@@ -1,0 +1,24 @@
+package com.beercompetition.pojo.po;
+
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@TableName("beer_entry_extra_field")
+public class BeerEntryExtraField {
+
+    @TableId(type = IdType.AUTO)
+    private Long id;
+    private Long beerEntryId;
+    private String fieldKey;
+    private String fieldLabel;
+    private String fieldValue;
+}

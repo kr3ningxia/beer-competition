@@ -1,0 +1,63 @@
+spring:
+  config:
+    import:
+      - optional:file:.env[.properties]
+      - optional:file:../.env[.properties]
+  datasource:
+    url: jdbc:mysql://${app.datasource.host}:${app.datasource.port}/${app.datasource.database}?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    driver-class-name: ${app.datasource.driver-class-name}
+    username: ${app.datasource.username}
+    password: ${app.datasource.password}
+  data:
+    redis:
+      host: ${APP_REDIS_HOST:localhost}
+      port: ${APP_REDIS_PORT:6379}
+      password: ${APP_REDIS_PASSWORD:}
+      database: ${APP_REDIS_DATABASE:0}
+      timeout: ${APP_REDIS_TIMEOUT:3s}
+      connect-timeout: ${APP_REDIS_CONNECT_TIMEOUT:3s}
+      lettuce:
+        pool:
+          max-active: ${APP_REDIS_MAX_ACTIVE:16}
+          max-idle: ${APP_REDIS_MAX_IDLE:8}
+          min-idle: ${APP_REDIS_MIN_IDLE:1}
+          max-wait: ${APP_REDIS_MAX_WAIT:3s}
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 200MB
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+
+mybatis-plus:
+  type-aliases-package: com.beercompetition.pojo.po
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      table-underline: true
+
+app:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    host: ${APP_DB_HOST:localhost}
+    port: ${APP_DB_PORT:3306}
+    database: ${APP_DB_NAME:beer_competition}
+    username: ${APP_DB_USERNAME:root}
+    password: ${APP_DB_PASSWORD:}
+  jwt:
+    secret-key: ${APP_JWT_SECRET:change-me-beer-competition-secret}
+    header-name: Authorization
+    admin-ttl: ${APP_JWT_ADMIN_TTL:7200000}
+    portal-ttl: ${APP_JWT_PORTAL_TTL:7200000}
+    judge-ttl: ${APP_JWT_JUDGE_TTL:7200000}
+  sms:
+    code-ttl-minutes: ${APP_SMS_CODE_TTL_MINUTES:5}
+    mock-enabled: ${APP_SMS_MOCK_ENABLED:false}
+  storage:
+    provider: ${APP_STORAGE_PROVIDER:local}
+    local-base-dir: ${APP_STORAGE_LOCAL_DIR:uploads}
+    endpoint: ${APP_ALIOSS_ENDPOINT:oss-cn-beijing.aliyuncs.com}
+    access-key-id: ${APP_ALIOSS_ACCESS_KEY_ID:}
+    access-key-secret: ${APP_ALIOSS_ACCESS_KEY_SECRET:}
+    bucket-name: ${APP_ALIOSS_BUCKET_NAME:}
