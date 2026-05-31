@@ -68,7 +68,7 @@ import { clearSession, getDisplayName } from '@/utils/auth'
 const router = useRouter()
 const route = useRoute()
 const displayName = getDisplayName('admin')
-const isDashboard = computed(() => route.path === '/admin/dashboard')
+const isDashboard = computed(() => ['/admin/dashboard', '/admin/competitions'].includes(route.path))
 
 const navItems = [
   { path: '/admin/dashboard', label: '现场看板', icon: DataBoard },
@@ -303,8 +303,24 @@ function logout() {
     grid-template-columns: 1fr;
   }
 
+  .dashboard-shell {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+
   .sidebar {
+    height: auto;
     min-height: auto;
+  }
+
+  .dashboard-shell .content {
+    height: auto;
+    overflow: visible;
+  }
+
+  .dashboard-page {
+    overflow: visible;
   }
 
   .system-card {

@@ -14,7 +14,13 @@ const routes = [
     meta: { requiresAuth: true, scope: 'portal' },
     children: [
       { path: 'home', component: () => import('@/views/portal/Home.vue') },
+      { path: 'events', component: () => import('@/views/portal/Events.vue') },
+      { path: 'events/:id', component: () => import('@/views/portal/EventDetail.vue') },
       { path: 'entries', component: () => import('@/views/portal/Entries.vue') },
+      { path: 'submit', component: () => import('@/views/portal/SubmitEntry.vue') },
+      { path: 'payment', component: () => import('@/views/portal/PaymentQr.vue') },
+      { path: 'results', component: () => import('@/views/portal/Results.vue') },
+      { path: 'profile', component: () => import('@/views/portal/Profile.vue') },
     ],
   },
   {

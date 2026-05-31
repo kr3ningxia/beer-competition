@@ -1,109 +1,274 @@
 <template>
-  <div class="page">
-    <header class="topbar">
-      <div>
-        <h1>我的比赛</h1>
-        <p>{{ displayName || '评审账号' }}</p>
+  <main class="app-shell">
+    <section class="top-panel">
+      <div class="split">
+        <div>
+          <p class="eyebrow">今日评审</p>
+          <h1 class="page-title">{{ current?.name || '啤酒大赛' }}</h1>
+        </div>
+        <span class="role-badge">{{ me?.roleLabel }}</span>
       </div>
-      <div class="top-actions">
-        <button class="ghost" @click="$router.push('/profile')">个人资料</button>
-      </div>
-    </header>
-
-    <section class="card uuid-card">
-      <label>手动输入酒款 UUID</label>
-      <div class="inline-row">
-        <input v-model="manualUuid" placeholder="例如 BC-2026-IPA-0001" />
-        <button class="primary" @click="goToScanResult">查看</button>
+      <div class="meta-grid">
+        <div>
+          <span>评审桌</span>
+          <strong>{{ me?.tableName || current?.tableName }}</strong>
+        </div>
+        <div>
+          <span>当前轮次</span>
+          <strong>{{ current?.flightName }}</strong>
+        </div>
+        <div>
+          <span>我的进度</span>
+          <strong>{{ current?.myScoredCount || 0 }} / {{ current?.totalEntries || 0 }}</strong>
+        </div>
       </div>
     </section>
 
-    <section class="list">
-      <article v-for="item in competitions" :key="item.id" class="card competition-card">
-        <h2>{{ item.name }}</h2>
-        <p>比赛日期：{{ item.competitionDate }}</p>
-        <p>状态：{{ item.status }}</p>
-      </article>
+    <section class="card action-card">
+      <h2 class="section-title">开始评酒</h2>
+      <button class="scan-button" type="button" @click="scannerOpen = !scannerOpen">
+        扫码评酒
+      </button>
+      <div v-if="scannerOpen" class="scanner-box">
+        <div class="scanner-frame">
+          <span></span>
+          <p>将二维码放入框内</p>
+        </div>
+        <div class="mock-list">
+          <button
+            v-for="entry in entries"
+            :key="entry.uuid"
+            type="button"
+            @click="openEntry(entry.uuid)"
+          >
+            识别 {{ entry.uuid }}
+          </button>
+        </div>
+      </div>
+
+      <label class="field">
+        输入酒款编号
+        <div class="manual-row">
+          <input v-model.trim="manualUuid" class="input" placeholder="例如 BC-2026-IPA-0001" />
+          <button class="button dark" type="button" @click="openEntry(manualUuid)">查看</button>
+        </div>
+      </label>
+      <p class="caption">扫码异常时，可输入杯身或二维码标签上的酒款编号继续评分。</p>
     </section>
-  </div>
+
+    <section class="card">
+      <div class="split">
+        <h2 class="section-title compact">本轮酒款</h2>
+        <span class="pill">{{ entries.length }} 款</span>
+      </div>
+      <div class="entry-list">
+        <button
+          v-for="entry in entries"
+          :key="entry.uuid"
+          type="button"
+          class="entry-row"
+          @click="openEntry(entry.uuid)"
+        >
+          <span>
+            <strong>{{ entry.uuid }}</strong>
+            <small>{{ entry.categoryName }} · {{ entry.style }}</small>
+          </span>
+          <em :class="['pill', entry.finalized ? 'status-lock' : entry.tableScoreCount ? 'status-warn' : '']">
+            {{ entry.finalized ? '已确认' : entry.tableScoreCount ? `${entry.tableScoreCount} 人已评` : '待评分' }}
+          </em>
+        </button>
+      </div>
+    </section>
+
+    <nav class="bottom-nav" :style="{ gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))` }">
+      <router-link v-for="item in navItems" :key="item.to" class="nav-item" :to="item.to">
+        {{ item.label }}
+      </router-link>
+    </nav>
+  </main>
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { fetchCompetitions } from '@/api/judge'
-import { getDisplayName } from '@/utils/auth'
+import { fetchCaptainBoard, fetchCompetitions, fetchMe } from '@/api/judge'
 
 const router = useRouter()
-const competitions = ref([])
+const me = ref(null)
+const current = ref(null)
+const entries = ref([])
+const scannerOpen = ref(false)
 const manualUuid = ref('BC-2026-IPA-0001')
-const displayName = getDisplayName()
 
-function goToScanResult() {
-  if (!manualUuid.value) return
-  router.push(`/scan-result/${manualUuid.value}`)
+const navItems = computed(() => {
+  const items = [
+    { label: '扫码', to: '/competitions' },
+    { label: '已评', to: '/judged' },
+  ]
+  if (me.value?.role === 'CAPTAIN') items.push({ label: '本桌', to: '/captain' })
+  items.push({ label: '我的', to: '/profile' })
+  return items
+})
+
+function openEntry(uuid) {
+  if (!uuid) return
+  router.push(`/scan-result/${uuid.toUpperCase()}`)
 }
 
 onMounted(async () => {
-  competitions.value = await fetchCompetitions()
+  me.value = await fetchMe()
+  const competitions = await fetchCompetitions()
+  current.value = competitions[0]
+  const board = await fetchCaptainBoard()
+  entries.value = board.entries
 })
 </script>
 
 <style scoped>
-.page {
-  padding: 20px;
+.role-badge {
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  padding: 7px 10px;
+  color: #fff7ed;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
-.topbar,
-.inline-row {
+.meta-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.meta-grid div {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.meta-grid span,
+.meta-grid strong {
+  display: block;
+}
+
+.meta-grid span {
+  color: rgba(248, 250, 252, 0.68);
+  font-size: 12px;
+}
+
+.meta-grid strong {
+  margin-top: 5px;
+  color: #fff;
+  font-size: 15px;
+}
+
+.action-card {
+  margin-top: 12px;
+}
+
+.scan-button {
+  width: 100%;
+  min-height: 58px;
+  border: 0;
+  border-radius: 8px;
+  color: #fff;
+  background: #a75517;
+  font-size: 18px;
+  font-weight: 850;
+}
+
+.scanner-box {
+  margin-top: 12px;
+  border-radius: 8px;
+  padding: 12px;
+  background: #121a24;
+}
+
+.scanner-frame {
+  display: grid;
+  place-items: center;
+  min-height: 190px;
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.72);
+  background:
+    linear-gradient(transparent 48%, rgba(167, 85, 23, 0.65) 50%, transparent 52%),
+    rgba(255, 255, 255, 0.04);
+}
+
+.scanner-frame span {
+  width: 86px;
+  height: 86px;
+  border: 2px solid rgba(255, 255, 255, 0.72);
+  border-radius: 8px;
+}
+
+.scanner-frame p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.mock-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.mock-list button {
+  min-height: 38px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.manual-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.compact {
+  margin-bottom: 0;
+}
+
+.entry-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.entry-row {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   justify-content: space-between;
   align-items: center;
-}
-
-.card {
-  background: #fff;
-  border-radius: 18px;
-  padding: 18px;
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
-}
-
-.uuid-card {
-  margin: 18px 0;
-}
-
-label {
-  display: block;
-  color: #475569;
-  margin-bottom: 8px;
-}
-
-input,
-textarea {
   width: 100%;
-  border: 1px solid #cbd5e1;
-  border-radius: 12px;
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
   padding: 12px;
+  color: #18222f;
+  background: #fff;
+  text-align: left;
 }
 
-button {
-  border: none;
-  border-radius: 12px;
-  padding: 12px 16px;
+.entry-row strong,
+.entry-row small {
+  display: block;
 }
 
-.primary {
-  background: #d97706;
-  color: #fff;
+.entry-row small {
+  margin-top: 5px;
+  color: #667085;
+  line-height: 1.35;
 }
 
-.ghost {
-  background: #f1f5f9;
-}
-
-.list {
-  display: grid;
-  gap: 14px;
+.entry-row em {
+  flex: 0 0 auto;
+  font-style: normal;
 }
 </style>

@@ -1,13 +1,13 @@
 <template>
   <div class="live-dashboard">
     <section class="hero-panel">
-      <div>
-        <p class="eyebrow">现场评审控制台</p>
+      <div class="hero-main">
+        <p class="eyebrow">比赛现场推进台</p>
         <div class="title-row">
           <h1>{{ competition.name }}</h1>
           <span class="status-pill live">
             <span />
-            {{ competition.status }}
+            {{ competition.currentStage }} · 第 {{ currentStageStep }} / {{ stages.length }} 步
           </span>
         </div>
         <div class="meta-row">
@@ -18,10 +18,28 @@
             最后更新：{{ competition.updatedAt }}
           </span>
         </div>
+
+        <div class="stage-compact" aria-label="比赛流程阶段">
+          <span>流程进度</span>
+          <div class="stage-meter">
+            <i :style="{ width: `${stageProgressPercent}%` }" />
+          </div>
+          <strong>{{ currentStageStep }} / {{ stages.length }}</strong>
+        </div>
+
+        <p class="next-step">
+          下一步：{{ competition.nextStep }}
+        </p>
       </div>
 
       <div class="toolbar" aria-label="现场操作">
-        <button v-for="action in topActions" :key="action.label" :class="['toolbar-button', action.tone]">
+        <button
+          v-for="action in topActions"
+          :key="action.label"
+          :class="['toolbar-button', action.tone, { disabled: action.disabled }]"
+          :disabled="action.disabled"
+          :title="action.disabled ? action.disabledReason : action.label"
+        >
           <component :is="action.icon" />
           <span>{{ action.label }}</span>
           <strong v-if="action.badge">{{ action.badge }}</strong>
@@ -35,7 +53,7 @@
       <section class="section-block first-section">
         <div class="section-heading">
           <h2>核心总览</h2>
-          <span>比赛现场关键数据</span>
+          <span>按现场推进口径统计</span>
         </div>
         <div class="summary-grid">
           <article v-for="item in summaryCards" :key="item.label" :class="['metric-card', item.tone]">
@@ -54,58 +72,77 @@
       <section class="section-block">
         <div class="section-heading">
           <h2>评审桌进度</h2>
-          <span>已评审 = 桌长已汇总</span>
+          <span>普通评分、桌长汇总、晋级选择分开查看</span>
         </div>
         <div class="table-grid">
-          <article v-for="table in judgeTables" :key="table.name" :class="['table-card', table.tone]">
+          <article v-for="table in judgeTables" :key="table.tableName" :class="['table-card', table.tone]">
             <header>
               <div class="table-title">
-                <span class="table-letter">{{ table.letter }}</span>
+                <span class="table-letter">{{ table.tableName.slice(0, 1) }}</span>
                 <div>
-                  <h3>{{ table.name }}</h3>
+                  <h3>{{ table.tableName }}</h3>
                   <p>
                     <User />
-                    桌长：{{ table.captain }} · {{ table.members }} 人
+                    桌长：{{ table.captainName }} · {{ table.memberCount }} 人
                   </p>
                 </div>
               </div>
-              <span class="state-badge">{{ table.status }}</span>
+              <span class="state-badge">{{ table.statusText }}</span>
             </header>
 
             <div class="flight-row">
-              <span>Flight 进度</span>
+              <span>Flight 进度：{{ table.flightCompletedCount }} / {{ table.flightTotalCount }}</span>
               <div class="flight-cups" aria-label="Flight 进度">
                 <span
-                  v-for="index in table.flightTotal"
+                  v-for="index in table.flightTotalCount"
                   :key="index"
-                  :class="{ active: index <= table.flightCurrent }"
+                  :class="{ active: index <= table.flightCompletedCount, current: index === table.flightCompletedCount + 1 }"
                 />
               </div>
-              <strong>当前 F{{ table.flightCurrent }}</strong>
+              <strong>当前 {{ table.currentFlightName }}</strong>
             </div>
 
-            <div class="progress-head">
-              <span>评审进度</span>
-              <strong>{{ table.completed }} / {{ table.total }}</strong>
+            <div class="current-flight">
+              {{ table.currentFlightName }}：{{ table.currentFlightFinalizedCount }} /
+              {{ table.currentFlightEntryCount }} 已汇总
             </div>
-            <div class="progress-track">
-              <span :style="{ width: `${table.percent}%` }" />
+
+            <div class="progress-stack">
+              <div class="progress-block">
+                <div class="progress-head">
+                  <span>普通评分</span>
+                  <strong>{{ table.judgeSubmittedCount }} / {{ table.judgeSubmissionTotal }}</strong>
+                </div>
+                <div class="progress-track">
+                  <span :style="{ width: `${table.judgeSubmittedPercent}%` }" />
+                </div>
+              </div>
+
+              <div class="progress-block final">
+                <div class="progress-head">
+                  <span>桌长汇总</span>
+                  <strong>{{ table.captainFinalizedCount }} / {{ table.captainFinalizeTotal }}</strong>
+                </div>
+                <div class="progress-track">
+                  <span :style="{ width: `${table.captainFinalizedPercent}%` }" />
+                </div>
+              </div>
             </div>
+
             <div class="table-meta">
-              <span>{{ table.percent }}%</span>
               <span>
                 <Medal />
-                已勾选 {{ table.advanced }} 款
+                本 Flight 晋级：{{ table.advancedSelectedCount }} / {{ table.advancedSuggestedMax }}
               </span>
               <span>
                 <Clock />
-                {{ table.lastSubmit }}
+                最后汇总：{{ table.lastFinalizeText }}
               </span>
             </div>
 
-            <p v-if="table.warning" class="table-warning">
+            <p v-if="table.issueText" class="table-warning">
               <Warning />
-              {{ table.warning }}
+              {{ table.issueText }}
             </p>
           </article>
         </div>
@@ -115,8 +152,8 @@
         <article class="panel category-panel">
           <div class="panel-heading">
             <div>
-              <h2>投报组别进度</h2>
-              <p>按桌长最终汇总统计</p>
+              <h2>投报组别汇总进度</h2>
+              <p>按桌长已汇总酒款统计</p>
             </div>
             <span>共 {{ categories.length }} 个投报组别</span>
           </div>
@@ -129,64 +166,85 @@
                   <strong>{{ category.name }}</strong>
                 </div>
                 <p>
-                  <b>{{ category.completed }}</b>
-                  / {{ category.total }}
+                  <b>{{ category.finalizedCount }}</b>
+                  / {{ category.totalCount }} 已汇总
                   <em>{{ category.percent }}%</em>
                 </p>
               </div>
               <div class="progress-track slim">
                 <span :style="{ width: `${category.percent}%` }" />
               </div>
+              <div class="category-breakdown" aria-label="按评审桌查看组别进度">
+                <span v-for="table in category.tables" :key="`${category.code}-${table.name}`">
+                  {{ table.name }} {{ table.finalized }} / {{ table.total }}
+                </span>
+              </div>
             </div>
           </div>
         </article>
 
-        <article class="panel alert-panel">
+        <article class="panel issue-panel">
           <div class="panel-heading">
             <div>
-              <h2>异常提醒</h2>
-              <p>优先处理影响现场推进的问题</p>
+              <h2>待处理问题</h2>
+              <p>优先处理会影响评审推进和结果发布的问题</p>
             </div>
             <div class="alert-counts">
-              <span class="danger">2 严重</span>
-              <span class="warn">2 警告</span>
+              <span class="danger">{{ issueCounts.danger }} 严重</span>
+              <span class="warn">{{ issueCounts.warning }} 提醒</span>
             </div>
           </div>
 
           <div class="alert-list">
-            <div v-for="alert in alerts" :key="alert.text" :class="['alert-item', alert.level]">
+            <div v-for="issue in issues" :key="issue.message" :class="['alert-item', issue.level]">
               <span class="alert-icon">
-                <component :is="alert.icon" />
+                <component :is="issue.icon" />
               </span>
-              <strong>{{ alert.text }}</strong>
-              <em>{{ alert.time }}</em>
+              <div class="alert-copy">
+                <span>{{ issue.tableName }} / {{ issue.flightName }} / {{ issue.targetText }}</span>
+                <strong>{{ issue.message }}</strong>
+              </div>
+              <em>{{ issue.timeText }}</em>
             </div>
           </div>
 
           <button class="quiet-action">
-            <CircleCheck />
-            全部标记已处理
+            <Document />
+            查看处理清单
           </button>
         </article>
       </section>
 
       <section class="section-block">
         <div class="section-heading">
-          <h2>晋级候选</h2>
-          <span>匿名评审，仅显示酒款 UUID</span>
+          <h2>已标记晋级酒款</h2>
+          <span>按评审桌和 Flight 展示，仅显示匿名 UUID</span>
         </div>
-        <div class="candidate-list">
-          <article v-for="candidate in candidates" :key="candidate.uuid" class="candidate-card">
-            <div>
-              <strong>{{ candidate.uuid }}</strong>
-              <span>{{ candidate.category }}</span>
-              <span>{{ candidate.table }}</span>
+        <div class="advanced-grid">
+          <article v-for="group in advancedGroups" :key="`${group.tableName}-${group.flightName}`" class="advanced-group">
+            <header>
+              <div>
+                <h3>{{ group.tableName }} / {{ group.flightName }}</h3>
+                <p>
+                  已选 {{ group.selectedCount }} / 建议 {{ group.suggestedMin }}-{{ group.suggestedMax }}
+                </p>
+              </div>
+              <span :class="['range-badge', group.rangeTone]">{{ group.rangeText }}</span>
+            </header>
+
+            <div class="candidate-list">
+              <article v-for="entry in group.entries" :key="entry.uuid" class="candidate-card">
+                <div>
+                  <strong>{{ entry.uuid }}</strong>
+                  <span>{{ entry.categoryName }}</span>
+                </div>
+                <p>
+                  <small>共识分</small>
+                  <b>{{ entry.consensusScore }}</b>
+                  <CircleCheck v-if="entry.confirmed" />
+                </p>
+              </article>
             </div>
-            <p>
-              <small>共识分</small>
-              <b>{{ candidate.score }}</b>
-              <CircleCheck v-if="candidate.confirmed" />
-            </p>
           </article>
         </div>
         <p class="privacy-note">现场匿名评审：仅展示酒款 UUID，不展示酒名和厂商。</p>
@@ -198,10 +256,16 @@
           <span>比赛当天常用入口</span>
         </div>
         <div class="quick-grid">
-          <button v-for="action in quickActions" :key="action.title" class="quick-card">
+          <button
+            v-for="action in quickActions"
+            :key="action.title"
+            :class="['quick-card', { disabled: action.disabled }]"
+            :disabled="action.disabled"
+            :title="action.disabled ? action.disabledReason : action.title"
+          >
             <component :is="action.icon" />
             <strong>{{ action.title }}</strong>
-            <span>{{ action.description }}</span>
+            <span>{{ action.disabled ? action.disabledReason : action.description }}</span>
           </button>
         </div>
       </section>
@@ -214,7 +278,6 @@ import {
   Box,
   CircleCheck,
   Clock,
-  CoffeeCup,
   DataBoard,
   Document,
   Download,
@@ -222,7 +285,6 @@ import {
   Promotion,
   Refresh,
   Setting,
-  Trophy,
   User,
   Warning,
 } from '@element-plus/icons-vue'
@@ -231,124 +293,352 @@ const competition = {
   name: '2026 中国精酿啤酒大赛',
   date: '2026年5月30日',
   batch: '第三批次',
-  status: '评审进行中',
+  currentStage: '评审进行中',
+  nextStep: '全部桌长汇总后进入结果确认',
   updatedAt: '12:19:53',
 }
 
+const stages = ['报名中', '酒样入库', '评审准备', '评审进行中', '结果确认中', '结果已发布']
+const currentStageIndex = stages.indexOf(competition.currentStage)
+const currentStageStep = currentStageIndex + 1
+const stageProgressPercent = Math.round((currentStageStep / stages.length) * 100)
+
+const summary = {
+  totalEntries: 268,
+  judgeSubmittedCount: 188,
+  judgeSubmissionTotal: 268,
+  captainFinalizedCount: 156,
+  captainFinalizeTotal: 268,
+  pendingFinalizeCount: 112,
+  advancedCount: 32,
+  openIssueCount: 5,
+}
+
+const canPublishResult = summary.pendingFinalizeCount === 0 && summary.openIssueCount === 0
+const publishDisabledReason = canPublishResult ? '' : '全部酒款完成桌长汇总并确认奖项后可发布'
+
 const topActions = [
-  { label: '刷新数据', badge: '15s', icon: Refresh, tone: 'neutral' },
-  { label: '导出 Excel', icon: Download, tone: 'neutral' },
-  { label: '评分配置', icon: Setting, tone: 'neutral' },
-  { label: '发布结果', icon: Promotion, tone: 'gold' },
+  { label: '刷新现场数据', badge: '15s', icon: Refresh, tone: 'neutral' },
+  { label: '导出评分数据', icon: Download, tone: 'neutral' },
+  {
+    label: '进入结果确认',
+    icon: Promotion,
+    tone: 'gold',
+    disabled: !canPublishResult,
+    disabledReason: publishDisabledReason,
+  },
 ]
 
 const summaryCards = [
-  { label: '总酒款数', value: '268', hint: '本场次投报', icon: Box, tone: 'neutral' },
-  { label: '已评审', value: '156', hint: '+18 较 10 分钟前', icon: CircleCheck, tone: 'success' },
-  { label: '待评审', value: '112', hint: '等待桌长汇总', icon: Clock, tone: 'warning' },
-  { label: '晋级候选', value: '32', hint: '各桌已勾选', icon: Medal, tone: 'gold' },
-  { label: '异常提醒', value: '5', hint: '需现场确认', icon: Warning, tone: 'danger' },
-  { label: '当前完成率', value: '58%', hint: '+5% 较 10 分钟前', icon: DataBoard, tone: 'gold' },
+  { label: '参赛酒款', value: summary.totalEntries, hint: '本场已入库酒款', icon: Box, tone: 'neutral' },
+  {
+    label: '普通评分提交',
+    value: `${summary.judgeSubmittedCount} / ${summary.judgeSubmissionTotal}`,
+    hint: '评审已提交原始评分',
+    icon: DataBoard,
+    tone: 'success',
+  },
+  {
+    label: '桌长已汇总',
+    value: `${summary.captainFinalizedCount} / ${summary.captainFinalizeTotal}`,
+    hint: '已形成本桌最终意见',
+    icon: CircleCheck,
+    tone: 'success',
+  },
+  {
+    label: '待桌长汇总',
+    value: summary.pendingFinalizeCount,
+    hint: '仍需桌长确认最终分',
+    icon: Clock,
+    tone: 'warning',
+  },
+  { label: '已标记晋级', value: summary.advancedCount, hint: '各桌已勾选晋级酒款', icon: Medal, tone: 'gold' },
+  { label: '待处理问题', value: summary.openIssueCount, hint: '影响现场推进的问题', icon: Warning, tone: 'danger' },
 ]
 
 const judgeTables = [
   {
-    letter: 'A',
-    name: 'A桌',
-    captain: '张明',
-    members: 4,
-    status: '正常',
+    tableName: 'A桌',
+    captainName: '张明',
+    memberCount: 4,
+    currentFlightName: 'F3',
+    flightCompletedCount: 2,
+    flightTotalCount: 5,
+    currentFlightFinalizedCount: 8,
+    currentFlightEntryCount: 12,
+    judgeSubmittedCount: 58,
+    judgeSubmissionTotal: 68,
+    captainFinalizedCount: 42,
+    captainFinalizeTotal: 68,
+    advancedSelectedCount: 2,
+    advancedSuggestedMin: 2,
+    advancedSuggestedMax: 4,
+    lastFinalizeText: '2 分钟前',
+    statusText: '推进正常',
     tone: 'success',
-    flightCurrent: 3,
-    flightTotal: 5,
-    completed: 42,
-    total: 68,
-    percent: 62,
-    advanced: 8,
-    lastSubmit: '2 分钟前',
   },
   {
-    letter: 'B',
-    name: 'B桌',
-    captain: '李华',
-    members: 4,
-    status: '正常',
-    tone: 'success',
-    flightCurrent: 4,
-    flightTotal: 5,
-    completed: 48,
-    total: 65,
-    percent: 74,
-    advanced: 11,
-    lastSubmit: '1 分钟前',
-  },
-  {
-    letter: 'C',
-    name: 'C桌',
-    captain: '王芳',
-    members: 3,
-    status: '稍慢',
-    tone: 'warning',
-    flightCurrent: 2,
-    flightTotal: 5,
-    completed: 35,
-    total: 70,
-    percent: 50,
-    advanced: 6,
-    lastSubmit: '8 分钟前',
-  },
-  {
-    letter: 'D',
-    name: 'D桌',
-    captain: '陈强',
-    members: 4,
-    status: '异常',
+    tableName: 'B桌',
+    captainName: '李华',
+    memberCount: 4,
+    currentFlightName: 'F4',
+    flightCompletedCount: 3,
+    flightTotalCount: 5,
+    currentFlightFinalizedCount: 10,
+    currentFlightEntryCount: 12,
+    judgeSubmittedCount: 60,
+    judgeSubmissionTotal: 65,
+    captainFinalizedCount: 48,
+    captainFinalizeTotal: 65,
+    advancedSelectedCount: 5,
+    advancedSuggestedMin: 2,
+    advancedSuggestedMax: 4,
+    lastFinalizeText: '1 分钟前',
+    statusText: '需要处理',
+    issueText: 'B桌 F4 已选 5 款晋级，超过建议范围',
     tone: 'danger',
-    flightCurrent: 2,
-    flightTotal: 5,
-    completed: 31,
-    total: 65,
-    percent: 48,
-    advanced: 7,
-    lastSubmit: '18 分钟前',
-    warning: '超过 18 分钟无桌长汇总',
   },
-]
+  {
+    tableName: 'C桌',
+    captainName: '王芳',
+    memberCount: 3,
+    currentFlightName: 'F2',
+    flightCompletedCount: 1,
+    flightTotalCount: 5,
+    currentFlightFinalizedCount: 7,
+    currentFlightEntryCount: 12,
+    judgeSubmittedCount: 47,
+    judgeSubmissionTotal: 70,
+    captainFinalizedCount: 35,
+    captainFinalizeTotal: 70,
+    advancedSelectedCount: 2,
+    advancedSuggestedMin: 2,
+    advancedSuggestedMax: 4,
+    lastFinalizeText: '8 分钟前',
+    statusText: '进度偏慢',
+    issueText: 'C桌 F2 还有 3 款未完成普通评分',
+    tone: 'warning',
+  },
+  {
+    tableName: 'D桌',
+    captainName: '陈强',
+    memberCount: 4,
+    currentFlightName: 'F2',
+    flightCompletedCount: 1,
+    flightTotalCount: 5,
+    currentFlightFinalizedCount: 5,
+    currentFlightEntryCount: 12,
+    judgeSubmittedCount: 42,
+    judgeSubmissionTotal: 65,
+    captainFinalizedCount: 31,
+    captainFinalizeTotal: 65,
+    advancedSelectedCount: 2,
+    advancedSuggestedMin: 2,
+    advancedSuggestedMax: 4,
+    lastFinalizeText: '18 分钟前',
+    statusText: '需要处理',
+    issueText: 'D桌 18 分钟没有新的桌长汇总',
+    tone: 'danger',
+  },
+].map((table) => ({
+  ...table,
+  judgeSubmittedPercent: Math.round((table.judgeSubmittedCount / table.judgeSubmissionTotal) * 100),
+  captainFinalizedPercent: Math.round((table.captainFinalizedCount / table.captainFinalizeTotal) * 100),
+}))
 
 const categories = [
-  { code: 'IPA', name: 'IPA', completed: 38, total: 52, percent: 73 },
-  { code: 'LAGER', name: '拉格', completed: 24, total: 45, percent: 53 },
-  { code: 'STOUT', name: '世涛', completed: 32, total: 48, percent: 67 },
-  { code: 'SOUR', name: '酸啤', completed: 18, total: 35, percent: 51 },
-  { code: 'WHEAT', name: '小麦', completed: 28, total: 42, percent: 67 },
-  { code: 'EXP', name: '实验风格', completed: 16, total: 46, percent: 35 },
+  {
+    code: 'IPA',
+    name: 'IPA',
+    finalizedCount: 38,
+    totalCount: 52,
+    tables: [
+      { name: 'A桌', finalized: 12, total: 16 },
+      { name: 'B桌', finalized: 14, total: 18 },
+      { name: 'D桌', finalized: 12, total: 18 },
+    ],
+  },
+  {
+    code: 'LAGER',
+    name: '拉格',
+    finalizedCount: 24,
+    totalCount: 45,
+    tables: [
+      { name: 'A桌', finalized: 8, total: 15 },
+      { name: 'B桌', finalized: 9, total: 14 },
+      { name: 'C桌', finalized: 7, total: 16 },
+    ],
+  },
+  {
+    code: 'STOUT',
+    name: '世涛',
+    finalizedCount: 32,
+    totalCount: 48,
+    tables: [
+      { name: 'A桌', finalized: 10, total: 16 },
+      { name: 'B桌', finalized: 12, total: 16 },
+      { name: 'D桌', finalized: 10, total: 16 },
+    ],
+  },
+  {
+    code: 'SOUR',
+    name: '酸啤',
+    finalizedCount: 18,
+    totalCount: 35,
+    tables: [
+      { name: 'B桌', finalized: 6, total: 12 },
+      { name: 'C桌', finalized: 7, total: 11 },
+      { name: 'D桌', finalized: 5, total: 12 },
+    ],
+  },
+  {
+    code: 'WHEAT',
+    name: '小麦',
+    finalizedCount: 28,
+    totalCount: 42,
+    tables: [
+      { name: 'A桌', finalized: 9, total: 14 },
+      { name: 'C桌', finalized: 10, total: 14 },
+      { name: 'D桌', finalized: 9, total: 14 },
+    ],
+  },
+  {
+    code: 'EXP',
+    name: '实验风格',
+    finalizedCount: 16,
+    totalCount: 46,
+    tables: [
+      { name: 'A桌', finalized: 5, total: 15 },
+      { name: 'C桌', finalized: 6, total: 16 },
+      { name: 'D桌', finalized: 5, total: 15 },
+    ],
+  },
+].map((category) => ({
+  ...category,
+  percent: Math.round((category.finalizedCount / category.totalCount) * 100),
+}))
+
+const issues = [
+  {
+    level: 'danger',
+    tableName: 'D桌',
+    flightName: 'F2',
+    targetText: '桌长',
+    message: '18 分钟没有新的桌长汇总',
+    timeText: '刚刚',
+    icon: Warning,
+  },
+  {
+    level: 'warning',
+    tableName: 'C桌',
+    flightName: 'F2',
+    targetText: '普通评分',
+    message: '还有 3 款酒缺普通评分',
+    timeText: '3 分钟前',
+    icon: Clock,
+  },
+  {
+    level: 'warning',
+    tableName: 'A桌',
+    flightName: '王评审',
+    targetText: '评语',
+    message: '2 条评语未达到字数要求',
+    timeText: '5 分钟前',
+    icon: Document,
+  },
+  {
+    level: 'danger',
+    tableName: 'D桌',
+    flightName: 'F2',
+    targetText: 'BC-2026-STOUT-0042',
+    message: '缺少桌长最终意见',
+    timeText: '8 分钟前',
+    icon: Warning,
+  },
+  {
+    level: 'neutral',
+    tableName: 'B桌',
+    flightName: 'F4',
+    targetText: '晋级选择',
+    message: '晋级数量为 5 款，建议调整为 2-4 款',
+    timeText: '12 分钟前',
+    icon: Medal,
+  },
 ]
 
-const alerts = [
-  { text: 'D桌超过 18 分钟无桌长汇总', time: '刚刚', icon: Warning, level: 'danger' },
-  { text: 'C桌 Flight 02 仍有 3 款待评审', time: '3 分钟前', icon: Clock, level: 'warning' },
-  { text: '评审王某有 2 条评语字数不足', time: '5 分钟前', icon: Document, level: 'warning' },
-  { text: 'BC-2026-STOUT-0042 缺少桌长最终分', time: '8 分钟前', icon: Warning, level: 'danger' },
-  { text: 'B桌晋级数量超过建议范围', time: '12 分钟前', icon: Medal, level: 'neutral' },
-]
+const issueCounts = {
+  danger: issues.filter((issue) => issue.level === 'danger').length,
+  warning: issues.filter((issue) => issue.level === 'warning').length,
+}
 
-const candidates = [
-  { uuid: 'BC-2026-IPA-0001', category: 'IPA', table: 'A桌', score: 92, confirmed: true },
-  { uuid: 'BC-2026-IPA-0017', category: 'IPA', table: 'A桌', score: 89, confirmed: true },
-  { uuid: 'BC-2026-STOUT-0008', category: '世涛', table: 'B桌', score: 91, confirmed: true },
-  { uuid: 'BC-2026-LAGER-0023', category: '拉格', table: 'B桌', score: 88, confirmed: false },
-  { uuid: 'BC-2026-SOUR-0005', category: '酸啤', table: 'C桌', score: 90, confirmed: true },
-  { uuid: 'BC-2026-WHEAT-0012', category: '小麦', table: 'C桌', score: 87, confirmed: false },
-  { uuid: 'BC-2026-EXP-0003', category: '实验风格', table: 'D桌', score: 93, confirmed: true },
-  { uuid: 'BC-2026-IPA-0029', category: 'IPA', table: 'D桌', score: 86, confirmed: false },
-]
+const advancedGroups = [
+  {
+    tableName: 'A桌',
+    flightName: 'F3',
+    selectedCount: 2,
+    suggestedMin: 2,
+    suggestedMax: 4,
+    entries: [
+      { uuid: 'BC-2026-IPA-0001', categoryName: 'IPA', consensusScore: 92, confirmed: true },
+      { uuid: 'BC-2026-IPA-0017', categoryName: 'IPA', consensusScore: 89, confirmed: true },
+    ],
+  },
+  {
+    tableName: 'B桌',
+    flightName: 'F4',
+    selectedCount: 5,
+    suggestedMin: 2,
+    suggestedMax: 4,
+    entries: [
+      { uuid: 'BC-2026-STOUT-0008', categoryName: '世涛', consensusScore: 91, confirmed: true },
+      { uuid: 'BC-2026-LAGER-0023', categoryName: '拉格', consensusScore: 88, confirmed: false },
+      { uuid: 'BC-2026-IPA-0031', categoryName: 'IPA', consensusScore: 90, confirmed: true },
+    ],
+  },
+  {
+    tableName: 'C桌',
+    flightName: 'F2',
+    selectedCount: 2,
+    suggestedMin: 2,
+    suggestedMax: 4,
+    entries: [
+      { uuid: 'BC-2026-SOUR-0005', categoryName: '酸啤', consensusScore: 90, confirmed: true },
+      { uuid: 'BC-2026-WHEAT-0012', categoryName: '小麦', consensusScore: 87, confirmed: false },
+    ],
+  },
+  {
+    tableName: 'D桌',
+    flightName: 'F2',
+    selectedCount: 2,
+    suggestedMin: 2,
+    suggestedMax: 4,
+    entries: [
+      { uuid: 'BC-2026-EXP-0003', categoryName: '实验风格', consensusScore: 93, confirmed: true },
+      { uuid: 'BC-2026-IPA-0029', categoryName: 'IPA', consensusScore: 86, confirmed: false },
+    ],
+  },
+].map((group) => {
+  const inRange = group.selectedCount >= group.suggestedMin && group.selectedCount <= group.suggestedMax
+
+  return {
+    ...group,
+    rangeTone: inRange ? 'success' : 'danger',
+    rangeText: inRange ? '数量合规' : '需要调整',
+  }
+})
 
 const quickActions = [
-  { title: '查看全部评分记录', description: '浏览所有已提交的评分', icon: Document },
-  { title: '管理评审分配', description: '调整评审桌人员配置', icon: User },
-  { title: '调整评分维度', description: '修改评分项目与权重', icon: Setting },
-  { title: '导出原始分与最终分', description: '下载完整评分数据', icon: Download },
-  { title: '进入结果发布', description: '准备发布比赛结果', icon: Promotion },
+  { title: '查看评分明细', description: '查看普通评分与桌长最终意见', icon: Document },
+  { title: '调整评审桌人员', description: '处理现场人员变动', icon: User },
+  { title: '查看评分规则', description: '确认本场评分项目与满分', icon: Setting },
+  { title: '导出现场数据', description: '下载原始分、最终分和晋级记录', icon: Download },
+  {
+    title: '进入结果确认',
+    description: '确认奖项后发布比赛结果',
+    icon: Promotion,
+    disabled: !canPublishResult,
+    disabledReason: `还有 ${summary.pendingFinalizeCount} 款酒等待桌长汇总`,
+  },
 ]
 </script>
 
@@ -356,9 +646,7 @@ const quickActions = [
 .live-dashboard {
   --bg: #0e1418;
   --panel: rgba(22, 32, 36, 0.9);
-  --panel-soft: rgba(19, 29, 33, 0.82);
   --line: rgba(219, 232, 237, 0.1);
-  --line-strong: rgba(224, 184, 74, 0.28);
   --text: #e6edf0;
   --muted: #8da1aa;
   --faint: #5f737d;
@@ -414,6 +702,7 @@ const quickActions = [
 .metric-card,
 .table-card,
 .candidate-card,
+.advanced-group,
 .quick-card {
   border: 1px solid var(--line);
   background: var(--panel);
@@ -423,12 +712,16 @@ const quickActions = [
 
 .hero-panel {
   flex: 0 0 auto;
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 24px;
   align-items: flex-start;
   padding: 22px 24px;
   border-radius: 22px;
+}
+
+.hero-main {
+  min-width: 0;
 }
 
 .scroll-fade {
@@ -479,7 +772,12 @@ const quickActions = [
 .flight-row,
 .table-meta,
 .privacy-note,
-.quick-card span {
+.quick-card span,
+.next-step,
+.current-flight,
+.category-breakdown,
+.advanced-group header p,
+.alert-copy span {
   color: var(--muted);
 }
 
@@ -499,7 +797,8 @@ const quickActions = [
 .category-line,
 .alert-item,
 .candidate-card,
-.quick-grid {
+.quick-grid,
+.stage-compact {
   display: flex;
   align-items: center;
 }
@@ -528,8 +827,8 @@ h2 {
 }
 
 h3 {
-  font-size: 24px;
-  letter-spacing: -0.03em;
+  font-size: 20px;
+  letter-spacing: -0.02em;
 }
 
 .status-pill {
@@ -561,7 +860,8 @@ h3 {
 .toolbar-button,
 .state-badge,
 .category-code,
-.alert-counts span {
+.alert-counts span,
+.range-badge {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -575,6 +875,43 @@ h3 {
   color: #adbdc4;
 }
 
+.stage-compact {
+  gap: 12px;
+  max-width: 420px;
+  margin-top: 18px;
+  color: #a8b8bf;
+}
+
+.stage-compact > span,
+.stage-compact > strong {
+  flex: 0 0 auto;
+  font-size: 13px;
+}
+
+.stage-compact > strong {
+  color: var(--gold-soft);
+}
+
+.stage-meter {
+  flex: 1 1 auto;
+  height: 8px;
+  min-width: 120px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.stage-meter i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #6fcf7a, #e0b84a);
+}
+
+.next-step {
+  margin-top: 10px;
+}
+
 svg {
   width: 1em;
   height: 1em;
@@ -584,6 +921,7 @@ svg {
   justify-content: flex-end;
   gap: 10px;
   flex-wrap: wrap;
+  max-width: 380px;
 }
 
 button {
@@ -595,7 +933,7 @@ button {
 .quiet-action {
   cursor: pointer;
   color: var(--text);
-  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease, opacity 0.18s ease;
 }
 
 .toolbar-button {
@@ -603,8 +941,8 @@ button {
   padding: 0 14px;
 }
 
-.toolbar-button:hover,
-.quick-card:hover,
+.toolbar-button:hover:not(.disabled),
+.quick-card:hover:not(.disabled),
 .quiet-action:hover {
   transform: translateY(-1px);
   border-color: rgba(224, 184, 74, 0.36);
@@ -620,6 +958,12 @@ button {
 .toolbar-button.gold {
   color: var(--gold-soft);
   border-color: rgba(216, 169, 53, 0.32);
+}
+
+.toolbar-button.disabled,
+.quick-card.disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
 }
 
 .section-block {
@@ -662,9 +1006,9 @@ button {
 .metric-card strong {
   display: block;
   margin: 12px 0 10px;
-  font-size: 38px;
+  font-size: 34px;
   line-height: 1;
-  letter-spacing: -0.06em;
+  letter-spacing: -0.04em;
 }
 
 .metric-card.success strong,
@@ -690,6 +1034,7 @@ button {
 .metric-icon {
   display: grid;
   place-items: center;
+  flex: 0 0 auto;
   width: 44px;
   height: 44px;
   color: #9caab1;
@@ -704,12 +1049,12 @@ button {
 
 .table-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(250px, 1fr));
+  grid-template-columns: repeat(4, minmax(270px, 1fr));
   gap: 16px;
 }
 
 .table-card {
-  min-height: 332px;
+  min-height: 390px;
   padding: 22px;
   border-radius: 18px;
 }
@@ -761,6 +1106,7 @@ button {
   align-self: flex-start;
   padding: 6px 10px;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .success .state-badge {
@@ -784,13 +1130,14 @@ button {
 .flight-row {
   display: grid;
   grid-template-columns: auto 1fr auto;
-  gap: 14px;
-  margin-top: 28px;
+  gap: 12px;
+  margin-top: 26px;
 }
 
 .flight-cups {
   display: flex;
   gap: 7px;
+  min-width: 0;
 }
 
 .flight-cups span {
@@ -802,24 +1149,42 @@ button {
 }
 
 .flight-cups span.active {
+  border-color: rgba(111, 207, 122, 0.5);
+  background: linear-gradient(180deg, rgba(111, 207, 122, 0.28), rgba(111, 207, 122, 0.12));
+}
+
+.flight-cups span.current {
   border-color: rgba(224, 184, 74, 0.58);
   background: linear-gradient(180deg, rgba(224, 184, 74, 0.32), rgba(216, 169, 53, 0.18));
 }
 
+.current-flight {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(224, 184, 74, 0.16);
+  border-radius: 12px;
+  background: rgba(216, 169, 53, 0.06);
+}
+
+.progress-stack {
+  display: grid;
+  gap: 18px;
+  margin-top: 18px;
+}
+
 .progress-head {
   justify-content: space-between;
-  margin-top: 24px;
   color: #b6c5cb;
 }
 
 .progress-head strong {
-  font-size: 20px;
+  font-size: 18px;
   color: #f1f7f8;
 }
 
 .progress-track {
   height: 10px;
-  margin-top: 12px;
+  margin-top: 10px;
   border-radius: 999px;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.055);
@@ -832,6 +1197,10 @@ button {
   background: linear-gradient(90deg, #d2a247, #ebce6a);
 }
 
+.progress-block:first-child .progress-track span {
+  background: linear-gradient(90deg, #6fcf7a, #a7dc87);
+}
+
 .progress-track.slim {
   height: 8px;
   margin-top: 10px;
@@ -840,7 +1209,8 @@ button {
 .table-meta {
   justify-content: space-between;
   gap: 12px;
-  margin-top: 14px;
+  margin-top: 16px;
+  flex-wrap: wrap;
 }
 
 .table-meta span {
@@ -849,7 +1219,7 @@ button {
   gap: 5px;
 }
 
-.table-meta span:nth-child(2) {
+.table-meta span:first-child {
   color: var(--gold-soft);
 }
 
@@ -857,9 +1227,9 @@ button {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 22px;
+  margin-top: 18px;
   padding: 12px;
-  color: #ff7b74;
+  color: #ff9089;
   border-radius: 12px;
   background: rgba(224, 82, 82, 0.1);
 }
@@ -936,6 +1306,20 @@ button {
   font-weight: 700;
 }
 
+.category-breakdown {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.category-breakdown span {
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
 .alert-counts {
   display: flex;
   gap: 8px;
@@ -958,7 +1342,7 @@ button {
 }
 
 .alert-item {
-  min-height: 60px;
+  min-height: 64px;
   gap: 12px;
   padding: 14px;
   border: 1px solid var(--line);
@@ -982,13 +1366,21 @@ button {
   background: var(--orange);
 }
 
-.alert-item strong {
+.alert-copy {
+  display: grid;
+  gap: 4px;
   flex: 1;
+  min-width: 0;
+}
+
+.alert-copy strong {
+  color: #edf5f7;
 }
 
 .alert-item em {
   color: var(--muted);
   font-style: normal;
+  white-space: nowrap;
 }
 
 .alert-icon {
@@ -1015,6 +1407,48 @@ button {
   background: rgba(255, 255, 255, 0.035);
 }
 
+.advanced-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.advanced-group {
+  padding: 18px;
+  border-color: rgba(216, 169, 53, 0.16);
+  border-radius: 16px;
+}
+
+.advanced-group header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.advanced-group header p {
+  margin-top: 6px;
+}
+
+.range-badge {
+  padding: 6px 10px;
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.range-badge.success {
+  color: var(--green);
+  border-color: rgba(111, 207, 122, 0.22);
+  background: rgba(111, 207, 122, 0.1);
+}
+
+.range-badge.danger {
+  color: var(--red);
+  border-color: rgba(224, 82, 82, 0.24);
+  background: rgba(224, 82, 82, 0.1);
+}
+
 .candidate-list {
   display: grid;
   gap: 10px;
@@ -1023,10 +1457,11 @@ button {
 .candidate-card {
   justify-content: space-between;
   gap: 14px;
-  min-height: 70px;
-  padding: 14px 18px;
-  border-color: rgba(216, 169, 53, 0.16);
+  min-height: 62px;
+  padding: 12px 14px;
+  border-color: rgba(216, 169, 53, 0.12);
   border-radius: 14px;
+  box-shadow: none;
 }
 
 .candidate-card > div {
@@ -1060,7 +1495,7 @@ button {
 }
 
 .candidate-card b {
-  font-size: 26px;
+  font-size: 22px;
   color: #e9f1f3;
 }
 
@@ -1114,24 +1549,39 @@ button {
     padding: 18px;
   }
 
-  .hero-panel,
-  .operations-grid {
-    grid-template-columns: 1fr;
-  }
-
   .hero-panel {
-    display: grid;
+    grid-template-columns: 1fr;
   }
 
   .toolbar {
     justify-content: flex-start;
+    max-width: none;
   }
 
   .operations-grid,
   .quick-grid,
   .summary-grid,
-  .table-grid {
+  .table-grid,
+  .advanced-grid {
     grid-template-columns: 1fr;
+  }
+
+  .panel-heading,
+  .section-heading,
+  .flight-row,
+  .category-line,
+  .alert-item,
+  .candidate-card,
+  .advanced-group header {
+    align-items: flex-start;
+  }
+
+  .flight-row,
+  .category-line,
+  .candidate-card,
+  .advanced-group header {
+    grid-template-columns: 1fr;
+    flex-direction: column;
   }
 }
 </style>

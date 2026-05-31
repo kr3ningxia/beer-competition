@@ -1,19 +1,51 @@
 <template>
-  <div class="page">
-    <section class="card">
-      <h1>个人资料</h1>
-      <p>姓名：{{ me?.displayName || '-' }}</p>
-      <p>手机号：{{ me?.phone || '-' }}</p>
-      <div class="actions">
-        <button class="ghost" @click="$router.push('/competitions')">返回比赛列表</button>
-        <button class="danger" @click="logout">退出登录</button>
+  <main class="app-shell">
+    <section class="top-panel">
+      <p class="eyebrow">我的</p>
+      <h1 class="page-title">评审信息</h1>
+      <div class="profile-head">
+        <strong>{{ me?.displayName || '-' }}</strong>
+        <span>{{ me?.roleLabel }} · {{ me?.tableName }}</span>
       </div>
     </section>
-  </div>
+
+    <section class="card">
+      <div class="profile-list">
+        <div>
+          <span>手机号</span>
+          <strong>{{ me?.phone || '-' }}</strong>
+        </div>
+        <div>
+          <span>微信号</span>
+          <strong>{{ me?.wechat || '-' }}</strong>
+        </div>
+        <div>
+          <span>当前比赛</span>
+          <strong>{{ me?.currentCompetition || '-' }}</strong>
+        </div>
+        <div>
+          <span>资质信息</span>
+          <strong>{{ me?.qualification || '-' }}</strong>
+        </div>
+      </div>
+      <p class="caption">如信息有误，请联系现场工作人员。</p>
+    </section>
+
+    <section class="card stack">
+      <button class="button secondary full" type="button" @click="$router.push('/competitions')">返回扫码</button>
+      <button class="button danger full" type="button" @click="logout">退出登录</button>
+    </section>
+
+    <nav class="bottom-nav" :style="{ gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))` }">
+      <router-link v-for="item in navItems" :key="item.to" class="nav-item" :to="item.to">
+        {{ item.label }}
+      </router-link>
+    </nav>
+  </main>
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { fetchMe } from '@/api/judge'
 import { clearSession } from '@/utils/auth'
@@ -21,8 +53,19 @@ import { clearSession } from '@/utils/auth'
 const router = useRouter()
 const me = ref(null)
 
+const navItems = computed(() => {
+  const items = [
+    { label: '扫码', to: '/competitions' },
+    { label: '已评', to: '/judged' },
+  ]
+  if (me.value?.role === 'CAPTAIN') items.push({ label: '本桌', to: '/captain' })
+  items.push({ label: '我的', to: '/profile' })
+  return items
+})
+
 function logout() {
   clearSession()
+  localStorage.removeItem('judge_mock_user')
   router.push('/login')
 }
 
@@ -32,34 +75,47 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.page {
-  padding: 20px;
+.profile-head {
+  display: grid;
+  gap: 4px;
+  margin-top: 16px;
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.1);
 }
 
-.card {
-  background: #fff;
-  border-radius: 18px;
-  padding: 20px;
-}
-
-.actions {
-  display: flex;
-  gap: 12px;
-  margin-top: 20px;
-}
-
-button {
-  border: none;
-  border-radius: 12px;
-  padding: 12px 16px;
-}
-
-.ghost {
-  background: #f1f5f9;
-}
-
-.danger {
-  background: #ef4444;
+.profile-head strong {
   color: #fff;
+  font-size: 22px;
+}
+
+.profile-head span {
+  color: rgba(248, 250, 252, 0.72);
+}
+
+.profile-list {
+  display: grid;
+  gap: 0;
+}
+
+.profile-list div {
+  display: grid;
+  gap: 5px;
+  border-bottom: 1px solid #eaecf0;
+  padding: 13px 0;
+}
+
+.profile-list div:last-child {
+  border-bottom: 0;
+}
+
+.profile-list span {
+  color: #667085;
+  font-size: 13px;
+}
+
+.profile-list strong {
+  color: #18222f;
+  line-height: 1.5;
 }
 </style>
