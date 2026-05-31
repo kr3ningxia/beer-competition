@@ -7,10 +7,11 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @Data
 @Builder
-public class CompetitionVO {
+public class CompetitionDetailVO {
 
     private Long id;
     private String code;
@@ -23,13 +24,18 @@ public class CompetitionVO {
     private BigDecimal entryFee;
     private String currentStageLabel;
     private CompetitionPrimaryActionVO primaryAction;
-    private Integer readyCount;
-    private Integer checkTotal;
-    private Integer alertCount;
-    private String nextAction;
-    private List<String> dataIntegrityIssues;
+    private List<CompetitionConfigNameVO> categories;
+    private List<CompetitionConfigNameVO> styles;
+    private List<EntryFieldConfigVO> entryFields;
+    private List<JudgeTableVO> judgeTables;
+    private List<ScoreConfigVO> scoreConfigs;
+    private List<CompetitionCheckVO> checks;
+    private List<CompetitionStageCheckVO> stageChecks;
+    private Map<String, Boolean> editableScopes;
     private EntrySummaryVO entriesSummary;
+    private List<CompetitionEntryVO> entries;
     private ProgressSummaryVO progressSummary;
-    private Integer judgeTableCount;
-    private Integer judgeCount;
+    private ResultSetupVO resultSetup;
+    private List<CompetitionAlertVO> alerts;
+    private List<String> dataIntegrityIssues;
 }

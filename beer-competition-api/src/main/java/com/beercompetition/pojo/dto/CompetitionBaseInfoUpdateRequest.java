@@ -9,7 +9,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
-public class CompetitionCreateRequest {
+public class CompetitionBaseInfoUpdateRequest {
 
     @NotBlank(message = "比赛名称不能为空")
     private String name;

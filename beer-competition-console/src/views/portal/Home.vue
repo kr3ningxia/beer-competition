@@ -5,8 +5,13 @@
         <span class="label-chip tone-green">{{ activeCompetition.stage }}</span>
         <h1>{{ activeCompetition.name }}</h1>
         <p>{{ activeCompetition.description }}</p>
+        <div class="hero-facts" aria-label="赛事关键信息">
+          <span>比赛日期 {{ activeCompetition.date }}</span>
+          <span>{{ activeCompetition.categories.length }} 个投递组别</span>
+          <span>报名费 ¥{{ activeCompetition.entryFee }} / 款</span>
+        </div>
         <div class="hero-actions">
-          <RouterLink class="primary-action" to="/portal/submit">提交酒款</RouterLink>
+          <RouterLink class="primary-action" :to="heroAction.to">{{ heroAction.label }}</RouterLink>
           <RouterLink class="secondary-action" to="/portal/entries">查看我的酒款</RouterLink>
         </div>
       </div>
@@ -14,6 +19,10 @@
       <aside class="event-ticket" aria-label="赛事报名信息">
         <span>{{ activeCompetition.shortName }}</span>
         <dl>
+          <div>
+            <dt>比赛日期</dt>
+            <dd>{{ activeCompetition.date }}</dd>
+          </div>
           <div>
             <dt>报名截止</dt>
             <dd>{{ activeCompetition.registrationDeadline }}</dd>
@@ -30,20 +39,53 @@
       </aside>
     </section>
 
-    <section class="status-panel brewer-card">
+    <section class="events-panel brewer-card">
       <div class="section-head">
         <div>
-          <h2 class="portal-section-title">我的报名进度</h2>
-          <p>{{ breweryProfile.breweryName }} 当前有 {{ entries.length }} 款参赛酒，优先处理付款和现场标签。</p>
+          <h2 class="portal-section-title">开放报名赛事</h2>
+          <p>先确认要参加的赛事，再进入提交、付款、标签和寄样流程。</p>
         </div>
         <RouterLink to="/portal/events">全部赛事</RouterLink>
       </div>
 
-      <div class="status-grid">
-        <RouterLink v-for="item in progressCards" :key="item.label" :to="item.to" class="status-card">
+      <div class="event-grid">
+        <article v-for="competition in openCompetitions" :key="competition.id" class="open-event-card">
+          <div>
+            <span :class="['label-chip', competition.id === activeCompetition.id ? 'tone-green' : 'tone-amber']">
+              {{ competition.id === activeCompetition.id ? '推荐报名' : competition.stage }}
+            </span>
+            <h3>{{ competition.name }}</h3>
+            <p>{{ competition.city }} · {{ competition.venue }}</p>
+          </div>
+          <div class="event-card-meta">
+            <span><small>报名截止</small><b>{{ competition.registrationDeadline }}</b></span>
+            <span><small>报名费</small><b>¥{{ competition.entryFee }} / 款</b></span>
+            <span><small>我的报名</small><b>{{ entryCount(competition.id) }} 款</b></span>
+          </div>
+          <div class="event-card-actions">
+            <RouterLink :to="`/portal/events/${competition.id}`">查看赛事</RouterLink>
+            <RouterLink class="event-primary" to="/portal/submit">提交酒款</RouterLink>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="next-panel brewer-card">
+      <div class="section-head">
+        <div>
+          <h2 class="portal-section-title">我的下一步</h2>
+          <p>{{ breweryProfile.breweryName }} 当前有 {{ entries.length }} 款参赛酒，优先处理会影响参赛完成度的事项。</p>
+        </div>
+        <RouterLink to="/portal/entries">查看全部酒款</RouterLink>
+      </div>
+
+      <div class="next-grid">
+        <RouterLink v-for="item in nextActions" :key="item.label" :to="item.to" class="next-card">
           <component :is="item.icon" />
-          <span>{{ item.label }}</span>
-          <strong>{{ item.value }}</strong>
+          <div>
+            <span>{{ item.label }}</span>
+            <strong>{{ item.value }}</strong>
+          </div>
           <p>{{ item.hint }}</p>
         </RouterLink>
       </div>
@@ -118,19 +160,32 @@
 <script setup>
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
-import { CircleCheck, Money, Postcard, Tickets } from '@element-plus/icons-vue'
-import { activeCompetition, breweryProfile, entries, statusMeta } from './mockData'
+import { CircleCheck, Money, Tickets } from '@element-plus/icons-vue'
+import { activeCompetition, breweryProfile, competitions, entries, statusMeta } from './mockData'
 
 const paidEntries = computed(() => entries.filter((entry) => entry.paymentStatus === 'PAID'))
 const unpaidEntries = computed(() => entries.filter((entry) => entry.status === 'PENDING_PAYMENT'))
 const storedEntries = computed(() => entries.filter((entry) => entry.status === 'STORED' || entry.status === 'RESULT_PUBLISHED'))
 const resultEntries = computed(() => entries.filter((entry) => entry.status === 'RESULT_PUBLISHED'))
 const labelReadyEntries = computed(() => paidEntries.value.filter((entry) => !entry.storedAt))
+const openCompetitions = computed(() => competitions.filter((competition) => competition.status === 'REGISTRATION_OPEN'))
 
-const progressCards = computed(() => [
+const heroAction = computed(() => {
+  if (unpaidEntries.value.length > 0) {
+    return { label: '去付款', to: '/portal/payment' }
+  }
+  if (labelReadyEntries.value.length > 0) {
+    return { label: '下载现场标签', to: '/portal/payment' }
+  }
+  if (resultEntries.value.length > 0) {
+    return { label: '查看结果反馈', to: '/portal/results' }
+  }
+  return { label: '提交酒款', to: '/portal/submit' }
+})
+
+const nextActions = computed(() => [
   { label: '待付款', value: unpaidEntries.value.length, hint: '完成付款后生成现场标签', icon: Money, to: '/portal/payment' },
   { label: '待打印标签', value: labelReadyEntries.value.length, hint: '下载 UUID 标签并贴瓶或外箱', icon: Tickets, to: '/portal/payment' },
-  { label: '已入库', value: storedEntries.value.length, hint: '主办方已确认收样', icon: Postcard, to: '/portal/entries' },
   { label: '结果可查', value: resultEntries.value.length, hint: '含奖项、评分和评语', icon: CircleCheck, to: '/portal/results' },
 ])
 
@@ -141,6 +196,10 @@ const flowSteps = computed(() => [
   { key: 'stored', index: '04', label: '酒样入库', hint: `${storedEntries.value.length} 款已入库`, active: storedEntries.value.length > 0 },
   { key: 'result', index: '05', label: '结果反馈', hint: `${resultEntries.value.length} 款可查看`, active: resultEntries.value.length > 0 },
 ])
+
+function entryCount(competitionId) {
+  return entries.filter((entry) => entry.competitionId === competitionId).length
+}
 </script>
 
 <style scoped>
@@ -200,6 +259,24 @@ const flowSteps = computed(() => [
   color: #eadabd;
   font-size: 17px;
   line-height: 1.75;
+}
+
+.hero-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.hero-facts span {
+  min-height: 32px;
+  padding: 6px 10px;
+  color: #fff8e8;
+  background: rgba(255, 250, 240, 0.11);
+  border: 1px solid rgba(255, 250, 240, 0.2);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .hero-actions {
@@ -281,7 +358,8 @@ dd {
   line-height: 1.55;
 }
 
-.status-panel,
+.events-panel,
+.next-panel,
 .flow-card,
 .rules-card {
   padding: 24px;
@@ -308,16 +386,101 @@ dd {
   white-space: nowrap;
 }
 
-.status-grid {
+.event-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
   margin-top: 18px;
 }
 
-.status-card {
-  min-height: 154px;
-  padding: 18px;
+.open-event-card {
+  display: grid;
+  gap: 18px;
+  min-height: 246px;
+  padding: 20px;
+  background: #fff7e6;
+  border: 1px solid rgba(87, 58, 26, 0.12);
+  border-radius: 8px;
+}
+
+.open-event-card h3 {
+  margin: 16px 0 8px;
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.open-event-card p {
+  margin: 0;
+  color: #746a5f;
+}
+
+.event-card-meta {
+  display: grid;
+  grid-template-columns: 1.3fr 0.8fr 0.7fr;
+  gap: 8px;
+}
+
+.event-card-meta span {
+  padding: 12px;
+  background: rgba(255, 250, 240, 0.7);
+  border: 1px solid rgba(87, 58, 26, 0.1);
+  border-radius: 8px;
+}
+
+.event-card-meta small,
+.event-card-meta b {
+  display: block;
+}
+
+.event-card-meta small {
+  color: #746a5f;
+}
+
+.event-card-meta b {
+  margin-top: 5px;
+  line-height: 1.35;
+}
+
+.event-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-self: end;
+}
+
+.event-card-actions a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 14px;
+  color: #6b4710;
+  background: #fffaf0;
+  border: 1px solid rgba(87, 58, 26, 0.14);
+  border-radius: 8px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.event-card-actions .event-primary {
+  color: #2b1d10;
+  background: #e1a23d;
+  border-color: rgba(87, 58, 26, 0.08);
+}
+
+.next-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.next-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  min-height: 112px;
+  padding: 16px;
   color: #2b1d10;
   text-decoration: none;
   background: #fff7e6;
@@ -326,37 +489,38 @@ dd {
   transition: transform 0.16s ease, box-shadow 0.16s ease;
 }
 
-.status-card:hover {
+.next-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 16px 34px rgba(83, 51, 17, 0.12);
 }
 
-.status-card svg {
+.next-card svg {
   width: 24px;
   height: 24px;
+  margin-top: 3px;
   color: #b87517;
 }
 
-.status-card span,
-.status-card p {
+.next-card span,
+.next-card p {
   color: #746a5f;
 }
 
-.status-card span {
+.next-card span {
   display: block;
-  margin-top: 12px;
   font-size: 13px;
 }
 
-.status-card strong {
+.next-card strong {
   display: block;
   margin-top: 6px;
   font-size: 34px;
   line-height: 1;
 }
 
-.status-card p {
-  margin: 8px 0 0;
+.next-card p {
+  grid-column: 1 / -1;
+  margin: 0;
   font-size: 13px;
   line-height: 1.5;
 }
@@ -487,9 +651,14 @@ dd {
     grid-template-columns: 1fr;
   }
 
-  .status-grid,
+  .event-grid,
+  .next-grid,
   .entry-cards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .event-card-meta {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -507,7 +676,8 @@ dd {
     display: grid;
   }
 
-  .status-grid,
+  .event-grid,
+  .next-grid,
   .entry-cards,
   .flow-line {
     grid-template-columns: 1fr;

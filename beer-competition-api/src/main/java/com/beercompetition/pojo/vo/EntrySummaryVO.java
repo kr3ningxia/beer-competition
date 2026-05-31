@@ -16,4 +16,10 @@ public class EntrySummaryVO {
     private String categoryName;
     private String status;
     private BigDecimal abv;
+    private Integer total;
+    private Integer pendingPayment;
+    private Integer registered;
+    private Integer stored;
+    private Integer canceled;
+    private Integer resultPublished;
 }

@@ -8,27 +8,24 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@TableName("competition")
-public class Competition {
+@TableName("entry_field_config")
+public class EntryFieldConfig {
 
     @TableId(type = IdType.AUTO)
     private Long id;
-    private String code;
-    private String name;
-    private String edition;
-    private LocalDate competitionDate;
-    private LocalDateTime registrationStart;
-    private LocalDateTime registrationDeadline;
-    private String status;
-    private BigDecimal entryFee;
+    private Long competitionId;
+    private String fieldKey;
+    private String fieldLabel;
+    private String fieldType;
+    private Integer requiredFlag;
+    private Integer visibleToJudges;
+    private Integer sortOrder;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

@@ -7,6 +7,8 @@ DROP TABLE IF EXISTS `beer_entry`;
 DROP TABLE IF EXISTS `judge_assignment`;
 DROP TABLE IF EXISTS `judge_table`;
 DROP TABLE IF EXISTS `competition_score_config`;
+DROP TABLE IF EXISTS `entry_field_config`;
+DROP TABLE IF EXISTS `competition_style_config`;
 DROP TABLE IF EXISTS `competition_category`;
 DROP TABLE IF EXISTS `competition`;
 DROP TABLE IF EXISTS `judge_account`;
@@ -68,14 +70,18 @@ CREATE TABLE `judge_account` (
 
 CREATE TABLE `competition` (
   `id` bigint NOT NULL AUTO_INCREMENT,
+  `code` varchar(64) NOT NULL,
   `name` varchar(128) NOT NULL,
+  `edition` varchar(64) NOT NULL DEFAULT '',
   `competition_date` date NOT NULL,
+  `registration_start` datetime DEFAULT NULL,
   `registration_deadline` datetime NOT NULL,
   `status` varchar(32) NOT NULL,
   `entry_fee` decimal(10,2) NOT NULL DEFAULT 0,
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_competition_code` (`code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='比赛';
 
 CREATE TABLE `competition_category` (
@@ -87,6 +93,31 @@ CREATE TABLE `competition_category` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_competition_category_name` (`competition_id`,`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='比赛组别';
+
+CREATE TABLE `competition_style_config` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `competition_id` bigint NOT NULL,
+  `name` varchar(128) NOT NULL,
+  `sort_order` int NOT NULL DEFAULT 0,
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_competition_style_name` (`competition_id`,`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='比赛基础风格';
+
+CREATE TABLE `entry_field_config` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `competition_id` bigint NOT NULL,
+  `field_key` varchar(64) NOT NULL,
+  `field_label` varchar(64) NOT NULL,
+  `field_type` varchar(32) NOT NULL,
+  `required_flag` tinyint NOT NULL DEFAULT 0,
+  `visible_to_judges` tinyint NOT NULL DEFAULT 0,
+  `sort_order` int NOT NULL DEFAULT 0,
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_entry_field_config_key` (`competition_id`,`field_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='报名字段配置';
 
 CREATE TABLE `competition_score_config` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -199,19 +230,29 @@ VALUES
   (1, '13800000011', 'judge-wang', '王评审', 'BJCP National', 1),
   (2, '13800000012', 'judge-li', '李桌长', 'BJCP Certified / Table Captain', 1);
 
-INSERT INTO `competition` (`id`, `name`, `competition_date`, `registration_deadline`, `status`, `entry_fee`)
-VALUES (1, '2026中国精酿啤酒大赛', '2026-08-18', '2026-07-31 23:59:59', 'REGISTRATION_OPEN', 299.00);
+INSERT INTO `competition` (`id`, `code`, `name`, `edition`, `competition_date`, `registration_start`, `registration_deadline`, `status`, `entry_fee`)
+VALUES (1, 'BC-2026', '2026中国精酿啤酒大赛', '第三批次', '2026-08-18', '2026-06-01 10:00:00', '2026-07-31 23:59:59', 'REGISTRATION_OPEN', 299.00);
 
 INSERT INTO `competition_category` (`id`, `competition_id`, `name`, `sort_order`)
 VALUES
   (1, 1, 'IPA', 1),
   (2, 1, '拉格', 2);
 
+INSERT INTO `competition_style_config` (`id`, `competition_id`, `name`, `sort_order`)
+VALUES
+  (1, 1, 'American IPA', 1),
+  (2, 1, 'Double IPA', 2),
+  (3, 1, 'Pilsner', 3);
+
+INSERT INTO `entry_field_config` (`id`, `competition_id`, `field_key`, `field_label`, `field_type`, `required_flag`, `visible_to_judges`, `sort_order`)
+VALUES
+  (1, 1, 'specialIngredients', '增味原料或特殊工艺', 'textarea', 0, 1, 1);
+
 INSERT INTO `competition_score_config` (`id`, `competition_id`, `judge_role_type`, `dimensions_json`)
 VALUES
   (1, 1, 'CROSS', JSON_ARRAY(
-    JSON_OBJECT('key', 'impression', 'label', '整体感受', 'maxScore', 10),
-    JSON_OBJECT('key', 'drinkability', 'label', '适饮性', 'maxScore', 10),
+    JSON_OBJECT('key', 'impression', 'label', '整体感受', 'maxScore', 20),
+    JSON_OBJECT('key', 'drinkability', 'label', '适饮性', 'maxScore', 20),
     JSON_OBJECT('key', 'story', 'label', '记忆点', 'maxScore', 10)
   )),
   (2, 1, 'PROFESSIONAL', JSON_ARRAY(

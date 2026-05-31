@@ -1,10 +1,15 @@
 package com.beercompetition.controller.admin;
 
 import com.beercompetition.common.result.Result;
+import com.beercompetition.pojo.dto.CompetitionBaseInfoUpdateRequest;
 import com.beercompetition.pojo.dto.CompetitionCreateRequest;
+import com.beercompetition.pojo.dto.ConfigNameBatchUpdateRequest;
+import com.beercompetition.pojo.dto.EntryFieldBatchUpdateRequest;
 import com.beercompetition.pojo.dto.JudgeAssignmentCreateRequest;
+import com.beercompetition.pojo.dto.JudgeTableBatchUpdateRequest;
 import com.beercompetition.pojo.dto.ScoreConfigBatchUpdateRequest;
 import com.beercompetition.pojo.enums.UserRole;
+import com.beercompetition.pojo.vo.CompetitionDetailVO;
 import com.beercompetition.pojo.vo.CompetitionVO;
 import com.beercompetition.pojo.vo.CurrentUserResponse;
 import com.beercompetition.pojo.vo.JudgeAccountVO;
@@ -46,6 +51,46 @@ public class AdminController {
     @PostMapping("/competitions")
     public Result<CompetitionVO> createCompetition(@RequestBody @Valid CompetitionCreateRequest request) {
         return Result.success(competitionService.createCompetition(request));
+    }
+
+    @GetMapping("/competitions/{id}")
+    public Result<CompetitionDetailVO> getCompetitionDetail(@PathVariable Long id) {
+        return Result.success(competitionService.getCompetitionDetail(id));
+    }
+
+    @PutMapping("/competitions/{id}/base-info")
+    public Result<CompetitionDetailVO> updateBaseInfo(@PathVariable Long id,
+                                                      @RequestBody @Valid CompetitionBaseInfoUpdateRequest request) {
+        return Result.success(competitionService.updateBaseInfo(id, request));
+    }
+
+    @PutMapping("/competitions/{id}/categories")
+    public Result<CompetitionDetailVO> updateCategories(@PathVariable Long id,
+                                                       @RequestBody @Valid ConfigNameBatchUpdateRequest request) {
+        return Result.success(competitionService.updateCategories(id, request));
+    }
+
+    @PutMapping("/competitions/{id}/styles")
+    public Result<CompetitionDetailVO> updateStyles(@PathVariable Long id,
+                                                   @RequestBody @Valid ConfigNameBatchUpdateRequest request) {
+        return Result.success(competitionService.updateStyles(id, request));
+    }
+
+    @PutMapping("/competitions/{id}/entry-fields")
+    public Result<CompetitionDetailVO> updateEntryFields(@PathVariable Long id,
+                                                        @RequestBody @Valid EntryFieldBatchUpdateRequest request) {
+        return Result.success(competitionService.updateEntryFields(id, request));
+    }
+
+    @PutMapping("/competitions/{id}/judge-tables")
+    public Result<CompetitionDetailVO> updateJudgeTables(@PathVariable Long id,
+                                                        @RequestBody @Valid JudgeTableBatchUpdateRequest request) {
+        return Result.success(competitionService.updateJudgeTables(id, request));
+    }
+
+    @PostMapping("/competitions/{id}/open-registration")
+    public Result<CompetitionDetailVO> openRegistration(@PathVariable Long id) {
+        return Result.success(competitionService.openRegistration(id));
     }
 
     @GetMapping("/judges")

@@ -2,6 +2,7 @@ package com.beercompetition.pojo.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -18,5 +19,6 @@ public class DimensionRequest {
     private BigDecimal score;
 
     @NotNull(message = "满分不能为空")
+    @Positive(message = "满分必须大于 0")
     private BigDecimal maxScore;
 }

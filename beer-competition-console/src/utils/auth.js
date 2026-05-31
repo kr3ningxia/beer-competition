@@ -23,9 +23,41 @@ export function clearSession(scope) {
 }
 
 export function isLoggedIn(scope) {
-  return !!getToken(scope)
+  const token = getToken(scope)
+  if (!token || !isTokenUsable(token, scope)) {
+    clearSession(scope)
+    return false
+  }
+  return true
 }
 
 export function getDisplayName(scope) {
   return localStorage.getItem(USERNAME_KEYS[scope]) || ''
+}
+
+function isTokenUsable(token, scope) {
+  const payload = parseJwtPayload(token)
+  if (!payload) {
+    return false
+  }
+  if (payload.scope && payload.scope !== scope) {
+    return false
+  }
+  if (payload.exp && payload.exp * 1000 <= Date.now()) {
+    return false
+  }
+  return true
+}
+
+function parseJwtPayload(token) {
+  try {
+    const payload = token.split('.')[1]
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/')
+    const json = decodeURIComponent(Array.from(atob(normalized), (char) => {
+      return `%${char.charCodeAt(0).toString(16).padStart(2, '0')}`
+    }).join(''))
+    return JSON.parse(json)
+  } catch {
+    return null
+  }
 }

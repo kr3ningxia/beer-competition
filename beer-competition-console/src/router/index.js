@@ -31,10 +31,13 @@ const routes = [
   {
     path: '/admin',
     component: () => import('@/layouts/AdminLayout.vue'),
+    redirect: '/admin/dashboard',
     meta: { requiresAuth: true, scope: 'admin' },
     children: [
       { path: 'dashboard', component: () => import('@/views/admin/Dashboard.vue') },
       { path: 'competitions', component: () => import('@/views/admin/Competitions.vue') },
+      { path: 'competitions/new', component: () => import('@/views/admin/CompetitionCreate.vue') },
+      { path: 'competitions/:id', component: () => import('@/views/admin/CompetitionDetail.vue') },
       { path: 'judges', component: () => import('@/views/admin/Judges.vue') },
       { path: 'assignments', component: () => import('@/views/admin/Assignments.vue') },
       { path: 'score-config', component: () => import('@/views/admin/ScoreConfig.vue') },

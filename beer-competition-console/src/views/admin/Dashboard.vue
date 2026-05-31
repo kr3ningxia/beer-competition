@@ -2,34 +2,18 @@
   <div class="live-dashboard">
     <section class="hero-panel">
       <div class="hero-main">
-        <p class="eyebrow">比赛现场推进台</p>
+        <p class="eyebrow">当前比赛</p>
         <div class="title-row">
           <h1>{{ competition.name }}</h1>
           <span class="status-pill live">
             <span />
-            {{ competition.currentStage }} · 第 {{ currentStageStep }} / {{ stages.length }} 步
+            当前阶段：{{ competition.currentStage }}
           </span>
         </div>
         <div class="meta-row">
           <span>{{ competition.date }}</span>
           <span>{{ competition.batch }}</span>
-          <span class="time-chip">
-            <Clock />
-            最后更新：{{ competition.updatedAt }}
-          </span>
         </div>
-
-        <div class="stage-compact" aria-label="比赛流程阶段">
-          <span>流程进度</span>
-          <div class="stage-meter">
-            <i :style="{ width: `${stageProgressPercent}%` }" />
-          </div>
-          <strong>{{ currentStageStep }} / {{ stages.length }}</strong>
-        </div>
-
-        <p class="next-step">
-          下一步：{{ competition.nextStep }}
-        </p>
       </div>
 
       <div class="toolbar" aria-label="现场操作">
@@ -53,7 +37,7 @@
       <section class="section-block first-section">
         <div class="section-heading">
           <h2>核心总览</h2>
-          <span>按现场推进口径统计</span>
+          <span>统计当前批次全部评审桌</span>
         </div>
         <div class="summary-grid">
           <article v-for="item in summaryCards" :key="item.label" :class="['metric-card', item.tone]">
@@ -72,7 +56,7 @@
       <section class="section-block">
         <div class="section-heading">
           <h2>评审桌进度</h2>
-          <span>普通评分、桌长汇总、晋级选择分开查看</span>
+          <span>评委评分、桌长确认、入围选择分项查看</span>
         </div>
         <div class="table-grid">
           <article v-for="table in judgeTables" :key="table.tableName" :class="['table-card', table.tone]">
@@ -91,26 +75,26 @@
             </header>
 
             <div class="flight-row">
-              <span>Flight 进度：{{ table.flightCompletedCount }} / {{ table.flightTotalCount }}</span>
-              <div class="flight-cups" aria-label="Flight 进度">
+              <span>轮次进度：{{ table.flightCompletedCount }} / {{ table.flightTotalCount }}</span>
+              <div class="flight-cups" aria-label="轮次进度">
                 <span
                   v-for="index in table.flightTotalCount"
                   :key="index"
                   :class="{ active: index <= table.flightCompletedCount, current: index === table.flightCompletedCount + 1 }"
                 />
               </div>
-              <strong>当前 {{ table.currentFlightName }}</strong>
+              <strong>当前轮次：{{ table.currentFlightName }}</strong>
             </div>
 
             <div class="current-flight">
-              {{ table.currentFlightName }}：{{ table.currentFlightFinalizedCount }} /
-              {{ table.currentFlightEntryCount }} 已汇总
+              {{ table.currentFlightName }} 桌长已确认：{{ table.currentFlightFinalizedCount }} /
+              {{ table.currentFlightEntryCount }}
             </div>
 
             <div class="progress-stack">
               <div class="progress-block">
                 <div class="progress-head">
-                  <span>普通评分</span>
+                  <span>评委评分</span>
                   <strong>{{ table.judgeSubmittedCount }} / {{ table.judgeSubmissionTotal }}</strong>
                 </div>
                 <div class="progress-track">
@@ -120,7 +104,7 @@
 
               <div class="progress-block final">
                 <div class="progress-head">
-                  <span>桌长汇总</span>
+                  <span>桌长确认</span>
                   <strong>{{ table.captainFinalizedCount }} / {{ table.captainFinalizeTotal }}</strong>
                 </div>
                 <div class="progress-track">
@@ -132,11 +116,11 @@
             <div class="table-meta">
               <span>
                 <Medal />
-                本 Flight 晋级：{{ table.advancedSelectedCount }} / {{ table.advancedSuggestedMax }}
+                本轮入围：{{ table.advancedSelectedCount }} / 建议 {{ table.advancedSuggestedMin }}-{{ table.advancedSuggestedMax }}
               </span>
               <span>
                 <Clock />
-                最后汇总：{{ table.lastFinalizeText }}
+                最近桌长确认：{{ table.lastFinalizeText }}
               </span>
             </div>
 
@@ -152,10 +136,10 @@
         <article class="panel category-panel">
           <div class="panel-heading">
             <div>
-              <h2>投报组别汇总进度</h2>
-              <p>按桌长已汇总酒款统计</p>
+              <h2>参赛组别进度</h2>
+              <p>按桌长已确认酒款统计</p>
             </div>
-            <span>共 {{ categories.length }} 个投报组别</span>
+            <span>共 {{ categories.length }} 个参赛组别</span>
           </div>
 
           <div class="category-list">
@@ -167,7 +151,7 @@
                 </div>
                 <p>
                   <b>{{ category.finalizedCount }}</b>
-                  / {{ category.totalCount }} 已汇总
+                  / {{ category.totalCount }} 已确认
                   <em>{{ category.percent }}%</em>
                 </p>
               </div>
@@ -187,11 +171,11 @@
           <div class="panel-heading">
             <div>
               <h2>待处理问题</h2>
-              <p>优先处理会影响评审推进和结果发布的问题</p>
+              <p>优先处理会影响评审进度和结果发布的问题</p>
             </div>
             <div class="alert-counts">
-              <span class="danger">{{ issueCounts.danger }} 严重</span>
-              <span class="warn">{{ issueCounts.warning }} 提醒</span>
+              <span class="danger">{{ issueCounts.danger }} 个阻塞项</span>
+              <span class="warn">{{ issueCounts.warning }} 个需关注</span>
             </div>
           </div>
 
@@ -201,7 +185,7 @@
                 <component :is="issue.icon" />
               </span>
               <div class="alert-copy">
-                <span>{{ issue.tableName }} / {{ issue.flightName }} / {{ issue.targetText }}</span>
+                <span>{{ issue.tableName }} · {{ issue.flightName }} · {{ issue.targetText }}</span>
                 <strong>{{ issue.message }}</strong>
               </div>
               <em>{{ issue.timeText }}</em>
@@ -217,8 +201,8 @@
 
       <section class="section-block">
         <div class="section-heading">
-          <h2>已标记晋级酒款</h2>
-          <span>按评审桌和 Flight 展示，仅显示匿名 UUID</span>
+          <h2>已选入围酒款</h2>
+          <span>按评审桌和轮次展示，仅显示匿名编号</span>
         </div>
         <div class="advanced-grid">
           <article v-for="group in advancedGroups" :key="`${group.tableName}-${group.flightName}`" class="advanced-group">
@@ -239,7 +223,7 @@
                   <span>{{ entry.categoryName }}</span>
                 </div>
                 <p>
-                  <small>共识分</small>
+                  <small>桌长最终分</small>
                   <b>{{ entry.consensusScore }}</b>
                   <CircleCheck v-if="entry.confirmed" />
                 </p>
@@ -247,7 +231,7 @@
             </div>
           </article>
         </div>
-        <p class="privacy-note">现场匿名评审：仅展示酒款 UUID，不展示酒名和厂商。</p>
+        <p class="privacy-note">为保护盲评，仅展示酒款匿名编号，不展示酒名和厂商。</p>
       </section>
 
       <section class="section-block">
@@ -292,16 +276,9 @@ import {
 const competition = {
   name: '2026 中国精酿啤酒大赛',
   date: '2026年5月30日',
-  batch: '第三批次',
+  batch: '当前批次：第三批',
   currentStage: '评审进行中',
-  nextStep: '全部桌长汇总后进入结果确认',
-  updatedAt: '12:19:53',
 }
-
-const stages = ['报名中', '酒样入库', '评审准备', '评审进行中', '结果确认中', '结果已发布']
-const currentStageIndex = stages.indexOf(competition.currentStage)
-const currentStageStep = currentStageIndex + 1
-const stageProgressPercent = Math.round((currentStageStep / stages.length) * 100)
 
 const summary = {
   totalEntries: 268,
@@ -315,11 +292,11 @@ const summary = {
 }
 
 const canPublishResult = summary.pendingFinalizeCount === 0 && summary.openIssueCount === 0
-const publishDisabledReason = canPublishResult ? '' : '全部酒款完成桌长汇总并确认奖项后可发布'
+const publishDisabledReason = canPublishResult ? '' : '全部酒款完成桌长确认，且待处理问题为 0 后可进入结果确认'
 
 const topActions = [
-  { label: '刷新现场数据', badge: '15s', icon: Refresh, tone: 'neutral' },
-  { label: '导出评分数据', icon: Download, tone: 'neutral' },
+  { label: '刷新数据', badge: '15 秒', icon: Refresh, tone: 'neutral' },
+  { label: '导出当前批次评分', icon: Download, tone: 'neutral' },
   {
     label: '进入结果确认',
     icon: Promotion,
@@ -330,30 +307,30 @@ const topActions = [
 ]
 
 const summaryCards = [
-  { label: '参赛酒款', value: summary.totalEntries, hint: '本场已入库酒款', icon: Box, tone: 'neutral' },
+  { label: '本场酒款', value: summary.totalEntries, hint: '当前批次评审酒款', icon: Box, tone: 'neutral' },
   {
-    label: '普通评分提交',
+    label: '评委评分已提交',
     value: `${summary.judgeSubmittedCount} / ${summary.judgeSubmissionTotal}`,
-    hint: '评审已提交原始评分',
+    hint: '评委已提交评分表',
     icon: DataBoard,
     tone: 'success',
   },
   {
-    label: '桌长已汇总',
+    label: '桌长已确认',
     value: `${summary.captainFinalizedCount} / ${summary.captainFinalizeTotal}`,
-    hint: '已形成本桌最终意见',
+    hint: '已生成桌长最终分',
     icon: CircleCheck,
     tone: 'success',
   },
   {
-    label: '待桌长汇总',
+    label: '待桌长确认',
     value: summary.pendingFinalizeCount,
     hint: '仍需桌长确认最终分',
     icon: Clock,
     tone: 'warning',
   },
-  { label: '已标记晋级', value: summary.advancedCount, hint: '各桌已勾选晋级酒款', icon: Medal, tone: 'gold' },
-  { label: '待处理问题', value: summary.openIssueCount, hint: '影响现场推进的问题', icon: Warning, tone: 'danger' },
+  { label: '已选入围', value: summary.advancedCount, hint: '各桌已选择入围酒款', icon: Medal, tone: 'gold' },
+  { label: '待处理问题', value: summary.openIssueCount, hint: '影响评审进度的问题', icon: Warning, tone: 'danger' },
 ]
 
 const judgeTables = [
@@ -395,7 +372,7 @@ const judgeTables = [
     advancedSuggestedMax: 4,
     lastFinalizeText: '1 分钟前',
     statusText: '需要处理',
-    issueText: 'B桌 F4 已选 5 款晋级，超过建议范围',
+    issueText: 'B桌 F4 已选 5 款入围，超过建议范围',
     tone: 'danger',
   },
   {
@@ -416,7 +393,7 @@ const judgeTables = [
     advancedSuggestedMax: 4,
     lastFinalizeText: '8 分钟前',
     statusText: '进度偏慢',
-    issueText: 'C桌 F2 还有 3 款未完成普通评分',
+    issueText: 'C桌 F2 还有 3 款未完成评委评分',
     tone: 'warning',
   },
   {
@@ -437,7 +414,7 @@ const judgeTables = [
     advancedSuggestedMax: 4,
     lastFinalizeText: '18 分钟前',
     statusText: '需要处理',
-    issueText: 'D桌 18 分钟没有新的桌长汇总',
+    issueText: 'D桌 18 分钟没有新的桌长确认',
     tone: 'danger',
   },
 ].map((table) => ({
@@ -523,8 +500,8 @@ const issues = [
     level: 'danger',
     tableName: 'D桌',
     flightName: 'F2',
-    targetText: '桌长',
-    message: '18 分钟没有新的桌长汇总',
+    targetText: '桌长确认',
+    message: '18 分钟没有新的桌长确认',
     timeText: '刚刚',
     icon: Warning,
   },
@@ -532,17 +509,17 @@ const issues = [
     level: 'warning',
     tableName: 'C桌',
     flightName: 'F2',
-    targetText: '普通评分',
-    message: '还有 3 款酒缺普通评分',
+    targetText: '评委评分',
+    message: '还有 3 款酒缺评委评分',
     timeText: '3 分钟前',
     icon: Clock,
   },
   {
     level: 'warning',
     tableName: 'A桌',
-    flightName: '王评审',
+    flightName: '评委王芳',
     targetText: '评语',
-    message: '2 条评语未达到字数要求',
+    message: '2 条评语不符合提交要求',
     timeText: '5 分钟前',
     icon: Document,
   },
@@ -551,7 +528,7 @@ const issues = [
     tableName: 'D桌',
     flightName: 'F2',
     targetText: 'BC-2026-STOUT-0042',
-    message: '缺少桌长最终意见',
+    message: '缺少桌长最终分',
     timeText: '8 分钟前',
     icon: Warning,
   },
@@ -559,8 +536,8 @@ const issues = [
     level: 'neutral',
     tableName: 'B桌',
     flightName: 'F4',
-    targetText: '晋级选择',
-    message: '晋级数量为 5 款，建议调整为 2-4 款',
+    targetText: '入围选择',
+    message: '入围数量为 5 款，建议调整为 2-4 款',
     timeText: '12 分钟前',
     icon: Medal,
   },
@@ -628,16 +605,16 @@ const advancedGroups = [
 })
 
 const quickActions = [
-  { title: '查看评分明细', description: '查看普通评分与桌长最终意见', icon: Document },
+  { title: '查看评分明细', description: '查看评委评分与桌长最终分', icon: Document },
   { title: '调整评审桌人员', description: '处理现场人员变动', icon: User },
-  { title: '查看评分规则', description: '确认本场评分项目与满分', icon: Setting },
-  { title: '导出现场数据', description: '下载原始分、最终分和晋级记录', icon: Download },
+  { title: '查看评分规则', description: '查看本场评分项目与满分', icon: Setting },
+  { title: '导出现场数据', description: '下载评委评分、桌长最终分和入围记录', icon: Download },
   {
     title: '进入结果确认',
     description: '确认奖项后发布比赛结果',
     icon: Promotion,
     disabled: !canPublishResult,
-    disabledReason: `还有 ${summary.pendingFinalizeCount} 款酒等待桌长汇总`,
+    disabledReason: `还有 ${summary.pendingFinalizeCount} 款酒等待桌长确认`,
   },
 ]
 </script>
@@ -773,7 +750,6 @@ const quickActions = [
 .table-meta,
 .privacy-note,
 .quick-card span,
-.next-step,
 .current-flight,
 .category-breakdown,
 .advanced-group header p,
@@ -797,8 +773,7 @@ const quickActions = [
 .category-line,
 .alert-item,
 .candidate-card,
-.quick-grid,
-.stage-compact {
+.quick-grid {
   display: flex;
   align-items: center;
 }
@@ -856,7 +831,6 @@ h3 {
   flex-wrap: wrap;
 }
 
-.time-chip,
 .toolbar-button,
 .state-badge,
 .category-code,
@@ -868,48 +842,6 @@ h3 {
   border-radius: 10px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.035);
-}
-
-.time-chip {
-  padding: 8px 12px;
-  color: #adbdc4;
-}
-
-.stage-compact {
-  gap: 12px;
-  max-width: 420px;
-  margin-top: 18px;
-  color: #a8b8bf;
-}
-
-.stage-compact > span,
-.stage-compact > strong {
-  flex: 0 0 auto;
-  font-size: 13px;
-}
-
-.stage-compact > strong {
-  color: var(--gold-soft);
-}
-
-.stage-meter {
-  flex: 1 1 auto;
-  height: 8px;
-  min-width: 120px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.07);
-}
-
-.stage-meter i {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #6fcf7a, #e0b84a);
-}
-
-.next-step {
-  margin-top: 10px;
 }
 
 svg {

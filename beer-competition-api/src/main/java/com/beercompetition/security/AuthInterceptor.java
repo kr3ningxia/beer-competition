@@ -7,6 +7,7 @@ import com.beercompetition.common.exception.UnauthorizedException;
 import com.beercompetition.pojo.enums.UserRole;
 import com.beercompetition.properties.JwtProperties;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,10 @@ public class AuthInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            return true;
+        }
+
         UserRole requiredRole = resolveRequiredRole(request.getRequestURI());
         if (requiredRole == null) {
             return true;
@@ -35,7 +40,12 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
 
         String token = authorization.substring(BEARER_PREFIX.length());
-        Claims claims = JwtUtil.parseToken(jwtProperties.getSecretKey(), token);
+        Claims claims;
+        try {
+            claims = JwtUtil.parseToken(jwtProperties.getSecretKey(), token);
+        } catch (JwtException | IllegalArgumentException ex) {
+            throw new UnauthorizedException("未登录或登录状态已失效");
+        }
         String role = claims.get("role", String.class);
         if (!requiredRole.name().equals(role)) {
             throw new ForbiddenException("当前账号无权访问该资源");
