@@ -17,6 +17,22 @@ export function setSession(scope, token, displayName) {
   localStorage.setItem(USERNAME_KEYS[scope], displayName || '')
 }
 
+export function createLocalSessionToken(scope, displayName) {
+  const now = Math.floor(Date.now() / 1000)
+  const payload = {
+    scope,
+    displayName,
+    iat: now,
+    exp: now + 24 * 60 * 60,
+  }
+
+  return [
+    encodeBase64Url({ alg: 'none', typ: 'JWT' }),
+    encodeBase64Url(payload),
+    'local',
+  ].join('.')
+}
+
 export function clearSession(scope) {
   localStorage.removeItem(TOKEN_KEYS[scope])
   localStorage.removeItem(USERNAME_KEYS[scope])
@@ -60,4 +76,12 @@ function parseJwtPayload(token) {
   } catch {
     return null
   }
+}
+
+function encodeBase64Url(value) {
+  const json = JSON.stringify(value)
+  const bytes = encodeURIComponent(json).replace(/%([0-9A-F]{2})/g, (_, hex) => {
+    return String.fromCharCode(Number.parseInt(hex, 16))
+  })
+  return btoa(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }

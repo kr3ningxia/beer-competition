@@ -68,7 +68,7 @@ import { clearSession, getDisplayName } from '@/utils/auth'
 const router = useRouter()
 const route = useRoute()
 const displayName = getDisplayName('admin')
-const isDashboard = computed(() => route.path === '/admin/dashboard' || route.path.startsWith('/admin/competitions'))
+const isDashboard = computed(() => ['/admin/dashboard', '/admin/judges'].includes(route.path) || route.path.startsWith('/admin/competitions'))
 
 const navItems = [
   { path: '/admin/dashboard', label: '现场看板', icon: DataBoard },

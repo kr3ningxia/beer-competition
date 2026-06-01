@@ -34,7 +34,7 @@
 import { reactive } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
-import { setSession } from '@/utils/auth'
+import { createLocalSessionToken, setSession } from '@/utils/auth'
 
 const router = useRouter()
 const form = reactive({ phone: '13800000001', code: '123456' })
@@ -44,7 +44,8 @@ function send() {
 }
 
 function submit() {
-  setSession('portal', 'mock-portal-token', '山雾麦芽工坊')
+  const displayName = '山雾麦芽工坊'
+  setSession('portal', createLocalSessionToken('portal', displayName), displayName)
   ElMessage.success('已进入厂商端')
   router.push('/portal/home')
 }
