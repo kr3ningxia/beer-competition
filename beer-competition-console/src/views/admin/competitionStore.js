@@ -43,6 +43,7 @@ export const fieldTypeLabels = {
   textarea: '长文本',
   number: '数字',
   select: '选项',
+  multi_select: '多选',
 }
 
 export const competitions = reactive([

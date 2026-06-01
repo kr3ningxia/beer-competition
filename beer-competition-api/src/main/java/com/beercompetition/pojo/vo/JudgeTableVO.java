@@ -3,6 +3,8 @@ package com.beercompetition.pojo.vo;
 import lombok.Builder;
 import lombok.Data;
 
+import java.util.List;
+
 @Data
 @Builder
 public class JudgeTableVO {
@@ -14,4 +16,5 @@ public class JudgeTableVO {
     private Integer crossCount;
     private Integer finalized;
     private Integer total;
+    private List<JudgeAssignmentVO> assignments;
 }

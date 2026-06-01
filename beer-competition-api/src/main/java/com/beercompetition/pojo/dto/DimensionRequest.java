@@ -21,4 +21,6 @@ public class DimensionRequest {
     @NotNull(message = "满分不能为空")
     @Positive(message = "满分必须大于 0")
     private BigDecimal maxScore;
+
+    private String notePrompt;
 }

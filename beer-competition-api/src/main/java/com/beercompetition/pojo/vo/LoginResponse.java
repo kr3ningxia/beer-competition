@@ -11,4 +11,6 @@ public class LoginResponse {
     private Long userId;
     private String role;
     private String displayName;
+    private Integer status;
+    private Boolean profileRequired;
 }

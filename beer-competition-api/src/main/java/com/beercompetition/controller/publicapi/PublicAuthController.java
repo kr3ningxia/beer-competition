@@ -40,4 +40,9 @@ public class PublicAuthController {
     public Result<LoginResponse> judgeLogin(@RequestBody @Valid SmsLoginRequest request) {
         return Result.success(authService.judgeLogin(request));
     }
+
+    @PostMapping("/judge/register")
+    public Result<LoginResponse> judgeRegister(@RequestBody @Valid SmsLoginRequest request) {
+        return Result.success(authService.judgeRegister(request));
+    }
 }

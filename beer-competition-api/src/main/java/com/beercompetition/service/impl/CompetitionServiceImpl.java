@@ -44,6 +44,7 @@ import com.beercompetition.pojo.vo.CompetitionStageCheckVO;
 import com.beercompetition.pojo.vo.CompetitionVO;
 import com.beercompetition.pojo.vo.EntryFieldConfigVO;
 import com.beercompetition.pojo.vo.EntrySummaryVO;
+import com.beercompetition.pojo.vo.JudgeAssignmentVO;
 import com.beercompetition.pojo.vo.JudgeTableVO;
 import com.beercompetition.pojo.vo.ProgressSummaryVO;
 import com.beercompetition.pojo.vo.ResultSetupVO;
@@ -70,6 +71,9 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.concurrent.ThreadLocalRandom;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 
 @Service
 @RequiredArgsConstructor
@@ -85,6 +89,14 @@ public class CompetitionServiceImpl implements CompetitionService {
     private static final String GROUP_FUTURE = "future";
     private static final String GROUP_LOCKED = "locked";
     private static final String GROUP_DATA_ISSUE = "data_issue";
+    private static final int COMPETITION_CODE_RETRY_LIMIT = 5;
+    private static final int CODE_SUFFIX_BOUND = 36 * 36 * 36 * 36 * 36;
+    private static final int CROSS_MIN_DIMENSIONS = 2;
+    private static final int CROSS_MAX_DIMENSIONS = 4;
+    private static final int DEFAULT_MIN_COMMENT_LENGTH = 0;
+    private static final String COMPETITION_CODE_PREFIX = "BC";
+    private static final DateTimeFormatter COMPETITION_CODE_DATE_FORMAT = DateTimeFormatter.BASIC_ISO_DATE;
+    private static final Set<String> ENTRY_FIELD_TYPES = Set.of("text", "textarea", "number", "select", "multi_select");
 
     private final CompetitionMapper competitionMapper;
     private final CompetitionCategoryMapper competitionCategoryMapper;
@@ -116,28 +128,29 @@ public class CompetitionServiceImpl implements CompetitionService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public CompetitionVO createCompetition(CompetitionCreateRequest request) {
-        // 1) 参数规范化与唯一性校验
-        String code = normalizeRequired(request.getCode(), "比赛编号不能为空");
-        assertCompetitionCodeUnique(code, null);
+        // 1) 参数规范化与完整性校验
+        validateCreateRequest(request);
+        List<ConfigNameItemRequest> categories = normalizeNameItems(request.getCategories(), "投递组别");
+        List<EntryFieldItemRequest> entryFields = normalizeEntryFields(request.getEntryFields() == null ? List.of() : request.getEntryFields());
+        validateScoreConfigs(request.getScoreConfigs());
 
         // 2) 构造草稿比赛主记录
         Competition competition = Competition.builder()
                 .name(normalizeRequired(request.getName(), "比赛名称不能为空"))
-                .code(code)
                 .edition(normalizeRequired(request.getEdition(), "届次不能为空"))
                 .competitionDate(request.getCompetitionDate())
                 .registrationStart(request.getRegistrationStart())
                 .registrationDeadline(request.getRegistrationDeadline())
                 .status(CompetitionStatus.DRAFT.name())
                 .entryFee(request.getEntryFee())
+                .styleLibraryVersion(normalizeRequired(request.getStyleLibraryVersion(), "基础风格库不能为空"))
                 .build();
 
-        // 3) 写入数据库，数据库唯一约束兜底防重
-        try {
-            competitionMapper.insert(competition);
-        } catch (DuplicateKeyException ex) {
-            throw new BaseException("比赛编号已存在");
-        }
+        // 3) 事务内写入比赛和新建页完整配置
+        insertCompetitionWithGeneratedCode(competition);
+        replaceCategories(competition.getId(), categories);
+        replaceEntryFields(competition.getId(), entryFields);
+        replaceScoreConfigs(competition.getId(), request.getScoreConfigs());
 
         // 4) 返回列表口径摘要
         Competition saved = competitionMapper.selectById(competition.getId());
@@ -190,21 +203,10 @@ public class CompetitionServiceImpl implements CompetitionService {
         assertEntryStructureEditable(competition);
         List<ConfigNameItemRequest> items = normalizeNameItems(request.getItems(), "投递组别");
 
-        // 2) 清理当前比赛旧组别
-        competitionCategoryMapper.delete(new LambdaQueryWrapper<CompetitionCategory>()
-                .eq(CompetitionCategory::getCompetitionId, id));
+        // 2) 替换当前比赛投递组别
+        replaceCategories(id, items);
 
-        // 3) 批量写入新组别
-        int sort = 0;
-        for (ConfigNameItemRequest item : items) {
-            competitionCategoryMapper.insert(CompetitionCategory.builder()
-                    .competitionId(id)
-                    .name(item.getName())
-                    .sortOrder(resolveSort(item.getSortOrder(), sort++))
-                    .build());
-        }
-
-        // 4) 重新计算配置检查并返回详情
+        // 3) 重新计算配置检查并返回详情
         return getCompetitionDetail(id);
     }
 
@@ -242,25 +244,10 @@ public class CompetitionServiceImpl implements CompetitionService {
         assertEntryStructureEditable(competition);
         List<EntryFieldItemRequest> items = normalizeEntryFields(request.getItems());
 
-        // 2) 清理当前比赛旧报名字段
-        entryFieldConfigMapper.delete(new LambdaQueryWrapper<EntryFieldConfig>()
-                .eq(EntryFieldConfig::getCompetitionId, id));
+        // 2) 替换当前比赛报名补充字段
+        replaceEntryFields(id, items);
 
-        // 3) 批量写入新报名字段
-        int sort = 0;
-        for (EntryFieldItemRequest item : items) {
-            entryFieldConfigMapper.insert(EntryFieldConfig.builder()
-                    .competitionId(id)
-                    .fieldKey(item.getFieldKey())
-                    .fieldLabel(item.getFieldLabel())
-                    .fieldType(item.getFieldType())
-                    .requiredFlag(Boolean.TRUE.equals(item.getRequired()) ? 1 : 0)
-                    .visibleToJudges(Boolean.TRUE.equals(item.getVisibleToJudges()) ? 1 : 0)
-                    .sortOrder(resolveSort(item.getSortOrder(), sort++))
-                    .build());
-        }
-
-        // 4) 重新计算配置检查并返回详情
+        // 3) 重新计算配置检查并返回详情
         return getCompetitionDetail(id);
     }
 
@@ -338,22 +325,80 @@ public class CompetitionServiceImpl implements CompetitionService {
         assertJudgeConfigEditable(competition);
         validateScoreConfigs(request.getConfigs());
 
-        // 2) 清理当前比赛旧评分表
+        // 2) 替换当前比赛评分表
+        replaceScoreConfigs(competitionId, request.getConfigs());
+
+        // 3) 返回最新评分表配置
+        return listScoreConfigs(competitionId);
+    }
+
+    private void replaceCategories(Long competitionId, List<ConfigNameItemRequest> items) {
+        competitionCategoryMapper.delete(new LambdaQueryWrapper<CompetitionCategory>()
+                .eq(CompetitionCategory::getCompetitionId, competitionId));
+        int sort = 0;
+        for (ConfigNameItemRequest item : items) {
+            competitionCategoryMapper.insert(CompetitionCategory.builder()
+                    .competitionId(competitionId)
+                    .name(item.getName())
+                    .sortOrder(resolveSort(item.getSortOrder(), sort++))
+                    .build());
+        }
+    }
+
+    private void replaceEntryFields(Long competitionId, List<EntryFieldItemRequest> items) {
+        entryFieldConfigMapper.delete(new LambdaQueryWrapper<EntryFieldConfig>()
+                .eq(EntryFieldConfig::getCompetitionId, competitionId));
+        int sort = 0;
+        for (EntryFieldItemRequest item : items) {
+            entryFieldConfigMapper.insert(EntryFieldConfig.builder()
+                    .competitionId(competitionId)
+                    .fieldKey(item.getFieldKey())
+                    .fieldLabel(item.getFieldLabel())
+                    .fieldType(item.getFieldType())
+                    .helpText(normalizeNullable(item.getHelpText()))
+                    .optionsJson(writeOptions(item.getOptions()))
+                    .requiredFlag(Boolean.TRUE.equals(item.getRequired()) ? 1 : 0)
+                    .visibleToJudges(Boolean.TRUE.equals(item.getVisibleToJudges()) ? 1 : 0)
+                    .sortOrder(resolveSort(item.getSortOrder(), sort++))
+                    .build());
+        }
+    }
+
+    private void replaceScoreConfigs(Long competitionId, List<ScoreConfigItemRequest> configs) {
         competitionScoreConfigMapper.delete(new LambdaQueryWrapper<CompetitionScoreConfig>()
                 .eq(CompetitionScoreConfig::getCompetitionId, competitionId));
-
-        // 3) 批量写入三类评分表
-        for (ScoreConfigItemRequest item : request.getConfigs()) {
-            CompetitionScoreConfig config = CompetitionScoreConfig.builder()
+        for (ScoreConfigItemRequest item : configs) {
+            competitionScoreConfigMapper.insert(CompetitionScoreConfig.builder()
                     .competitionId(competitionId)
                     .judgeRoleType(item.getJudgeRoleType().name())
+                    .minCommentLength(resolveMinCommentLength(item.getMinCommentLength()))
                     .dimensionsJson(writeDimensions(item.getDimensions()))
-                    .build();
-            competitionScoreConfigMapper.insert(config);
+                    .build());
         }
+    }
 
-        // 4) 返回最新评分表配置
-        return listScoreConfigs(competitionId);
+    private void validateCreateRequest(CompetitionCreateRequest request) {
+        if (request.getRegistrationDeadline() != null
+                && request.getRegistrationStart() != null
+                && !request.getRegistrationDeadline().isAfter(request.getRegistrationStart())) {
+            throw new BaseException("报名截止时间必须晚于报名开始时间");
+        }
+        if (!StringUtils.hasText(request.getStyleLibraryVersion())) {
+            throw new BaseException("基础风格库不能为空");
+        }
+    }
+
+    private void insertCompetitionWithGeneratedCode(Competition competition) {
+        for (int i = 0; i < COMPETITION_CODE_RETRY_LIMIT; i++) {
+            competition.setCode(generateCompetitionCode(competition.getCompetitionDate()));
+            try {
+                competitionMapper.insert(competition);
+                return;
+            } catch (DuplicateKeyException ex) {
+                competition.setId(null);
+            }
+        }
+        throw new BaseException("比赛编号生成失败，请重试");
     }
 
     private CompetitionDetailVO buildDetail(Competition competition) {
@@ -383,6 +428,7 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .registrationDeadline(competition.getRegistrationDeadline())
                 .status(competition.getStatus())
                 .entryFee(competition.getEntryFee())
+                .styleLibraryVersion(competition.getStyleLibraryVersion())
                 .currentStageLabel(resolveStageLabel(parseStatus(competition)))
                 .primaryAction(primaryAction)
                 .categories(categories)
@@ -417,6 +463,7 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .registrationDeadline(competition.getRegistrationDeadline())
                 .status(competition.getStatus())
                 .entryFee(competition.getEntryFee())
+                .styleLibraryVersion(competition.getStyleLibraryVersion())
                 .currentStageLabel(detail.getCurrentStageLabel())
                 .primaryAction(detail.getPrimaryAction())
                 .readyCount(readyCount)
@@ -470,6 +517,8 @@ public class CompetitionServiceImpl implements CompetitionService {
                         .fieldKey(item.getFieldKey())
                         .fieldLabel(item.getFieldLabel())
                         .fieldType(item.getFieldType())
+                        .helpText(item.getHelpText())
+                        .options(readOptions(item.getOptionsJson()))
                         .required(Objects.equals(item.getRequiredFlag(), 1))
                         .visibleToJudges(Objects.equals(item.getVisibleToJudges(), 1))
                         .sortOrder(item.getSortOrder())
@@ -516,6 +565,14 @@ public class CompetitionServiceImpl implements CompetitionService {
                             .crossCount(cross)
                             .finalized(finalized)
                             .total(0)
+                            .assignments(tableAssignments.stream()
+                                    .map(assignment -> JudgeAssignmentVO.builder()
+                                            .id(assignment.getId())
+                                            .tableId(assignment.getTableId())
+                                            .judgeAccountId(assignment.getJudgeAccountId())
+                                            .role(assignment.getRole())
+                                            .build())
+                                    .toList())
                             .build();
                 })
                 .toList();
@@ -603,10 +660,10 @@ public class CompetitionServiceImpl implements CompetitionService {
                                                  EntrySummaryVO entriesSummary,
                                                  ResultSetupVO resultSetup) {
         List<CompetitionCheckVO> checks = new ArrayList<>();
-        checks.add(check("baseInfo", "基础信息", isBaseInfoReady(competition), "名称、编号、日期、截止时间和报名费需要完整"));
+        checks.add(check("baseInfo", "基础信息", isBaseInfoReady(competition), "名称、日期、报名时间和报名费需要完整"));
         checks.add(check("categories", "投递组别", !categories.isEmpty(), "至少配置 1 个投递组别"));
-        checks.add(check("styles", "基础风格", !styles.isEmpty(), "至少配置 1 个基础风格"));
-        checks.add(check("entryFields", "报名字段", !entryFields.isEmpty(), "至少配置 1 个报名字段"));
+        checks.add(check("styleLibrary", "基础风格库", StringUtils.hasText(competition.getStyleLibraryVersion()), "请选择基础风格库"));
+        checks.add(check("entryFields", "补充字段", true, entryFields.isEmpty() ? "未配置补充字段" : "已配置补充字段"));
         checks.add(check("judgeTables", "评审桌", !judgeTables.isEmpty(), "至少配置 1 张评审桌"));
         checks.add(check("scoreForms", "评分表", isScoreFormsReady(scoreConfigs), "跨界、专业、桌长三类评分表都必须为 50 分"));
         checks.add(check("storedEntries", "酒款入库", entriesSummary.getRegistered() > 0
@@ -614,7 +671,7 @@ public class CompetitionServiceImpl implements CompetitionService {
         checks.add(check("resultSetup", "结果发布", Boolean.TRUE.equals(resultSetup.getPublished()), "奖项确认后才能发布结果"));
 
         if (!buildEditableScopes(competition).get("entryStructure")) {
-            markLocked(checks, Set.of("categories", "styles", "entryFields"), "报名已开放，报名结构已锁定");
+            markLocked(checks, Set.of("categories", "styleLibrary", "entryFields"), "报名已开放，报名结构已锁定");
         }
         if (!buildEditableScopes(competition).get("judgeConfig")) {
             markLocked(checks, Set.of("judgeTables", "scoreForms"), "评审已开始，评审配置已锁定");
@@ -795,7 +852,7 @@ public class CompetitionServiceImpl implements CompetitionService {
 
     private String resolveAlertText(CompetitionCheckVO check) {
         String target = switch (check.getKey()) {
-            case "categories", "styles", "entryFields" -> "报名配置";
+            case "categories", "styleLibrary", "entryFields" -> "报名配置";
             case "judgeTables" -> "评审配置";
             case "scoreForms" -> "评分表";
             default -> "概览";
@@ -805,7 +862,7 @@ public class CompetitionServiceImpl implements CompetitionService {
 
     private String resolveCheckTargetTab(String key) {
         return switch (key) {
-            case "categories", "styles", "entryFields" -> "entryConfig";
+            case "categories", "styleLibrary", "entryFields" -> "entryConfig";
             case "judgeTables" -> "judges";
             case "scoreForms" -> "score";
             case "storedEntries" -> "entries";
@@ -833,6 +890,7 @@ public class CompetitionServiceImpl implements CompetitionService {
         scopes.put("baseInfo", draft || registrationStage);
         scopes.put("entryStructure", draft);
         scopes.put("categories", draft);
+        scopes.put("styleLibrary", draft);
         scopes.put("styles", draft);
         scopes.put("entryFields", draft);
         scopes.put("judgeConfig", judgeConfig);
@@ -886,6 +944,19 @@ public class CompetitionServiceImpl implements CompetitionService {
             throw new BaseException("评分表需要同时配置跨界评审、专业评审和桌长");
         }
         for (ScoreConfigItemRequest config : configs) {
+            config.setMinCommentLength(resolveMinCommentLength(config.getMinCommentLength()));
+            config.getDimensions().forEach(dimension -> {
+                dimension.setKey(normalizeRequired(dimension.getKey(), "评分维度 key 不能为空"));
+                dimension.setLabel(normalizeRequired(dimension.getLabel(), "评分维度名称不能为空"));
+                dimension.setNotePrompt(normalizeNullable(dimension.getNotePrompt()));
+            });
+            if (config.getJudgeRoleType() == JudgeRoleType.CROSS
+                    && (config.getDimensions().size() < CROSS_MIN_DIMENSIONS || config.getDimensions().size() > CROSS_MAX_DIMENSIONS)) {
+                throw new BaseException("跨界评审需配置 2-4 个维度");
+            }
+            if (config.getJudgeRoleType() == JudgeRoleType.CAPTAIN && config.getDimensions().size() != 1) {
+                throw new BaseException("桌长评分表只能配置 1 个共识评分维度");
+            }
             BigDecimal total = config.getDimensions().stream()
                     .map(DimensionRequest::getMaxScore)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -893,6 +964,7 @@ public class CompetitionServiceImpl implements CompetitionService {
                 throw new BaseException("评分表总分必须等于 50 分：" + config.getJudgeRoleType().name());
             }
             assertUniqueKeys(config.getDimensions().stream().map(DimensionRequest::getKey).toList(), "评分维度 key");
+            assertUniqueKeys(config.getDimensions().stream().map(DimensionRequest::getLabel).toList(), "评分维度名称");
         }
     }
 
@@ -925,15 +997,31 @@ public class CompetitionServiceImpl implements CompetitionService {
     }
 
     private List<EntryFieldItemRequest> normalizeEntryFields(List<EntryFieldItemRequest> items) {
-        List<EntryFieldItemRequest> normalized = items.stream()
-                .peek(item -> {
-                    item.setFieldKey(normalizeRequired(item.getFieldKey(), "字段 key 不能为空"));
-                    item.setFieldLabel(normalizeRequired(item.getFieldLabel(), "字段名称不能为空"));
-                    item.setFieldType(normalizeRequired(item.getFieldType(), "字段类型不能为空"));
-                })
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+        List<EntryFieldItemRequest> normalized = new ArrayList<>();
+        for (int index = 0; index < items.size(); index++) {
+            EntryFieldItemRequest item = items.get(index);
+            item.setFieldLabel(normalizeRequired(item.getFieldLabel(), "字段名称不能为空"));
+            item.setFieldType(normalizeRequired(item.getFieldType(), "字段类型不能为空"));
+            if (!ENTRY_FIELD_TYPES.contains(item.getFieldType())) {
+                throw new BaseException("字段类型不支持：" + item.getFieldType());
+            }
+            if (!StringUtils.hasText(item.getFieldKey())) {
+                item.setFieldKey("custom_" + (index + 1));
+            } else {
+                item.setFieldKey(normalizeRequired(item.getFieldKey(), "字段 key 不能为空"));
+            }
+            item.setHelpText(normalizeNullable(item.getHelpText()));
+            item.setOptions(normalizeOptions(item.getOptions()));
+            normalized.add(item);
+        }
+        normalized = normalized.stream()
                 .sorted(Comparator.comparing(item -> resolveSort(item.getSortOrder(), 0)))
                 .toList();
         assertUniqueKeys(normalized.stream().map(EntryFieldItemRequest::getFieldKey).toList(), "报名字段 key");
+        assertUniqueKeys(normalized.stream().map(EntryFieldItemRequest::getFieldLabel).toList(), "报名字段名称");
         return normalized;
     }
 
@@ -985,7 +1073,9 @@ public class CompetitionServiceImpl implements CompetitionService {
         return StringUtils.hasText(competition.getName())
                 && StringUtils.hasText(competition.getCode())
                 && competition.getCompetitionDate() != null
+                && competition.getRegistrationStart() != null
                 && competition.getRegistrationDeadline() != null
+                && competition.getRegistrationDeadline().isAfter(competition.getRegistrationStart())
                 && competition.getEntryFee() != null
                 && competition.getEntryFee().compareTo(BigDecimal.ZERO) >= 0;
     }
@@ -996,7 +1086,7 @@ public class CompetitionServiceImpl implements CompetitionService {
     }
 
     private boolean isBlockingCheck(String key) {
-        return Set.of("baseInfo", "categories", "styles", "entryFields", "judgeTables", "scoreForms").contains(key);
+        return Set.of("baseInfo", "categories", "styleLibrary").contains(key);
     }
 
     private int countDoneChecks(List<CompetitionCheckVO> checks) {
@@ -1028,6 +1118,36 @@ public class CompetitionServiceImpl implements CompetitionService {
         return value.trim();
     }
 
+    private String normalizeNullable(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    private List<String> normalizeOptions(List<String> options) {
+        if (options == null || options.isEmpty()) {
+            return List.of();
+        }
+        List<String> normalized = options.stream()
+                .map(this::normalizeNullable)
+                .filter(Objects::nonNull)
+                .toList();
+        assertUniqueKeys(normalized, "字段选项");
+        return normalized;
+    }
+
+    private Integer resolveMinCommentLength(Integer minCommentLength) {
+        return minCommentLength == null ? DEFAULT_MIN_COMMENT_LENGTH : minCommentLength;
+    }
+
+    private String generateCompetitionCode(LocalDate competitionDate) {
+        String datePart = competitionDate.format(COMPETITION_CODE_DATE_FORMAT);
+        String suffix = Integer.toString(ThreadLocalRandom.current().nextInt(CODE_SUFFIX_BOUND), 36)
+                .toUpperCase();
+        return COMPETITION_CODE_PREFIX + "-" + datePart + "-" + "0".repeat(5 - suffix.length()) + suffix;
+    }
+
     private String resolveNextAction(CompetitionStatus status) {
         return switch (status) {
             case DRAFT -> "完善配置并开放报名";
@@ -1057,6 +1177,7 @@ public class CompetitionServiceImpl implements CompetitionService {
         return ScoreConfigVO.builder()
                 .competitionId(config.getCompetitionId())
                 .judgeRoleType(config.getJudgeRoleType())
+                .minCommentLength(resolveMinCommentLength(config.getMinCommentLength()))
                 .dimensions(readDimensions(config.getDimensionsJson()))
                 .build();
     }
@@ -1075,6 +1196,30 @@ public class CompetitionServiceImpl implements CompetitionService {
             return objectMapper.writeValueAsString(dimensions);
         } catch (JsonProcessingException ex) {
             throw new BaseException("保存评分维度失败");
+        }
+    }
+
+    private List<String> readOptions(String json) {
+        if (!StringUtils.hasText(json)) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<String>>() {
+            });
+        } catch (JsonProcessingException ex) {
+            throw new BaseException("解析报名字段选项失败");
+        }
+    }
+
+    private String writeOptions(List<String> options) {
+        List<String> normalized = normalizeOptions(options);
+        if (normalized.isEmpty()) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(normalized);
+        } catch (JsonProcessingException ex) {
+            throw new BaseException("保存报名字段选项失败");
         }
     }
 }

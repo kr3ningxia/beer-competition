@@ -24,6 +24,13 @@
       </div>
     </section>
 
+    <section v-if="!current" class="card action-card">
+      <h2 class="section-title">暂未分配比赛</h2>
+      <p class="caption">账号启用后，主办方会把你加入本场评审桌。</p>
+      <button class="button secondary full empty-action" type="button" @click="router.push('/profile')">查看我的资料</button>
+    </section>
+
+    <template v-else>
     <section class="card action-card">
       <h2 class="section-title">开始评酒</h2>
       <button class="scan-button" type="button" @click="scannerOpen = !scannerOpen">
@@ -47,13 +54,13 @@
       </div>
 
       <label class="field">
-        输入酒款编号
+        输入酒款编号或短编号
         <div class="manual-row">
-          <input v-model.trim="manualUuid" class="input" placeholder="例如 BC-2026-IPA-0001" />
+          <input v-model.trim="manualUuid" class="input" placeholder="例如 BC-2026-IPA-0001 或 IPA001" />
           <button class="button dark" type="button" @click="openEntry(manualUuid)">查看</button>
         </div>
       </label>
-      <p class="caption">扫码异常时，可输入杯身或二维码标签上的酒款编号继续评分。</p>
+      <p class="caption">扫码异常时，可输入二维码标签上的短编号继续评分。</p>
     </section>
 
     <section class="card">
@@ -71,7 +78,7 @@
         >
           <span>
             <strong>{{ entry.uuid }}</strong>
-            <small>{{ entry.categoryName }} · {{ entry.style }}</small>
+            <small>{{ entry.shortCode }} · {{ entry.categoryName }} · {{ entry.style }}</small>
           </span>
           <em :class="['pill', entry.finalized ? 'status-lock' : entry.tableScoreCount ? 'status-warn' : '']">
             {{ entry.finalized ? '已确认' : entry.tableScoreCount ? `${entry.tableScoreCount} 人已评` : '待评分' }}
@@ -79,6 +86,7 @@
         </button>
       </div>
     </section>
+    </template>
 
     <nav class="bottom-nav" :style="{ gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))` }">
       <router-link v-for="item in navItems" :key="item.to" class="nav-item" :to="item.to">
@@ -117,8 +125,20 @@ function openEntry(uuid) {
 
 onMounted(async () => {
   me.value = await fetchMe()
+  if (me.value?.profileRequired) {
+    router.replace('/profile/edit')
+    return
+  }
+  if (Number(me.value?.status) === 2) {
+    router.replace('/review-status')
+    return
+  }
   const competitions = await fetchCompetitions()
   current.value = competitions[0]
+  if (!current.value) {
+    entries.value = []
+    return
+  }
   const board = await fetchCaptainBoard()
   entries.value = board.entries
 })
@@ -168,6 +188,10 @@ onMounted(async () => {
 
 .action-card {
   margin-top: 12px;
+}
+
+.empty-action {
+  margin-top: 14px;
 }
 
 .scan-button {

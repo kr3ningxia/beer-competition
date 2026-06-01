@@ -2,11 +2,11 @@ import {
   competition,
   entries,
   getFallbackPerson,
-  getPersonByPhone,
   getRoleLabel,
   scoreConfigs,
   seedScores,
 } from './mockJudgeData'
+import request from './request'
 
 const MOCK_USER_KEY = 'judge_mock_user'
 const MOCK_SCORES_KEY = 'judge_mock_scores'
@@ -46,6 +46,17 @@ function nowLabel() {
   }).format(new Date())
 }
 
+function buildComments(dimensions, fallback = '') {
+  const lines = dimensions
+    .map((item) => ({
+      label: item.label,
+      note: String(item.note || '').trim(),
+    }))
+    .filter((item) => item.note)
+    .map((item) => `${item.label}：${item.note}`)
+  return lines.length ? lines.join('\n') : fallback
+}
+
 function normalizeScore(payload, existing = {}) {
   const user = readUser()
   const dimensions = payload.dimensions || []
@@ -62,7 +73,7 @@ function normalizeScore(payload, existing = {}) {
     roleLabel: getRoleLabel(payload.judgeRoleType || user?.role || 'CROSS'),
     dimensions,
     totalScore,
-    comments: payload.comments,
+    comments: buildComments(dimensions, payload.comments),
     submittedAt: nowLabel(),
     locked: false,
     finalFlag: Boolean(payload.finalFlag),
@@ -70,67 +81,87 @@ function normalizeScore(payload, existing = {}) {
   }
 }
 
-export function sendSmsCode() {
-  return wait({ ok: true })
+export function sendSmsCode(payload) {
+  return request.post('/api/public/sms/send', payload)
 }
 
-export function login(payload) {
-  const person = getPersonByPhone(payload.phone) || getFallbackPerson(payload.phone)
+export async function login(payload) {
+  const data = await request.post('/api/public/judge/login', payload)
+  writeUser({
+    ...getFallbackPerson(payload.phone),
+    id: data.userId,
+    phone: payload.phone,
+    displayName: data.displayName,
+    status: data.status,
+    profileRequired: data.profileRequired,
+  })
+  return data
+}
+
+export async function register(payload) {
+  const data = await request.post('/api/public/judge/register', payload)
+  writeUser({
+    ...getFallbackPerson(payload.phone),
+    id: data.userId,
+    phone: payload.phone,
+    displayName: data.displayName,
+    status: data.status,
+    profileRequired: data.profileRequired,
+  })
+  return data
+}
+
+export async function fetchMe() {
+  const data = await request.get('/api/judge/me')
   const user = {
-    ...person,
-    roleLabel: getRoleLabel(person.role),
-    competitionId: competition.id,
-    competitionName: competition.name,
+    ...readUser(),
+    ...data,
+    id: data.userId,
+    displayName: data.displayName,
+    role: data.judgeRoleType,
+    roleLabel: data.roleLabel || getRoleLabel(data.judgeRoleType),
+    competitionId: data.currentCompetitionId,
+    competitionName: data.currentCompetition,
   }
   writeUser(user)
-
-  return wait({
-    token: `mock-token-${person.phone}`,
-    displayName: person.displayName,
-    role: person.role,
-  })
+  return user
 }
 
-export function fetchMe() {
-  const user = readUser()
-  return wait({
-    ...user,
-    currentCompetition: competition.name,
-    roleLabel: getRoleLabel(user?.role),
-  })
+export function fetchProfile() {
+  return request.get('/api/judge/profile')
 }
 
-export function fetchCompetitions() {
+export function updateProfile(payload) {
+  return request.put('/api/judge/profile', payload)
+}
+
+export async function fetchCompetitions() {
   const user = readUser()
   const scores = readScores()
   const mine = scores.filter((item) => item.judgeName === user?.displayName && !item.finalFlag)
   const finalized = scores.filter((item) => item.finalFlag)
-  return wait([
-    {
-      ...competition,
-      role: user?.role,
-      roleLabel: getRoleLabel(user?.role),
-      tableName: user?.tableName || competition.tableName,
-      totalEntries: entries.length,
-      myScoredCount: mine.length,
-      finalizedCount: finalized.length,
-    },
-  ])
+  const data = await request.get('/api/judge/competitions')
+  return data.map((item) => ({
+    ...item,
+    role: item.judgeRoleType,
+    roleLabel: item.roleLabel || getRoleLabel(item.judgeRoleType),
+    tableName: item.tableName || competition.tableName,
+    totalEntries: item.totalEntries || entries.length,
+    myScoredCount: mine.length,
+    finalizedCount: finalized.length,
+  }))
 }
 
-export function fetchEntry(uuid) {
-  const entry = entries.find((item) => item.uuid.toUpperCase() === String(uuid).toUpperCase())
-  if (!entry) {
-    return Promise.reject(new Error('没有找到这个酒款编号'))
-  }
+export async function fetchEntry(uuid) {
+  const entry = await request.get(`/api/judge/entries/${uuid}`)
   const scores = readScores()
   const finalScore = scores.find((item) => item.beerUuid === entry.uuid && item.finalFlag)
-  return wait({
+  return {
     ...entry,
     locked: Boolean(finalScore),
     finalScore: finalScore?.totalScore,
     advanced: Boolean(finalScore?.advanced),
-  })
+  }
 }
 
 export function fetchEntries() {
@@ -179,7 +210,8 @@ export function fetchMyScore(uuid) {
   )) || null)
 }
 
-export function createScore(payload) {
+export async function createScore(payload) {
+  const saved = await request.post('/api/judge/scores', payload)
   const scores = readScores()
   const user = readUser()
   const existingIndex = scores.findIndex((item) => (
@@ -194,17 +226,18 @@ export function createScore(payload) {
     scores.push(next)
   }
   writeScores(scores)
-  return wait(next)
+  return saved || next
 }
 
-export function updateScore(id, payload) {
+export async function updateScore(id, payload) {
+  const saved = await request.put(`/api/judge/scores/${id}`, payload)
   const scores = readScores()
   const index = scores.findIndex((item) => item.id === id)
   if (index < 0) return createScore(payload)
   const next = normalizeScore(payload, scores[index])
   scores.splice(index, 1, next)
   writeScores(scores)
-  return wait(next)
+  return saved || next
 }
 
 export function fetchTableScores(uuid) {

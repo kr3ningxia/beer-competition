@@ -21,6 +21,7 @@ public class CompetitionVO {
     private LocalDateTime registrationDeadline;
     private String status;
     private BigDecimal entryFee;
+    private String styleLibraryVersion;
     private String currentStageLabel;
     private CompetitionPrimaryActionVO primaryAction;
     private Integer readyCount;
@@ -32,4 +33,7 @@ public class CompetitionVO {
     private ProgressSummaryVO progressSummary;
     private Integer judgeTableCount;
     private Integer judgeCount;
+    private String judgeRoleType;
+    private String roleLabel;
+    private String tableName;
 }

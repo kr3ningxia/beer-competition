@@ -3,7 +3,7 @@
     <section class="login-card">
       <p class="eyebrow dark-text">啤酒大赛现场评审</p>
       <h1>评审登录</h1>
-      <p class="login-note">请使用主办方登记的手机号进入评审端。</p>
+      <p class="login-note">已提交资料的评审可用手机号验证码进入。</p>
 
       <div class="quick-roles" aria-label="选择体验身份">
         <button
@@ -32,6 +32,7 @@
       </label>
 
       <button class="button primary full" :disabled="!canSubmit" @click="submit">进入评审</button>
+      <button class="button secondary full register-link" type="button" @click="router.push('/register')">注册评审账号</button>
       <p v-if="message" class="form-message">{{ message }}</p>
     </section>
   </main>
@@ -69,6 +70,14 @@ async function send() {
 async function submit() {
   const data = await login(form)
   setSession(data.token, data.displayName)
+  if (data.profileRequired) {
+    router.push('/profile/edit')
+    return
+  }
+  if (Number(data.status) === 2) {
+    router.push('/review-status')
+    return
+  }
   router.push('/competitions')
 }
 </script>
@@ -158,5 +167,9 @@ h1 {
   margin: 12px 0 0;
   color: #067647;
   font-size: 14px;
+}
+
+.register-link {
+  margin-top: 10px;
 }
 </style>

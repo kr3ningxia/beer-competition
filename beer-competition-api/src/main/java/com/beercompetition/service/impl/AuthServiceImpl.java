@@ -6,16 +6,24 @@ import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.common.util.Md5Util;
 import com.beercompetition.mapper.AdminUserMapper;
+import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.JudgeAccountMapper;
+import com.beercompetition.mapper.JudgeAssignmentMapper;
+import com.beercompetition.mapper.JudgeTableMapper;
 import com.beercompetition.mapper.PortalAccountMapper;
 import com.beercompetition.mapper.SmsCodeLogMapper;
 import com.beercompetition.pojo.dto.AdminLoginRequest;
 import com.beercompetition.pojo.dto.SmsLoginRequest;
 import com.beercompetition.pojo.dto.SmsSendRequest;
+import com.beercompetition.pojo.enums.JudgeAccountStatus;
+import com.beercompetition.pojo.enums.JudgeRoleType;
 import com.beercompetition.pojo.enums.SmsBizType;
 import com.beercompetition.pojo.enums.UserRole;
 import com.beercompetition.pojo.po.AdminUser;
+import com.beercompetition.pojo.po.Competition;
 import com.beercompetition.pojo.po.JudgeAccount;
+import com.beercompetition.pojo.po.JudgeAssignment;
+import com.beercompetition.pojo.po.JudgeTable;
 import com.beercompetition.pojo.po.PortalAccount;
 import com.beercompetition.pojo.po.SmsCodeLog;
 import com.beercompetition.pojo.vo.CurrentUserResponse;
@@ -24,15 +32,16 @@ import com.beercompetition.properties.JwtProperties;
 import com.beercompetition.properties.SmsProperties;
 import com.beercompetition.security.JwtUtil;
 import com.beercompetition.service.AuthService;
+import com.beercompetition.service.SmsAuthProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 @RequiredArgsConstructor
@@ -41,10 +50,14 @@ public class AuthServiceImpl implements AuthService {
     private final AdminUserMapper adminUserMapper;
     private final PortalAccountMapper portalAccountMapper;
     private final JudgeAccountMapper judgeAccountMapper;
+    private final JudgeAssignmentMapper judgeAssignmentMapper;
+    private final JudgeTableMapper judgeTableMapper;
+    private final CompetitionMapper competitionMapper;
     private final SmsCodeLogMapper smsCodeLogMapper;
     private final RedisTemplate<String, Object> redisTemplate;
     private final JwtProperties jwtProperties;
     private final SmsProperties smsProperties;
+    private final SmsAuthProvider smsAuthProvider;
 
     @Override
     public LoginResponse adminLogin(AdminLoginRequest request) {
@@ -61,11 +74,22 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public void sendSmsCode(SmsSendRequest request) {
-        String code = smsProperties.isMockEnabled()
-                ? "123456"
-                : String.format("%06d", ThreadLocalRandom.current().nextInt(1_000_000));
-        redisTemplate.opsForValue().set(buildSmsKey(request.getBizType(), request.getPhone()), code,
-                Duration.ofMinutes(smsProperties.getCodeTtlMinutes()));
+        // 1) 参数规范化与发送频控
+        ensureSmsSendAvailable(request.getBizType(), request.getPhone());
+
+        // 2) 按环境选择验证码提供方
+        String code = "ALIYUN_MANAGED";
+        if (smsProperties.isMockEnabled()) {
+            code = "123456";
+            redisTemplate.opsForValue().set(buildSmsKey(request.getBizType(), request.getPhone()), code,
+                    Duration.ofMinutes(smsProperties.getCodeTtlMinutes()));
+        } else {
+            smsAuthProvider.sendCode(request.getPhone(), request.getBizType());
+        }
+        redisTemplate.opsForValue().set(buildSmsIntervalKey(request.getBizType(), request.getPhone()), "1",
+                Duration.ofSeconds(smsProperties.getSendIntervalSeconds()));
+
+        // 3) 记录发送日志
         smsCodeLogMapper.insert(SmsCodeLog.builder()
                 .phone(request.getPhone())
                 .bizType(request.getBizType().name())
@@ -76,24 +100,69 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public LoginResponse portalLogin(SmsLoginRequest request) {
+        // 1) 验证短信验证码
         validateSmsCode(SmsBizType.PORTAL_LOGIN, request.getPhone(), request.getCode());
+
+        // 2) 查询厂商账号状态
         PortalAccount account = portalAccountMapper.selectOne(new LambdaQueryWrapper<PortalAccount>()
                 .eq(PortalAccount::getPhone, request.getPhone()));
         if (account == null || account.getStatus() == null || account.getStatus() != 1) {
             throw new BaseException("厂商账号不存在或已禁用");
         }
+
+        // 3) 组装并返回登录态
         return buildLoginResponse(account.getId(), account.getDisplayName(), UserRole.PORTAL, jwtProperties.getPortalTtl());
     }
 
     @Override
     public LoginResponse judgeLogin(SmsLoginRequest request) {
+        // 1) 验证短信验证码
         validateSmsCode(SmsBizType.JUDGE_LOGIN, request.getPhone(), request.getCode());
+
+        // 2) 查询评审账号状态
         JudgeAccount account = judgeAccountMapper.selectOne(new LambdaQueryWrapper<JudgeAccount>()
                 .eq(JudgeAccount::getPhone, request.getPhone()));
-        if (account == null || account.getStatus() == null || account.getStatus() != 1) {
-            throw new BaseException("评审账号不存在或已禁用");
+        if (account == null) {
+            throw new BaseException("评审账号不存在，请先注册");
         }
-        return buildLoginResponse(account.getId(), account.getName(), UserRole.JUDGE, jwtProperties.getJudgeTtl());
+        JudgeAccountStatus status = JudgeAccountStatus.of(account.getStatus());
+        if (!status.canLogin()) {
+            throw new BaseException("评审账号已停用，请联系主办方");
+        }
+
+        // 3) 组装并返回登录态
+        return buildJudgeLoginResponse(account);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public LoginResponse judgeRegister(SmsLoginRequest request) {
+        // 1) 验证短信验证码
+        validateSmsCode(SmsBizType.JUDGE_REGISTER, request.getPhone(), request.getCode());
+
+        // 2) 查询或创建资料未完善账号
+        JudgeAccount account = judgeAccountMapper.selectOne(new LambdaQueryWrapper<JudgeAccount>()
+                .eq(JudgeAccount::getPhone, request.getPhone()));
+        if (account == null) {
+            account = JudgeAccount.builder()
+                    .phone(request.getPhone())
+                    .name("")
+                    .wechat("")
+                    .qualification("")
+                    .status(JudgeAccountStatus.PROFILE_INCOMPLETE.getCode())
+                    .build();
+            judgeAccountMapper.insert(account);
+            return buildJudgeLoginResponse(judgeAccountMapper.selectById(account.getId()));
+        }
+
+        JudgeAccountStatus status = JudgeAccountStatus.of(account.getStatus());
+        if (status == JudgeAccountStatus.PROFILE_INCOMPLETE) {
+            return buildJudgeLoginResponse(account);
+        }
+        if (status == JudgeAccountStatus.DISABLED) {
+            throw new BaseException("评审账号已停用，请联系主办方");
+        }
+        throw new BaseException("评审账号已存在，请直接登录");
     }
 
     @Override
@@ -131,28 +200,60 @@ public class AuthServiceImpl implements AuthService {
                 if (account == null) {
                     throw new ResourceNotFoundException("评审账号不存在");
                 }
+                JudgeAccountStatus status = JudgeAccountStatus.of(account.getStatus());
+                JudgeAssignment assignment = findFirstAssignment(account.getId());
+                JudgeTable table = assignment == null ? null : judgeTableMapper.selectById(assignment.getTableId());
+                Competition competition = assignment == null ? null : competitionMapper.selectById(assignment.getCompetitionId());
                 yield CurrentUserResponse.builder()
                         .userId(account.getId())
                         .role(role.name())
-                        .displayName(account.getName())
+                        .displayName(resolveJudgeDisplayName(account))
                         .phone(account.getPhone())
+                        .wechat(account.getWechat())
+                        .qualification(account.getQualification())
+                        .status(status.getCode())
+                        .statusLabel(status.getLabel())
+                        .profileRequired(status == JudgeAccountStatus.PROFILE_INCOMPLETE)
+                        .canScore(status == JudgeAccountStatus.ACTIVE && assignment != null)
+                        .currentCompetitionId(competition == null ? null : competition.getId())
+                        .currentCompetition(competition == null ? null : competition.getName())
+                        .judgeRoleType(assignment == null ? null : assignment.getRole())
+                        .roleLabel(assignment == null ? null : roleLabel(assignment.getRole()))
+                        .tableName(table == null ? null : table.getTableName())
                         .build();
             }
         };
     }
 
     private void validateSmsCode(SmsBizType bizType, String phone, String code) {
-        if (smsProperties.isMockEnabled() && "123456".equals(code)) {
-            return;
+        if (!StringUtils.hasText(code)) {
+            throw new BaseException("验证码不能为空");
         }
-        Object cachedCode = redisTemplate.opsForValue().get(buildSmsKey(bizType, phone));
-        if (!StringUtils.hasText(code) || cachedCode == null || !code.equals(String.valueOf(cachedCode))) {
+        boolean valid;
+        if (smsProperties.isMockEnabled()) {
+            Object cachedCode = redisTemplate.opsForValue().get(buildSmsKey(bizType, phone));
+            valid = "123456".equals(code) || (cachedCode != null && code.equals(String.valueOf(cachedCode)));
+        } else {
+            valid = smsAuthProvider.checkCode(phone, code, bizType);
+        }
+        if (!valid) {
             throw new BaseException("验证码错误或已过期");
+        }
+    }
+
+    private void ensureSmsSendAvailable(SmsBizType bizType, String phone) {
+        Object intervalFlag = redisTemplate.opsForValue().get(buildSmsIntervalKey(bizType, phone));
+        if (intervalFlag != null) {
+            throw new BaseException("验证码发送过于频繁，请稍后再试");
         }
     }
 
     private String buildSmsKey(SmsBizType bizType, String phone) {
         return "beer-competition:sms:" + bizType.name() + ":" + phone;
+    }
+
+    private String buildSmsIntervalKey(SmsBizType bizType, String phone) {
+        return "beer-competition:sms-interval:" + bizType.name() + ":" + phone;
     }
 
     private LoginResponse buildLoginResponse(Long userId, String displayName, UserRole role, long ttlMillis) {
@@ -168,5 +269,39 @@ public class AuthServiceImpl implements AuthService {
                 .role(role.name())
                 .displayName(displayName)
                 .build();
+    }
+
+    private LoginResponse buildJudgeLoginResponse(JudgeAccount account) {
+        JudgeAccountStatus status = JudgeAccountStatus.of(account.getStatus());
+        LoginResponse response = buildLoginResponse(account.getId(), resolveJudgeDisplayName(account), UserRole.JUDGE, jwtProperties.getJudgeTtl());
+        response.setStatus(status.getCode());
+        response.setProfileRequired(status == JudgeAccountStatus.PROFILE_INCOMPLETE);
+        return response;
+    }
+
+    private String resolveJudgeDisplayName(JudgeAccount account) {
+        return StringUtils.hasText(account.getName()) ? account.getName() : "现场评审";
+    }
+
+    private JudgeAssignment findFirstAssignment(Long judgeAccountId) {
+        return judgeAssignmentMapper.selectList(new LambdaQueryWrapper<JudgeAssignment>()
+                        .eq(JudgeAssignment::getJudgeAccountId, judgeAccountId)
+                        .orderByAsc(JudgeAssignment::getCompetitionId))
+                .stream()
+                .findFirst()
+                .orElse(null);
+    }
+
+    private String roleLabel(String role) {
+        if (JudgeRoleType.CAPTAIN.name().equals(role)) {
+            return "桌长";
+        }
+        if (JudgeRoleType.PROFESSIONAL.name().equals(role)) {
+            return "专业评审";
+        }
+        if (JudgeRoleType.CROSS.name().equals(role)) {
+            return "跨界评审";
+        }
+        return role;
     }
 }

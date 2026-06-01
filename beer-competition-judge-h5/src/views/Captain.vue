@@ -75,10 +75,11 @@
               </div>
               <strong>{{ score.totalScore }} 分</strong>
             </div>
-            <div class="dimension-tags">
-              <span v-for="dim in score.dimensions" :key="dim.key">
-                {{ dim.label }} {{ dim.score }}/{{ dim.maxScore }}
-              </span>
+            <div class="dimension-notes">
+              <div v-for="dim in score.dimensions" :key="dim.key">
+                <span>{{ dim.label }} {{ dim.score }}/{{ dim.maxScore }}</span>
+                <p v-if="dim.note">{{ dim.note }}</p>
+              </div>
             </div>
             <p class="member-comment">{{ score.comments }}</p>
           </article>
@@ -89,7 +90,7 @@
         <h2 class="section-title">本桌最终意见</h2>
         <label class="field">
           共识分
-          <input v-model.number="form.consensusScore" class="input" type="number" min="0" max="50" step="0.5" />
+          <input v-model.number="form.consensusScore" class="input" type="number" inputmode="numeric" min="0" max="50" step="1" />
         </label>
         <label class="field">
           综合评语
@@ -150,7 +151,8 @@ const boardEntries = computed(() => board.value?.entries || [])
 const finalizedCount = computed(() => boardEntries.value.filter((item) => item.finalized).length)
 const advanceReady = computed(() => advancedUuids.value.length >= 2 && advancedUuids.value.length <= 4)
 const canFinalize = computed(() => (
-  Number(form.consensusScore) >= 0
+  Number.isInteger(Number(form.consensusScore))
+  && Number(form.consensusScore) >= 0
   && Number(form.consensusScore) <= 50
   && form.comments.length >= 20
 ))
@@ -167,15 +169,15 @@ async function loadDetail() {
   const average = tableScores.value.length
     ? tableScores.value.reduce((sum, item) => sum + Number(item.totalScore || 0), 0) / tableScores.value.length
     : 0
-  form.consensusScore = Number(average.toFixed(1))
+  form.consensusScore = Math.round(average)
   form.comments = ''
   form.advanced = Boolean(entry.value.advanced)
 }
 
 async function submitFinal() {
   await finalizeTableScore(uuid.value, {
-    dimensions: [{ key: 'consensus', label: '共识分', score: Number(form.consensusScore), maxScore: 50 }],
-    consensusScore: Number(form.consensusScore),
+    dimensions: [{ key: 'consensus', label: '共识分', score: Math.round(Number(form.consensusScore)), maxScore: 50 }],
+    consensusScore: Math.round(Number(form.consensusScore)),
     comments: form.comments,
     advanced: form.advanced,
   })
@@ -340,20 +342,32 @@ onMounted(async () => {
   font-size: 21px;
 }
 
-.dimension-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+.dimension-notes {
+  display: grid;
+  gap: 8px;
   margin-top: 12px;
 }
 
-.dimension-tags span {
+.dimension-notes div {
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: #f7f8f6;
+}
+
+.dimension-notes span {
+  display: inline-flex;
   border-radius: 999px;
   padding: 5px 8px;
   color: #344054;
-  background: #f2f4f7;
+  background: #e6ece8;
   font-size: 12px;
   font-weight: 750;
+}
+
+.dimension-notes p {
+  margin: 7px 0 0;
+  color: #344054;
+  line-height: 1.5;
 }
 
 .member-comment {

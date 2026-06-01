@@ -1,6 +1,7 @@
 package com.beercompetition.controller.judge;
 
 import com.beercompetition.common.result.Result;
+import com.beercompetition.pojo.dto.JudgeProfileUpdateRequest;
 import com.beercompetition.pojo.dto.JudgeScoreSaveRequest;
 import com.beercompetition.pojo.dto.JudgeScoreUpdateRequest;
 import com.beercompetition.pojo.dto.TableScoreFinalizeRequest;
@@ -8,6 +9,7 @@ import com.beercompetition.pojo.enums.UserRole;
 import com.beercompetition.pojo.vo.CompetitionVO;
 import com.beercompetition.pojo.vo.CurrentUserResponse;
 import com.beercompetition.pojo.vo.JudgeEntryVO;
+import com.beercompetition.pojo.vo.JudgeAccountVO;
 import com.beercompetition.pojo.vo.ScoreRecordVO;
 import com.beercompetition.service.AuthService;
 import com.beercompetition.service.EntryService;
@@ -38,6 +40,16 @@ public class JudgeController {
     @GetMapping("/me")
     public Result<CurrentUserResponse> me() {
         return Result.success(authService.getCurrentUser(UserRole.JUDGE));
+    }
+
+    @GetMapping("/profile")
+    public Result<JudgeAccountVO> profile() {
+        return Result.success(judgeService.getMyProfile());
+    }
+
+    @PutMapping("/profile")
+    public Result<JudgeAccountVO> updateProfile(@RequestBody @Valid JudgeProfileUpdateRequest request) {
+        return Result.success(judgeService.updateMyProfile(request));
     }
 
     @GetMapping("/competitions")

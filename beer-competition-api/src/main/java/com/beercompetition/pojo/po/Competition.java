@@ -29,6 +29,7 @@ public class Competition {
     private LocalDateTime registrationDeadline;
     private String status;
     private BigDecimal entryFee;
+    private String styleLibraryVersion;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

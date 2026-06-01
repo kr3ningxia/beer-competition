@@ -22,6 +22,7 @@ public class CompetitionDetailVO {
     private LocalDateTime registrationDeadline;
     private String status;
     private BigDecimal entryFee;
+    private String styleLibraryVersion;
     private String currentStageLabel;
     private CompetitionPrimaryActionVO primaryAction;
     private List<CompetitionConfigNameVO> categories;

@@ -6,14 +6,17 @@ import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ForbiddenException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.mapper.BeerEntryMapper;
+import com.beercompetition.mapper.JudgeAccountMapper;
 import com.beercompetition.mapper.JudgeAssignmentMapper;
 import com.beercompetition.mapper.ScoreRecordMapper;
 import com.beercompetition.pojo.dto.DimensionRequest;
 import com.beercompetition.pojo.dto.JudgeScoreSaveRequest;
 import com.beercompetition.pojo.dto.JudgeScoreUpdateRequest;
 import com.beercompetition.pojo.dto.TableScoreFinalizeRequest;
+import com.beercompetition.pojo.enums.JudgeAccountStatus;
 import com.beercompetition.pojo.enums.JudgeRoleType;
 import com.beercompetition.pojo.po.BeerEntry;
+import com.beercompetition.pojo.po.JudgeAccount;
 import com.beercompetition.pojo.po.JudgeAssignment;
 import com.beercompetition.pojo.po.ScoreRecord;
 import com.beercompetition.pojo.vo.ScoreRecordVO;
@@ -31,6 +34,7 @@ import java.util.List;
 public class ScoreServiceImpl implements ScoreService {
 
     private final BeerEntryMapper beerEntryMapper;
+    private final JudgeAccountMapper judgeAccountMapper;
     private final JudgeAssignmentMapper judgeAssignmentMapper;
     private final ScoreRecordMapper scoreRecordMapper;
     private final ObjectMapper objectMapper;
@@ -136,6 +140,13 @@ public class ScoreServiceImpl implements ScoreService {
     }
 
     private JudgeAssignment requireAssignment(Long competitionId) {
+        JudgeAccount account = judgeAccountMapper.selectById(BaseContext.getCurrentId());
+        if (account == null) {
+            throw new ResourceNotFoundException("评审账号不存在");
+        }
+        if (JudgeAccountStatus.of(account.getStatus()) != JudgeAccountStatus.ACTIVE) {
+            throw new ForbiddenException("评审账号未启用，不能提交评分");
+        }
         JudgeAssignment assignment = judgeAssignmentMapper.selectOne(new LambdaQueryWrapper<JudgeAssignment>()
                 .eq(JudgeAssignment::getCompetitionId, competitionId)
                 .eq(JudgeAssignment::getJudgeAccountId, BaseContext.getCurrentId()));

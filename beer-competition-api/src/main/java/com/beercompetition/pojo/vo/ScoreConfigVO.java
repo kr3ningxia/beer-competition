@@ -12,5 +12,6 @@ public class ScoreConfigVO {
 
     private Long competitionId;
     private String judgeRoleType;
+    private Integer minCommentLength;
     private List<DimensionRequest> dimensions;
 }

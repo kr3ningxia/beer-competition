@@ -4,6 +4,9 @@ import { isLoggedIn } from '@/utils/auth'
 const routes = [
   { path: '/', redirect: '/competitions' },
   { path: '/login', component: () => import('@/views/Login.vue'), meta: { public: true } },
+  { path: '/register', component: () => import('@/views/Register.vue'), meta: { public: true } },
+  { path: '/review-status', component: () => import('@/views/ReviewStatus.vue'), meta: { requiresAuth: true } },
+  { path: '/profile/edit', component: () => import('@/views/ProfileEdit.vue'), meta: { requiresAuth: true } },
   { path: '/competitions', component: () => import('@/views/Competitions.vue'), meta: { requiresAuth: true } },
   { path: '/judged', component: () => import('@/views/Judged.vue'), meta: { requiresAuth: true } },
   { path: '/scan-result/:uuid', component: () => import('@/views/ScanResult.vue'), meta: { requiresAuth: true } },

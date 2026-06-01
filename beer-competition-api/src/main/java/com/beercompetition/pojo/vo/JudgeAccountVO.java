@@ -13,4 +13,7 @@ public class JudgeAccountVO {
     private String wechat;
     private String qualification;
     private Integer status;
+    private String statusLabel;
+    private Boolean profileRequired;
+    private String reviewRemark;
 }

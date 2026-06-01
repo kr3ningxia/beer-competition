@@ -17,5 +17,7 @@ public interface AuthService {
 
     LoginResponse judgeLogin(SmsLoginRequest request);
 
+    LoginResponse judgeRegister(SmsLoginRequest request);
+
     CurrentUserResponse getCurrentUser(UserRole role);
 }

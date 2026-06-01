@@ -32,12 +32,24 @@ export function updateCompetitionJudgeTables(id, payload) {
   return request.put(`/api/admin/competitions/${id}/judge-tables`, payload, { authScope: 'admin' })
 }
 
+export function updateCompetitionJudgeAssignments(id, payload) {
+  return request.put(`/api/admin/competitions/${id}/judge-assignments`, payload, { authScope: 'admin' })
+}
+
 export function openCompetitionRegistration(id) {
   return request.post(`/api/admin/competitions/${id}/open-registration`, {}, { authScope: 'admin' })
 }
 
-export function fetchJudges() {
-  return request.get('/api/admin/judges', { authScope: 'admin' })
+export function fetchJudges(params = {}) {
+  return request.get('/api/admin/judges', { params, authScope: 'admin' })
+}
+
+export function updateJudge(id, payload) {
+  return request.put(`/api/admin/judges/${id}`, payload, { authScope: 'admin' })
+}
+
+export function updateJudgeStatus(id, payload) {
+  return request.patch(`/api/admin/judges/${id}/status`, payload, { authScope: 'admin' })
 }
 
 export function createAssignment(payload) {

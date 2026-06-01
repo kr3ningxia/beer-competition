@@ -65,13 +65,45 @@
             <small>{{ judge.wechat || '未填写微信号' }}</small>
           </div>
           <span class="qualification">{{ judge.qualification || '未填写资质' }}</span>
-          <span :class="['status-badge', isActive(judge) ? 'active' : 'inactive']">
-            {{ isActive(judge) ? '启用' : '停用' }}
+          <span :class="['status-badge', statusTone(judge)]">
+            {{ judge.statusLabel || statusLabel(judge.status) }}
           </span>
-          <button class="row-action" type="button" @click="router.push('/admin/assignments')">
-            编排
-            <Right />
-          </button>
+          <div class="row-actions">
+            <button class="row-action" type="button" @click="openEditor(judge)">编辑</button>
+            <button
+              v-if="Number(judge.status) === 2"
+              class="row-action success"
+              type="button"
+              @click="changeStatus(judge, 1)"
+            >
+              通过
+            </button>
+            <button
+              v-if="Number(judge.status) !== 0"
+              class="row-action danger"
+              type="button"
+              @click="changeStatus(judge, 0)"
+            >
+              停用
+            </button>
+            <button
+              v-if="Number(judge.status) === 0"
+              class="row-action success"
+              type="button"
+              @click="changeStatus(judge, 1)"
+            >
+              启用
+            </button>
+            <button
+              v-if="isActive(judge)"
+              class="row-action"
+              type="button"
+              @click="router.push('/admin/assignments')"
+            >
+              编排
+              <Right />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -80,25 +112,64 @@
         <p>调整搜索条件或状态筛选后再查看。</p>
       </div>
     </section>
+
+    <div v-if="editorOpen" class="modal-mask" @click.self="closeEditor">
+      <section class="modal-card">
+        <header>
+          <h2>编辑评审资料</h2>
+          <button class="icon-close" type="button" @click="closeEditor">×</button>
+        </header>
+        <label>
+          <span>手机号</span>
+          <input v-model.trim="editForm.phone" />
+        </label>
+        <label>
+          <span>姓名</span>
+          <input v-model.trim="editForm.name" />
+        </label>
+        <label>
+          <span>微信号</span>
+          <input v-model.trim="editForm.wechat" />
+        </label>
+        <label>
+          <span>资质信息</span>
+          <textarea v-model.trim="editForm.qualification"></textarea>
+        </label>
+        <footer>
+          <button class="tool-button" type="button" @click="closeEditor">取消</button>
+          <button class="tool-button primary" type="button" @click="saveEditor">保存</button>
+        </footer>
+      </section>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { Connection, Refresh, Right, Search } from '@element-plus/icons-vue'
-import { fetchJudges } from '@/api/admin'
+import { fetchJudges, updateJudge, updateJudgeStatus } from '@/api/admin'
 
 const router = useRouter()
 const judges = ref([])
 const keyword = ref('')
 const statusFilter = ref('ALL')
 const loading = ref(false)
+const editorOpen = ref(false)
+const editingJudgeId = ref(null)
+const editForm = reactive({
+  phone: '',
+  name: '',
+  wechat: '',
+  qualification: '',
+})
 
 const statusFilters = [
   { label: '全部', value: 'ALL' },
+  { label: '待审核', value: 'PENDING' },
   { label: '启用', value: 'ACTIVE' },
-  { label: '停用', value: 'INACTIVE' },
+  { label: '停用', value: 'DISABLED' },
 ]
 
 const totalCount = computed(() => judges.value.length)
@@ -107,8 +178,9 @@ const filteredJudges = computed(() => {
   return judges.value.filter((judge) => {
     const matchesStatus =
       statusFilter.value === 'ALL' ||
+      (statusFilter.value === 'PENDING' && Number(judge.status) === 2) ||
       (statusFilter.value === 'ACTIVE' && isActive(judge)) ||
-      (statusFilter.value === 'INACTIVE' && !isActive(judge))
+      (statusFilter.value === 'DISABLED' && Number(judge.status) === 0)
     const matchesKeyword =
       !query ||
       [judge.name, judge.phone, judge.wechat, judge.qualification]
@@ -131,6 +203,50 @@ async function loadJudges() {
 
 function isActive(judge) {
   return Number(judge.status) === 1
+}
+
+function statusLabel(status) {
+  const map = {
+    0: '停用',
+    1: '启用',
+    2: '待审核',
+    3: '资料未完善',
+  }
+  return map[Number(status)] || '未知'
+}
+
+function statusTone(judge) {
+  const status = Number(judge.status)
+  if (status === 1) return 'active'
+  if (status === 2) return 'pending'
+  return 'inactive'
+}
+
+function openEditor(judge) {
+  editingJudgeId.value = judge.id
+  editForm.phone = judge.phone || ''
+  editForm.name = judge.name || ''
+  editForm.wechat = judge.wechat || ''
+  editForm.qualification = judge.qualification || ''
+  editorOpen.value = true
+}
+
+function closeEditor() {
+  editorOpen.value = false
+  editingJudgeId.value = null
+}
+
+async function saveEditor() {
+  await updateJudge(editingJudgeId.value, editForm)
+  ElMessage.success('评审资料已更新')
+  closeEditor()
+  await loadJudges()
+}
+
+async function changeStatus(judge, status) {
+  await updateJudgeStatus(judge.id, { status })
+  ElMessage.success(status === 1 ? '评审已启用' : '评审已停用')
+  await loadJudges()
 }
 
 function getInitial(name) {
@@ -324,7 +440,7 @@ svg {
 .table-head,
 .table-row {
   display: grid;
-  grid-template-columns: minmax(220px, 1.2fr) minmax(200px, 1fr) minmax(260px, 1.25fr) 96px 100px;
+  grid-template-columns: minmax(220px, 1.2fr) minmax(200px, 1fr) minmax(260px, 1.25fr) 96px minmax(260px, auto);
   gap: 12px;
   align-items: center;
 }
@@ -409,6 +525,19 @@ svg {
   background: rgba(242, 153, 74, 0.09);
 }
 
+.status-badge.pending {
+  color: #f7d774;
+  border: 1px solid rgba(247, 215, 116, 0.24);
+  background: rgba(247, 215, 116, 0.09);
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .row-action {
   justify-content: center;
   gap: 7px;
@@ -416,6 +545,91 @@ svg {
   color: var(--gold-soft);
   border-color: rgba(216, 169, 53, 0.24);
   background: rgba(216, 169, 53, 0.06);
+}
+
+.row-action.success {
+  color: var(--green);
+  border-color: rgba(111, 207, 122, 0.24);
+  background: rgba(111, 207, 122, 0.08);
+}
+
+.row-action.danger {
+  color: #ffb4a8;
+  border-color: rgba(255, 180, 168, 0.24);
+  background: rgba(255, 180, 168, 0.08);
+}
+
+.modal-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(5, 12, 16, 0.72);
+  backdrop-filter: blur(10px);
+}
+
+.modal-card {
+  width: min(100%, 520px);
+  border: 1px solid rgba(219, 232, 237, 0.14);
+  border-radius: 8px;
+  padding: 20px;
+  color: var(--text);
+  background: rgba(22, 32, 36, 0.98);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.36);
+}
+
+.modal-card header,
+.modal-card footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.modal-card h2 {
+  margin: 0;
+}
+
+.icon-close {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 22px;
+}
+
+.modal-card label {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.modal-card input,
+.modal-card textarea {
+  width: 100%;
+  border: 1px solid rgba(219, 232, 237, 0.16);
+  border-radius: 8px;
+  padding: 11px 12px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+  outline: none;
+}
+
+.modal-card textarea {
+  min-height: 104px;
+  resize: vertical;
+}
+
+.modal-card footer {
+  justify-content: flex-end;
+  margin-top: 18px;
 }
 
 .empty-state {
@@ -429,7 +643,7 @@ svg {
 @media (max-width: 1260px) {
   .table-head,
   .table-row {
-    grid-template-columns: minmax(220px, 1.1fr) minmax(190px, 1fr) minmax(180px, 1fr) 88px 96px;
+    grid-template-columns: minmax(220px, 1.1fr) minmax(190px, 1fr) minmax(180px, 1fr) 88px minmax(220px, auto);
   }
 }
 
@@ -462,6 +676,10 @@ svg {
 
   .row-action {
     width: fit-content;
+  }
+
+  .row-actions {
+    justify-content: flex-start;
   }
 }
 </style>

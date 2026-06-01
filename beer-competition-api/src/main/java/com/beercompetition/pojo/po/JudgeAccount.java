@@ -24,6 +24,10 @@ public class JudgeAccount {
     private String name;
     private String qualification;
     private Integer status;
+    private LocalDateTime submittedTime;
+    private LocalDateTime reviewedTime;
+    private Long reviewedBy;
+    private String reviewRemark;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

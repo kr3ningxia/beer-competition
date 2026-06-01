@@ -20,35 +20,72 @@
         <el-form-item label="验证码">
           <div class="sms-row">
             <el-input v-model="form.code" />
-            <el-button @click="send">发送验证码</el-button>
+            <el-button :loading="sending" :disabled="sendDisabled" @click="send">
+              {{ sendButtonText }}
+            </el-button>
           </div>
         </el-form-item>
-        <div class="mock-note">当前为前端 mock 预览，验证码默认 123456。</div>
-        <el-button type="primary" class="full" @click="submit">进入厂商端</el-button>
+        <div v-if="message" class="form-note">{{ message }}</div>
+        <el-button type="primary" class="full" :loading="submitting" @click="submit">进入厂商端</el-button>
       </el-form>
     </section>
   </div>
 </template>
 
 <script setup>
-import { reactive } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
-import { createLocalSessionToken, setSession } from '@/utils/auth'
+import { portalLogin, sendSmsCode } from '@/api/auth'
+import { setSession } from '@/utils/auth'
 
 const router = useRouter()
-const form = reactive({ phone: '13800000001', code: '123456' })
+const form = reactive({ phone: '13800000001', code: '' })
+const sending = ref(false)
+const submitting = ref(false)
+const countdown = ref(0)
+const message = ref('')
+let timer = null
 
-function send() {
-  ElMessage.success('Mock 验证码已发送：123456')
+const sendDisabled = computed(() => sending.value || countdown.value > 0 || !/^1\d{10}$/.test(form.phone))
+const sendButtonText = computed(() => (countdown.value > 0 ? `${countdown.value}s` : '发送验证码'))
+
+async function send() {
+  sending.value = true
+  try {
+    await sendSmsCode({ phone: form.phone, bizType: 'PORTAL_LOGIN' })
+    message.value = '验证码已发送，请查看手机短信'
+    startCountdown()
+  } finally {
+    sending.value = false
+  }
 }
 
-function submit() {
-  const displayName = '山雾麦芽工坊'
-  setSession('portal', createLocalSessionToken('portal', displayName), displayName)
-  ElMessage.success('已进入厂商端')
-  router.push('/portal/home')
+async function submit() {
+  submitting.value = true
+  try {
+    const data = await portalLogin({ phone: form.phone, code: form.code })
+    setSession('portal', data.token, data.displayName)
+    ElMessage.success('已进入厂商端')
+    router.push('/portal/home')
+  } finally {
+    submitting.value = false
+  }
 }
+
+function startCountdown() {
+  countdown.value = 60
+  window.clearInterval(timer)
+  timer = window.setInterval(() => {
+    countdown.value -= 1
+    if (countdown.value <= 0) {
+      window.clearInterval(timer)
+      timer = null
+    }
+  }, 1000)
+}
+
+onBeforeUnmount(() => window.clearInterval(timer))
 </script>
 
 <style scoped>
@@ -161,7 +198,7 @@ function submit() {
   gap: 12px;
 }
 
-.mock-note {
+.form-note {
   margin: 8px 0 18px;
   padding: 12px;
   color: #725018;

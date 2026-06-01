@@ -23,6 +23,8 @@ public class EntryFieldConfig {
     private String fieldKey;
     private String fieldLabel;
     private String fieldType;
+    private String helpText;
+    private String optionsJson;
     private Integer requiredFlag;
     private Integer visibleToJudges;
     private Integer sortOrder;

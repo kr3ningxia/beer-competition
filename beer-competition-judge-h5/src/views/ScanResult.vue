@@ -8,6 +8,7 @@
         <span :class="['pill', entry?.locked ? 'status-lock' : 'status-ok']">
           {{ entry?.locked ? '本桌已确认' : '可评分' }}
         </span>
+        <span v-if="entry?.shortCode" class="pill status-warn">短编号 {{ entry.shortCode }}</span>
         <span v-if="entry?.advanced" class="pill status-ok">已晋级</span>
       </div>
     </section>

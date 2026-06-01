@@ -2,6 +2,7 @@ package com.beercompetition.pojo.dto;
 
 import com.beercompetition.pojo.enums.JudgeRoleType;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
@@ -17,4 +18,7 @@ public class ScoreConfigItemRequest {
     @Valid
     @NotEmpty(message = "评分维度不能为空")
     private List<DimensionRequest> dimensions;
+
+    @Min(value = 0, message = "备注字数下限不能小于 0")
+    private Integer minCommentLength = 0;
 }

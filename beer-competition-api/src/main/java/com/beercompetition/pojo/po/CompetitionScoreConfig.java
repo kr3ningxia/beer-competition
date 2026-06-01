@@ -22,6 +22,7 @@ public class CompetitionScoreConfig {
     private Long competitionId;
     private String judgeRoleType;
     private String dimensionsJson;
+    private Integer minCommentLength;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

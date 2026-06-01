@@ -1,52 +1,40 @@
 <template>
   <div class="competition-create">
     <section class="create-head">
-      <button class="back-button" type="button" @click="router.push('/admin/competitions')">
+      <button class="breadcrumb-link" type="button" @click="leaveCreatePage">
         <Back />
-        返回台账
+        比赛管理
       </button>
-      <div>
-        <p class="eyebrow">Create Competition</p>
-        <h1>新建比赛</h1>
-      </div>
-      <div class="head-actions">
-        <button class="tool-button" type="button" @click="router.push('/admin/competitions')">取消</button>
-        <button class="tool-button primary" type="button" @click="submitDraft">
-          <Plus />
-          保存草稿
-        </button>
+      <div class="head-main">
+        <div>
+          <h1>新建比赛</h1>
+        </div>
+        <div class="head-actions">
+          <button class="tool-button" type="button" @click="leaveCreatePage">取消</button>
+          <button class="tool-button primary" type="button" @click="submitDraft">
+            <CircleCheck />
+            保存草稿
+          </button>
+        </div>
       </div>
     </section>
 
-    <section class="step-shell">
-      <aside class="step-rail">
-        <button
-          v-for="(step, index) in steps"
-          :key="step.key"
-          :class="['step-item', { active: activeStep === index, done: index < activeStep }]"
-          type="button"
-          @click="activeStep = index"
-        >
-          <span>{{ index + 1 }}</span>
-          <strong>{{ step.title }}</strong>
-          <small>{{ step.caption }}</small>
-        </button>
-      </aside>
+    <nav class="anchor-bar" aria-label="新建比赛分区导航">
+      <button :class="{ active: activeSection === 'base-info', issue: sectionIssueMap['base-info'] }" type="button" @click="scrollToSection('base-info')">基础信息</button>
+      <button :class="{ active: activeSection === 'entry-config', issue: sectionIssueMap['entry-config'] }" type="button" @click="scrollToSection('entry-config')">报名表</button>
+      <button :class="{ active: activeSection === 'score-config', issue: sectionIssueMap['score-config'] }" type="button" @click="scrollToSection('score-config')">评分表</button>
+      <button :class="{ active: activeSection === 'review-draft' }" type="button" @click="scrollToSection('review-draft')">确认</button>
+    </nav>
 
-      <main class="step-content">
-        <section v-if="activeStep === 0" class="form-section">
-          <header>
+    <main class="create-panel">
+        <section id="base-info" class="form-section">
+          <header class="section-head">
             <h2>基础信息</h2>
-            <p>比赛草稿先确定唯一编号、关键日期和报名费，后续配置完成后再开放报名。</p>
           </header>
           <div class="form-grid two">
             <label>
               <span>比赛名称</span>
               <input v-model.trim="draft.name" placeholder="例如 2026 中国精酿啤酒大赛" />
-            </label>
-            <label>
-              <span>比赛编号</span>
-              <input v-model.trim="draft.code" placeholder="例如 BC-2026" />
             </label>
             <label>
               <span>届次</span>
@@ -66,189 +54,247 @@
             </label>
             <label>
               <span>报名费</span>
-              <input v-model.number="draft.entryFee" min="0" type="number" />
-            </label>
-            <label>
-              <span>初始状态</span>
-              <select v-model="draft.status" disabled>
-                <option value="DRAFT">草稿</option>
-              </select>
+              <div class="fee-field">
+                <input v-model.number="draft.entryFee" min="0" type="number" />
+                <span>元 / 款</span>
+              </div>
             </label>
           </div>
         </section>
 
-        <section v-if="activeStep === 1" class="form-section">
-          <header>
-            <h2>报名配置</h2>
-            <p>投递组别和基础风格按比赛独立维护，报名补充信息可控制是否匿名展示给评审。</p>
+        <section id="entry-config" class="form-section">
+          <header class="section-head">
+            <h2>报名表配置</h2>
           </header>
-          <div class="config-grid">
-            <div class="config-card">
-              <div class="card-title">
-                <h3>投递组别</h3>
-                <button class="icon-button" type="button" @click="draft.categories.push('')"><Plus /></button>
-              </div>
-              <div class="stack-list">
-                <label v-for="(_, index) in draft.categories" :key="`category-${index}`">
-                  <input v-model.trim="draft.categories[index]" placeholder="例如 IPA" />
-                  <button class="icon-button" type="button" @click="removeItem(draft.categories, index)"><Delete /></button>
-                </label>
-              </div>
-            </div>
-
-            <div class="config-card">
-              <div class="card-title">
-                <h3>基础风格</h3>
-                <button class="icon-button" type="button" @click="draft.baseStyles.push('')"><Plus /></button>
-              </div>
-              <div class="stack-list">
-                <label v-for="(_, index) in draft.baseStyles" :key="`style-${index}`">
-                  <input v-model.trim="draft.baseStyles[index]" placeholder="例如 American IPA" />
-                  <button class="icon-button" type="button" @click="removeItem(draft.baseStyles, index)"><Delete /></button>
-                </label>
-              </div>
+          <div class="built-in-strip">
+            <h3>内置报名字段</h3>
+            <div class="built-in-fields">
+              <span>酒名</span>
+              <span>投递组别</span>
+              <span>基础风格</span>
+              <span>ABV</span>
+              <span>酒款简介</span>
             </div>
           </div>
+          <section class="entry-section library-section">
+            <div class="library-row">
+              <h3>基础风格库</h3>
+              <label class="library-select">
+                <select v-model="draft.styleLibraryVersion" aria-label="风格库版本">
+                  <option value="BJCP_2021_CN">BJCP 2021 中文标准库</option>
+                  <option value="CUSTOM_STANDARD">主办方标准风格库</option>
+                </select>
+              </label>
+              <div class="library-tags">
+                <span>报名必填</span>
+                <span>支持搜索</span>
+              </div>
+            </div>
+          </section>
 
-          <div class="config-card wide">
+          <section class="entry-section category-section">
             <div class="card-title">
-              <h3>报名补充信息</h3>
+              <div class="title-with-count">
+                <h3>投递组别</h3>
+                <span class="count-pill">{{ categoryCount }} 个</span>
+              </div>
+              <button class="tool-button" type="button" @click="addCategory">
+                <Plus />
+                添加组别
+              </button>
+            </div>
+            <div class="category-list">
+              <div v-for="(category, index) in draft.categories" :key="category.id" class="category-row">
+                <input v-model.trim="category.name" :aria-label="`投递组别 ${index + 1}`" placeholder="例如 浅色拉格" />
+                <button class="icon-button" title="删除投递组别" type="button" @click="removeItem(draft.categories, index)"><Delete /></button>
+              </div>
+            </div>
+          </section>
+
+          <section class="entry-section field-section">
+            <div class="card-title">
+              <div class="title-with-count">
+                <h3>补充字段</h3>
+              </div>
               <button class="tool-button" type="button" @click="addEntryField">
                 <Plus />
                 添加字段
               </button>
             </div>
-            <div class="field-table">
-              <div class="field-row field-head">
-                <span>字段 key</span>
-                <span>字段名称</span>
-                <span>类型</span>
-                <span>必填</span>
-                <span>评审可见</span>
-                <span></span>
-              </div>
-              <div v-for="(field, index) in draft.entryFields" :key="field.key" class="field-row">
-                <input v-model.trim="field.key" placeholder="specialIngredients" />
-                <input v-model.trim="field.label" placeholder="例如 增味原料或特殊工艺" />
-                <select v-model="field.type">
-                  <option value="text">短文本</option>
-                  <option value="textarea">长文本</option>
-                  <option value="number">数字</option>
-                  <option value="select">选项</option>
-                </select>
-                <label class="switch-line"><input v-model="field.required" type="checkbox" /> 必填</label>
-                <label class="switch-line"><input v-model="field.visibleToJudges" type="checkbox" /> 展示</label>
-                <button class="icon-button" type="button" @click="removeItem(draft.entryFields, index)"><Delete /></button>
+            <div class="field-list">
+              <div v-for="(field, index) in draft.entryFields" :key="field.key" class="field-card">
+                <div class="field-main-row">
+                  <label>
+                    <span>字段名称</span>
+                    <input v-model.trim="field.label" placeholder="例如 增味原料或特殊工艺" />
+                  </label>
+                  <label>
+                    <span>类型</span>
+                    <select v-model="field.type">
+                      <option value="text">短文本</option>
+                      <option value="textarea">长文本</option>
+                      <option value="number">数字</option>
+                      <option value="select">选项</option>
+                      <option value="multi_select">多选</option>
+                    </select>
+                  </label>
+                  <button class="icon-button" title="删除补充字段" type="button" @click="removeItem(draft.entryFields, index)"><Delete /></button>
+                </div>
+                <div class="field-extra-row">
+                  <label>
+                    <span>提示文案</span>
+                    <input v-model.trim="field.helpText" placeholder="给厂商看的填写说明" />
+                  </label>
+                  <label class="switch-line"><input v-model="field.required" type="checkbox" /> 必填</label>
+                  <label
+                    class="switch-line visibility-switch"
+                    data-tooltip="评审可见字段会进入匿名扫码页，只勾选评酒时需要判断的信息。"
+                    :class="{ warning: field.visibleToJudges }"
+                  >
+                    <input v-model="field.visibleToJudges" type="checkbox" />
+                    评审可见
+                  </label>
+                </div>
               </div>
             </div>
-          </div>
+          </section>
         </section>
 
-        <section v-if="activeStep === 2" class="form-section">
-          <header>
-            <h2>评审配置</h2>
-            <p>每张评审桌必须有且只有 1 名桌长；跨界、专业、桌长评分表总分均固定为 50。</p>
+        <section id="score-config" class="form-section">
+          <header class="section-head">
+            <h2>评分表配置</h2>
           </header>
-          <div class="config-card wide">
-            <div class="card-title">
-              <h3>评审桌</h3>
-              <button class="tool-button" type="button" @click="addJudgeTable">
-                <Plus />
-                添加评审桌
-              </button>
-            </div>
-            <div class="judge-table">
-              <div class="judge-row judge-head">
-                <span>桌号</span>
-                <span>桌长</span>
-                <span>专业评审</span>
-                <span>跨界评审</span>
-                <span>校验</span>
-                <span></span>
-              </div>
-              <div v-for="(table, index) in draft.judgeTables" :key="table.id" class="judge-row">
-                <input v-model.trim="table.name" />
-                <input v-model.number="table.captain" min="0" type="number" />
-                <input v-model.number="table.professional" min="0" type="number" />
-                <input v-model.number="table.cross" min="0" type="number" />
-                <strong :class="{ danger: Number(table.captain) !== 1 }">
-                  {{ Number(table.captain) === 1 ? '桌长已确认' : '需 1 名桌长' }}
-                </strong>
-                <button class="icon-button" type="button" @click="removeItem(draft.judgeTables, index)"><Delete /></button>
-              </div>
-            </div>
-          </div>
 
-          <div class="score-grid">
-            <article v-for="config in draft.scoreConfigs" :key="config.role" class="config-card">
+          <div class="score-stack">
+            <article v-for="config in draft.scoreConfigs" :key="config.role" class="config-card score-card">
               <div class="card-title">
-                <h3>{{ roleLabels[config.role] }}</h3>
+                <div>
+                  <h3>{{ roleLabels[config.role] }}</h3>
+                  <small>{{ scoreDescriptions[config.role] }}</small>
+                </div>
                 <span :class="['score-total', { ok: getScoreTotal(config) === 50 }]">{{ getScoreTotal(config) }} / 50</span>
               </div>
               <div class="dimension-list">
-                <label v-for="dimension in config.dimensions" :key="dimension.label">
-                  <span>{{ dimension.label }}</span>
-                  <input v-model.number="dimension.maxScore" min="0" type="number" />
-                </label>
-              </div>
-            </article>
-          </div>
-        </section>
-
-        <section v-if="activeStep === 3" class="form-section">
-          <header>
-            <h2>检查并创建</h2>
-            <p>当前只保存为草稿。开放报名前，需要完成投递组别、基础风格、评审桌和评分表。</p>
-          </header>
-          <div class="review-layout">
-            <article class="review-card">
-              <h3>{{ draft.name || '未命名比赛' }}</h3>
-              <p>{{ draft.code || '-' }} · {{ draft.edition || '-' }}</p>
-              <div class="summary-grid">
-                <span>比赛日 <strong>{{ draft.date || '-' }}</strong></span>
-                <span>报名截止 <strong>{{ formatDateTime(draft.registrationDeadline) }}</strong></span>
-                <span>报名费 <strong>{{ draft.entryFee }} 元 / 款</strong></span>
-                <span>评审桌 <strong>{{ draft.judgeTables.length }} 张</strong></span>
-              </div>
-            </article>
-            <article class="review-card">
-              <h3>配置检查</h3>
-              <div class="check-list">
-                <div v-for="item in checkItems" :key="item.key" :class="['check-item', checks[item.key]]">
-                  <CircleCheck v-if="checks[item.key] === 'done'" />
-                  <Warning v-else />
-                  <span>{{ item.label }}</span>
-                  <strong>{{ checkLabels[checks[item.key]] }}</strong>
+                <div class="dimension-row dimension-head">
+                  <span>维度</span>
+                  <span>满分</span>
+                  <span>备注提示</span>
+                  <span></span>
+                </div>
+                <div v-for="(dimension, index) in config.dimensions" :key="dimension.key || dimension.label" class="dimension-row">
+                  <input v-model.trim="dimension.label" :disabled="config.locked" placeholder="维度名称" />
+                  <input v-model.number="dimension.maxScore" :disabled="config.locked" min="1" step="1" type="number" />
+                  <input v-model.trim="dimension.notePrompt" placeholder="例如 描述香气表现" />
+                  <button
+                    class="icon-button"
+                    type="button"
+                    :disabled="config.locked || config.dimensions.length <= 2"
+                    @click="removeDimension(config, index)"
+                  >
+                    <Delete />
+                  </button>
+                </div>
+                <div class="score-foot">
+                  <label>
+                    <span>备注合计字数下限</span>
+                    <input v-model.number="config.minCommentLength" min="0" type="number" />
+                  </label>
+                  <button v-if="config.role === 'CROSS'" class="tool-button" type="button" :disabled="config.dimensions.length >= 4" @click="addCrossDimension(config)">
+                    <Plus />
+                    添加维度
+                  </button>
+                  <span v-else class="status-pill">{{ config.locked ? '维度固定' : '共识分' }}</span>
                 </div>
               </div>
             </article>
           </div>
         </section>
 
-        <footer class="step-actions">
-          <button class="tool-button" type="button" :disabled="activeStep === 0" @click="activeStep -= 1">上一步</button>
-          <button v-if="activeStep < steps.length - 1" class="tool-button primary" type="button" @click="activeStep += 1">
-            下一步
-            <Right />
-          </button>
-          <button v-else class="tool-button primary" type="button" @click="submitDraft">
-            <Plus />
-            保存草稿
-          </button>
-        </footer>
+        <section id="review-draft" class="form-section review-section">
+          <header class="section-head review-head">
+            <h2>确认草稿</h2>
+          </header>
+          <div :class="['review-banner', { blocked: reviewBlockingItems.length }]">
+            <div class="review-banner-copy">
+              <span class="review-banner-icon">
+                <Warning v-if="reviewBlockingItems.length" />
+                <CircleCheck v-else />
+              </span>
+              <div>
+                <h3>{{ reviewBlockingItems.length ? `还有 ${reviewBlockingItems.length} 项需要处理` : '可以保存草稿' }}</h3>
+                <p>{{ reviewBlockingItems.length ? reviewBlockingText : '保存后进入工作台继续配置评审桌、轮次和奖项。' }}</p>
+              </div>
+            </div>
+            <div class="section-actions inline-actions">
+              <button class="tool-button primary" type="button" @click="submitDraft">
+                <CircleCheck />
+                保存草稿，进入工作台
+              </button>
+            </div>
+          </div>
+
+          <div class="review-layout">
+            <section class="review-block">
+              <h3>保存前检查</h3>
+              <div class="review-check-list">
+                <div v-for="item in reviewItems" :key="item.key" :class="['review-check-item', item.status]">
+                  <CircleCheck v-if="item.status === 'done'" />
+                  <Warning v-else />
+                  <div>
+                    <strong>{{ item.label }}</strong>
+                    <span>{{ item.detail }}</span>
+                  </div>
+                  <button v-if="item.status !== 'done'" class="text-button" type="button" @click="scrollToSection(item.target)">去修改</button>
+                </div>
+              </div>
+            </section>
+
+            <section class="review-block summary-block">
+              <h3>关键摘要</h3>
+              <dl class="summary-list">
+                <div>
+                  <dt>比赛名称</dt>
+                  <dd>{{ draft.name || '-' }}</dd>
+                </div>
+                <div>
+                  <dt>届次</dt>
+                  <dd>{{ draft.edition || '-' }}</dd>
+                </div>
+                <div>
+                  <dt>比赛日期</dt>
+                  <dd>{{ draft.date || '-' }}</dd>
+                </div>
+                <div>
+                  <dt>报名截止</dt>
+                  <dd>{{ formatDateTime(draft.registrationDeadline) }}</dd>
+                </div>
+                <div>
+                  <dt>报名费</dt>
+                  <dd>{{ draft.entryFee }} 元 / 款</dd>
+                </div>
+                <div>
+                  <dt>投递组别</dt>
+                  <dd>{{ categorySummary }}</dd>
+                </div>
+                <div>
+                  <dt>评审可见字段</dt>
+                  <dd>{{ judgeVisibleFieldSummary }}</dd>
+                </div>
+              </dl>
+            </section>
+          </div>
+        </section>
+
       </main>
-    </section>
   </div>
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { Back, CircleCheck, Delete, Plus, Right, Warning } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Back, CircleCheck, Delete, Plus, Warning } from '@element-plus/icons-vue'
 import {
-  buildChecks,
-  checkItems,
   defaultScoreConfigs,
   formatDateTime,
   getScoreTotal,
@@ -256,132 +302,137 @@ import {
 } from './competitionStore'
 import {
   createCompetition,
-  updateCompetitionCategories,
-  updateCompetitionEntryFields,
-  updateCompetitionJudgeTables,
-  updateCompetitionStyles,
-  updateScoreConfigs,
 } from '@/api/admin'
 
 const router = useRouter()
-const activeStep = ref(0)
-
-const steps = [
-  { key: 'base', title: '基础信息', caption: '名称、编号、关键日期' },
-  { key: 'entry', title: '报名配置', caption: '组别、风格、补充信息' },
-  { key: 'judge', title: '评审配置', caption: '评审桌、评分表' },
-  { key: 'review', title: '检查创建', caption: '保存草稿并进入工作台' },
-]
+const activeSection = ref('base-info')
 
 const draft = reactive({
   name: '2026 新建精酿啤酒赛',
-  code: 'BC-NEW-2026',
   edition: '第一批次',
   date: '2026-08-20',
   registrationStart: '2026-06-10T10:00',
   registrationDeadline: '2026-07-30T18:00',
   entryFee: 199,
-  status: 'DRAFT',
-  categories: ['IPA', '拉格'],
-  baseStyles: ['American IPA', 'Pilsner'],
+  categories: [
+    { id: 'cat-1', name: '浅色拉格' },
+    { id: 'cat-2', name: '深色拉格' },
+    { id: 'cat-3', name: '创意拉格' },
+  ],
+  styleLibraryVersion: 'BJCP_2021_CN',
   entryFields: [
-    { key: 'specialIngredients', label: '增味原料或特殊工艺', type: 'textarea', required: false, visibleToJudges: true },
+    {
+      key: 'specialIngredients',
+      label: '增味原料或特殊工艺',
+      type: 'textarea',
+      helpText: '如使用茶、咖啡、水果、桶陈等，请描述原料和工艺。',
+      required: false,
+      visibleToJudges: true,
+    },
   ],
-  judgeTables: [
-    { id: 'A', name: 'A桌', captain: 1, professional: 3, cross: 1 },
-    { id: 'B', name: 'B桌', captain: 1, professional: 3, cross: 1 },
-  ],
-  scoreConfigs: defaultScoreConfigs(),
+  scoreConfigs: createScoreConfigs(),
 })
+const initialDraftSnapshot = JSON.stringify(toDraftSnapshot(draft))
 
-const checkLabels = {
-  done: '已完成',
-  confirm: '需确认',
-  pending: '待补充',
+const scoreDescriptions = {
+  CROSS: '每场比赛可配置 2-4 个维度，总分 50。',
+  PROFESSIONAL: '固定 BJCP 口径，允许调整备注提示。',
+  CAPTAIN: '桌长填写独立共识分和综合评语。',
 }
 
-const checks = computed(() => buildChecks(draft))
+const categoryCount = computed(() => draft.categories.filter((category) => category.name).length)
+const reviewItems = computed(() => buildReviewItems(draft))
+const reviewBlockingItems = computed(() => reviewItems.value.filter((item) => item.status !== 'done'))
+const reviewBlockingText = computed(() => `请先处理：${reviewBlockingItems.value.map((item) => item.label).join('、')}`)
+const sectionIssueMap = computed(() => reviewBlockingItems.value.reduce((map, item) => ({ ...map, [item.target]: true }), {}))
+const categorySummary = computed(() => summarizeList(getCategoryNames(draft), '未配置'))
+const judgeVisibleFieldSummary = computed(() => summarizeList(getJudgeVisibleFields(draft), '无'))
+const isDraftDirty = computed(() => JSON.stringify(toDraftSnapshot(draft)) !== initialDraftSnapshot)
 
 function removeItem(list, index) {
   list.splice(index, 1)
 }
 
+function addCategory() {
+  draft.categories.push({ id: `cat-${Date.now()}`, name: '' })
+}
+
 function addEntryField() {
   draft.entryFields.push({
-    key: `field_${draft.entryFields.length + 1}`,
+    key: createEntryFieldKey(),
     label: '',
     type: 'text',
+    helpText: '',
     required: false,
     visibleToJudges: true,
   })
 }
 
-function addJudgeTable() {
-  const code = String.fromCharCode(65 + draft.judgeTables.length)
-  draft.judgeTables.push({ id: code, name: `${code}桌`, captain: 1, professional: 3, cross: 1 })
+function addCrossDimension(config) {
+  if (config.dimensions.length >= 4) {
+    ElMessage.warning('跨界评审需配置 2-4 个维度')
+    return
+  }
+  const next = config.dimensions.length + 1
+  config.dimensions.push({
+    key: `cross_${next}`,
+    label: '',
+    maxScore: 10,
+    notePrompt: '请补充这个维度的具体反馈。',
+  })
+}
+
+function removeDimension(config, index) {
+  config.dimensions.splice(index, 1)
 }
 
 async function submitDraft() {
-  if (!draft.name || !draft.code || !draft.date || !draft.registrationDeadline || draft.entryFee === '' || draft.entryFee === null) {
-    ElMessage.warning('请先填写比赛名称、编号、比赛日期、报名截止和报名费')
-    activeStep.value = 0
-    return
-  }
-  if (!draft.scoreConfigs.every((config) => getScoreTotal(config) === 50)) {
-    ElMessage.warning('三类评分表总分都需要为 50 分')
-    activeStep.value = 2
+  const firstIssue = reviewBlockingItems.value[0]
+  if (firstIssue) {
+    ElMessage.warning(firstIssue.detail)
+    scrollToSection(firstIssue.target)
     return
   }
   try {
     const created = await createCompetition({
       name: draft.name,
-      code: draft.code,
       edition: draft.edition,
       competitionDate: draft.date,
       registrationStart: toBackendDateTime(draft.registrationStart),
       registrationDeadline: toBackendDateTime(draft.registrationDeadline),
       entryFee: Number(draft.entryFee || 0),
-    })
-    const competitionId = created.id
-    const categoryItems = draft.categories.filter(Boolean).map((name, index) => ({ name, sortOrder: index }))
-    const styleItems = draft.baseStyles.filter(Boolean).map((name, index) => ({ name, sortOrder: index }))
-    const entryFieldItems = draft.entryFields
-      .filter((field) => field.key && field.label)
-      .map((field, index) => ({
+      styleLibraryVersion: draft.styleLibraryVersion,
+      categories: draft.categories
+        .filter((category) => category.name)
+        .map((category, index) => ({ name: category.name, sortOrder: index })),
+      entryFields: draft.entryFields
+        .filter((field) => field.label)
+        .map((field, index) => ({
         fieldKey: field.key,
         fieldLabel: field.label,
         fieldType: field.type,
+        helpText: field.helpText,
+        options: [],
         required: Boolean(field.required),
         visibleToJudges: Boolean(field.visibleToJudges),
         sortOrder: index,
-      }))
-    const judgeTableItems = draft.judgeTables.filter((table) => table.name).map((table) => ({ tableName: table.name }))
-    if (categoryItems.length) {
-      await updateCompetitionCategories(competitionId, { items: categoryItems })
-    }
-    if (styleItems.length) {
-      await updateCompetitionStyles(competitionId, { items: styleItems })
-    }
-    if (entryFieldItems.length) {
-      await updateCompetitionEntryFields(competitionId, { items: entryFieldItems })
-    }
-    if (judgeTableItems.length) {
-      await updateCompetitionJudgeTables(competitionId, { items: judgeTableItems })
-    }
-    await updateScoreConfigs(competitionId, {
-      configs: draft.scoreConfigs.map((config) => ({
+      })),
+      scoreConfigs: draft.scoreConfigs.map((config) => ({
         judgeRoleType: config.role,
+        minCommentLength: Number(config.minCommentLength || 0),
         dimensions: config.dimensions.map((dimension, index) => ({
           key: dimension.key || `${config.role.toLowerCase()}_${index + 1}`,
           label: dimension.label,
           maxScore: Number(dimension.maxScore || 0),
+          notePrompt: dimension.notePrompt,
         })),
       })),
     })
-    ElMessage.success('比赛草稿已创建，配置已保存')
+    const competitionId = created.id
+    ElMessage.success('比赛草稿已创建，下一步进入工作台完成评审编排')
     router.push(`/admin/competitions/${competitionId}`)
   } catch {
-    ElMessage.warning('草稿创建或配置保存未全部完成，请在详情工作台继续检查')
+    ElMessage.warning('草稿创建失败，请检查页面配置后重试')
   }
 }
 
@@ -390,6 +441,229 @@ function toBackendDateTime(value) {
     return null
   }
   return value.length === 16 ? `${value}:00` : value
+}
+
+async function leaveCreatePage() {
+  if (!isDraftDirty.value) {
+    router.push('/admin/competitions')
+    return
+  }
+  try {
+    await ElMessageBox.confirm('当前新建比赛内容尚未保存，离开后本页填写内容会丢失。', '离开新建比赛？', {
+      confirmButtonText: '离开',
+      cancelButtonText: '继续编辑',
+      type: 'warning',
+    })
+    router.push('/admin/competitions')
+  } catch {
+    // User chose to keep editing.
+  }
+}
+
+function scrollToSection(id) {
+  activeSection.value = id
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+function syncActiveSection() {
+  const sections = ['base-info', 'entry-config', 'score-config', 'review-draft']
+  const current = sections
+    .map((id) => ({ id, top: Math.abs(document.getElementById(id)?.getBoundingClientRect().top ?? Number.POSITIVE_INFINITY) }))
+    .sort((a, b) => a.top - b.top)[0]
+  if (current?.id) {
+    activeSection.value = current.id
+  }
+}
+
+onMounted(() => {
+  document.querySelector('.create-panel')?.addEventListener('scroll', syncActiveSection, { passive: true })
+})
+
+onBeforeUnmount(() => {
+  document.querySelector('.create-panel')?.removeEventListener('scroll', syncActiveSection)
+})
+
+function getCategoryNames(source) {
+  return source.categories.map((category) => category.name.trim()).filter(Boolean)
+}
+
+function getJudgeVisibleFields(source) {
+  return source.entryFields
+    .filter((field) => field.label.trim() && field.visibleToJudges)
+    .map((field) => field.label.trim())
+}
+
+function hasEntryFieldContent(field) {
+  return Boolean(
+    field.label.trim()
+    || (field.helpText || '').trim()
+    || field.required
+    || field.visibleToJudges
+    || field.type !== 'text',
+  )
+}
+
+function getIncompleteEntryFields(source) {
+  return source.entryFields.filter((field) => !field.label.trim() && hasEntryFieldContent(field))
+}
+
+function toDraftSnapshot(source) {
+  return {
+    name: source.name,
+    edition: source.edition,
+    date: source.date,
+    registrationStart: source.registrationStart,
+    registrationDeadline: source.registrationDeadline,
+    entryFee: source.entryFee,
+    categories: source.categories.map((category) => ({ name: category.name })),
+    styleLibraryVersion: source.styleLibraryVersion,
+    entryFields: source.entryFields.map((field) => ({
+      label: field.label,
+      type: field.type,
+      helpText: field.helpText,
+      required: field.required,
+      visibleToJudges: field.visibleToJudges,
+    })),
+    scoreConfigs: source.scoreConfigs.map((config) => ({
+      role: config.role,
+      minCommentLength: config.minCommentLength,
+      dimensions: config.dimensions.map((dimension) => ({
+        label: dimension.label,
+        maxScore: dimension.maxScore,
+        notePrompt: dimension.notePrompt,
+      })),
+    })),
+  }
+}
+
+function summarizeList(items, emptyText) {
+  if (!items.length) {
+    return emptyText
+  }
+  if (items.length <= 3) {
+    return items.join('、')
+  }
+  return `${items.slice(0, 3).join('、')} 等 ${items.length} 项`
+}
+
+function getDuplicateItems(items) {
+  const seen = new Set()
+  const duplicated = new Set()
+  items.forEach((item) => {
+    if (seen.has(item)) {
+      duplicated.add(item)
+    }
+    seen.add(item)
+  })
+  return Array.from(duplicated)
+}
+
+function isDeadlineAfterStart(start, deadline) {
+  if (!start || !deadline) {
+    return false
+  }
+  return new Date(deadline).getTime() > new Date(start).getTime()
+}
+
+function createEntryFieldKey() {
+  return `custom_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+}
+
+function createScoreConfigs() {
+  const promptMap = {
+    香气: '描述香气强度、干净度和主要香气来源。',
+    外观: '描述颜色、清澈度、泡沫和持久性。',
+    味道: '描述甜苦酸平衡、风味层次和缺陷。',
+    口感: '描述酒体、杀口感、顺滑度和余味。',
+    整体印象: '汇总整体表现、完成度和改进建议。',
+    整体感受: '描述第一印象、愉悦度和整体完成度。',
+    适饮性: '描述是否易饮、是否愿意继续饮用。',
+    记忆点: '描述最容易被记住的风味或体验。',
+    共识评分: '桌长讨论后填写独立共识分。',
+  }
+  return defaultScoreConfigs().map((config) => ({
+    ...config,
+    locked: config.role === 'PROFESSIONAL',
+    minCommentLength: config.role === 'CROSS' ? 50 : 30,
+    dimensions: config.dimensions.map((dimension, index) => ({
+      key: dimension.key || `${config.role.toLowerCase()}_${index + 1}`,
+      label: dimension.label,
+      maxScore: dimension.maxScore,
+      notePrompt: promptMap[dimension.label] || '请输入该维度备注提示。',
+    })),
+  }))
+}
+
+function buildReviewItems(source) {
+  const missingBaseFields = []
+  if (!source.name) missingBaseFields.push('比赛名称')
+  if (!source.date) missingBaseFields.push('比赛日期')
+  if (!source.registrationStart) missingBaseFields.push('报名开始')
+  if (!source.registrationDeadline) missingBaseFields.push('报名截止')
+  if (source.entryFee === '' || source.entryFee === null || Number(source.entryFee) < 0) missingBaseFields.push('报名费')
+
+  const categoryNames = getCategoryNames(source)
+  const duplicatedCategories = getDuplicateItems(categoryNames)
+  const scoreErrors = source.scoreConfigs
+    .filter((config) => getScoreTotal(config) !== 50)
+    .map((config) => `${roleLabels[config.role]} ${getScoreTotal(config)} 分`)
+  const crossConfig = source.scoreConfigs.find((config) => config.role === 'CROSS')
+  const crossDimensionValid = crossConfig && crossConfig.dimensions.length >= 2 && crossConfig.dimensions.length <= 4
+  const visibleFields = getJudgeVisibleFields(source)
+  const incompleteEntryFields = getIncompleteEntryFields(source)
+
+  return [
+    {
+      key: 'baseInfo',
+      label: '基础信息',
+      target: 'base-info',
+      status: missingBaseFields.length ? 'pending' : 'done',
+      detail: missingBaseFields.length ? `缺少${missingBaseFields.join('、')}` : `${source.name}，${source.date}`,
+    },
+    {
+      key: 'time',
+      label: '报名时间',
+      target: 'base-info',
+      status: isDeadlineAfterStart(source.registrationStart, source.registrationDeadline) ? 'done' : 'pending',
+      detail: isDeadlineAfterStart(source.registrationStart, source.registrationDeadline)
+        ? `截止 ${formatDateTime(source.registrationDeadline)}`
+        : '报名截止需晚于报名开始',
+    },
+    {
+      key: 'categories',
+      label: '投递组别',
+      target: 'entry-config',
+      status: categoryNames.length && !duplicatedCategories.length ? 'done' : 'pending',
+      detail: !categoryNames.length
+        ? '请至少配置一个投递组别'
+        : duplicatedCategories.length
+          ? `组别名称重复：${duplicatedCategories.join('、')}`
+          : summarizeList(categoryNames, '未配置'),
+    },
+    {
+      key: 'entryFields',
+      label: '补充字段',
+      target: 'entry-config',
+      status: incompleteEntryFields.length ? 'pending' : 'done',
+      detail: incompleteEntryFields.length
+        ? `有 ${incompleteEntryFields.length} 个补充字段缺少字段名称`
+        : visibleFields.length ? `${summarizeList(visibleFields, '无')} 对评审可见` : '无评审可见字段',
+    },
+    {
+      key: 'scoreForms',
+      label: '评分表',
+      target: 'score-config',
+      status: scoreErrors.length ? 'pending' : 'done',
+      detail: scoreErrors.length ? `总分需为 50：${scoreErrors.join('、')}` : '三类评分表均为 50 分',
+    },
+    {
+      key: 'crossDimensions',
+      label: '跨界评审',
+      target: 'score-config',
+      status: crossDimensionValid ? 'done' : 'pending',
+      detail: crossDimensionValid ? `${crossConfig.dimensions.length} 个评分维度` : '跨界评审需配置 2-4 个维度',
+    },
+  ]
 }
 </script>
 
@@ -406,11 +680,12 @@ function toBackendDateTime(value) {
   --orange: #f2994a;
   --red: #e05252;
   height: 100vh;
-  padding: 26px 28px;
+  padding: 20px 28px;
   color: var(--text);
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  align-items: center;
   background:
     linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
@@ -447,18 +722,13 @@ svg {
 }
 
 .create-head,
-.back-button,
+.breadcrumb-link,
 .head-actions,
 .tool-button,
-.step-shell,
-.step-item,
 .card-title,
-.stack-list label,
-.field-row,
-.judge-row,
-.dimension-list label,
-.step-actions,
-.check-item {
+.category-row,
+.dimension-row,
+.section-actions {
   display: flex;
   align-items: center;
 }
@@ -466,32 +736,30 @@ svg {
 .create-head {
   flex: 0 0 auto;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 18px;
-  padding-bottom: 22px;
+  gap: 8px;
+  width: min(100%, 1180px);
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--line);
 }
 
-.eyebrow,
+.head-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+}
+
 p,
 small,
-label span,
-.step-item small {
+label span {
   color: var(--muted);
 }
 
-.eyebrow {
-  margin-bottom: 6px;
-  color: var(--gold-soft);
-  font-size: 12px;
-  font-weight: 800;
-}
-
 h1 {
-  font-size: 28px;
+  font-size: 24px;
+  line-height: 1.15;
 }
 
-.back-button,
 .tool-button,
 .icon-button {
   color: var(--text);
@@ -500,21 +768,31 @@ h1 {
   background: rgba(255, 255, 255, 0.035);
 }
 
-.back-button {
-  gap: 8px;
-  min-height: 42px;
-  padding: 0 12px;
+.breadcrumb-link {
+  justify-self: start;
+  gap: 7px;
+  min-height: 28px;
+  padding: 0;
+  color: var(--muted);
+  border: 0;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.breadcrumb-link:hover {
+  color: var(--gold-soft);
 }
 
 .head-actions,
-.step-actions {
+.section-actions {
   gap: 10px;
 }
 
 .tool-button {
   justify-content: center;
   gap: 8px;
-  min-height: 42px;
+  min-height: 38px;
   padding: 0 14px;
 }
 
@@ -524,77 +802,129 @@ h1 {
   background: rgba(216, 169, 53, 0.08);
 }
 
-.step-shell {
+.anchor-bar {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  width: min(100%, 1180px);
+  min-height: 30px;
+  margin-top: 8px;
+  align-items: center;
+}
+
+.anchor-bar button {
+  position: relative;
+  min-height: 28px;
+  padding: 0;
+  color: var(--muted);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.anchor-bar button::after {
+  position: absolute;
+  right: 0;
+  bottom: -4px;
+  left: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: transparent;
+  content: '';
+}
+
+.anchor-bar button:hover,
+.anchor-bar button.active {
+  color: var(--gold-soft);
+}
+
+.anchor-bar button.active::after {
+  background: rgba(224, 184, 74, 0.78);
+}
+
+.anchor-bar button.issue::before {
+  position: absolute;
+  top: 3px;
+  right: -9px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--orange);
+  box-shadow: 0 0 0 3px rgba(242, 153, 74, 0.12);
+  content: '';
+}
+
+.create-panel {
   flex: 1 1 auto;
   min-height: 0;
-  gap: 18px;
-  margin-top: 22px;
-  align-items: stretch;
-}
-
-.step-rail {
-  flex: 0 0 260px;
-  display: grid;
-  align-content: start;
-  gap: 10px;
-}
-
-.step-item {
-  gap: 12px;
-  min-height: 76px;
-  padding: 14px;
-  text-align: left;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel);
-}
-
-.step-item span {
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-  width: 34px;
-  height: 34px;
-  color: var(--gold-soft);
-  border: 1px solid rgba(216, 169, 53, 0.28);
-  border-radius: 8px;
-  background: rgba(216, 169, 53, 0.08);
-}
-
-.step-item strong,
-.step-item small {
-  display: block;
-}
-
-.step-item.active {
-  border-color: rgba(216, 169, 53, 0.34);
-  background: var(--panel-strong);
-}
-
-.step-content {
-  flex: 1 1 auto;
-  min-width: 0;
   display: flex;
   flex-direction: column;
+  gap: 0;
+  width: min(100%, 1180px);
+  margin-top: 8px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 .form-section {
-  flex: 1 1 auto;
-  min-height: 0;
-  padding: 24px;
-  overflow-y: auto;
+  padding: 28px;
+  border-bottom: 1px solid var(--line);
+  scroll-margin-top: 12px;
+}
+
+.form-section:last-child {
+  border-bottom: 0;
+}
+
+.form-section,
+.create-panel,
+.category-list {
+  scrollbar-color: rgba(255, 255, 255, 0.16) rgba(255, 255, 255, 0.035);
+  scrollbar-width: thin;
+}
+
+.form-section::-webkit-scrollbar,
+.create-panel::-webkit-scrollbar,
+.category-list::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.form-section::-webkit-scrollbar-track,
+.create-panel::-webkit-scrollbar-track,
+.category-list::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.form-section::-webkit-scrollbar-thumb,
+.create-panel::-webkit-scrollbar-thumb,
+.category-list::-webkit-scrollbar-thumb {
+  border: 1px solid rgba(16, 25, 29, 0.95);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.form-section::-webkit-scrollbar-thumb:hover,
+.create-panel::-webkit-scrollbar-thumb:hover,
+.category-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(224, 184, 74, 0.45);
 }
 
 .form-section header {
   margin-bottom: 22px;
 }
 
-.form-section header p {
-  margin-top: 8px;
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 .form-grid {
@@ -603,7 +933,9 @@ h1 {
 }
 
 .form-grid.two {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 1000px;
+  grid-template-columns: repeat(2, minmax(260px, 1fr));
+  justify-content: start;
 }
 
 label {
@@ -627,31 +959,115 @@ input::placeholder {
   color: var(--faint);
 }
 
-.config-grid,
-.score-grid,
-.review-layout {
+.fee-field {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.fee-field input {
+  border: 0;
+  background: transparent;
+}
+
+.fee-field span {
+  padding: 0 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.built-in-strip {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 18px;
+  align-items: center;
+  max-width: 1040px;
+  padding: 0 0 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.built-in-strip h3 {
+  color: var(--text);
+}
+
+.built-in-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-start;
+}
+
+.built-in-fields span {
+  padding: 7px 10px;
+  color: #b7c8d0;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 13px;
+}
+
+.score-stack {
+  display: grid;
   gap: 14px;
 }
 
-.config-card,
-.review-card {
+.score-stack {
+  max-width: 1040px;
+}
+
+.review-layout {
+  display: grid;
+  gap: 18px;
+  max-width: 1040px;
+}
+
+.entry-section {
+  max-width: 1040px;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.entry-section:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.config-card {
+  align-self: start;
   min-width: 0;
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.026);
-}
-
-.config-card.wide {
-  margin-top: 14px;
+  background: rgba(255, 255, 255, 0.018);
 }
 
 .card-title {
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
+}
+
+.title-with-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.count-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 9px;
+  color: #9fb4bf;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .icon-button {
@@ -661,36 +1077,65 @@ input::placeholder {
   height: 34px;
 }
 
-.stack-list {
+.category-list,
+.dimension-list,
+.field-list {
   display: grid;
   gap: 10px;
 }
 
-.stack-list label {
-  grid-template-columns: 1fr auto;
-  gap: 8px;
+.category-list {
+  grid-template-columns: repeat(auto-fill, minmax(240px, 300px));
+  justify-content: start;
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: 6px;
 }
 
-.field-table,
-.judge-table {
+.category-row {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) 40px;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+
+.category-row input {
+  min-height: 38px;
+}
+
+.field-card {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(219, 232, 237, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.012);
+}
+
+.field-main-row {
+  display: grid;
+  grid-template-columns: minmax(320px, 640px) 180px 40px;
+  gap: 10px;
+  align-items: end;
+  justify-content: start;
+}
+
+.field-extra-row {
+  display: grid;
+  grid-template-columns: minmax(320px, 560px) auto auto;
+  gap: 16px;
+  align-items: end;
+  justify-content: start;
+}
+
+.dimension-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 220px) 80px minmax(260px, 1fr) 36px;
   gap: 10px;
 }
 
-.field-row {
-  display: grid;
-  grid-template-columns: minmax(150px, 0.9fr) minmax(180px, 1fr) 130px 92px 112px 40px;
-  gap: 10px;
-}
-
-.judge-row {
-  display: grid;
-  grid-template-columns: minmax(140px, 1fr) 90px 110px 110px 130px 40px;
-  gap: 10px;
-}
-
-.field-head,
-.judge-head {
+.dimension-head {
   color: var(--muted);
   font-size: 13px;
 }
@@ -698,20 +1143,88 @@ input::placeholder {
 .switch-line {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   color: var(--muted);
+  cursor: pointer;
+  line-height: 1.2;
 }
 
-.switch-line input {
-  min-height: auto;
+.switch-line input[type='checkbox'] {
+  display: grid;
+  place-content: center;
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  min-height: 16px;
+  margin: 0;
+  appearance: none;
+  border: 1px solid rgba(219, 232, 237, 0.2);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.035);
+  transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
 }
 
-.judge-row strong {
-  align-self: center;
-  color: var(--green);
+.switch-line input[type='checkbox']::before {
+  width: 9px;
+  height: 9px;
+  background: var(--gold-soft);
+  clip-path: polygon(14% 44%, 0 58%, 40% 100%, 100% 16%, 84% 0, 38% 65%);
+  content: '';
+  transform: scale(0);
+  transition: transform 0.16s ease;
 }
 
-.judge-row strong.danger,
+.switch-line input[type='checkbox']:checked {
+  border-color: rgba(224, 184, 74, 0.5);
+  background: rgba(224, 184, 74, 0.1);
+  box-shadow: 0 0 0 3px rgba(224, 184, 74, 0.08);
+}
+
+.switch-line input[type='checkbox']:checked::before {
+  transform: scale(1);
+}
+
+.switch-line:hover input[type='checkbox'] {
+  border-color: rgba(224, 184, 74, 0.42);
+}
+
+.visibility-switch.warning {
+  color: var(--gold-soft);
+}
+
+.visibility-switch {
+  position: relative;
+  cursor: help;
+}
+
+.visibility-switch::after {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  z-index: 20;
+  width: 260px;
+  padding: 10px 12px;
+  color: var(--text);
+  border: 1px solid rgba(216, 169, 53, 0.26);
+  border-radius: 8px;
+  background: rgba(18, 27, 31, 0.98);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.26);
+  content: attr(data-tooltip);
+  font-size: 12px;
+  line-height: 1.55;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.visibility-switch:hover::after,
+.visibility-switch:focus-within::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 .score-total {
   color: var(--orange);
 }
@@ -720,79 +1233,222 @@ input::placeholder {
   color: var(--green);
 }
 
-.dimension-list {
+.score-foot {
   display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto;
   gap: 10px;
+  align-items: end;
+  padding-top: 4px;
 }
 
-.dimension-list label {
-  grid-template-columns: 1fr 90px;
-  gap: 10px;
-}
-
-.summary-grid {
+.library-row {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-  margin-top: 16px;
+  grid-template-columns: 120px minmax(320px, 420px) auto;
+  gap: 18px;
+  align-items: center;
+  justify-content: start;
 }
 
-.summary-grid span {
-  padding: 12px;
-  color: var(--muted);
+.library-row h3 {
+  align-self: center;
+}
+
+.library-select {
+  gap: 0;
+}
+
+.library-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-self: center;
+  justify-content: flex-start;
+}
+
+.library-tags span {
+  padding: 7px 10px;
+  color: var(--gold-soft);
+  border: 1px solid rgba(216, 169, 53, 0.22);
+  border-radius: 999px;
+  background: rgba(216, 169, 53, 0.07);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.form-grid.compact {
+  gap: 10px;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 10px;
+  color: var(--gold-soft);
+  border: 1px solid rgba(216, 169, 53, 0.25);
+  border-radius: 999px;
+  background: rgba(216, 169, 53, 0.08);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.status-pill.done {
+  color: var(--green);
+  border-color: rgba(111, 207, 122, 0.25);
+  background: rgba(111, 207, 122, 0.08);
+}
+
+.review-banner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+  max-width: 1040px;
+  margin-bottom: 18px;
+  padding: 16px;
+  border: 1px solid rgba(111, 207, 122, 0.2);
+  border-radius: 8px;
+  background: rgba(111, 207, 122, 0.055);
+}
+
+.review-banner.blocked {
+  border-color: rgba(242, 153, 74, 0.24);
+  background: rgba(242, 153, 74, 0.06);
+}
+
+.review-banner-copy,
+.review-check-item {
+  display: flex;
+  align-items: center;
+}
+
+.review-banner-copy {
+  gap: 12px;
+  min-width: 0;
+}
+
+.review-banner-copy h3 {
+  margin-bottom: 4px;
+}
+
+.review-banner-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  color: var(--green);
+  border: 1px solid rgba(111, 207, 122, 0.28);
+  border-radius: 50%;
+  background: rgba(111, 207, 122, 0.08);
+}
+
+.blocked .review-banner-icon {
+  color: var(--orange);
+  border-color: rgba(242, 153, 74, 0.32);
+  background: rgba(242, 153, 74, 0.1);
+}
+
+.review-block {
+  min-width: 0;
+  padding: 16px;
   border: 1px solid var(--line);
   border-radius: 8px;
+  background: rgba(255, 255, 255, 0.014);
 }
 
-.summary-grid strong {
-  display: block;
-  margin-top: 6px;
-  color: var(--text);
-}
-
-.check-list {
+.review-check-list {
   display: grid;
-  gap: 10px;
-  margin-top: 12px;
+  gap: 8px;
+  margin-top: 14px;
 }
 
-.check-item {
-  gap: 10px;
+.review-check-item {
+  gap: 12px;
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
+  background: rgba(255, 255, 255, 0.012);
 }
 
-.check-item.done {
+.review-check-item.done {
   color: var(--green);
 }
 
-.check-item.pending,
-.check-item.confirm {
+.review-check-item.pending {
   color: var(--orange);
 }
 
-.check-item span {
+.review-check-item div {
   flex: 1;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
 }
 
-.step-actions {
+.review-check-item span {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.text-button {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 0 8px;
+  color: var(--gold-soft);
+  border: 0;
+  background: transparent;
+  font-weight: 700;
+}
+
+.summary-list {
+  display: grid;
+  gap: 0;
+  margin: 14px 0 0;
+}
+
+.summary-list div {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.summary-list div:last-child {
+  border-bottom: 0;
+}
+
+.summary-list dt {
+  color: var(--muted);
+}
+
+.summary-list dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.section-actions {
   justify-content: flex-end;
   padding: 18px 24px;
   border-top: 1px solid var(--line);
 }
 
-@media (max-width: 1180px) {
-  .step-shell,
-  .create-head {
+.inline-actions {
+  flex: 0 0 auto;
+  padding: 0;
+  border-top: 0;
+}
+
+@media (max-width: 720px) {
+  .create-head,
+  .head-main {
     display: flex;
     flex-direction: column;
     align-items: stretch;
-  }
-
-  .step-rail {
-    flex: 0 0 auto;
-    grid-template-columns: repeat(4, 1fr);
   }
 }
 
@@ -804,16 +1460,55 @@ input::placeholder {
   }
 
   .form-grid.two,
-  .config-grid,
-  .score-grid,
+  .score-stack,
   .review-layout,
-  .step-rail {
+  .built-in-strip,
+  .library-row {
     grid-template-columns: 1fr;
   }
 
-  .field-row,
-  .judge-row {
+  .dimension-row,
+  .field-main-row,
+  .field-extra-row,
+  .score-foot,
+  .review-banner {
     grid-template-columns: 1fr;
   }
+
+  .summary-list div {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .review-check-item {
+    align-items: flex-start;
+  }
+
+  .built-in-fields {
+    justify-content: flex-start;
+  }
+
+  .library-tags {
+    justify-content: flex-start;
+  }
+
+  .form-section {
+    padding: 20px;
+  }
+
+  .section-actions {
+    padding: 14px 20px;
+  }
+
+  .review-head {
+    align-items: stretch;
+  }
+
+  .inline-actions {
+    width: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
 }
 </style>

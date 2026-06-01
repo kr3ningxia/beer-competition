@@ -54,6 +54,17 @@ app:
   sms:
     code-ttl-minutes: ${APP_SMS_CODE_TTL_MINUTES:5}
     mock-enabled: ${APP_SMS_MOCK_ENABLED:false}
+    access-key-id: ${APP_ALIYUN_ACCESS_KEY_ID:}
+    access-key-secret: ${APP_ALIYUN_ACCESS_KEY_SECRET:}
+    endpoint: ${APP_SMS_ENDPOINT:dypnsapi.aliyuncs.com}
+    scheme-name: ${APP_SMS_SCHEME_NAME:默认方案}
+    sign-name: ${APP_SMS_SIGN_NAME:}
+    template-code: ${APP_SMS_TEMPLATE_CODE:}
+    country-code: ${APP_SMS_COUNTRY_CODE:86}
+    send-interval-seconds: ${APP_SMS_SEND_INTERVAL_SECONDS:60}
+    code-length: ${APP_SMS_CODE_LENGTH:6}
+    code-type: ${APP_SMS_CODE_TYPE:1}
+    duplicate-policy: ${APP_SMS_DUPLICATE_POLICY:1}
   storage:
     provider: ${APP_STORAGE_PROVIDER:local}
     local-base-dir: ${APP_STORAGE_LOCAL_DIR:uploads}
