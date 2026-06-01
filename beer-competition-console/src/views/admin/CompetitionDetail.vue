@@ -27,7 +27,7 @@
     </section>
 
     <section v-if="competition" class="detail-shell">
-      <section class="stage-summary" :class="{ danger: hasDataIssues }">
+      <section v-if="activeTab === 'overview'" class="stage-summary" :class="{ danger: hasDataIssues }">
         <div>
           <small>当前阶段</small>
           <strong>{{ competition.currentStageLabel || statusInfo.label }}</strong>
@@ -276,45 +276,176 @@
         </section>
 
         <section v-if="activeTab === 'judges'" class="tab-panel">
-          <div class="edit-banner" :class="{ locked: !editable.judgeTables }">
-            <Lock v-if="!editable.judgeTables" />
-            <Edit v-else />
-            {{ editable.judgeTables ? '评审开始前可调整评审桌' : '评审已开始，评审桌和评分表已锁定。' }}
-          </div>
-          <article class="panel-card">
-            <div class="panel-heading">
-              <h2>评审桌配置</h2>
-              <button v-if="editable.judgeTables" class="tool-button" type="button" @click="addJudgeTable">
+          <section class="judge-workbench">
+            <aside class="judge-nav-panel">
+              <div class="panel-heading compact">
+                <h2>评审桌</h2>
+                <span>{{ judgeTableForm.length }} 桌</span>
+              </div>
+              <button
+                v-for="table in judgeTableForm"
+                :key="table.localId"
+                :class="['table-nav-item', { active: selectedTableLocalId === table.localId, danger: tableValidationIssues(table).length }]"
+                type="button"
+                @click="selectedTableLocalId = table.localId"
+              >
+                <strong>{{ table.tableName || '未命名评审桌' }}</strong>
+                <span>{{ assignmentsForTable(table).length }} 人</span>
+              </button>
+              <button v-if="editable.judgeTables" class="table-nav-add" type="button" @click="addJudgeTable">
                 <Plus />
-                添加评审桌
+                新增评审桌
               </button>
-            </div>
-            <div class="data-table judge-table">
-              <div class="table-head">
-                <span>桌号</span>
-                <span>桌长</span>
-                <span>专业评审</span>
-                <span>跨界评审</span>
-                <span></span>
+
+              <div class="left-check-summary">
+                <div>
+                  <strong>检查</strong>
+                  <span :class="{ success: validationIssues.length === 0, danger: validationIssues.length > 0 }">
+                    {{ validationIssues.length === 0 ? '通过' : `${validationIssues.length} 项` }}
+                  </span>
+                </div>
+                <p v-if="validationIssues.length === 0">
+                  <CircleCheck />
+                  可发布
+                </p>
+                <p v-for="issue in validationIssues.slice(0, 3)" v-else :key="issue">
+                  <Warning />
+                  {{ issue }}
+                </p>
               </div>
-              <div v-for="(table, index) in judgeTableForm" :key="table.localId" class="table-row">
-                <input v-if="editable.judgeTables" v-model.trim="table.tableName" />
-                <strong v-else>{{ table.tableName }}</strong>
-                <span :class="{ danger: table.captainCount !== 1, success: table.captainCount === 1 }">{{ table.captainCount }} 人</span>
-                <span>{{ table.professionalCount }} 人</span>
-                <span>{{ table.crossCount }} 人</span>
-                <button v-if="editable.judgeTables" class="icon-button" type="button" @click="removeItem(judgeTableForm, index)">
-                  <Delete />
-                </button>
+            </aside>
+
+            <section class="assignment-board">
+              <div class="judge-command-bar">
+                <div class="metric-strip">
+                  <span>已分配 <strong>{{ judgeMetrics.assigned }}</strong></span>
+                  <span>桌长 <strong>{{ judgeMetrics.captain }} / {{ judgeTableForm.length }}</strong></span>
+                  <span>专业 <strong>{{ judgeMetrics.professional }}</strong></span>
+                  <span>跨界 <strong>{{ judgeMetrics.cross }}</strong></span>
+                </div>
+                <div class="command-actions">
+                  <button v-if="editable.judgeTables" class="tool-button" type="button" @click="saveJudgeDraft">
+                    <Check />
+                    保存
+                  </button>
+                </div>
               </div>
-            </div>
-            <footer v-if="editable.judgeTables" class="panel-actions">
-              <button class="tool-button primary" type="button" @click="saveJudgeTables">
-                <Check />
-                保存评审桌
-              </button>
-            </footer>
-          </article>
+
+              <article v-for="(table, index) in judgeTableForm" :key="table.localId" class="judge-table-card">
+                <header class="judge-table-head">
+                  <div>
+                    <label v-if="editable.judgeTables">
+                      <span>桌号</span>
+                      <input v-model.trim="table.tableName" placeholder="例如 A桌" />
+                    </label>
+                    <h2 v-else>{{ table.tableName }}</h2>
+                    <p>{{ tableValidationIssues(table).length ? tableValidationIssues(table)[0] : '本桌配置正常' }}</p>
+                  </div>
+                  <button v-if="editable.judgeTables" class="icon-button" type="button" @click="removeJudgeTable(index)">
+                    <Delete />
+                  </button>
+                </header>
+
+                <div class="role-lanes">
+                  <section
+                    v-for="role in roleOptions"
+                    :key="role.value"
+                    :class="['role-lane', role.value.toLowerCase(), { active: selectedTableLocalId === table.localId && selectedRole === role.value }]"
+                    @click="selectAssignmentTarget(table, role.value)"
+                    @dragover.prevent
+                    @drop.prevent="dropOnRole(table, role.value)"
+                  >
+                    <header>
+                      <div>
+                        <strong>{{ role.label }}</strong>
+                        <span>{{ assignmentsForTable(table, role.value).length }} 人</span>
+                      </div>
+                    </header>
+
+                    <div class="assignment-card-list">
+                      <article
+                        v-for="assignment in assignmentsForTable(table, role.value)"
+                        :key="assignment.localId"
+                        class="assignment-card"
+                        :draggable="editable.judgeTables"
+                        @dragstart="startAssignmentDrag(assignment)"
+                        @dragend="clearDrag"
+                      >
+                        <span class="avatar small">{{ getJudgeInitial(getJudge(assignment.judgeId)?.name) }}</span>
+                        <div class="assignment-main">
+                          <strong>{{ getJudge(assignment.judgeId)?.name || '未知评委' }}</strong>
+                          <small>{{ getJudge(assignment.judgeId)?.qualification || '未填写资质' }}</small>
+                        </div>
+                        <button v-if="editable.judgeTables" class="icon-button ghost" type="button" @click.stop="removeAssignment(assignment)">
+                          <Delete />
+                        </button>
+                      </article>
+                      <button
+                        v-if="editable.judgeTables && assignmentsForTable(table, role.value).length === 0"
+                        class="empty-assignment"
+                        type="button"
+                        @click.stop="selectAssignmentTarget(table, role.value)"
+                      >
+                        <Plus />
+                        添加
+                      </button>
+                    </div>
+                  </section>
+                </div>
+              </article>
+            </section>
+
+            <aside class="judge-right-panel">
+              <section class="panel-card tight">
+                <div class="panel-heading compact">
+                  <h2>评委池</h2>
+                  <span>{{ filteredJudgePool.length }} 人</span>
+                </div>
+                <label class="inline-search">
+                  <Search />
+                  <input v-model.trim="judgeKeyword" placeholder="搜索姓名、手机号、资质" />
+                </label>
+                <div class="pool-filters">
+                  <button
+                    v-for="filter in roleFilters"
+                    :key="filter.value"
+                    :class="{ active: judgeRoleFilter === filter.value }"
+                    type="button"
+                    @click="judgeRoleFilter = filter.value"
+                  >
+                    {{ filter.label }}
+                  </button>
+                </div>
+                <div class="judge-pool-list">
+                  <article
+                    v-for="judge in filteredJudgePool"
+                    :key="judge.id"
+                    :class="['pool-card', { assigned: isAssigned(judge.id), inactive: !isJudgeActive(judge) }]"
+                    :draggable="editable.judgeTables && isJudgeActive(judge)"
+                    @dragstart="startJudgeDrag(judge)"
+                    @dragend="clearDrag"
+                  >
+                    <span class="avatar">{{ getJudgeInitial(judge.name) }}</span>
+                    <div>
+                      <strong>{{ judge.name || '未填写姓名' }}</strong>
+                      <small>{{ judge.qualification || '未填写资质' }}</small>
+                      <em>{{ isAssigned(judge.id) ? '已分配' : '未分配' }}</em>
+                    </div>
+                    <button
+                      v-if="editable.judgeTables"
+                      class="link-action"
+                      type="button"
+                      :disabled="!isJudgeActive(judge)"
+                      @click="addJudgeToTarget(judge)"
+                    >
+                      加入
+                    </button>
+                  </article>
+                  <p v-if="filteredJudgePool.length === 0" class="empty-line">没有匹配的评委。</p>
+                </div>
+              </section>
+            </aside>
+          </section>
         </section>
 
         <section v-if="activeTab === 'score'" class="tab-panel">
@@ -444,6 +575,7 @@ import {
   Medal,
   Plus,
   Right,
+  Search,
   Setting,
   Tickets,
   Warning,
@@ -459,6 +591,7 @@ import {
 } from './competitionStore'
 import {
   fetchCompetitionDetail,
+  fetchJudges,
   openCompetitionRegistration,
   updateCompetitionCategories,
   updateCompetitionEntryFields,
@@ -469,20 +602,27 @@ import {
 
 const route = useRoute()
 const router = useRouter()
-const activeTab = ref('overview')
+const activeTab = ref(route.query.tab || 'overview')
 const loading = ref(false)
 const competition = ref(null)
 const categoryForm = reactive([])
 const styleForm = reactive([])
 const entryFieldForm = reactive([])
 const judgeTableForm = reactive([])
+const judgeAssignmentForm = reactive([])
 const scoreConfigForm = reactive([])
+const judgePool = ref([])
+const judgeKeyword = ref('')
+const judgeRoleFilter = ref('ALL')
+const selectedTableLocalId = ref(null)
+const selectedRole = ref('CAPTAIN')
+const draggingItem = ref(null)
 
 const tabs = [
   { key: 'overview', label: '概览', icon: DataAnalysis },
   { key: 'entryConfig', label: '报名配置', icon: Setting },
   { key: 'entries', label: '参赛酒款', icon: Tickets },
-  { key: 'judges', label: '评审配置', icon: Files },
+  { key: 'judges', label: '评审与桌次', icon: Files },
   { key: 'score', label: '评分表', icon: Finished },
   { key: 'progress', label: '现场进度', icon: Calendar },
   { key: 'results', label: '结果发布', icon: Medal },
@@ -495,6 +635,31 @@ const entryStatusLabels = {
   CANCELED: '已取消',
   RESULT_PUBLISHED: '结果已出',
 }
+
+const roleOptions = [
+  { label: '桌长', value: 'CAPTAIN' },
+  { label: '专业评审', value: 'PROFESSIONAL' },
+  { label: '跨界评审', value: 'CROSS' },
+]
+
+const roleFilters = [
+  { label: '全部', value: 'ALL' },
+  { label: '未分配', value: 'UNASSIGNED' },
+  { label: '桌长候选', value: 'CAPTAIN' },
+  { label: '专业', value: 'PROFESSIONAL' },
+  { label: '跨界', value: 'CROSS' },
+]
+
+const fallbackJudgePool = [
+  { id: 9001, name: '张远', phone: '13800000001', wechat: 'zy_beer', qualification: 'BJCP 认证 · 桌长候选', status: 1 },
+  { id: 9002, name: '李澄', phone: '13800000002', wechat: 'lc_hops', qualification: '专业评审 · 酒厂顾问', status: 1 },
+  { id: 9003, name: '王禾', phone: '13800000003', wechat: 'wh_malt', qualification: '专业评审 · 酿酒师', status: 1 },
+  { id: 9004, name: '陈乐', phone: '13800000004', wechat: 'cl_media', qualification: '跨界评审 · 媒体', status: 1 },
+  { id: 9005, name: '赵予', phone: '13800000005', wechat: 'zy_flavor', qualification: 'BJCP 认证 · 专业评审', status: 1 },
+  { id: 9006, name: '周亦', phone: '13800000006', wechat: 'zhouy', qualification: '跨界评审 · 餐饮主理人', status: 1 },
+  { id: 9007, name: '吴嘉', phone: '', wechat: 'wj_brew', qualification: '专业评审 · 待补手机号', status: 1 },
+  { id: 9008, name: '郑南', phone: '13800000008', wechat: 'zn_beer', qualification: '桌长候选 · 赛事经验', status: 1 },
+]
 
 const statusInfo = computed(() => statusMeta[competition.value?.status] || statusMeta.DRAFT)
 const editable = computed(() => competition.value?.editableScopes || {})
@@ -526,8 +691,68 @@ const canOpenRegistration = computed(() => {
   return blocking.every((key) => competition.value.checks.find((check) => check.key === key)?.state === 'done')
 })
 
-onMounted(loadDetail)
+const selectedTable = computed(() => judgeTableForm.find((table) => table.localId === selectedTableLocalId.value))
+const selectedRoleLabel = computed(() => roleOptions.find((role) => role.value === selectedRole.value)?.label || '角色')
+const selectedTargetLabel = computed(() => {
+  if (!selectedTable.value) {
+    return '请先选择评审桌'
+  }
+  return `${selectedTable.value.tableName || '未命名评审桌'} · ${selectedRoleLabel.value}`
+})
+const judgeMetrics = computed(() => ({
+  assigned: judgeAssignmentForm.length,
+  captain: countAssignedRole('CAPTAIN'),
+  professional: countAssignedRole('PROFESSIONAL'),
+  cross: countAssignedRole('CROSS'),
+}))
+const validationIssues = computed(() => {
+  const issues = []
+  if (!judgeTableForm.length) {
+    issues.push('至少需要创建 1 张评审桌')
+  }
+  judgeTableForm.forEach((table) => {
+    issues.push(...tableValidationIssues(table))
+  })
+  const duplicateJudgeIds = judgeAssignmentForm
+    .map((assignment) => assignment.judgeId)
+    .filter((judgeId, index, list) => list.indexOf(judgeId) !== index)
+  new Set(duplicateJudgeIds).forEach((judgeId) => {
+    issues.push(`${getJudge(judgeId)?.name || '某位评委'}在本场比赛中被重复分配`)
+  })
+  judgeAssignmentForm.forEach((assignment) => {
+    const judge = getJudge(assignment.judgeId)
+    if (judge && !judge.phone) {
+      issues.push(`${judge.name || '某位评委'}未填写手机号，可能无法登录评审端`)
+    }
+  })
+  return issues
+})
+const filteredJudgePool = computed(() => {
+  const query = judgeKeyword.value.toLowerCase()
+  return judgePool.value.filter((judge) => {
+    const matchesKeyword =
+      !query ||
+      [judge.name, judge.phone, judge.wechat, judge.qualification]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query))
+    const matchesRole =
+      judgeRoleFilter.value === 'ALL' ||
+      (judgeRoleFilter.value === 'UNASSIGNED' && !isAssigned(judge.id)) ||
+      inferJudgeRoles(judge).includes(judgeRoleFilter.value)
+    return matchesKeyword && matchesRole
+  })
+})
+
+onMounted(() => {
+  loadDetail()
+  loadJudgePool()
+})
 watch(() => route.params.id, loadDetail)
+watch(() => route.query.tab, (tab) => {
+  if (tab) {
+    activeTab.value = tab
+  }
+})
 
 async function loadDetail() {
   loading.value = true
@@ -538,6 +763,16 @@ async function loadDetail() {
   } finally {
     loading.value = false
   }
+}
+
+async function loadJudgePool() {
+  try {
+    const data = await fetchJudges()
+    judgePool.value = data?.length ? data : fallbackJudgePool
+  } catch {
+    judgePool.value = fallbackJudgePool
+  }
+  seedJudgeAssignments()
 }
 
 function normalizeDetail(data) {
@@ -574,6 +809,9 @@ function resetForms() {
     ...item,
     localId: item.id || `table-${index}`,
   })))
+  judgeAssignmentForm.splice(0, judgeAssignmentForm.length)
+  selectedTableLocalId.value = judgeTableForm[0]?.localId || null
+  seedJudgeAssignments()
   const sourceScoreConfigs = competition.value.scoreConfigs.length ? competition.value.scoreConfigs : defaultScoreConfigs().map((item) => ({
     judgeRoleType: item.role,
     dimensions: item.dimensions,
@@ -589,6 +827,34 @@ function resetForms() {
   })))
 }
 
+function seedJudgeAssignments() {
+  if (!judgeTableForm.length || judgeAssignmentForm.length) {
+    return
+  }
+  const sourceJudges = judgePool.value.length ? judgePool.value : fallbackJudgePool
+  let cursor = 0
+  const seeded = []
+  judgeTableForm.forEach((table) => {
+    const roleCounts = [
+      ['CAPTAIN', Number(table.captainCount || 0)],
+      ['PROFESSIONAL', Number(table.professionalCount || 0)],
+      ['CROSS', Number(table.crossCount || 0)],
+    ]
+    roleCounts.forEach(([role, count]) => {
+      for (let index = 0; index < count && cursor < sourceJudges.length; index += 1) {
+        seeded.push({
+          localId: `assignment-${table.localId}-${role}-${index}-${sourceJudges[cursor].id}`,
+          tableLocalId: table.localId,
+          judgeId: sourceJudges[cursor].id,
+          role,
+        })
+        cursor += 1
+      }
+    })
+  })
+  judgeAssignmentForm.splice(0, judgeAssignmentForm.length, ...seeded)
+}
+
 function addEntryField() {
   entryFieldForm.push({
     localId: `new-field-${Date.now()}`,
@@ -602,7 +868,7 @@ function addEntryField() {
 
 function addJudgeTable() {
   const code = String.fromCharCode(65 + judgeTableForm.length)
-  judgeTableForm.push({
+  const table = {
     localId: `new-table-${Date.now()}`,
     tableName: `${code}桌`,
     captainCount: 0,
@@ -610,11 +876,182 @@ function addJudgeTable() {
     crossCount: 0,
     finalized: 0,
     total: 0,
-  })
+  }
+  judgeTableForm.push(table)
+  selectedTableLocalId.value = table.localId
 }
 
 function removeItem(list, index) {
   list.splice(index, 1)
+}
+
+function removeJudgeTable(index) {
+  const [table] = judgeTableForm.splice(index, 1)
+  if (table) {
+    for (let i = judgeAssignmentForm.length - 1; i >= 0; i -= 1) {
+      if (judgeAssignmentForm[i].tableLocalId === table.localId) {
+        judgeAssignmentForm.splice(i, 1)
+      }
+    }
+  }
+  selectedTableLocalId.value = judgeTableForm[0]?.localId || null
+}
+
+function assignmentsForTable(table, role) {
+  return judgeAssignmentForm.filter((assignment) => {
+    const matchesTable = assignment.tableLocalId === table.localId
+    return matchesTable && (!role || assignment.role === role)
+  })
+}
+
+function selectAssignmentTarget(table, role) {
+  selectedTableLocalId.value = table.localId
+  selectedRole.value = role
+}
+
+function addJudgeToTarget(judge) {
+  if (!selectedTable.value) {
+    ElMessage.warning('请先选择要加入的评审桌')
+    return
+  }
+  if (!isJudgeActive(judge)) {
+    ElMessage.warning('停用评委不能加入本场比赛')
+    return
+  }
+  const existing = judgeAssignmentForm.find((assignment) => assignment.judgeId === judge.id)
+  if (existing) {
+    existing.tableLocalId = selectedTable.value.localId
+    existing.role = selectedRole.value
+    ElMessage.success(`${judge.name}已移动到${selectedTargetLabel.value}`)
+    return
+  }
+  judgeAssignmentForm.push({
+    localId: `assignment-${Date.now()}-${judge.id}`,
+    tableLocalId: selectedTable.value.localId,
+    judgeId: judge.id,
+    role: selectedRole.value,
+  })
+}
+
+function removeAssignment(assignment) {
+  const index = judgeAssignmentForm.findIndex((item) => item.localId === assignment.localId)
+  if (index >= 0) {
+    judgeAssignmentForm.splice(index, 1)
+  }
+}
+
+function countAssignedRole(role) {
+  return judgeAssignmentForm.filter((assignment) => assignment.role === role).length
+}
+
+function startJudgeDrag(judge) {
+  if (!editable.value.judgeTables || !isJudgeActive(judge)) {
+    return
+  }
+  draggingItem.value = { type: 'judge', judgeId: judge.id }
+}
+
+function startAssignmentDrag(assignment) {
+  if (!editable.value.judgeTables) {
+    return
+  }
+  draggingItem.value = { type: 'assignment', localId: assignment.localId, judgeId: assignment.judgeId }
+}
+
+function clearDrag() {
+  draggingItem.value = null
+}
+
+function dropOnRole(table, role) {
+  if (!editable.value.judgeTables || !draggingItem.value) {
+    return
+  }
+  selectedTableLocalId.value = table.localId
+  selectedRole.value = role
+  if (draggingItem.value.type === 'assignment') {
+    const assignment = judgeAssignmentForm.find((item) => item.localId === draggingItem.value.localId)
+    if (assignment) {
+      assignment.tableLocalId = table.localId
+      assignment.role = role
+    }
+    clearDrag()
+    return
+  }
+  const judge = getJudge(draggingItem.value.judgeId)
+  if (judge) {
+    addJudgeToTarget(judge)
+  }
+  clearDrag()
+}
+
+function tableValidationIssues(table) {
+  const issues = []
+  const captainCount = assignmentsForTable(table, 'CAPTAIN').length
+  const totalCount = assignmentsForTable(table).length
+  if (!table.tableName?.trim()) {
+    issues.push('评审桌名称不能为空')
+  }
+  if (captainCount === 0) {
+    issues.push(`${table.tableName || '未命名评审桌'}缺少桌长`)
+  }
+  if (captainCount > 1) {
+    issues.push(`${table.tableName || '未命名评审桌'}有 ${captainCount} 名桌长`)
+  }
+  if (totalCount === 0) {
+    issues.push(`${table.tableName || '未命名评审桌'}尚未分配评委`)
+  }
+  return issues
+}
+
+function getJudge(judgeId) {
+  return judgePool.value.find((judge) => judge.id === judgeId) || fallbackJudgePool.find((judge) => judge.id === judgeId)
+}
+
+function getJudgeInitial(name) {
+  return name?.trim()?.slice(0, 1) || '评'
+}
+
+function isJudgeActive(judge) {
+  return Number(judge.status) === 1
+}
+
+function isAssigned(judgeId) {
+  return judgeAssignmentForm.some((assignment) => assignment.judgeId === judgeId)
+}
+
+function inferJudgeRoles(judge) {
+  const qualification = `${judge.qualification || ''}${judge.name || ''}`.toLowerCase()
+  const roles = []
+  if (qualification.includes('桌长') || qualification.includes('bjcp') || qualification.includes('captain')) {
+    roles.push('CAPTAIN')
+  }
+  if (qualification.includes('专业') || qualification.includes('酿酒') || qualification.includes('bjcp') || qualification.includes('judge')) {
+    roles.push('PROFESSIONAL')
+  }
+  if (qualification.includes('跨界') || qualification.includes('媒体') || qualification.includes('餐饮') || qualification.includes('大众')) {
+    roles.push('CROSS')
+  }
+  return roles.length ? roles : ['PROFESSIONAL']
+}
+
+function checkJudgeSetup() {
+  if (validationIssues.value.length) {
+    ElMessage.warning(`还有 ${validationIssues.value.length} 项评审配置需要处理`)
+    return
+  }
+  ElMessage.success('评审编排校验通过')
+}
+
+async function saveJudgeDraft() {
+  ElMessage.success('评审编排草稿已保存，身份分配将在后端接口补齐后持久化')
+}
+
+function publishJudgeSetup() {
+  if (validationIssues.value.length) {
+    ElMessage.warning('发布前请先处理配置检查中的问题')
+    return
+  }
+  ElMessage.success('已完成发布前端演示：评委 H5 将按本场桌次和身份展示')
 }
 
 async function saveEntryConfig() {
@@ -642,7 +1079,7 @@ async function saveEntryConfig() {
   ElMessage.success('报名配置已保存')
 }
 
-async function saveJudgeTables() {
+async function saveJudgeTables(quiet = false) {
   const items = judgeTableForm.filter((table) => table.tableName).map((table) => ({ tableName: table.tableName }))
   if (!items.length) {
     ElMessage.warning('至少保留 1 张评审桌')
@@ -651,7 +1088,9 @@ async function saveJudgeTables() {
   const detail = await updateCompetitionJudgeTables(competition.value.id, { items })
   competition.value = normalizeDetail(detail)
   resetForms()
-  ElMessage.success('评审桌已保存')
+  if (!quiet) {
+    ElMessage.success('评审桌已保存')
+  }
 }
 
 async function saveScoreConfigs() {
@@ -1188,6 +1627,399 @@ select {
   grid-template-columns: minmax(180px, 1fr) 120px 180px 100px 110px;
 }
 
+.judge-workbench {
+  display: grid;
+  grid-template-columns: 168px minmax(0, 1fr) 340px;
+  gap: 10px;
+  align-items: start;
+}
+
+.judge-nav-panel,
+.judge-right-panel {
+  position: sticky;
+  top: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.judge-nav-panel,
+.panel-card.tight,
+.judge-table-card,
+.judge-command-bar {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.16);
+}
+
+.judge-nav-panel,
+.panel-card.tight {
+  padding: 12px;
+}
+
+.panel-heading.compact {
+  margin-bottom: 8px;
+}
+
+.panel-heading.compact h2 {
+  font-size: 16px;
+}
+
+.table-nav-item,
+.table-nav-add,
+.pool-filters button,
+.empty-assignment {
+  width: 100%;
+  min-height: 38px;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.026);
+}
+
+.table-nav-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  padding: 0 9px;
+  text-align: left;
+}
+
+.table-nav-item strong,
+.table-nav-item span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table-nav-item.active {
+  color: var(--gold-soft);
+  border-color: rgba(216, 169, 53, 0.34);
+  background: rgba(216, 169, 53, 0.08);
+}
+
+.table-nav-item.danger:not(.active) {
+  border-color: rgba(242, 153, 74, 0.22);
+}
+
+.table-nav-add,
+.empty-assignment {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--gold-soft);
+  border-style: dashed;
+}
+
+.left-check-summary {
+  display: grid;
+  gap: 7px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.left-check-summary div,
+.left-check-summary p {
+  display: flex;
+  align-items: center;
+}
+
+.left-check-summary div {
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.left-check-summary p {
+  gap: 6px;
+  color: #f1bd79;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.left-check-summary p svg {
+  flex: 0 0 auto;
+}
+
+.left-check-summary p:first-of-type:last-child {
+  color: var(--green);
+}
+
+.assignment-board {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.judge-command-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 58px;
+  padding: 10px 12px;
+}
+
+.metric-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.metric-strip span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 10px;
+  color: var(--muted);
+  border: 1px solid rgba(219, 232, 237, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.022);
+}
+
+.metric-strip strong {
+  color: var(--text);
+  font-size: 18px;
+}
+
+.assignment-card small,
+.pool-card small,
+.pool-card em,
+.judge-table-head p {
+  color: var(--muted);
+}
+
+.command-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.command-actions .tool-button {
+  min-height: 38px;
+  padding: 0 10px;
+}
+
+.judge-table-card {
+  min-width: 0;
+  padding: 12px;
+}
+
+.judge-table-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.judge-table-head label {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 180px);
+  gap: 8px;
+  align-items: center;
+}
+
+.judge-table-head label span {
+  color: var(--muted);
+}
+
+.judge-table-head p {
+  margin-top: 8px;
+}
+
+.role-lanes {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.role-lane {
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid rgba(219, 232, 237, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.022);
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease;
+}
+
+.role-lane.active {
+  border-color: rgba(216, 169, 53, 0.36);
+  background: rgba(216, 169, 53, 0.06);
+}
+
+.role-lane > header,
+.assignment-card,
+.pool-card,
+.inline-search {
+  display: flex;
+  align-items: center;
+}
+
+.role-lane > header {
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.role-lane > header div {
+  display: grid;
+  gap: 4px;
+}
+
+.role-lane > header span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.assignment-card-list,
+.judge-pool-list {
+  display: grid;
+  gap: 7px;
+}
+
+.assignment-card {
+  gap: 8px;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid rgba(219, 232, 237, 0.08);
+  border-radius: 8px;
+  background: rgba(7, 14, 17, 0.46);
+  cursor: grab;
+}
+
+.assignment-card:active,
+.pool-card:active {
+  cursor: grabbing;
+}
+
+.assignment-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.assignment-main strong,
+.assignment-main small,
+.pool-card strong,
+.pool-card small,
+.pool-card em {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.icon-button.ghost {
+  flex: 0 0 auto;
+  width: 32px;
+  min-height: 32px;
+  color: #f1bd79;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.avatar {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  color: var(--gold-soft);
+  font-weight: 800;
+  border: 1px solid rgba(216, 169, 53, 0.26);
+  border-radius: 8px;
+  background: rgba(216, 169, 53, 0.09);
+}
+
+.avatar.small {
+  width: 30px;
+  height: 30px;
+  font-size: 13px;
+}
+
+.inline-search {
+  gap: 9px;
+  min-height: 42px;
+  padding: 0 10px;
+  color: var(--muted);
+  border: 1px solid rgba(219, 232, 237, 0.14);
+  border-radius: 8px;
+  background: rgba(7, 14, 17, 0.68);
+}
+
+.inline-search input {
+  min-height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.pool-filters {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 8px 0;
+}
+
+.pool-filters button {
+  width: auto;
+  min-height: 32px;
+  padding: 0 8px;
+  color: #a9bbc2;
+  font-size: 12px;
+}
+
+.pool-filters button.active {
+  color: var(--gold-soft);
+  border-color: rgba(216, 169, 53, 0.32);
+  background: rgba(216, 169, 53, 0.08);
+}
+
+.judge-pool-list {
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 3px;
+}
+
+.pool-card {
+  gap: 8px;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid rgba(219, 232, 237, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.024);
+  cursor: grab;
+}
+
+.pool-card.assigned {
+  background: rgba(111, 207, 122, 0.055);
+}
+
+.pool-card.inactive {
+  opacity: 0.58;
+}
+
+.pool-card > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.pool-card em {
+  margin-top: 4px;
+  font-style: normal;
+  font-size: 12px;
+}
+
 .judge-table .table-head,
 .judge-table .table-row {
   grid-template-columns: minmax(160px, 1fr) 100px 110px 110px 40px;
@@ -1305,6 +2137,25 @@ select {
   .score-panels {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .judge-command-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .command-actions {
+    justify-content: flex-start;
+  }
+
+  .judge-workbench {
+    grid-template-columns: 170px minmax(0, 1fr);
+  }
+
+  .judge-right-panel {
+    grid-column: 1 / -1;
+    position: static;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 980px) {
@@ -1317,7 +2168,25 @@ select {
   .detail-head,
   .two-column,
   .overview-grid,
-  .score-panels {
+  .score-panels,
+  .judge-workbench,
+  .role-lanes,
+  .judge-command-bar,
+  .judge-right-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .judge-nav-panel,
+  .judge-right-panel {
+    position: static;
+  }
+
+  .judge-table-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .judge-table-head label {
     grid-template-columns: 1fr;
   }
 

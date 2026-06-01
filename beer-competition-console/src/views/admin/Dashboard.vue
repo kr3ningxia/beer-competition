@@ -7,7 +7,7 @@
           <h1>{{ competition.name }}</h1>
           <span class="status-pill live">
             <span />
-            当前阶段：{{ competition.currentStage }}
+            {{ competition.currentStage }}
           </span>
         </div>
         <div class="meta-row">

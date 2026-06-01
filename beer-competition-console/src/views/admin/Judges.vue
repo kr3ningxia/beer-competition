@@ -2,9 +2,7 @@
   <div class="judges-page">
     <section class="page-head">
       <div>
-        <small>评审账号管理</small>
         <h1>评审列表</h1>
-        <p>维护赛前可用评审名单，分桌与角色在评审分配中处理。</p>
       </div>
       <div class="head-actions">
         <button class="tool-button" type="button" @click="loadJudges">
@@ -13,32 +11,9 @@
         </button>
         <button class="tool-button primary" type="button" @click="router.push('/admin/assignments')">
           <Connection />
-          评审分配
+          评审编排
         </button>
       </div>
-    </section>
-
-    <section class="metric-grid">
-      <article class="metric-card">
-        <small>评审账号</small>
-        <strong>{{ totalCount }}</strong>
-        <p>名单总数</p>
-      </article>
-      <article class="metric-card">
-        <small>可参与评审</small>
-        <strong>{{ activeCount }}</strong>
-        <p>启用账号</p>
-      </article>
-      <article class="metric-card">
-        <small>停用账号</small>
-        <strong>{{ inactiveCount }}</strong>
-        <p>暂不参与分配</p>
-      </article>
-      <article class="metric-card">
-        <small>资质已填</small>
-        <strong>{{ qualifiedCount }}</strong>
-        <p>便于赛前分组</p>
-      </article>
     </section>
 
     <section class="toolbar">
@@ -94,7 +69,7 @@
             {{ isActive(judge) ? '启用' : '停用' }}
           </span>
           <button class="row-action" type="button" @click="router.push('/admin/assignments')">
-            分配
+            编排
             <Right />
           </button>
         </div>
@@ -127,9 +102,6 @@ const statusFilters = [
 ]
 
 const totalCount = computed(() => judges.value.length)
-const activeCount = computed(() => judges.value.filter(isActive).length)
-const inactiveCount = computed(() => totalCount.value - activeCount.value)
-const qualifiedCount = computed(() => judges.value.filter((judge) => Boolean(judge.qualification?.trim())).length)
 const filteredJudges = computed(() => {
   const query = keyword.value.toLowerCase()
   return judges.value.filter((judge) => {
@@ -228,22 +200,9 @@ svg {
   border-bottom: 1px solid var(--line);
 }
 
-.page-head small {
-  color: var(--gold-soft);
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0;
-}
-
 .page-head h1 {
-  margin-top: 7px;
   font-size: 30px;
   line-height: 1.1;
-}
-
-.page-head p {
-  margin-top: 10px;
-  color: var(--muted);
 }
 
 .head-actions {
@@ -273,14 +232,6 @@ svg {
   background: rgba(216, 169, 53, 0.08);
 }
 
-.metric-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-  margin-top: 22px;
-}
-
-.metric-card,
 .toolbar,
 .table-card {
   border: 1px solid var(--line);
@@ -289,12 +240,6 @@ svg {
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.16);
 }
 
-.metric-card {
-  min-width: 0;
-  padding: 16px;
-}
-
-.metric-card small,
 .table-head,
 .judge-cell small,
 .contact-cell small,
@@ -303,21 +248,10 @@ svg {
   color: var(--muted);
 }
 
-.metric-card strong {
-  display: block;
-  margin: 8px 0 6px;
-  color: var(--text);
-  font-size: 25px;
-}
-
-.metric-card p {
-  color: var(--faint);
-}
-
 .toolbar {
   justify-content: space-between;
   gap: 16px;
-  margin-top: 18px;
+  margin-top: 22px;
   padding: 14px 16px;
 }
 
@@ -493,10 +427,6 @@ svg {
 }
 
 @media (max-width: 1260px) {
-  .metric-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .table-head,
   .table-row {
     grid-template-columns: minmax(220px, 1.1fr) minmax(190px, 1fr) minmax(180px, 1fr) 88px 96px;
@@ -520,10 +450,6 @@ svg {
 
   .search-box {
     max-width: none;
-  }
-
-  .metric-grid {
-    grid-template-columns: 1fr;
   }
 
   .table-head {

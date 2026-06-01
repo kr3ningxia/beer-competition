@@ -7,13 +7,7 @@
         </span>
         <div>
           <h2>Beer Competition Console</h2>
-          <p>啤酒大赛后台</p>
         </div>
-      </div>
-
-      <div class="season-tags">
-        <span>BC-2026</span>
-        <span>第三批次</span>
       </div>
 
       <nav class="nav-list" aria-label="主办方后台导航">
@@ -74,7 +68,7 @@ const navItems = [
   { path: '/admin/dashboard', label: '现场看板', icon: DataBoard },
   { path: '/admin/competitions', label: '比赛管理', icon: Medal },
   { path: '/admin/judges', label: '评审列表', icon: User },
-  { path: '/admin/assignments', label: '评审分配', icon: Files },
+  { path: '/admin/assignments', label: '评审编排', icon: Files },
   { path: '/admin/score-config', label: '评分配置', icon: Setting },
   { path: null, label: '酒款管理', icon: Document },
   { path: null, label: '结果发布', icon: Medal },
@@ -153,7 +147,6 @@ function logout() {
 }
 
 .brand h2,
-.brand p,
 .system-card p {
   margin: 0;
 }
@@ -163,36 +156,10 @@ function logout() {
   line-height: 1.25;
 }
 
-.brand p {
-  margin-top: 4px;
-  color: #93a6ae;
-  font-size: 13px;
-}
-
-.season-tags {
-  display: flex;
-  gap: 8px;
-  margin: 18px 0 26px;
-}
-
-.season-tags span {
-  padding: 6px 10px;
-  color: #9fb2ba;
-  border: 1px solid rgba(218, 231, 236, 0.08);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
-  font-size: 12px;
-}
-
-.season-tags span:last-child {
-  color: #d7ad3f;
-  border-color: rgba(216, 169, 53, 0.24);
-  background: rgba(216, 169, 53, 0.08);
-}
-
 .nav-list {
   display: grid;
   gap: 8px;
+  margin-top: 28px;
 }
 
 .nav-item {

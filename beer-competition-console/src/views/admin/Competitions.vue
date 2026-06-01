@@ -2,7 +2,6 @@
   <div class="competition-ledger">
     <section class="page-head">
       <div>
-        <p class="eyebrow">Competition Ledger</p>
         <h1>比赛管理</h1>
       </div>
 
@@ -370,7 +369,6 @@ function getNextAction(competition) {
   border-bottom: 1px solid var(--line);
 }
 
-.eyebrow,
 p,
 small,
 .ledger-row,
@@ -378,13 +376,6 @@ small,
 .drawer-meta,
 .drawer-heading span {
   color: var(--muted);
-}
-
-.eyebrow {
-  margin: 0 0 6px;
-  color: var(--gold-soft);
-  font-size: 12px;
-  font-weight: 800;
 }
 
 h1,
