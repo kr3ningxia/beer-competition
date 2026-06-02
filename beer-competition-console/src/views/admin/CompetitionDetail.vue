@@ -17,6 +17,8 @@
           <div class="meta-line">
             <span :class="['state-badge', statusInfo.tone]">{{ statusInfo.label }}</span>
             <span :class="['window-badge', registrationWindowInfo.tone]">{{ registrationWindowInfo.label }}</span>
+            <span>{{ currentRound?.name || '未创建轮次' }}</span>
+            <span>{{ currentRoundTypeLabel }}</span>
             <span>比赛日 {{ formatDate(competition.date) }}</span>
             <span>{{ competition.entryFee }} 元 / 款</span>
           </div>
@@ -65,90 +67,59 @@
               <strong>{{ registrationReadyCount }} / {{ registrationRequiredChecks.length }}</strong>
               <p>{{ registrationBlockText }}</p>
             </article>
-            <article class="metric-card action-card">
-              <div class="metric-card-head">
-                <small>报名窗口</small>
-                <button class="text-action" type="button" @click="openRegistrationTimeDialog">修改时间</button>
-              </div>
-              <strong>{{ registrationWindowInfo.label }}</strong>
-              <p>{{ registrationWindowInfo.detail }}</p>
+            <article class="metric-card">
+              <small>当前轮次</small>
+              <strong>{{ currentRound?.name || '-' }}</strong>
+              <p>{{ currentRoundTypeLabel }} · {{ currentRoundStatusText }}</p>
             </article>
             <article class="metric-card">
-              <small>报名酒款</small>
-              <strong>{{ competition.entriesSummary.registered }} / {{ competition.entriesSummary.total }}</strong>
-              <p>待付款 {{ competition.entriesSummary.pendingPayment }} · 已取消 {{ competition.entriesSummary.canceled }}</p>
+              <small>当前轮次桌数</small>
+              <strong>{{ currentRoundTables.length }} 桌</strong>
+              <p>{{ currentRoundEntryCount }} 款酒 · 目标 {{ currentRoundTargetCount }} 款</p>
             </article>
             <article class="metric-card">
-              <small>下一阶段</small>
-              <strong>{{ nextStageInfo.label }}</strong>
-              <p>{{ nextStageInfo.detail }}</p>
+              <small>晋级池</small>
+              <strong>{{ advancedPool.length }}</strong>
+              <p>用于创建第二轮或决赛轮</p>
             </article>
           </div>
-
-          <article v-if="hasDataIssues" class="panel-card issue-card">
-            <div class="panel-heading">
-              <h2>系统数据需修正</h2>
-              <span>{{ competition.dataIntegrityIssues.length }} 项</span>
-            </div>
-            <p class="issue-summary">当前比赛数据不一致：比赛已开放报名，但缺少开放报名必需配置。请管理员修正数据。</p>
-            <div class="check-list">
-              <div v-for="issue in competition.dataIntegrityIssues" :key="issue" class="check-item invalid">
-                <Warning />
-                <span>{{ issue }}</span>
-                <strong>需修正</strong>
-              </div>
-            </div>
-          </article>
 
           <div class="two-column">
             <article class="panel-card">
               <div class="panel-heading">
-                <h2>开放报名检查</h2>
-                <span>{{ registrationReadyCount }} / {{ registrationRequiredChecks.length }}</span>
-              </div>
-              <div class="check-list">
-                <div v-for="check in registrationRequiredChecks" :key="check.key" :class="['check-item', check.state]">
-                  <CircleCheck v-if="check.state === 'done'" />
-                  <Warning v-else />
-                  <span>{{ check.label }}</span>
-                  <button v-if="check.targetTab && check.state !== 'done'" class="link-action" type="button" @click="activeTab = check.targetTab">
-                    去处理
-                  </button>
-                  <strong v-else>{{ check.message }}</strong>
-                </div>
-              </div>
-            </article>
-
-            <article class="panel-card">
-              <div class="panel-heading">
                 <h2>当前需要处理</h2>
-                <span>{{ currentActionItems.length }} 项</span>
+                <span>{{ overviewActionItems.length }} 项</span>
               </div>
               <div class="alert-list">
-                <p v-if="currentActionItems.length === 0" class="success">
+                <p v-if="overviewActionItems.length === 0" class="success">
                   <CircleCheck />
-                  <span>{{ currentActionEmptyText }}</span>
-                  <button
-                    v-if="competition.status === 'DRAFT' && canOpenRegistration"
-                    class="link-action"
-                    type="button"
-                    @click="handleStageAction('publishRegistration')"
-                  >
-                    发布报名
-                  </button>
+                  <span>当前阶段没有阻塞项，可以继续推进。</span>
                 </p>
-                <p v-for="item in currentActionItems" v-else :key="item.key" :class="item.level">
+                <p v-for="item in overviewActionItems" v-else :key="item.key" :class="item.level">
                   <component :is="item.level === 'danger' ? Warning : Clock" />
                   <span>{{ item.text }}</span>
                   <button v-if="item.targetTab" class="link-action" type="button" @click="activeTab = item.targetTab">去处理</button>
                 </p>
               </div>
             </article>
+
+            <article class="panel-card">
+              <div class="panel-heading">
+                <h2>轮次重组摘要</h2>
+                <span>{{ rounds.length }} 个节点</span>
+              </div>
+              <div class="round-path">
+                <span v-for="round in rounds" :key="round.id" :class="{ active: round.id === activeRoundId }">
+                  <strong>{{ round.name }}</strong>
+                  <small>{{ round.tables.length }} 桌 · {{ countRoundEntries(round) }} 款</small>
+                </span>
+              </div>
+            </article>
           </div>
 
           <article class="panel-card">
             <div class="panel-heading">
-              <h2>后续赛务</h2>
+              <h2>阶段任务</h2>
               <span>随比赛阶段推进处理</span>
             </div>
             <div class="future-task-list">
@@ -157,7 +128,7 @@
                 :key="task.key"
                 :class="['future-task', task.state]"
                 type="button"
-                @click="activeTab = task.targetTab"
+                @click="handleFutureTask(task)"
               >
                 <span>
                   <strong>{{ task.label }}</strong>
@@ -207,6 +178,7 @@
               <div>
                 <span>报名必填</span>
                 <span>支持搜索</span>
+                <span>评审可见</span>
               </div>
             </div>
           </article>
@@ -219,7 +191,7 @@
                 添加字段
               </button>
             </div>
-            <div v-if="editable.entryStructure" class="data-table field-table">
+            <div class="data-table field-table">
               <div class="table-head">
                 <span>字段名称</span>
                 <span>类型</span>
@@ -239,29 +211,10 @@
                 </select>
                 <input v-model.trim="field.helpText" :disabled="!editable.entryStructure" placeholder="给厂商看的填写说明" />
                 <label class="check-control"><input v-model="field.required" type="checkbox" :disabled="!editable.entryStructure" /> 必填</label>
-                <label class="check-control visibility-label" data-tooltip="评审可见字段会进入匿名扫码页，只勾选评酒时需要判断的信息。">
-                  <input v-model="field.visibleToJudges" type="checkbox" :disabled="!editable.entryStructure" />
-                  评审可见
-                </label>
+                <label class="check-control"><input v-model="field.visibleToJudges" type="checkbox" :disabled="!editable.entryStructure" /> 评审可见</label>
                 <button class="icon-button" type="button" :disabled="!editable.entryStructure" @click="removeItem(entryFieldForm, index)">
                   <Delete />
                 </button>
-              </div>
-            </div>
-            <div v-else class="data-table field-readonly-table">
-              <div class="table-head">
-                <span>字段名称</span>
-                <span>类型</span>
-                <span>提示文案</span>
-                <span>必填</span>
-                <span>评审可见</span>
-              </div>
-              <div v-for="field in entryFieldForm" :key="field.localId" class="table-row">
-                <span>{{ field.fieldLabel }}</span>
-                <span>{{ fieldTypeLabels[field.fieldType] || field.fieldType }}</span>
-                <span>{{ field.helpText || '-' }}</span>
-                <span>{{ field.required ? '必填' : '选填' }}</span>
-                <span>{{ field.visibleToJudges ? '评审可见' : '仅报名后台' }}</span>
               </div>
               <p v-if="entryFieldForm.length === 0" class="empty-line">当前没有报名补充字段。</p>
             </div>
@@ -279,38 +232,43 @@
             <article class="metric-card"><small>全部</small><strong>{{ competition.entriesSummary.total }}</strong><p>已报名酒款</p></article>
             <article class="metric-card"><small>待付款</small><strong>{{ competition.entriesSummary.pendingPayment }}</strong><p>需跟进支付</p></article>
             <article class="metric-card"><small>已入库</small><strong>{{ competition.entriesSummary.stored }}</strong><p>现场已确认</p></article>
-            <article class="metric-card"><small>结果已出</small><strong>{{ competition.entriesSummary.resultPublished }}</strong><p>发布后可见</p></article>
+            <article class="metric-card"><small>晋级轨迹</small><strong>{{ roundEntryPool.length }}</strong><p>含 mock 轮次分配</p></article>
           </div>
           <article class="panel-card">
             <div class="panel-heading">
               <h2>参赛酒款</h2>
-              <span>最近 20 条</span>
+              <span>匿名编号、短编号和轮次轨迹</span>
             </div>
             <div class="data-table entries-table">
               <div class="table-head">
-                <span>UUID</span>
+                <span>匿名编号</span>
+                <span>短编号</span>
                 <span>投递组别</span>
                 <span>基础风格</span>
-                <span>入库</span>
+                <span>轮次轨迹</span>
                 <span>状态</span>
               </div>
-              <div v-for="entry in competition.entries" :key="entry.uuid" class="table-row">
+              <div v-for="entry in roundEntryPool" :key="entry.uuid" class="table-row">
                 <strong>{{ entry.uuid }}</strong>
+                <span>{{ entry.shortCode }}</span>
                 <span>{{ entry.categoryName }}</span>
                 <span>{{ entry.style }}</span>
-                <span>{{ entry.stored ? '已入库' : '待入库' }}</span>
+                <span>{{ getEntryPath(entry.uuid) }}</span>
                 <span>{{ entryStatusLabels[entry.status] || entry.status }}</span>
               </div>
-              <p v-if="competition.entries.length === 0" class="empty-line">暂无报名酒款。</p>
             </div>
           </article>
         </section>
 
         <section v-if="activeTab === 'judges'" class="tab-panel">
+          <div class="edit-banner">
+            <Files />
+            基础桌次用于生成第一轮；第二轮及以后可从晋级池重新合并、减少或重组桌次。
+          </div>
           <section class="judge-workbench">
             <aside class="judge-nav-panel">
               <div class="panel-heading compact">
-                <h2>评审桌</h2>
+                <h2>基础桌次</h2>
                 <span>{{ judgeTableForm.length }} 桌</span>
               </div>
               <button
@@ -325,7 +283,7 @@
               </button>
               <button v-if="editable.judgeTables" class="table-nav-add" type="button" @click="addJudgeTable">
                 <Plus />
-                新增评审桌
+                新增基础桌
               </button>
 
               <div class="left-check-summary">
@@ -335,13 +293,13 @@
                     {{ validationIssues.length === 0 ? '通过' : `${validationIssues.length} 项` }}
                   </span>
                 </div>
-                <p v-if="validationIssues.length === 0">
-                  <CircleCheck />
-                  可发布
-                </p>
-                <p v-for="issue in validationIssues.slice(0, 3)" v-else :key="issue">
+                <p v-for="issue in validationIssues.slice(0, 3)" :key="issue">
                   <Warning />
                   {{ issue }}
+                </p>
+                <p v-if="validationIssues.length === 0">
+                  <CircleCheck />
+                  可生成第一轮桌任务
                 </p>
               </div>
             </aside>
@@ -354,12 +312,10 @@
                   <span>专业 <strong>{{ judgeMetrics.professional }}</strong></span>
                   <span>跨界 <strong>{{ judgeMetrics.cross }}</strong></span>
                 </div>
-                <div class="command-actions">
-                  <button v-if="editable.judgeTables" class="tool-button" type="button" @click="saveJudgeDraft">
-                    <Check />
-                    保存
-                  </button>
-                </div>
+                <button v-if="editable.judgeTables" class="tool-button" type="button" @click="saveJudgeDraft">
+                  <Check />
+                  保存
+                </button>
               </div>
 
               <article v-for="(table, index) in judgeTableForm" :key="table.localId" class="judge-table-card">
@@ -370,7 +326,7 @@
                       <input v-model.trim="table.tableName" placeholder="例如 A桌" />
                     </label>
                     <h2 v-else>{{ table.tableName }}</h2>
-                    <p>{{ tableValidationIssues(table).length ? tableValidationIssues(table)[0] : '本桌配置正常' }}</p>
+                    <p>{{ tableValidationIssues(table).length ? tableValidationIssues(table)[0] : '本桌可生成第一轮任务' }}</p>
                   </div>
                   <button v-if="editable.judgeTables" class="icon-button" type="button" @click="removeJudgeTable(index)">
                     <Delete />
@@ -472,21 +428,179 @@
                       加入
                     </button>
                   </article>
-                  <p v-if="filteredJudgePool.length === 0" class="empty-line">没有匹配的评委。</p>
                 </div>
               </section>
             </aside>
           </section>
         </section>
 
-        <section v-if="activeTab === 'score'" class="tab-panel score-config-panel">
-          <div class="panel-page-title">
-            <h2>评分表配置</h2>
+        <section v-if="activeTab === 'rounds'" class="tab-panel rounds-panel">
+          <div class="round-flow">
+            <button
+              v-for="round in rounds"
+              :key="round.id"
+              :class="['round-flow-item', { active: round.id === activeRoundId }]"
+              type="button"
+              @click="selectRound(round.id)"
+            >
+              <small>{{ round.type === 'SCORE' ? '评分制' : '选择排序' }}</small>
+              <strong>{{ round.name }}</strong>
+              <em>{{ roundStatusLabels[round.status] || round.status }}</em>
+            </button>
+            <button class="round-flow-item create" type="button" @click="openCreateRoundDialog">
+              <Plus />
+              <strong>创建下一轮</strong>
+              <em>从晋级池生成</em>
+            </button>
           </div>
-          <div class="edit-banner" :class="{ locked: !editable.scoreConfigs }">
-            <Lock v-if="!editable.scoreConfigs" />
-            <Edit v-else />
-            {{ editable.scoreConfigs ? '评审开始前可调整三类评分表' : '评审已开始，评审桌和评分表已锁定。' }}
+
+          <div class="round-summary-strip">
+            <span>评审方式 <strong>{{ currentRoundTypeLabel }}</strong></span>
+            <span>桌数 <strong>{{ currentRoundTables.length }}</strong></span>
+            <span>酒款 <strong>{{ currentRoundEntryCount }}</strong></span>
+            <span>目标 <strong>{{ currentRoundTargetCount }}</strong></span>
+            <span>状态 <strong>{{ currentRoundStatusText }}</strong></span>
+          </div>
+
+          <section class="round-workbench">
+            <aside class="round-pool-panel">
+              <div class="panel-heading compact">
+                <h2>{{ currentRound?.type === 'SCORE' ? '已入库酒款池' : '晋级酒款池' }}</h2>
+                <span>{{ filteredRoundPool.length }} 款</span>
+              </div>
+              <label class="inline-search">
+                <Search />
+                <input v-model.trim="roundKeyword" placeholder="搜索匿名编号、短编号、风格" />
+              </label>
+              <div class="pool-filters">
+                <button
+                  v-for="category in roundCategoryFilters"
+                  :key="category"
+                  :class="{ active: roundCategoryFilter === category }"
+                  type="button"
+                  @click="roundCategoryFilter = category"
+                >
+                  {{ category }}
+                </button>
+              </div>
+              <div class="round-entry-list">
+                <article
+                  v-for="entry in filteredRoundPool"
+                  :key="entry.uuid"
+                  :class="['round-entry-card', { assigned: getRoundEntryAssignment(entry.uuid) }]"
+                  draggable="true"
+                  @dragstart="startEntryDrag(entry.uuid)"
+                  @dragend="clearDrag"
+                >
+                  <div>
+                    <strong>{{ entry.uuid }}</strong>
+                    <small>{{ entry.shortCode }} · {{ entry.categoryName }} · {{ entry.style }}</small>
+                    <em v-if="entry.sourceTable">{{ entry.sourceTable }} · {{ entry.sourceResult }}</em>
+                  </div>
+                  <button class="link-action" type="button" @click="addEntryToSelectedRoundTable(entry.uuid)">
+                    {{ getRoundEntryAssignment(entry.uuid) ? '移动' : '加入' }}
+                  </button>
+                </article>
+              </div>
+            </aside>
+
+            <section class="round-table-board">
+              <article
+                v-for="table in currentRoundTables"
+                :key="table.id"
+                :class="['round-table-card', { active: selectedRoundTableId === table.id, danger: getRoundTableIssues(table).length }]"
+                @click="selectedRoundTableId = table.id"
+                @dragover.prevent
+                @drop.prevent="dropEntryOnRoundTable(table.id)"
+              >
+                <header>
+                  <div>
+                    <span class="mini-label">{{ currentRoundTypeLabel }}</span>
+                    <h3>{{ table.name }}</h3>
+                  </div>
+                  <em :class="['round-status', table.status]">{{ roundStatusLabels[table.status] || table.status }}</em>
+                </header>
+                <div class="round-table-meta">
+                  <span>桌长 <strong>{{ getJudge(table.captainPublicId)?.name || '未指定' }}</strong></span>
+                  <span>酒款 <strong>{{ table.entryUuids.length }}</strong></span>
+                  <span>{{ currentRound?.type === 'SCORE' ? '晋级' : '排序' }} <strong>{{ table.targetCount }}</strong></span>
+                </div>
+                <p v-if="currentRound?.type !== 'SCORE'" class="round-note">本轮仅桌长选择排序，普通评委无需系统操作。</p>
+                <div v-if="currentRound?.type === 'SCORE'" class="round-members">
+                  <span>普通评委</span>
+                  <strong>{{ table.professionalCount || 0 }} 专业 · {{ table.crossCount || 0 }} 跨界</strong>
+                </div>
+                <div class="round-table-entries">
+                  <article v-for="uuid in table.entryUuids" :key="uuid">
+                    <span>{{ uuid }}</span>
+                    <button type="button" @click.stop="removeEntryFromRoundTable(table.id, uuid)">移除</button>
+                  </article>
+                  <p v-if="!table.entryUuids.length" class="empty-line">从左侧酒款池加入本桌。</p>
+                </div>
+                <p v-for="issue in getRoundTableIssues(table)" :key="issue" class="table-warning">
+                  <Warning />
+                  {{ issue }}
+                </p>
+              </article>
+            </section>
+
+            <aside class="round-check-panel">
+              <div class="panel-card tight">
+                <div class="panel-heading compact">
+                  <h2>配置与校验</h2>
+                  <span>{{ roundValidationIssues.length }} 项</span>
+                </div>
+                <template v-if="selectedRoundTable">
+                  <label class="stack-field">
+                    <span>当前桌</span>
+                    <strong>{{ selectedRoundTable.name }}</strong>
+                  </label>
+                  <label class="stack-field">
+                    <span>桌长</span>
+                    <select v-model="selectedRoundTable.captainPublicId">
+                      <option value="">未指定</option>
+                      <option v-for="judge in captainCandidates" :key="judge.publicId" :value="judge.publicId">
+                        {{ judge.name }} · {{ judge.qualification }}
+                      </option>
+                    </select>
+                  </label>
+                  <label class="stack-field">
+                    <span>{{ currentRound?.type === 'SCORE' ? '晋级数量' : '排序目标' }}</span>
+                    <input v-model.number="selectedRoundTable.targetCount" min="1" type="number" />
+                  </label>
+                  <button
+                    v-if="currentRound?.status === 'DRAFT'"
+                    class="tool-button"
+                    type="button"
+                    @click="removeRoundTable(selectedRoundTable.id)"
+                  >
+                    <Delete />
+                    删除草稿桌
+                  </button>
+                </template>
+                <div class="check-list">
+                  <div v-for="issue in roundValidationIssues" :key="issue" class="check-item pending">
+                    <Warning />
+                    <span>{{ issue }}</span>
+                  </div>
+                  <div v-if="roundValidationIssues.length === 0" class="check-item done">
+                    <CircleCheck />
+                    <span>当前轮次可发布或锁定。</span>
+                  </div>
+                </div>
+                <button class="tool-button primary full-width" type="button" :disabled="!canPublishCurrentRound" @click="publishCurrentRound">
+                  <Check />
+                  {{ currentRound?.status === 'SUBMITTED' ? '确认排序并锁定' : '发布当前轮次' }}
+                </button>
+              </div>
+            </aside>
+          </section>
+        </section>
+
+        <section v-if="activeTab === 'score'" class="tab-panel score-config-panel">
+          <div class="edit-banner">
+            <Finished />
+            评分表仅用于第一轮；第二轮及以后由桌长选择排序，不需要打分和备注。
           </div>
           <div class="score-panels">
             <article v-for="config in scoreConfigForm" :key="config.role" class="panel-card score-config-card">
@@ -511,6 +625,9 @@
                   </button>
                 </div>
               </div>
+              <p v-if="getScoreTotal(config) !== 50" class="score-warning">
+                当前总分 {{ getScoreTotal(config) }}，必须调整为 50 后才能保存。
+              </p>
               <label class="score-comment-limit">
                 <span>备注合计字数下限：</span>
                 <span class="compact-number-field">
@@ -519,9 +636,6 @@
                   <em>字</em>
                 </span>
               </label>
-              <p v-if="getScoreTotal(config) !== 50" class="score-warning">
-                当前总分 {{ getScoreTotal(config) }}，必须调整为 50 后才能保存。
-              </p>
               <div class="dimension-list">
                 <div class="dimension-head">
                   <span>维度</span>
@@ -545,7 +659,7 @@
                   >
                     <Delete />
                   </button>
-                  <span v-else></span>
+                  <span v-else class="dimension-action-placeholder"></span>
                 </div>
               </div>
             </article>
@@ -559,60 +673,119 @@
         </section>
 
         <section v-if="activeTab === 'progress'" class="tab-panel">
-          <article v-if="isJudgingStage" class="panel-card">
+          <div class="round-flow compact-flow">
+            <button
+              v-for="round in rounds"
+              :key="`progress-${round.id}`"
+              :class="['round-flow-item', { active: round.id === activeRoundId }]"
+              type="button"
+              @click="selectRound(round.id)"
+            >
+              <small>{{ round.type === 'SCORE' ? '评分制' : '选择排序' }}</small>
+              <strong>{{ round.name }}</strong>
+              <em>{{ roundStatusLabels[round.status] || round.status }}</em>
+            </button>
+          </div>
+          <article class="panel-card">
             <div class="panel-heading">
-              <h2>现场进度</h2>
-              <span>按已完成评审汇总统计</span>
+              <h2>桌次重组</h2>
+              <span>{{ roundRestructureText }}</span>
             </div>
-            <div class="progress-list">
-              <div v-for="table in competition.judgeTables" :key="table.id" class="progress-row">
-                <strong>{{ table.tableName }}</strong>
-                <div class="progress-bar"><span :style="{ width: getProgressWidth(table) }" /></div>
-                <em>{{ table.finalized }} / {{ table.total }}</em>
+            <div class="round-path wide">
+              <span v-for="round in rounds" :key="`path-${round.id}`">
+                <strong>{{ round.name }}</strong>
+                <small>{{ round.tables.map((table) => table.name).join(' / ') }}</small>
+              </span>
+            </div>
+          </article>
+          <div class="progress-card-grid">
+            <article v-for="table in currentRoundTables" :key="`progress-${table.id}`" class="panel-card progress-card">
+              <div class="panel-heading">
+                <h2>{{ table.name }}</h2>
+                <span>{{ getJudge(table.captainPublicId)?.name || '未指定桌长' }}</span>
               </div>
-            </div>
-          </article>
-          <article v-else class="panel-card empty-panel">
-            <h2>现场进度</h2>
-            <p>比赛尚未进入评审阶段，评审开始后会按评审桌展示汇总进度。</p>
-          </article>
+              <template v-if="currentRound?.type === 'SCORE'">
+                <div class="progress-row">
+                  <strong>普通评委评分</strong>
+                  <div class="progress-bar"><span :style="{ width: `${table.judgeProgress || 0}%` }" /></div>
+                  <em>{{ table.judgeProgress || 0 }}%</em>
+                </div>
+                <div class="progress-row">
+                  <strong>桌长汇总</strong>
+                  <div class="progress-bar"><span :style="{ width: `${table.captainProgress || 0}%` }" /></div>
+                  <em>{{ table.captainProgress || 0 }}%</em>
+                </div>
+                <p>已选晋级 {{ table.advancedCount || 0 }} / {{ table.targetCount }}</p>
+              </template>
+              <template v-else>
+                <div class="ranking-slots">
+                  <span v-for="slot in getRankingSlots(table)" :key="slot.label" :class="{ filled: slot.uuid }">
+                    <small>{{ slot.label }}</small>
+                    <strong>{{ slot.uuid || '待选择' }}</strong>
+                  </span>
+                </div>
+                <p>桌长排序 {{ getFilledRankingCount(table) }} / {{ table.targetCount }} · {{ roundStatusLabels[table.status] || table.status }}</p>
+              </template>
+            </article>
+          </div>
         </section>
 
         <section v-if="activeTab === 'results'" class="tab-panel">
-          <article v-if="!isResultStage" class="panel-card empty-panel">
-            <h2>结果发布</h2>
-            <p>比赛尚未进入结果确认阶段，评审完成后可配置奖项并发布结果。</p>
-          </article>
-          <div v-else class="two-column">
+          <div class="two-column results-layout">
             <article class="panel-card">
               <div class="panel-heading">
-                <h2>结果发布检查</h2>
-                <span>{{ competition.resultSetup.published ? '已发布' : '未发布' }}</span>
+                <h2>组别奖项草稿</h2>
+                <span>{{ awardDrafts.length }} 项</span>
               </div>
-              <div class="check-list">
-                <div :class="['check-item', competition.resultSetup.awardsReady ? 'done' : 'pending']">
-                  <CircleCheck v-if="competition.resultSetup.awardsReady" />
-                  <Warning v-else />
-                  <span>奖项配置</span>
-                  <strong>{{ competition.resultSetup.awardsReady ? '已设置' : '待设置' }}</strong>
-                </div>
-                <div :class="['check-item', competition.resultSetup.championReady ? 'done' : 'pending']">
-                  <CircleCheck v-if="competition.resultSetup.championReady" />
-                  <Warning v-else />
-                  <span>全场总冠军</span>
-                  <strong>{{ competition.resultSetup.championReady ? '已确认' : '待确认' }}</strong>
-                </div>
+              <div class="award-list">
+                <article v-for="award in awardDrafts" :key="`${award.category}-${award.slot}`">
+                  <span>{{ award.category }}</span>
+                  <strong>{{ award.slot }}</strong>
+                  <em>{{ award.uuid || '待确认' }}</em>
+                </article>
               </div>
             </article>
-            <article class="panel-card publish-card">
-              <h2>发布与导出</h2>
-              <p>结果发布功能暂未启用。请在评审完成并确认奖项后发布。</p>
+            <article class="panel-card">
+              <div class="panel-heading">
+                <h2>发布前检查</h2>
+                <span>{{ resultChecks.filter((item) => item.done).length }} / {{ resultChecks.length }}</span>
+              </div>
+              <div class="check-list">
+                <div v-for="check in resultChecks" :key="check.label" :class="['check-item', check.done ? 'done' : 'pending']">
+                  <CircleCheck v-if="check.done" />
+                  <Warning v-else />
+                  <span>{{ check.label }}</span>
+                  <strong>{{ check.done ? '通过' : '待处理' }}</strong>
+                </div>
+              </div>
               <div class="publish-actions">
-                <button class="tool-button" type="button">导出评分数据</button>
-                <button class="tool-button primary" type="button">发布结果</button>
+                <button class="tool-button" type="button" @click="showPendingStageMessage('导出评分数据')">导出评分数据</button>
+                <button class="tool-button primary" type="button" :disabled="!resultChecks.every((item) => item.done)" @click="publishMockResults">
+                  发布结果
+                </button>
               </div>
             </article>
           </div>
+          <article class="panel-card">
+            <div class="panel-heading">
+              <h2>晋级路径摘要</h2>
+              <span>第一轮桌 -> 第二轮桌 -> 决赛桌 -> 奖项</span>
+            </div>
+            <div class="path-table">
+              <div class="table-head">
+                <span>匿名编号</span>
+                <span>组别</span>
+                <span>路径</span>
+                <span>奖项</span>
+              </div>
+              <div v-for="entry in resultPathEntries" :key="entry.uuid" class="table-row">
+                <strong>{{ entry.uuid }}</strong>
+                <span>{{ entry.categoryName }}</span>
+                <span>{{ getEntryPath(entry.uuid) }}</span>
+                <span>{{ getEntryAward(entry.uuid) || '候选' }}</span>
+              </div>
+            </div>
+          </article>
         </section>
       </main>
     </section>
@@ -622,29 +795,117 @@
       <button class="tool-button primary" type="button" @click="router.push('/admin/competitions')">返回台账</button>
     </section>
 
-    <div v-if="registrationTimeDialogOpen" class="modal-backdrop" @click.self="closeRegistrationTimeDialog">
-      <section class="time-dialog" role="dialog" aria-modal="true" aria-labelledby="registration-time-title">
+    <div v-if="createRoundDialogOpen" class="modal-backdrop" @click.self="closeCreateRoundDialog">
+      <section class="round-dialog" role="dialog" aria-modal="true" aria-labelledby="create-round-title">
         <header>
           <div>
-            <h2 id="registration-time-title">修改报名时间</h2>
-            <p>{{ registrationTimeDialogHint }}</p>
+            <h2 id="create-round-title">从晋级池创建下一轮</h2>
+            <p>当前是前端原型，完成后只更新页面 mock 状态。</p>
           </div>
-          <button class="icon-button" type="button" @click="closeRegistrationTimeDialog">×</button>
+          <button class="icon-button" type="button" @click="closeCreateRoundDialog">×</button>
         </header>
-        <div class="time-dialog-grid">
-          <label>
-            <span>报名开始时间</span>
-            <input v-model="registrationTimeForm.start" type="datetime-local" />
-          </label>
-          <label>
-            <span>报名截止时间</span>
-            <input v-model="registrationTimeForm.deadline" type="datetime-local" />
-          </label>
+
+        <div class="wizard-steps">
+          <button v-for="step in 6" :key="step" :class="{ active: createRoundStep === step }" type="button" @click="createRoundStep = step">
+            {{ step }}
+          </button>
         </div>
-        <p v-if="registrationTimeError" class="form-error">{{ registrationTimeError }}</p>
+
+        <section v-if="createRoundStep === 1" class="wizard-panel">
+          <h3>选择候选来源</h3>
+          <p>默认使用上一轮晋级酒款池，共 {{ advancedPool.length }} 款。</p>
+          <div class="wizard-stat-grid">
+            <span v-for="item in advancedCategoryStats" :key="item.category">
+              <strong>{{ item.count }}</strong>
+              {{ item.category }}
+            </span>
+          </div>
+        </section>
+
+        <section v-if="createRoundStep === 2" class="wizard-panel">
+          <h3>选择桌次策略</h3>
+          <div class="strategy-grid">
+            <button
+              v-for="strategy in roundStrategies"
+              :key="strategy.value"
+              :class="{ active: createRoundForm.strategy === strategy.value }"
+              type="button"
+              @click="createRoundForm.strategy = strategy.value"
+            >
+              <strong>{{ strategy.label }}</strong>
+              <small>{{ strategy.detail }}</small>
+            </button>
+          </div>
+          <label v-if="createRoundForm.strategy === 'EVEN'" class="stack-field">
+            <span>平均分成几桌</span>
+            <input v-model.number="createRoundForm.tableCount" min="1" max="4" type="number" />
+          </label>
+        </section>
+
+        <section v-if="createRoundStep === 3" class="wizard-panel">
+          <h3>指定桌长</h3>
+          <p>每张后续轮桌必须指定 1 名桌长。</p>
+          <div class="wizard-table-list">
+            <label v-for="table in previewNextRoundTables" :key="table.id">
+              <span>{{ table.name }}</span>
+              <select v-model="table.captainPublicId">
+                <option value="">未指定</option>
+                <option v-for="judge in captainCandidates" :key="judge.publicId" :value="judge.publicId">
+                  {{ judge.name }} · {{ judge.qualification }}
+                </option>
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <section v-if="createRoundStep === 4" class="wizard-panel">
+          <h3>分配酒款</h3>
+          <p>按当前策略自动分配，发布前仍可在轮次编排中微调。</p>
+          <div class="wizard-preview-tables">
+            <article v-for="table in previewNextRoundTables" :key="`preview-${table.id}`">
+              <strong>{{ table.name }}</strong>
+              <span>{{ table.entryUuids.length }} 款</span>
+              <small>{{ table.entryUuids.join('、') }}</small>
+            </article>
+          </div>
+        </section>
+
+        <section v-if="createRoundStep === 5" class="wizard-panel">
+          <h3>设置排序目标</h3>
+          <label class="stack-field">
+            <span>目标名称</span>
+            <select v-model="createRoundForm.targetMode">
+              <option value="TOP3">选前 3</option>
+              <option value="MEDALS">金银铜</option>
+              <option value="CHAMPION">总冠军候选</option>
+            </select>
+          </label>
+          <label class="stack-field">
+            <span>每桌目标数量</span>
+            <input v-model.number="createRoundForm.targetCount" min="1" type="number" />
+          </label>
+        </section>
+
+        <section v-if="createRoundStep === 6" class="wizard-panel">
+          <h3>发布确认</h3>
+          <div class="check-list">
+            <div v-for="issue in createRoundPreviewIssues" :key="issue" class="check-item pending">
+              <Warning />
+              <span>{{ issue }}</span>
+            </div>
+            <div v-if="createRoundPreviewIssues.length === 0" class="check-item done">
+              <CircleCheck />
+              <span>下一轮可创建。发布后只给桌长端生成任务。</span>
+            </div>
+          </div>
+        </section>
+
         <footer>
-          <button class="tool-button" type="button" @click="closeRegistrationTimeDialog">取消</button>
-          <button class="tool-button primary" type="button" @click="saveRegistrationTime">保存时间</button>
+          <button class="tool-button" type="button" :disabled="createRoundStep === 1" @click="createRoundStep -= 1">上一步</button>
+          <button v-if="createRoundStep < 6" class="tool-button primary" type="button" @click="createRoundStep += 1">下一步</button>
+          <button v-else class="tool-button primary" type="button" :disabled="createRoundPreviewIssues.length > 0" @click="finishCreateRound">
+            创建下一轮
+          </button>
         </footer>
       </section>
     </div>
@@ -663,7 +924,6 @@ import {
   Clock,
   DataAnalysis,
   Delete,
-  Edit,
   Files,
   Finished,
   Lock,
@@ -711,20 +971,31 @@ const judgeRoleFilter = ref('ALL')
 const selectedTableLocalId = ref(null)
 const selectedRole = ref('CAPTAIN')
 const draggingItem = ref(null)
-const registrationTimeDialogOpen = ref(false)
-const registrationTimeError = ref('')
-const registrationTimeForm = reactive({
-  start: '',
-  deadline: '',
+
+const rounds = ref([])
+const roundEntryPool = ref([])
+const activeRoundId = ref('round-2')
+const selectedRoundTableId = ref('')
+const roundKeyword = ref('')
+const roundCategoryFilter = ref('全部')
+const createRoundDialogOpen = ref(false)
+const createRoundStep = ref(1)
+const previewNextRoundTables = ref([])
+const createRoundForm = reactive({
+  strategy: 'EVEN',
+  tableCount: 2,
+  targetMode: 'TOP3',
+  targetCount: 3,
 })
 
 const tabs = [
   { key: 'overview', label: '概览', icon: DataAnalysis },
   { key: 'entryConfig', label: '报名配置', icon: Setting },
   { key: 'entries', label: '参赛酒款', icon: Tickets },
-  { key: 'judges', label: '评审与桌次', icon: Files },
+  { key: 'judges', label: '评审人员', icon: Files },
+  { key: 'rounds', label: '轮次编排', icon: Calendar },
   { key: 'score', label: '评分表', icon: Finished },
-  { key: 'progress', label: '现场进度', icon: Calendar },
+  { key: 'progress', label: '现场进度', icon: Clock },
   { key: 'results', label: '结果发布', icon: Medal },
 ]
 
@@ -755,6 +1026,22 @@ const styleLibraryLabels = {
   CUSTOM_STANDARD: '主办方标准风格库',
 }
 
+const roundStatusLabels = {
+  DRAFT: '草稿',
+  PUBLISHED: '已发布',
+  IN_PROGRESS: '处理中',
+  SUBMITTED: '已提交',
+  LOCKED: '已锁定',
+}
+
+const roundStrategies = [
+  { value: 'MERGE', label: '合并为 1 桌', detail: '晋级酒款较少，集中交给 1 位桌长排序。' },
+  { value: 'CATEGORY', label: '按组别建桌', detail: '每个投递组别生成独立后续轮桌。' },
+  { value: 'EVEN', label: '平均分成 N 桌', detail: '保留多桌处理能力，酒款均匀拆分。' },
+  { value: 'CARRY', label: '沿用上一轮', detail: '保留上一轮桌长结构，减少现场变动。' },
+  { value: 'MANUAL', label: '手动编排', detail: '先生成空桌，再由主办方手动拖入酒款。' },
+]
+
 const fallbackJudgePool = [
   { publicId: 'J-DEMO-001', name: '张远', maskedPhone: '138****0001', qualification: 'BJCP 认证 · 桌长候选', status: 1 },
   { publicId: 'J-DEMO-002', name: '李澄', maskedPhone: '138****0002', qualification: '专业评审 · 酒厂顾问', status: 1 },
@@ -766,17 +1053,27 @@ const fallbackJudgePool = [
   { publicId: 'J-DEMO-008', name: '郑南', maskedPhone: '138****0008', qualification: '桌长候选 · 赛事经验', status: 1 },
 ]
 
+const fallbackEntries = [
+  { uuid: 'BC-2026-IPA-0001', shortCode: 'A19K', categoryName: 'IPA', style: 'Double IPA', status: 'STORED', stored: true },
+  { uuid: 'BC-2026-IPA-0002', shortCode: 'F72C', categoryName: 'IPA', style: 'American IPA', status: 'STORED', stored: true },
+  { uuid: 'BC-2026-IPA-0003', shortCode: 'H48Q', categoryName: 'IPA', style: 'Hazy IPA', status: 'STORED', stored: true },
+  { uuid: 'BC-2026-LAG-0042', shortCode: 'L08P', categoryName: '拉格', style: 'Pilsner', status: 'STORED', stored: true },
+  { uuid: 'BC-2026-LAG-0045', shortCode: 'N11R', categoryName: '拉格', style: 'Helles', status: 'STORED', stored: true },
+  { uuid: 'BC-2026-STO-0108', shortCode: 'S63T', categoryName: '世涛', style: 'Imperial Stout', status: 'STORED', stored: true },
+  { uuid: 'BC-2026-STO-0112', shortCode: 'D36M', categoryName: '世涛', style: 'Barrel Aged Stout', status: 'STORED', stored: true },
+  { uuid: 'BC-2026-SOU-0149', shortCode: 'Q90A', categoryName: '酸啤', style: 'Mixed Fermentation Sour', status: 'STORED', stored: true },
+  { uuid: 'BC-2026-SOU-0150', shortCode: 'R12U', categoryName: '酸啤', style: 'Gose', status: 'STORED', stored: true },
+  { uuid: 'BC-2026-EXP-0202', shortCode: 'X56B', categoryName: '特色实验', style: 'Experimental Beer', status: 'STORED', stored: true },
+]
+
 const statusInfo = computed(() => statusMeta[competition.value?.status] || statusMeta.DRAFT)
 const editable = computed(() => competition.value?.editableScopes || {})
-const primaryAction = computed(() => competition.value?.primaryAction || { text: statusInfo.value.next, targetTab: 'overview', enabled: true })
 const hasDataIssues = computed(() => Boolean(competition.value?.dataIntegrityIssues?.length))
 const registrationRequiredKeys = ['baseInfo', 'categories', 'styleLibrary']
 const registrationRequiredChecks = computed(() => (competition.value?.checks || []).filter((check) => registrationRequiredKeys.includes(check.key)))
 const registrationReadyCount = computed(() => registrationRequiredChecks.value.filter((check) => check.state === 'done').length)
 const registrationBlockText = computed(() => {
-  if (hasDataIssues.value) {
-    return '系统数据需修正'
-  }
+  if (hasDataIssues.value) return '系统数据需修正'
   const pending = registrationRequiredChecks.value.filter((check) => check.state !== 'done')
   return pending.length ? `还差 ${pending.map((check) => check.label).join('、')}` : '可开放报名'
 })
@@ -784,38 +1081,69 @@ const styleLibraryLabel = computed(() => styleLibraryLabels[competition.value?.s
 const registrationWindowInfo = computed(() => resolveRegistrationWindowInfo())
 const stagePrimaryAction = computed(() => resolveStagePrimaryAction())
 const stageSecondaryActions = computed(() => resolveStageSecondaryActions())
-const currentActionItems = computed(() => buildCurrentActionItems())
-const currentActionEmptyText = computed(() => {
-  if (competition.value?.status === 'DRAFT' && canOpenRegistration.value) {
-    return '报名配置已就绪，可以发布给厂商。'
-  }
-  return '当前阶段没有需要立即处理的事项。'
-})
-const registrationTimeDialogHint = computed(() => {
-  if (competition.value?.status === 'DRAFT') {
-    return '发布报名后，厂商将按这里设置的时间进入报名窗口。'
-  }
-  return '修改报名时间会影响厂商入口，请确认现场运营节奏后再保存。'
-})
 const futureStageTasks = computed(() => buildFutureStageTasks())
-const nextStageInfo = computed(() => resolveNextStageInfo())
-const isJudgingStage = computed(() => ['JUDGING', 'RESULT_CONFIRMING', 'PUBLISHED', 'ARCHIVED'].includes(competition.value?.status))
-const isResultStage = computed(() => ['RESULT_CONFIRMING', 'PUBLISHED', 'ARCHIVED'].includes(competition.value?.status))
-const canOpenRegistration = computed(() => {
-  if (competition.value?.status !== 'DRAFT') {
-    return false
-  }
-  return registrationRequiredKeys.every((key) => competition.value.checks.find((check) => check.key === key)?.state === 'done')
+const currentRound = computed(() => rounds.value.find((round) => round.id === activeRoundId.value) || rounds.value[0])
+const currentRoundTables = computed(() => currentRound.value?.tables || [])
+const selectedRoundTable = computed(() => currentRoundTables.value.find((table) => table.id === selectedRoundTableId.value) || currentRoundTables.value[0])
+const currentRoundTypeLabel = computed(() => (currentRound.value?.type === 'SCORE' ? '评分制' : '选择排序制'))
+const currentRoundStatusText = computed(() => roundStatusLabels[currentRound.value?.status] || currentRound.value?.status || '-')
+const currentRoundEntryCount = computed(() => new Set(currentRoundTables.value.flatMap((table) => table.entryUuids)).size)
+const currentRoundTargetCount = computed(() => currentRoundTables.value.reduce((sum, table) => sum + Number(table.targetCount || 0), 0))
+const advancedPool = computed(() => roundEntryPool.value.filter((entry) => entry.advanced))
+const overviewActionItems = computed(() => buildOverviewActionItems())
+const roundCategoryFilters = computed(() => ['全部', ...new Set(currentPoolEntries.value.map((entry) => entry.categoryName).filter(Boolean))])
+const currentPoolEntries = computed(() => {
+  if (currentRound.value?.type === 'SCORE') return roundEntryPool.value.filter((entry) => entry.stored)
+  return advancedPool.value
 })
+const filteredRoundPool = computed(() => {
+  const query = roundKeyword.value.toLowerCase()
+  return currentPoolEntries.value.filter((entry) => {
+    const matchesCategory = roundCategoryFilter.value === '全部' || entry.categoryName === roundCategoryFilter.value
+    const matchesQuery = !query || [entry.uuid, entry.shortCode, entry.categoryName, entry.style, entry.sourceTable]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(query))
+    return matchesCategory && matchesQuery
+  })
+})
+const roundValidationIssues = computed(() => buildRoundValidationIssues(currentRound.value))
+const canPublishCurrentRound = computed(() => currentRound.value && ['DRAFT', 'SUBMITTED'].includes(currentRound.value.status) && roundValidationIssues.value.length === 0)
+const captainCandidates = computed(() => {
+  const pool = [...judgePool.value]
+  fallbackJudgePool.forEach((judge) => {
+    if (!pool.some((item) => item.publicId === judge.publicId)) pool.push(judge)
+  })
+  return pool.filter((judge) => inferJudgeRoles(judge).includes('CAPTAIN') && isJudgeActive(judge))
+})
+const advancedCategoryStats = computed(() => {
+  const map = new Map()
+  advancedPool.value.forEach((entry) => map.set(entry.categoryName, (map.get(entry.categoryName) || 0) + 1))
+  return [...map.entries()].map(([category, count]) => ({ category, count }))
+})
+const createRoundPreviewIssues = computed(() => {
+  const issues = []
+  if (!advancedPool.value.length) issues.push('上一轮没有晋级酒款，无法创建下一轮')
+  previewNextRoundTables.value.forEach((table) => {
+    if (!table.captainPublicId) issues.push(`${table.name}缺少桌长`)
+    if (table.entryUuids.length && Number(createRoundForm.targetCount) > table.entryUuids.length) {
+      issues.push(`${table.name}排序目标超过酒款数量`)
+    }
+  })
+  return issues
+})
+const roundRestructureText = computed(() => rounds.value.map((round) => `${round.name} ${round.tables.length}桌`).join(' -> '))
+const awardDrafts = computed(() => buildAwardDrafts())
+const resultPathEntries = computed(() => roundEntryPool.value.filter((entry) => entry.advanced || getEntryAward(entry.uuid)).slice(0, 8))
+const resultChecks = computed(() => [
+  { label: '第一轮桌长汇总已完成', done: rounds.value.find((round) => round.id === 'round-1')?.status === 'LOCKED' },
+  { label: '后续轮排序已锁定', done: rounds.value.filter((round) => round.type === 'RANKING').every((round) => round.status === 'LOCKED') },
+  { label: '组别奖项无重复', done: awardDrafts.value.every((award) => award.uuid) },
+  { label: '总冠军候选已确认', done: Boolean(getEntryAward(roundEntryPool.value[0]?.uuid) || awardDrafts.value.find((award) => award.slot === '金奖')?.uuid) },
+])
 
 const selectedTable = computed(() => judgeTableForm.find((table) => table.localId === selectedTableLocalId.value))
 const selectedRoleLabel = computed(() => roleOptions.find((role) => role.value === selectedRole.value)?.label || '角色')
-const selectedTargetLabel = computed(() => {
-  if (!selectedTable.value) {
-    return '请先选择评审桌'
-  }
-  return `${selectedTable.value.tableName || '未命名评审桌'} · ${selectedRoleLabel.value}`
-})
+const selectedTargetLabel = computed(() => selectedTable.value ? `${selectedTable.value.tableName || '未命名评审桌'} · ${selectedRoleLabel.value}` : '请先选择评审桌')
 const judgeMetrics = computed(() => ({
   assigned: judgeAssignmentForm.length,
   captain: countAssignedRole('CAPTAIN'),
@@ -824,34 +1152,22 @@ const judgeMetrics = computed(() => ({
 }))
 const validationIssues = computed(() => {
   const issues = []
-  if (!judgeTableForm.length) {
-    issues.push('至少需要创建 1 张评审桌')
-  }
-  judgeTableForm.forEach((table) => {
-    issues.push(...tableValidationIssues(table))
-  })
-    const duplicateJudgeIds = judgeAssignmentForm
+  if (!judgeTableForm.length) issues.push('至少需要创建 1 张基础桌')
+  judgeTableForm.forEach((table) => issues.push(...tableValidationIssues(table)))
+  const duplicateJudgeIds = judgeAssignmentForm
     .map((assignment) => assignment.judgePublicId)
     .filter((judgePublicId, index, list) => list.indexOf(judgePublicId) !== index)
   new Set(duplicateJudgeIds).forEach((judgePublicId) => {
     issues.push(`${getJudge(judgePublicId)?.name || '某位评委'}在本场比赛中被重复分配`)
-  })
-  judgeAssignmentForm.forEach((assignment) => {
-    const judge = getJudge(assignment.judgePublicId)
-    if (judge && !judge.maskedPhone) {
-      issues.push(`${judge.name || '某位评委'}未填写手机号，可能无法登录评审端`)
-    }
   })
   return issues
 })
 const filteredJudgePool = computed(() => {
   const query = judgeKeyword.value.toLowerCase()
   return judgePool.value.filter((judge) => {
-    const matchesKeyword =
-      !query ||
-      [judge.name, judge.maskedPhone, judge.qualification]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(query))
+    const matchesKeyword = !query || [judge.name, judge.maskedPhone, judge.qualification]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(query))
     const matchesRole =
       judgeRoleFilter.value === 'ALL' ||
       (judgeRoleFilter.value === 'UNASSIGNED' && !isAssigned(judge.publicId)) ||
@@ -866,9 +1182,14 @@ onMounted(() => {
 })
 watch(() => route.params.id, loadDetail)
 watch(() => route.query.tab, (tab) => {
-  if (tab) {
-    activeTab.value = tab
-  }
+  if (tab) activeTab.value = tab
+})
+watch(() => createRoundForm.strategy, refreshPreviewNextRoundTables)
+watch(() => createRoundForm.tableCount, refreshPreviewNextRoundTables)
+watch(() => createRoundForm.targetCount, () => {
+  previewNextRoundTables.value.forEach((table) => {
+    table.targetCount = Number(createRoundForm.targetCount || 1)
+  })
 })
 
 async function loadDetail() {
@@ -877,6 +1198,7 @@ async function loadDetail() {
     const data = await fetchCompetitionDetail(route.params.id)
     competition.value = normalizeDetail(data)
     resetForms()
+    seedRoundPrototype()
   } finally {
     loading.value = false
   }
@@ -885,10 +1207,18 @@ async function loadDetail() {
 async function loadJudgePool() {
   try {
     const data = await fetchJudges()
-    judgePool.value = data?.length ? data : fallbackJudgePool
+    judgePool.value = mergeJudgePool(data || [])
   } catch {
-    judgePool.value = fallbackJudgePool
+    judgePool.value = mergeJudgePool([])
   }
+}
+
+function mergeJudgePool(source) {
+  const merged = [...source]
+  fallbackJudgePool.forEach((judge) => {
+    if (!merged.some((item) => item.publicId === judge.publicId)) merged.push(judge)
+  })
+  return merged
 }
 
 function normalizeDetail(data) {
@@ -901,244 +1231,14 @@ function normalizeDetail(data) {
     judgeTables: data.judgeTables || [],
     scoreConfigs: data.scoreConfigs || [],
     checks: data.checks || [],
-    stageChecks: data.stageChecks || [],
     alerts: data.alerts || [],
     dataIntegrityIssues: data.dataIntegrityIssues || [],
-    currentStageLabel: data.currentStageLabel,
-    primaryAction: data.primaryAction,
     entries: data.entries || [],
     editableScopes: data.editableScopes || {},
     entriesSummary: data.entriesSummary || { total: 0, pendingPayment: 0, registered: 0, stored: 0, canceled: 0, resultPublished: 0 },
     progressSummary: data.progressSummary || { finalized: 0, total: 0, advanced: 0, commentWarnings: 0 },
     resultSetup: data.resultSetup || { awardsReady: false, published: false, championReady: false },
   }
-}
-
-function parseDateTime(value) {
-  if (!value) {
-    return null
-  }
-  const time = new Date(value).getTime()
-  return Number.isNaN(time) ? null : time
-}
-
-function toDatetimeLocalValue(value) {
-  if (!value) {
-    return ''
-  }
-  return value.slice(0, 16)
-}
-
-function openRegistrationTimeDialog() {
-  registrationTimeForm.start = toDatetimeLocalValue(competition.value?.registrationStart)
-  registrationTimeForm.deadline = toDatetimeLocalValue(competition.value?.registrationDeadline)
-  registrationTimeError.value = ''
-  registrationTimeDialogOpen.value = true
-}
-
-function closeRegistrationTimeDialog() {
-  registrationTimeDialogOpen.value = false
-  registrationTimeError.value = ''
-}
-
-function saveRegistrationTime() {
-  if (!registrationTimeForm.start || !registrationTimeForm.deadline) {
-    registrationTimeError.value = '请填写报名开始和报名截止时间。'
-    return
-  }
-  if (new Date(registrationTimeForm.deadline).getTime() <= new Date(registrationTimeForm.start).getTime()) {
-    registrationTimeError.value = '报名截止时间必须晚于报名开始时间。'
-    return
-  }
-  competition.value = {
-    ...competition.value,
-    registrationStart: `${registrationTimeForm.start}:00`,
-    registrationDeadline: `${registrationTimeForm.deadline}:00`,
-  }
-  closeRegistrationTimeDialog()
-  ElMessage.success('报名时间已在页面中更新，后端保存接口接入后会同步持久化')
-}
-
-function resolveRegistrationWindowInfo() {
-  const status = competition.value?.status
-  const now = Date.now()
-  const start = parseDateTime(competition.value?.registrationStart)
-  const deadline = parseDateTime(competition.value?.registrationDeadline)
-  if (status === 'DRAFT') {
-    return {
-      label: '未发布',
-      tone: 'neutral',
-      detail: start ? `发布后按 ${formatDateTime(competition.value.registrationStart)} 开放` : '报名窗口尚未完整',
-    }
-  }
-  if (status === 'REGISTRATION_OPEN') {
-    if (start && now < start) {
-      return {
-        label: '待开始',
-        tone: 'gold',
-        detail: `将于 ${formatDateTime(competition.value.registrationStart)} 自动开放`,
-      }
-    }
-    if (deadline && now > deadline) {
-      return {
-        label: '已过截止',
-        tone: 'warning',
-        detail: '已到报名截止时间，建议结束报名',
-      }
-    }
-    return {
-      label: '报名中',
-      tone: 'success',
-      detail: deadline ? `将于 ${formatDateTime(competition.value.registrationDeadline)} 自动截止` : '正在接受报名',
-    }
-  }
-  if (status === 'REGISTRATION_CLOSED') {
-    return {
-      label: '已截止',
-      tone: 'warning',
-      detail: '可进入评审准备',
-    }
-  }
-  if (['JUDGING_PREP', 'JUDGING', 'RESULT_CONFIRMING', 'PUBLISHED', 'ARCHIVED'].includes(status)) {
-    return {
-      label: '报名关闭',
-      tone: 'neutral',
-      detail: '报名窗口已结束',
-    }
-  }
-  return { label: '-', tone: 'neutral', detail: '-' }
-}
-
-function resolveStagePrimaryAction() {
-  const status = competition.value?.status
-  if (status === 'DRAFT') {
-    return {
-      text: canOpenRegistration.value ? '发布报名' : '补齐报名配置',
-      enabled: true,
-      action: canOpenRegistration.value ? 'publishRegistration' : 'fixRegistration',
-    }
-  }
-  if (status === 'REGISTRATION_OPEN') {
-    return {
-      text: registrationWindowInfo.value.label === '待开始' ? '立即开始报名' : '结束报名',
-      enabled: true,
-      action: registrationWindowInfo.value.label === '待开始' ? 'startRegistrationNow' : 'closeRegistration',
-    }
-  }
-  if (status === 'REGISTRATION_CLOSED') {
-    return { text: '进入评审准备', enabled: true, action: 'moveToJudgingPrep' }
-  }
-  if (status === 'JUDGING_PREP') {
-    return { text: '开始评审', enabled: true, action: 'startJudging' }
-  }
-  if (status === 'JUDGING') {
-    return { text: '进入结果确认', enabled: true, action: 'moveToResults' }
-  }
-  if (status === 'RESULT_CONFIRMING') {
-    return { text: '发布结果', enabled: true, action: 'publishResults' }
-  }
-  if (status === 'PUBLISHED') {
-    return { text: '归档比赛', enabled: true, action: 'archiveCompetition' }
-  }
-  return primaryAction.value
-}
-
-function resolveStageSecondaryActions() {
-  const status = competition.value?.status
-  if (status === 'DRAFT') {
-    return [
-      { key: 'editTime', label: '修改报名时间', handler: openRegistrationTimeDialog },
-    ]
-  }
-  if (status === 'REGISTRATION_OPEN') {
-    return [
-      { key: 'editDeadline', label: '修改报名时间', handler: openRegistrationTimeDialog },
-      { key: 'close', label: '结束报名', handler: () => handleStageAction('closeRegistration') },
-    ]
-  }
-  if (status === 'REGISTRATION_CLOSED') {
-    return [
-      { key: 'reopen', label: '重新开放报名', handler: openRegistrationTimeDialog },
-    ]
-  }
-  if (['JUDGING_PREP', 'JUDGING', 'RESULT_CONFIRMING', 'PUBLISHED'].includes(status)) {
-    return [
-      { key: 'export', label: '导出数据', handler: () => showPendingStageMessage('导出数据') },
-    ]
-  }
-  return []
-}
-
-function buildCurrentActionItems() {
-  if (hasDataIssues.value) {
-    return competition.value.dataIntegrityIssues.map((text, index) => ({
-      key: `data-${index}`,
-      level: 'danger',
-      text,
-      targetTab: 'overview',
-    }))
-  }
-  if (competition.value?.status === 'DRAFT') {
-    return registrationRequiredChecks.value
-      .filter((check) => check.state !== 'done')
-      .map((check) => ({
-        key: check.key,
-        level: 'warning',
-        text: `${check.label}未完成`,
-        targetTab: check.targetTab,
-      }))
-  }
-  return (competition.value?.alerts || []).map((alert, index) => ({
-    key: `alert-${index}`,
-    level: alert.level,
-    text: alert.text,
-    targetTab: null,
-  }))
-}
-
-function getCheck(key) {
-  return (competition.value?.checks || []).find((check) => check.key === key)
-}
-
-function buildFutureStageTasks() {
-  const tasks = [
-    { key: 'judgeTables', label: '评审桌', targetTab: 'judges', detail: '报名截止后配置评审桌和评委分配' },
-    { key: 'scoreForms', label: '评分表', targetTab: 'score', detail: '评审开始前确认维度、分值和备注要求' },
-    { key: 'storedEntries', label: '酒款入库', targetTab: 'entries', detail: '报名酒款到场后确认入库状态' },
-    { key: 'resultSetup', label: '结果发布', targetTab: 'results', detail: '评审结束后确认奖项并发布反馈' },
-  ]
-  return tasks.map((task) => {
-    const check = getCheck(task.key)
-    const done = check?.state === 'done'
-    return {
-      ...task,
-      state: done ? 'done' : 'pending',
-      statusText: done ? '已完成' : '稍后处理',
-    }
-  })
-}
-
-function resolveNextStageInfo() {
-  const status = competition.value?.status
-  if (status === 'DRAFT') {
-    return { label: '发布报名', detail: canOpenRegistration.value ? '配置已就绪' : '先补齐报名配置' }
-  }
-  if (status === 'REGISTRATION_OPEN') {
-    return { label: '收样入库', detail: '报名截止后确认酒款到场' }
-  }
-  if (status === 'REGISTRATION_CLOSED') {
-    return { label: '评审准备', detail: '配置评审桌、评委和酒款分桌' }
-  }
-  if (status === 'JUDGING_PREP') {
-    return { label: '现场评审', detail: '确认评审配置后开始' }
-  }
-  if (status === 'JUDGING') {
-    return { label: '结果确认', detail: '等待桌长汇总完成' }
-  }
-  if (status === 'RESULT_CONFIRMING') {
-    return { label: '发布结果', detail: '确认奖项和厂商反馈' }
-  }
-  return { label: '归档', detail: '保留数据和导出结果' }
 }
 
 function resetForms() {
@@ -1151,6 +1251,12 @@ function resetForms() {
     ...item,
     localId: item.id || `table-${index}`,
   })))
+  if (!judgeTableForm.length) {
+    judgeTableForm.push(
+      { localId: 'base-A', tableName: 'A桌', captainCount: 1, professionalCount: 2, crossCount: 1 },
+      { localId: 'base-B', tableName: 'B桌', captainCount: 1, professionalCount: 2, crossCount: 1 },
+    )
+  }
   const persistedAssignments = judgeTableForm.flatMap((table) => (table.assignments || []).map((assignment) => ({
     localId: `assignment-${assignment.id || `${table.localId}-${assignment.judgePublicId}`}`,
     tableLocalId: table.localId,
@@ -1159,6 +1265,7 @@ function resetForms() {
     role: assignment.role,
   })))
   judgeAssignmentForm.splice(0, judgeAssignmentForm.length, ...persistedAssignments)
+  if (!judgeAssignmentForm.length) seedJudgeAssignments()
   selectedTableLocalId.value = judgeTableForm[0]?.localId || null
   const sourceScoreConfigs = competition.value.scoreConfigs.length ? competition.value.scoreConfigs : defaultScoreConfigs().map((item) => ({
     judgeRoleType: item.role,
@@ -1177,32 +1284,401 @@ function resetForms() {
   })))
 }
 
+function seedRoundPrototype() {
+  const apiEntries = competition.value.entries?.length >= 6 ? competition.value.entries : fallbackEntries
+  const sourceEntries = apiEntries.map((entry, index) => ({
+    ...entry,
+    uuid: entry.uuid,
+    shortCode: entry.shortCode || `S${String(index + 17).padStart(2, '0')}`,
+    categoryName: entry.categoryName || entry.category || 'IPA',
+    style: entry.style || '未填写',
+    status: entry.status || 'STORED',
+    stored: entry.stored ?? true,
+    advanced: index < 6,
+    sourceTable: index < 3 ? 'A桌' : index < 6 ? 'B桌' : '',
+    sourceResult: index < 6 ? `晋级 ${Math.min(index % 3 + 1, 3)}` : '',
+  }))
+  roundEntryPool.value = sourceEntries
+  const uuids = sourceEntries.map((entry) => entry.uuid)
+  rounds.value = [
+    {
+      id: 'round-1',
+      name: '第一轮',
+      type: 'SCORE',
+      status: 'LOCKED',
+      tables: [
+        {
+          id: 'r1-a',
+          name: 'A桌',
+          captainPublicId: 'J-DEMO-001',
+          professionalCount: 2,
+          crossCount: 1,
+          targetCount: 3,
+          status: 'LOCKED',
+          entryUuids: uuids.slice(0, 5),
+          advancedCount: 3,
+          judgeProgress: 100,
+          captainProgress: 100,
+        },
+        {
+          id: 'r1-b',
+          name: 'B桌',
+          captainPublicId: 'J-DEMO-008',
+          professionalCount: 2,
+          crossCount: 1,
+          targetCount: 3,
+          status: 'LOCKED',
+          entryUuids: uuids.slice(5, 10),
+          advancedCount: 3,
+          judgeProgress: 100,
+          captainProgress: 100,
+        },
+      ],
+    },
+    {
+      id: 'round-2',
+      name: '第二轮',
+      type: 'RANKING',
+      status: 'DRAFT',
+      tables: [
+        {
+          id: 'r2-a',
+          name: '2A桌',
+          captainPublicId: 'J-DEMO-001',
+          targetCount: 3,
+          status: 'DRAFT',
+          entryUuids: uuids.slice(0, 3),
+          rankings: [
+            { rank: 1, label: '第 1 名', uuid: uuids[0] },
+            { rank: 2, label: '第 2 名', uuid: uuids[1] },
+            { rank: 3, label: '第 3 名', uuid: '' },
+          ],
+        },
+        {
+          id: 'r2-b',
+          name: '2B桌',
+          captainPublicId: '',
+          targetCount: 3,
+          status: 'DRAFT',
+          entryUuids: uuids.slice(3, 6),
+          rankings: [],
+        },
+      ],
+    },
+    {
+      id: 'round-final',
+      name: '决赛轮',
+      type: 'RANKING',
+      status: 'DRAFT',
+      tables: [
+        {
+          id: 'rf-a',
+          name: '决赛桌',
+          captainPublicId: 'J-DEMO-008',
+          targetCount: 1,
+          status: 'DRAFT',
+          entryUuids: uuids.slice(0, 3),
+          rankings: [{ rank: 1, label: '总冠军', uuid: '' }],
+        },
+      ],
+    },
+  ]
+  selectedRoundTableId.value = rounds.value.find((round) => round.id === activeRoundId.value)?.tables[0]?.id || ''
+}
+
 function seedJudgeAssignments() {
-  if (!judgeTableForm.length || judgeAssignmentForm.length) {
-    return
-  }
-  const sourceJudges = judgePool.value.length ? judgePool.value : fallbackJudgePool
-  let cursor = 0
+  const sourceJudges = fallbackJudgePool
   const seeded = []
-  judgeTableForm.forEach((table) => {
-    const roleCounts = [
-      ['CAPTAIN', Number(table.captainCount || 0)],
-      ['PROFESSIONAL', Number(table.professionalCount || 0)],
-      ['CROSS', Number(table.crossCount || 0)],
+  judgeTableForm.forEach((table, tableIndex) => {
+    const offset = tableIndex * 4
+    const roles = [
+      ['CAPTAIN', sourceJudges[offset] || sourceJudges[0]],
+      ['PROFESSIONAL', sourceJudges[offset + 1] || sourceJudges[1]],
+      ['PROFESSIONAL', sourceJudges[offset + 2] || sourceJudges[2]],
+      ['CROSS', sourceJudges[offset + 3] || sourceJudges[3]],
     ]
-    roleCounts.forEach(([role, count]) => {
-      for (let index = 0; index < count && cursor < sourceJudges.length; index += 1) {
-        seeded.push({
-          localId: `assignment-${table.localId}-${role}-${index}-${sourceJudges[cursor].publicId}`,
-          tableLocalId: table.localId,
-          judgePublicId: sourceJudges[cursor].publicId,
-          role,
-        })
-        cursor += 1
-      }
+    roles.forEach(([role, judge], index) => {
+      seeded.push({
+        localId: `assignment-${table.localId}-${role}-${index}`,
+        tableLocalId: table.localId,
+        judgePublicId: judge.publicId,
+        role,
+      })
     })
   })
   judgeAssignmentForm.splice(0, judgeAssignmentForm.length, ...seeded)
+}
+
+function resolveRegistrationWindowInfo() {
+  const status = competition.value?.status
+  const now = Date.now()
+  const start = parseDateTime(competition.value?.registrationStart)
+  const deadline = parseDateTime(competition.value?.registrationDeadline)
+  if (status === 'DRAFT') return { label: '未发布', tone: 'neutral', detail: start ? `发布后按 ${formatDateTime(competition.value.registrationStart)} 开放` : '报名窗口尚未完整' }
+  if (status === 'REGISTRATION_OPEN') {
+    if (start && now < start) return { label: '待开始', tone: 'gold', detail: `将于 ${formatDateTime(competition.value.registrationStart)} 自动开放` }
+    if (deadline && now > deadline) return { label: '已过截止', tone: 'warning', detail: '已到报名截止时间，建议结束报名' }
+    return { label: '报名中', tone: 'success', detail: deadline ? `将于 ${formatDateTime(competition.value.registrationDeadline)} 自动截止` : '正在接受报名' }
+  }
+  if (status === 'REGISTRATION_CLOSED') return { label: '已截止', tone: 'warning', detail: '可进入评审准备' }
+  return { label: '报名关闭', tone: 'neutral', detail: '报名窗口已结束' }
+}
+
+function parseDateTime(value) {
+  if (!value) return null
+  const time = new Date(value).getTime()
+  return Number.isNaN(time) ? null : time
+}
+
+function resolveStagePrimaryAction() {
+  if (!competition.value) return { text: '加载中', enabled: false, action: 'noop' }
+  if (currentRound.value?.status === 'DRAFT') {
+    return {
+      text: currentRound.value.id === 'round-2' ? '发布给桌长' : '发布当前轮次',
+      enabled: canPublishCurrentRound.value,
+      action: 'publishCurrentRound',
+    }
+  }
+  if (currentRound.value?.status === 'SUBMITTED') {
+    return { text: '确认排序并锁定', enabled: canPublishCurrentRound.value, action: 'publishCurrentRound' }
+  }
+  if (currentRound.value?.id === 'round-1' && currentRound.value?.status === 'LOCKED') {
+    return { text: '从晋级池创建第二轮', enabled: true, action: 'createNextRound' }
+  }
+  if (competition.value.status === 'DRAFT') {
+    return { text: '发布报名', enabled: true, action: 'publishRegistration' }
+  }
+  return { text: '查看现场进度', enabled: true, action: 'viewProgress' }
+}
+
+function resolveStageSecondaryActions() {
+  return [
+    { key: 'rounds', label: '进入轮次编排', handler: () => { activeTab.value = 'rounds' } },
+    { key: 'export', label: '导出数据', handler: () => showPendingStageMessage('导出数据') },
+  ]
+}
+
+function buildOverviewActionItems() {
+  const issues = []
+  if (hasDataIssues.value) {
+    return competition.value.dataIntegrityIssues.map((text, index) => ({ key: `data-${index}`, level: 'danger', text, targetTab: 'overview' }))
+  }
+  if (roundValidationIssues.value.length) {
+    issues.push(...roundValidationIssues.value.slice(0, 3).map((text, index) => ({ key: `round-${index}`, level: 'warning', text, targetTab: 'rounds' })))
+  }
+  if (competition.value?.entriesSummary?.pendingPayment > 0) {
+    issues.push({ key: 'payment', level: 'warning', text: `还有 ${competition.value.entriesSummary.pendingPayment} 款酒等待付款。`, targetTab: 'entries' })
+  }
+  return issues
+}
+
+function buildFutureStageTasks() {
+  const firstRound = rounds.value.find((round) => round.id === 'round-1')
+  const secondRound = rounds.value.find((round) => round.id === 'round-2')
+  const finalRound = rounds.value.find((round) => round.id === 'round-final')
+  return [
+    { key: 'storedEntries', label: '酒款入库', targetTab: 'entries', detail: '报名酒款到场后确认入库状态', state: 'done', statusText: '已完成' },
+    { key: 'round1Setup', label: '第一轮编排', targetTab: 'rounds', roundId: 'round-1', detail: '评分制桌次、酒款和晋级数量', state: firstRound?.status === 'LOCKED' ? 'done' : 'pending', statusText: firstRound?.status === 'LOCKED' ? '已锁定' : '待发布' },
+    { key: 'round1Review', label: '第一轮评审', targetTab: 'progress', roundId: 'round-1', detail: '普通评委评分与桌长汇总', state: firstRound?.status === 'LOCKED' ? 'done' : 'pending', statusText: firstRound?.status === 'LOCKED' ? '已完成' : '进行中' },
+    { key: 'round2Create', label: '第二轮创建', targetTab: 'rounds', roundId: 'round-2', detail: '从晋级池生成 2A / 2B', state: secondRound ? 'done' : 'pending', statusText: secondRound ? '已创建' : '待创建' },
+    { key: 'round2Sort', label: '第二轮排序', targetTab: 'rounds', roundId: 'round-2', detail: '仅桌长选择并排序', state: secondRound?.status === 'LOCKED' ? 'done' : 'pending', statusText: roundStatusLabels[secondRound?.status] || '待处理' },
+    { key: 'finalRound', label: '决赛轮', targetTab: 'rounds', roundId: 'round-final', detail: '合并为 1 桌确认总冠军', state: finalRound?.status === 'LOCKED' ? 'done' : 'pending', statusText: roundStatusLabels[finalRound?.status] || '待创建' },
+    { key: 'resultSetup', label: '奖项确认', targetTab: 'results', detail: '确认组别奖项和发布反馈', state: resultChecks.value.every((item) => item.done) ? 'done' : 'pending', statusText: resultChecks.value.every((item) => item.done) ? '可发布' : '待确认' },
+  ]
+}
+
+function handleFutureTask(task) {
+  if (task.roundId) selectRound(task.roundId)
+  activeTab.value = task.targetTab
+}
+
+function selectRound(roundId) {
+  activeRoundId.value = roundId
+  const round = rounds.value.find((item) => item.id === roundId)
+  selectedRoundTableId.value = round?.tables[0]?.id || ''
+}
+
+function countRoundEntries(round) {
+  return new Set((round?.tables || []).flatMap((table) => table.entryUuids)).size
+}
+
+function buildRoundValidationIssues(round) {
+  if (!round) return ['请先创建轮次']
+  const issues = []
+  if (!round.tables.length) issues.push(`${round.name}至少需要 1 张桌`)
+  const assigned = round.tables.flatMap((table) => table.entryUuids)
+  if (!assigned.length) issues.push(`${round.name}尚未分配酒款`)
+  const duplicates = assigned.filter((uuid, index, list) => list.indexOf(uuid) !== index)
+  if (duplicates.length) issues.push(`${round.name}存在重复分配酒款`)
+  round.tables.forEach((table) => issues.push(...getRoundTableIssues(table)))
+  return [...new Set(issues)]
+}
+
+function getRoundTableIssues(table) {
+  const issues = []
+  if (!table.captainPublicId) issues.push(`${table.name}缺少桌长`)
+  if (!table.entryUuids.length) issues.push(`${table.name}尚未分配酒款`)
+  if (!Number(table.targetCount || 0)) issues.push(`${table.name}目标数量不能为空`)
+  if (Number(table.targetCount || 0) > table.entryUuids.length) issues.push(`${table.name}目标数量超过酒款数`)
+  return issues
+}
+
+function getRoundEntryAssignment(uuid) {
+  const table = currentRoundTables.value.find((item) => item.entryUuids.includes(uuid))
+  return table?.name || ''
+}
+
+function addEntryToSelectedRoundTable(uuid) {
+  const table = selectedRoundTable.value
+  if (!table) {
+    ElMessage.warning('请先选择要加入的轮次桌')
+    return
+  }
+  currentRoundTables.value.forEach((item) => {
+    item.entryUuids = item.entryUuids.filter((entryUuid) => entryUuid !== uuid)
+  })
+  table.entryUuids.push(uuid)
+  ElMessage.success(`${uuid} 已加入 ${table.name}`)
+}
+
+function removeEntryFromRoundTable(tableId, uuid) {
+  const table = currentRoundTables.value.find((item) => item.id === tableId)
+  if (!table) return
+  table.entryUuids = table.entryUuids.filter((entryUuid) => entryUuid !== uuid)
+}
+
+function startEntryDrag(uuid) {
+  draggingItem.value = { type: 'entry', uuid }
+}
+
+function dropEntryOnRoundTable(tableId) {
+  if (!draggingItem.value || draggingItem.value.type !== 'entry') return
+  selectedRoundTableId.value = tableId
+  addEntryToSelectedRoundTable(draggingItem.value.uuid)
+  clearDrag()
+}
+
+function removeRoundTable(tableId) {
+  if (!currentRound.value || currentRound.value.status !== 'DRAFT') return
+  currentRound.value.tables = currentRound.value.tables.filter((table) => table.id !== tableId)
+  selectedRoundTableId.value = currentRound.value.tables[0]?.id || ''
+}
+
+function publishCurrentRound() {
+  if (!currentRound.value || roundValidationIssues.value.length) return
+  if (currentRound.value.status === 'SUBMITTED') {
+    currentRound.value.status = 'LOCKED'
+    currentRound.value.tables.forEach((table) => { table.status = 'LOCKED' })
+    ElMessage.success(`${currentRound.value.name}已确认并锁定`)
+    return
+  }
+  currentRound.value.status = currentRound.value.type === 'SCORE' ? 'PUBLISHED' : 'IN_PROGRESS'
+  currentRound.value.tables.forEach((table) => { table.status = currentRound.value.status })
+  ElMessage.success(currentRound.value.type === 'SCORE' ? '当前轮次已发布到评审端' : '排序任务已发布给桌长')
+}
+
+function openCreateRoundDialog() {
+  createRoundDialogOpen.value = true
+  createRoundStep.value = 1
+  refreshPreviewNextRoundTables()
+}
+
+function closeCreateRoundDialog() {
+  createRoundDialogOpen.value = false
+}
+
+function refreshPreviewNextRoundTables() {
+  const source = advancedPool.value
+  let tables = []
+  if (createRoundForm.strategy === 'MERGE') {
+    tables = [{ id: 'preview-1', name: '2A桌', captainPublicId: captainCandidates.value[0]?.publicId || '', entryUuids: source.map((entry) => entry.uuid) }]
+  } else if (createRoundForm.strategy === 'CATEGORY') {
+    const categories = [...new Set(source.map((entry) => entry.categoryName))]
+    tables = categories.map((category, index) => ({
+      id: `preview-${index + 1}`,
+      name: `${category}桌`,
+      captainPublicId: captainCandidates.value[index]?.publicId || '',
+      entryUuids: source.filter((entry) => entry.categoryName === category).map((entry) => entry.uuid),
+    }))
+  } else {
+    const count = Math.max(1, Number(createRoundForm.strategy === 'EVEN' ? createRoundForm.tableCount : 2) || 2)
+    tables = Array.from({ length: count }, (_, index) => ({
+      id: `preview-${index + 1}`,
+      name: `2${String.fromCharCode(65 + index)}桌`,
+      captainPublicId: captainCandidates.value[index]?.publicId || '',
+      entryUuids: createRoundForm.strategy === 'MANUAL' ? [] : source.filter((_, entryIndex) => entryIndex % count === index).map((entry) => entry.uuid),
+    }))
+  }
+  previewNextRoundTables.value = tables.map((table) => ({ ...table, targetCount: Number(createRoundForm.targetCount || 3), status: 'DRAFT', rankings: [] }))
+}
+
+function finishCreateRound() {
+  const nextRound = {
+    id: 'round-2',
+    name: '第二轮',
+    type: 'RANKING',
+    status: 'DRAFT',
+    tables: previewNextRoundTables.value.map((table, index) => ({
+      ...table,
+      id: `r2-${index + 1}`,
+      targetCount: Number(createRoundForm.targetCount || 3),
+      rankings: buildEmptyRankings(Number(createRoundForm.targetCount || 3), createRoundForm.targetMode),
+    })),
+  }
+  const existingIndex = rounds.value.findIndex((round) => round.id === 'round-2')
+  if (existingIndex >= 0) rounds.value.splice(existingIndex, 1, nextRound)
+  else rounds.value.splice(1, 0, nextRound)
+  activeRoundId.value = 'round-2'
+  selectedRoundTableId.value = nextRound.tables[0]?.id || ''
+  createRoundDialogOpen.value = false
+  ElMessage.success('第二轮已从晋级池创建')
+}
+
+function buildEmptyRankings(count, mode = 'TOP3') {
+  const labels = mode === 'MEDALS' ? ['金奖', '银奖', '铜奖'] : mode === 'CHAMPION' ? ['总冠军'] : ['第 1 名', '第 2 名', '第 3 名']
+  return Array.from({ length: count }, (_, index) => ({ rank: index + 1, label: labels[index] || `第 ${index + 1} 名`, uuid: '' }))
+}
+
+function getRankingSlots(table) {
+  if (table.rankings?.length) return table.rankings
+  return buildEmptyRankings(Number(table.targetCount || 3))
+}
+
+function getFilledRankingCount(table) {
+  return getRankingSlots(table).filter((slot) => slot.uuid).length
+}
+
+function buildAwardDrafts() {
+  const second = rounds.value.find((round) => round.id === 'round-2')
+  const categories = [...new Set(roundEntryPool.value.map((entry) => entry.categoryName))]
+  return categories.flatMap((category) => {
+    const categoryEntries = roundEntryPool.value.filter((entry) => entry.categoryName === category && entry.advanced)
+    const rankedUuid = second?.tables.flatMap((table) => getRankingSlots(table)).find((slot) => categoryEntries.some((entry) => entry.uuid === slot.uuid))?.uuid
+    return ['金奖', '银奖', '铜奖'].map((slot, index) => ({ category, slot, uuid: index === 0 ? rankedUuid || categoryEntries[index]?.uuid : categoryEntries[index]?.uuid || '' }))
+  }).filter((item) => item.uuid || item.slot === '金奖')
+}
+
+function getEntryAward(uuid) {
+  return awardDrafts.value.find((award) => award.uuid === uuid)?.slot || ''
+}
+
+function getEntryPath(uuid) {
+  const parts = []
+  rounds.value.forEach((round) => {
+    const table = round.tables.find((item) => item.entryUuids.includes(uuid))
+    if (!table) return
+    if (round.type === 'SCORE') {
+      parts.push(`${round.name} ${table.name} ${roundEntryPool.value.find((entry) => entry.uuid === uuid)?.advanced ? '晋级' : '待定'}`)
+    } else {
+      const slot = getRankingSlots(table).find((item) => item.uuid === uuid)
+      parts.push(`${round.name} ${table.name}${slot ? ` ${slot.label}` : ''}`)
+    }
+  })
+  return parts.join(' -> ') || '-'
+}
+
+function publishMockResults() {
+  ElMessage.success('结果发布前端原型已完成，后端发布接口待接入')
 }
 
 function addEntryField() {
@@ -1220,15 +1696,7 @@ function addEntryField() {
 
 function addJudgeTable() {
   const code = String.fromCharCode(65 + judgeTableForm.length)
-  const table = {
-    localId: `new-table-${Date.now()}`,
-    tableName: `${code}桌`,
-    captainCount: 0,
-    professionalCount: 0,
-    crossCount: 0,
-    finalized: 0,
-    total: 0,
-  }
+  const table = { localId: `new-table-${Date.now()}`, tableName: `${code}桌`, captainCount: 0, professionalCount: 0, crossCount: 0 }
   judgeTableForm.push(table)
   selectedTableLocalId.value = table.localId
 }
@@ -1237,66 +1705,18 @@ function removeItem(list, index) {
   list.splice(index, 1)
 }
 
-function addCrossScoreDimension(config) {
-  if (config.dimensions.length >= 4) {
-    ElMessage.warning('跨界评审需配置 2-4 个维度')
-    return
-  }
-  const next = config.dimensions.length + 1
-  config.dimensions.push({
-    key: `cross_${next}`,
-    label: '',
-    maxScore: 10,
-    notePrompt: '',
-    localId: `cross-new-${Date.now()}-${next}`,
-  })
-}
-
-function removeScoreDimension(config, index) {
-  if (config.role === 'CROSS' && config.dimensions.length <= 2) {
-    ElMessage.warning('跨界评审需配置 2-4 个维度')
-    return
-  }
-  config.dimensions.splice(index, 1)
-}
-
-function scoreConfigHint(config) {
-  if (config.role === 'CROSS') {
-    return '可配置 2-4 个维度，总分 50'
-  }
-  if (config.role === 'PROFESSIONAL') {
-    return '专业评审固定 5 个维度'
-  }
-  return '桌长填写共识分和综合评语'
-}
-
-function defaultMinCommentLength(role) {
-  if (role === 'CROSS') {
-    return 50
-  }
-  if (role === 'PROFESSIONAL') {
-    return 30
-  }
-  return 0
-}
-
 function removeJudgeTable(index) {
   const [table] = judgeTableForm.splice(index, 1)
   if (table) {
     for (let i = judgeAssignmentForm.length - 1; i >= 0; i -= 1) {
-      if (judgeAssignmentForm[i].tableLocalId === table.localId) {
-        judgeAssignmentForm.splice(i, 1)
-      }
+      if (judgeAssignmentForm[i].tableLocalId === table.localId) judgeAssignmentForm.splice(i, 1)
     }
   }
   selectedTableLocalId.value = judgeTableForm[0]?.localId || null
 }
 
 function assignmentsForTable(table, role) {
-  return judgeAssignmentForm.filter((assignment) => {
-    const matchesTable = assignment.tableLocalId === table.localId
-    return matchesTable && (!role || assignment.role === role)
-  })
+  return judgeAssignmentForm.filter((assignment) => assignment.tableLocalId === table.localId && (!role || assignment.role === role))
 }
 
 function selectAssignmentTarget(table, role) {
@@ -1306,7 +1726,7 @@ function selectAssignmentTarget(table, role) {
 
 function addJudgeToTarget(judge) {
   if (!selectedTable.value) {
-    ElMessage.warning('请先选择要加入的评审桌')
+    ElMessage.warning('请先选择要加入的基础桌')
     return
   }
   if (!isJudgeActive(judge)) {
@@ -1330,9 +1750,7 @@ function addJudgeToTarget(judge) {
 
 function removeAssignment(assignment) {
   const index = judgeAssignmentForm.findIndex((item) => item.localId === assignment.localId)
-  if (index >= 0) {
-    judgeAssignmentForm.splice(index, 1)
-  }
+  if (index >= 0) judgeAssignmentForm.splice(index, 1)
 }
 
 function countAssignedRole(role) {
@@ -1340,16 +1758,12 @@ function countAssignedRole(role) {
 }
 
 function startJudgeDrag(judge) {
-  if (!editable.value.judgeTables || !isJudgeActive(judge)) {
-    return
-  }
+  if (!editable.value.judgeTables || !isJudgeActive(judge)) return
   draggingItem.value = { type: 'judge', judgePublicId: judge.publicId }
 }
 
 function startAssignmentDrag(assignment) {
-  if (!editable.value.judgeTables) {
-    return
-  }
+  if (!editable.value.judgeTables) return
   draggingItem.value = { type: 'assignment', localId: assignment.localId, judgePublicId: assignment.judgePublicId }
 }
 
@@ -1358,9 +1772,7 @@ function clearDrag() {
 }
 
 function dropOnRole(table, role) {
-  if (!editable.value.judgeTables || !draggingItem.value) {
-    return
-  }
+  if (!editable.value.judgeTables || !draggingItem.value) return
   selectedTableLocalId.value = table.localId
   selectedRole.value = role
   if (draggingItem.value.type === 'assignment') {
@@ -1373,9 +1785,7 @@ function dropOnRole(table, role) {
     return
   }
   const judge = getJudge(draggingItem.value.judgePublicId)
-  if (judge) {
-    addJudgeToTarget(judge)
-  }
+  if (judge) addJudgeToTarget(judge)
   clearDrag()
 }
 
@@ -1383,18 +1793,10 @@ function tableValidationIssues(table) {
   const issues = []
   const captainCount = assignmentsForTable(table, 'CAPTAIN').length
   const totalCount = assignmentsForTable(table).length
-  if (!table.tableName?.trim()) {
-    issues.push('评审桌名称不能为空')
-  }
-  if (captainCount === 0) {
-    issues.push(`${table.tableName || '未命名评审桌'}缺少桌长`)
-  }
-  if (captainCount > 1) {
-    issues.push(`${table.tableName || '未命名评审桌'}有 ${captainCount} 名桌长`)
-  }
-  if (totalCount === 0) {
-    issues.push(`${table.tableName || '未命名评审桌'}尚未分配评委`)
-  }
+  if (!table.tableName?.trim()) issues.push('基础桌名称不能为空')
+  if (captainCount === 0) issues.push(`${table.tableName || '未命名基础桌'}缺少桌长`)
+  if (captainCount > 1) issues.push(`${table.tableName || '未命名基础桌'}有 ${captainCount} 名桌长`)
+  if (totalCount === 0) issues.push(`${table.tableName || '未命名基础桌'}尚未分配评委`)
   return issues
 }
 
@@ -1417,24 +1819,10 @@ function isAssigned(judgePublicId) {
 function inferJudgeRoles(judge) {
   const qualification = `${judge.qualification || ''}${judge.name || ''}`.toLowerCase()
   const roles = []
-  if (qualification.includes('桌长') || qualification.includes('bjcp') || qualification.includes('captain')) {
-    roles.push('CAPTAIN')
-  }
-  if (qualification.includes('专业') || qualification.includes('酿酒') || qualification.includes('bjcp') || qualification.includes('judge')) {
-    roles.push('PROFESSIONAL')
-  }
-  if (qualification.includes('跨界') || qualification.includes('媒体') || qualification.includes('餐饮') || qualification.includes('大众')) {
-    roles.push('CROSS')
-  }
+  if (qualification.includes('桌长') || qualification.includes('bjcp') || qualification.includes('captain')) roles.push('CAPTAIN')
+  if (qualification.includes('专业') || qualification.includes('酿酒') || qualification.includes('bjcp') || qualification.includes('judge')) roles.push('PROFESSIONAL')
+  if (qualification.includes('跨界') || qualification.includes('媒体') || qualification.includes('餐饮') || qualification.includes('大众')) roles.push('CROSS')
   return roles.length ? roles : ['PROFESSIONAL']
-}
-
-function checkJudgeSetup() {
-  if (validationIssues.value.length) {
-    ElMessage.warning(`还有 ${validationIssues.value.length} 项评审配置需要处理`)
-    return
-  }
-  ElMessage.success('评审编排校验通过')
 }
 
 async function saveJudgeDraft() {
@@ -1460,15 +1848,8 @@ async function saveJudgeDraft() {
   detail = await fetchCompetitionDetail(competition.value.id)
   competition.value = normalizeDetail(detail)
   resetForms()
-  ElMessage.success('评审编排已保存')
-}
-
-function publishJudgeSetup() {
-  if (validationIssues.value.length) {
-    ElMessage.warning('发布前请先处理配置检查中的问题')
-    return
-  }
-  ElMessage.success('已完成发布前端演示：评委 H5 将按本场桌次和身份展示')
+  seedRoundPrototype()
+  ElMessage.success('评审人员已保存')
 }
 
 async function saveEntryConfig() {
@@ -1490,36 +1871,21 @@ async function saveEntryConfig() {
     return
   }
   let detail = await updateCompetitionCategories(competition.value.id, { items: categoryItems })
-  if (fieldItems.length) {
-    detail = await updateCompetitionEntryFields(competition.value.id, { items: fieldItems })
-  }
+  if (fieldItems.length) detail = await updateCompetitionEntryFields(competition.value.id, { items: fieldItems })
   competition.value = normalizeDetail(detail)
   resetForms()
+  seedRoundPrototype()
   ElMessage.success('报名配置已保存')
 }
 
-async function saveJudgeTables(quiet = false) {
-  const items = judgeTableForm.filter((table) => table.tableName).map((table) => ({ tableName: table.tableName }))
-  if (!items.length) {
-    ElMessage.warning('至少保留 1 张评审桌')
-    return
-  }
-  const detail = await updateCompetitionJudgeTables(competition.value.id, { items })
-  competition.value = normalizeDetail(detail)
-  resetForms()
-  if (!quiet) {
-    ElMessage.success('评审桌已保存')
-  }
-}
-
 async function saveScoreConfigs() {
-  if (!scoreConfigForm.every((config) => getScoreTotal(config) === 50)) {
-    ElMessage.warning('三类评分表总分都需要为 50 分')
-    return
-  }
   const crossConfig = scoreConfigForm.find((config) => config.role === 'CROSS')
   if (!crossConfig || crossConfig.dimensions.length < 2 || crossConfig.dimensions.length > 4) {
     ElMessage.warning('跨界评审需配置 2-4 个维度')
+    return
+  }
+  if (!scoreConfigForm.every((config) => getScoreTotal(config) === 50)) {
+    ElMessage.warning('三类评分表总分都需要为 50 分')
     return
   }
   await updateScoreConfigs(competition.value.id, {
@@ -1538,11 +1904,43 @@ async function saveScoreConfigs() {
   ElMessage.success('评分表已保存')
 }
 
-async function handleOpenRegistration() {
-  const detail = await openCompetitionRegistration(competition.value.id)
-  competition.value = normalizeDetail(detail)
-  resetForms()
-  ElMessage.success('报名已发布')
+function addCrossScoreDimension(config) {
+  if (config.role !== 'CROSS') return
+  if (config.dimensions.length >= 4) {
+    ElMessage.warning('跨界评审最多配置 4 个维度')
+    return
+  }
+  const existingKeys = new Set(config.dimensions.map((dimension) => dimension.key))
+  let nextIndex = config.dimensions.length + 1
+  while (existingKeys.has(`cross_${nextIndex}`)) nextIndex += 1
+  config.dimensions.push({
+    key: `cross_${nextIndex}`,
+    label: '',
+    maxScore: 10,
+    notePrompt: '',
+    localId: `CROSS-${Date.now()}-${nextIndex}`,
+  })
+}
+
+function removeScoreDimension(config, index) {
+  if (config.role !== 'CROSS') return
+  if (config.dimensions.length <= 2) {
+    ElMessage.warning('跨界评审至少保留 2 个维度')
+    return
+  }
+  config.dimensions.splice(index, 1)
+}
+
+function scoreConfigHint(config) {
+  if (config.role === 'CROSS') return '可配置 2-4 个维度，总分 50'
+  if (config.role === 'PROFESSIONAL') return '专业评审固定 5 个维度'
+  return '桌长填写共识分和综合评语'
+}
+
+function defaultMinCommentLength(role) {
+  if (role === 'CROSS') return 50
+  if (role === 'PROFESSIONAL') return 30
+  return 0
 }
 
 async function handlePrimaryAction() {
@@ -1550,82 +1948,39 @@ async function handlePrimaryAction() {
 }
 
 async function handleStageAction(action) {
-  if (action === 'fixRegistration') {
-    const pending = registrationRequiredChecks.value.find((check) => check.state !== 'done')
-    activeTab.value = pending?.targetTab || 'entryConfig'
-    return
-  }
   if (action === 'publishRegistration') {
-    await confirmPublishRegistration()
-    return
-  }
-  if (action === 'startRegistrationNow') {
-    await confirmPendingStageAction('立即开始报名', '系统会将报名开始时间调整为当前时间，厂商可以提交酒款。')
-    return
-  }
-  if (action === 'closeRegistration') {
-    await confirmPendingStageAction('结束报名', '结束后厂商不能再提交新酒款。已提交但未付款的酒款仍可在后台处理。')
-    return
-  }
-  if (action === 'moveToJudgingPrep') {
-    showPendingStageMessage('进入评审准备')
-    activeTab.value = 'judges'
-    return
-  }
-  if (action === 'startJudging') {
-    showPendingStageMessage('开始评审')
-    activeTab.value = 'judges'
-    return
-  }
-  if (action === 'moveToResults' || action === 'publishResults') {
-    showPendingStageMessage(stagePrimaryAction.value.text)
-    activeTab.value = 'results'
-    return
-  }
-  if (action === 'archiveCompetition') {
-    showPendingStageMessage('归档比赛')
-  }
-}
-
-async function confirmPublishRegistration() {
-  try {
-    await ElMessageBox.confirm(
-      `发布后厂商可看到本场比赛。报名提交将按开始时间开放。\n报名开始：${formatDateTime(competition.value.registrationStart)}\n报名截止：${formatDateTime(competition.value.registrationDeadline)}\n报名费：${competition.value.entryFee} 元 / 款`,
-      '发布报名？',
-      {
+    try {
+      await ElMessageBox.confirm('发布后厂商可看到本场比赛。', '发布报名？', {
         confirmButtonText: '发布报名',
         cancelButtonText: '取消',
         type: 'warning',
-      },
-    )
-    await handleOpenRegistration()
-  } catch {
-    // User cancelled.
+      })
+      const detail = await openCompetitionRegistration(competition.value.id)
+      competition.value = normalizeDetail(detail)
+      resetForms()
+      seedRoundPrototype()
+      ElMessage.success('报名已发布')
+    } catch {
+      // User cancelled.
+    }
+    return
   }
-}
-
-async function confirmPendingStageAction(title, message) {
-  try {
-    await ElMessageBox.confirm(message, `${title}？`, {
-      confirmButtonText: title,
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
-    showPendingStageMessage(title)
-  } catch {
-    // User cancelled.
+  if (action === 'publishCurrentRound') {
+    publishCurrentRound()
+    return
+  }
+  if (action === 'createNextRound') {
+    activeTab.value = 'rounds'
+    openCreateRoundDialog()
+    return
+  }
+  if (action === 'viewProgress') {
+    activeTab.value = 'progress'
   }
 }
 
 function showPendingStageMessage(actionName) {
-  ElMessage.info(`${actionName}的后端状态接口待接入，当前先完成前端流程设计`)
-}
-
-function getProgressWidth(table) {
-  if (!table.total) {
-    return '0%'
-  }
-  return `${Math.min(100, Math.round((table.finalized / table.total) * 100))}%`
+  ElMessage.info(`${actionName}的后端接口待接入，当前先完成前端原型`)
 }
 </script>
 
@@ -1660,6 +2015,7 @@ function getProgressWidth(table) {
 
 h1,
 h2,
+h3,
 p {
   margin: 0;
 }
@@ -1695,7 +2051,6 @@ svg {
 .panel-heading,
 .alert-list p,
 .check-item,
-.stack-list label,
 .panel-actions,
 .progress-row,
 .publish-actions,
@@ -1717,18 +2072,6 @@ svg {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 18px;
   align-items: start;
-}
-
-.title-block {
-  min-width: 0;
-}
-
-.meta-line,
-small,
-.panel-heading span,
-.publish-card p,
-.empty-line {
-  color: var(--muted);
 }
 
 .title-line {
@@ -1770,17 +2113,6 @@ small,
   background: rgba(255, 255, 255, 0.03);
 }
 
-.tool-button,
-.icon-button {
-  gap: 8px;
-  min-height: 42px;
-  padding: 0 12px;
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.035);
-}
-
 .breadcrumb-link {
   justify-self: start;
   gap: 7px;
@@ -1797,6 +2129,17 @@ small,
   color: var(--gold-soft);
 }
 
+.tool-button,
+.icon-button {
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 12px;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
 .tool-button.primary {
   color: var(--gold-soft);
   border-color: rgba(216, 169, 53, 0.32);
@@ -1811,16 +2154,12 @@ small,
   padding: 0;
 }
 
-.state-badge {
-  display: inline-flex;
-  padding: 7px 10px;
-  color: var(--green);
-  font-weight: 800;
-  border: 1px solid rgba(111, 207, 122, 0.2);
-  border-radius: 8px;
-  background: rgba(111, 207, 122, 0.1);
+.full-width {
+  justify-content: center;
+  width: 100%;
 }
 
+.state-badge,
 .window-badge {
   display: inline-flex;
   padding: 7px 10px;
@@ -1830,26 +2169,30 @@ small,
   background: rgba(255, 255, 255, 0.035);
 }
 
+.state-badge {
+  color: var(--green);
+  border-color: rgba(111, 207, 122, 0.2);
+  background: rgba(111, 207, 122, 0.1);
+}
+
+.state-badge.gold,
+.state-badge.warning,
+.window-badge.gold,
+.window-badge.warning {
+  color: var(--gold-soft);
+  border-color: rgba(216, 169, 53, 0.3);
+  background: rgba(216, 169, 53, 0.08);
+}
+
+.state-badge.neutral,
+.window-badge.neutral {
+  color: #a9bbc2;
+}
+
 .window-badge.success {
   color: var(--green);
   border-color: rgba(111, 207, 122, 0.22);
   background: rgba(111, 207, 122, 0.08);
-}
-
-.window-badge.gold {
-  color: var(--gold-soft);
-  border-color: rgba(216, 169, 53, 0.28);
-  background: rgba(216, 169, 53, 0.08);
-}
-
-.window-badge.warning {
-  color: #f1bd79;
-  border-color: rgba(242, 153, 74, 0.24);
-  background: rgba(242, 153, 74, 0.08);
-}
-
-.window-badge.neutral {
-  color: #a9bbc2;
 }
 
 .head-action-group {
@@ -1903,24 +2246,6 @@ small,
   background: transparent;
 }
 
-.more-actions-menu button:hover {
-  color: var(--gold-soft);
-  background: rgba(216, 169, 53, 0.08);
-}
-
-.state-badge.gold,
-.state-badge.warning {
-  color: var(--gold-soft);
-  border-color: rgba(216, 169, 53, 0.3);
-  background: rgba(216, 169, 53, 0.08);
-}
-
-.state-badge.neutral {
-  color: #a9bbc2;
-  border-color: var(--line);
-  background: rgba(255, 255, 255, 0.03);
-}
-
 .detail-shell {
   flex: 1 1 auto;
   min-height: 0;
@@ -1933,7 +2258,7 @@ small,
   flex: 0 0 auto;
   gap: 8px;
   flex-wrap: wrap;
-  width: min(100%, 1280px);
+  width: min(100%, 1360px);
   margin: 0 auto;
 }
 
@@ -1973,26 +2298,9 @@ small,
 
 .entry-config-panel,
 .score-config-panel {
+  width: min(100%, 1280px);
   margin: 0 auto;
   align-content: start;
-}
-
-.entry-config-panel {
-  width: min(100%, 1180px);
-}
-
-.score-config-panel {
-  width: min(100%, 1280px);
-}
-
-.panel-page-title {
-  display: grid;
-  gap: 6px;
-  margin-bottom: 4px;
-}
-
-.panel-page-title h2 {
-  font-size: 26px;
 }
 
 .overview-grid,
@@ -2009,7 +2317,14 @@ small,
 }
 
 .metric-card,
-.panel-card {
+.panel-card,
+.judge-nav-panel,
+.panel-card.tight,
+.judge-table-card,
+.judge-command-bar,
+.round-pool-panel,
+.round-check-panel .panel-card,
+.round-table-card {
   min-width: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -2028,35 +2343,21 @@ small,
   gap: 8px;
 }
 
-.metric-card-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
 .metric-card strong {
   color: var(--text);
   font-size: 24px;
 }
 
-.metric-card p {
-  line-height: 1.45;
-}
-
-.action-card {
-  border-color: rgba(216, 169, 53, 0.18);
-}
-
-.issue-card {
-  border-color: rgba(224, 82, 82, 0.28);
-  background: rgba(224, 82, 82, 0.055);
-}
-
-.issue-summary,
-.score-warning {
-  margin-bottom: 12px;
-  color: #ffb4ad;
+small,
+.panel-heading span,
+.empty-line,
+.metric-card p,
+.round-note,
+.round-members span,
+.round-entry-card small,
+.round-entry-card em,
+.wizard-panel p {
+  color: var(--muted);
 }
 
 .panel-heading {
@@ -2065,12 +2366,21 @@ small,
   margin-bottom: 14px;
 }
 
+.panel-heading.compact {
+  margin-bottom: 8px;
+}
+
+.panel-heading.compact h2 {
+  font-size: 16px;
+}
+
 .check-list,
 .alert-list,
-.stack-list,
 .progress-list,
 .dimension-list,
-.library-summary {
+.library-summary,
+.round-entry-list,
+.award-list {
   display: grid;
   gap: 10px;
 }
@@ -2086,7 +2396,8 @@ small,
   background: rgba(255, 255, 255, 0.026);
 }
 
-.alert-list p span {
+.alert-list p span,
+.check-item span {
   flex: 1;
 }
 
@@ -2099,10 +2410,6 @@ small,
   background: rgba(242, 153, 74, 0.09);
 }
 
-.check-item span {
-  flex: 1;
-}
-
 .check-item.done,
 .alert-list p.success,
 .success {
@@ -2110,14 +2417,11 @@ small,
 }
 
 .check-item.pending,
-.check-item.locked,
 .alert-list p.warning {
   color: #f1bd79;
   background: rgba(242, 153, 74, 0.09);
 }
 
-.check-item.invalid,
-.check-item.data_issue,
 .alert-list p.danger,
 .danger {
   color: #ff9089;
@@ -2131,23 +2435,6 @@ small,
   border: 1px solid rgba(216, 169, 53, 0.28);
   border-radius: 8px;
   background: rgba(216, 169, 53, 0.07);
-}
-
-.text-action {
-  flex: 0 0 auto;
-  min-height: 28px;
-  padding: 0 8px;
-  color: var(--gold-soft);
-  border: 1px solid rgba(216, 169, 53, 0.24);
-  border-radius: 6px;
-  background: rgba(216, 169, 53, 0.06);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.text-action:hover {
-  border-color: rgba(216, 169, 53, 0.42);
-  background: rgba(216, 169, 53, 0.1);
 }
 
 .future-task-list {
@@ -2176,10 +2463,6 @@ small,
   min-width: 0;
 }
 
-.future-task small {
-  line-height: 1.35;
-}
-
 .future-task em {
   color: #f1bd79;
   font-style: normal;
@@ -2191,18 +2474,41 @@ small,
   color: var(--green);
 }
 
-.future-task:hover {
-  border-color: rgba(216, 169, 53, 0.24);
-  background: rgba(216, 169, 53, 0.045);
-}
-
-.pill-list {
+.round-path {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.pill-list span {
+.round-path span {
+  display: grid;
+  gap: 3px;
+  min-width: 132px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.026);
+}
+
+.round-path span.active {
+  color: var(--gold-soft);
+  border-color: rgba(216, 169, 53, 0.32);
+  background: rgba(216, 169, 53, 0.08);
+}
+
+.round-path.wide span {
+  flex: 1;
+}
+
+.pill-list,
+.library-summary div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pill-list span,
+.library-summary span {
   padding: 7px 10px;
   color: var(--text);
   border: 1px solid var(--line);
@@ -2217,30 +2523,6 @@ small,
 .library-summary strong {
   color: var(--text);
   font-size: 18px;
-}
-
-.library-summary div {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.library-summary span {
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  padding: 0 10px;
-  color: var(--gold-soft);
-  border: 1px solid rgba(216, 169, 53, 0.22);
-  border-radius: 999px;
-  background: rgba(216, 169, 53, 0.07);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.category-card .panel-heading > div {
-  display: grid;
-  gap: 4px;
 }
 
 .category-editor-list {
@@ -2261,27 +2543,6 @@ small,
   grid-template-columns: 140px minmax(0, 1fr);
   gap: 24px;
   align-items: center;
-  padding-block: 14px;
-}
-
-.library-card h2 {
-  font-size: 20px;
-}
-
-.library-card .library-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px 18px;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.library-card .library-summary strong {
-  font-size: 17px;
-}
-
-.field-config-card {
-  min-width: 0;
 }
 
 input,
@@ -2297,12 +2558,6 @@ select {
   outline: 0;
   background-color: rgba(7, 14, 17, 0.72);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
-  transition: border-color 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease;
-}
-
-input:hover,
-select:hover {
-  border-color: rgba(224, 184, 74, 0.24);
 }
 
 input:focus,
@@ -2314,28 +2569,6 @@ select:focus {
 
 input::placeholder {
   color: var(--faint);
-}
-
-input:disabled,
-select:disabled {
-  color: #8fa0a8;
-  -webkit-text-fill-color: #8fa0a8;
-  border-color: rgba(219, 232, 237, 0.08);
-  background-color: rgba(9, 16, 19, 0.78);
-  opacity: 1;
-}
-
-input[type="number"] {
-  text-align: left;
-  appearance: textfield;
-  -moz-appearance: textfield;
-}
-
-input[type="number"]::-webkit-outer-spin-button,
-input[type="number"]::-webkit-inner-spin-button {
-  margin: 0;
-  appearance: none;
-  -webkit-appearance: none;
 }
 
 input[type="checkbox"] {
@@ -2350,67 +2583,16 @@ input[type="checkbox"] {
   accent-color: var(--gold-soft);
 }
 
-select {
-  appearance: none;
-  padding-right: 28px;
-  background-image:
-    linear-gradient(45deg, transparent 50%, #9eb0b7 50%),
-    linear-gradient(135deg, #9eb0b7 50%, transparent 50%);
-  background-position:
-    calc(100% - 16px) 17px,
-    calc(100% - 11px) 17px;
-  background-size: 5px 5px, 5px 5px;
-  background-repeat: no-repeat;
-}
-
-.stack-list label {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-}
-
 .check-control {
-  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  min-width: 0;
   color: var(--muted);
   white-space: nowrap;
 }
 
-.visibility-label {
-  cursor: help;
-}
-
-.visibility-label::after {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + 10px);
-  z-index: 20;
-  width: 260px;
-  padding: 10px 12px;
-  color: var(--text);
-  border: 1px solid rgba(216, 169, 53, 0.26);
-  border-radius: 8px;
-  background: rgba(18, 27, 31, 0.98);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.26);
-  content: attr(data-tooltip);
-  font-size: 12px;
-  line-height: 1.55;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(4px);
-  transition: opacity 0.16s ease, transform 0.16s ease;
-}
-
-.visibility-label:hover::after,
-.visibility-label:focus-within::after {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.data-table {
+.data-table,
+.path-table {
   display: grid;
   gap: 8px;
 }
@@ -2430,17 +2612,17 @@ select {
 
 .field-table .table-head,
 .field-table .table-row {
-  grid-template-columns: minmax(160px, 1fr) minmax(112px, 132px) minmax(220px, 1.35fr) 72px 96px 38px;
-}
-
-.field-readonly-table .table-head,
-.field-readonly-table .table-row {
-  grid-template-columns: minmax(160px, 1fr) minmax(112px, 128px) minmax(220px, 1.35fr) 80px 104px;
+  grid-template-columns: minmax(150px, 1fr) minmax(104px, 124px) minmax(190px, 1.2fr) 72px 96px 38px;
 }
 
 .entries-table .table-head,
 .entries-table .table-row {
-  grid-template-columns: minmax(180px, 1fr) 120px 180px 100px 110px;
+  grid-template-columns: minmax(180px, 1.2fr) 88px 110px 160px minmax(260px, 1.5fr) 96px;
+}
+
+.path-table .table-head,
+.path-table .table-row {
+  grid-template-columns: minmax(180px, 1fr) 110px minmax(360px, 2fr) 110px;
 }
 
 .judge-workbench {
@@ -2459,26 +2641,8 @@ select {
 }
 
 .judge-nav-panel,
-.panel-card.tight,
-.judge-table-card,
-.judge-command-bar {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel);
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.16);
-}
-
-.judge-nav-panel,
 .panel-card.tight {
   padding: 12px;
-}
-
-.panel-heading.compact {
-  margin-bottom: 8px;
-}
-
-.panel-heading.compact h2 {
-  font-size: 16px;
 }
 
 .table-nav-item,
@@ -2502,22 +2666,10 @@ select {
   text-align: left;
 }
 
-.table-nav-item strong,
-.table-nav-item span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .table-nav-item.active {
   color: var(--gold-soft);
   border-color: rgba(216, 169, 53, 0.34);
   background: rgba(216, 169, 53, 0.08);
-}
-
-.table-nav-item.danger:not(.active) {
-  border-color: rgba(242, 153, 74, 0.22);
 }
 
 .table-nav-add,
@@ -2556,18 +2708,9 @@ select {
   line-height: 1.35;
 }
 
-.left-check-summary p svg {
-  flex: 0 0 auto;
-}
-
-.left-check-summary p:first-of-type:last-child {
-  color: var(--green);
-}
-
 .assignment-board {
   display: grid;
   gap: 10px;
-  min-width: 0;
 }
 
 .judge-command-bar {
@@ -2575,151 +2718,98 @@ select {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 58px;
-  padding: 10px 12px;
+  padding: 12px;
 }
 
 .metric-strip {
   display: flex;
-  align-items: center;
-  gap: 8px;
   flex-wrap: wrap;
-  min-width: 0;
+  gap: 8px;
 }
 
 .metric-strip span {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  min-height: 34px;
-  padding: 0 10px;
-  color: var(--muted);
-  border: 1px solid rgba(219, 232, 237, 0.08);
+  padding: 7px 10px;
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.022);
-}
-
-.metric-strip strong {
-  color: var(--text);
-  font-size: 18px;
-}
-
-.assignment-card small,
-.pool-card small,
-.pool-card em,
-.judge-table-head p {
-  color: var(--muted);
-}
-
-.command-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  flex: 0 0 auto;
-}
-
-.command-actions .tool-button {
-  min-height: 38px;
-  padding: 0 10px;
+  background: rgba(255, 255, 255, 0.026);
 }
 
 .judge-table-card {
-  min-width: 0;
   padding: 12px;
 }
 
 .judge-table-head {
   display: flex;
-  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .judge-table-head label {
   display: grid;
-  grid-template-columns: 52px minmax(0, 180px);
-  gap: 8px;
-  align-items: center;
-}
-
-.judge-table-head label span {
-  color: var(--muted);
-}
-
-.judge-table-head p {
-  margin-top: 8px;
+  gap: 6px;
 }
 
 .role-lanes {
   display: grid;
-  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.2fr) minmax(0, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .role-lane {
-  min-width: 0;
-  padding: 9px;
-  border: 1px solid rgba(219, 232, 237, 0.08);
+  display: grid;
+  gap: 10px;
+  min-height: 124px;
+  padding: 12px;
+  border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.022);
-  cursor: pointer;
-  transition: border-color 0.16s ease, background 0.16s ease;
 }
 
 .role-lane.active {
-  border-color: rgba(216, 169, 53, 0.36);
+  border-color: rgba(216, 169, 53, 0.34);
   background: rgba(216, 169, 53, 0.06);
-}
-
-.role-lane > header,
-.assignment-card,
-.pool-card,
-.inline-search {
-  display: flex;
-  align-items: center;
-}
-
-.role-lane > header {
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.role-lane > header div {
-  display: grid;
-  gap: 4px;
-}
-
-.role-lane > header span {
-  color: var(--muted);
-  font-size: 12px;
 }
 
 .assignment-card-list,
 .judge-pool-list {
   display: grid;
-  gap: 7px;
-}
-
-.assignment-card {
   gap: 8px;
-  min-width: 0;
+}
+
+.assignment-card,
+.pool-card {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: center;
   padding: 9px;
-  border: 1px solid rgba(219, 232, 237, 0.08);
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(7, 14, 17, 0.46);
-  cursor: grab;
+  background: rgba(255, 255, 255, 0.026);
 }
 
-.assignment-card:active,
-.pool-card:active {
-  cursor: grabbing;
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  color: var(--gold-soft);
+  border: 1px solid rgba(216, 169, 53, 0.24);
+  border-radius: 8px;
+  background: rgba(216, 169, 53, 0.08);
+  font-weight: 900;
 }
 
-.assignment-main {
-  flex: 1;
+.avatar.small {
+  width: 28px;
+  height: 28px;
+}
+
+.assignment-main,
+.pool-card div {
+  display: grid;
+  gap: 3px;
   min-width: 0;
 }
 
@@ -2728,127 +2818,289 @@ select {
 .pool-card strong,
 .pool-card small,
 .pool-card em {
-  display: block;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.icon-button.ghost {
-  flex: 0 0 auto;
-  width: 32px;
-  min-height: 32px;
-  color: #f1bd79;
-  background: rgba(255, 255, 255, 0.02);
-}
-
-.avatar {
-  display: grid;
-  flex: 0 0 auto;
-  place-items: center;
-  width: 36px;
-  height: 36px;
+.pool-card em {
   color: var(--gold-soft);
-  font-weight: 800;
-  border: 1px solid rgba(216, 169, 53, 0.26);
-  border-radius: 8px;
-  background: rgba(216, 169, 53, 0.09);
-}
-
-.avatar.small {
-  width: 30px;
-  height: 30px;
-  font-size: 13px;
+  font-style: normal;
+  font-size: 12px;
 }
 
 .inline-search {
-  gap: 9px;
-  min-height: 42px;
-  padding: 0 10px;
+  position: relative;
+  display: block;
+}
+
+.inline-search svg {
+  position: absolute;
+  top: 50%;
+  left: 10px;
   color: var(--muted);
-  border: 1px solid rgba(219, 232, 237, 0.14);
-  border-radius: 8px;
-  background: rgba(7, 14, 17, 0.68);
+  transform: translateY(-50%);
 }
 
 .inline-search input {
-  min-height: auto;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
+  padding-left: 32px;
 }
 
 .pool-filters {
   display: flex;
-  gap: 6px;
   flex-wrap: wrap;
-  margin: 8px 0;
+  gap: 6px;
 }
 
 .pool-filters button {
   width: auto;
-  min-height: 32px;
-  padding: 0 8px;
-  color: #a9bbc2;
+  min-height: 30px;
+  padding: 0 9px;
+  color: var(--muted);
   font-size: 12px;
 }
 
 .pool-filters button.active {
   color: var(--gold-soft);
-  border-color: rgba(216, 169, 53, 0.32);
+  border-color: rgba(216, 169, 53, 0.28);
   background: rgba(216, 169, 53, 0.08);
 }
 
-.judge-pool-list {
-  max-height: 520px;
-  overflow-y: auto;
-  padding-right: 3px;
+.round-flow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
 }
 
-.pool-card {
-  gap: 8px;
-  min-width: 0;
-  padding: 9px;
-  border: 1px solid rgba(219, 232, 237, 0.08);
+.round-flow.compact-flow {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.round-flow-item {
+  display: grid;
+  gap: 4px;
+  min-height: 78px;
+  padding: 12px;
+  color: var(--text);
+  text-align: left;
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.024);
-  cursor: grab;
+  background: rgba(255, 255, 255, 0.026);
 }
 
-.pool-card.assigned {
+.round-flow-item.active {
+  color: var(--gold-soft);
+  border-color: rgba(216, 169, 53, 0.34);
+  background: rgba(216, 169, 53, 0.08);
+}
+
+.round-flow-item.create {
+  border-style: dashed;
+}
+
+.round-flow-item em {
+  color: var(--muted);
+  font-style: normal;
+}
+
+.round-summary-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.round-summary-strip span {
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.026);
+}
+
+.round-workbench {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr) 300px;
+  gap: 10px;
+  align-items: start;
+}
+
+.round-pool-panel,
+.round-check-panel {
+  position: sticky;
+  top: 0;
+}
+
+.round-pool-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.round-entry-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.026);
+}
+
+.round-entry-card.assigned {
+  border-color: rgba(111, 207, 122, 0.22);
   background: rgba(111, 207, 122, 0.055);
 }
 
-.pool-card.inactive {
-  opacity: 0.58;
-}
-
-.pool-card > div {
-  flex: 1;
+.round-entry-card div {
+  display: grid;
+  gap: 3px;
   min-width: 0;
 }
 
-.pool-card em {
-  margin-top: 4px;
+.round-entry-card strong,
+.round-entry-card small,
+.round-entry-card em {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.round-entry-card em {
   font-style: normal;
   font-size: 12px;
 }
 
-.judge-table .table-head,
-.judge-table .table-row {
-  grid-template-columns: minmax(160px, 1fr) 100px 110px 110px 40px;
-}
-
-.table-row strong {
-  color: var(--text);
-}
-
-.panel-actions {
-  justify-content: flex-end;
+.round-table-board {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  margin-top: 14px;
+}
+
+.round-table-card {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.round-table-card.active {
+  border-color: rgba(216, 169, 53, 0.34);
+  background: rgba(216, 169, 53, 0.045);
+}
+
+.round-table-card.danger:not(.active) {
+  border-color: rgba(242, 153, 74, 0.22);
+}
+
+.round-table-card header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.round-table-card h3 {
+  margin-top: 3px;
+  font-size: 22px;
+}
+
+.mini-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.round-status {
+  align-self: start;
+  padding: 5px 8px;
+  color: var(--gold-soft);
+  border: 1px solid rgba(216, 169, 53, 0.24);
+  border-radius: 8px;
+  background: rgba(216, 169, 53, 0.08);
+  font-style: normal;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.round-status.LOCKED,
+.round-status.PUBLISHED {
+  color: var(--green);
+  border-color: rgba(111, 207, 122, 0.24);
+  background: rgba(111, 207, 122, 0.08);
+}
+
+.round-table-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.round-table-meta span,
+.round-members,
+.round-table-entries article,
+.ranking-slots span,
+.award-list article,
+.wizard-stat-grid span,
+.wizard-preview-tables article {
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.026);
+}
+
+.round-table-meta span,
+.round-members {
+  display: grid;
+  gap: 3px;
+}
+
+.round-table-entries {
+  display: grid;
+  gap: 7px;
+}
+
+.round-table-entries article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.round-table-entries article span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.round-table-entries button {
+  color: var(--gold-soft);
+  border: 0;
+  background: transparent;
+}
+
+.table-warning {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  color: #f1bd79;
+  font-size: 12px;
+}
+
+.stack-field {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.stack-field span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .score-panels {
@@ -2856,17 +3108,15 @@ select {
   gap: 14px;
 }
 
-.dimension-list {
-  gap: 8px;
-}
-
 .score-config-card {
+  display: grid;
+  gap: 12px;
   padding: 18px;
 }
 
 .score-config-card .panel-heading {
   align-items: flex-start;
-  margin-bottom: 14px;
+  margin-bottom: 2px;
 }
 
 .score-card-actions {
@@ -2900,21 +3150,18 @@ select {
   background: rgba(224, 82, 82, 0.07);
 }
 
-.dimension-head,
-.dimension-row {
-  display: grid;
-  grid-template-columns: minmax(180px, 260px) 96px minmax(0, 1fr) 40px;
-  gap: 10px;
-  align-items: center;
-  min-width: 0;
+.score-warning {
+  margin: 0 0 2px;
+  color: #ffb4ad;
 }
 
 .score-comment-limit {
   display: inline-grid;
   grid-template-columns: auto auto;
-  gap: 8px;
   align-items: center;
-  margin-bottom: 14px;
+  justify-content: flex-start;
+  gap: 8px;
+  margin-bottom: 4px;
 }
 
 .score-comment-limit span {
@@ -2931,45 +3178,25 @@ select {
   display: inline-grid;
   grid-template-columns: 72px auto;
   align-items: center;
-  overflow: hidden;
-  width: 104px;
-  border: 1px solid rgba(219, 232, 237, 0.14);
-  border-radius: 8px;
-  background-color: rgba(7, 14, 17, 0.72);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
-  transition: border-color 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease;
-}
-
-.compact-number-field:focus-within {
-  border-color: rgba(224, 184, 74, 0.5);
-  background-color: rgba(10, 20, 24, 0.92);
-  box-shadow: 0 0 0 3px rgba(216, 169, 53, 0.09);
-}
-
-.compact-number-field input {
-  min-height: 38px;
-  padding: 0 6px 0 10px;
-  text-align: left;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.compact-number-field strong {
-  justify-content: flex-start;
-  min-height: 38px;
-  padding-left: 10px;
-}
-
-.compact-number-field em {
-  padding-right: 10px;
-  color: var(--muted);
   font-style: normal;
   font-size: 13px;
 }
 
+.compact-number-field input {
+  width: 72px;
+}
+
+.dimension-head,
+.dimension-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 260px) 96px minmax(0, 1fr) 40px;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+
 .dimension-head {
-  padding: 0 10px 0;
+  padding: 0 10px;
   color: var(--muted);
   font-size: 12px;
 }
@@ -2989,24 +3216,29 @@ select {
   white-space: nowrap;
 }
 
-.progress-row {
+.dimension-action-placeholder {
+  min-width: 36px;
+}
+
+.progress-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
 }
 
-.progress-row strong {
-  width: 90px;
+.progress-card {
+  display: grid;
+  gap: 12px;
 }
 
-.progress-row em {
-  width: 90px;
-  color: var(--muted);
-  font-style: normal;
-  text-align: right;
+.progress-row {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) 46px;
+  gap: 10px;
 }
 
 .progress-bar {
-  flex: 1;
-  height: 10px;
+  height: 8px;
   overflow: hidden;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.07);
@@ -3015,182 +3247,204 @@ select {
 .progress-bar span {
   display: block;
   height: 100%;
-  border-radius: inherit;
   background: linear-gradient(90deg, var(--green), var(--gold-soft));
 }
 
-.publish-card {
+.ranking-slots {
   display: grid;
-  gap: 14px;
-  align-content: start;
+  gap: 8px;
 }
 
-.empty-panel {
+.ranking-slots span {
   display: grid;
-  gap: 10px;
-  align-content: start;
-  min-height: 170px;
+  gap: 4px;
 }
 
-.empty-panel p {
+.ranking-slots span.filled {
+  color: var(--green);
+  border-color: rgba(111, 207, 122, 0.24);
+  background: rgba(111, 207, 122, 0.07);
+}
+
+.results-layout {
+  align-items: start;
+}
+
+.award-list {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.award-list article {
+  display: grid;
+  gap: 4px;
+}
+
+.award-list strong {
+  color: var(--gold-soft);
+}
+
+.award-list em {
   color: var(--muted);
-}
-
-.publish-actions {
-  gap: 10px;
-  flex-wrap: wrap;
+  font-style: normal;
 }
 
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 80;
+  z-index: 100;
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(3, 8, 10, 0.62);
-  backdrop-filter: blur(8px);
+  background: rgba(1, 7, 9, 0.72);
 }
 
-.time-dialog {
+.round-dialog {
+  width: min(920px, 100%);
+  max-height: min(760px, 92vh);
+  overflow: auto;
   display: grid;
-  gap: 18px;
-  width: min(100%, 560px);
-  padding: 20px;
-  border: 1px solid rgba(219, 232, 237, 0.12);
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(17, 28, 32, 0.98);
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+  background: rgba(15, 24, 28, 0.98);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.42);
 }
 
-.time-dialog header,
-.time-dialog footer {
+.round-dialog header,
+.round-dialog footer {
   display: flex;
-  align-items: flex-start;
   justify-content: space-between;
-  gap: 14px;
-}
-
-.time-dialog header p {
-  margin-top: 8px;
-  color: var(--muted);
-  line-height: 1.5;
-}
-
-.time-dialog-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-}
-
-.time-dialog label {
-  display: grid;
-  gap: 8px;
-}
-
-.time-dialog label span {
-  color: var(--muted);
-}
-
-.time-dialog footer {
-  justify-content: flex-end;
   align-items: center;
 }
 
-.form-error {
-  padding: 10px 12px;
-  color: #ffb4ad;
-  border: 1px solid rgba(224, 82, 82, 0.24);
+.round-dialog footer {
+  justify-content: flex-end;
+}
+
+.wizard-steps {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+}
+
+.wizard-steps button {
+  min-height: 34px;
+  color: var(--muted);
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(224, 82, 82, 0.07);
+  background: rgba(255, 255, 255, 0.026);
+}
+
+.wizard-steps button.active {
+  color: var(--gold-soft);
+  border-color: rgba(216, 169, 53, 0.32);
+  background: rgba(216, 169, 53, 0.08);
+}
+
+.wizard-panel {
+  display: grid;
+  gap: 12px;
+  min-height: 260px;
+  align-content: start;
+}
+
+.wizard-stat-grid,
+.strategy-grid,
+.wizard-preview-tables {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.strategy-grid button {
+  display: grid;
+  gap: 6px;
+  min-height: 88px;
+  padding: 12px;
+  color: var(--text);
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.026);
+}
+
+.strategy-grid button.active {
+  color: var(--gold-soft);
+  border-color: rgba(216, 169, 53, 0.32);
+  background: rgba(216, 169, 53, 0.08);
+}
+
+.wizard-table-list {
+  display: grid;
+  gap: 10px;
+}
+
+.wizard-table-list label {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.wizard-preview-tables article {
+  display: grid;
+  gap: 5px;
+}
+
+.wizard-preview-tables small {
+  line-height: 1.5;
 }
 
 .not-found {
   display: grid;
-  place-items: center;
+  place-content: center;
   gap: 14px;
-  min-height: 60vh;
+  min-height: 100%;
 }
 
-@media (max-width: 1260px) {
-  .overview-grid,
-  .score-panels {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .judge-command-bar {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .command-actions {
-    justify-content: flex-start;
+@media (max-width: 1400px) {
+  .round-workbench {
+    grid-template-columns: 280px minmax(0, 1fr) 280px;
   }
 
   .judge-workbench {
-    grid-template-columns: 170px minmax(0, 1fr);
+    grid-template-columns: 150px minmax(0, 1fr) 300px;
   }
 
-  .judge-right-panel {
-    grid-column: 1 / -1;
-    position: static;
+  .future-task-list,
+  .overview-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 980px) {
+@media (max-width: 1100px) {
   .competition-detail {
-    height: auto;
-    min-height: 100vh;
-    overflow: visible;
+    padding: 18px;
+    overflow: auto;
   }
 
-  .detail-head,
   .head-main,
-  .head-action-group,
   .two-column,
-  .overview-grid,
-  .category-editor-list,
-  .library-card,
-  .future-task-list,
-  .score-panels,
   .judge-workbench,
-  .role-lanes,
-  .judge-command-bar,
-  .judge-right-panel,
-  .time-dialog-grid {
+  .round-workbench,
+  .round-table-board,
+  .score-panels,
+  .progress-card-grid,
+  .award-list {
     grid-template-columns: 1fr;
   }
 
   .judge-nav-panel,
-  .judge-right-panel {
+  .judge-right-panel,
+  .round-pool-panel,
+  .round-check-panel {
     position: static;
   }
 
-  .judge-table-head {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .judge-table-head label {
-    grid-template-columns: 1fr;
-  }
-
-  .tab-content {
-    overflow: visible;
-  }
-
-  .table-head {
-    display: none;
-  }
-
-  .field-table .table-row,
-  .field-readonly-table .table-row,
-  .entries-table .table-row,
-  .judge-table .table-row,
-  .dimension-row {
-    grid-template-columns: 1fr;
-    min-width: 0;
+  .round-flow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>
