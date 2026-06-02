@@ -3,6 +3,7 @@ package com.beercompetition.controller.admin;
 import com.beercompetition.common.result.Result;
 import com.beercompetition.pojo.dto.CompetitionBaseInfoUpdateRequest;
 import com.beercompetition.pojo.dto.CompetitionCreateRequest;
+import com.beercompetition.pojo.dto.CompetitionStyleLibraryUpdateRequest;
 import com.beercompetition.pojo.dto.ConfigNameBatchUpdateRequest;
 import com.beercompetition.pojo.dto.EntryFieldBatchUpdateRequest;
 import com.beercompetition.pojo.dto.AdminJudgeStatusUpdateRequest;
@@ -12,15 +13,18 @@ import com.beercompetition.pojo.dto.JudgeAssignmentCreateRequest;
 import com.beercompetition.pojo.dto.JudgeAssignmentBatchUpdateRequest;
 import com.beercompetition.pojo.dto.JudgeTableBatchUpdateRequest;
 import com.beercompetition.pojo.dto.ScoreConfigBatchUpdateRequest;
+import com.beercompetition.pojo.dto.StyleLibraryUpsertRequest;
 import com.beercompetition.pojo.enums.UserRole;
 import com.beercompetition.pojo.vo.CompetitionDetailVO;
 import com.beercompetition.pojo.vo.CompetitionVO;
 import com.beercompetition.pojo.vo.CurrentUserResponse;
 import com.beercompetition.pojo.vo.JudgeAccountVO;
 import com.beercompetition.pojo.vo.ScoreConfigVO;
+import com.beercompetition.pojo.vo.StyleLibraryVO;
 import com.beercompetition.service.AuthService;
 import com.beercompetition.service.CompetitionService;
 import com.beercompetition.service.JudgeService;
+import com.beercompetition.service.StyleLibraryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -43,10 +47,33 @@ public class AdminController {
     private final AuthService authService;
     private final CompetitionService competitionService;
     private final JudgeService judgeService;
+    private final StyleLibraryService styleLibraryService;
 
     @GetMapping("/me")
     public Result<CurrentUserResponse> me() {
         return Result.success(authService.getCurrentUser(UserRole.ADMIN));
+    }
+
+    @GetMapping("/style-libraries")
+    public Result<List<StyleLibraryVO>> styleLibraries() {
+        return Result.success(styleLibraryService.listLibraries());
+    }
+
+    @GetMapping("/style-libraries/{code}")
+    public Result<StyleLibraryVO> styleLibraryDetail(@PathVariable String code) {
+        return Result.success(styleLibraryService.getLibrary(code));
+    }
+
+    @PostMapping("/style-libraries")
+    public Result<StyleLibraryVO> createStyleLibrary(@RequestBody @Valid StyleLibraryUpsertRequest request) {
+        return Result.success(styleLibraryService.saveLibrary(request));
+    }
+
+    @PutMapping("/style-libraries/{code}")
+    public Result<StyleLibraryVO> updateStyleLibrary(@PathVariable String code,
+                                                     @RequestBody @Valid StyleLibraryUpsertRequest request) {
+        request.setCode(code);
+        return Result.success(styleLibraryService.saveLibrary(request));
     }
 
     @GetMapping("/competitions")
@@ -78,7 +105,7 @@ public class AdminController {
 
     @PutMapping("/competitions/{id}/styles")
     public Result<CompetitionDetailVO> updateStyles(@PathVariable Long id,
-                                                   @RequestBody @Valid ConfigNameBatchUpdateRequest request) {
+                                                   @RequestBody @Valid CompetitionStyleLibraryUpdateRequest request) {
         return Result.success(competitionService.updateStyles(id, request));
     }
 

@@ -2,6 +2,7 @@ package com.beercompetition.service;
 
 import com.beercompetition.pojo.dto.CompetitionCreateRequest;
 import com.beercompetition.pojo.dto.CompetitionBaseInfoUpdateRequest;
+import com.beercompetition.pojo.dto.CompetitionStyleLibraryUpdateRequest;
 import com.beercompetition.pojo.dto.ConfigNameBatchUpdateRequest;
 import com.beercompetition.pojo.dto.EntryFieldBatchUpdateRequest;
 import com.beercompetition.pojo.dto.JudgeTableBatchUpdateRequest;
@@ -24,7 +25,7 @@ public interface CompetitionService {
 
     CompetitionDetailVO updateCategories(Long id, ConfigNameBatchUpdateRequest request);
 
-    CompetitionDetailVO updateStyles(Long id, ConfigNameBatchUpdateRequest request);
+    CompetitionDetailVO updateStyles(Long id, CompetitionStyleLibraryUpdateRequest request);
 
     CompetitionDetailVO updateEntryFields(Long id, EntryFieldBatchUpdateRequest request);
 

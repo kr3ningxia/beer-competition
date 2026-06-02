@@ -15,6 +15,7 @@ import com.beercompetition.mapper.JudgeTableMapper;
 import com.beercompetition.mapper.ScoreRecordMapper;
 import com.beercompetition.pojo.dto.CompetitionBaseInfoUpdateRequest;
 import com.beercompetition.pojo.dto.CompetitionCreateRequest;
+import com.beercompetition.pojo.dto.CompetitionStyleLibraryUpdateRequest;
 import com.beercompetition.pojo.dto.ConfigNameBatchUpdateRequest;
 import com.beercompetition.pojo.dto.ConfigNameItemRequest;
 import com.beercompetition.pojo.dto.DimensionRequest;
@@ -52,6 +53,7 @@ import com.beercompetition.pojo.vo.ProgressSummaryVO;
 import com.beercompetition.pojo.vo.ResultSetupVO;
 import com.beercompetition.pojo.vo.ScoreConfigVO;
 import com.beercompetition.service.CompetitionService;
+import com.beercompetition.service.StyleLibraryService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -110,6 +112,7 @@ public class CompetitionServiceImpl implements CompetitionService {
     private final CompetitionScoreConfigMapper competitionScoreConfigMapper;
     private final BeerEntryMapper beerEntryMapper;
     private final ScoreRecordMapper scoreRecordMapper;
+    private final StyleLibraryService styleLibraryService;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -135,6 +138,8 @@ public class CompetitionServiceImpl implements CompetitionService {
         validateCreateRequest(request);
         List<ConfigNameItemRequest> categories = normalizeNameItems(request.getCategories(), "投递组别");
         List<EntryFieldItemRequest> entryFields = normalizeEntryFields(request.getEntryFields() == null ? List.of() : request.getEntryFields());
+        String styleLibraryVersion = normalizeRequired(request.getStyleLibraryVersion(), "基础风格库不能为空");
+        List<String> snapshotStyles = styleLibraryService.listEnabledStyleNames(styleLibraryVersion);
         validateScoreConfigs(request.getScoreConfigs());
 
         // 2) 构造草稿比赛主记录
@@ -146,12 +151,13 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .registrationDeadline(request.getRegistrationDeadline())
                 .status(CompetitionStatus.DRAFT.name())
                 .entryFee(request.getEntryFee())
-                .styleLibraryVersion(normalizeRequired(request.getStyleLibraryVersion(), "基础风格库不能为空"))
+                .styleLibraryVersion(styleLibraryVersion)
                 .build();
 
         // 3) 事务内写入比赛和新建页完整配置
         insertCompetitionWithGeneratedCode(competition);
         replaceCategories(competition.getId(), categories);
+        replaceStyleSnapshot(competition.getId(), snapshotStyles);
         replaceEntryFields(competition.getId(), entryFields);
         replaceScoreConfigs(competition.getId(), request.getScoreConfigs());
 
@@ -215,28 +221,36 @@ public class CompetitionServiceImpl implements CompetitionService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public CompetitionDetailVO updateStyles(Long id, ConfigNameBatchUpdateRequest request) {
+    public CompetitionDetailVO updateStyles(Long id, CompetitionStyleLibraryUpdateRequest request) {
         // 1) 参数规范化与阶段权限校验
         Competition competition = getCompetitionOrThrow(id);
         assertEntryStructureEditable(competition);
-        List<ConfigNameItemRequest> items = normalizeNameItems(request.getItems(), "基础风格");
+        String styleLibraryVersion = normalizeRequired(request.getStyleLibraryVersion(), "基础风格库不能为空");
+        List<String> snapshotStyles = styleLibraryService.listEnabledStyleNames(styleLibraryVersion);
+        competition.setStyleLibraryVersion(styleLibraryVersion);
 
-        // 2) 清理当前比赛旧基础风格
+        // 2) 更新比赛风格库版本并重建比赛风格快照
+        competitionMapper.updateById(competition);
+        replaceStyleSnapshot(id, snapshotStyles);
+
+        // 3) 重新计算配置检查并返回详情
+        return getCompetitionDetail(id);
+    }
+
+    private void replaceStyleSnapshot(Long competitionId, List<String> styles) {
+        // 1) 清理当前比赛旧基础风格快照
         competitionStyleConfigMapper.delete(new LambdaQueryWrapper<CompetitionStyleConfig>()
-                .eq(CompetitionStyleConfig::getCompetitionId, id));
+                .eq(CompetitionStyleConfig::getCompetitionId, competitionId));
 
-        // 3) 批量写入新基础风格
+        // 2) 批量写入新的比赛风格快照
         int sort = 0;
-        for (ConfigNameItemRequest item : items) {
+        for (String style : styles) {
             competitionStyleConfigMapper.insert(CompetitionStyleConfig.builder()
-                    .competitionId(id)
-                    .name(item.getName())
-                    .sortOrder(resolveSort(item.getSortOrder(), sort++))
+                    .competitionId(competitionId)
+                    .name(style)
+                    .sortOrder(sort++)
                     .build());
         }
-
-        // 4) 重新计算配置检查并返回详情
-        return getCompetitionDetail(id);
     }
 
     @Override

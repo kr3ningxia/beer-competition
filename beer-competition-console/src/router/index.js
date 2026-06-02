@@ -39,6 +39,7 @@ const routes = [
       { path: 'competitions/new', component: () => import('@/views/admin/CompetitionCreate.vue') },
       { path: 'competitions/:id', component: () => import('@/views/admin/CompetitionDetail.vue') },
       { path: 'judges', component: () => import('@/views/admin/Judges.vue') },
+      { path: 'style-libraries', component: () => import('@/views/admin/StyleLibraries.vue') },
       { path: 'assignments', redirect: '/admin/competitions' },
       { path: 'score-config', redirect: '/admin/competitions' },
     ],

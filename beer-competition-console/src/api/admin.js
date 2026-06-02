@@ -12,6 +12,22 @@ export function fetchCompetitionDetail(id) {
   return request.get(`/api/admin/competitions/${id}`, { authScope: 'admin' })
 }
 
+export function fetchStyleLibraries() {
+  return request.get('/api/admin/style-libraries', { authScope: 'admin' })
+}
+
+export function fetchStyleLibraryDetail(code) {
+  return request.get(`/api/admin/style-libraries/${code}`, { authScope: 'admin' })
+}
+
+export function saveStyleLibrary(payload) {
+  return request.post('/api/admin/style-libraries', payload, { authScope: 'admin' })
+}
+
+export function updateStyleLibrary(code, payload) {
+  return request.put(`/api/admin/style-libraries/${code}`, payload, { authScope: 'admin' })
+}
+
 export function updateCompetitionBaseInfo(id, payload) {
   return request.put(`/api/admin/competitions/${id}/base-info`, payload, { authScope: 'admin' })
 }

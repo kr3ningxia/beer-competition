@@ -4,7 +4,7 @@
       <div>
         <small>评审编排入口</small>
         <h1>选择比赛后编排评审</h1>
-        <p>评委账号在评审列表维护；桌次、桌长和本场身份进入具体比赛后配置。</p>
+        <p>进入比赛后，把评审和酒款安排到对应桌。</p>
       </div>
       <button class="tool-button" type="button" @click="loadCompetitions">
         <Refresh />
@@ -55,7 +55,7 @@
         </dl>
         <button class="tool-button primary" type="button" @click="openWorkbench(competition.id)">
           <Connection />
-          进入评审与桌次
+          进入分桌分配
         </button>
       </article>
     </section>

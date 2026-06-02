@@ -81,13 +81,13 @@
               <h3>基础风格库</h3>
               <label class="library-select">
                 <select v-model="draft.styleLibraryVersion" aria-label="风格库版本">
-                  <option value="BJCP_2021_CN">BJCP 2021 中文标准库</option>
-                  <option value="CUSTOM_STANDARD">主办方标准风格库</option>
+                  <option v-for="library in styleLibraryOptions" :key="library.value" :value="library.value">
+                    {{ library.label }}
+                  </option>
                 </select>
               </label>
               <div class="library-tags">
-                <span>报名必填</span>
-                <span>支持搜索</span>
+                <span v-for="tag in selectedStyleLibrary.tags.slice(0, 2)" :key="tag">{{ tag }}</span>
               </div>
             </div>
           </section>
@@ -302,7 +302,9 @@ import {
 } from './competitionStore'
 import {
   createCompetition,
+  fetchStyleLibraries,
 } from '@/api/admin'
+import { defaultStyleLibraryValue, fallbackStyleLibraries, getStyleLibrary, normalizeStyleLibraries } from './styleLibraries'
 
 const router = useRouter()
 const activeSection = ref('base-info')
@@ -319,7 +321,7 @@ const draft = reactive({
     { id: 'cat-2', name: '深色拉格' },
     { id: 'cat-3', name: '创意拉格' },
   ],
-  styleLibraryVersion: 'BJCP_2021_CN',
+  styleLibraryVersion: defaultStyleLibraryValue,
   entryFields: [
     {
       key: 'specialIngredients',
@@ -341,6 +343,8 @@ const scoreDescriptions = {
 }
 
 const categoryCount = computed(() => draft.categories.filter((category) => category.name).length)
+const styleLibraryOptions = ref(normalizeStyleLibraries(fallbackStyleLibraries))
+const selectedStyleLibrary = computed(() => getStyleLibrary(draft.styleLibraryVersion, styleLibraryOptions.value))
 const reviewItems = computed(() => buildReviewItems(draft))
 const reviewBlockingItems = computed(() => reviewItems.value.filter((item) => item.status !== 'done'))
 const reviewBlockingText = computed(() => `请先处理：${reviewBlockingItems.value.map((item) => item.label).join('、')}`)
@@ -476,12 +480,25 @@ function syncActiveSection() {
 }
 
 onMounted(() => {
+  loadStyleLibraries()
   document.querySelector('.create-panel')?.addEventListener('scroll', syncActiveSection, { passive: true })
 })
 
 onBeforeUnmount(() => {
   document.querySelector('.create-panel')?.removeEventListener('scroll', syncActiveSection)
 })
+
+async function loadStyleLibraries() {
+  try {
+    const data = await fetchStyleLibraries()
+    styleLibraryOptions.value = normalizeStyleLibraries(data)
+    if (!styleLibraryOptions.value.some((library) => library.value === draft.styleLibraryVersion)) {
+      draft.styleLibraryVersion = styleLibraryOptions.value[0]?.value || defaultStyleLibraryValue
+    }
+  } catch {
+    styleLibraryOptions.value = normalizeStyleLibraries(fallbackStyleLibraries)
+  }
+}
 
 function getCategoryNames(source) {
   return source.categories.map((category) => category.name.trim()).filter(Boolean)

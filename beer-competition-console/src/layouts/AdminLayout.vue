@@ -51,6 +51,7 @@ import {
   CoffeeCup,
   DataBoard,
   Document,
+  Files,
   Download,
   Medal,
   User,
@@ -60,13 +61,14 @@ import { clearSession, getDisplayName } from '@/utils/auth'
 const router = useRouter()
 const route = useRoute()
 const displayName = getDisplayName('admin')
-const isDashboard = computed(() => ['/admin/dashboard', '/admin/judges'].includes(route.path) || route.path.startsWith('/admin/competitions'))
+const isDashboard = computed(() => ['/admin/dashboard', '/admin/judges', '/admin/style-libraries'].includes(route.path) || route.path.startsWith('/admin/competitions'))
 
 const navItems = [
   { path: '/admin/dashboard', label: '现场看板', icon: DataBoard },
   { path: '/admin/competitions', label: '比赛管理', icon: Medal },
   { path: '/admin/judges', label: '评审列表', icon: User },
   { path: null, label: '酒款管理', icon: Document },
+  { path: '/admin/style-libraries', label: '风格库管理', icon: Files },
   { path: null, label: '结果发布', icon: Medal },
   { path: null, label: '数据导出', icon: Download },
 ]
