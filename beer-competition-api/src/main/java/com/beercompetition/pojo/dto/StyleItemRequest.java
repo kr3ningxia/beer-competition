@@ -7,6 +7,7 @@ import lombok.Data;
 @Data
 public class StyleItemRequest {
 
+    @NotBlank(message = "风格分类不能为空")
     private String categoryName;
 
     @NotBlank(message = "风格名称不能为空")

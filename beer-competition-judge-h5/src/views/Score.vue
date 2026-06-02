@@ -20,9 +20,17 @@
       <div class="entry-summary">
         <div>
           <span>{{ entry.categoryName }}</span>
-          <strong>{{ entry.style }} · {{ entry.abv }}</strong>
+          <strong>{{ styleDisplayName(entry) }} · {{ entry.abv }}</strong>
         </div>
         <em v-if="entry.shortCode">短编号 {{ entry.shortCode }}</em>
+      </div>
+
+      <div v-if="entry.styleCategoryName || entry.styleDescription" class="style-reference">
+        <div>
+          <span>风格分类</span>
+          <strong>{{ entry.styleCategoryName || entry.categoryName }}</strong>
+        </div>
+        <p v-if="entry.styleDescription">{{ entry.styleDescription }}</p>
       </div>
 
       <div v-if="entry.locked" class="locked-alert">
@@ -184,6 +192,10 @@ function rangePercent(item) {
   return Math.min(100, Math.max(0, (Number(item.score || 0) / maxScore) * 100))
 }
 
+function styleDisplayName(source) {
+  return [source?.styleCode, source?.style].filter(Boolean).join(' ')
+}
+
 function parseCommentNotes(comments = '') {
   return String(comments)
     .split('\n')
@@ -339,6 +351,40 @@ onMounted(async () => {
   font-style: normal;
   font-weight: 800;
   white-space: nowrap;
+}
+
+.style-reference {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fff;
+}
+
+.style-reference div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.style-reference span {
+  color: #667085;
+  font-size: 13px;
+}
+
+.style-reference strong {
+  color: #18222f;
+  font-size: 14px;
+}
+
+.style-reference p {
+  margin: 0;
+  color: #344054;
+  line-height: 1.55;
+  font-size: 14px;
 }
 
 .locked-alert {

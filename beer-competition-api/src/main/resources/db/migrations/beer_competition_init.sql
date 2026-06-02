@@ -117,6 +117,9 @@ CREATE TABLE `competition_style_config` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `competition_id` bigint NOT NULL,
   `name` varchar(128) NOT NULL,
+  `category_name` varchar(128) DEFAULT NULL,
+  `style_code` varchar(64) DEFAULT NULL,
+  `description` varchar(500) DEFAULT NULL,
   `sort_order` int NOT NULL DEFAULT 0,
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -357,11 +360,11 @@ VALUES
   (1, 1, 'IPA', 1),
   (2, 1, '拉格', 2);
 
-INSERT INTO `competition_style_config` (`id`, `competition_id`, `name`, `sort_order`)
+INSERT INTO `competition_style_config` (`id`, `competition_id`, `name`, `category_name`, `style_code`, `sort_order`)
 VALUES
-  (1, 1, 'American IPA', 1),
-  (2, 1, 'Double IPA', 2),
-  (3, 1, 'Pilsner', 3);
+  (1, 1, 'American IPA', 'IPA', '21A', 1),
+  (2, 1, 'Double IPA', 'IPA', '22A', 2),
+  (3, 1, 'Pilsner', '拉格', '5D', 3);
 
 INSERT INTO `entry_field_config` (`id`, `competition_id`, `field_key`, `field_label`, `field_type`, `required_flag`, `visible_to_judges`, `sort_order`)
 VALUES

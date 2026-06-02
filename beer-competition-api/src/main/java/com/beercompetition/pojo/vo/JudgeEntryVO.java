@@ -15,6 +15,9 @@ public class JudgeEntryVO {
     private Long competitionId;
     private String categoryName;
     private String style;
+    private String styleCategoryName;
+    private String styleCode;
+    private String styleDescription;
     private BigDecimal abv;
     private String description;
     private List<EntryExtraFieldVO> extraFields;

@@ -1,6 +1,7 @@
 package com.beercompetition.service;
 
 import com.beercompetition.pojo.dto.StyleLibraryUpsertRequest;
+import com.beercompetition.pojo.vo.StyleItemVO;
 import com.beercompetition.pojo.vo.StyleLibraryVO;
 
 import java.util.List;
@@ -13,5 +14,5 @@ public interface StyleLibraryService {
 
     StyleLibraryVO saveLibrary(StyleLibraryUpsertRequest request);
 
-    List<String> listEnabledStyleNames(String code);
+    List<StyleItemVO> listEnabledStyles(String code);
 }

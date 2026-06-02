@@ -9,6 +9,7 @@ import com.beercompetition.mapper.BeerEntryMapper;
 import com.beercompetition.mapper.BreweryMapper;
 import com.beercompetition.mapper.CompetitionCategoryMapper;
 import com.beercompetition.mapper.CompetitionMapper;
+import com.beercompetition.mapper.CompetitionStyleConfigMapper;
 import com.beercompetition.mapper.PortalAccountMapper;
 import com.beercompetition.mapper.JudgeAccountMapper;
 import com.beercompetition.mapper.RoundTableEntryMapper;
@@ -19,6 +20,7 @@ import com.beercompetition.pojo.po.BeerEntryExtraField;
 import com.beercompetition.pojo.po.Brewery;
 import com.beercompetition.pojo.po.Competition;
 import com.beercompetition.pojo.po.CompetitionCategory;
+import com.beercompetition.pojo.po.CompetitionStyleConfig;
 import com.beercompetition.pojo.po.JudgeAccount;
 import com.beercompetition.pojo.po.RoundTableEntry;
 import com.beercompetition.pojo.po.PortalAccount;
@@ -40,6 +42,7 @@ public class EntryServiceImpl implements EntryService {
     private final BeerEntryMapper beerEntryMapper;
     private final CompetitionMapper competitionMapper;
     private final CompetitionCategoryMapper competitionCategoryMapper;
+    private final CompetitionStyleConfigMapper competitionStyleConfigMapper;
     private final BeerEntryExtraFieldMapper beerEntryExtraFieldMapper;
     private final BreweryMapper breweryMapper;
     private final JudgeAccountMapper judgeAccountMapper;
@@ -93,16 +96,27 @@ public class EntryServiceImpl implements EntryService {
         }
         requireActiveJudgeRoundEntry(entry);
         CompetitionCategory category = competitionCategoryMapper.selectById(entry.getCategoryId());
+        CompetitionStyleConfig style = findStyleSnapshot(entry);
         return JudgeEntryVO.builder()
                 .id(entry.getId())
                 .uuid(entry.getUuid())
                 .competitionId(entry.getCompetitionId())
                 .categoryName(category == null ? null : category.getName())
                 .style(entry.getStyle())
+                .styleCategoryName(style == null ? null : style.getCategoryName())
+                .styleCode(style == null ? null : style.getStyleCode())
+                .styleDescription(style == null ? null : style.getDescription())
                 .abv(entry.getAbv())
                 .description(entry.getDescription())
                 .extraFields(listExtraFields(entry.getId()))
                 .build();
+    }
+
+    private CompetitionStyleConfig findStyleSnapshot(BeerEntry entry) {
+        return competitionStyleConfigMapper.selectOne(new LambdaQueryWrapper<CompetitionStyleConfig>()
+                .eq(CompetitionStyleConfig::getCompetitionId, entry.getCompetitionId())
+                .eq(CompetitionStyleConfig::getName, entry.getStyle())
+                .last("LIMIT 1"));
     }
 
     private EntrySummaryVO toEntrySummaryVO(BeerEntry entry) {

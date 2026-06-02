@@ -9,5 +9,8 @@ public class CompetitionConfigNameVO {
 
     private Long id;
     private String name;
+    private String categoryName;
+    private String styleCode;
+    private String description;
     private Integer sortOrder;
 }

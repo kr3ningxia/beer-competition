@@ -27,7 +27,7 @@
             <button type="button" @click="$router.push(`/captain/${entry.uuid}`)">
               <span>
                 <strong>{{ entry.uuid }}</strong>
-                <small>{{ entry.categoryName }} · {{ entry.style }}</small>
+                <small>{{ entry.categoryName }} · {{ styleDisplayName(entry) }}</small>
               </span>
               <em :class="['pill', entry.finalized ? 'status-lock' : 'status-warn']">
                 {{ entry.finalized ? `${entry.finalScore} 分` : `${entry.submittedCount}/${entry.expectedCount} 人已评` }}
@@ -62,7 +62,14 @@
       <section class="card">
         <div v-if="entry" class="entry-summary">
           <span>{{ entry.categoryName }}</span>
-          <strong>{{ entry.style }} · {{ entry.abv }}</strong>
+          <strong>{{ styleDisplayName(entry) }} · {{ entry.abv }}</strong>
+        </div>
+        <div v-if="entry?.styleCategoryName || entry?.styleDescription" class="style-reference">
+          <div>
+            <span>风格分类</span>
+            <strong>{{ entry.styleCategoryName || entry.categoryName }}</strong>
+          </div>
+          <p v-if="entry.styleDescription">{{ entry.styleDescription }}</p>
         </div>
 
         <h2 class="section-title score-title">同桌评分</h2>
@@ -189,6 +196,10 @@ async function saveAdvanced() {
   await loadBoard()
 }
 
+function styleDisplayName(source) {
+  return [source?.styleCode, source?.style].filter(Boolean).join(' ')
+}
+
 watch(uuid, async () => {
   message.value = ''
   if (uuid.value) await loadDetail()
@@ -312,6 +323,40 @@ onMounted(async () => {
 .entry-summary span {
   color: #667085;
   font-size: 13px;
+}
+
+.style-reference {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fff;
+}
+
+.style-reference div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.style-reference span {
+  color: #667085;
+  font-size: 13px;
+}
+
+.style-reference strong {
+  color: #18222f;
+  font-size: 14px;
+}
+
+.style-reference p {
+  margin: 0;
+  color: #344054;
+  line-height: 1.55;
+  font-size: 14px;
 }
 
 .score-title {

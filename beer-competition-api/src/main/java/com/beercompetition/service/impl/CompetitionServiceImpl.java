@@ -55,6 +55,7 @@ import com.beercompetition.pojo.vo.ProgressSummaryVO;
 import com.beercompetition.pojo.vo.ResultDraftVO;
 import com.beercompetition.pojo.vo.ResultSetupVO;
 import com.beercompetition.pojo.vo.ScoreConfigVO;
+import com.beercompetition.pojo.vo.StyleItemVO;
 import com.beercompetition.service.CompetitionService;
 import com.beercompetition.service.RoundService;
 import com.beercompetition.service.StyleLibraryService;
@@ -145,7 +146,7 @@ public class CompetitionServiceImpl implements CompetitionService {
         List<ConfigNameItemRequest> categories = normalizeNameItems(request.getCategories(), "投递组别");
         List<EntryFieldItemRequest> entryFields = normalizeEntryFields(request.getEntryFields() == null ? List.of() : request.getEntryFields());
         String styleLibraryVersion = normalizeRequired(request.getStyleLibraryVersion(), "基础风格库不能为空");
-        List<String> snapshotStyles = styleLibraryService.listEnabledStyleNames(styleLibraryVersion);
+        List<StyleItemVO> snapshotStyles = styleLibraryService.listEnabledStyles(styleLibraryVersion);
         validateScoreConfigs(request.getScoreConfigs());
 
         // 2) 构造草稿比赛主记录
@@ -242,7 +243,7 @@ public class CompetitionServiceImpl implements CompetitionService {
         Competition competition = getCompetitionOrThrow(id);
         assertEntryStructureEditable(competition);
         String styleLibraryVersion = normalizeRequired(request.getStyleLibraryVersion(), "基础风格库不能为空");
-        List<String> snapshotStyles = styleLibraryService.listEnabledStyleNames(styleLibraryVersion);
+        List<StyleItemVO> snapshotStyles = styleLibraryService.listEnabledStyles(styleLibraryVersion);
         competition.setStyleLibraryVersion(styleLibraryVersion);
 
         // 2) 更新比赛风格库版本并重建比赛风格快照
@@ -253,17 +254,20 @@ public class CompetitionServiceImpl implements CompetitionService {
         return getCompetitionDetail(id);
     }
 
-    private void replaceStyleSnapshot(Long competitionId, List<String> styles) {
+    private void replaceStyleSnapshot(Long competitionId, List<StyleItemVO> styles) {
         // 1) 清理当前比赛旧基础风格快照
         competitionStyleConfigMapper.delete(new LambdaQueryWrapper<CompetitionStyleConfig>()
                 .eq(CompetitionStyleConfig::getCompetitionId, competitionId));
 
         // 2) 批量写入新的比赛风格快照
         int sort = 0;
-        for (String style : styles) {
+        for (StyleItemVO style : styles) {
             competitionStyleConfigMapper.insert(CompetitionStyleConfig.builder()
                     .competitionId(competitionId)
-                    .name(style)
+                    .name(style.getName())
+                    .categoryName(style.getCategoryName())
+                    .styleCode(style.getStyleCode())
+                    .description(style.getDescription())
                     .sortOrder(sort++)
                     .build());
         }
@@ -585,6 +589,9 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .map(item -> CompetitionConfigNameVO.builder()
                         .id(item.getId())
                         .name(item.getName())
+                        .categoryName(item.getCategoryName())
+                        .styleCode(item.getStyleCode())
+                        .description(item.getDescription())
                         .sortOrder(item.getSortOrder())
                         .build())
                 .toList();
@@ -704,20 +711,28 @@ public class CompetitionServiceImpl implements CompetitionService {
     private List<CompetitionEntryVO> listEntries(Long competitionId, List<CompetitionConfigNameVO> categories) {
         Map<Long, String> categoryNameById = categories.stream()
                 .collect(Collectors.toMap(CompetitionConfigNameVO::getId, CompetitionConfigNameVO::getName));
+        Map<String, CompetitionConfigNameVO> styleByName = listStyles(competitionId).stream()
+                .collect(Collectors.toMap(CompetitionConfigNameVO::getName, Function.identity(), (left, right) -> left));
         return beerEntryMapper.selectList(new LambdaQueryWrapper<BeerEntry>()
                         .eq(BeerEntry::getCompetitionId, competitionId)
                         .orderByDesc(BeerEntry::getCreateTime)
                         .last("LIMIT 20"))
                 .stream()
-                .map(entry -> CompetitionEntryVO.builder()
-                        .id(entry.getId())
-                        .uuid(entry.getUuid())
-                        .shortCode(entry.getShortCode())
-                        .categoryName(categoryNameById.getOrDefault(entry.getCategoryId(), "-"))
-                        .style(entry.getStyle())
-                        .status(entry.getStatus())
-                        .stored(Objects.equals(entry.getStoredFlag(), 1))
-                        .build())
+                .map(entry -> {
+                    CompetitionConfigNameVO style = styleByName.get(entry.getStyle());
+                    return CompetitionEntryVO.builder()
+                            .id(entry.getId())
+                            .uuid(entry.getUuid())
+                            .shortCode(entry.getShortCode())
+                            .categoryName(categoryNameById.getOrDefault(entry.getCategoryId(), "-"))
+                            .style(entry.getStyle())
+                            .styleCategoryName(style == null ? null : style.getCategoryName())
+                            .styleCode(style == null ? null : style.getStyleCode())
+                            .styleDescription(style == null ? null : style.getDescription())
+                            .status(entry.getStatus())
+                            .stored(Objects.equals(entry.getStoredFlag(), 1))
+                            .build();
+                })
                 .toList();
     }
 

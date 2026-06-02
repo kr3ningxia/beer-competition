@@ -21,6 +21,9 @@ public class CompetitionStyleConfig {
     private Long id;
     private Long competitionId;
     private String name;
+    private String categoryName;
+    private String styleCode;
+    private String description;
     private Integer sortOrder;
     private LocalDateTime createTime;
 }

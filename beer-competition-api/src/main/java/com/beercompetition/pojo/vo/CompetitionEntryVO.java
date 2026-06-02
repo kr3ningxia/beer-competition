@@ -12,6 +12,9 @@ public class CompetitionEntryVO {
     private String shortCode;
     private String categoryName;
     private String style;
+    private String styleCategoryName;
+    private String styleCode;
+    private String styleDescription;
     private String status;
     private Boolean stored;
     private Boolean advanced;

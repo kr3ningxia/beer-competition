@@ -3,7 +3,7 @@
     <section class="page-head">
       <div>
         <h1>风格库管理</h1>
-        <p>维护报名时可选的啤酒风格库，比赛可从这里选择一套口径。</p>
+        <p>维护报名和评审使用的基础风格口径。</p>
       </div>
       <button class="tool-button primary" type="button" @click="startCreate">
         新建风格库
@@ -11,58 +11,68 @@
     </section>
 
     <section class="library-layout">
-      <section class="library-grid" aria-label="风格库列表">
-        <article
+      <aside class="library-rail" aria-label="风格库列表">
+        <button
           v-for="library in styleLibraryOptions"
           :key="library.value"
-          :class="['library-card', { active: selectedLibrary.value === library.value }]"
+          :class="['library-nav-item', { active: selectedLibrary.value === library.value }]"
+          type="button"
+          @click="selectedLibraryValue = library.value"
         >
-          <header>
-            <div>
-              <span :class="['status-pill', library.statusLabel === '启用' ? 'success' : 'muted']">{{ library.statusLabel }}</span>
-              <h2>{{ library.label }}</h2>
-            </div>
-          </header>
-          <dl class="library-meta">
-            <div>
-              <dt>版本</dt>
-              <dd>{{ library.version }}</dd>
-            </div>
-            <div>
-              <dt>语言</dt>
-              <dd>{{ library.language }}</dd>
-            </div>
-            <div>
-              <dt>分类</dt>
-              <dd>{{ library.categoryCount }}</dd>
-            </div>
-            <div>
-              <dt>风格</dt>
-              <dd>{{ library.styleCount }}</dd>
-            </div>
-          </dl>
-          <div class="tag-row">
-            <span v-for="tag in library.tags" :key="tag">{{ tag }}</span>
-          </div>
-          <footer>
-            <small>{{ library.source }} · 更新于 {{ library.updatedAt }}</small>
-            <div>
-              <button type="button" @click="selectedLibraryValue = library.value">查看风格</button>
-              <button type="button" @click="startEdit(library)">编辑</button>
-            </div>
-          </footer>
-        </article>
-      </section>
-
-      <aside class="preview-panel">
-        <header>
-          <span>风格预览</span>
-          <h2>{{ selectedLibrary.label }}</h2>
-        </header>
-        <div class="preview-list">
-          <span v-for="style in selectedLibrary.styles" :key="style">{{ style }}</span>
-        </div>
+          <span :class="['status-dot', library.statusLabel === '启用' ? 'success' : 'muted']" />
+          <strong>{{ library.label }}</strong>
+          <small>{{ library.categoryCount }} 类 · {{ library.styleCount }} 个风格</small>
+        </button>
       </aside>
+
+      <main class="style-workbench">
+        <section class="library-summary">
+          <div>
+            <span :class="['status-pill', selectedLibrary.statusLabel === '启用' ? 'success' : 'muted']">{{ selectedLibrary.statusLabel }}</span>
+            <h2>{{ selectedLibrary.label }}</h2>
+            <p>{{ selectedLibrary.source }} · {{ selectedLibrary.version }} · {{ selectedLibrary.language }}</p>
+          </div>
+          <button type="button" @click="startEdit(selectedLibrary)">编辑</button>
+        </section>
+
+        <section class="style-browser">
+          <aside class="category-panel">
+            <header>
+              <strong>分类</strong>
+              <span>{{ selectedLibrary.categories.length }}</span>
+            </header>
+            <button
+              v-for="category in selectedLibrary.categories"
+              :key="category"
+              :class="{ active: previewCategory === category }"
+              type="button"
+              @click="previewCategory = category"
+            >
+              {{ category }}
+              <small>{{ countStylesInCategory(category) }}</small>
+            </button>
+          </aside>
+
+          <section class="style-panel">
+            <header>
+              <label class="search-field">
+                <input v-model.trim="previewKeyword" placeholder="搜索风格、编号或分类" />
+              </label>
+              <span>{{ previewStyles.length }} 个</span>
+            </header>
+            <div class="style-list">
+              <article v-for="style in previewStyles" :key="styleKey(style)" class="style-row">
+                <div>
+                  <strong>{{ style.name }}</strong>
+                  <small>{{ style.categoryName || '未归类' }}<template v-if="style.styleCode"> · {{ style.styleCode }}</template></small>
+                </div>
+                <p v-if="style.description">{{ style.description }}</p>
+              </article>
+              <p v-if="previewStyles.length === 0" class="empty-line">没有匹配的风格。</p>
+            </div>
+          </section>
+        </section>
+      </main>
     </section>
 
     <section v-if="editorOpen" class="editor-backdrop">
@@ -82,7 +92,7 @@
           </label>
           <label>
             <span>名称</span>
-            <input v-model.trim="editor.name" placeholder="例如 华南酸啤风格库" />
+            <input v-model.trim="editor.name" placeholder="例如 主办方标准风格库" />
           </label>
           <label>
             <span>版本</span>
@@ -109,14 +119,87 @@
           <span>标签</span>
           <input v-model.trim="editor.tagsText" placeholder="用逗号分隔，例如 报名必填, 支持搜索, 评审可见" />
         </label>
-        <label class="stack-field">
-          <span>分类</span>
-          <textarea v-model="editor.categoriesText" rows="3" placeholder="每行一个分类"></textarea>
-        </label>
-        <label class="stack-field">
-          <span>风格</span>
-          <textarea v-model="editor.stylesText" rows="8" placeholder="每行一个风格，可写为 分类 | 风格名称 | 编号"></textarea>
-        </label>
+
+        <section class="structured-editor">
+          <aside class="edit-category-panel">
+            <div class="panel-title">
+              <strong>分类</strong>
+              <button type="button" @click="addCategory">添加</button>
+            </div>
+            <label v-for="category in editor.categories" :key="category.localId" :class="{ active: editorCategory === category.name }">
+              <input v-model.trim="category.name" placeholder="分类名称" @focus="editorCategory = category.name" @input="syncCategoryName(category)" />
+              <button type="button" @click="removeCategory(category.localId)">删除</button>
+            </label>
+            <p v-if="editor.categories.length === 0" class="empty-line">先添加分类。</p>
+          </aside>
+
+          <section class="edit-style-panel">
+            <div class="panel-title">
+              <label class="search-field">
+                <input v-model.trim="editorKeyword" placeholder="搜索风格" />
+              </label>
+              <button type="button" @click="addStyle">添加风格</button>
+            </div>
+            <div class="edit-style-list">
+              <button
+                v-for="style in editorStyles"
+                :key="style.localId"
+                :class="{ active: selectedStyleId === style.localId }"
+                type="button"
+                @click="selectedStyleId = style.localId"
+              >
+                <span>
+                  <strong>{{ style.name || '未命名风格' }}</strong>
+                  <small>{{ style.categoryName || '未选择分类' }}<template v-if="style.styleCode"> · {{ style.styleCode }}</template></small>
+                </span>
+                <em>{{ style.status === 1 ? '启用' : '停用' }}</em>
+              </button>
+              <p v-if="editorStyles.length === 0" class="empty-line">当前分类没有风格。</p>
+            </div>
+          </section>
+
+          <aside class="style-detail-panel">
+            <template v-if="selectedStyle">
+              <div class="panel-title">
+                <strong>风格详情</strong>
+                <button type="button" @click="removeStyle(selectedStyle.localId)">删除</button>
+              </div>
+              <label>
+                <span>所属分类</span>
+                <select v-model="selectedStyle.categoryName">
+                  <option value="">选择分类</option>
+                  <option v-for="category in cleanEditorCategories" :key="category" :value="category">{{ category }}</option>
+                </select>
+              </label>
+              <label>
+                <span>风格名称</span>
+                <input v-model.trim="selectedStyle.name" placeholder="例如 American IPA" />
+              </label>
+              <label>
+                <span>编号</span>
+                <input v-model.trim="selectedStyle.styleCode" placeholder="例如 21A" />
+              </label>
+              <label>
+                <span>评委可见说明</span>
+                <textarea v-model.trim="selectedStyle.description" rows="5" placeholder="用一两句话说明评审时关注的风格口径"></textarea>
+              </label>
+              <label>
+                <span>状态</span>
+                <select v-model.number="selectedStyle.status">
+                  <option :value="1">启用</option>
+                  <option :value="0">停用</option>
+                </select>
+              </label>
+            </template>
+            <p v-else class="empty-line">选择一个风格查看详情。</p>
+          </aside>
+        </section>
+
+        <details class="import-box">
+          <summary>批量导入</summary>
+          <textarea v-model="importText" rows="5" placeholder="每行：分类 | 风格名称 | 编号 | 评委可见说明"></textarea>
+          <button type="button" @click="applyImportText">导入到列表</button>
+        </details>
 
         <footer>
           <button type="button" @click="closeEditor">取消</button>
@@ -128,7 +211,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { fetchStyleLibraries, saveStyleLibrary, updateStyleLibrary } from '@/api/admin'
 import { defaultStyleLibraryValue, fallbackStyleLibraries, getStyleLibrary, normalizeStyleLibraries } from './styleLibraries'
@@ -136,11 +219,43 @@ import { defaultStyleLibraryValue, fallbackStyleLibraries, getStyleLibrary, norm
 const selectedLibraryValue = ref(defaultStyleLibraryValue)
 const styleLibraryOptions = ref(normalizeStyleLibraries(fallbackStyleLibraries))
 const selectedLibrary = computed(() => getStyleLibrary(selectedLibraryValue.value, styleLibraryOptions.value))
+const previewCategory = ref('')
+const previewKeyword = ref('')
 const editorOpen = ref(false)
 const editingCode = ref('')
+const editorCategory = ref('')
+const editorKeyword = ref('')
+const selectedStyleId = ref('')
+const importText = ref('')
 const editor = reactive(createEmptyEditor())
 
+const normalizedPreviewItems = computed(() => getStyleItems(selectedLibrary.value))
+const previewStyles = computed(() => {
+  const keyword = previewKeyword.value.toLowerCase()
+  return normalizedPreviewItems.value.filter((style) => {
+    const inCategory = !previewCategory.value || style.categoryName === previewCategory.value
+    const text = [style.name, style.styleCode, style.categoryName].filter(Boolean).join(' ').toLowerCase()
+    return inCategory && (!keyword || text.includes(keyword))
+  })
+})
+const cleanEditorCategories = computed(() => editor.categories.map((category) => category.name.trim()).filter(Boolean))
+const editorStyles = computed(() => {
+  const keyword = editorKeyword.value.toLowerCase()
+  return editor.styles.filter((style) => {
+    const inCategory = !editorCategory.value || style.categoryName === editorCategory.value
+    const text = [style.name, style.styleCode, style.categoryName].filter(Boolean).join(' ').toLowerCase()
+    return inCategory && (!keyword || text.includes(keyword))
+  })
+})
+const selectedStyle = computed(() => editor.styles.find((style) => style.localId === selectedStyleId.value))
+
 onMounted(loadStyleLibraries)
+
+watch(selectedLibrary, (library) => {
+  if (!library.categories.includes(previewCategory.value)) {
+    previewCategory.value = library.categories[0] || ''
+  }
+}, { immediate: true })
 
 async function loadStyleLibraries() {
   try {
@@ -157,12 +272,24 @@ async function loadStyleLibraries() {
 function startCreate() {
   Object.assign(editor, createEmptyEditor())
   editingCode.value = ''
+  editorCategory.value = ''
+  selectedStyleId.value = ''
+  importText.value = ''
   editorOpen.value = true
 }
 
 function startEdit(library) {
   selectedLibraryValue.value = library.value
   editingCode.value = library.value
+  const categories = (library.categories || []).map((name) => ({ localId: createLocalId('category'), name }))
+  const styles = getStyleItems(library).map((item) => ({
+    localId: createLocalId('style'),
+    categoryName: item.categoryName || '',
+    name: item.name || '',
+    styleCode: item.styleCode || '',
+    description: item.description || '',
+    status: item.status === 0 ? 0 : 1,
+  }))
   Object.assign(editor, {
     code: library.value,
     name: library.label,
@@ -171,9 +298,12 @@ function startEdit(library) {
     source: library.source,
     status: library.status === 0 ? 0 : 1,
     tagsText: (library.tags || []).join(', '),
-    categoriesText: (library.categories || []).join('\n'),
-    stylesText: buildStylesText(library),
+    categories,
+    styles,
   })
+  editorCategory.value = categories[0]?.name || ''
+  selectedStyleId.value = styles[0]?.localId || ''
+  importText.value = ''
   editorOpen.value = true
 }
 
@@ -183,12 +313,9 @@ function closeEditor() {
 
 async function submitEditor() {
   const payload = buildPayload()
-  if (!payload.code || !payload.name || !payload.version || !payload.language || !payload.source) {
-    ElMessage.warning('请补全风格库基础信息')
-    return
-  }
-  if (!payload.styles.length) {
-    ElMessage.warning('请至少配置 1 个风格')
+  const issue = validatePayload(payload)
+  if (issue) {
+    ElMessage.warning(issue)
     return
   }
   const saved = editingCode.value
@@ -209,17 +336,13 @@ function createEmptyEditor() {
     source: '主办方',
     status: 1,
     tagsText: '报名必填, 支持搜索, 评审可见',
-    categoriesText: '',
-    stylesText: '',
+    categories: [],
+    styles: [],
   }
 }
 
 function buildPayload() {
-  const categories = editor.categoriesText
-    .split('\n')
-    .map((name) => name.trim())
-    .filter(Boolean)
-    .map((name, index) => ({ name, sortOrder: index }))
+  const categories = cleanEditorCategories.value.map((name, index) => ({ name, sortOrder: index }))
   return {
     code: editor.code,
     name: editor.name,
@@ -229,32 +352,144 @@ function buildPayload() {
     status: Number(editor.status),
     tags: editor.tagsText.split(/[,，]/).map((tag) => tag.trim()).filter(Boolean),
     categories,
-    styles: parseStylesText(editor.stylesText),
+    styles: editor.styles.map((style, index) => ({
+      categoryName: style.categoryName,
+      name: style.name,
+      styleCode: style.styleCode,
+      description: style.description,
+      status: Number(style.status),
+      sortOrder: index,
+    })),
   }
 }
 
-function buildStylesText(library) {
-  const items = library.styleItems?.length
-    ? library.styleItems
-    : (library.styles || []).map((name) => ({ name }))
-  return items.map((item) => [item.categoryName, item.name, item.styleCode].filter(Boolean).join(' | ')).join('\n')
+function validatePayload(payload) {
+  if (!payload.code || !payload.name || !payload.version || !payload.language || !payload.source) return '请补全风格库基础信息'
+  if (!payload.categories.length) return '请至少配置 1 个分类'
+  if (!payload.styles.length) return '请至少配置 1 个风格'
+  const categorySet = new Set(payload.categories.map((category) => category.name))
+  const missingCategory = payload.styles.find((style) => !categorySet.has(style.categoryName))
+  if (missingCategory) return `风格分类不存在：${missingCategory.categoryName || missingCategory.name}`
+  const unnamedStyle = payload.styles.find((style) => !style.name)
+  if (unnamedStyle) return '风格名称不能为空'
+  const duplicatedName = findDuplicated(payload.styles.map((style) => style.name))
+  if (duplicatedName) return `风格名称不能重复：${duplicatedName}`
+  const duplicatedCode = findDuplicated(payload.styles.map((style) => style.styleCode).filter(Boolean))
+  if (duplicatedCode) return `风格编号不能重复：${duplicatedCode}`
+  return ''
 }
 
-function parseStylesText(value) {
-  return value
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line, index) => {
-      const parts = line.split('|').map((part) => part.trim()).filter(Boolean)
-      if (parts.length >= 3) {
-        return { categoryName: parts[0], name: parts[1], styleCode: parts[2], sortOrder: index, status: 1 }
-      }
-      if (parts.length === 2) {
-        return { categoryName: parts[0], name: parts[1], sortOrder: index, status: 1 }
-      }
-      return { name: parts[0], sortOrder: index, status: 1 }
+function addCategory() {
+  const nextName = createUniqueCategoryName()
+  editor.categories.push({ localId: createLocalId('category'), name: nextName })
+  editorCategory.value = nextName
+}
+
+function removeCategory(localId) {
+  const category = editor.categories.find((item) => item.localId === localId)
+  if (!category) return
+  if (editor.styles.some((style) => style.categoryName === category.name)) {
+    ElMessage.warning('该分类下还有风格，先移动或删除这些风格')
+    return
+  }
+  editor.categories = editor.categories.filter((item) => item.localId !== localId)
+  editorCategory.value = editor.categories[0]?.name || ''
+}
+
+function syncCategoryName(category) {
+  const oldName = editorCategory.value
+  if (oldName && category.localId && editor.styles.some((style) => style.categoryName === oldName)) {
+    editor.styles.forEach((style) => {
+      if (style.categoryName === oldName) style.categoryName = category.name
     })
+  }
+  editorCategory.value = category.name
+}
+
+function addStyle() {
+  if (!cleanEditorCategories.value.length) {
+    ElMessage.warning('先添加分类')
+    return
+  }
+  const categoryName = editorCategory.value || cleanEditorCategories.value[0]
+  const style = {
+    localId: createLocalId('style'),
+    categoryName,
+    name: '',
+    styleCode: '',
+    description: '',
+    status: 1,
+  }
+  editor.styles.push(style)
+  selectedStyleId.value = style.localId
+}
+
+function removeStyle(localId) {
+  editor.styles = editor.styles.filter((style) => style.localId !== localId)
+  selectedStyleId.value = editorStyles.value[0]?.localId || editor.styles[0]?.localId || ''
+}
+
+function applyImportText() {
+  const rows = importText.value.split('\n').map((line) => line.trim()).filter(Boolean)
+  if (!rows.length) {
+    ElMessage.warning('请先填写导入内容')
+    return
+  }
+  rows.forEach((line) => {
+    const [categoryName = '', name = '', styleCode = '', description = ''] = line.split('|').map((part) => part.trim())
+    if (!categoryName || !name) return
+    if (!cleanEditorCategories.value.includes(categoryName)) {
+      editor.categories.push({ localId: createLocalId('category'), name: categoryName })
+    }
+    editor.styles.push({
+      localId: createLocalId('style'),
+      categoryName,
+      name,
+      styleCode,
+      description,
+      status: 1,
+    })
+  })
+  editorCategory.value = cleanEditorCategories.value[0] || ''
+  selectedStyleId.value = editor.styles[0]?.localId || ''
+  importText.value = ''
+  ElMessage.success('已导入到列表，请检查后保存')
+}
+
+function getStyleItems(library) {
+  if (library.styleItems?.length) return library.styleItems
+  return (library.styles || []).map((name) => ({ name, categoryName: '', status: 1 }))
+}
+
+function countStylesInCategory(category) {
+  return normalizedPreviewItems.value.filter((style) => style.categoryName === category).length
+}
+
+function styleKey(style) {
+  return [style.categoryName, style.name, style.styleCode].filter(Boolean).join('|')
+}
+
+function findDuplicated(values) {
+  const set = new Set()
+  return values.find((value) => {
+    if (set.has(value)) return true
+    set.add(value)
+    return false
+  })
+}
+
+function createUniqueCategoryName() {
+  let index = editor.categories.length + 1
+  let name = `新分类 ${index}`
+  while (cleanEditorCategories.value.includes(name)) {
+    index += 1
+    name = `新分类 ${index}`
+  }
+  return name
+}
+
+function createLocalId(prefix) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 </script>
 
@@ -289,8 +524,11 @@ button,
 input,
 select,
 textarea {
-  cursor: pointer;
   font: inherit;
+}
+
+button {
+  cursor: pointer;
 }
 
 input,
@@ -315,11 +553,13 @@ select {
 textarea {
   resize: vertical;
   padding: 10px;
+  line-height: 1.55;
 }
 
-svg {
-  width: 1em;
-  height: 1em;
+.page-head,
+.library-layout {
+  max-width: 1440px;
+  margin: 0 auto;
 }
 
 .page-head {
@@ -327,8 +567,6 @@ svg {
   justify-content: space-between;
   gap: 18px;
   align-items: center;
-  max-width: 1420px;
-  margin: 0 auto 18px;
   padding-bottom: 16px;
   border-bottom: 1px solid var(--line);
 }
@@ -340,7 +578,8 @@ svg {
 
 .page-head p,
 small,
-dt {
+.empty-line,
+.library-summary p {
   color: var(--muted);
 }
 
@@ -349,14 +588,16 @@ dt {
 }
 
 .tool-button,
-.library-card footer button,
+.library-summary button,
 .editor-dialog footer button,
-.editor-dialog header button {
+.editor-dialog header button,
+.panel-title button,
+.edit-category-panel label button,
+.import-box button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  min-height: 40px;
+  min-height: 38px;
   padding: 0 13px;
   color: var(--text);
   border: 1px solid var(--line);
@@ -366,10 +607,8 @@ dt {
 }
 
 .tool-button.primary,
-.library-card footer button,
+.library-summary button,
 .editor-dialog footer button.primary {
-  flex: 0 0 auto;
-  white-space: nowrap;
   color: var(--gold-soft);
   border-color: rgba(216, 169, 53, 0.32);
   background: rgba(216, 169, 53, 0.08);
@@ -377,59 +616,98 @@ dt {
 
 .library-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-columns: 280px minmax(0, 1fr);
   gap: 14px;
-  max-width: 1420px;
-  margin: 0 auto;
+  margin-top: 18px;
   align-items: start;
 }
 
-.library-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.library-card {
-  display: grid;
-  gap: 16px;
-  min-width: 0;
-  padding: 18px;
+.library-rail,
+.style-workbench,
+.category-panel,
+.style-panel,
+.edit-category-panel,
+.edit-style-panel,
+.style-detail-panel {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
-.library-card.active {
+.library-rail {
+  position: sticky;
+  top: 18px;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.library-nav-item {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  gap: 8px 10px;
+  min-height: 70px;
+  padding: 10px;
+  color: var(--text);
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.024);
+}
+
+.library-nav-item.active {
   border-color: rgba(216, 169, 53, 0.34);
-  background: rgba(216, 169, 53, 0.045);
+  background: rgba(216, 169, 53, 0.07);
 }
 
-.library-card header,
-.library-card footer {
+.library-nav-item strong,
+.library-nav-item small {
+  grid-column: 2;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-dot {
+  grid-row: 1 / span 2;
+  align-self: start;
+  width: 8px;
+  height: 8px;
+  margin-top: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.status-dot.success {
+  background: var(--green);
+  box-shadow: 0 0 0 4px rgba(111, 207, 122, 0.09);
+}
+
+.style-workbench {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+}
+
+.library-summary {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: 18px;
   align-items: flex-start;
+  padding: 6px 4px 14px;
+  border-bottom: 1px solid var(--line);
 }
 
-.library-card footer div {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: flex-end;
-}
-
-.library-card h2 {
-  margin-top: 10px;
-  font-size: 22px;
+.library-summary h2 {
+  margin-top: 8px;
+  font-size: 24px;
 }
 
 .status-pill {
   display: inline-flex;
   align-items: center;
-  min-height: 28px;
+  min-height: 26px;
   padding: 0 9px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -445,74 +723,79 @@ dt {
   background: rgba(111, 207, 122, 0.06);
 }
 
-.library-meta {
+.style-browser {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 12px;
 }
 
-.library-meta div,
-.tag-row span {
-  padding: 10px;
+.category-panel,
+.style-panel {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 12px;
+}
+
+.category-panel header,
+.style-panel header,
+.panel-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.category-panel button {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 10px;
+  color: var(--text);
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.026);
 }
 
-.library-meta dd {
-  margin: 5px 0 0;
-  color: var(--text);
-  font-weight: 900;
+.category-panel button.active {
+  color: var(--gold-soft);
+  border-color: rgba(216, 169, 53, 0.3);
+  background: rgba(216, 169, 53, 0.07);
 }
 
-.tag-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+.search-field {
+  flex: 1 1 auto;
 }
 
-.tag-row span {
-  padding: 7px 10px;
-  color: var(--text);
-}
-
-.preview-panel {
-  position: sticky;
-  top: 18px;
-  display: grid;
-  gap: 14px;
-  padding: 18px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(22, 32, 36, 0.94);
-}
-
-.preview-panel header {
+.style-list,
+.edit-style-list {
   display: grid;
   gap: 8px;
+  max-height: 560px;
+  overflow: auto;
+  padding-right: 4px;
 }
 
-.preview-panel header span {
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.preview-panel h2 {
-  font-size: 20px;
-}
-
-.preview-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.preview-list span {
-  padding: 8px 10px;
+.style-row {
+  display: grid;
+  gap: 6px;
+  padding: 11px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.024);
+}
+
+.style-row div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.style-row p {
+  color: #b6c8cf;
+  line-height: 1.55;
 }
 
 .editor-backdrop {
@@ -528,8 +811,8 @@ dt {
 .editor-dialog {
   display: grid;
   gap: 14px;
-  width: min(820px, 100%);
-  max-height: min(780px, 92vh);
+  width: min(1180px, 100%);
+  max-height: min(840px, 92vh);
   overflow: auto;
   padding: 18px;
   border: 1px solid var(--line);
@@ -548,7 +831,8 @@ dt {
 
 .editor-dialog header span,
 .stack-field span,
-.editor-grid label span {
+.editor-grid label span,
+.style-detail-panel label span {
   color: var(--muted);
   font-size: 13px;
   font-weight: 800;
@@ -561,9 +845,102 @@ dt {
 }
 
 .editor-grid label,
-.stack-field {
+.stack-field,
+.style-detail-panel label {
   display: grid;
   gap: 7px;
+}
+
+.structured-editor {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr) 340px;
+  gap: 10px;
+  min-height: 430px;
+}
+
+.edit-category-panel,
+.edit-style-panel,
+.style-detail-panel {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.edit-category-panel label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.edit-category-panel label.active input {
+  border-color: rgba(216, 169, 53, 0.38);
+}
+
+.edit-category-panel label button,
+.style-detail-panel .panel-title button {
+  min-height: 40px;
+  color: #ffb4ad;
+}
+
+.edit-style-list button {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  min-height: 58px;
+  padding: 9px;
+  color: var(--text);
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.024);
+}
+
+.edit-style-list button.active {
+  border-color: rgba(216, 169, 53, 0.34);
+  background: rgba(216, 169, 53, 0.07);
+}
+
+.edit-style-list span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.edit-style-list strong,
+.edit-style-list small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.edit-style-list em {
+  color: var(--gold-soft);
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.import-box {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.import-box summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.import-box textarea {
+  margin-top: 10px;
+}
+
+.import-box button {
+  margin-top: 10px;
 }
 
 .editor-dialog footer {
@@ -571,11 +948,13 @@ dt {
 }
 
 @media (max-width: 1180px) {
-  .library-layout {
+  .library-layout,
+  .style-browser,
+  .structured-editor {
     grid-template-columns: 1fr;
   }
 
-  .preview-panel {
+  .library-rail {
     position: static;
   }
 }
@@ -586,12 +965,13 @@ dt {
   }
 
   .page-head,
-  .library-card header,
-  .library-card footer {
+  .library-summary,
+  .editor-dialog header,
+  .editor-dialog footer {
     display: grid;
   }
 
-  .library-grid {
+  .editor-grid {
     grid-template-columns: 1fr;
   }
 }

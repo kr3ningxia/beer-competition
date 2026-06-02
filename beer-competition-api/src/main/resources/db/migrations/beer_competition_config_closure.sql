@@ -74,6 +74,9 @@ CREATE TABLE IF NOT EXISTS `competition_style_config` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `competition_id` bigint NOT NULL,
   `name` varchar(128) NOT NULL,
+  `category_name` varchar(128) DEFAULT NULL,
+  `style_code` varchar(64) DEFAULT NULL,
+  `description` varchar(500) DEFAULT NULL,
   `sort_order` int NOT NULL DEFAULT 0,
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -95,8 +98,8 @@ CREATE TABLE IF NOT EXISTS `entry_field_config` (
   UNIQUE KEY `uk_entry_field_config_key` (`competition_id`,`field_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='报名字段配置';
 
-INSERT IGNORE INTO `competition_style_config` (`competition_id`, `name`, `sort_order`)
-SELECT `id`, 'American IPA', 1
+INSERT IGNORE INTO `competition_style_config` (`competition_id`, `name`, `category_name`, `style_code`, `sort_order`)
+SELECT `id`, 'American IPA', 'IPA', '21A', 1
 FROM `competition`
 WHERE `status` <> 'DRAFT';
 

@@ -76,6 +76,10 @@ public class StyleLibraryServiceImpl implements StyleLibraryService {
         String code = normalizeRequired(request.getCode(), "风格库编码不能为空");
         List<StyleCategoryRequest> categories = normalizeCategories(request.getCategories() == null ? List.of() : request.getCategories());
         List<StyleItemRequest> styles = normalizeStyles(request.getStyles());
+        if (resolveStatus(request.getStatus()) == ENABLED_STATUS && categories.isEmpty()) {
+            throw new BaseException("启用风格库至少需要 1 个分类");
+        }
+        assertStylesUseExistingCategories(styles, categories);
 
         // 2) 新建或更新风格库主记录
         StyleLibrary library = styleLibraryMapper.selectOne(new LambdaQueryWrapper<StyleLibrary>()
@@ -108,24 +112,37 @@ public class StyleLibraryServiceImpl implements StyleLibraryService {
     }
 
     @Override
-    public List<String> listEnabledStyleNames(String code) {
+    public List<StyleItemVO> listEnabledStyles(String code) {
         // 1) 查询启用风格库
         StyleLibrary library = getLibraryOrThrow(normalizeRequired(code, "风格库编码不能为空"));
         if (!Objects.equals(library.getStatus(), ENABLED_STATUS)) {
             throw new BaseException("当前风格库未启用");
         }
 
-        // 2) 返回启用风格名称
-        List<String> styles = styleItemMapper.selectList(new LambdaQueryWrapper<StyleItem>()
+        // 2) 返回启用风格详情
+        Map<Long, StyleCategory> categoryMap = listCategories(library.getId()).stream()
+                .collect(Collectors.toMap(StyleCategory::getId, Function.identity(), (left, right) -> left, LinkedHashMap::new));
+        List<StyleItemVO> styles = styleItemMapper.selectList(new LambdaQueryWrapper<StyleItem>()
                         .eq(StyleItem::getLibraryId, library.getId())
                         .eq(StyleItem::getStatus, ENABLED_STATUS)
                         .orderByAsc(StyleItem::getSortOrder)
                         .orderByAsc(StyleItem::getId))
                 .stream()
-                .map(StyleItem::getName)
+                .map(item -> StyleItemVO.builder()
+                        .id(item.getId())
+                        .categoryName(categoryMap.get(item.getCategoryId()) == null ? null : categoryMap.get(item.getCategoryId()).getName())
+                        .name(item.getName())
+                        .styleCode(item.getStyleCode())
+                        .description(item.getDescription())
+                        .status(item.getStatus())
+                        .sortOrder(item.getSortOrder())
+                        .build())
                 .toList();
         if (styles.isEmpty()) {
             throw new BaseException("当前风格库没有可用风格");
+        }
+        if (styles.stream().anyMatch(item -> !StringUtils.hasText(item.getCategoryName()))) {
+            throw new BaseException("当前风格库存在未归类风格，请先修正分类");
         }
         return styles;
     }
@@ -210,10 +227,13 @@ public class StyleLibraryServiceImpl implements StyleLibraryService {
                 .eq(StyleItem::getLibraryId, libraryId));
         int sort = 0;
         for (StyleItemRequest item : styles) {
-            StyleCategory category = StringUtils.hasText(item.getCategoryName()) ? categoryMap.get(item.getCategoryName()) : null;
+            StyleCategory category = categoryMap.get(item.getCategoryName());
+            if (category == null) {
+                throw new BaseException("风格分类不存在：" + item.getCategoryName());
+            }
             styleItemMapper.insert(StyleItem.builder()
                     .libraryId(libraryId)
-                    .categoryId(category == null ? null : category.getId())
+                    .categoryId(category.getId())
                     .name(item.getName())
                     .styleCode(normalizeNullable(item.getStyleCode()))
                     .description(normalizeNullable(item.getDescription()))
@@ -236,12 +256,29 @@ public class StyleLibraryServiceImpl implements StyleLibraryService {
         List<StyleItemRequest> normalized = styles.stream()
                 .peek(item -> {
                     item.setName(normalizeRequired(item.getName(), "风格名称不能为空"));
-                    item.setCategoryName(normalizeNullable(item.getCategoryName()));
+                    item.setCategoryName(normalizeRequired(item.getCategoryName(), "风格分类不能为空"));
+                    item.setStyleCode(normalizeNullable(item.getStyleCode()));
+                    item.setDescription(normalizeNullable(item.getDescription()));
                 })
                 .sorted(Comparator.comparing(item -> resolveSort(item.getSortOrder(), 0)))
                 .toList();
         assertUnique(normalized.stream().map(StyleItemRequest::getName).toList(), "风格名称");
+        assertUnique(normalized.stream()
+                .map(StyleItemRequest::getStyleCode)
+                .filter(StringUtils::hasText)
+                .toList(), "风格编号");
         return normalized;
+    }
+
+    private void assertStylesUseExistingCategories(List<StyleItemRequest> styles, List<StyleCategoryRequest> categories) {
+        Set<String> categoryNames = categories.stream()
+                .map(StyleCategoryRequest::getName)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        for (StyleItemRequest style : styles) {
+            if (!categoryNames.contains(style.getCategoryName())) {
+                throw new BaseException("风格分类不存在：" + style.getCategoryName());
+            }
+        }
     }
 
     private void assertUnique(List<String> values, String label) {

@@ -10,6 +10,7 @@ import com.beercompetition.mapper.CompetitionCategoryMapper;
 import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.CompetitionRoundMapper;
 import com.beercompetition.mapper.CompetitionScoreConfigMapper;
+import com.beercompetition.mapper.CompetitionStyleConfigMapper;
 import com.beercompetition.mapper.JudgeAccountMapper;
 import com.beercompetition.mapper.JudgeAssignmentMapper;
 import com.beercompetition.mapper.JudgeTableMapper;
@@ -39,6 +40,7 @@ import com.beercompetition.pojo.po.Competition;
 import com.beercompetition.pojo.po.CompetitionCategory;
 import com.beercompetition.pojo.po.CompetitionRound;
 import com.beercompetition.pojo.po.CompetitionScoreConfig;
+import com.beercompetition.pojo.po.CompetitionStyleConfig;
 import com.beercompetition.pojo.po.JudgeAccount;
 import com.beercompetition.pojo.po.JudgeAssignment;
 import com.beercompetition.pojo.po.JudgeTable;
@@ -88,6 +90,7 @@ public class RoundServiceImpl implements RoundService {
     private final CompetitionMapper competitionMapper;
     private final CompetitionCategoryMapper competitionCategoryMapper;
     private final CompetitionScoreConfigMapper competitionScoreConfigMapper;
+    private final CompetitionStyleConfigMapper competitionStyleConfigMapper;
     private final JudgeTableMapper judgeTableMapper;
     private final JudgeAssignmentMapper judgeAssignmentMapper;
     private final JudgeAccountMapper judgeAccountMapper;
@@ -128,6 +131,7 @@ public class RoundServiceImpl implements RoundService {
     public List<CompetitionEntryVO> listEntryPool(Long competitionId) {
         requireCompetition(competitionId);
         Map<Long, String> categoryNameById = listCategoryNames(competitionId);
+        Map<String, CompetitionStyleConfig> styleByName = listStyleSnapshot(competitionId);
         Map<Long, RoundResult> latestResultByEntry = latestResultByEntry(competitionId);
         Map<Long, RoundTable> tableById = loadRoundTables(latestResultByEntry.values().stream()
                 .map(RoundResult::getRoundTableId)
@@ -137,7 +141,7 @@ public class RoundServiceImpl implements RoundService {
                         .orderByDesc(BeerEntry::getCreateTime)
                         .orderByAsc(BeerEntry::getId))
                 .stream()
-                .map(entry -> toEntryVO(entry, categoryNameById, latestResultByEntry.get(entry.getId()), tableById))
+                .map(entry -> toEntryVO(entry, categoryNameById, styleByName, latestResultByEntry.get(entry.getId()), tableById))
                 .toList();
     }
 
@@ -554,6 +558,7 @@ public class RoundServiceImpl implements RoundService {
         CompetitionRound round = competitionRoundMapper.selectById(table.getRoundId());
         requireTaskMember(roundTableId, judgeId);
         Map<Long, String> categoryNameById = listCategoryNames(table.getCompetitionId());
+        Map<String, CompetitionStyleConfig> styleByName = listStyleSnapshot(table.getCompetitionId());
         List<RoundTableEntry> entries = roundTableEntryMapper.selectList(new LambdaQueryWrapper<RoundTableEntry>()
                 .eq(RoundTableEntry::getRoundTableId, roundTableId)
                 .orderByAsc(RoundTableEntry::getSortOrder)
@@ -571,7 +576,7 @@ public class RoundServiceImpl implements RoundService {
                 .targetCount(table.getTargetCount())
                 .targetMode(table.getTargetMode())
                 .status(table.getStatus())
-                .entries(entries.stream().map(item -> toEntryVO(entryById.get(item.getBeerEntryId()), categoryNameById, null, Map.of())).toList())
+                .entries(entries.stream().map(item -> toEntryVO(entryById.get(item.getBeerEntryId()), categoryNameById, styleByName, null, Map.of())).toList())
                 .rankings(buildRankings(table, results, entryById))
                 .build();
     }
@@ -700,23 +705,37 @@ public class RoundServiceImpl implements RoundService {
 
     private CompetitionEntryVO toEntryVO(BeerEntry entry,
                                          Map<Long, String> categoryNameById,
+                                         Map<String, CompetitionStyleConfig> styleByName,
                                          RoundResult latestResult,
                                          Map<Long, RoundTable> tableById) {
         if (entry == null) {
             return CompetitionEntryVO.builder().build();
         }
+        CompetitionStyleConfig style = styleByName.get(entry.getStyle());
         return CompetitionEntryVO.builder()
                 .id(entry.getId())
                 .uuid(entry.getUuid())
                 .shortCode(entry.getShortCode())
                 .categoryName(categoryNameById.getOrDefault(entry.getCategoryId(), "-"))
                 .style(entry.getStyle())
+                .styleCategoryName(style == null ? null : style.getCategoryName())
+                .styleCode(style == null ? null : style.getStyleCode())
+                .styleDescription(style == null ? null : style.getDescription())
                 .status(entry.getStatus())
                 .stored(Objects.equals(entry.getStoredFlag(), FLAG_TRUE))
                 .advanced(latestResult != null)
                 .sourceTable(latestResult == null || tableById.get(latestResult.getRoundTableId()) == null ? "" : tableById.get(latestResult.getRoundTableId()).getTableName())
                 .sourceResult(latestResult == null ? "" : resolveSlotLabel(latestResult))
                 .build();
+    }
+
+    private Map<String, CompetitionStyleConfig> listStyleSnapshot(Long competitionId) {
+        return competitionStyleConfigMapper.selectList(new LambdaQueryWrapper<CompetitionStyleConfig>()
+                        .eq(CompetitionStyleConfig::getCompetitionId, competitionId)
+                        .orderByAsc(CompetitionStyleConfig::getSortOrder)
+                        .orderByAsc(CompetitionStyleConfig::getId))
+                .stream()
+                .collect(Collectors.toMap(CompetitionStyleConfig::getName, Function.identity(), (left, right) -> left, LinkedHashMap::new));
     }
 
     private void validateAllocationRequest(CompetitionRound round, RoundAllocationRequest request) {

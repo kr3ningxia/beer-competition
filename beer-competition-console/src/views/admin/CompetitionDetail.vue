@@ -200,7 +200,21 @@
               <div class="library-summary compact">
                 <strong>{{ selectedStyleLibrary.label }}</strong>
                 <small>{{ selectedStyleLibrary.categoryCount }} 个分类 · {{ selectedStyleLibrary.styleCount }} 个风格</small>
-                <p>需要查看风格详情、标签或风格示例时，请前往风格库管理页。</p>
+                <p>{{ editable.styleLibrary ? '保存后会更新本场报名可选风格。' : '本场报名使用下方已锁定快照。' }}</p>
+              </div>
+            </div>
+            <div class="style-snapshot">
+              <div class="style-snapshot-head">
+                <strong>本场风格快照</strong>
+                <span>{{ styleSnapshot.length }} 个风格</span>
+              </div>
+              <div class="style-snapshot-list">
+                <span v-for="style in styleSnapshot.slice(0, 12)" :key="style.id || style.name">
+                  <b>{{ styleDisplayName(style) }}</b>
+                  <small>{{ style.categoryName || '未归类' }}</small>
+                </span>
+                <em v-if="styleSnapshot.length > 12">还有 {{ styleSnapshot.length - 12 }} 个</em>
+                <p v-if="styleSnapshot.length === 0" class="empty-line">当前没有风格快照。</p>
               </div>
             </div>
           </article>
@@ -812,6 +826,7 @@ const registrationBlockText = computed(() => {
   return pending.length ? `还差 ${pending.map((check) => check.label).join('、')}` : '可开放报名'
 })
 const selectedStyleLibrary = computed(() => getStyleLibrary(selectedStyleLibraryVersion.value || competition.value?.styleLibraryVersion, styleLibraryOptions.value))
+const styleSnapshot = computed(() => competition.value?.styles || [])
 const registrationWindowInfo = computed(() => resolveRegistrationWindowInfo())
 const stagePrimaryAction = computed(() => resolveStagePrimaryAction())
 const stageSecondaryActions = computed(() => resolveStageSecondaryActions())
@@ -1092,6 +1107,10 @@ async function loadStyleLibraries() {
   } catch {
     styleLibraryOptions.value = normalizeStyleLibraries(fallbackStyleLibraries)
   }
+}
+
+function styleDisplayName(style) {
+  return [style.styleCode, style.name].filter(Boolean).join(' ')
 }
 
 function seedJudgeAssignments() {
@@ -2635,6 +2654,54 @@ small,
   margin: 0;
   color: var(--muted);
   line-height: 1.6;
+}
+
+.style-snapshot {
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.style-snapshot-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.style-snapshot-head span {
+  color: var(--muted);
+}
+
+.style-snapshot-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.style-snapshot-list span {
+  display: inline-grid;
+  gap: 2px;
+  max-width: 220px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.026);
+}
+
+.style-snapshot-list b,
+.style-snapshot-list small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.style-snapshot-list small,
+.style-snapshot-list em {
+  color: var(--muted);
+  font-style: normal;
 }
 
 .category-editor-list {
