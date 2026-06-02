@@ -6,21 +6,23 @@ const routes = [
   {
     path: '/portal/login',
     component: () => import('@/views/portal/Login.vue'),
-    meta: { public: true, scope: 'portal' },
+    meta: { public: true, guestOnly: true, scope: 'portal' },
   },
   {
     path: '/portal',
     component: () => import('@/layouts/PortalLayout.vue'),
-    meta: { requiresAuth: true, scope: 'portal' },
+    redirect: '/portal/home',
+    meta: { scope: 'portal' },
     children: [
-      { path: 'home', component: () => import('@/views/portal/Home.vue') },
-      { path: 'events', component: () => import('@/views/portal/Events.vue') },
-      { path: 'events/:id', component: () => import('@/views/portal/EventDetail.vue') },
-      { path: 'entries', component: () => import('@/views/portal/Entries.vue') },
-      { path: 'submit', component: () => import('@/views/portal/SubmitEntry.vue') },
-      { path: 'payment', component: () => import('@/views/portal/PaymentQr.vue') },
-      { path: 'results', component: () => import('@/views/portal/Results.vue') },
-      { path: 'profile', component: () => import('@/views/portal/Profile.vue') },
+      { path: 'home', component: () => import('@/views/portal/Home.vue'), meta: { public: true, scope: 'portal' } },
+      { path: 'events', component: () => import('@/views/portal/Events.vue'), meta: { public: true, scope: 'portal' } },
+      { path: 'events/:id', component: () => import('@/views/portal/EventDetail.vue'), meta: { public: true, scope: 'portal' } },
+      { path: 'my', component: () => import('@/views/portal/MyParticipation.vue'), meta: { requiresAuth: true, scope: 'portal' } },
+      { path: 'entries', component: () => import('@/views/portal/Entries.vue'), meta: { requiresAuth: true, scope: 'portal' } },
+      { path: 'submit', component: () => import('@/views/portal/SubmitEntry.vue'), meta: { requiresAuth: true, scope: 'portal' } },
+      { path: 'payment', component: () => import('@/views/portal/PaymentQr.vue'), meta: { requiresAuth: true, scope: 'portal' } },
+      { path: 'results', component: () => import('@/views/portal/Results.vue'), meta: { requiresAuth: true, scope: 'portal' } },
+      { path: 'profile', component: () => import('@/views/portal/Profile.vue'), meta: { requiresAuth: true, scope: 'portal' } },
     ],
   },
   {
@@ -53,8 +55,8 @@ const router = createRouter({
 
 router.beforeEach((to, from, next) => {
   if (to.meta.public) {
-    if (to.meta.scope && isLoggedIn(to.meta.scope)) {
-      next(to.meta.scope === 'admin' ? '/admin/dashboard' : '/portal/home')
+    if (to.meta.guestOnly && to.meta.scope && isLoggedIn(to.meta.scope)) {
+      next(to.meta.scope === 'admin' ? '/admin/dashboard' : '/portal/my')
       return
     }
     next()

@@ -55,17 +55,17 @@
     </template>
 
     <section v-else class="locked-card brewer-card">
-      <span :class="['label-chip', `tone-${statusMeta[selectedEntry.status].tone}`]">
-        {{ statusMeta[selectedEntry.status].label }}
+      <span :class="['label-chip', `tone-${entryStatusMeta[selectedEntry.status].tone}`]">
+        {{ entryStatusMeta[selectedEntry.status].label }}
       </span>
       <h3>{{ selectedEntry.name }}</h3>
       <p>该酒款结果暂未发布。比赛结束并由主办方确认结果后，这里会展示评分反馈、桌长评语和奖项信息。</p>
       <div class="locked-progress">
         <span class="done">提交</span>
-        <span :class="{ done: selectedEntry.paymentStatus === 'PAID' }">付款</span>
+        <span :class="{ done: selectedEntry.paymentStatus === 'PAID' }">付款确认</span>
         <span :class="{ done: selectedEntry.storedAt }">入库</span>
         <span>评审</span>
-        <span>发布</span>
+        <span>结果发布</span>
       </div>
     </section>
   </div>
@@ -73,7 +73,8 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { activeCompetition, entries, statusMeta } from './mockData'
+import { activeCompetition, entries } from './mockData'
+import { entryStatusMeta } from './portalViewModels'
 
 const selectedId = ref(entries.find((entry) => entry.status === 'RESULT_PUBLISHED')?.id || entries[0].id)
 const selectedEntry = computed(() => entries.find((entry) => entry.id === selectedId.value) || entries[0])

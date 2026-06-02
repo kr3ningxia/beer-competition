@@ -2,7 +2,7 @@
   <div class="portal-shell">
     <header class="portal-header">
       <div class="header-inner">
-        <RouterLink class="brand" to="/portal/home" aria-label="厂家端首页">
+        <RouterLink class="brand" to="/portal/home" aria-label="赛事首页">
           <span class="brand-mark">
             <CoffeeCup />
           </span>
@@ -12,9 +12,9 @@
           </span>
         </RouterLink>
 
-        <nav class="nav-list" aria-label="厂家端导航">
+        <nav class="nav-list" aria-label="厂商导航">
           <RouterLink
-            v-for="item in navItems"
+            v-for="item in visibleNavItems"
             :key="item.path"
             :to="item.path"
             :class="['nav-item', { active: isNavActive(item) }]"
@@ -24,11 +24,12 @@
           </RouterLink>
         </nav>
 
-        <div class="account-pill">
+        <div v-if="loggedIn" class="account-pill">
           <span class="avatar">SM</span>
-          <span>{{ displayName || '山雾麦芽工坊' }}</span>
+          <span>{{ accountName }}</span>
           <el-button text @click="logout">退出</el-button>
         </div>
+        <RouterLink v-else class="login-link" to="/portal/login">登录报名</RouterLink>
       </div>
     </header>
 
@@ -39,6 +40,7 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
   CircleCheck,
@@ -48,19 +50,25 @@ import {
   Tickets,
   User,
 } from '@element-plus/icons-vue'
-import { clearSession, getDisplayName } from '@/utils/auth'
+import { clearSession, getDisplayName, isLoggedIn } from '@/utils/auth'
 
 const router = useRouter()
 const route = useRoute()
 const displayName = getDisplayName('portal')
+const loggedIn = computed(() => isLoggedIn('portal'))
+const accountName = computed(() => displayName || '完善厂牌资料')
 
 const navItems = [
-  { path: '/portal/home', label: '赛事报名', icon: Tickets, match: ['/portal/home', '/portal/events'] },
-  { path: '/portal/entries', label: '我的酒款', icon: Document },
-  { path: '/portal/payment', label: '付款与标签', icon: Money },
-  { path: '/portal/results', label: '结果反馈', icon: CircleCheck },
-  { path: '/portal/profile', label: '厂牌资料', icon: User },
+  { path: '/portal/home', label: '赛事首页', icon: Tickets, public: true },
+  { path: '/portal/events', label: '全部赛事', icon: Document, public: true, match: ['/portal/events'] },
+  { path: '/portal/my', label: '我的参赛', icon: CircleCheck, auth: true },
+  { path: '/portal/entries', label: '我的酒款', icon: Document, auth: true },
+  { path: '/portal/payment', label: '付款与标签', icon: Money, auth: true },
+  { path: '/portal/results', label: '结果反馈', icon: CircleCheck, auth: true },
+  { path: '/portal/profile', label: '厂牌资料', icon: User, auth: true },
 ]
+
+const visibleNavItems = computed(() => navItems.filter((item) => item.public || loggedIn.value))
 
 function isNavActive(item) {
   if (item.match) {
@@ -71,7 +79,7 @@ function isNavActive(item) {
 
 function logout() {
   clearSession('portal')
-  router.push('/portal/login')
+  router.push('/portal/home')
 }
 </script>
 
@@ -203,6 +211,21 @@ function logout() {
   border: 1px solid rgba(87, 58, 26, 0.12);
   border-radius: 999px;
   box-shadow: 0 10px 24px rgba(83, 51, 17, 0.08);
+  white-space: nowrap;
+}
+
+.login-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 16px;
+  color: #2b1d10;
+  background: #e1a23d;
+  border: 1px solid rgba(87, 58, 26, 0.16);
+  border-radius: 999px;
+  font-weight: 800;
+  text-decoration: none;
   white-space: nowrap;
 }
 

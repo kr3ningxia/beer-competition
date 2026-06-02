@@ -6,7 +6,7 @@
         <p>按酒款查看报名记录，并处理付款、现场标签、酒样入库和结果反馈。</p>
       </div>
       <div class="toolbar-actions">
-        <el-input v-model="keyword" placeholder="搜索酒名 / UUID" clearable />
+        <el-input v-model="keyword" placeholder="搜索酒名 / 参赛编号 / 现场短编号" clearable />
         <el-select v-model="statusFilter" placeholder="状态" clearable>
           <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
@@ -21,8 +21,8 @@
         @click="selectEntry(entry)"
       >
         <div class="label-top">
-          <span :class="['label-chip', `tone-${statusMeta[entry.status].tone}`]">
-            {{ statusMeta[entry.status].label }}
+          <span :class="['label-chip', `tone-${entryStatusMeta[entry.status].tone}`]">
+            {{ entryStatusMeta[entry.status].label }}
           </span>
           <span class="abv">{{ entry.abv }}</span>
         </div>
@@ -44,7 +44,7 @@
           </span>
         </div>
         <div class="uuid-band">
-          <span>{{ entry.uuid }}</span>
+          <span>参赛编号 {{ entry.uuid }}</span>
           <el-button size="small" text @click.stop="selectEntry(entry)">详情</el-button>
         </div>
         <div class="card-actions" @click.stop>
@@ -57,11 +57,11 @@
     <el-drawer v-model="drawerVisible" size="520px" class="entry-drawer" :with-header="false">
       <div v-if="selectedEntry" class="drawer-body">
         <div class="drawer-label">
-          <span :class="['label-chip', `tone-${statusMeta[selectedEntry.status].tone}`]">
-            {{ statusMeta[selectedEntry.status].label }}
+          <span :class="['label-chip', `tone-${entryStatusMeta[selectedEntry.status].tone}`]">
+            {{ entryStatusMeta[selectedEntry.status].label }}
           </span>
           <h2>{{ selectedEntry.name }}</h2>
-          <p>{{ selectedEntry.uuid }}</p>
+          <p>参赛编号 {{ selectedEntry.uuid }} · 现场短编号 {{ selectedEntry.shortCode }}</p>
         </div>
 
         <section class="drawer-section">
@@ -78,6 +78,7 @@
             <div><dt>投递组别</dt><dd>{{ selectedEntry.categoryName }}</dd></div>
             <div><dt>基础风格</dt><dd>{{ selectedEntry.style }}</dd></div>
             <div><dt>ABV / IBU</dt><dd>{{ selectedEntry.abv }} / {{ selectedEntry.ibu }}</dd></div>
+            <div><dt>现场短编号</dt><dd>{{ selectedEntry.shortCode }}</dd></div>
             <div><dt>提交时间</dt><dd>{{ selectedEntry.submittedAt }}</dd></div>
             <div><dt>付款时间</dt><dd>{{ selectedEntry.paidAt || '-' }}</dd></div>
             <div><dt>入库时间</dt><dd>{{ selectedEntry.storedAt || '-' }}</dd></div>
@@ -85,9 +86,9 @@
         </section>
 
         <section class="drawer-section">
-          <h3>评审匿名视图预览</h3>
+          <h3>评审可见信息预览</h3>
           <div class="anonymous-preview">
-            <strong>{{ selectedEntry.uuid }}</strong>
+            <strong>参赛编号 {{ selectedEntry.uuid }}</strong>
             <p>{{ selectedEntry.categoryName }} · {{ selectedEntry.style }} · {{ selectedEntry.abv }}</p>
             <p>{{ selectedEntry.description }}</p>
             <ul>
@@ -129,20 +130,21 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { competitions, entries, statusMeta } from './mockData'
+import { competitions, entries } from './mockData'
+import { entryPrimaryAction, entryStatusMeta } from './portalViewModels'
 
 const keyword = ref('')
 const statusFilter = ref('')
 const drawerVisible = ref(false)
 const selectedEntry = ref(null)
 
-const statusOptions = Object.entries(statusMeta).map(([value, meta]) => ({ value, label: meta.label }))
+const statusOptions = Object.entries(entryStatusMeta).map(([value, meta]) => ({ value, label: meta.label }))
 
 const filteredEntries = computed(() => {
   const word = keyword.value.trim().toLowerCase()
   return entries.filter((entry) => {
     const hitStatus = !statusFilter.value || entry.status === statusFilter.value
-    const hitWord = !word || `${entry.name} ${entry.uuid}`.toLowerCase().includes(word)
+    const hitWord = !word || `${entry.name} ${entry.uuid} ${entry.shortCode}`.toLowerCase().includes(word)
     return hitStatus && hitWord
   })
 })
@@ -157,20 +159,14 @@ function competitionName(competitionId) {
 }
 
 function primaryAction(entry) {
-  if (entry.paymentStatus !== 'PAID') {
-    return { label: '去付款', to: '/portal/payment' }
-  }
-  if (entry.status === 'RESULT_PUBLISHED') {
-    return { label: '查看反馈', to: '/portal/results' }
-  }
-  return { label: '下载标签', to: '/portal/payment' }
+  return entryPrimaryAction(entry)
 }
 
 function timeline(entry) {
   return [
     { label: '提交资料', time: entry.submittedAt, done: true },
     { label: '付款确认', time: entry.paidAt, hint: '等待支付报名费', done: Boolean(entry.paidAt) },
-    { label: '二维码可下载', hint: entry.paidAt ? '已生成现场标签' : '付款后生成', done: Boolean(entry.paidAt) },
+            { label: '标签可下载', hint: entry.paidAt ? '已生成现场标签' : '付款确认后开放下载', done: Boolean(entry.paidAt) },
     { label: '酒样入库', time: entry.storedAt, hint: '等待主办方确认收样', done: Boolean(entry.storedAt) },
     { label: '结果发布', hint: entry.status === 'RESULT_PUBLISHED' ? '评分反馈可查看' : '等待比赛结束', done: entry.status === 'RESULT_PUBLISHED' },
   ]

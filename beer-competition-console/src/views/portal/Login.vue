@@ -12,7 +12,7 @@
 
     <section class="login-card">
       <span class="label-chip tone-gold">BREWER LOGIN</span>
-      <h2>厂商端登录</h2>
+      <h2>厂商登录</h2>
       <el-form :model="form" label-position="top">
         <el-form-item label="手机号">
           <el-input v-model="form.phone" />
@@ -26,7 +26,7 @@
           </div>
         </el-form-item>
         <div v-if="message" class="form-note">{{ message }}</div>
-        <el-button type="primary" class="full" :loading="submitting" @click="submit">进入厂商端</el-button>
+        <el-button type="primary" class="full" :loading="submitting" @click="submit">进入我的参赛</el-button>
       </el-form>
     </section>
   </div>
@@ -66,8 +66,8 @@ async function submit() {
   try {
     const data = await portalLogin({ phone: form.phone, code: form.code })
     setSession('portal', data.token, data.displayName)
-    ElMessage.success('已进入厂商端')
-    router.push('/portal/home')
+    ElMessage.success('已登录')
+    router.push('/portal/my')
   } finally {
     submitting.value = false
   }

@@ -2,13 +2,13 @@
   <div class="profile-page">
     <section class="profile-hero brewer-card">
       <div>
-        <span class="label-chip tone-green">BREWERY PROFILE</span>
+        <span class="label-chip tone-green">厂牌资料</span>
         <h2>{{ breweryProfile.breweryName }}</h2>
         <p>{{ breweryProfile.bio }}</p>
       </div>
       <div class="seal">
-        <span>2026</span>
-        <strong>参赛厂牌</strong>
+        <span>资料</span>
+        <strong>报名与收件使用</strong>
       </div>
     </section>
 
@@ -24,7 +24,7 @@
           <el-form-item label="厂牌简介">
             <el-input v-model="profileForm.bio" type="textarea" :rows="4" />
           </el-form-item>
-          <el-button type="primary" @click="saveMock">保存资料</el-button>
+          <el-button type="primary" @click="saveProfile">保存资料</el-button>
         </el-form>
       </article>
 
@@ -41,7 +41,7 @@
             <strong>用于获奖后寄送奖牌、奖状或主办方物料。</strong>
             <p>结果发布前也可以提前维护，减少赛后沟通成本。</p>
           </div>
-          <el-button @click="saveMock">保存地址</el-button>
+          <el-button @click="saveProfile">保存地址</el-button>
         </el-form>
       </article>
     </section>
@@ -56,8 +56,8 @@ import { breweryProfile, deliveryAddress } from './mockData'
 const profileForm = reactive({ ...breweryProfile })
 const addressForm = reactive({ ...deliveryAddress })
 
-function saveMock() {
-  ElMessage.success('Mock 保存成功')
+function saveProfile() {
+  ElMessage.success('已保存')
 }
 </script>
 
@@ -107,8 +107,14 @@ function saveMock() {
 }
 
 .seal span {
-  font-size: 30px;
+  font-size: 26px;
   font-weight: 900;
+}
+
+.seal strong {
+  max-width: 86px;
+  text-align: center;
+  line-height: 1.25;
 }
 
 .profile-grid {

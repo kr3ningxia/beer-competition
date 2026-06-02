@@ -2,33 +2,38 @@
   <div class="submit-page">
     <section class="form-card brewer-card">
       <div class="form-header">
-        <span class="label-chip tone-gold">NEW ENTRY</span>
-        <h2 class="portal-section-title">提交参赛酒款</h2>
-        <p>填写完整信息后，系统将生成匿名编码并进入待付款状态。</p>
+        <span class="label-chip tone-gold">提交酒款</span>
+        <h2 class="portal-section-title">填写参赛酒款资料</h2>
+        <p>请选择目标赛事并填写酒款信息。评审可见内容中请避免出现厂牌、联系人或可识别身份的信息。</p>
       </div>
 
       <el-form :model="form" label-position="top" class="entry-form">
         <div class="form-grid">
-          <el-form-item label="目标比赛">
-            <el-select v-model="form.competition">
-              <el-option v-for="item in competitionOptions" :key="item" :label="item" :value="item" />
+          <el-form-item label="目标赛事">
+            <el-select v-model="form.competitionId" :disabled="lockedCompetition" @change="syncCompetitionDefaults">
+              <el-option
+                v-for="item in openCompetitions"
+                :key="item.id"
+                :label="item.name"
+                :value="item.id"
+              />
             </el-select>
           </el-form-item>
           <el-form-item label="酒款名称">
-            <el-input v-model="form.name" />
+            <el-input v-model="form.name" placeholder="仅主办方和厂商可见" />
           </el-form-item>
           <el-form-item label="投递组别">
             <el-select v-model="form.category">
-              <el-option v-for="item in categoryOptions" :key="item" :label="item" :value="item" />
+              <el-option v-for="item in selectedCompetition.categories" :key="item" :label="item" :value="item" />
             </el-select>
           </el-form-item>
           <el-form-item label="基础风格">
             <el-select v-model="form.style" filterable>
-              <el-option v-for="item in styleOptions" :key="item" :label="item" :value="item" />
+              <el-option v-for="item in selectedCompetition.styleOptions" :key="item" :label="item" :value="item" />
             </el-select>
           </el-form-item>
           <el-form-item label="ABV">
-            <el-input v-model="form.abv" />
+            <el-input-number v-model="form.abv" :min="0" :max="20" :precision="1" :step="0.1" />
           </el-form-item>
           <el-form-item label="IBU">
             <el-input-number v-model="form.ibu" :min="0" :max="120" />
@@ -36,80 +41,96 @@
         </div>
 
         <el-form-item label="酒款简介">
-          <el-input v-model="form.description" type="textarea" :rows="5" maxlength="300" show-word-limit />
+          <el-input
+            v-model="form.description"
+            type="textarea"
+            :rows="5"
+            maxlength="300"
+            show-word-limit
+            placeholder="评审可见。请描述风格、香气、口感或工艺特点，避免出现厂牌和联系人。"
+          />
         </el-form-item>
 
         <div class="form-grid">
-          <el-form-item label="特殊工艺">
-            <el-input v-model="form.process" />
-          </el-form-item>
-          <el-form-item label="增味原料">
-            <el-input v-model="form.ingredients" />
+          <el-form-item v-for="field in selectedCompetition.entryFields" :key="field" :label="field">
+            <el-input v-model="form.extraFields[field]" placeholder="评审可见，请谨慎填写可识别信息" />
           </el-form-item>
         </div>
 
         <div class="confirm-box">
           <el-checkbox v-model="form.confirmed">
-            已确认评审匿名视图不会包含厂牌、联系人和酒款名称
+            我已确认评审可见内容不包含厂牌、联系人或其他可识别身份的信息
           </el-checkbox>
         </div>
 
         <div class="form-actions">
-          <el-button>保存草稿</el-button>
-          <el-button type="primary" :disabled="!form.confirmed" @click="submitMock">提交并生成 UUID</el-button>
+          <RouterLink class="secondary-link" :to="`/portal/events/${form.competitionId}`">返回赛事详情</RouterLink>
+          <el-button type="primary" :disabled="submitDisabled" @click="submitEntry">提交报名</el-button>
         </div>
       </el-form>
     </section>
 
     <aside class="preview-card">
       <div class="preview-label">
-        <span>ANONYMOUS SCORE CARD</span>
-        <strong>{{ mockUuid }}</strong>
-        <p>{{ form.category }} · {{ form.style }} · {{ form.abv }}</p>
+        <span>评审可见信息预览</span>
+        <strong>提交后生成参赛编号</strong>
+        <p>{{ form.category || '投递组别' }} · {{ form.style || '基础风格' }} · {{ form.abv ? `${form.abv}%` : 'ABV' }}</p>
         <div class="foam-line" />
-        <p>{{ form.description }}</p>
+        <p>{{ form.description || '酒款简介会展示给评审，用于了解风格和工艺特点。' }}</p>
         <dl>
-          <div>
-            <dt>特殊工艺</dt>
-            <dd>{{ form.process }}</dd>
-          </div>
-          <div>
-            <dt>增味原料</dt>
-            <dd>{{ form.ingredients }}</dd>
+          <div v-for="field in selectedCompetition.entryFields" :key="field">
+            <dt>{{ field }}</dt>
+            <dd>{{ form.extraFields[field] || '待填写' }}</dd>
           </div>
         </dl>
       </div>
 
       <div class="hidden-note">
-        <strong>匿名保护</strong>
-        <p>此预览模拟评审扫码后看到的信息。酒名、厂牌和联系人仅供厂商与主办方后台查看。</p>
+        <strong>不会展示给评审</strong>
+        <p>酒款名称、厂牌资料、联系人和付款信息只用于厂商与主办方核对。</p>
       </div>
     </aside>
   </div>
 </template>
 
 <script setup>
-import { reactive } from 'vue'
+import { computed, reactive } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { activeCompetition, categoryOptions, competitionOptions, styleOptions } from './mockData'
+import { competitions } from './mockData'
 
-const mockUuid = '提交后自动生成'
+const route = useRoute()
+const router = useRouter()
+const openCompetitions = competitions.filter((competition) => competition.status === 'REGISTRATION_OPEN')
+const queryCompetitionId = route.query.competitionId
+const lockedCompetition = computed(() => Boolean(queryCompetitionId && openCompetitions.some((item) => item.id === queryCompetitionId)))
 
 const form = reactive({
-  competition: activeCompetition.name,
-  name: '新批次实验 IPA',
-  category: '美式 IPA',
-  style: 'Hazy IPA',
-  abv: '6.2%',
-  ibu: 32,
-  description: '热带水果香气明显，酒体柔和，使用 Mosaic、Citra 与 Nelson Sauvin 干投。',
-  process: '双倍干投，冷端酒花 15g/L',
-  ingredients: '无',
-  confirmed: true,
+  competitionId: lockedCompetition.value ? queryCompetitionId : openCompetitions[0]?.id,
+  name: '',
+  category: '',
+  style: '',
+  abv: null,
+  ibu: null,
+  description: '',
+  extraFields: {},
+  confirmed: false,
 })
 
-function submitMock() {
-  ElMessage.success('Mock 提交成功：已生成匿名编码 BC-2026-IPA-0042')
+const selectedCompetition = computed(() => openCompetitions.find((item) => item.id === form.competitionId) || openCompetitions[0])
+const submitDisabled = computed(() => !form.confirmed || !form.competitionId || !form.name || !form.category || !form.style || !form.abv || !form.description)
+
+syncCompetitionDefaults()
+
+function syncCompetitionDefaults() {
+  form.category = ''
+  form.style = ''
+  form.extraFields = Object.fromEntries((selectedCompetition.value?.entryFields || []).map((field) => [field, '']))
+}
+
+function submitEntry() {
+  ElMessage.success('已提交报名，等待付款确认')
+  router.push('/portal/my')
 }
 </script>
 
@@ -128,6 +149,7 @@ function submitMock() {
 .form-header p {
   margin: 0 0 20px;
   color: #746a5f;
+  line-height: 1.65;
 }
 
 .entry-form :deep(.el-input__wrapper),
@@ -156,6 +178,20 @@ function submitMock() {
   justify-content: flex-end;
   gap: 12px;
   margin-top: 20px;
+}
+
+.secondary-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 14px;
+  color: #6b4710;
+  background: #fff7e6;
+  border: 1px solid rgba(87, 58, 26, 0.14);
+  border-radius: 8px;
+  font-weight: 800;
+  text-decoration: none;
 }
 
 .preview-card {
@@ -188,7 +224,7 @@ function submitMock() {
 .preview-label > strong {
   display: block;
   margin-top: 34px;
-  font-size: 29px;
+  font-size: 26px;
   line-height: 1.15;
 }
 
@@ -244,8 +280,13 @@ function submitMock() {
 }
 
 @media (max-width: 680px) {
-  .form-grid {
+  .form-grid,
+  .form-actions {
     grid-template-columns: 1fr;
+  }
+
+  .form-actions {
+    display: grid;
   }
 }
 </style>
