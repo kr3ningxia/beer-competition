@@ -6,12 +6,15 @@ import com.beercompetition.pojo.dto.CompetitionCreateRequest;
 import com.beercompetition.pojo.dto.CompetitionStyleLibraryUpdateRequest;
 import com.beercompetition.pojo.dto.ConfigNameBatchUpdateRequest;
 import com.beercompetition.pojo.dto.EntryFieldBatchUpdateRequest;
+import com.beercompetition.pojo.dto.FirstRoundCreateRequest;
 import com.beercompetition.pojo.dto.AdminJudgeStatusUpdateRequest;
 import com.beercompetition.pojo.dto.AdminJudgeUpdateRequest;
 import com.beercompetition.pojo.dto.AdminJudgePhoneUpdateRequest;
 import com.beercompetition.pojo.dto.JudgeAssignmentCreateRequest;
 import com.beercompetition.pojo.dto.JudgeAssignmentBatchUpdateRequest;
 import com.beercompetition.pojo.dto.JudgeTableBatchUpdateRequest;
+import com.beercompetition.pojo.dto.NextRoundCreateRequest;
+import com.beercompetition.pojo.dto.RoundAllocationRequest;
 import com.beercompetition.pojo.dto.ScoreConfigBatchUpdateRequest;
 import com.beercompetition.pojo.dto.StyleLibraryUpsertRequest;
 import com.beercompetition.pojo.enums.UserRole;
@@ -19,14 +22,17 @@ import com.beercompetition.pojo.vo.CompetitionDetailVO;
 import com.beercompetition.pojo.vo.CompetitionVO;
 import com.beercompetition.pojo.vo.CurrentUserResponse;
 import com.beercompetition.pojo.vo.JudgeAccountVO;
+import com.beercompetition.pojo.vo.ResultDraftVO;
 import com.beercompetition.pojo.vo.ScoreConfigVO;
 import com.beercompetition.pojo.vo.StyleLibraryVO;
 import com.beercompetition.service.AuthService;
 import com.beercompetition.service.CompetitionService;
 import com.beercompetition.service.JudgeService;
+import com.beercompetition.service.RoundService;
 import com.beercompetition.service.StyleLibraryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -48,6 +54,7 @@ public class AdminController {
     private final CompetitionService competitionService;
     private final JudgeService judgeService;
     private final StyleLibraryService styleLibraryService;
+    private final RoundService roundService;
 
     @GetMapping("/me")
     public Result<CurrentUserResponse> me() {
@@ -91,6 +98,12 @@ public class AdminController {
         return Result.success(competitionService.getCompetitionDetail(id));
     }
 
+    @DeleteMapping("/competitions/{id}")
+    public Result<String> deleteCompetition(@PathVariable Long id) {
+        competitionService.deleteCompetition(id);
+        return Result.success("删除成功");
+    }
+
     @PutMapping("/competitions/{id}/base-info")
     public Result<CompetitionDetailVO> updateBaseInfo(@PathVariable Long id,
                                                       @RequestBody @Valid CompetitionBaseInfoUpdateRequest request) {
@@ -124,6 +137,72 @@ public class AdminController {
     @PostMapping("/competitions/{id}/open-registration")
     public Result<CompetitionDetailVO> openRegistration(@PathVariable Long id) {
         return Result.success(competitionService.openRegistration(id));
+    }
+
+    @PostMapping("/competitions/{id}/close-registration")
+    public Result<CompetitionDetailVO> closeRegistration(@PathVariable Long id) {
+        return Result.success(competitionService.closeRegistration(id));
+    }
+
+    @PostMapping("/competitions/{id}/prepare-judging")
+    public Result<CompetitionDetailVO> prepareJudging(@PathVariable Long id) {
+        return Result.success(competitionService.prepareJudging(id));
+    }
+
+    @PostMapping("/competitions/{id}/rounds/first")
+    public Result<CompetitionDetailVO> createFirstRound(@PathVariable Long id,
+                                                        @RequestBody @Valid FirstRoundCreateRequest request) {
+        roundService.createFirstRound(id, request);
+        return Result.success(competitionService.getCompetitionDetail(id));
+    }
+
+    @PutMapping("/competitions/{id}/rounds/{roundId}/allocation")
+    public Result<CompetitionDetailVO> saveRoundAllocation(@PathVariable Long id,
+                                                           @PathVariable Long roundId,
+                                                           @RequestBody @Valid RoundAllocationRequest request) {
+        roundService.saveRoundAllocation(id, roundId, request);
+        return Result.success(competitionService.getCompetitionDetail(id));
+    }
+
+    @PostMapping("/competitions/{id}/rounds/{roundId}/publish")
+    public Result<CompetitionDetailVO> publishRound(@PathVariable Long id, @PathVariable Long roundId) {
+        roundService.publishRound(id, roundId);
+        return Result.success(competitionService.getCompetitionDetail(id));
+    }
+
+    @PostMapping("/competitions/{id}/rounds/{roundId}/complete-first-round")
+    public Result<CompetitionDetailVO> completeFirstRound(@PathVariable Long id, @PathVariable Long roundId) {
+        roundService.completeFirstRound(id, roundId);
+        return Result.success(competitionService.getCompetitionDetail(id));
+    }
+
+    @PostMapping("/competitions/{id}/rounds/next")
+    public Result<CompetitionDetailVO> createNextRound(@PathVariable Long id,
+                                                       @RequestBody @Valid NextRoundCreateRequest request) {
+        roundService.createNextRound(id, request);
+        return Result.success(competitionService.getCompetitionDetail(id));
+    }
+
+    @PostMapping("/competitions/{id}/rounds/{roundId}/lock")
+    public Result<CompetitionDetailVO> lockRound(@PathVariable Long id, @PathVariable Long roundId) {
+        roundService.lockRound(id, roundId);
+        return Result.success(competitionService.getCompetitionDetail(id));
+    }
+
+    @GetMapping("/competitions/{id}/progress")
+    public Result<CompetitionDetailVO> progress(@PathVariable Long id) {
+        return Result.success(competitionService.getCompetitionDetail(id));
+    }
+
+    @GetMapping("/competitions/{id}/results/draft")
+    public Result<List<ResultDraftVO>> resultDraft(@PathVariable Long id) {
+        return Result.success(roundService.buildResultDrafts(id));
+    }
+
+    @PostMapping("/competitions/{id}/results/publish")
+    public Result<CompetitionDetailVO> publishResults(@PathVariable Long id) {
+        roundService.publishResults(id);
+        return Result.success(competitionService.getCompetitionDetail(id));
     }
 
     @GetMapping("/judges")

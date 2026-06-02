@@ -26,7 +26,9 @@ import com.beercompetition.pojo.po.JudgeAssignment;
 import com.beercompetition.pojo.po.JudgeTable;
 import com.beercompetition.pojo.vo.CompetitionVO;
 import com.beercompetition.pojo.vo.JudgeAccountVO;
+import com.beercompetition.pojo.vo.JudgeTaskVO;
 import com.beercompetition.service.JudgeService;
+import com.beercompetition.service.RoundService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,6 +53,7 @@ public class JudgeServiceImpl implements JudgeService {
     private final CompetitionMapper competitionMapper;
     private final AdminOperationLogMapper adminOperationLogMapper;
     private final PiiService piiService;
+    private final RoundService roundService;
 
     @Override
     public List<JudgeAccountVO> listJudges(Integer status, String keyword) {
@@ -276,20 +279,28 @@ public class JudgeServiceImpl implements JudgeService {
         if (JudgeAccountStatus.of(account.getStatus()) != JudgeAccountStatus.ACTIVE) {
             return List.of();
         }
-        List<JudgeAssignment> assignments = judgeAssignmentMapper.selectList(new LambdaQueryWrapper<JudgeAssignment>()
-                .eq(JudgeAssignment::getJudgeAccountId, BaseContext.getCurrentId()));
-        Set<Long> competitionIds = assignments.stream().map(JudgeAssignment::getCompetitionId).collect(Collectors.toSet());
-        if (competitionIds.isEmpty()) {
-            return List.of();
-        }
-        return assignments.stream()
-                .map(assignment -> {
-                    Competition competition = competitionMapper.selectById(assignment.getCompetitionId());
-                    JudgeTable table = judgeTableMapper.selectById(assignment.getTableId());
-                    return toCompetitionVO(competition, assignment, table);
-                })
-                .filter(item -> item.getId() != null)
+        return roundService.listMyTasks()
+                .stream()
+                .map(this::toCompetitionVO)
                 .toList();
+    }
+
+    private CompetitionVO toCompetitionVO(JudgeTaskVO task) {
+        Competition competition = competitionMapper.selectById(task.getCompetitionId());
+        if (competition == null) {
+            return CompetitionVO.builder().build();
+        }
+        return CompetitionVO.builder()
+                .id(competition.getId())
+                .name(competition.getName())
+                .competitionDate(competition.getCompetitionDate())
+                .registrationDeadline(competition.getRegistrationDeadline())
+                .status(competition.getStatus())
+                .entryFee(competition.getEntryFee())
+                .judgeRoleType(task.getJudgeRoleType())
+                .roleLabel(task.getRoleLabel())
+                .tableName(task.getTableName())
+                .build();
     }
 
     private CompetitionVO toCompetitionVO(Competition competition, JudgeAssignment assignment, JudgeTable table) {

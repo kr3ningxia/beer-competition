@@ -8,30 +8,25 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@TableName("beer_entry")
-public class BeerEntry {
+@TableName("round_table")
+public class RoundTable {
 
     @TableId(type = IdType.AUTO)
     private Long id;
-    private String uuid;
-    private String shortCode;
     private Long competitionId;
-    private Long breweryId;
-    private Long categoryId;
-    private String name;
-    private String style;
-    private BigDecimal abv;
-    private String description;
-    private String extraFieldsJson;
+    private Long roundId;
+    private String tableName;
+    private Long captainJudgeId;
+    private Integer targetCount;
+    private String targetMode;
     private String status;
-    private Integer storedFlag;
+    private Integer sortOrder;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

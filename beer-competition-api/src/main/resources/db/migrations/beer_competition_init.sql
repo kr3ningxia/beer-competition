@@ -4,6 +4,13 @@ USE `beer_competition`;
 DROP TABLE IF EXISTS `score_record`;
 DROP TABLE IF EXISTS `beer_entry_extra_field`;
 DROP TABLE IF EXISTS `beer_entry`;
+DROP TABLE IF EXISTS `round_result`;
+DROP TABLE IF EXISTS `round_table_entry`;
+DROP TABLE IF EXISTS `round_table_member`;
+DROP TABLE IF EXISTS `round_table`;
+DROP TABLE IF EXISTS `competition_round`;
+DROP TABLE IF EXISTS `competition_judge_assignment`;
+DROP TABLE IF EXISTS `competition_judge_table`;
 DROP TABLE IF EXISTS `judge_assignment`;
 DROP TABLE IF EXISTS `judge_table`;
 DROP TABLE IF EXISTS `competition_score_config`;
@@ -89,6 +96,7 @@ CREATE TABLE `competition` (
   `status` varchar(32) NOT NULL,
   `entry_fee` decimal(10,2) NOT NULL DEFAULT 0,
   `style_library_version` varchar(64) NOT NULL DEFAULT 'BJCP_2021_CN',
+  `deleted_flag` tinyint NOT NULL DEFAULT 0,
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -144,29 +152,116 @@ CREATE TABLE `competition_score_config` (
   UNIQUE KEY `uk_competition_score_config` (`competition_id`,`judge_role_type`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='评分维度配置';
 
-CREATE TABLE `judge_table` (
+CREATE TABLE `competition_judge_table` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `competition_id` bigint NOT NULL,
   `table_name` varchar(64) NOT NULL,
+  `sort_order` int NOT NULL DEFAULT 0,
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_judge_table_name` (`competition_id`,`table_name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='评审桌';
+  UNIQUE KEY `uk_competition_judge_table_name` (`competition_id`,`table_name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='比赛基础评审桌';
 
-CREATE TABLE `judge_assignment` (
+CREATE TABLE `competition_judge_assignment` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `competition_id` bigint NOT NULL,
+  `base_table_id` bigint NOT NULL,
   `judge_account_id` bigint NOT NULL,
-  `table_id` bigint NOT NULL,
   `role` varchar(32) NOT NULL,
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_judge_assignment` (`competition_id`,`judge_account_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='评审分配';
+  UNIQUE KEY `uk_competition_judge_assignment` (`competition_id`,`judge_account_id`),
+  KEY `idx_competition_judge_assignment_table` (`base_table_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='比赛基础评审分配';
+
+CREATE TABLE `competition_round` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `competition_id` bigint NOT NULL,
+  `round_no` int NOT NULL,
+  `round_name` varchar(64) NOT NULL,
+  `round_type` varchar(32) NOT NULL,
+  `source_round_id` bigint DEFAULT NULL,
+  `status` varchar(32) NOT NULL,
+  `sort_order` int NOT NULL DEFAULT 0,
+  `published_time` datetime DEFAULT NULL,
+  `submitted_time` datetime DEFAULT NULL,
+  `locked_time` datetime DEFAULT NULL,
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_competition_round_no` (`competition_id`,`round_no`),
+  KEY `idx_competition_round_source` (`source_round_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='比赛轮次';
+
+CREATE TABLE `round_table` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `competition_id` bigint NOT NULL,
+  `round_id` bigint NOT NULL,
+  `table_name` varchar(64) NOT NULL,
+  `captain_judge_id` bigint DEFAULT NULL,
+  `target_count` int NOT NULL DEFAULT 1,
+  `target_mode` varchar(32) NOT NULL,
+  `status` varchar(32) NOT NULL,
+  `sort_order` int NOT NULL DEFAULT 0,
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_round_table_name` (`round_id`,`table_name`),
+  KEY `idx_round_table_competition` (`competition_id`),
+  KEY `idx_round_table_captain` (`captain_judge_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='轮次桌任务';
+
+CREATE TABLE `round_table_member` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `round_table_id` bigint NOT NULL,
+  `judge_account_id` bigint NOT NULL,
+  `role` varchar(32) NOT NULL,
+  `system_task_required` tinyint NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_round_table_member` (`round_table_id`,`judge_account_id`),
+  KEY `idx_round_table_member_judge` (`judge_account_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='轮次桌参与人';
+
+CREATE TABLE `round_table_entry` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `competition_id` bigint NOT NULL,
+  `round_id` bigint NOT NULL,
+  `round_table_id` bigint NOT NULL,
+  `beer_entry_id` bigint NOT NULL,
+  `source_round_table_id` bigint DEFAULT NULL,
+  `status` varchar(32) NOT NULL,
+  `sort_order` int NOT NULL DEFAULT 0,
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_round_entry_once` (`round_id`,`beer_entry_id`),
+  KEY `idx_round_table_entry_table` (`round_table_id`),
+  KEY `idx_round_table_entry_competition` (`competition_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='轮次桌酒款';
+
+CREATE TABLE `round_result` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `competition_id` bigint NOT NULL,
+  `round_id` bigint NOT NULL,
+  `round_table_id` bigint NOT NULL,
+  `beer_entry_id` bigint NOT NULL,
+  `result_type` varchar(32) NOT NULL,
+  `rank_no` int DEFAULT NULL,
+  `slot_label` varchar(64) DEFAULT NULL,
+  `submitted_by` bigint DEFAULT NULL,
+  `submitted_time` datetime DEFAULT NULL,
+  `locked_flag` tinyint NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_round_result_slot` (`round_table_id`,`result_type`,`rank_no`),
+  KEY `idx_round_result_entry` (`beer_entry_id`),
+  KEY `idx_round_result_competition` (`competition_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='轮次结果';
 
 CREATE TABLE `beer_entry` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `uuid` varchar(64) NOT NULL,
+  `short_code` varchar(16) DEFAULT NULL,
   `competition_id` bigint NOT NULL,
   `brewery_id` bigint NOT NULL,
   `category_id` bigint NOT NULL,
@@ -176,6 +271,7 @@ CREATE TABLE `beer_entry` (
   `description` varchar(500) NOT NULL,
   `extra_fields_json` json DEFAULT NULL,
   `status` varchar(32) NOT NULL,
+  `stored_flag` tinyint NOT NULL DEFAULT 0,
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -253,8 +349,8 @@ VALUES (1, '山海精酿', '张三', '13800000001', 'brewery-zhangsan');
 INSERT INTO `portal_account` (`id`, `phone`, `wechat`, `display_name`, `brewery_id`, `status`)
 VALUES (1, '13800000001', 'brewery-zhangsan', '山海精酿联系人', 1, 1);
 
-INSERT INTO `competition` (`id`, `code`, `name`, `edition`, `competition_date`, `registration_start`, `registration_deadline`, `status`, `entry_fee`)
-VALUES (1, 'BC-2026', '2026中国精酿啤酒大赛', '第三批次', '2026-08-18', '2026-06-01 10:00:00', '2026-07-31 23:59:59', 'REGISTRATION_OPEN', 299.00);
+INSERT INTO `competition` (`id`, `code`, `name`, `edition`, `competition_date`, `registration_start`, `registration_deadline`, `status`, `entry_fee`, `deleted_flag`)
+VALUES (1, 'BC-2026', '2026中国精酿啤酒大赛', '第三批次', '2026-08-18', '2026-06-01 10:00:00', '2026-07-31 23:59:59', 'REGISTRATION_OPEN', 299.00, 0);
 
 INSERT INTO `competition_category` (`id`, `competition_id`, `name`, `sort_order`)
 VALUES
@@ -289,12 +385,12 @@ VALUES
     JSON_OBJECT('key', 'consensus', 'label', '共识评分', 'maxScore', 50)
   ));
 
-INSERT INTO `judge_table` (`id`, `competition_id`, `table_name`)
-VALUES (1, 1, 'A桌');
+INSERT INTO `competition_judge_table` (`id`, `competition_id`, `table_name`, `sort_order`)
+VALUES (1, 1, 'A桌', 0);
 
-INSERT INTO `beer_entry` (`id`, `uuid`, `competition_id`, `brewery_id`, `category_id`, `name`, `style`, `abv`, `description`, `extra_fields_json`, `status`)
+INSERT INTO `beer_entry` (`id`, `uuid`, `short_code`, `competition_id`, `brewery_id`, `category_id`, `name`, `style`, `abv`, `description`, `extra_fields_json`, `status`, `stored_flag`)
 VALUES
-  (1, 'BC-2026-IPA-0001', 1, 1, 1, '海风双倍IPA', 'Double IPA', 7.5, '柑橘、松针与热带水果香气明显，苦度干净。', JSON_OBJECT('specialIngredients', '西楚酒花'), 'REGISTERED');
+  (1, 'BC-2026-IPA-0001', 'A19K', 1, 1, 1, '海风双倍IPA', 'Double IPA', 7.5, '柑橘、松针与热带水果香气明显，苦度干净。', JSON_OBJECT('specialIngredients', '西楚酒花'), 'REGISTERED', 1);
 
 INSERT INTO `beer_entry_extra_field` (`beer_entry_id`, `field_key`, `field_label`, `field_value`)
 VALUES (1, 'specialIngredients', '增味原料或特殊工艺', '西楚酒花');

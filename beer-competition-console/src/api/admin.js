@@ -12,6 +12,10 @@ export function fetchCompetitionDetail(id) {
   return request.get(`/api/admin/competitions/${id}`, { authScope: 'admin' })
 }
 
+export function deleteCompetition(id) {
+  return request.delete(`/api/admin/competitions/${id}`, { authScope: 'admin' })
+}
+
 export function fetchStyleLibraries() {
   return request.get('/api/admin/style-libraries', { authScope: 'admin' })
 }
@@ -56,6 +60,14 @@ export function openCompetitionRegistration(id) {
   return request.post(`/api/admin/competitions/${id}/open-registration`, {}, { authScope: 'admin' })
 }
 
+export function closeCompetitionRegistration(id) {
+  return request.post(`/api/admin/competitions/${id}/close-registration`, {}, { authScope: 'admin' })
+}
+
+export function prepareCompetitionJudging(id) {
+  return request.post(`/api/admin/competitions/${id}/prepare-judging`, {}, { authScope: 'admin' })
+}
+
 export function fetchJudges(params = {}) {
   return request.get('/api/admin/judges', { params, authScope: 'admin' })
 }
@@ -86,4 +98,32 @@ export function fetchScoreConfigs(competitionId) {
 
 export function updateScoreConfigs(competitionId, payload) {
   return request.put(`/api/admin/score-configs/${competitionId}`, payload, { authScope: 'admin' })
+}
+
+export function createFirstRound(competitionId, payload) {
+  return request.post(`/api/admin/competitions/${competitionId}/rounds/first`, payload, { authScope: 'admin' })
+}
+
+export function saveRoundAllocation(competitionId, roundId, payload) {
+  return request.put(`/api/admin/competitions/${competitionId}/rounds/${roundId}/allocation`, payload, { authScope: 'admin' })
+}
+
+export function publishRound(competitionId, roundId) {
+  return request.post(`/api/admin/competitions/${competitionId}/rounds/${roundId}/publish`, {}, { authScope: 'admin' })
+}
+
+export function completeFirstRound(competitionId, roundId) {
+  return request.post(`/api/admin/competitions/${competitionId}/rounds/${roundId}/complete-first-round`, {}, { authScope: 'admin' })
+}
+
+export function createNextRound(competitionId, payload) {
+  return request.post(`/api/admin/competitions/${competitionId}/rounds/next`, payload, { authScope: 'admin' })
+}
+
+export function lockRound(competitionId, roundId) {
+  return request.post(`/api/admin/competitions/${competitionId}/rounds/${roundId}/lock`, {}, { authScope: 'admin' })
+}
+
+export function publishCompetitionResults(competitionId) {
+  return request.post(`/api/admin/competitions/${competitionId}/results/publish`, {}, { authScope: 'admin' })
 }

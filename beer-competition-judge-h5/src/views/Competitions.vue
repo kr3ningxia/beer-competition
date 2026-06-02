@@ -30,6 +30,31 @@
       <button class="button secondary full empty-action" type="button" @click="router.push('/profile')">查看我的资料</button>
     </section>
 
+    <template v-else-if="current?.taskType === 'RANKING_ROUND'">
+    <section class="card action-card">
+      <h2 class="section-title">本轮排序</h2>
+      <button class="scan-button" type="button" @click="router.push(`/ranking/${current.roundTableId}`)">
+        进入排序
+      </button>
+      <p class="caption">本轮由桌长选择并排序，普通评委无需提交评分。</p>
+    </section>
+
+    <section class="card">
+      <div class="split">
+        <h2 class="section-title compact">候选酒款</h2>
+        <span class="pill">{{ entries.length }} 款</span>
+      </div>
+      <div class="entry-list">
+        <article v-for="entry in entries" :key="entry.uuid" class="entry-row static-row">
+          <span>
+            <strong>{{ entry.uuid }}</strong>
+            <small>{{ entry.shortCode }} · {{ entry.categoryName }} · {{ entry.style }}</small>
+          </span>
+        </article>
+      </div>
+    </section>
+    </template>
+
     <template v-else>
     <section class="card action-card">
       <h2 class="section-title">开始评酒</h2>
@@ -99,7 +124,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { fetchCaptainBoard, fetchCompetitions, fetchMe } from '@/api/judge'
+import { fetchCompetitions, fetchMe, fetchRoundTable } from '@/api/judge'
 
 const router = useRouter()
 const me = ref(null)
@@ -139,8 +164,10 @@ onMounted(async () => {
     entries.value = []
     return
   }
-  const board = await fetchCaptainBoard()
-  entries.value = board.entries
+  if (current.value.roundTableId) {
+    const table = await fetchRoundTable(current.value.roundTableId)
+    entries.value = table.entries || []
+  }
 })
 </script>
 
@@ -278,6 +305,10 @@ onMounted(async () => {
   color: #18222f;
   background: #fff;
   text-align: left;
+}
+
+.static-row {
+  cursor: default;
 }
 
 .entry-row strong,

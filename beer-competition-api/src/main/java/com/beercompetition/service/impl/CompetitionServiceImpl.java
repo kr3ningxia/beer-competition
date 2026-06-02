@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.mapper.BeerEntryMapper;
+import com.beercompetition.mapper.CompetitionRoundMapper;
 import com.beercompetition.mapper.CompetitionCategoryMapper;
 import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.CompetitionScoreConfigMapper;
@@ -42,6 +43,7 @@ import com.beercompetition.pojo.vo.CompetitionCheckVO;
 import com.beercompetition.pojo.vo.CompetitionConfigNameVO;
 import com.beercompetition.pojo.vo.CompetitionDetailVO;
 import com.beercompetition.pojo.vo.CompetitionEntryVO;
+import com.beercompetition.pojo.vo.CompetitionRoundVO;
 import com.beercompetition.pojo.vo.CompetitionPrimaryActionVO;
 import com.beercompetition.pojo.vo.CompetitionStageCheckVO;
 import com.beercompetition.pojo.vo.CompetitionVO;
@@ -50,9 +52,11 @@ import com.beercompetition.pojo.vo.EntrySummaryVO;
 import com.beercompetition.pojo.vo.JudgeAssignmentVO;
 import com.beercompetition.pojo.vo.JudgeTableVO;
 import com.beercompetition.pojo.vo.ProgressSummaryVO;
+import com.beercompetition.pojo.vo.ResultDraftVO;
 import com.beercompetition.pojo.vo.ResultSetupVO;
 import com.beercompetition.pojo.vo.ScoreConfigVO;
 import com.beercompetition.service.CompetitionService;
+import com.beercompetition.service.RoundService;
 import com.beercompetition.service.StyleLibraryService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -112,7 +116,9 @@ public class CompetitionServiceImpl implements CompetitionService {
     private final CompetitionScoreConfigMapper competitionScoreConfigMapper;
     private final BeerEntryMapper beerEntryMapper;
     private final ScoreRecordMapper scoreRecordMapper;
+    private final CompetitionRoundMapper competitionRoundMapper;
     private final StyleLibraryService styleLibraryService;
+    private final RoundService roundService;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -173,6 +179,16 @@ public class CompetitionServiceImpl implements CompetitionService {
 
         // 2) 查询并聚合关联配置
         return buildDetail(competition);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteCompetition(Long id) {
+        // 1) 查询比赛并确认存在
+        getCompetitionOrThrow(id);
+
+        // 2) 执行逻辑删除
+        competitionMapper.deleteById(id);
     }
 
     @Override
@@ -274,6 +290,10 @@ public class CompetitionServiceImpl implements CompetitionService {
         // 1) 参数规范化与阶段权限校验
         Competition competition = getCompetitionOrThrow(id);
         assertJudgeConfigEditable(competition);
+        if (competitionRoundMapper.selectCount(new LambdaQueryWrapper<com.beercompetition.pojo.po.CompetitionRound>()
+                .eq(com.beercompetition.pojo.po.CompetitionRound::getCompetitionId, id)) > 0) {
+            throw new BaseException("已创建轮次后不能修改基础评审桌");
+        }
         List<JudgeTableItemRequest> items = normalizeJudgeTables(request.getItems());
 
         // 2) 清理当前比赛旧评审桌
@@ -283,10 +303,12 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .eq(JudgeTable::getCompetitionId, id));
 
         // 3) 批量写入新评审桌
+        int sort = 0;
         for (JudgeTableItemRequest item : items) {
             judgeTableMapper.insert(JudgeTable.builder()
                     .competitionId(id)
                     .tableName(item.getTableName())
+                    .sortOrder(sort++)
                     .build());
         }
 
@@ -319,6 +341,44 @@ public class CompetitionServiceImpl implements CompetitionService {
 
         // 3) 更新比赛状态为报名中
         competition.setStatus(CompetitionStatus.REGISTRATION_OPEN.name());
+        competitionMapper.updateById(competition);
+
+        // 4) 重新计算配置检查并返回详情
+        return getCompetitionDetail(id);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public CompetitionDetailVO closeRegistration(Long id) {
+        // 1) 查询比赛并校验状态流转入口
+        Competition competition = getCompetitionOrThrow(id);
+        if (parseStatus(competition) != CompetitionStatus.REGISTRATION_OPEN) {
+            throw new BaseException("只有报名中的比赛可以截止报名");
+        }
+
+        // 2) 更新比赛状态为报名截止
+        competition.setStatus(CompetitionStatus.REGISTRATION_CLOSED.name());
+        competitionMapper.updateById(competition);
+
+        // 3) 重新计算配置检查并返回详情
+        return getCompetitionDetail(id);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public CompetitionDetailVO prepareJudging(Long id) {
+        // 1) 查询比赛并校验状态流转入口
+        Competition competition = getCompetitionOrThrow(id);
+        if (parseStatus(competition) != CompetitionStatus.REGISTRATION_CLOSED) {
+            throw new BaseException("只有报名截止后的比赛可以进入评审准备");
+        }
+
+        // 2) 校验评审准备必需配置
+        CompetitionDetailVO detail = buildDetail(competition);
+        assertChecksDone(detail.getChecks(), Set.of("judgeTables", "scoreForms", "storedEntries"), "评审准备");
+
+        // 3) 更新比赛状态为评审准备
+        competition.setStatus(CompetitionStatus.JUDGING_PREP.name());
         competitionMapper.updateById(competition);
 
         // 4) 重新计算配置检查并返回详情
@@ -430,6 +490,9 @@ public class CompetitionServiceImpl implements CompetitionService {
         ResultSetupVO resultSetup = buildResultSetup(competition);
         List<CompetitionCheckVO> checks = buildChecks(competition, categories, styles, entryFields, judgeTables, scoreConfigs,
                 entriesSummary, resultSetup);
+        List<CompetitionRoundVO> rounds = roundService.listCompetitionRounds(competitionId);
+        List<CompetitionEntryVO> entryPool = roundService.listEntryPool(competitionId);
+        List<ResultDraftVO> resultDrafts = roundService.buildResultDrafts(competitionId);
         List<String> dataIntegrityIssues = buildDataIntegrityIssues(competition, checks);
         List<CompetitionStageCheckVO> stageChecks = buildStageChecks(competition, checks, dataIntegrityIssues);
         List<CompetitionAlertVO> alerts = buildAlerts(checks, entriesSummary, dataIntegrityIssues);
@@ -457,7 +520,11 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .stageChecks(stageChecks)
                 .editableScopes(buildEditableScopes(competition))
                 .entriesSummary(entriesSummary)
-                .entries(listEntries(competitionId, categories))
+                .entries(entryPool)
+                .entryPool(entryPool)
+                .rounds(rounds)
+                .currentRound(rounds.isEmpty() ? null : rounds.get(rounds.size() - 1))
+                .resultDrafts(resultDrafts)
                 .progressSummary(progressSummary)
                 .resultSetup(resultSetup)
                 .alerts(alerts)
@@ -546,6 +613,7 @@ public class CompetitionServiceImpl implements CompetitionService {
     private List<JudgeTableVO> listJudgeTables(Long competitionId) {
         List<JudgeTable> tables = judgeTableMapper.selectList(new LambdaQueryWrapper<JudgeTable>()
                 .eq(JudgeTable::getCompetitionId, competitionId)
+                .orderByAsc(JudgeTable::getSortOrder)
                 .orderByAsc(JudgeTable::getId));
         List<JudgeAssignment> assignments = judgeAssignmentMapper.selectList(new LambdaQueryWrapper<JudgeAssignment>()
                 .eq(JudgeAssignment::getCompetitionId, competitionId));
@@ -620,7 +688,7 @@ public class CompetitionServiceImpl implements CompetitionService {
         int total = entries.size();
         int pendingPayment = countEntryStatus(entries, "PENDING_PAYMENT");
         int canceled = countEntryStatus(entries, "CANCELED");
-        int stored = countEntryStatus(entries, "STORED");
+        int stored = (int) entries.stream().filter(entry -> Objects.equals(entry.getStoredFlag(), 1)).count();
         int resultPublished = countEntryStatus(entries, "RESULT_PUBLISHED") + countEntryStatus(entries, "PUBLISHED");
         int registered = Math.max(0, total - canceled);
         return EntrySummaryVO.builder()
@@ -644,10 +712,11 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .map(entry -> CompetitionEntryVO.builder()
                         .id(entry.getId())
                         .uuid(entry.getUuid())
+                        .shortCode(entry.getShortCode())
                         .categoryName(categoryNameById.getOrDefault(entry.getCategoryId(), "-"))
                         .style(entry.getStyle())
                         .status(entry.getStatus())
-                        .stored("STORED".equals(entry.getStatus()) || "RESULT_PUBLISHED".equals(entry.getStatus()))
+                        .stored(Objects.equals(entry.getStoredFlag(), 1))
                         .build())
                 .toList();
     }
@@ -803,13 +872,18 @@ public class CompetitionServiceImpl implements CompetitionService {
                         .enabled(true)
                         .build();
             }
-            case REGISTRATION_OPEN, REGISTRATION_CLOSED -> CompetitionPrimaryActionVO.builder()
-                    .text("查看报名酒款")
+            case REGISTRATION_OPEN -> CompetitionPrimaryActionVO.builder()
+                    .text("截止报名")
                     .targetTab("entries")
                     .enabled(true)
                     .build();
+            case REGISTRATION_CLOSED -> CompetitionPrimaryActionVO.builder()
+                    .text("进入评审准备")
+                    .targetTab("judges")
+                    .enabled(true)
+                    .build();
             case JUDGING_PREP -> CompetitionPrimaryActionVO.builder()
-                    .text("校准评审配置")
+                    .text("创建第一轮")
                     .targetTab("judges")
                     .enabled(true)
                     .build();
@@ -1008,6 +1082,17 @@ public class CompetitionServiceImpl implements CompetitionService {
         return scoreConfigs.stream().allMatch(config -> getScoreTotal(config.getDimensions()).compareTo(SCORE_FORM_TOTAL) == 0);
     }
 
+    private void assertChecksDone(List<CompetitionCheckVO> checks, Set<String> requiredKeys, String actionName) {
+        List<String> missing = checks.stream()
+                .filter(check -> requiredKeys.contains(check.getKey()))
+                .filter(check -> !CHECK_DONE.equals(check.getState()))
+                .map(CompetitionCheckVO::getLabel)
+                .toList();
+        if (!missing.isEmpty()) {
+            throw new BaseException(actionName + "前还需要完成：" + String.join("、", missing));
+        }
+    }
+
     private BigDecimal getScoreTotal(List<DimensionRequest> dimensions) {
         return dimensions.stream()
                 .map(DimensionRequest::getMaxScore)
@@ -1070,12 +1155,7 @@ public class CompetitionServiceImpl implements CompetitionService {
     }
 
     private void assertCompetitionCodeUnique(String code, Long currentId) {
-        LambdaQueryWrapper<Competition> query = new LambdaQueryWrapper<Competition>()
-                .eq(Competition::getCode, code);
-        if (currentId != null) {
-            query.ne(Competition::getId, currentId);
-        }
-        if (competitionMapper.selectCount(query) > 0) {
+        if (competitionMapper.countByCodeIncludingDeleted(code, currentId) > 0) {
             throw new BaseException("比赛编号已存在");
         }
     }

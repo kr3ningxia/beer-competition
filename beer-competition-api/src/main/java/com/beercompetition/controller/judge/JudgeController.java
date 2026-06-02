@@ -4,16 +4,20 @@ import com.beercompetition.common.result.Result;
 import com.beercompetition.pojo.dto.JudgeProfileUpdateRequest;
 import com.beercompetition.pojo.dto.JudgeScoreSaveRequest;
 import com.beercompetition.pojo.dto.JudgeScoreUpdateRequest;
+import com.beercompetition.pojo.dto.RankingSubmitRequest;
 import com.beercompetition.pojo.dto.TableScoreFinalizeRequest;
 import com.beercompetition.pojo.enums.UserRole;
 import com.beercompetition.pojo.vo.CompetitionVO;
 import com.beercompetition.pojo.vo.CurrentUserResponse;
 import com.beercompetition.pojo.vo.JudgeEntryVO;
 import com.beercompetition.pojo.vo.JudgeAccountVO;
+import com.beercompetition.pojo.vo.JudgeRoundTableVO;
+import com.beercompetition.pojo.vo.JudgeTaskVO;
 import com.beercompetition.pojo.vo.ScoreRecordVO;
 import com.beercompetition.service.AuthService;
 import com.beercompetition.service.EntryService;
 import com.beercompetition.service.JudgeService;
+import com.beercompetition.service.RoundService;
 import com.beercompetition.service.ScoreService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +40,7 @@ public class JudgeController {
     private final JudgeService judgeService;
     private final EntryService entryService;
     private final ScoreService scoreService;
+    private final RoundService roundService;
 
     @GetMapping("/me")
     public Result<CurrentUserResponse> me() {
@@ -55,6 +60,23 @@ public class JudgeController {
     @GetMapping("/competitions")
     public Result<List<CompetitionVO>> competitions() {
         return Result.success(judgeService.listMyCompetitions());
+    }
+
+    @GetMapping("/tasks")
+    public Result<List<JudgeTaskVO>> tasks() {
+        return Result.success(roundService.listMyTasks());
+    }
+
+    @GetMapping("/round-tables/{roundTableId}")
+    public Result<JudgeRoundTableVO> roundTable(@PathVariable Long roundTableId) {
+        return Result.success(roundService.getMyRoundTable(roundTableId));
+    }
+
+    @PostMapping("/round-tables/{roundTableId}/ranking")
+    public Result<String> submitRanking(@PathVariable Long roundTableId,
+                                        @RequestBody @Valid RankingSubmitRequest request) {
+        roundService.submitRanking(roundTableId, request);
+        return Result.success("提交成功");
     }
 
     @GetMapping("/entries/{uuid}")

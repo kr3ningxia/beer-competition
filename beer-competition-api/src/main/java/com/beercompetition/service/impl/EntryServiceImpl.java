@@ -11,7 +11,8 @@ import com.beercompetition.mapper.CompetitionCategoryMapper;
 import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.PortalAccountMapper;
 import com.beercompetition.mapper.JudgeAccountMapper;
-import com.beercompetition.mapper.JudgeAssignmentMapper;
+import com.beercompetition.mapper.RoundTableEntryMapper;
+import com.beercompetition.mapper.RoundTableMemberMapper;
 import com.beercompetition.pojo.enums.JudgeAccountStatus;
 import com.beercompetition.pojo.po.BeerEntry;
 import com.beercompetition.pojo.po.BeerEntryExtraField;
@@ -19,7 +20,7 @@ import com.beercompetition.pojo.po.Brewery;
 import com.beercompetition.pojo.po.Competition;
 import com.beercompetition.pojo.po.CompetitionCategory;
 import com.beercompetition.pojo.po.JudgeAccount;
-import com.beercompetition.pojo.po.JudgeAssignment;
+import com.beercompetition.pojo.po.RoundTableEntry;
 import com.beercompetition.pojo.po.PortalAccount;
 import com.beercompetition.pojo.vo.EntryDetailVO;
 import com.beercompetition.pojo.vo.EntryExtraFieldVO;
@@ -42,7 +43,8 @@ public class EntryServiceImpl implements EntryService {
     private final BeerEntryExtraFieldMapper beerEntryExtraFieldMapper;
     private final BreweryMapper breweryMapper;
     private final JudgeAccountMapper judgeAccountMapper;
-    private final JudgeAssignmentMapper judgeAssignmentMapper;
+    private final RoundTableEntryMapper roundTableEntryMapper;
+    private final RoundTableMemberMapper roundTableMemberMapper;
 
     @Override
     public List<EntrySummaryVO> listPortalEntries() {
@@ -89,7 +91,7 @@ public class EntryServiceImpl implements EntryService {
         if (entry == null) {
             throw new ResourceNotFoundException("酒款不存在");
         }
-        requireActiveJudgeAssignment(entry.getCompetitionId());
+        requireActiveJudgeRoundEntry(entry);
         CompetitionCategory category = competitionCategoryMapper.selectById(entry.getCategoryId());
         return JudgeEntryVO.builder()
                 .id(entry.getId())
@@ -141,7 +143,7 @@ public class EntryServiceImpl implements EntryService {
         return account;
     }
 
-    private void requireActiveJudgeAssignment(Long competitionId) {
+    private void requireActiveJudgeRoundEntry(BeerEntry entry) {
         JudgeAccount account = judgeAccountMapper.selectById(BaseContext.getCurrentId());
         if (account == null) {
             throw new ResourceNotFoundException("评审账号不存在");
@@ -149,11 +151,21 @@ public class EntryServiceImpl implements EntryService {
         if (JudgeAccountStatus.of(account.getStatus()) != JudgeAccountStatus.ACTIVE) {
             throw new ForbiddenException("评审账号未启用，不能查看酒款");
         }
-        JudgeAssignment assignment = judgeAssignmentMapper.selectOne(new LambdaQueryWrapper<JudgeAssignment>()
-                .eq(JudgeAssignment::getCompetitionId, competitionId)
-                .eq(JudgeAssignment::getJudgeAccountId, account.getId()));
-        if (assignment == null) {
-            throw new ForbiddenException("当前评审未分配到该比赛");
+        List<Long> roundTableIds = roundTableMemberMapper.selectList(new LambdaQueryWrapper<com.beercompetition.pojo.po.RoundTableMember>()
+                        .eq(com.beercompetition.pojo.po.RoundTableMember::getJudgeAccountId, account.getId())
+                        .eq(com.beercompetition.pojo.po.RoundTableMember::getSystemTaskRequired, 1))
+                .stream()
+                .map(com.beercompetition.pojo.po.RoundTableMember::getRoundTableId)
+                .toList();
+        if (roundTableIds.isEmpty()) {
+            throw new ForbiddenException("当前评审没有可查看的评审任务");
+        }
+        RoundTableEntry roundEntry = roundTableEntryMapper.selectOne(new LambdaQueryWrapper<RoundTableEntry>()
+                .eq(RoundTableEntry::getBeerEntryId, entry.getId())
+                .in(RoundTableEntry::getRoundTableId, roundTableIds)
+                .last("LIMIT 1"));
+        if (roundEntry == null) {
+            throw new ForbiddenException("当前评审无权查看该酒款");
         }
     }
 }

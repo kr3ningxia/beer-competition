@@ -1,7 +1,7 @@
 USE `beer_competition`;
 
 DELETE FROM `score_record`;
-DELETE FROM `judge_assignment`;
+DELETE FROM `competition_judge_assignment`;
 DELETE FROM `judge_account`;
 
 ALTER TABLE `judge_account`

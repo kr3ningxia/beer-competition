@@ -136,20 +136,30 @@ export function updateProfile(payload) {
 }
 
 export async function fetchCompetitions() {
-  const user = readUser()
-  const scores = readScores()
-  const mine = scores.filter((item) => item.judgeName === user?.displayName && !item.finalFlag)
-  const finalized = scores.filter((item) => item.finalFlag)
-  const data = await request.get('/api/judge/competitions')
+  const data = await request.get('/api/judge/tasks')
   return data.map((item) => ({
     ...item,
     role: item.judgeRoleType,
     roleLabel: item.roleLabel || getRoleLabel(item.judgeRoleType),
-    tableName: item.tableName || competition.tableName,
-    totalEntries: item.totalEntries || entries.length,
-    myScoredCount: mine.length,
-    finalizedCount: finalized.length,
+    name: item.competitionName,
+    flightName: item.roundName,
+    tableName: item.tableName,
+    totalEntries: item.totalEntries || 0,
+    myScoredCount: item.completedCount || 0,
+    finalizedCount: item.completedCount || 0,
   }))
+}
+
+export function fetchJudgeTasks() {
+  return request.get('/api/judge/tasks')
+}
+
+export function fetchRoundTable(roundTableId) {
+  return request.get(`/api/judge/round-tables/${roundTableId}`)
+}
+
+export function submitRanking(roundTableId, payload) {
+  return request.post(`/api/judge/round-tables/${roundTableId}/ranking`, payload)
 }
 
 export async function fetchEntry(uuid) {
@@ -245,24 +255,31 @@ export function fetchTableScores(uuid) {
   return wait(scores.filter((item) => item.beerUuid === uuid && !item.finalFlag))
 }
 
-export function fetchCaptainBoard() {
-  const scores = readScores()
-  return wait({
-    competition,
-    entries: entries.map((entry) => {
-      const memberScores = scores.filter((item) => item.beerUuid === entry.uuid && !item.finalFlag)
-      const finalScore = scores.find((item) => item.beerUuid === entry.uuid && item.finalFlag)
-      return {
-        ...entry,
-        memberScores,
-        submittedCount: memberScores.length,
-        expectedCount: 2,
-        finalized: Boolean(finalScore),
-        finalScore: finalScore?.totalScore,
-        advanced: Boolean(finalScore?.advanced),
-      }
-    }),
-  })
+export async function fetchCaptainBoard(roundTableId) {
+  const tasks = await fetchJudgeTasks()
+  const task = roundTableId
+    ? tasks.find((item) => item.roundTableId === Number(roundTableId))
+    : tasks.find((item) => item.taskType === 'CAPTAIN_FINALIZE') || tasks.find((item) => item.taskType === 'RANKING_ROUND')
+  if (!task) return { competition: null, entries: [] }
+  const table = await fetchRoundTable(task.roundTableId)
+  return {
+    competition: {
+      name: task.competitionName,
+      flightName: task.roundName,
+      tableName: task.tableName,
+      taskType: task.taskType,
+      roundTableId: task.roundTableId,
+    },
+    entries: (table.entries || []).map((entry) => ({
+      ...entry,
+      submittedCount: 0,
+      expectedCount: 0,
+      finalized: Boolean(entry.advanced),
+      advanced: Boolean(entry.advanced),
+    })),
+    rankings: table.rankings || [],
+    roundTable: table,
+  }
 }
 
 export function finalizeTableScore(uuid, payload) {

@@ -21,6 +21,8 @@ public interface CompetitionService {
 
     CompetitionDetailVO getCompetitionDetail(Long id);
 
+    void deleteCompetition(Long id);
+
     CompetitionDetailVO updateBaseInfo(Long id, CompetitionBaseInfoUpdateRequest request);
 
     CompetitionDetailVO updateCategories(Long id, ConfigNameBatchUpdateRequest request);
@@ -32,6 +34,10 @@ public interface CompetitionService {
     CompetitionDetailVO updateJudgeTables(Long id, JudgeTableBatchUpdateRequest request);
 
     CompetitionDetailVO openRegistration(Long id);
+
+    CompetitionDetailVO closeRegistration(Long id);
+
+    CompetitionDetailVO prepareJudging(Long id);
 
     List<ScoreConfigVO> getScoreConfigs(Long competitionId);
 

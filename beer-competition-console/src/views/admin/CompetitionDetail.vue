@@ -23,8 +23,9 @@
             <span>{{ competition.entryFee }} 元 / 款</span>
           </div>
         </div>
-        <div v-if="activeTab !== 'rounds'" class="head-action-group">
+        <div class="head-action-group">
           <button
+            v-if="activeTab !== 'rounds'"
             class="tool-button primary"
             type="button"
             :disabled="!stagePrimaryAction.enabled"
@@ -36,7 +37,13 @@
           <details class="more-actions">
             <summary>更多</summary>
             <div class="more-actions-menu">
-              <button v-for="action in stageSecondaryActions" :key="action.key" type="button" @click="action.handler">
+              <button
+                v-for="action in stageSecondaryActions"
+                :key="action.key"
+                :class="{ danger: action.danger }"
+                type="button"
+                @click="action.handler"
+              >
                 {{ action.label }}
               </button>
             </div>
@@ -247,7 +254,7 @@
             <article class="metric-card"><small>全部</small><strong>{{ competition.entriesSummary.total }}</strong><p>已报名酒款</p></article>
             <article class="metric-card"><small>待付款</small><strong>{{ competition.entriesSummary.pendingPayment }}</strong><p>需跟进支付</p></article>
             <article class="metric-card"><small>已入库</small><strong>{{ competition.entriesSummary.stored }}</strong><p>现场已确认</p></article>
-            <article class="metric-card"><small>晋级轨迹</small><strong>{{ roundEntryPool.length }}</strong><p>含 mock 轮次分配</p></article>
+            <article class="metric-card"><small>晋级轨迹</small><strong>{{ roundEntryPool.length }}</strong><p>真实轮次分配</p></article>
           </div>
           <article class="panel-card">
             <div class="panel-heading">
@@ -387,13 +394,13 @@
                 >
                   {{ currentRound?.type === 'SCORE' ? '发布给评委' : '发布给桌长' }}
                 </button>
-                <button v-if="currentRound?.id === 'round-1' && currentRound?.status === 'PUBLISHED'" class="tool-button primary" type="button" @click="completeFirstRoundMock">
-                  完成第一轮
+                <button v-if="currentRound?.roundNo === 1 && currentRound?.status === 'PUBLISHED'" class="tool-button primary" type="button" @click="completeFirstRoundAction">
+                  确认第一轮完成
                 </button>
                 <button v-if="currentRound?.type === 'RANKING' && ['DRAFT', 'IN_PROGRESS'].includes(currentRound?.status)" class="tool-button primary" type="button" :disabled="!canSubmitRankingRound" @click="submitRankingRound">
                   提交排序
                 </button>
-                <button v-if="currentRound?.status === 'SUBMITTED'" class="tool-button primary" type="button" @click="publishCurrentRound">
+                <button v-if="currentRound?.status === 'SUBMITTED'" class="tool-button primary" type="button" @click="lockCurrentRound">
                   确认锁定
                 </button>
               </div>
@@ -607,7 +614,7 @@
               </div>
               <div class="publish-actions">
                 <button class="tool-button" type="button" @click="showPendingStageMessage('导出评分数据')">导出评分数据</button>
-                <button class="tool-button primary" type="button" :disabled="!resultChecks.every((item) => item.done)" @click="publishMockResults">
+                <button class="tool-button primary" type="button" :disabled="!resultChecks.every((item) => item.done)" @click="publishResultsAction">
                   发布结果
                 </button>
               </div>
@@ -686,10 +693,20 @@ import {
   statusMeta,
 } from './competitionStore'
 import {
+  closeCompetitionRegistration,
+  completeFirstRound,
+  createFirstRound,
+  createNextRound,
+  deleteCompetition,
   fetchCompetitionDetail,
   fetchJudges,
   fetchStyleLibraries,
+  lockRound,
   openCompetitionRegistration,
+  prepareCompetitionJudging,
+  publishCompetitionResults,
+  publishRound,
+  saveRoundAllocation,
   updateCompetitionCategories,
   updateCompetitionEntryFields,
   updateCompetitionJudgeAssignments,
@@ -722,7 +739,7 @@ const draggingItem = ref(null)
 
 const rounds = ref([])
 const roundEntryPool = ref([])
-const activeRoundId = ref('round-1')
+const activeRoundId = ref('')
 const selectedRoundTableId = ref('')
 const roundKeyword = ref('')
 const roundCategoryFilter = ref('全部')
@@ -781,19 +798,6 @@ const fallbackJudgePool = [
   { publicId: 'J-DEMO-006', name: '周亦', maskedPhone: '138****0006', qualification: '跨界评审 · 餐饮主理人', status: 1 },
   { publicId: 'J-DEMO-007', name: '吴嘉', maskedPhone: '-', qualification: '专业评审 · 待补手机号', status: 1 },
   { publicId: 'J-DEMO-008', name: '郑南', maskedPhone: '138****0008', qualification: '桌长候选 · 赛事经验', status: 1 },
-]
-
-const fallbackEntries = [
-  { uuid: 'BC-2026-IPA-0001', shortCode: 'A19K', categoryName: 'IPA', style: 'Double IPA', status: 'STORED', stored: true },
-  { uuid: 'BC-2026-IPA-0002', shortCode: 'F72C', categoryName: 'IPA', style: 'American IPA', status: 'STORED', stored: true },
-  { uuid: 'BC-2026-IPA-0003', shortCode: 'H48Q', categoryName: 'IPA', style: 'Hazy IPA', status: 'STORED', stored: true },
-  { uuid: 'BC-2026-LAG-0042', shortCode: 'L08P', categoryName: '拉格', style: 'Pilsner', status: 'STORED', stored: true },
-  { uuid: 'BC-2026-LAG-0045', shortCode: 'N11R', categoryName: '拉格', style: 'Helles', status: 'STORED', stored: true },
-  { uuid: 'BC-2026-STO-0108', shortCode: 'S63T', categoryName: '世涛', style: 'Imperial Stout', status: 'STORED', stored: true },
-  { uuid: 'BC-2026-STO-0112', shortCode: 'D36M', categoryName: '世涛', style: 'Barrel Aged Stout', status: 'STORED', stored: true },
-  { uuid: 'BC-2026-SOU-0149', shortCode: 'Q90A', categoryName: '酸啤', style: 'Mixed Fermentation Sour', status: 'STORED', stored: true },
-  { uuid: 'BC-2026-SOU-0150', shortCode: 'R12U', categoryName: '酸啤', style: 'Gose', status: 'STORED', stored: true },
-  { uuid: 'BC-2026-EXP-0202', shortCode: 'X56B', categoryName: '特色实验', style: 'Experimental Beer', status: 'STORED', stored: true },
 ]
 
 const statusInfo = computed(() => statusMeta[competition.value?.status] || statusMeta.DRAFT)
@@ -906,10 +910,10 @@ const advancedCategoryStats = computed(() => {
   return [...map.entries()].map(([category, count]) => ({ category, count }))
 })
 const roundRestructureText = computed(() => rounds.value.map((round) => `${round.name} ${round.tables.length}桌`).join(' -> '))
-const awardDrafts = computed(() => buildAwardDrafts())
+const awardDrafts = computed(() => competition.value?.resultDrafts || [])
 const resultPathEntries = computed(() => roundEntryPool.value.filter((entry) => entry.advanced || getEntryAward(entry.uuid)).slice(0, 8))
 const resultChecks = computed(() => [
-  { label: '第一轮桌长汇总已完成', done: rounds.value.find((round) => round.id === 'round-1')?.status === 'LOCKED' },
+  { label: '第一轮桌长汇总已完成', done: rounds.value.find((round) => round.roundNo === 1)?.status === 'LOCKED' },
   { label: '后续轮排序已锁定', done: rounds.value.filter((round) => round.type === 'RANKING').every((round) => round.status === 'LOCKED') },
   { label: '组别奖项无重复', done: awardDrafts.value.every((award) => award.uuid) },
   { label: '总冠军候选已确认', done: Boolean(getEntryAward(roundEntryPool.value[0]?.uuid) || awardDrafts.value.find((award) => award.slot === '金奖')?.uuid) },
@@ -965,7 +969,7 @@ async function loadDetail() {
     const data = await fetchCompetitionDetail(route.params.id)
     competition.value = normalizeDetail(data)
     resetForms()
-    seedRoundPrototype()
+    applyRoundState()
   } finally {
     loading.value = false
   }
@@ -1001,6 +1005,9 @@ function normalizeDetail(data) {
     alerts: data.alerts || [],
     dataIntegrityIssues: data.dataIntegrityIssues || [],
     entries: data.entries || [],
+    entryPool: data.entryPool || data.entries || [],
+    rounds: data.rounds || [],
+    resultDrafts: data.resultDrafts || [],
     editableScopes: data.editableScopes || {},
     entriesSummary: data.entriesSummary || { total: 0, pendingPayment: 0, registered: 0, stored: 0, canceled: 0, resultPublished: 0 },
     progressSummary: data.progressSummary || { finalized: 0, total: 0, advanced: 0, commentWarnings: 0 },
@@ -1052,47 +1059,29 @@ function resetForms() {
   })))
 }
 
-function seedRoundPrototype() {
-  const apiEntries = competition.value.entries?.length >= 6 ? competition.value.entries : fallbackEntries
-  const sourceEntries = apiEntries.map((entry, index) => ({
+function applyRoundState(preferredRoundId = activeRoundId.value) {
+  roundEntryPool.value = (competition.value?.entryPool || competition.value?.entries || []).map((entry) => ({
     ...entry,
-    uuid: entry.uuid,
-    shortCode: entry.shortCode || `S${String(index + 17).padStart(2, '0')}`,
-    categoryName: entry.categoryName || entry.category || 'IPA',
+    shortCode: entry.shortCode || '-',
+    categoryName: entry.categoryName || entry.category || '-',
     style: entry.style || '未填写',
-    status: entry.status || 'STORED',
-    stored: entry.stored ?? true,
-    advanced: false,
-    sourceTable: '',
-    sourceResult: '',
+    stored: Boolean(entry.stored),
+    advanced: Boolean(entry.advanced),
+    sourceTable: entry.sourceTable || '',
+    sourceResult: entry.sourceResult || '',
   }))
-  roundEntryPool.value = sourceEntries
-  const uuids = sourceEntries.map((entry) => entry.uuid)
-  const baseTables = judgeTableForm.length ? judgeTableForm : [{ localId: 'base-A', tableName: 'A桌' }, { localId: 'base-B', tableName: 'B桌' }]
-  const firstRoundTables = baseTables.map((table, index) => ({
-    id: `r1-${index + 1}`,
-    name: table.tableName || `${String.fromCharCode(65 + index)}桌`,
-    captainPublicId: assignmentsForTable(table, 'CAPTAIN')[0]?.judgePublicId || '',
-    professionalCount: assignmentsForTable(table, 'PROFESSIONAL').length,
-    crossCount: assignmentsForTable(table, 'CROSS').length,
-    targetCount: 3,
-    status: 'DRAFT',
-    entryUuids: uuids.filter((_, entryIndex) => entryIndex % baseTables.length === index),
-    advancedCount: 0,
-    judgeProgress: 0,
-    captainProgress: 0,
+  rounds.value = (competition.value?.rounds || []).map((round) => ({
+    ...round,
+    tables: (round.tables || []).map((table) => ({
+      ...table,
+      entryUuids: table.entryUuids || [],
+      rankings: table.rankings || buildEmptyRankings(Number(table.targetCount || 3), table.targetMode),
+    })),
   }))
-  rounds.value = [
-    {
-      id: 'round-1',
-      name: '第一轮',
-      type: 'SCORE',
-      status: 'DRAFT',
-      tables: firstRoundTables,
-    },
-  ]
-  activeRoundId.value = 'round-1'
-  selectedRoundTableId.value = firstRoundTables[0]?.id || ''
+  const preferred = rounds.value.find((round) => round.id === preferredRoundId)
+  const current = preferred || competition.value?.currentRound || rounds.value[rounds.value.length - 1] || rounds.value[0]
+  activeRoundId.value = current?.id || ''
+  selectedRoundTableId.value = current?.tables?.[0]?.id || ''
   selectedEntryUuids.value = []
 }
 
@@ -1128,47 +1117,21 @@ function seedJudgeAssignments() {
   judgeAssignmentForm.splice(0, judgeAssignmentForm.length, ...seeded)
 }
 
-function generateFirstRoundFromJudges() {
+async function generateFirstRoundFromJudges() {
   if (validationIssues.value.length) {
     ElMessage.warning(`还有 ${validationIssues.value.length} 项评审配置需要处理`)
     return
   }
-  const storedUuids = roundEntryPool.value.filter((entry) => entry.stored).map((entry) => entry.uuid)
-  const tables = judgeTableForm.map((table, index) => ({
-    id: `r1-${index + 1}`,
-    name: table.tableName || `${String.fromCharCode(65 + index)}桌`,
-    captainPublicId: assignmentsForTable(table, 'CAPTAIN')[0]?.judgePublicId || '',
-    professionalCount: assignmentsForTable(table, 'PROFESSIONAL').length,
-    crossCount: assignmentsForTable(table, 'CROSS').length,
-    targetCount: 3,
-    status: 'DRAFT',
-    entryUuids: storedUuids.filter((_, entryIndex) => entryIndex % judgeTableForm.length === index),
-    advancedCount: 0,
-    judgeProgress: 0,
-    captainProgress: 0,
-  }))
-  const firstRound = {
-    id: 'round-1',
-    name: '第一轮',
-    type: 'SCORE',
-    status: 'DRAFT',
-    tables,
-  }
-  const index = rounds.value.findIndex((round) => round.id === 'round-1')
-  if (index >= 0) rounds.value.splice(index, 1, firstRound)
-  else rounds.value.unshift(firstRound)
-  rounds.value = rounds.value.filter((round) => round.id === 'round-1')
-  roundEntryPool.value.forEach((entry) => {
-    entry.advanced = false
-    entry.sourceTable = ''
-    entry.sourceResult = ''
+  const detail = await createFirstRound(competition.value.id, {
+    allocationStrategy: 'EVEN_SPLIT',
+    defaultTargetCount: 3,
   })
+  competition.value = normalizeDetail(detail)
+  resetForms()
+  applyRoundState(competition.value.rounds?.find((round) => round.roundNo === 1)?.id)
   activeTab.value = 'judges'
   allocationMode.value = 'entries'
-  activeRoundId.value = 'round-1'
-  selectedRoundTableId.value = tables[0]?.id || ''
-  selectedEntryUuids.value = []
-  ElMessage.success('第一轮编排已生成，可以开始分配和发布酒款')
+  ElMessage.success('第一轮编排已生成，可以继续调整分桌')
 }
 
 function resolveRegistrationWindowInfo() {
@@ -1213,13 +1176,22 @@ function resolveStagePrimaryAction() {
     }
   }
   if (currentRound.value?.status === 'SUBMITTED') {
-    return { text: '确认排序并锁定', enabled: canPublishCurrentRound.value, action: 'publishCurrentRound' }
+    return { text: '确认排序并锁定', enabled: true, action: 'lockCurrentRound' }
   }
   if (canCreateNextRound.value) {
     return { text: `创建${nextRoundName.value}`, enabled: true, action: 'createNextRound' }
   }
   if (competition.value.status === 'DRAFT') {
     return { text: '发布报名', enabled: true, action: 'publishRegistration' }
+  }
+  if (competition.value.status === 'REGISTRATION_OPEN') {
+    return { text: '截止报名', enabled: true, action: 'closeRegistration' }
+  }
+  if (competition.value.status === 'REGISTRATION_CLOSED') {
+    return { text: '进入评审准备', enabled: true, action: 'prepareJudging' }
+  }
+  if (competition.value.status === 'JUDGING_PREP' && !rounds.value.length) {
+    return { text: '创建第一轮', enabled: true, action: 'createFirstRound' }
   }
   return { text: '查看现场进度', enabled: true, action: 'viewProgress' }
 }
@@ -1228,6 +1200,7 @@ function resolveStageSecondaryActions() {
   return [
     { key: 'rounds', label: '进入轮次编排', handler: () => { activeTab.value = 'rounds' } },
     { key: 'export', label: '导出数据', handler: () => showPendingStageMessage('导出数据') },
+    { key: 'delete', label: '删除比赛', danger: true, handler: () => handleDeleteCompetition() },
   ]
 }
 
@@ -1518,44 +1491,53 @@ function removeRoundTable(tableId) {
   selectedRoundTableId.value = currentRound.value.tables[0]?.id || ''
 }
 
-function publishCurrentRound() {
-  if (!currentRound.value || roundValidationIssues.value.length) return
-  if (currentRound.value.status === 'SUBMITTED') {
-    currentRound.value.status = 'LOCKED'
-    currentRound.value.tables.forEach((table) => { table.status = 'LOCKED' })
-    refreshAdvancedPoolFromRound(currentRound.value)
-    ElMessage.success(`${currentRound.value.name}已确认并锁定`)
-    return
+async function persistCurrentRoundAllocation() {
+  if (!currentRound.value || currentRound.value.status !== 'DRAFT') return
+  const payload = {
+    tables: currentRoundTables.value.map((table, index) => ({
+      id: Number.isFinite(Number(table.id)) ? Number(table.id) : undefined,
+      name: table.name,
+      captainPublicId: table.captainPublicId,
+      targetCount: Number(table.targetCount || 1),
+      targetMode: table.targetMode || (currentRound.value.type === 'SCORE' ? 'ADVANCE_COUNT' : 'TOP_N'),
+      sortOrder: index,
+      entryUuids: table.entryUuids || [],
+    })),
   }
-  currentRound.value.status = currentRound.value.type === 'SCORE' ? 'PUBLISHED' : 'IN_PROGRESS'
-  currentRound.value.tables.forEach((table) => { table.status = currentRound.value.status })
+  const detail = await saveRoundAllocation(competition.value.id, currentRound.value.id, payload)
+  competition.value = normalizeDetail(detail)
+  resetForms()
+  applyRoundState(currentRound.value?.id)
+}
+
+async function publishCurrentRound() {
+  if (!currentRound.value || roundValidationIssues.value.length) return
+  const targetRoundId = currentRound.value.id
+  if (currentRound.value.status === 'DRAFT') await persistCurrentRoundAllocation()
+  const detail = await publishRound(competition.value.id, targetRoundId)
+  competition.value = normalizeDetail(detail)
+  resetForms()
+  applyRoundState(targetRoundId)
   ElMessage.success(currentRound.value.type === 'SCORE' ? '当前轮次已发布到评审端' : '排序任务已发布给桌长')
 }
 
-function completeFirstRoundMock() {
-  const firstRound = rounds.value.find((round) => round.id === 'round-1')
-  if (!firstRound || firstRound.status !== 'PUBLISHED') return
-  roundEntryPool.value.forEach((entry) => {
-    entry.advanced = false
-    entry.sourceTable = ''
-    entry.sourceResult = ''
-  })
-  firstRound.tables.forEach((table) => {
-    table.status = 'LOCKED'
-    table.advancedCount = Math.min(Number(table.targetCount || 0), table.entryUuids.length)
-    table.judgeProgress = 100
-    table.captainProgress = 100
-    table.entryUuids.slice(0, table.advancedCount).forEach((uuid, index) => {
-      const entry = roundEntryPool.value.find((item) => item.uuid === uuid)
-      if (entry) {
-        entry.advanced = true
-        entry.sourceTable = table.name
-        entry.sourceResult = `晋级 ${index + 1}`
-      }
-    })
-  })
-  firstRound.status = 'LOCKED'
-  ElMessage.success('第一轮已模拟完成，晋级池已生成')
+async function completeFirstRoundAction() {
+  if (!currentRound.value) return
+  const detail = await completeFirstRound(competition.value.id, currentRound.value.id)
+  competition.value = normalizeDetail(detail)
+  resetForms()
+  applyRoundState(currentRound.value?.id)
+  ElMessage.success('第一轮已确认完成，晋级池已生成')
+}
+
+async function lockCurrentRound() {
+  if (!currentRound.value) return
+  const targetRoundId = currentRound.value.id
+  const detail = await lockRound(competition.value.id, targetRoundId)
+  competition.value = normalizeDetail(detail)
+  resetForms()
+  applyRoundState(targetRoundId)
+  ElMessage.success('当前轮次已锁定')
 }
 
 function openCreateRoundDialog() {
@@ -1570,41 +1552,26 @@ function closeCreateRoundDialog() {
   createRoundDialogOpen.value = false
 }
 
-function finishCreateRound() {
-  const roundNumber = nextRoundNumber.value
-  const roundId = `round-${roundNumber}`
-  const roundName = nextRoundName.value
-  const tablePrefix = `r${roundNumber}`
-  const sourceEntryUuids = advancedPool.value.map((entry) => entry.uuid)
-  const nextRound = {
-    id: roundId,
-    name: roundName,
-    type: 'RANKING',
-    status: 'DRAFT',
-    sourceEntryUuids,
-    tables: [
-      {
-        id: `${tablePrefix}-1`,
-        name: `${roundNumber}A桌`,
-        captainPublicId: '',
-        targetCount: 3,
-        targetMode: 'TOP3',
-        status: 'DRAFT',
-        entryUuids: [],
-        rankings: buildEmptyRankings(3, 'TOP3'),
-      },
-    ],
-  }
-  const existingIndex = rounds.value.findIndex((round) => round.id === roundId)
-  if (existingIndex >= 0) rounds.value.splice(existingIndex, 1, nextRound)
-  else rounds.value.push(nextRound)
-  activeRoundId.value = roundId
-  selectedRoundTableId.value = nextRound.tables[0]?.id || ''
+async function finishCreateRound() {
+  const lastRound = rounds.value[rounds.value.length - 1]
+  if (!lastRound) return
+  const detail = await createNextRound(competition.value.id, {
+    sourceRoundId: lastRound.id,
+    roundName: nextRoundName.value,
+    strategy: 'MANUAL',
+    tableCount: 1,
+    targetMode: 'TOP_N',
+    targetCount: 3,
+    captainPublicIds: [],
+  })
+  competition.value = normalizeDetail(detail)
+  resetForms()
+  applyRoundState(competition.value.rounds?.[competition.value.rounds.length - 1]?.id)
   activeTab.value = 'judges'
   allocationMode.value = 'entries'
   selectedEntryUuids.value = []
   createRoundDialogOpen.value = false
-  ElMessage.success(`${roundName}已创建，请重新分配桌长和酒款`)
+  ElMessage.success(`${nextRoundName.value}已创建，请重新分配桌长和酒款`)
 }
 
 function buildEmptyRankings(count, mode = 'TOP3') {
@@ -1642,13 +1609,7 @@ function clearRankingSlot(tableId, rank) {
 
 function submitRankingRound() {
   if (!currentRound.value || currentRound.value.type !== 'RANKING') return
-  if (!canSubmitRankingRound.value) {
-    ElMessage.warning('请先填满每张桌的排序槽位')
-    return
-  }
-  currentRound.value.status = 'SUBMITTED'
-  currentRound.value.tables.forEach((table) => { table.status = 'SUBMITTED' })
-  ElMessage.success('桌长排序已提交，等待主办方确认锁定')
+  ElMessage.warning('排序结果需要由桌长在评审端提交')
 }
 
 function refreshAdvancedPoolFromRound(round) {
@@ -1696,8 +1657,12 @@ function getEntryPath(uuid) {
   return parts.join(' -> ') || '-'
 }
 
-function publishMockResults() {
-  ElMessage.success('结果发布前端原型已完成，后端发布接口待接入')
+async function publishResultsAction() {
+  const detail = await publishCompetitionResults(competition.value.id)
+  competition.value = normalizeDetail(detail)
+  resetForms()
+  applyRoundState()
+  ElMessage.success('结果已发布')
 }
 
 function addEntryField() {
@@ -1867,7 +1832,7 @@ async function saveJudgeDraft() {
   detail = await fetchCompetitionDetail(competition.value.id)
   competition.value = normalizeDetail(detail)
   resetForms()
-  seedRoundPrototype()
+  applyRoundState()
   ElMessage.success('评审人员已保存')
 }
 
@@ -1901,7 +1866,7 @@ async function saveEntryConfig() {
   if (fieldItems.length) detail = await updateCompetitionEntryFields(competition.value.id, { items: fieldItems })
   competition.value = normalizeDetail(detail)
   resetForms()
-  seedRoundPrototype()
+  applyRoundState()
   ElMessage.success('报名配置已保存')
 }
 
@@ -1974,6 +1939,26 @@ async function handlePrimaryAction() {
   await handleStageAction(stagePrimaryAction.value.action)
 }
 
+async function handleDeleteCompetition() {
+  if (!competition.value) return
+  try {
+    await ElMessageBox.confirm(
+      `删除后，这场比赛会从管理台账中移除，已保存的数据会保留在后台。确认删除「${competition.value.name}」吗？`,
+      '删除比赛',
+      {
+        confirmButtonText: '删除比赛',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    )
+    await deleteCompetition(competition.value.id)
+    ElMessage.success('比赛已删除')
+    router.replace('/admin/competitions')
+  } catch {
+    // 用户取消或请求失败时保持当前页面不变。
+  }
+}
+
 async function handleStageAction(action) {
   if (action === 'publishRegistration') {
     try {
@@ -1985,15 +1970,50 @@ async function handleStageAction(action) {
       const detail = await openCompetitionRegistration(competition.value.id)
       competition.value = normalizeDetail(detail)
       resetForms()
-      seedRoundPrototype()
+      applyRoundState()
       ElMessage.success('报名已发布')
     } catch {
       // User cancelled.
     }
     return
   }
+  if (action === 'closeRegistration') {
+    try {
+      await ElMessageBox.confirm('截止后厂商将不能继续提交报名。', '截止报名？', {
+        confirmButtonText: '截止报名',
+        cancelButtonText: '取消',
+        type: 'warning',
+      })
+      const detail = await closeCompetitionRegistration(competition.value.id)
+      competition.value = normalizeDetail(detail)
+      resetForms()
+      applyRoundState()
+      ElMessage.success('报名已截止')
+    } catch {
+      // User cancelled.
+    }
+    return
+  }
+  if (action === 'prepareJudging') {
+    const detail = await prepareCompetitionJudging(competition.value.id)
+    competition.value = normalizeDetail(detail)
+    resetForms()
+    applyRoundState()
+    activeTab.value = 'judges'
+    ElMessage.success('已进入评审准备')
+    return
+  }
+  if (action === 'createFirstRound') {
+    activeTab.value = 'judges'
+    await generateFirstRoundFromJudges()
+    return
+  }
   if (action === 'publishCurrentRound') {
     publishCurrentRound()
+    return
+  }
+  if (action === 'lockCurrentRound') {
+    lockCurrentRound()
     return
   }
   if (action === 'createNextRound') {
@@ -2007,7 +2027,7 @@ async function handleStageAction(action) {
 }
 
 function showPendingStageMessage(actionName) {
-  ElMessage.info(`${actionName}的后端接口待接入，当前先完成前端原型`)
+  ElMessage.info(`${actionName}暂未开放`)
 }
 </script>
 
@@ -2271,6 +2291,14 @@ svg {
   border: 0;
   border-radius: 6px;
   background: transparent;
+}
+
+.more-actions-menu button.danger {
+  color: #ff9089;
+}
+
+.more-actions-menu button.danger:hover {
+  background: rgba(224, 82, 82, 0.09);
 }
 
 .detail-shell {

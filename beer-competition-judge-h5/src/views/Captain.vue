@@ -129,7 +129,6 @@ import {
   fetchMe,
   fetchTableScores,
   finalizeTableScore,
-  updateAdvancedList,
 } from '@/api/judge'
 
 const route = useRoute()
@@ -186,8 +185,7 @@ async function submitFinal() {
 }
 
 async function saveAdvanced() {
-  await updateAdvancedList(advancedUuids.value)
-  message.value = '晋级名单已确认'
+  message.value = '请在每款酒的本桌最终意见中勾选晋级'
   await loadBoard()
 }
 

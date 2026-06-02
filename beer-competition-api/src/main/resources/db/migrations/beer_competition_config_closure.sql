@@ -105,8 +105,8 @@ SELECT `id`, 'specialIngredients', '增味原料或特殊工艺', 'textarea', 0,
 FROM `competition`
 WHERE `status` <> 'DRAFT';
 
-INSERT IGNORE INTO `judge_table` (`competition_id`, `table_name`)
-SELECT `id`, 'A桌'
+INSERT IGNORE INTO `competition_judge_table` (`competition_id`, `table_name`, `sort_order`)
+SELECT `id`, 'A桌', 0
 FROM `competition`
 WHERE `status` <> 'DRAFT';
 

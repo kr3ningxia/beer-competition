@@ -14,12 +14,14 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@TableName("judge_table")
+@TableName("competition_judge_table")
 public class JudgeTable {
 
     @TableId(type = IdType.AUTO)
     private Long id;
     private Long competitionId;
     private String tableName;
+    private Integer sortOrder;
     private LocalDateTime createTime;
+    private LocalDateTime updateTime;
 }

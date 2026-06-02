@@ -35,6 +35,10 @@ public class CompetitionDetailVO {
     private Map<String, Boolean> editableScopes;
     private EntrySummaryVO entriesSummary;
     private List<CompetitionEntryVO> entries;
+    private List<CompetitionEntryVO> entryPool;
+    private List<CompetitionRoundVO> rounds;
+    private CompetitionRoundVO currentRound;
+    private List<ResultDraftVO> resultDrafts;
     private ProgressSummaryVO progressSummary;
     private ResultSetupVO resultSetup;
     private List<CompetitionAlertVO> alerts;
