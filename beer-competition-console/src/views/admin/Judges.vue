@@ -19,7 +19,7 @@
     <section class="toolbar">
       <label class="search-box">
         <Search />
-        <input v-model.trim="keyword" placeholder="搜索姓名、手机号、微信号、资质" />
+        <input v-model.trim="keyword" placeholder="搜索姓名、手机号后四位、资质" />
       </label>
       <div class="filter-tabs" aria-label="评审状态筛选">
         <button
@@ -52,17 +52,17 @@
           <span>状态</span>
           <span>操作</span>
         </div>
-        <div v-for="judge in filteredJudges" :key="judge.id" class="table-row">
+        <div v-for="judge in filteredJudges" :key="judge.publicId" class="table-row">
           <div class="judge-cell">
             <span class="avatar">{{ getInitial(judge.name) }}</span>
             <div>
               <strong>{{ judge.name || '未填写姓名' }}</strong>
-              <small>ID {{ judge.id }}</small>
+              <small>{{ judge.statusLabel || statusLabel(judge.status) }}</small>
             </div>
           </div>
           <div class="contact-cell">
-            <span>{{ judge.phone || '-' }}</span>
-            <small>{{ judge.wechat || '未填写微信号' }}</small>
+            <span>{{ judge.maskedPhone || '-' }}</span>
+            <small>{{ judge.maskedWechat || '未填写微信号' }}</small>
           </div>
           <span class="qualification">{{ judge.qualification || '未填写资质' }}</span>
           <span :class="['status-badge', statusTone(judge)]">
@@ -119,9 +119,13 @@
           <h2>编辑评审资料</h2>
           <button class="icon-close" type="button" @click="closeEditor">×</button>
         </header>
+        <p class="privacy-hint">完整联系方式仅供内部联络和资料维护使用，系统会记录查看和修改操作。</p>
         <label>
           <span>手机号</span>
-          <input v-model.trim="editForm.phone" />
+          <div class="readonly-row">
+            <input v-model.trim="editForm.phone" readonly />
+            <button class="row-action" type="button" @click="openPhoneEditor">更正</button>
+          </div>
         </label>
         <label>
           <span>姓名</span>
@@ -141,15 +145,37 @@
         </footer>
       </section>
     </div>
+
+    <div v-if="phoneEditorOpen" class="modal-mask" @click.self="closePhoneEditor">
+      <section class="modal-card">
+        <header>
+          <h2>更正手机号</h2>
+          <button class="icon-close" type="button" @click="closePhoneEditor">×</button>
+        </header>
+        <p class="privacy-hint">手机号是评审登录身份。仅在录入错误且评审尚未分配比赛时更正。</p>
+        <label>
+          <span>新手机号</span>
+          <input v-model.trim="phoneForm.phone" inputmode="tel" />
+        </label>
+        <label>
+          <span>更正原因</span>
+          <textarea v-model.trim="phoneForm.reason"></textarea>
+        </label>
+        <footer>
+          <button class="tool-button" type="button" @click="closePhoneEditor">取消</button>
+          <button class="tool-button primary" type="button" @click="savePhoneEditor">保存</button>
+        </footer>
+      </section>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Connection, Refresh, Right, Search } from '@element-plus/icons-vue'
-import { fetchJudges, updateJudge, updateJudgeStatus } from '@/api/admin'
+import { fetchJudgeDetail, fetchJudges, updateJudge, updateJudgePhone, updateJudgeStatus } from '@/api/admin'
 
 const router = useRouter()
 const judges = ref([])
@@ -157,12 +183,18 @@ const keyword = ref('')
 const statusFilter = ref('ALL')
 const loading = ref(false)
 const editorOpen = ref(false)
-const editingJudgeId = ref(null)
+const phoneEditorOpen = ref(false)
+const editingJudgePublicId = ref(null)
 const editForm = reactive({
   phone: '',
   name: '',
   wechat: '',
   qualification: '',
+  reviewRemark: '',
+})
+const phoneForm = reactive({
+  phone: '',
+  reason: '',
 })
 
 const statusFilters = [
@@ -183,7 +215,7 @@ const filteredJudges = computed(() => {
       (statusFilter.value === 'DISABLED' && Number(judge.status) === 0)
     const matchesKeyword =
       !query ||
-      [judge.name, judge.phone, judge.wechat, judge.qualification]
+      [judge.name, judge.maskedPhone, judge.qualification]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(query))
     return matchesStatus && matchesKeyword
@@ -222,35 +254,65 @@ function statusTone(judge) {
   return 'inactive'
 }
 
-function openEditor(judge) {
-  editingJudgeId.value = judge.id
-  editForm.phone = judge.phone || ''
-  editForm.name = judge.name || ''
-  editForm.wechat = judge.wechat || ''
-  editForm.qualification = judge.qualification || ''
+async function openEditor(judge) {
+  const detail = await fetchJudgeDetail(judge.publicId)
+  editingJudgePublicId.value = detail.publicId
+  editForm.phone = detail.phone || ''
+  editForm.name = detail.name || ''
+  editForm.wechat = detail.wechat || ''
+  editForm.qualification = detail.qualification || ''
+  editForm.reviewRemark = detail.reviewRemark || ''
   editorOpen.value = true
 }
 
 function closeEditor() {
   editorOpen.value = false
-  editingJudgeId.value = null
+  editingJudgePublicId.value = null
 }
 
 async function saveEditor() {
-  await updateJudge(editingJudgeId.value, editForm)
+  await updateJudge(editingJudgePublicId.value, {
+    name: editForm.name,
+    wechat: editForm.wechat,
+    qualification: editForm.qualification,
+    reviewRemark: editForm.reviewRemark,
+  })
   ElMessage.success('评审资料已更新')
   closeEditor()
   await loadJudges()
 }
 
 async function changeStatus(judge, status) {
-  await updateJudgeStatus(judge.id, { status })
+  await updateJudgeStatus(judge.publicId, { status })
   ElMessage.success(status === 1 ? '评审已启用' : '评审已停用')
   await loadJudges()
 }
 
 function getInitial(name) {
   return name?.trim()?.slice(0, 1) || '评'
+}
+
+function openPhoneEditor() {
+  phoneForm.phone = editForm.phone || ''
+  phoneForm.reason = ''
+  phoneEditorOpen.value = true
+}
+
+function closePhoneEditor() {
+  phoneEditorOpen.value = false
+}
+
+async function savePhoneEditor() {
+  await ElMessageBox.confirm('更正后评审需使用新手机号登录。确认保存吗？', '确认更正手机号', {
+    confirmButtonText: '保存',
+    cancelButtonText: '取消',
+    type: 'warning',
+  })
+  const next = await updateJudgePhone(editingJudgePublicId.value, phoneForm)
+  editForm.phone = next.phone || ''
+  ElMessage.success('手机号已更正')
+  closePhoneEditor()
+  await loadJudges()
 }
 </script>
 
@@ -590,6 +652,19 @@ svg {
 
 .modal-card h2 {
   margin: 0;
+}
+
+.privacy-hint {
+  margin: 12px 0 0;
+  color: var(--muted);
+  line-height: 1.5;
+  font-size: 13px;
+}
+
+.readonly-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
 }
 
 .icon-close {

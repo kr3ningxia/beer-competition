@@ -8,7 +8,7 @@
     <section class="card">
       <label class="field">
         手机号
-        <input v-model.trim="form.phone" class="input" inputmode="tel" placeholder="请输入手机号" />
+        <input v-model.trim="form.phone" class="input readonly" inputmode="tel" readonly />
       </label>
       <label class="field">
         姓名
@@ -58,13 +58,17 @@ onMounted(async () => {
 
 async function save() {
   error.value = ''
-  if (!form.phone || !form.name || !form.qualification) {
-    error.value = '请填写手机号、姓名和资质信息。'
+  if (!form.name || !form.qualification) {
+    error.value = '请填写姓名和资质信息。'
     return
   }
   saving.value = true
   try {
-    const next = await updateProfile(form)
+    const next = await updateProfile({
+      name: form.name,
+      wechat: form.wechat,
+      qualification: form.qualification,
+    })
     if (Number(next.status) === 2) {
       router.push('/review-status')
       return
@@ -90,5 +94,10 @@ function goBack() {
   color: #b42318;
   font-size: 14px;
   font-weight: 700;
+}
+
+.readonly {
+  color: #667085;
+  background: #f3f5f2;
 }
 </style>

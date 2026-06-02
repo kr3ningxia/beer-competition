@@ -7,10 +7,12 @@ import lombok.Data;
 @Builder
 public class JudgeAccountVO {
 
-    private Long id;
+    private String publicId;
     private String name;
     private String phone;
     private String wechat;
+    private String maskedPhone;
+    private String maskedWechat;
     private String qualification;
     private Integer status;
     private String statusLabel;

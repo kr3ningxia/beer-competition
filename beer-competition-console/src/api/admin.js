@@ -44,12 +44,20 @@ export function fetchJudges(params = {}) {
   return request.get('/api/admin/judges', { params, authScope: 'admin' })
 }
 
-export function updateJudge(id, payload) {
-  return request.put(`/api/admin/judges/${id}`, payload, { authScope: 'admin' })
+export function fetchJudgeDetail(publicId) {
+  return request.get(`/api/admin/judges/${publicId}`, { authScope: 'admin' })
 }
 
-export function updateJudgeStatus(id, payload) {
-  return request.patch(`/api/admin/judges/${id}/status`, payload, { authScope: 'admin' })
+export function updateJudge(publicId, payload) {
+  return request.put(`/api/admin/judges/${publicId}`, payload, { authScope: 'admin' })
+}
+
+export function updateJudgePhone(publicId, payload) {
+  return request.patch(`/api/admin/judges/${publicId}/phone`, payload, { authScope: 'admin' })
+}
+
+export function updateJudgeStatus(publicId, payload) {
+  return request.patch(`/api/admin/judges/${publicId}/status`, payload, { authScope: 'admin' })
 }
 
 export function createAssignment(payload) {

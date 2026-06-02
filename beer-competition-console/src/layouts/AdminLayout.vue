@@ -52,9 +52,7 @@ import {
   DataBoard,
   Document,
   Download,
-  Files,
   Medal,
-  Setting,
   User,
 } from '@element-plus/icons-vue'
 import { clearSession, getDisplayName } from '@/utils/auth'
@@ -68,8 +66,6 @@ const navItems = [
   { path: '/admin/dashboard', label: '现场看板', icon: DataBoard },
   { path: '/admin/competitions', label: '比赛管理', icon: Medal },
   { path: '/admin/judges', label: '评审列表', icon: User },
-  { path: '/admin/assignments', label: '评审编排', icon: Files },
-  { path: '/admin/score-config', label: '评分配置', icon: Setting },
   { path: null, label: '酒款管理', icon: Document },
   { path: null, label: '结果发布', icon: Medal },
   { path: null, label: '数据导出', icon: Download },

@@ -56,15 +56,15 @@ public class AliyunSmsAuthProvider implements SmsAuthProvider {
             SendSmsVerifyCodeResponseBody body = response.getBody();
             if (!isSuccess(body == null ? null : body.getCode(), body == null ? null : body.getSuccess())) {
                 String message = body == null ? "短信验证码发送失败" : body.getMessage();
-                log.warn("阿里云短信发送失败 phone={}, code={}, message={}", phone,
+                log.warn("阿里云短信发送失败 phone={}, code={}, message={}", maskPhone(phone),
                         body == null ? null : body.getCode(), message);
                 throw new BaseException(StringUtils.hasText(message) ? message : "短信验证码发送失败");
             }
-            log.info("阿里云短信发送成功 phone={}, requestId={}", phone, body.getRequestId());
+            log.info("阿里云短信发送成功 phone={}, requestId={}", maskPhone(phone), body.getRequestId());
         } catch (BaseException ex) {
             throw ex;
         } catch (Exception ex) {
-            log.error("阿里云短信发送异常 phone={}", phone, ex);
+            log.error("阿里云短信发送异常 phone={}", maskPhone(phone), ex);
             throw new BaseException("短信验证码发送失败，请稍后重试");
         }
     }
@@ -82,14 +82,14 @@ public class AliyunSmsAuthProvider implements SmsAuthProvider {
                     .setOutId(buildOutId(bizType)));
             CheckSmsVerifyCodeResponseBody body = response.getBody();
             if (!isSuccess(body == null ? null : body.getCode(), body == null ? null : body.getSuccess())) {
-                log.warn("阿里云短信校验失败 phone={}, code={}, message={}", phone,
+                log.warn("阿里云短信校验失败 phone={}, code={}, message={}", maskPhone(phone),
                         body == null ? null : body.getCode(), body == null ? null : body.getMessage());
                 return false;
             }
             String verifyResult = body.getModel() == null ? null : body.getModel().getVerifyResult();
             return VERIFY_PASS.equals(verifyResult);
         } catch (Exception ex) {
-            log.error("阿里云短信校验异常 phone={}", phone, ex);
+            log.error("阿里云短信校验异常 phone={}", maskPhone(phone), ex);
             throw new BaseException("验证码校验失败，请稍后重试");
         }
     }
@@ -128,5 +128,12 @@ public class AliyunSmsAuthProvider implements SmsAuthProvider {
                 || !StringUtils.hasText(smsProperties.getTemplateCode())) {
             throw new BaseException("阿里云短信认证配置不完整");
         }
+    }
+
+    private String maskPhone(String phone) {
+        if (!StringUtils.hasText(phone) || phone.length() < 7) {
+            return "已填写";
+        }
+        return phone.substring(0, 3) + "****" + phone.substring(phone.length() - 4);
     }
 }

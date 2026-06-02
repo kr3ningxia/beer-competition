@@ -65,6 +65,9 @@ app:
     code-length: ${APP_SMS_CODE_LENGTH:6}
     code-type: ${APP_SMS_CODE_TYPE:1}
     duplicate-policy: ${APP_SMS_DUPLICATE_POLICY:1}
+  pii:
+    aes-key: ${APP_PII_AES_KEY:dev-beer-competition-pii-aes-key-change-me}
+    hash-key: ${APP_PII_HASH_KEY:dev-beer-competition-pii-hash-key-change-me}
   storage:
     provider: ${APP_STORAGE_PROVIDER:local}
     local-base-dir: ${APP_STORAGE_LOCAL_DIR:uploads}

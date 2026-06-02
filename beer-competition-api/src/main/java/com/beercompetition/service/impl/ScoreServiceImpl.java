@@ -167,7 +167,6 @@ public class ScoreServiceImpl implements ScoreService {
     private ScoreRecordVO toScoreRecordVO(ScoreRecord scoreRecord) {
         return ScoreRecordVO.builder()
                 .id(scoreRecord.getId())
-                .judgeAccountId(scoreRecord.getJudgeAccountId())
                 .judgeRoleType(scoreRecord.getJudgeRoleType())
                 .dimensions(readDimensions(scoreRecord.getDimensionsJson()))
                 .totalScore(scoreRecord.getTotalScore())

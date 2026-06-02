@@ -7,6 +7,7 @@ import com.beercompetition.pojo.dto.ConfigNameBatchUpdateRequest;
 import com.beercompetition.pojo.dto.EntryFieldBatchUpdateRequest;
 import com.beercompetition.pojo.dto.AdminJudgeStatusUpdateRequest;
 import com.beercompetition.pojo.dto.AdminJudgeUpdateRequest;
+import com.beercompetition.pojo.dto.AdminJudgePhoneUpdateRequest;
 import com.beercompetition.pojo.dto.JudgeAssignmentCreateRequest;
 import com.beercompetition.pojo.dto.JudgeAssignmentBatchUpdateRequest;
 import com.beercompetition.pojo.dto.JudgeTableBatchUpdateRequest;
@@ -104,16 +105,27 @@ public class AdminController {
         return Result.success(judgeService.listJudges(status, keyword));
     }
 
-    @PutMapping("/judges/{id}")
-    public Result<JudgeAccountVO> updateJudge(@PathVariable Long id,
-                                              @RequestBody @Valid AdminJudgeUpdateRequest request) {
-        return Result.success(judgeService.updateJudge(id, request));
+    @GetMapping("/judges/{publicId}")
+    public Result<JudgeAccountVO> judgeDetail(@PathVariable String publicId) {
+        return Result.success(judgeService.getJudgeDetail(publicId));
     }
 
-    @PatchMapping("/judges/{id}/status")
-    public Result<JudgeAccountVO> updateJudgeStatus(@PathVariable Long id,
+    @PutMapping("/judges/{publicId}")
+    public Result<JudgeAccountVO> updateJudge(@PathVariable String publicId,
+                                              @RequestBody @Valid AdminJudgeUpdateRequest request) {
+        return Result.success(judgeService.updateJudge(publicId, request));
+    }
+
+    @PatchMapping("/judges/{publicId}/phone")
+    public Result<JudgeAccountVO> updateJudgePhone(@PathVariable String publicId,
+                                                   @RequestBody @Valid AdminJudgePhoneUpdateRequest request) {
+        return Result.success(judgeService.updateJudgePhone(publicId, request));
+    }
+
+    @PatchMapping("/judges/{publicId}/status")
+    public Result<JudgeAccountVO> updateJudgeStatus(@PathVariable String publicId,
                                                     @RequestBody @Valid AdminJudgeStatusUpdateRequest request) {
-        return Result.success(judgeService.updateJudgeStatus(id, request));
+        return Result.success(judgeService.updateJudgeStatus(publicId, request));
     }
 
     @PostMapping("/judge-assignments")

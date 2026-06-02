@@ -15,6 +15,7 @@ DROP TABLE IF EXISTS `judge_account`;
 DROP TABLE IF EXISTS `portal_account`;
 DROP TABLE IF EXISTS `brewery`;
 DROP TABLE IF EXISTS `admin_user`;
+DROP TABLE IF EXISTS `admin_operation_log`;
 DROP TABLE IF EXISTS `sms_code_log`;
 DROP TABLE IF EXISTS `file_asset`;
 
@@ -57,8 +58,11 @@ CREATE TABLE `portal_account` (
 
 CREATE TABLE `judge_account` (
   `id` bigint NOT NULL AUTO_INCREMENT,
-  `phone` varchar(20) NOT NULL,
-  `wechat` varchar(64) DEFAULT NULL,
+  `public_id` varchar(32) NOT NULL,
+  `phone_enc` text NOT NULL,
+  `phone_hash` char(64) NOT NULL,
+  `phone_last4` varchar(4) DEFAULT NULL,
+  `wechat_enc` text DEFAULT NULL,
   `name` varchar(64) NOT NULL,
   `qualification` varchar(255) NOT NULL,
   `status` tinyint NOT NULL DEFAULT 1,
@@ -69,7 +73,9 @@ CREATE TABLE `judge_account` (
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_judge_account_phone` (`phone`)
+  UNIQUE KEY `uk_judge_account_public_id` (`public_id`),
+  UNIQUE KEY `uk_judge_account_phone_hash` (`phone_hash`),
+  KEY `idx_judge_account_phone_last4` (`phone_last4`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='评审账号';
 
 CREATE TABLE `competition` (
@@ -205,13 +211,27 @@ CREATE TABLE `score_record` (
 
 CREATE TABLE `sms_code_log` (
   `id` bigint NOT NULL AUTO_INCREMENT,
-  `phone` varchar(20) NOT NULL,
+  `phone_hash` char(64) NOT NULL,
+  `masked_phone` varchar(20) NOT NULL,
   `biz_type` varchar(32) NOT NULL,
-  `code` varchar(16) NOT NULL,
   `status` varchar(16) NOT NULL,
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  KEY `idx_sms_code_log_phone_hash` (`phone_hash`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='短信验证码日志';
+
+CREATE TABLE `admin_operation_log` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `admin_user_id` bigint NOT NULL,
+  `action` varchar(64) NOT NULL,
+  `target_type` varchar(32) NOT NULL,
+  `target_public_id` varchar(64) DEFAULT NULL,
+  `summary` varchar(255) DEFAULT NULL,
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_admin_operation_log_target` (`target_type`,`target_public_id`),
+  KEY `idx_admin_operation_log_admin` (`admin_user_id`,`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='管理员操作日志';
 
 CREATE TABLE `file_asset` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -232,11 +252,6 @@ VALUES (1, '山海精酿', '张三', '13800000001', 'brewery-zhangsan');
 
 INSERT INTO `portal_account` (`id`, `phone`, `wechat`, `display_name`, `brewery_id`, `status`)
 VALUES (1, '13800000001', 'brewery-zhangsan', '山海精酿联系人', 1, 1);
-
-INSERT INTO `judge_account` (`id`, `phone`, `wechat`, `name`, `qualification`, `status`)
-VALUES
-  (1, '13800000011', 'judge-wang', '王评审', 'BJCP National', 1),
-  (2, '13800000012', 'judge-li', '李桌长', 'BJCP Certified / Table Captain', 1);
 
 INSERT INTO `competition` (`id`, `code`, `name`, `edition`, `competition_date`, `registration_start`, `registration_deadline`, `status`, `entry_fee`)
 VALUES (1, 'BC-2026', '2026中国精酿啤酒大赛', '第三批次', '2026-08-18', '2026-06-01 10:00:00', '2026-07-31 23:59:59', 'REGISTRATION_OPEN', 299.00);
@@ -276,11 +291,6 @@ VALUES
 
 INSERT INTO `judge_table` (`id`, `competition_id`, `table_name`)
 VALUES (1, 1, 'A桌');
-
-INSERT INTO `judge_assignment` (`id`, `competition_id`, `judge_account_id`, `table_id`, `role`)
-VALUES
-  (1, 1, 1, 1, 'PROFESSIONAL'),
-  (2, 1, 2, 1, 'CAPTAIN');
 
 INSERT INTO `beer_entry` (`id`, `uuid`, `competition_id`, `brewery_id`, `category_id`, `name`, `style`, `abv`, `description`, `extra_fields_json`, `status`)
 VALUES

@@ -12,7 +12,6 @@ import java.util.List;
 public class ScoreRecordVO {
 
     private Long id;
-    private Long judgeAccountId;
     private String judgeRoleType;
     private List<DimensionRequest> dimensions;
     private BigDecimal totalScore;

@@ -9,6 +9,7 @@ import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.CompetitionScoreConfigMapper;
 import com.beercompetition.mapper.CompetitionStyleConfigMapper;
 import com.beercompetition.mapper.EntryFieldConfigMapper;
+import com.beercompetition.mapper.JudgeAccountMapper;
 import com.beercompetition.mapper.JudgeAssignmentMapper;
 import com.beercompetition.mapper.JudgeTableMapper;
 import com.beercompetition.mapper.ScoreRecordMapper;
@@ -31,6 +32,7 @@ import com.beercompetition.pojo.po.CompetitionCategory;
 import com.beercompetition.pojo.po.CompetitionScoreConfig;
 import com.beercompetition.pojo.po.CompetitionStyleConfig;
 import com.beercompetition.pojo.po.EntryFieldConfig;
+import com.beercompetition.pojo.po.JudgeAccount;
 import com.beercompetition.pojo.po.JudgeAssignment;
 import com.beercompetition.pojo.po.JudgeTable;
 import com.beercompetition.pojo.po.ScoreRecord;
@@ -103,6 +105,7 @@ public class CompetitionServiceImpl implements CompetitionService {
     private final CompetitionStyleConfigMapper competitionStyleConfigMapper;
     private final EntryFieldConfigMapper entryFieldConfigMapper;
     private final JudgeTableMapper judgeTableMapper;
+    private final JudgeAccountMapper judgeAccountMapper;
     private final JudgeAssignmentMapper judgeAssignmentMapper;
     private final CompetitionScoreConfigMapper competitionScoreConfigMapper;
     private final BeerEntryMapper beerEntryMapper;
@@ -543,6 +546,14 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .collect(Collectors.groupingBy(ScoreRecord::getAssignmentId, Collectors.counting()));
         Map<Long, JudgeAssignment> assignmentById = assignments.stream()
                 .collect(Collectors.toMap(JudgeAssignment::getId, Function.identity(), (left, right) -> left));
+        Set<Long> judgeIds = assignments.stream()
+                .map(JudgeAssignment::getJudgeAccountId)
+                .collect(Collectors.toSet());
+        Map<Long, JudgeAccount> judgeById = judgeIds.isEmpty()
+                ? Map.of()
+                : judgeAccountMapper.selectBatchIds(judgeIds)
+                        .stream()
+                        .collect(Collectors.toMap(JudgeAccount::getId, Function.identity()));
 
         return tables.stream()
                 .map(table -> {
@@ -569,7 +580,9 @@ public class CompetitionServiceImpl implements CompetitionService {
                                     .map(assignment -> JudgeAssignmentVO.builder()
                                             .id(assignment.getId())
                                             .tableId(assignment.getTableId())
-                                            .judgeAccountId(assignment.getJudgeAccountId())
+                                            .judgePublicId(judgeById.get(assignment.getJudgeAccountId()) == null
+                                                    ? null
+                                                    : judgeById.get(assignment.getJudgeAccountId()).getPublicId())
                                             .role(assignment.getRole())
                                             .build())
                                     .toList())

@@ -19,9 +19,9 @@ public class SmsCodeLog {
 
     @TableId(type = IdType.AUTO)
     private Long id;
-    private String phone;
+    private String phoneHash;
+    private String maskedPhone;
     private String bizType;
-    private String code;
     private String status;
     private LocalDateTime createTime;
 }

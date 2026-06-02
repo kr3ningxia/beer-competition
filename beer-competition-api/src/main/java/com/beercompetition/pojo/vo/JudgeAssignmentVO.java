@@ -8,7 +8,7 @@ import lombok.Data;
 public class JudgeAssignmentVO {
 
     private Long id;
-    private Long judgeAccountId;
+    private String judgePublicId;
     private Long tableId;
     private String role;
 }

@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
+import com.beercompetition.common.util.PiiService;
 import com.beercompetition.common.util.Md5Util;
 import com.beercompetition.mapper.AdminUserMapper;
 import com.beercompetition.mapper.CompetitionMapper;
@@ -42,6 +43,7 @@ import org.springframework.util.StringUtils;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -58,6 +60,7 @@ public class AuthServiceImpl implements AuthService {
     private final JwtProperties jwtProperties;
     private final SmsProperties smsProperties;
     private final SmsAuthProvider smsAuthProvider;
+    private final PiiService piiService;
 
     @Override
     public LoginResponse adminLogin(AdminLoginRequest request) {
@@ -75,25 +78,27 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public void sendSmsCode(SmsSendRequest request) {
         // 1) 参数规范化与发送频控
-        ensureSmsSendAvailable(request.getBizType(), request.getPhone());
+        String phone = piiService.normalizePhone(request.getPhone());
+        String phoneHash = piiService.hashPhone(phone);
+        ensureSmsSendAvailable(request.getBizType(), phoneHash);
 
         // 2) 按环境选择验证码提供方
         String code = "ALIYUN_MANAGED";
         if (smsProperties.isMockEnabled()) {
             code = "123456";
-            redisTemplate.opsForValue().set(buildSmsKey(request.getBizType(), request.getPhone()), code,
+            redisTemplate.opsForValue().set(buildSmsKey(request.getBizType(), phoneHash), code,
                     Duration.ofMinutes(smsProperties.getCodeTtlMinutes()));
         } else {
-            smsAuthProvider.sendCode(request.getPhone(), request.getBizType());
+            smsAuthProvider.sendCode(phone, request.getBizType());
         }
-        redisTemplate.opsForValue().set(buildSmsIntervalKey(request.getBizType(), request.getPhone()), "1",
+        redisTemplate.opsForValue().set(buildSmsIntervalKey(request.getBizType(), phoneHash), "1",
                 Duration.ofSeconds(smsProperties.getSendIntervalSeconds()));
 
         // 3) 记录发送日志
         smsCodeLogMapper.insert(SmsCodeLog.builder()
-                .phone(request.getPhone())
+                .phoneHash(phoneHash)
+                .maskedPhone(piiService.maskPhone(phone))
                 .bizType(request.getBizType().name())
-                .code(code)
                 .status("SENT")
                 .build());
     }
@@ -120,8 +125,9 @@ public class AuthServiceImpl implements AuthService {
         validateSmsCode(SmsBizType.JUDGE_LOGIN, request.getPhone(), request.getCode());
 
         // 2) 查询评审账号状态
+        String phone = piiService.normalizePhone(request.getPhone());
         JudgeAccount account = judgeAccountMapper.selectOne(new LambdaQueryWrapper<JudgeAccount>()
-                .eq(JudgeAccount::getPhone, request.getPhone()));
+                .eq(JudgeAccount::getPhoneHash, piiService.hashPhone(phone)));
         if (account == null) {
             throw new BaseException("评审账号不存在，请先注册");
         }
@@ -141,13 +147,17 @@ public class AuthServiceImpl implements AuthService {
         validateSmsCode(SmsBizType.JUDGE_REGISTER, request.getPhone(), request.getCode());
 
         // 2) 查询或创建资料未完善账号
+        String phone = piiService.normalizePhone(request.getPhone());
         JudgeAccount account = judgeAccountMapper.selectOne(new LambdaQueryWrapper<JudgeAccount>()
-                .eq(JudgeAccount::getPhone, request.getPhone()));
+                .eq(JudgeAccount::getPhoneHash, piiService.hashPhone(phone)));
         if (account == null) {
             account = JudgeAccount.builder()
-                    .phone(request.getPhone())
+                    .publicId(generateJudgePublicId())
+                    .phoneEnc(piiService.encrypt(phone))
+                    .phoneHash(piiService.hashPhone(phone))
+                    .phoneLast4(piiService.phoneLast4(phone))
                     .name("")
-                    .wechat("")
+                    .wechatEnc(null)
                     .qualification("")
                     .status(JudgeAccountStatus.PROFILE_INCOMPLETE.getCode())
                     .build();
@@ -205,11 +215,10 @@ public class AuthServiceImpl implements AuthService {
                 JudgeTable table = assignment == null ? null : judgeTableMapper.selectById(assignment.getTableId());
                 Competition competition = assignment == null ? null : competitionMapper.selectById(assignment.getCompetitionId());
                 yield CurrentUserResponse.builder()
-                        .userId(account.getId())
                         .role(role.name())
                         .displayName(resolveJudgeDisplayName(account))
-                        .phone(account.getPhone())
-                        .wechat(account.getWechat())
+                        .phone(piiService.decrypt(account.getPhoneEnc()))
+                        .wechat(piiService.decrypt(account.getWechatEnc()))
                         .qualification(account.getQualification())
                         .status(status.getCode())
                         .statusLabel(status.getLabel())
@@ -229,31 +238,33 @@ public class AuthServiceImpl implements AuthService {
         if (!StringUtils.hasText(code)) {
             throw new BaseException("验证码不能为空");
         }
+        String normalizedPhone = piiService.normalizePhone(phone);
+        String phoneHash = piiService.hashPhone(normalizedPhone);
         boolean valid;
         if (smsProperties.isMockEnabled()) {
-            Object cachedCode = redisTemplate.opsForValue().get(buildSmsKey(bizType, phone));
+            Object cachedCode = redisTemplate.opsForValue().get(buildSmsKey(bizType, phoneHash));
             valid = "123456".equals(code) || (cachedCode != null && code.equals(String.valueOf(cachedCode)));
         } else {
-            valid = smsAuthProvider.checkCode(phone, code, bizType);
+            valid = smsAuthProvider.checkCode(normalizedPhone, code, bizType);
         }
         if (!valid) {
             throw new BaseException("验证码错误或已过期");
         }
     }
 
-    private void ensureSmsSendAvailable(SmsBizType bizType, String phone) {
-        Object intervalFlag = redisTemplate.opsForValue().get(buildSmsIntervalKey(bizType, phone));
+    private void ensureSmsSendAvailable(SmsBizType bizType, String phoneHash) {
+        Object intervalFlag = redisTemplate.opsForValue().get(buildSmsIntervalKey(bizType, phoneHash));
         if (intervalFlag != null) {
             throw new BaseException("验证码发送过于频繁，请稍后再试");
         }
     }
 
-    private String buildSmsKey(SmsBizType bizType, String phone) {
-        return "beer-competition:sms:" + bizType.name() + ":" + phone;
+    private String buildSmsKey(SmsBizType bizType, String phoneHash) {
+        return "beer-competition:sms:" + bizType.name() + ":" + phoneHash;
     }
 
-    private String buildSmsIntervalKey(SmsBizType bizType, String phone) {
-        return "beer-competition:sms-interval:" + bizType.name() + ":" + phone;
+    private String buildSmsIntervalKey(SmsBizType bizType, String phoneHash) {
+        return "beer-competition:sms-interval:" + bizType.name() + ":" + phoneHash;
     }
 
     private LoginResponse buildLoginResponse(Long userId, String displayName, UserRole role, long ttlMillis) {
@@ -274,6 +285,7 @@ public class AuthServiceImpl implements AuthService {
     private LoginResponse buildJudgeLoginResponse(JudgeAccount account) {
         JudgeAccountStatus status = JudgeAccountStatus.of(account.getStatus());
         LoginResponse response = buildLoginResponse(account.getId(), resolveJudgeDisplayName(account), UserRole.JUDGE, jwtProperties.getJudgeTtl());
+        response.setUserId(null);
         response.setStatus(status.getCode());
         response.setProfileRequired(status == JudgeAccountStatus.PROFILE_INCOMPLETE);
         return response;
@@ -303,5 +315,14 @@ public class AuthServiceImpl implements AuthService {
             return "跨界评审";
         }
         return role;
+    }
+
+    private String generateJudgePublicId() {
+        String publicId;
+        do {
+            publicId = "J" + UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase();
+        } while (judgeAccountMapper.selectOne(new LambdaQueryWrapper<JudgeAccount>()
+                .eq(JudgeAccount::getPublicId, publicId)) != null);
+        return publicId;
     }
 }

@@ -402,10 +402,10 @@
                         @dragstart="startAssignmentDrag(assignment)"
                         @dragend="clearDrag"
                       >
-                        <span class="avatar small">{{ getJudgeInitial(getJudge(assignment.judgeId)?.name) }}</span>
+                        <span class="avatar small">{{ getJudgeInitial(getJudge(assignment.judgePublicId)?.name) }}</span>
                         <div class="assignment-main">
-                          <strong>{{ getJudge(assignment.judgeId)?.name || '未知评委' }}</strong>
-                          <small>{{ getJudge(assignment.judgeId)?.qualification || '未填写资质' }}</small>
+                          <strong>{{ getJudge(assignment.judgePublicId)?.name || '未知评委' }}</strong>
+                          <small>{{ getJudge(assignment.judgePublicId)?.qualification || '未填写资质' }}</small>
                         </div>
                         <button v-if="editable.judgeTables" class="icon-button ghost" type="button" @click.stop="removeAssignment(assignment)">
                           <Delete />
@@ -450,8 +450,8 @@
                 <div class="judge-pool-list">
                   <article
                     v-for="judge in filteredJudgePool"
-                    :key="judge.id"
-                    :class="['pool-card', { assigned: isAssigned(judge.id), inactive: !isJudgeActive(judge) }]"
+                    :key="judge.publicId"
+                    :class="['pool-card', { assigned: isAssigned(judge.publicId), inactive: !isJudgeActive(judge) }]"
                     :draggable="editable.judgeTables && isJudgeActive(judge)"
                     @dragstart="startJudgeDrag(judge)"
                     @dragend="clearDrag"
@@ -460,7 +460,7 @@
                     <div>
                       <strong>{{ judge.name || '未填写姓名' }}</strong>
                       <small>{{ judge.qualification || '未填写资质' }}</small>
-                      <em>{{ isAssigned(judge.id) ? '已分配' : '未分配' }}</em>
+                      <em>{{ isAssigned(judge.publicId) ? '已分配' : '未分配' }}</em>
                     </div>
                     <button
                       v-if="editable.judgeTables"
@@ -756,14 +756,14 @@ const styleLibraryLabels = {
 }
 
 const fallbackJudgePool = [
-  { id: 9001, name: '张远', phone: '13800000001', wechat: 'zy_beer', qualification: 'BJCP 认证 · 桌长候选', status: 1 },
-  { id: 9002, name: '李澄', phone: '13800000002', wechat: 'lc_hops', qualification: '专业评审 · 酒厂顾问', status: 1 },
-  { id: 9003, name: '王禾', phone: '13800000003', wechat: 'wh_malt', qualification: '专业评审 · 酿酒师', status: 1 },
-  { id: 9004, name: '陈乐', phone: '13800000004', wechat: 'cl_media', qualification: '跨界评审 · 媒体', status: 1 },
-  { id: 9005, name: '赵予', phone: '13800000005', wechat: 'zy_flavor', qualification: 'BJCP 认证 · 专业评审', status: 1 },
-  { id: 9006, name: '周亦', phone: '13800000006', wechat: 'zhouy', qualification: '跨界评审 · 餐饮主理人', status: 1 },
-  { id: 9007, name: '吴嘉', phone: '', wechat: 'wj_brew', qualification: '专业评审 · 待补手机号', status: 1 },
-  { id: 9008, name: '郑南', phone: '13800000008', wechat: 'zn_beer', qualification: '桌长候选 · 赛事经验', status: 1 },
+  { publicId: 'J-DEMO-001', name: '张远', maskedPhone: '138****0001', qualification: 'BJCP 认证 · 桌长候选', status: 1 },
+  { publicId: 'J-DEMO-002', name: '李澄', maskedPhone: '138****0002', qualification: '专业评审 · 酒厂顾问', status: 1 },
+  { publicId: 'J-DEMO-003', name: '王禾', maskedPhone: '138****0003', qualification: '专业评审 · 酿酒师', status: 1 },
+  { publicId: 'J-DEMO-004', name: '陈乐', maskedPhone: '138****0004', qualification: '跨界评审 · 媒体', status: 1 },
+  { publicId: 'J-DEMO-005', name: '赵予', maskedPhone: '138****0005', qualification: 'BJCP 认证 · 专业评审', status: 1 },
+  { publicId: 'J-DEMO-006', name: '周亦', maskedPhone: '138****0006', qualification: '跨界评审 · 餐饮主理人', status: 1 },
+  { publicId: 'J-DEMO-007', name: '吴嘉', maskedPhone: '-', qualification: '专业评审 · 待补手机号', status: 1 },
+  { publicId: 'J-DEMO-008', name: '郑南', maskedPhone: '138****0008', qualification: '桌长候选 · 赛事经验', status: 1 },
 ]
 
 const statusInfo = computed(() => statusMeta[competition.value?.status] || statusMeta.DRAFT)
@@ -830,15 +830,15 @@ const validationIssues = computed(() => {
   judgeTableForm.forEach((table) => {
     issues.push(...tableValidationIssues(table))
   })
-  const duplicateJudgeIds = judgeAssignmentForm
-    .map((assignment) => assignment.judgeId)
-    .filter((judgeId, index, list) => list.indexOf(judgeId) !== index)
-  new Set(duplicateJudgeIds).forEach((judgeId) => {
-    issues.push(`${getJudge(judgeId)?.name || '某位评委'}在本场比赛中被重复分配`)
+    const duplicateJudgeIds = judgeAssignmentForm
+    .map((assignment) => assignment.judgePublicId)
+    .filter((judgePublicId, index, list) => list.indexOf(judgePublicId) !== index)
+  new Set(duplicateJudgeIds).forEach((judgePublicId) => {
+    issues.push(`${getJudge(judgePublicId)?.name || '某位评委'}在本场比赛中被重复分配`)
   })
   judgeAssignmentForm.forEach((assignment) => {
-    const judge = getJudge(assignment.judgeId)
-    if (judge && !judge.phone) {
+    const judge = getJudge(assignment.judgePublicId)
+    if (judge && !judge.maskedPhone) {
       issues.push(`${judge.name || '某位评委'}未填写手机号，可能无法登录评审端`)
     }
   })
@@ -849,12 +849,12 @@ const filteredJudgePool = computed(() => {
   return judgePool.value.filter((judge) => {
     const matchesKeyword =
       !query ||
-      [judge.name, judge.phone, judge.wechat, judge.qualification]
+      [judge.name, judge.maskedPhone, judge.qualification]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(query))
     const matchesRole =
       judgeRoleFilter.value === 'ALL' ||
-      (judgeRoleFilter.value === 'UNASSIGNED' && !isAssigned(judge.id)) ||
+      (judgeRoleFilter.value === 'UNASSIGNED' && !isAssigned(judge.publicId)) ||
       inferJudgeRoles(judge).includes(judgeRoleFilter.value)
     return matchesKeyword && matchesRole
   })
@@ -1152,10 +1152,10 @@ function resetForms() {
     localId: item.id || `table-${index}`,
   })))
   const persistedAssignments = judgeTableForm.flatMap((table) => (table.assignments || []).map((assignment) => ({
-    localId: `assignment-${assignment.id || `${table.localId}-${assignment.judgeAccountId}`}`,
+    localId: `assignment-${assignment.id || `${table.localId}-${assignment.judgePublicId}`}`,
     tableLocalId: table.localId,
     tableId: table.id,
-    judgeId: assignment.judgeAccountId,
+    judgePublicId: assignment.judgePublicId,
     role: assignment.role,
   })))
   judgeAssignmentForm.splice(0, judgeAssignmentForm.length, ...persistedAssignments)
@@ -1193,9 +1193,9 @@ function seedJudgeAssignments() {
     roleCounts.forEach(([role, count]) => {
       for (let index = 0; index < count && cursor < sourceJudges.length; index += 1) {
         seeded.push({
-          localId: `assignment-${table.localId}-${role}-${index}-${sourceJudges[cursor].id}`,
+          localId: `assignment-${table.localId}-${role}-${index}-${sourceJudges[cursor].publicId}`,
           tableLocalId: table.localId,
-          judgeId: sourceJudges[cursor].id,
+          judgePublicId: sourceJudges[cursor].publicId,
           role,
         })
         cursor += 1
@@ -1313,7 +1313,7 @@ function addJudgeToTarget(judge) {
     ElMessage.warning('停用评委不能加入本场比赛')
     return
   }
-  const existing = judgeAssignmentForm.find((assignment) => assignment.judgeId === judge.id)
+  const existing = judgeAssignmentForm.find((assignment) => assignment.judgePublicId === judge.publicId)
   if (existing) {
     existing.tableLocalId = selectedTable.value.localId
     existing.role = selectedRole.value
@@ -1321,9 +1321,9 @@ function addJudgeToTarget(judge) {
     return
   }
   judgeAssignmentForm.push({
-    localId: `assignment-${Date.now()}-${judge.id}`,
+    localId: `assignment-${Date.now()}-${judge.publicId}`,
     tableLocalId: selectedTable.value.localId,
-    judgeId: judge.id,
+    judgePublicId: judge.publicId,
     role: selectedRole.value,
   })
 }
@@ -1343,14 +1343,14 @@ function startJudgeDrag(judge) {
   if (!editable.value.judgeTables || !isJudgeActive(judge)) {
     return
   }
-  draggingItem.value = { type: 'judge', judgeId: judge.id }
+  draggingItem.value = { type: 'judge', judgePublicId: judge.publicId }
 }
 
 function startAssignmentDrag(assignment) {
   if (!editable.value.judgeTables) {
     return
   }
-  draggingItem.value = { type: 'assignment', localId: assignment.localId, judgeId: assignment.judgeId }
+  draggingItem.value = { type: 'assignment', localId: assignment.localId, judgePublicId: assignment.judgePublicId }
 }
 
 function clearDrag() {
@@ -1372,7 +1372,7 @@ function dropOnRole(table, role) {
     clearDrag()
     return
   }
-  const judge = getJudge(draggingItem.value.judgeId)
+  const judge = getJudge(draggingItem.value.judgePublicId)
   if (judge) {
     addJudgeToTarget(judge)
   }
@@ -1398,8 +1398,8 @@ function tableValidationIssues(table) {
   return issues
 }
 
-function getJudge(judgeId) {
-  return judgePool.value.find((judge) => judge.id === judgeId) || fallbackJudgePool.find((judge) => judge.id === judgeId)
+function getJudge(judgePublicId) {
+  return judgePool.value.find((judge) => judge.publicId === judgePublicId) || fallbackJudgePool.find((judge) => judge.publicId === judgePublicId)
 }
 
 function getJudgeInitial(name) {
@@ -1410,8 +1410,8 @@ function isJudgeActive(judge) {
   return Number(judge.status) === 1
 }
 
-function isAssigned(judgeId) {
-  return judgeAssignmentForm.some((assignment) => assignment.judgeId === judgeId)
+function isAssigned(judgePublicId) {
+  return judgeAssignmentForm.some((assignment) => assignment.judgePublicId === judgePublicId)
 }
 
 function inferJudgeRoles(judge) {
@@ -1444,7 +1444,7 @@ async function saveJudgeDraft() {
   }
   const assignmentDraft = judgeAssignmentForm.map((assignment) => ({
     tableName: judgeTableForm.find((table) => table.localId === assignment.tableLocalId)?.tableName,
-    judgeAccountId: assignment.judgeId,
+    judgePublicId: assignment.judgePublicId,
     role: assignment.role,
   }))
   let detail = await updateCompetitionJudgeTables(competition.value.id, {
@@ -1453,7 +1453,7 @@ async function saveJudgeDraft() {
   const tableByName = new Map((detail.judgeTables || []).map((table) => [table.tableName, table]))
   const items = assignmentDraft.map((assignment) => ({
     tableId: tableByName.get(assignment.tableName)?.id,
-    judgeAccountId: assignment.judgeAccountId,
+    judgePublicId: assignment.judgePublicId,
     role: assignment.role,
   }))
   await updateCompetitionJudgeAssignments(competition.value.id, { items })
