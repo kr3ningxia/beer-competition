@@ -261,340 +261,143 @@
         </section>
 
         <section v-if="activeTab === 'judges'" class="tab-panel">
-          <div class="edit-banner">
-            <Files />
-            基础桌次用于生成第一轮；第二轮及以后可从晋级池重新合并、减少或重组桌次。
-          </div>
-          <section class="judge-workbench">
-            <aside class="judge-nav-panel">
-              <div class="panel-heading compact">
-                <h2>基础桌次</h2>
-                <span>{{ judgeTableForm.length }} 桌</span>
-              </div>
-              <button
-                v-for="table in judgeTableForm"
-                :key="table.localId"
-                :class="['table-nav-item', { active: selectedTableLocalId === table.localId, danger: tableValidationIssues(table).length }]"
-                type="button"
-                @click="selectedTableLocalId = table.localId"
-              >
-                <strong>{{ table.tableName || '未命名评审桌' }}</strong>
-                <span>{{ assignmentsForTable(table).length }} 人</span>
-              </button>
-              <button v-if="editable.judgeTables" class="table-nav-add" type="button" @click="addJudgeTable">
-                <Plus />
-                新增基础桌
-              </button>
-
-              <div class="left-check-summary">
-                <div>
-                  <strong>检查</strong>
-                  <span :class="{ success: validationIssues.length === 0, danger: validationIssues.length > 0 }">
-                    {{ validationIssues.length === 0 ? '通过' : `${validationIssues.length} 项` }}
-                  </span>
-                </div>
-                <p v-for="issue in validationIssues.slice(0, 3)" :key="issue">
-                  <Warning />
-                  {{ issue }}
-                </p>
-                <p v-if="validationIssues.length === 0">
-                  <CircleCheck />
-                  可生成第一轮桌任务
-                </p>
-              </div>
-            </aside>
-
-            <section class="assignment-board">
-              <div class="judge-command-bar">
-                <div class="metric-strip">
-                  <span>已分配 <strong>{{ judgeMetrics.assigned }}</strong></span>
-                  <span>桌长 <strong>{{ judgeMetrics.captain }} / {{ judgeTableForm.length }}</strong></span>
-                  <span>专业 <strong>{{ judgeMetrics.professional }}</strong></span>
-                  <span>跨界 <strong>{{ judgeMetrics.cross }}</strong></span>
-                </div>
-                <button v-if="editable.judgeTables" class="tool-button" type="button" @click="saveJudgeDraft">
-                  <Check />
-                  保存
-                </button>
-              </div>
-
-              <article v-for="(table, index) in judgeTableForm" :key="table.localId" class="judge-table-card">
-                <header class="judge-table-head">
-                  <div>
-                    <label v-if="editable.judgeTables">
-                      <span>桌号</span>
-                      <input v-model.trim="table.tableName" placeholder="例如 A桌" />
-                    </label>
-                    <h2 v-else>{{ table.tableName }}</h2>
-                    <p>{{ tableValidationIssues(table).length ? tableValidationIssues(table)[0] : '本桌可生成第一轮任务' }}</p>
-                  </div>
-                  <button v-if="editable.judgeTables" class="icon-button" type="button" @click="removeJudgeTable(index)">
-                    <Delete />
-                  </button>
-                </header>
-
-                <div class="role-lanes">
-                  <section
-                    v-for="role in roleOptions"
-                    :key="role.value"
-                    :class="['role-lane', role.value.toLowerCase(), { active: selectedTableLocalId === table.localId && selectedRole === role.value }]"
-                    @click="selectAssignmentTarget(table, role.value)"
-                    @dragover.prevent
-                    @drop.prevent="dropOnRole(table, role.value)"
-                  >
-                    <header>
-                      <div>
-                        <strong>{{ role.label }}</strong>
-                        <span>{{ assignmentsForTable(table, role.value).length }} 人</span>
-                      </div>
-                    </header>
-
-                    <div class="assignment-card-list">
-                      <article
-                        v-for="assignment in assignmentsForTable(table, role.value)"
-                        :key="assignment.localId"
-                        class="assignment-card"
-                        :draggable="editable.judgeTables"
-                        @dragstart="startAssignmentDrag(assignment)"
-                        @dragend="clearDrag"
-                      >
-                        <span class="avatar small">{{ getJudgeInitial(getJudge(assignment.judgePublicId)?.name) }}</span>
-                        <div class="assignment-main">
-                          <strong>{{ getJudge(assignment.judgePublicId)?.name || '未知评委' }}</strong>
-                          <small>{{ getJudge(assignment.judgePublicId)?.qualification || '未填写资质' }}</small>
-                        </div>
-                        <button v-if="editable.judgeTables" class="icon-button ghost" type="button" @click.stop="removeAssignment(assignment)">
-                          <Delete />
-                        </button>
-                      </article>
-                      <button
-                        v-if="editable.judgeTables && assignmentsForTable(table, role.value).length === 0"
-                        class="empty-assignment"
-                        type="button"
-                        @click.stop="selectAssignmentTarget(table, role.value)"
-                      >
-                        <Plus />
-                        添加
-                      </button>
-                    </div>
-                  </section>
-                </div>
-              </article>
-            </section>
-
-            <aside class="judge-right-panel">
-              <section class="panel-card tight">
-                <div class="panel-heading compact">
-                  <h2>评委池</h2>
-                  <span>{{ filteredJudgePool.length }} 人</span>
-                </div>
-                <label class="inline-search">
-                  <Search />
-                  <input v-model.trim="judgeKeyword" placeholder="搜索姓名、手机号、资质" />
-                </label>
-                <div class="pool-filters">
-                  <button
-                    v-for="filter in roleFilters"
-                    :key="filter.value"
-                    :class="{ active: judgeRoleFilter === filter.value }"
-                    type="button"
-                    @click="judgeRoleFilter = filter.value"
-                  >
-                    {{ filter.label }}
-                  </button>
-                </div>
-                <div class="judge-pool-list">
-                  <article
-                    v-for="judge in filteredJudgePool"
-                    :key="judge.publicId"
-                    :class="['pool-card', { assigned: isAssigned(judge.publicId), inactive: !isJudgeActive(judge) }]"
-                    :draggable="editable.judgeTables && isJudgeActive(judge)"
-                    @dragstart="startJudgeDrag(judge)"
-                    @dragend="clearDrag"
-                  >
-                    <span class="avatar">{{ getJudgeInitial(judge.name) }}</span>
-                    <div>
-                      <strong>{{ judge.name || '未填写姓名' }}</strong>
-                      <small>{{ judge.qualification || '未填写资质' }}</small>
-                      <em>{{ isAssigned(judge.publicId) ? '已分配' : '未分配' }}</em>
-                    </div>
-                    <button
-                      v-if="editable.judgeTables"
-                      class="link-action"
-                      type="button"
-                      :disabled="!isJudgeActive(judge)"
-                      @click="addJudgeToTarget(judge)"
-                    >
-                      加入
-                    </button>
-                  </article>
-                </div>
-              </section>
-            </aside>
-          </section>
+          <JudgeSetupPanel
+            :editable="Boolean(editable.judgeTables)"
+            :judge-table-form="judgeTableForm"
+            :role-options="roleOptions"
+            :role-filters="roleFilters"
+            :judge-keyword="judgeKeyword"
+            :judge-role-filter="judgeRoleFilter"
+            :selected-table-local-id="selectedTableLocalId"
+            :selected-role="selectedRole"
+            :judge-metrics="judgeMetrics"
+            :validation-issues="validationIssues"
+            :filtered-judge-pool="filteredJudgePool"
+            :assignments-for-table="assignmentsForTable"
+            :table-validation-issues="tableValidationIssues"
+            :get-judge="getJudge"
+            :get-judge-initial="getJudgeInitial"
+            :is-assigned="isAssigned"
+            :is-judge-active="isJudgeActive"
+            @update:judge-keyword="judgeKeyword = $event"
+            @update:judge-role-filter="judgeRoleFilter = $event"
+            @select-assignment-target="selectAssignmentTarget"
+            @add-judge-to-target="addJudgeToTarget"
+            @add-judge-table="addJudgeTable"
+            @remove-judge-table="removeJudgeTable"
+            @remove-assignment="removeAssignment"
+            @save-judge-draft="saveJudgeDraft"
+            @start-judge-drag="startJudgeDrag"
+            @start-assignment-drag="startAssignmentDrag"
+            @drop-on-role="dropOnRole"
+            @clear-drag="clearDrag"
+            @generate-first-round="generateFirstRoundFromJudges"
+          />
         </section>
 
         <section v-if="activeTab === 'rounds'" class="tab-panel rounds-panel">
-          <div class="round-flow">
-            <button
-              v-for="round in rounds"
-              :key="round.id"
-              :class="['round-flow-item', { active: round.id === activeRoundId }]"
-              type="button"
-              @click="selectRound(round.id)"
-            >
-              <small>{{ round.type === 'SCORE' ? '评分制' : '选择排序' }}</small>
-              <strong>{{ round.name }}</strong>
-              <em>{{ roundStatusLabels[round.status] || round.status }}</em>
-            </button>
-            <button class="round-flow-item create" type="button" @click="openCreateRoundDialog">
-              <Plus />
-              <strong>创建下一轮</strong>
-              <em>从晋级池生成</em>
-            </button>
+          <RoundStepper
+            :rounds="rounds"
+            :active-round-id="activeRoundId"
+            :round-status-labels="roundStatusLabels"
+            @select-round="selectRound"
+          />
+
+          <div v-if="canCreateNextRound" class="next-round-banner">
+            <div>
+              <strong>第一轮已锁定，可以从晋级酒款创建第二轮。</strong>
+              <span>{{ advancedPool.length }} 款晋级酒可用。</span>
+            </div>
+            <button type="button" @click="openCreateRoundDialog">创建第二轮</button>
+          </div>
+          <div v-else-if="currentRound?.id === 'round-1'" class="next-round-banner muted">
+            <div>
+              <strong>完成并锁定第一轮后，再创建第二轮。</strong>
+              <span>这样用户不会在第一轮未完成时误操作后续轮。</span>
+            </div>
           </div>
 
-          <div class="round-summary-strip">
-            <span>评审方式 <strong>{{ currentRoundTypeLabel }}</strong></span>
-            <span>桌数 <strong>{{ currentRoundTables.length }}</strong></span>
-            <span>酒款 <strong>{{ currentRoundEntryCount }}</strong></span>
-            <span>目标 <strong>{{ currentRoundTargetCount }}</strong></span>
-            <span>状态 <strong>{{ currentRoundStatusText }}</strong></span>
-          </div>
+          <FirstRoundWorkbench
+            v-if="currentRound?.type === 'SCORE'"
+            :current-round="currentRound"
+            :current-round-tables="currentRoundTables"
+            :selected-round-table="selectedRoundTable"
+            :selected-round-table-id="selectedRoundTableId"
+            :filtered-round-pool="filteredRoundPool"
+            :category-stats="roundCategoryStats"
+            :round-category-filters="roundCategoryFilters"
+            :round-category-filter="roundCategoryFilter"
+            :round-keyword="roundKeyword"
+            :selected-entry-uuids="selectedEntryUuids"
+            :captain-candidates="captainCandidates"
+            :round-validation-issues="roundValidationIssues"
+            :can-publish="canPublishCurrentRound"
+            :unassigned-count="unassignedRoundEntries.length"
+            :round-status-labels="roundStatusLabels"
+            :get-judge="getJudge"
+            :get-round-table-issues="getRoundTableIssues"
+            :get-round-entry-assignment="getRoundEntryAssignment"
+            @update:round-keyword="roundKeyword = $event"
+            @update:round-category-filter="roundCategoryFilter = $event"
+            @toggle-entry-selection="toggleEntrySelection"
+            @clear-selection="clearEntrySelection"
+            @add-selected-to-table="addSelectedEntriesToTable"
+            @add-entry-to-selected-table="addEntryToSelectedRoundTable"
+            @start-entry-drag="startEntryDrag"
+            @clear-drag="clearDrag"
+            @assign-evenly="assignCurrentRoundEvenly"
+            @assign-by-category="assignCurrentRoundByCategory"
+            @clear-round-assignments="clearCurrentRoundAssignments"
+            @select-round-table="selectedRoundTableId = $event"
+            @drop-entry-on-round-table="dropEntryOnRoundTable"
+            @remove-entry-from-round-table="removeEntryFromRoundTable"
+            @update-table-captain="updateRoundTableCaptain"
+            @update-table-target="updateRoundTableTarget"
+            @remove-round-table="removeRoundTable"
+            @publish-current-round="publishCurrentRound"
+            @complete-first-round="completeFirstRoundMock"
+          />
 
-          <section class="round-workbench">
-            <aside class="round-pool-panel">
-              <div class="panel-heading compact">
-                <h2>{{ currentRound?.type === 'SCORE' ? '已入库酒款池' : '晋级酒款池' }}</h2>
-                <span>{{ filteredRoundPool.length }} 款</span>
-              </div>
-              <label class="inline-search">
-                <Search />
-                <input v-model.trim="roundKeyword" placeholder="搜索匿名编号、短编号、风格" />
-              </label>
-              <div class="pool-filters">
-                <button
-                  v-for="category in roundCategoryFilters"
-                  :key="category"
-                  :class="{ active: roundCategoryFilter === category }"
-                  type="button"
-                  @click="roundCategoryFilter = category"
-                >
-                  {{ category }}
-                </button>
-              </div>
-              <div class="round-entry-list">
-                <article
-                  v-for="entry in filteredRoundPool"
-                  :key="entry.uuid"
-                  :class="['round-entry-card', { assigned: getRoundEntryAssignment(entry.uuid) }]"
-                  draggable="true"
-                  @dragstart="startEntryDrag(entry.uuid)"
-                  @dragend="clearDrag"
-                >
-                  <div>
-                    <strong>{{ entry.uuid }}</strong>
-                    <small>{{ entry.shortCode }} · {{ entry.categoryName }} · {{ entry.style }}</small>
-                    <em v-if="entry.sourceTable">{{ entry.sourceTable }} · {{ entry.sourceResult }}</em>
-                  </div>
-                  <button class="link-action" type="button" @click="addEntryToSelectedRoundTable(entry.uuid)">
-                    {{ getRoundEntryAssignment(entry.uuid) ? '移动' : '加入' }}
-                  </button>
-                </article>
-              </div>
-            </aside>
-
-            <section class="round-table-board">
-              <article
-                v-for="table in currentRoundTables"
-                :key="table.id"
-                :class="['round-table-card', { active: selectedRoundTableId === table.id, danger: getRoundTableIssues(table).length }]"
-                @click="selectedRoundTableId = table.id"
-                @dragover.prevent
-                @drop.prevent="dropEntryOnRoundTable(table.id)"
-              >
-                <header>
-                  <div>
-                    <span class="mini-label">{{ currentRoundTypeLabel }}</span>
-                    <h3>{{ table.name }}</h3>
-                  </div>
-                  <em :class="['round-status', table.status]">{{ roundStatusLabels[table.status] || table.status }}</em>
-                </header>
-                <div class="round-table-meta">
-                  <span>桌长 <strong>{{ getJudge(table.captainPublicId)?.name || '未指定' }}</strong></span>
-                  <span>酒款 <strong>{{ table.entryUuids.length }}</strong></span>
-                  <span>{{ currentRound?.type === 'SCORE' ? '晋级' : '排序' }} <strong>{{ table.targetCount }}</strong></span>
-                </div>
-                <p v-if="currentRound?.type !== 'SCORE'" class="round-note">本轮仅桌长选择排序，普通评委无需系统操作。</p>
-                <div v-if="currentRound?.type === 'SCORE'" class="round-members">
-                  <span>普通评委</span>
-                  <strong>{{ table.professionalCount || 0 }} 专业 · {{ table.crossCount || 0 }} 跨界</strong>
-                </div>
-                <div class="round-table-entries">
-                  <article v-for="uuid in table.entryUuids" :key="uuid">
-                    <span>{{ uuid }}</span>
-                    <button type="button" @click.stop="removeEntryFromRoundTable(table.id, uuid)">移除</button>
-                  </article>
-                  <p v-if="!table.entryUuids.length" class="empty-line">从左侧酒款池加入本桌。</p>
-                </div>
-                <p v-for="issue in getRoundTableIssues(table)" :key="issue" class="table-warning">
-                  <Warning />
-                  {{ issue }}
-                </p>
-              </article>
-            </section>
-
-            <aside class="round-check-panel">
-              <div class="panel-card tight">
-                <div class="panel-heading compact">
-                  <h2>配置与校验</h2>
-                  <span>{{ roundValidationIssues.length }} 项</span>
-                </div>
-                <template v-if="selectedRoundTable">
-                  <label class="stack-field">
-                    <span>当前桌</span>
-                    <strong>{{ selectedRoundTable.name }}</strong>
-                  </label>
-                  <label class="stack-field">
-                    <span>桌长</span>
-                    <select v-model="selectedRoundTable.captainPublicId">
-                      <option value="">未指定</option>
-                      <option v-for="judge in captainCandidates" :key="judge.publicId" :value="judge.publicId">
-                        {{ judge.name }} · {{ judge.qualification }}
-                      </option>
-                    </select>
-                  </label>
-                  <label class="stack-field">
-                    <span>{{ currentRound?.type === 'SCORE' ? '晋级数量' : '排序目标' }}</span>
-                    <input v-model.number="selectedRoundTable.targetCount" min="1" type="number" />
-                  </label>
-                  <button
-                    v-if="currentRound?.status === 'DRAFT'"
-                    class="tool-button"
-                    type="button"
-                    @click="removeRoundTable(selectedRoundTable.id)"
-                  >
-                    <Delete />
-                    删除草稿桌
-                  </button>
-                </template>
-                <div class="check-list">
-                  <div v-for="issue in roundValidationIssues" :key="issue" class="check-item pending">
-                    <Warning />
-                    <span>{{ issue }}</span>
-                  </div>
-                  <div v-if="roundValidationIssues.length === 0" class="check-item done">
-                    <CircleCheck />
-                    <span>当前轮次可发布或锁定。</span>
-                  </div>
-                </div>
-                <button class="tool-button primary full-width" type="button" :disabled="!canPublishCurrentRound" @click="publishCurrentRound">
-                  <Check />
-                  {{ currentRound?.status === 'SUBMITTED' ? '确认排序并锁定' : '发布当前轮次' }}
-                </button>
-              </div>
-            </aside>
-          </section>
+          <RankingRoundWorkbench
+            v-else
+            :current-round="currentRound"
+            :current-round-tables="currentRoundTables"
+            :selected-round-table="selectedRoundTable"
+            :selected-round-table-id="selectedRoundTableId"
+            :filtered-round-pool="filteredRoundPool"
+            :round-category-filters="roundCategoryFilters"
+            :round-category-filter="roundCategoryFilter"
+            :round-keyword="roundKeyword"
+            :selected-entry-uuids="selectedEntryUuids"
+            :captain-candidates="captainCandidates"
+            :round-validation-issues="roundValidationIssues"
+            :can-publish="canPublishCurrentRound"
+            :can-submit-ranking="canSubmitRankingRound"
+            :round-status-labels="roundStatusLabels"
+            :get-judge="getJudge"
+            :get-round-table-issues="getRoundTableIssues"
+            :get-round-entry-assignment="getRoundEntryAssignment"
+            :get-ranking-slots="getRankingSlots"
+            :get-filled-ranking-count="getFilledRankingCount"
+            @update:round-keyword="roundKeyword = $event"
+            @update:round-category-filter="roundCategoryFilter = $event"
+            @toggle-entry-selection="toggleEntrySelection"
+            @clear-selection="clearEntrySelection"
+            @add-selected-to-table="addSelectedEntriesToTable"
+            @add-entry-to-selected-table="addEntryToSelectedRoundTable"
+            @start-entry-drag="startEntryDrag"
+            @clear-drag="clearDrag"
+            @select-round-table="selectedRoundTableId = $event"
+            @drop-entry-on-round-table="dropEntryOnRoundTable"
+            @remove-entry-from-round-table="removeEntryFromRoundTable"
+            @update-table-captain="updateRoundTableCaptain"
+            @update-table-target="updateRoundTableTarget"
+            @remove-round-table="removeRoundTable"
+            @set-ranking-slot="setRankingSlot"
+            @clear-ranking-slot="clearRankingSlot"
+            @submit-ranking-round="submitRankingRound"
+            @ranking-main-action="publishCurrentRound"
+          />
         </section>
 
         <section v-if="activeTab === 'score'" class="tab-panel score-config-panel">
@@ -795,120 +598,20 @@
       <button class="tool-button primary" type="button" @click="router.push('/admin/competitions')">返回台账</button>
     </section>
 
-    <div v-if="createRoundDialogOpen" class="modal-backdrop" @click.self="closeCreateRoundDialog">
-      <section class="round-dialog" role="dialog" aria-modal="true" aria-labelledby="create-round-title">
-        <header>
-          <div>
-            <h2 id="create-round-title">从晋级池创建下一轮</h2>
-            <p>当前是前端原型，完成后只更新页面 mock 状态。</p>
-          </div>
-          <button class="icon-button" type="button" @click="closeCreateRoundDialog">×</button>
-        </header>
-
-        <div class="wizard-steps">
-          <button v-for="step in 6" :key="step" :class="{ active: createRoundStep === step }" type="button" @click="createRoundStep = step">
-            {{ step }}
-          </button>
-        </div>
-
-        <section v-if="createRoundStep === 1" class="wizard-panel">
-          <h3>选择候选来源</h3>
-          <p>默认使用上一轮晋级酒款池，共 {{ advancedPool.length }} 款。</p>
-          <div class="wizard-stat-grid">
-            <span v-for="item in advancedCategoryStats" :key="item.category">
-              <strong>{{ item.count }}</strong>
-              {{ item.category }}
-            </span>
-          </div>
-        </section>
-
-        <section v-if="createRoundStep === 2" class="wizard-panel">
-          <h3>选择桌次策略</h3>
-          <div class="strategy-grid">
-            <button
-              v-for="strategy in roundStrategies"
-              :key="strategy.value"
-              :class="{ active: createRoundForm.strategy === strategy.value }"
-              type="button"
-              @click="createRoundForm.strategy = strategy.value"
-            >
-              <strong>{{ strategy.label }}</strong>
-              <small>{{ strategy.detail }}</small>
-            </button>
-          </div>
-          <label v-if="createRoundForm.strategy === 'EVEN'" class="stack-field">
-            <span>平均分成几桌</span>
-            <input v-model.number="createRoundForm.tableCount" min="1" max="4" type="number" />
-          </label>
-        </section>
-
-        <section v-if="createRoundStep === 3" class="wizard-panel">
-          <h3>指定桌长</h3>
-          <p>每张后续轮桌必须指定 1 名桌长。</p>
-          <div class="wizard-table-list">
-            <label v-for="table in previewNextRoundTables" :key="table.id">
-              <span>{{ table.name }}</span>
-              <select v-model="table.captainPublicId">
-                <option value="">未指定</option>
-                <option v-for="judge in captainCandidates" :key="judge.publicId" :value="judge.publicId">
-                  {{ judge.name }} · {{ judge.qualification }}
-                </option>
-              </select>
-            </label>
-          </div>
-        </section>
-
-        <section v-if="createRoundStep === 4" class="wizard-panel">
-          <h3>分配酒款</h3>
-          <p>按当前策略自动分配，发布前仍可在轮次编排中微调。</p>
-          <div class="wizard-preview-tables">
-            <article v-for="table in previewNextRoundTables" :key="`preview-${table.id}`">
-              <strong>{{ table.name }}</strong>
-              <span>{{ table.entryUuids.length }} 款</span>
-              <small>{{ table.entryUuids.join('、') }}</small>
-            </article>
-          </div>
-        </section>
-
-        <section v-if="createRoundStep === 5" class="wizard-panel">
-          <h3>设置排序目标</h3>
-          <label class="stack-field">
-            <span>目标名称</span>
-            <select v-model="createRoundForm.targetMode">
-              <option value="TOP3">选前 3</option>
-              <option value="MEDALS">金银铜</option>
-              <option value="CHAMPION">总冠军候选</option>
-            </select>
-          </label>
-          <label class="stack-field">
-            <span>每桌目标数量</span>
-            <input v-model.number="createRoundForm.targetCount" min="1" type="number" />
-          </label>
-        </section>
-
-        <section v-if="createRoundStep === 6" class="wizard-panel">
-          <h3>发布确认</h3>
-          <div class="check-list">
-            <div v-for="issue in createRoundPreviewIssues" :key="issue" class="check-item pending">
-              <Warning />
-              <span>{{ issue }}</span>
-            </div>
-            <div v-if="createRoundPreviewIssues.length === 0" class="check-item done">
-              <CircleCheck />
-              <span>下一轮可创建。发布后只给桌长端生成任务。</span>
-            </div>
-          </div>
-        </section>
-
-        <footer>
-          <button class="tool-button" type="button" :disabled="createRoundStep === 1" @click="createRoundStep -= 1">上一步</button>
-          <button v-if="createRoundStep < 6" class="tool-button primary" type="button" @click="createRoundStep += 1">下一步</button>
-          <button v-else class="tool-button primary" type="button" :disabled="createRoundPreviewIssues.length > 0" @click="finishCreateRound">
-            创建下一轮
-          </button>
-        </footer>
-      </section>
-    </div>
+    <CreateRoundWizard
+      :open="createRoundDialogOpen"
+      :create-round-step="createRoundStep"
+      :create-round-form="createRoundForm"
+      :preview-next-round-tables="previewNextRoundTables"
+      :advanced-pool="advancedPool"
+      :advanced-category-stats="advancedCategoryStats"
+      :round-strategies="roundStrategies"
+      :captain-candidates="captainCandidates"
+      :create-round-preview-issues="createRoundPreviewIssues"
+      @update:create-round-step="createRoundStep = $event"
+      @close="closeCreateRoundDialog"
+      @finish="finishCreateRound"
+    />
   </div>
 </template>
 
@@ -954,6 +657,11 @@ import {
   updateCompetitionJudgeTables,
   updateScoreConfigs,
 } from '@/api/admin'
+import CreateRoundWizard from './components/competition-detail/CreateRoundWizard.vue'
+import FirstRoundWorkbench from './components/competition-detail/FirstRoundWorkbench.vue'
+import JudgeSetupPanel from './components/competition-detail/JudgeSetupPanel.vue'
+import RankingRoundWorkbench from './components/competition-detail/RankingRoundWorkbench.vue'
+import RoundStepper from './components/competition-detail/RoundStepper.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -974,10 +682,11 @@ const draggingItem = ref(null)
 
 const rounds = ref([])
 const roundEntryPool = ref([])
-const activeRoundId = ref('round-2')
+const activeRoundId = ref('round-1')
 const selectedRoundTableId = ref('')
 const roundKeyword = ref('')
 const roundCategoryFilter = ref('全部')
+const selectedEntryUuids = ref([])
 const createRoundDialogOpen = ref(false)
 const createRoundStep = ref(1)
 const previewNextRoundTables = ref([])
@@ -1106,8 +815,29 @@ const filteredRoundPool = computed(() => {
     return matchesCategory && matchesQuery
   })
 })
+const unassignedRoundEntries = computed(() => currentPoolEntries.value.filter((entry) => !getRoundEntryAssignment(entry.uuid)))
+const roundCategoryStats = computed(() => {
+  const map = new Map()
+  currentPoolEntries.value.forEach((entry) => {
+    const current = map.get(entry.categoryName) || { category: entry.categoryName, total: 0, assigned: 0, unassigned: 0 }
+    current.total += 1
+    if (getRoundEntryAssignment(entry.uuid)) current.assigned += 1
+    else current.unassigned += 1
+    map.set(entry.categoryName, current)
+  })
+  return [...map.values()]
+})
 const roundValidationIssues = computed(() => buildRoundValidationIssues(currentRound.value))
 const canPublishCurrentRound = computed(() => currentRound.value && ['DRAFT', 'SUBMITTED'].includes(currentRound.value.status) && roundValidationIssues.value.length === 0)
+const canCreateNextRound = computed(() => {
+  const firstRound = rounds.value.find((round) => round.id === 'round-1')
+  return firstRound?.status === 'LOCKED' && advancedPool.value.length > 0 && !rounds.value.some((round) => round.id === 'round-2')
+})
+const canSubmitRankingRound = computed(() => {
+  if (!currentRound.value || currentRound.value.type !== 'RANKING') return false
+  if (!['IN_PROGRESS', 'DRAFT'].includes(currentRound.value.status)) return false
+  return currentRound.value.tables.every((table) => getFilledRankingCount(table) === Number(table.targetCount || 0))
+})
 const captainCandidates = computed(() => {
   const pool = [...judgePool.value]
   fallbackJudgePool.forEach((judge) => {
@@ -1186,6 +916,7 @@ watch(() => route.query.tab, (tab) => {
 })
 watch(() => createRoundForm.strategy, refreshPreviewNextRoundTables)
 watch(() => createRoundForm.tableCount, refreshPreviewNextRoundTables)
+watch(() => createRoundForm.targetMode, refreshPreviewNextRoundTables)
 watch(() => createRoundForm.targetCount, () => {
   previewNextRoundTables.value.forEach((table) => {
     table.targetCount = Number(createRoundForm.targetCount || 1)
@@ -1294,96 +1025,38 @@ function seedRoundPrototype() {
     style: entry.style || '未填写',
     status: entry.status || 'STORED',
     stored: entry.stored ?? true,
-    advanced: index < 6,
-    sourceTable: index < 3 ? 'A桌' : index < 6 ? 'B桌' : '',
-    sourceResult: index < 6 ? `晋级 ${Math.min(index % 3 + 1, 3)}` : '',
+    advanced: false,
+    sourceTable: '',
+    sourceResult: '',
   }))
   roundEntryPool.value = sourceEntries
   const uuids = sourceEntries.map((entry) => entry.uuid)
+  const baseTables = judgeTableForm.length ? judgeTableForm : [{ localId: 'base-A', tableName: 'A桌' }, { localId: 'base-B', tableName: 'B桌' }]
+  const firstRoundTables = baseTables.map((table, index) => ({
+    id: `r1-${index + 1}`,
+    name: table.tableName || `${String.fromCharCode(65 + index)}桌`,
+    captainPublicId: assignmentsForTable(table, 'CAPTAIN')[0]?.judgePublicId || '',
+    professionalCount: assignmentsForTable(table, 'PROFESSIONAL').length,
+    crossCount: assignmentsForTable(table, 'CROSS').length,
+    targetCount: 3,
+    status: 'DRAFT',
+    entryUuids: uuids.filter((_, entryIndex) => entryIndex % baseTables.length === index),
+    advancedCount: 0,
+    judgeProgress: 0,
+    captainProgress: 0,
+  }))
   rounds.value = [
     {
       id: 'round-1',
       name: '第一轮',
       type: 'SCORE',
-      status: 'LOCKED',
-      tables: [
-        {
-          id: 'r1-a',
-          name: 'A桌',
-          captainPublicId: 'J-DEMO-001',
-          professionalCount: 2,
-          crossCount: 1,
-          targetCount: 3,
-          status: 'LOCKED',
-          entryUuids: uuids.slice(0, 5),
-          advancedCount: 3,
-          judgeProgress: 100,
-          captainProgress: 100,
-        },
-        {
-          id: 'r1-b',
-          name: 'B桌',
-          captainPublicId: 'J-DEMO-008',
-          professionalCount: 2,
-          crossCount: 1,
-          targetCount: 3,
-          status: 'LOCKED',
-          entryUuids: uuids.slice(5, 10),
-          advancedCount: 3,
-          judgeProgress: 100,
-          captainProgress: 100,
-        },
-      ],
-    },
-    {
-      id: 'round-2',
-      name: '第二轮',
-      type: 'RANKING',
       status: 'DRAFT',
-      tables: [
-        {
-          id: 'r2-a',
-          name: '2A桌',
-          captainPublicId: 'J-DEMO-001',
-          targetCount: 3,
-          status: 'DRAFT',
-          entryUuids: uuids.slice(0, 3),
-          rankings: [
-            { rank: 1, label: '第 1 名', uuid: uuids[0] },
-            { rank: 2, label: '第 2 名', uuid: uuids[1] },
-            { rank: 3, label: '第 3 名', uuid: '' },
-          ],
-        },
-        {
-          id: 'r2-b',
-          name: '2B桌',
-          captainPublicId: '',
-          targetCount: 3,
-          status: 'DRAFT',
-          entryUuids: uuids.slice(3, 6),
-          rankings: [],
-        },
-      ],
-    },
-    {
-      id: 'round-final',
-      name: '决赛轮',
-      type: 'RANKING',
-      status: 'DRAFT',
-      tables: [
-        {
-          id: 'rf-a',
-          name: '决赛桌',
-          captainPublicId: 'J-DEMO-008',
-          targetCount: 1,
-          status: 'DRAFT',
-          entryUuids: uuids.slice(0, 3),
-          rankings: [{ rank: 1, label: '总冠军', uuid: '' }],
-        },
-      ],
+      tables: firstRoundTables,
     },
   ]
-  selectedRoundTableId.value = rounds.value.find((round) => round.id === activeRoundId.value)?.tables[0]?.id || ''
+  activeRoundId.value = 'round-1'
+  selectedRoundTableId.value = firstRoundTables[0]?.id || ''
+  selectedEntryUuids.value = []
 }
 
 function seedJudgeAssignments() {
@@ -1407,6 +1080,48 @@ function seedJudgeAssignments() {
     })
   })
   judgeAssignmentForm.splice(0, judgeAssignmentForm.length, ...seeded)
+}
+
+function generateFirstRoundFromJudges() {
+  if (validationIssues.value.length) {
+    ElMessage.warning(`还有 ${validationIssues.value.length} 项评审配置需要处理`)
+    return
+  }
+  const storedUuids = roundEntryPool.value.filter((entry) => entry.stored).map((entry) => entry.uuid)
+  const tables = judgeTableForm.map((table, index) => ({
+    id: `r1-${index + 1}`,
+    name: table.tableName || `${String.fromCharCode(65 + index)}桌`,
+    captainPublicId: assignmentsForTable(table, 'CAPTAIN')[0]?.judgePublicId || '',
+    professionalCount: assignmentsForTable(table, 'PROFESSIONAL').length,
+    crossCount: assignmentsForTable(table, 'CROSS').length,
+    targetCount: 3,
+    status: 'DRAFT',
+    entryUuids: storedUuids.filter((_, entryIndex) => entryIndex % judgeTableForm.length === index),
+    advancedCount: 0,
+    judgeProgress: 0,
+    captainProgress: 0,
+  }))
+  const firstRound = {
+    id: 'round-1',
+    name: '第一轮',
+    type: 'SCORE',
+    status: 'DRAFT',
+    tables,
+  }
+  const index = rounds.value.findIndex((round) => round.id === 'round-1')
+  if (index >= 0) rounds.value.splice(index, 1, firstRound)
+  else rounds.value.unshift(firstRound)
+  rounds.value = rounds.value.filter((round) => round.id === 'round-1')
+  roundEntryPool.value.forEach((entry) => {
+    entry.advanced = false
+    entry.sourceTable = ''
+    entry.sourceResult = ''
+  })
+  activeTab.value = 'rounds'
+  activeRoundId.value = 'round-1'
+  selectedRoundTableId.value = tables[0]?.id || ''
+  selectedEntryUuids.value = []
+  ElMessage.success('第一轮编排已生成，可以开始分配和发布酒款')
 }
 
 function resolveRegistrationWindowInfo() {
@@ -1508,6 +1223,7 @@ function buildRoundValidationIssues(round) {
   if (!round.tables.length) issues.push(`${round.name}至少需要 1 张桌`)
   const assigned = round.tables.flatMap((table) => table.entryUuids)
   if (!assigned.length) issues.push(`${round.name}尚未分配酒款`)
+  if (unassignedRoundEntries.value.length) issues.push(`还有 ${unassignedRoundEntries.value.length} 款酒未分配到本轮桌`)
   const duplicates = assigned.filter((uuid, index, list) => list.indexOf(uuid) !== index)
   if (duplicates.length) issues.push(`${round.name}存在重复分配酒款`)
   round.tables.forEach((table) => issues.push(...getRoundTableIssues(table)))
@@ -1528,7 +1244,29 @@ function getRoundEntryAssignment(uuid) {
   return table?.name || ''
 }
 
-function addEntryToSelectedRoundTable(uuid) {
+function toggleEntrySelection(uuid) {
+  if (selectedEntryUuids.value.includes(uuid)) {
+    selectedEntryUuids.value = selectedEntryUuids.value.filter((item) => item !== uuid)
+    return
+  }
+  selectedEntryUuids.value = [...selectedEntryUuids.value, uuid]
+}
+
+function clearEntrySelection() {
+  selectedEntryUuids.value = []
+}
+
+function addSelectedEntriesToTable() {
+  if (!selectedEntryUuids.value.length) {
+    ElMessage.warning('请先选择酒款')
+    return
+  }
+  selectedEntryUuids.value.forEach((uuid) => addEntryToSelectedRoundTable(uuid, false))
+  ElMessage.success(`已加入 ${selectedEntryUuids.value.length} 款酒`)
+  clearEntrySelection()
+}
+
+function addEntryToSelectedRoundTable(uuid, notify = true) {
   const table = selectedRoundTable.value
   if (!table) {
     ElMessage.warning('请先选择要加入的轮次桌')
@@ -1538,13 +1276,70 @@ function addEntryToSelectedRoundTable(uuid) {
     item.entryUuids = item.entryUuids.filter((entryUuid) => entryUuid !== uuid)
   })
   table.entryUuids.push(uuid)
-  ElMessage.success(`${uuid} 已加入 ${table.name}`)
+  if (notify) ElMessage.success(`${uuid} 已加入 ${table.name}`)
+}
+
+function assignCurrentRoundEvenly() {
+  if (!currentRound.value || !currentRoundTables.value.length) return
+  const entries = currentPoolEntries.value.map((entry) => entry.uuid)
+  currentRoundTables.value.forEach((table) => { table.entryUuids = [] })
+  entries.forEach((uuid, index) => {
+    currentRoundTables.value[index % currentRoundTables.value.length].entryUuids.push(uuid)
+  })
+  clearEntrySelection()
+  ElMessage.success('已按桌数平均分配酒款')
+}
+
+function assignCurrentRoundByCategory() {
+  if (!currentRound.value || !currentRoundTables.value.length) return
+  const groups = new Map()
+  currentPoolEntries.value.forEach((entry) => {
+    const list = groups.get(entry.categoryName) || []
+    list.push(entry.uuid)
+    groups.set(entry.categoryName, list)
+  })
+  currentRoundTables.value.forEach((table) => { table.entryUuids = [] })
+  let tableIndex = 0
+  groups.forEach((uuids) => {
+    uuids.forEach((uuid) => {
+      currentRoundTables.value[tableIndex % currentRoundTables.value.length].entryUuids.push(uuid)
+    })
+    tableIndex += 1
+  })
+  clearEntrySelection()
+  ElMessage.success('已按投递组别分配酒款')
+}
+
+function clearCurrentRoundAssignments() {
+  currentRoundTables.value.forEach((table) => {
+    table.entryUuids = []
+    table.rankings = buildEmptyRankings(Number(table.targetCount || 3))
+  })
+  clearEntrySelection()
+  ElMessage.success('当前轮次酒款已清空')
+}
+
+function updateRoundTableCaptain(tableId, judgePublicId) {
+  const table = currentRoundTables.value.find((item) => item.id === tableId)
+  if (table) table.captainPublicId = judgePublicId
+}
+
+function updateRoundTableTarget(tableId, targetCount) {
+  const table = currentRoundTables.value.find((item) => item.id === tableId)
+  if (!table) return
+  table.targetCount = Math.max(1, Number(targetCount || 1))
+  table.rankings = buildEmptyRankings(table.targetCount, createRoundForm.targetMode)
 }
 
 function removeEntryFromRoundTable(tableId, uuid) {
   const table = currentRoundTables.value.find((item) => item.id === tableId)
   if (!table) return
   table.entryUuids = table.entryUuids.filter((entryUuid) => entryUuid !== uuid)
+  if (table.rankings?.length) {
+    table.rankings.forEach((slot) => {
+      if (slot.uuid === uuid) slot.uuid = ''
+    })
+  }
 }
 
 function startEntryDrag(uuid) {
@@ -1577,7 +1372,37 @@ function publishCurrentRound() {
   ElMessage.success(currentRound.value.type === 'SCORE' ? '当前轮次已发布到评审端' : '排序任务已发布给桌长')
 }
 
+function completeFirstRoundMock() {
+  const firstRound = rounds.value.find((round) => round.id === 'round-1')
+  if (!firstRound || firstRound.status !== 'PUBLISHED') return
+  roundEntryPool.value.forEach((entry) => {
+    entry.advanced = false
+    entry.sourceTable = ''
+    entry.sourceResult = ''
+  })
+  firstRound.tables.forEach((table) => {
+    table.status = 'LOCKED'
+    table.advancedCount = Math.min(Number(table.targetCount || 0), table.entryUuids.length)
+    table.judgeProgress = 100
+    table.captainProgress = 100
+    table.entryUuids.slice(0, table.advancedCount).forEach((uuid, index) => {
+      const entry = roundEntryPool.value.find((item) => item.uuid === uuid)
+      if (entry) {
+        entry.advanced = true
+        entry.sourceTable = table.name
+        entry.sourceResult = `晋级 ${index + 1}`
+      }
+    })
+  })
+  firstRound.status = 'LOCKED'
+  ElMessage.success('第一轮已模拟完成，晋级池已生成')
+}
+
 function openCreateRoundDialog() {
+  if (!canCreateNextRound.value) {
+    ElMessage.warning('请先完成并锁定上一轮')
+    return
+  }
   createRoundDialogOpen.value = true
   createRoundStep.value = 1
   refreshPreviewNextRoundTables()
@@ -1646,6 +1471,36 @@ function getRankingSlots(table) {
 
 function getFilledRankingCount(table) {
   return getRankingSlots(table).filter((slot) => slot.uuid).length
+}
+
+function setRankingSlot(tableId, rank, uuid) {
+  const table = currentRoundTables.value.find((item) => item.id === tableId)
+  if (!table || !table.entryUuids.includes(uuid)) return
+  if (!table.rankings?.length) {
+    table.rankings = buildEmptyRankings(Number(table.targetCount || 3), createRoundForm.targetMode)
+  }
+  table.rankings.forEach((slot) => {
+    if (slot.uuid === uuid) slot.uuid = ''
+  })
+  const targetSlot = table.rankings.find((slot) => slot.rank === rank)
+  if (targetSlot) targetSlot.uuid = uuid
+}
+
+function clearRankingSlot(tableId, rank) {
+  const table = currentRoundTables.value.find((item) => item.id === tableId)
+  const targetSlot = table?.rankings?.find((slot) => slot.rank === rank)
+  if (targetSlot) targetSlot.uuid = ''
+}
+
+function submitRankingRound() {
+  if (!currentRound.value || currentRound.value.type !== 'RANKING') return
+  if (!canSubmitRankingRound.value) {
+    ElMessage.warning('请先填满每张桌的排序槽位')
+    return
+  }
+  currentRound.value.status = 'SUBMITTED'
+  currentRound.value.tables.forEach((table) => { table.status = 'SUBMITTED' })
+  ElMessage.success('桌长排序已提交，等待主办方确认锁定')
 }
 
 function buildAwardDrafts() {
@@ -2912,6 +2767,44 @@ input[type="checkbox"] {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
+}
+
+.next-round-banner {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  color: var(--text);
+  border: 1px solid rgba(216, 169, 53, 0.24);
+  border-radius: 8px;
+  background: rgba(216, 169, 53, 0.07);
+}
+
+.next-round-banner div {
+  display: grid;
+  gap: 4px;
+}
+
+.next-round-banner span {
+  color: var(--muted);
+}
+
+.next-round-banner button {
+  min-height: 38px;
+  padding: 0 12px;
+  color: var(--gold-soft);
+  border: 1px solid rgba(216, 169, 53, 0.32);
+  border-radius: 8px;
+  background: rgba(216, 169, 53, 0.08);
+  font: inherit;
+  font-weight: 800;
+}
+
+.next-round-banner.muted {
+  color: var(--muted);
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.026);
 }
 
 .round-summary-strip span {
