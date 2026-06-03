@@ -27,11 +27,12 @@
 
 <script setup>
 import { computed, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { login, sendSmsCode } from '@/api/judge'
 import { setSession } from '@/utils/auth'
 
 const router = useRouter()
+const route = useRoute()
 const message = ref('')
 
 const form = reactive({ phone: '', code: '' })
@@ -53,7 +54,7 @@ async function submit() {
     router.push('/review-status')
     return
   }
-  router.push('/competitions')
+  router.push(String(route.query.redirect || '/competitions'))
 }
 </script>
 

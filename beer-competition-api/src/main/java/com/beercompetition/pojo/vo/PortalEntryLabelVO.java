@@ -11,7 +11,9 @@ public class PortalEntryLabelVO {
 
     private Long id;
     private String uuid;
+    private String labelCode;
     private String shortCode;
+    private String scanToken;
     private String name;
     private String competitionName;
     private String competitionCode;

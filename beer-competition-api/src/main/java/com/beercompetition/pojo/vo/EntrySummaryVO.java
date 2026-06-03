@@ -12,7 +12,9 @@ public class EntrySummaryVO {
 
     private Long id;
     private String uuid;
+    private String labelCode;
     private String shortCode;
+    private String scanToken;
     private Long competitionId;
     private String competitionCode;
     private String name;

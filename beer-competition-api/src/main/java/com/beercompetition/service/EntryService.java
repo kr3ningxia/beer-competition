@@ -43,4 +43,6 @@ public interface EntryService {
     void cancelEntry(Long entryId);
 
     JudgeEntryVO getJudgeEntry(String uuid);
+
+    JudgeEntryVO resolveJudgeScan(String code);
 }

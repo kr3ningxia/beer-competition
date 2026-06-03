@@ -33,6 +33,7 @@ import com.beercompetition.pojo.po.Competition;
 import com.beercompetition.pojo.po.CompetitionCategory;
 import com.beercompetition.pojo.po.CompetitionScoreConfig;
 import com.beercompetition.pojo.po.CompetitionStyleConfig;
+import com.beercompetition.pojo.po.EntryScanLabel;
 import com.beercompetition.pojo.po.EntryFieldConfig;
 import com.beercompetition.pojo.po.JudgeAccount;
 import com.beercompetition.pojo.po.JudgeAssignment;
@@ -59,6 +60,7 @@ import com.beercompetition.pojo.vo.ResultSetupVO;
 import com.beercompetition.pojo.vo.ScoreConfigVO;
 import com.beercompetition.pojo.vo.StyleItemVO;
 import com.beercompetition.service.CompetitionService;
+import com.beercompetition.service.EntryScanLabelService;
 import com.beercompetition.service.RoundService;
 import com.beercompetition.service.StyleLibraryService;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -121,6 +123,7 @@ public class CompetitionServiceImpl implements CompetitionService {
     private final ScoreRecordMapper scoreRecordMapper;
     private final CompetitionRoundMapper competitionRoundMapper;
     private final StyleLibraryService styleLibraryService;
+    private final EntryScanLabelService entryScanLabelService;
     private final RoundService roundService;
     private final ObjectMapper objectMapper;
 
@@ -780,17 +783,23 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .collect(Collectors.toMap(CompetitionConfigNameVO::getId, CompetitionConfigNameVO::getName));
         Map<String, CompetitionConfigNameVO> styleByName = listStyles(competitionId).stream()
                 .collect(Collectors.toMap(CompetitionConfigNameVO::getName, Function.identity(), (left, right) -> left));
-        return beerEntryMapper.selectList(new LambdaQueryWrapper<BeerEntry>()
+        List<BeerEntry> entries = beerEntryMapper.selectList(new LambdaQueryWrapper<BeerEntry>()
                         .eq(BeerEntry::getCompetitionId, competitionId)
                         .orderByDesc(BeerEntry::getCreateTime)
-                        .last("LIMIT 20"))
-                .stream()
+                        .last("LIMIT 20"));
+        Map<Long, EntryScanLabel> labelByEntryId = entryScanLabelService.listActiveLabels(entries.stream()
+                .map(BeerEntry::getId)
+                .toList());
+        return entries.stream()
                 .map(entry -> {
                     CompetitionConfigNameVO style = styleByName.get(entry.getStyle());
+                    EntryScanLabel label = labelByEntryId.get(entry.getId());
                     return CompetitionEntryVO.builder()
                             .id(entry.getId())
                             .uuid(entry.getUuid())
-                            .shortCode(entry.getShortCode())
+                            .labelCode(label == null ? null : label.getLabelCode())
+                            .shortCode(label == null ? null : label.getShortCode())
+                            .scanToken(label == null ? null : label.getScanToken())
                             .categoryName(categoryNameById.getOrDefault(entry.getCategoryId(), "-"))
                             .style(entry.getStyle())
                             .styleCategoryName(style == null ? null : style.getCategoryName())

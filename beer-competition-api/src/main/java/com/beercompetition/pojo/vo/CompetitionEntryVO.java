@@ -11,7 +11,9 @@ public class CompetitionEntryVO {
 
     private Long id;
     private String uuid;
+    private String labelCode;
     private String shortCode;
+    private String scanToken;
     private String name;
     private String breweryCompanyName;
     private String breweryContactName;

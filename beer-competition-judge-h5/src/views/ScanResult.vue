@@ -2,18 +2,29 @@
   <main class="app-shell">
     <section class="top-panel">
       <button class="back-link" type="button" @click="$router.push('/competitions')">返回扫码</button>
-      <p class="eyebrow">酒款信息</p>
-      <h1 class="page-title">{{ entry?.uuid || uuid }}</h1>
+      <p class="eyebrow">{{ entry?.competitionName || '酒款信息' }}</p>
+      <h1 class="page-title">{{ entry?.labelCode || entry?.uuid || code }}</h1>
       <div class="scan-status">
         <span :class="['pill', entry?.locked ? 'status-lock' : 'status-ok']">
-          {{ entry?.locked ? '本桌已确认' : '可评分' }}
+          {{ entry?.locked ? '本桌已确认' : actionLabel }}
         </span>
         <span v-if="entry?.shortCode" class="pill status-warn">短编号 {{ entry.shortCode }}</span>
-        <span v-if="entry?.advanced" class="pill status-ok">已晋级</span>
+        <span v-if="entry?.scored" class="pill status-ok">已提交</span>
       </div>
     </section>
 
     <section v-if="entry" class="card info-card">
+      <dl class="context-grid">
+        <div>
+          <dt>当前轮次</dt>
+          <dd>{{ entry.roundName }}</dd>
+        </div>
+        <div>
+          <dt>评审桌</dt>
+          <dd>{{ entry.tableName }}</dd>
+        </div>
+      </dl>
+
       <dl class="info-grid">
         <div>
           <dt>投递组别</dt>
@@ -58,7 +69,7 @@
 
     <div v-if="entry" class="sticky-actions">
       <button
-        v-if="me?.role !== 'CAPTAIN'"
+        v-if="entry.action === 'SCORE'"
         class="button primary full"
         type="button"
         :disabled="entry.locked"
@@ -67,12 +78,20 @@
         {{ entry.locked ? '本桌结果已确认' : '开始评分' }}
       </button>
       <button
-        v-else
+        v-else-if="entry.action === 'CAPTAIN'"
         class="button primary full"
         type="button"
         @click="$router.push(`/captain/${entry.uuid}`)"
       >
         查看本桌评分
+      </button>
+      <button
+        v-else
+        class="button primary full"
+        type="button"
+        @click="$router.push(`/ranking/${entry.roundTableId}`)"
+      >
+        进入本轮排序
       </button>
       <button class="button secondary full" type="button" @click="$router.push('/competitions')">
         继续扫码
@@ -90,12 +109,18 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { fetchEntry, fetchMe } from '@/api/judge'
+import { fetchEntry, fetchMe, resolveScanEntry } from '@/api/judge'
 
 const route = useRoute()
-const uuid = String(route.params.uuid || '').toUpperCase()
+const code = computed(() => String(route.params.code || route.params.uuid || '').toUpperCase())
+const resolvingScan = computed(() => Boolean(route.params.code))
 const entry = ref(null)
 const me = ref(null)
+const actionLabel = computed(() => {
+  if (entry.value?.action === 'CAPTAIN') return '桌长汇总'
+  if (entry.value?.action === 'RANKING') return '本轮排序'
+  return entry.value?.scored ? '可修改评分' : '可评分'
+})
 
 const navItems = computed(() => {
   const items = [
@@ -110,7 +135,7 @@ const navItems = computed(() => {
 onMounted(async () => {
   me.value = await fetchMe()
   try {
-    entry.value = await fetchEntry(uuid)
+    entry.value = resolvingScan.value ? await resolveScanEntry(code.value) : await fetchEntry(code.value)
   } catch {
     entry.value = null
   }
@@ -141,13 +166,23 @@ function styleDisplayName(source) {
   margin-top: 12px;
 }
 
+.context-grid,
 .info-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   margin: 0;
 }
 
+.context-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 8px;
+}
+
+.info-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.context-grid div,
 .info-grid div {
   border-radius: 8px;
   padding: 10px;

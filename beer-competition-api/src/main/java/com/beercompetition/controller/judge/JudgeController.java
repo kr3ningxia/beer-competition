@@ -27,6 +27,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -82,6 +83,11 @@ public class JudgeController {
     @GetMapping("/entries/{uuid}")
     public Result<JudgeEntryVO> entry(@PathVariable String uuid) {
         return Result.success(entryService.getJudgeEntry(uuid));
+    }
+
+    @GetMapping("/scan/resolve")
+    public Result<JudgeEntryVO> resolveScan(@RequestParam String code) {
+        return Result.success(entryService.resolveJudgeScan(code));
     }
 
     @PostMapping("/scores")

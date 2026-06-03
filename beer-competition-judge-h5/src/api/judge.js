@@ -174,6 +174,18 @@ export async function fetchEntry(uuid) {
   }
 }
 
+export async function resolveScanEntry(code) {
+  const entry = await request.get('/api/judge/scan/resolve', { params: { code } })
+  const scores = readScores()
+  const finalScore = scores.find((item) => item.beerUuid === entry.uuid && item.finalFlag)
+  return {
+    ...entry,
+    locked: Boolean(entry.locked || finalScore),
+    finalScore: finalScore?.totalScore,
+    advanced: Boolean(finalScore?.advanced),
+  }
+}
+
 export function fetchEntries() {
   const scores = readScores()
   return wait(entries.map((entry) => {

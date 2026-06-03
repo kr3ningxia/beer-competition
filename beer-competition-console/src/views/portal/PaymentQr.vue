@@ -79,12 +79,12 @@
           </dl>
         </section>
 
-        <section v-if="showPreparationCards" class="label-card brewer-card">
+        <section v-if="showLabelCard" class="label-card brewer-card">
           <div class="card-head">
             <div>
               <span class="section-kicker">下载并打印标签</span>
-              <h3>寄样前请先贴好标签</h3>
-              <p>建议优先使用打印版，贴在酒瓶或外箱醒目位置，便于主办方核对和入库。</p>
+              <h3>{{ labelCardTitle }}</h3>
+              <p>{{ labelCardDescription }}</p>
             </div>
             <span :class="['task-chip', selectedEntry.canDownloadLabel ? 'tone-green' : 'tone-amber']">
               {{ selectedEntry.canDownloadLabel ? '可下载' : '等待付款确认' }}
@@ -97,7 +97,7 @@
             <div class="label-actions">
               <div class="label-action-copy">
                 <strong>{{ selectedEntry.canDownloadLabel ? '标签已开放' : '付款确认后自动开放' }}</strong>
-                <p>{{ selectedEntry.canDownloadLabel ? '打印后直接贴标，再回到下方填写寄样方式和快递单号。' : '如果你已经完成转账或现场付款，请等待主办方确认。' }}</p>
+                <p>{{ labelActionDescription }}</p>
               </div>
               <div class="button-row">
                 <el-button
@@ -241,12 +241,14 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import QRCode from 'qrcode'
 import {
   fetchPortalEntries,
   fetchPortalEntryDetail,
   fetchPortalEntryLabel,
   submitPortalEntryDelivery,
 } from '@/api/portal'
+import { JUDGE_H5_BASE_URL } from '@/config'
 
 const route = useRoute()
 
@@ -274,6 +276,7 @@ const payableEntries = computed(() => {
 
 const hasSubmittedDelivery = computed(() => hasDeliveryProgress(selectedEntry.value))
 const showPaymentCard = computed(() => selectedEntry.value?.paymentStatus !== 'PAID')
+const showLabelCard = computed(() => Boolean(selectedEntry.value?.canDownloadLabel))
 const showPreparationCards = computed(() => {
   if (!selectedEntry.value?.canDownloadLabel) return false
   return !hasSubmittedDelivery.value
@@ -288,13 +291,28 @@ const showDeliverySummary = computed(() => {
 
 const labelRecord = computed(() => ({
   uuid: labelData.value?.uuid || selectedEntry.value?.uuid || '',
+  labelCode: labelData.value?.labelCode || selectedEntry.value?.labelCode || '',
   shortCode: labelData.value?.shortCode || selectedEntry.value?.shortCode || '',
+  scanToken: labelData.value?.scanToken || selectedEntry.value?.scanToken || '',
   categoryName: labelData.value?.categoryName || selectedEntry.value?.categoryName || '',
   style: labelData.value?.style || selectedEntry.value?.style || '',
   abv: labelData.value?.abv ?? selectedEntry.value?.abv ?? '',
 }))
 
 const labelSvg = computed(() => buildLabelSvg(labelRecord.value))
+const labelCardTitle = computed(() => {
+  if (hasSubmittedDelivery.value) return '需要时可补打现场标签'
+  return '寄样前请先贴好标签'
+})
+const labelCardDescription = computed(() => {
+  if (hasSubmittedDelivery.value) return '标签会一直保留，后续补贴瓶身、外箱或现场核对时都可以重新下载。'
+  return '建议优先使用打印版，贴在酒瓶或外箱醒目位置，便于主办方核对和入库。'
+})
+const labelActionDescription = computed(() => {
+  if (!selectedEntry.value?.canDownloadLabel) return '如果你已经完成转账或现场付款，请等待主办方确认。'
+  if (hasSubmittedDelivery.value) return '如现场需要补贴、重贴或核对编号，可重新下载或打印这一张标签。'
+  return '打印后直接贴标，再回到下方填写寄样方式和快递单号。'
+})
 
 const suggestedArrivalText = computed(() => {
   if (!selectedEntry.value?.competitionDate) return '请至少预留 2 到 3 天运输时间，具体以主办方通知为准'
@@ -596,16 +614,18 @@ function pad(value) {
 }
 
 function buildLabelSvg(label) {
-  const matrix = buildMatrix(`${label.uuid}-${label.shortCode}`)
+  const qr = QRCode.create(scanUrl(label), { errorCorrectionLevel: 'M', margin: 0 })
+  const matrix = qr.modules
   const cells = []
-  const size = 10
-  const offsetX = 34
-  const offsetY = 80
+  const qrSize = 176
+  const cellSize = qrSize / matrix.size
+  const offsetX = 42
+  const offsetY = 88
 
-  for (let row = 0; row < matrix.length; row += 1) {
-    for (let col = 0; col < matrix[row].length; col += 1) {
-      if (!matrix[row][col]) continue
-      cells.push(`<rect x="${offsetX + col * size}" y="${offsetY + row * size}" width="${size}" height="${size}" rx="1.5" fill="#2e2014" />`)
+  for (let row = 0; row < matrix.size; row += 1) {
+    for (let col = 0; col < matrix.size; col += 1) {
+      if (!matrix.data[row * matrix.size + col]) continue
+      cells.push(`<rect x="${formatSvgNumber(offsetX + col * cellSize)}" y="${formatSvgNumber(offsetY + row * cellSize)}" width="${formatSvgNumber(cellSize)}" height="${formatSvgNumber(cellSize)}" fill="#2e2014" />`)
     }
   }
 
@@ -613,14 +633,14 @@ function buildLabelSvg(label) {
   const style = escapeXml(label.style || 'Style Pending')
   const abv = label.abv !== '' && label.abv !== null && label.abv !== undefined ? `${label.abv}%` : 'ABV Pending'
   const code = escapeXml(label.shortCode || 'PENDING')
-  const uuid = escapeXml(label.uuid || '等待开放标签')
+  const labelCode = escapeXml(label.labelCode || label.uuid || '等待开放标签')
 
   return `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 360" role="img" aria-label="现场评审标签">
       <rect width="260" height="360" rx="24" fill="#fff8ec"/>
       <rect x="14" y="14" width="232" height="332" rx="18" fill="#fffdf9" stroke="#d4bf9f"/>
       <text x="130" y="44" text-anchor="middle" font-size="12" font-weight="700" letter-spacing="1.4" fill="#8c6330">现场评审标签</text>
-      <text x="130" y="66" text-anchor="middle" font-size="22" font-weight="800" fill="#24170f">${uuid}</text>
+      <text x="130" y="66" text-anchor="middle" font-size="22" font-weight="800" fill="#24170f">${labelCode}</text>
       <rect x="28" y="74" width="204" height="204" rx="18" fill="#f7ecd8" stroke="#3a2818" stroke-width="10"/>
       ${cells.join('')}
       <text x="130" y="302" text-anchor="middle" font-size="12" font-weight="700" fill="#8c6330">现场短编号</text>
@@ -630,45 +650,13 @@ function buildLabelSvg(label) {
   `
 }
 
-function buildMatrix(seed) {
-  const size = 17
-  const matrix = Array.from({ length: size }, () => Array(size).fill(false))
-
-  drawFinder(matrix, 0, 0)
-  drawFinder(matrix, 0, size - 5)
-  drawFinder(matrix, size - 5, 0)
-
-  let hash = 0
-  for (const char of seed || 'label') {
-    hash = (hash * 31 + char.charCodeAt(0)) >>> 0
-  }
-
-  for (let row = 0; row < size; row += 1) {
-    for (let col = 0; col < size; col += 1) {
-      if (inFinder(row, col, size)) continue
-      hash = (hash * 1664525 + 1013904223) >>> 0
-      matrix[row][col] = (hash & 3) === 0
-    }
-  }
-
-  return matrix
+function scanUrl(label) {
+  const token = encodeURIComponent(label.scanToken || label.shortCode || label.labelCode || label.uuid || '')
+  return `${JUDGE_H5_BASE_URL.replace(/\/$/, '')}/q/${token}`
 }
 
-function drawFinder(matrix, rowStart, colStart) {
-  for (let row = rowStart; row < rowStart + 5; row += 1) {
-    for (let col = colStart; col < colStart + 5; col += 1) {
-      const onBorder = row === rowStart || row === rowStart + 4 || col === colStart || col === colStart + 4
-      const center = row >= rowStart + 1 && row <= rowStart + 3 && col >= colStart + 1 && col <= colStart + 3
-      matrix[row][col] = onBorder || center
-    }
-  }
-}
-
-function inFinder(row, col, size) {
-  const topLeft = row < 5 && col < 5
-  const topRight = row < 5 && col >= size - 5
-  const bottomLeft = row >= size - 5 && col < 5
-  return topLeft || topRight || bottomLeft
+function formatSvgNumber(value) {
+  return Number(value.toFixed(3))
 }
 
 function escapeXml(value) {

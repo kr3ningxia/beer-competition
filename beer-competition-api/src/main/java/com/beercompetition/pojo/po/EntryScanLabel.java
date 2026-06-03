@@ -8,29 +8,26 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@TableName("beer_entry")
-public class BeerEntry {
+@TableName("entry_scan_label")
+public class EntryScanLabel {
 
     @TableId(type = IdType.AUTO)
     private Long id;
-    private String uuid;
     private Long competitionId;
-    private Long breweryId;
-    private Long categoryId;
-    private String name;
-    private String style;
-    private BigDecimal abv;
-    private String description;
-    private String extraFieldsJson;
+    private Long beerEntryId;
+    private String labelCode;
+    private String shortCode;
+    private String scanToken;
     private String status;
-    private Integer storedFlag;
+    private Long generatedBy;
+    private LocalDateTime generatedTime;
+    private LocalDateTime printedTime;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

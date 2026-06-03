@@ -9,6 +9,7 @@ const routes = [
   { path: '/profile/edit', component: () => import('@/views/ProfileEdit.vue'), meta: { requiresAuth: true } },
   { path: '/competitions', component: () => import('@/views/Competitions.vue'), meta: { requiresAuth: true } },
   { path: '/judged', component: () => import('@/views/Judged.vue'), meta: { requiresAuth: true } },
+  { path: '/q/:code', component: () => import('@/views/ScanResult.vue'), meta: { requiresAuth: true } },
   { path: '/scan-result/:uuid', component: () => import('@/views/ScanResult.vue'), meta: { requiresAuth: true } },
   { path: '/score/:uuid', component: () => import('@/views/Score.vue'), meta: { requiresAuth: true } },
   { path: '/ranking/:roundTableId', component: () => import('@/views/Ranking.vue'), meta: { requiresAuth: true } },
@@ -33,7 +34,7 @@ router.beforeEach((to, from, next) => {
   }
 
   if (to.meta.requiresAuth && !isLoggedIn()) {
-    next('/login')
+    next({ path: '/login', query: { redirect: to.fullPath } })
     return
   }
 

@@ -49,6 +49,7 @@ import com.beercompetition.pojo.po.CompetitionScoreConfig;
 import com.beercompetition.pojo.po.CompetitionStyleConfig;
 import com.beercompetition.pojo.po.EntryDelivery;
 import com.beercompetition.pojo.po.EntryPayment;
+import com.beercompetition.pojo.po.EntryScanLabel;
 import com.beercompetition.pojo.po.JudgeAccount;
 import com.beercompetition.pojo.po.JudgeAssignment;
 import com.beercompetition.pojo.po.JudgeTable;
@@ -64,6 +65,7 @@ import com.beercompetition.pojo.vo.JudgeTaskVO;
 import com.beercompetition.pojo.vo.ResultDraftVO;
 import com.beercompetition.pojo.vo.RoundRankingSlotVO;
 import com.beercompetition.pojo.vo.RoundTableVO;
+import com.beercompetition.service.EntryScanLabelService;
 import com.beercompetition.service.RoundService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -115,6 +117,7 @@ public class RoundServiceImpl implements RoundService {
     private final RoundTableMemberMapper roundTableMemberMapper;
     private final RoundTableEntryMapper roundTableEntryMapper;
     private final RoundResultMapper roundResultMapper;
+    private final EntryScanLabelService entryScanLabelService;
 
     @Override
     public List<CompetitionRoundVO> listCompetitionRounds(Long competitionId) {
@@ -158,9 +161,11 @@ public class RoundServiceImpl implements RoundService {
         Map<Long, Brewery> breweryById = loadBreweries(entries.stream().map(BeerEntry::getBreweryId).collect(Collectors.toSet()));
         Map<Long, EntryPayment> paymentByEntryId = loadPayments(entries.stream().map(BeerEntry::getId).collect(Collectors.toSet()));
         Map<Long, EntryDelivery> deliveryByEntryId = loadDeliveries(entries.stream().map(BeerEntry::getId).collect(Collectors.toSet()));
+        Map<Long, EntryScanLabel> labelByEntryId = entryScanLabelService.listActiveLabels(entries.stream().map(BeerEntry::getId).toList());
         return entries.stream()
                 .map(entry -> toEntryVO(entry, categoryNameById, styleByName, latestResultByEntry.get(entry.getId()), tableById,
-                        breweryById.get(entry.getBreweryId()), paymentByEntryId.get(entry.getId()), deliveryByEntryId.get(entry.getId())))
+                        breweryById.get(entry.getBreweryId()), paymentByEntryId.get(entry.getId()), deliveryByEntryId.get(entry.getId()),
+                        labelByEntryId.get(entry.getId())))
                 .toList();
     }
 
@@ -574,6 +579,7 @@ public class RoundServiceImpl implements RoundService {
                 .orderByAsc(RoundTableEntry::getSortOrder)
                 .orderByAsc(RoundTableEntry::getId));
         Map<Long, BeerEntry> entryById = loadEntries(entries.stream().map(RoundTableEntry::getBeerEntryId).collect(Collectors.toSet()));
+        Map<Long, EntryScanLabel> labelByEntryId = entryScanLabelService.listActiveLabels(entryById.keySet());
         List<RoundResult> results = roundResultMapper.selectList(new LambdaQueryWrapper<RoundResult>()
                 .eq(RoundResult::getRoundTableId, roundTableId)
                 .orderByAsc(RoundResult::getRankNo));
@@ -595,7 +601,8 @@ public class RoundServiceImpl implements RoundService {
                                 Map.of(),
                                 null,
                                 null,
-                                null))
+                                null,
+                                labelByEntryId.get(item.getBeerEntryId())))
                         .toList())
                 .rankings(buildRankings(table, results, entryById))
                 .build();
@@ -736,7 +743,8 @@ public class RoundServiceImpl implements RoundService {
                                          Map<Long, RoundTable> tableById,
                                          Brewery brewery,
                                          EntryPayment payment,
-                                         EntryDelivery delivery) {
+                                         EntryDelivery delivery,
+                                         EntryScanLabel label) {
         if (entry == null) {
             return CompetitionEntryVO.builder().build();
         }
@@ -747,7 +755,9 @@ public class RoundServiceImpl implements RoundService {
         return CompetitionEntryVO.builder()
                 .id(entry.getId())
                 .uuid(entry.getUuid())
-                .shortCode(entry.getShortCode())
+                .labelCode(label == null ? null : label.getLabelCode())
+                .shortCode(label == null ? null : label.getShortCode())
+                .scanToken(label == null ? null : label.getScanToken())
                 .name(entry.getName())
                 .breweryCompanyName(brewery == null ? null : brewery.getCompanyName())
                 .breweryContactName(brewery == null ? null : brewery.getContactName())

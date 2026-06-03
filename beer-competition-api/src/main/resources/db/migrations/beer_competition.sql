@@ -70,7 +70,6 @@ DROP TABLE IF EXISTS `beer_entry`;
 CREATE TABLE `beer_entry`  (
   `id` bigint(0) NOT NULL AUTO_INCREMENT,
   `uuid` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
-  `short_code` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL,
   `competition_id` bigint(0) NOT NULL,
   `brewery_id` bigint(0) NOT NULL,
   `category_id` bigint(0) NOT NULL,
@@ -90,7 +89,38 @@ CREATE TABLE `beer_entry`  (
 -- ----------------------------
 -- Records of beer_entry
 -- ----------------------------
-INSERT INTO `beer_entry` VALUES (1, 'BC-2026-IPA-0001', 'A19K', 1, 1, 1, '????IPA', 'Double IPA', 7.5, '????????????????????', '{\"specialIngredients\": \"????\"}', 'REGISTERED', 1, '2026-06-02 21:39:35', '2026-06-02 21:39:35');
+INSERT INTO `beer_entry` VALUES (1, 'BC-2026-IPA-0001', 1, 1, 1, '????IPA', 'Double IPA', 7.5, '????????????????????', '{\"specialIngredients\": \"????\"}', 'REGISTERED', 1, '2026-06-02 21:39:35', '2026-06-02 21:39:35');
+
+-- ----------------------------
+-- Table structure for entry_scan_label
+-- ----------------------------
+DROP TABLE IF EXISTS `entry_scan_label`;
+CREATE TABLE `entry_scan_label`  (
+  `id` bigint(0) NOT NULL AUTO_INCREMENT,
+  `competition_id` bigint(0) NOT NULL,
+  `beer_entry_id` bigint(0) NOT NULL,
+  `label_code` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+  `short_code` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+  `scan_token` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+  `status` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+  `active_flag` tinyint(0) GENERATED ALWAYS AS (case when (`status` = 'ACTIVE') then 1 else NULL end) VIRTUAL,
+  `generated_by` bigint(0) NULL DEFAULT NULL,
+  `generated_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0),
+  `printed_time` datetime(0) NULL DEFAULT NULL,
+  `create_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0),
+  `update_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) ON UPDATE CURRENT_TIMESTAMP(0),
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE INDEX `uk_entry_scan_label_active_entry`(`beer_entry_id`, `active_flag`) USING BTREE,
+  UNIQUE INDEX `uk_entry_scan_label_label_code`(`label_code`) USING BTREE,
+  UNIQUE INDEX `uk_entry_scan_label_short_code`(`short_code`) USING BTREE,
+  UNIQUE INDEX `uk_entry_scan_label_token`(`scan_token`) USING BTREE,
+  INDEX `idx_entry_scan_label_competition`(`competition_id`) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '现场扫码标签' ROW_FORMAT = Dynamic;
+
+-- ----------------------------
+-- Records of entry_scan_label
+-- ----------------------------
+INSERT INTO `entry_scan_label` (`id`, `competition_id`, `beer_entry_id`, `label_code`, `short_code`, `scan_token`, `status`, `generated_by`, `generated_time`, `printed_time`, `create_time`, `update_time`) VALUES (1, 1, 1, 'BE-DEMO00000001', 'A19K0', 'QDEMO0000000000000000000000000001', 'ACTIVE', NULL, '2026-06-02 21:39:35', NULL, '2026-06-02 21:39:35', '2026-06-02 21:39:35');
 
 -- ----------------------------
 -- Table structure for entry_payment
