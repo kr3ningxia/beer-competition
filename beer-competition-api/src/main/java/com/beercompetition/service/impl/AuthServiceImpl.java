@@ -7,6 +7,7 @@ import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.common.util.PiiService;
 import com.beercompetition.common.util.Md5Util;
 import com.beercompetition.mapper.AdminUserMapper;
+import com.beercompetition.mapper.BreweryMapper;
 import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.JudgeAccountMapper;
 import com.beercompetition.mapper.JudgeAssignmentMapper;
@@ -21,6 +22,7 @@ import com.beercompetition.pojo.enums.JudgeRoleType;
 import com.beercompetition.pojo.enums.SmsBizType;
 import com.beercompetition.pojo.enums.UserRole;
 import com.beercompetition.pojo.po.AdminUser;
+import com.beercompetition.pojo.po.Brewery;
 import com.beercompetition.pojo.po.Competition;
 import com.beercompetition.pojo.po.JudgeAccount;
 import com.beercompetition.pojo.po.JudgeAssignment;
@@ -51,6 +53,7 @@ public class AuthServiceImpl implements AuthService {
 
     private final AdminUserMapper adminUserMapper;
     private final PortalAccountMapper portalAccountMapper;
+    private final BreweryMapper breweryMapper;
     private final JudgeAccountMapper judgeAccountMapper;
     private final JudgeAssignmentMapper judgeAssignmentMapper;
     private final JudgeTableMapper judgeTableMapper;
@@ -104,15 +107,20 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public LoginResponse portalLogin(SmsLoginRequest request) {
         // 1) 验证短信验证码
         validateSmsCode(SmsBizType.PORTAL_LOGIN, request.getPhone(), request.getCode());
+        String phone = piiService.normalizePhone(request.getPhone());
 
-        // 2) 查询厂商账号状态
+        // 2) 查询或自动创建厂商账号
         PortalAccount account = portalAccountMapper.selectOne(new LambdaQueryWrapper<PortalAccount>()
-                .eq(PortalAccount::getPhone, request.getPhone()));
-        if (account == null || account.getStatus() == null || account.getStatus() != 1) {
-            throw new BaseException("厂商账号不存在或已禁用");
+                .eq(PortalAccount::getPhone, phone));
+        if (account == null) {
+            account = createPortalAccount(phone);
+        }
+        if (account.getStatus() == null || account.getStatus() != 1) {
+            throw new BaseException("厂商账号已禁用");
         }
 
         // 3) 组装并返回登录态
@@ -280,6 +288,28 @@ public class AuthServiceImpl implements AuthService {
                 .role(role.name())
                 .displayName(displayName)
                 .build();
+    }
+
+    private PortalAccount createPortalAccount(String phone) {
+        String suffix = phone.length() <= 4 ? phone : phone.substring(phone.length() - 4);
+        String initialName = "待完善厂牌" + suffix;
+        Brewery brewery = Brewery.builder()
+                .companyName(initialName)
+                .contactName("待完善")
+                .phone(phone)
+                .wechat(null)
+                .build();
+        breweryMapper.insert(brewery);
+
+        PortalAccount account = PortalAccount.builder()
+                .phone(phone)
+                .wechat(null)
+                .displayName(initialName)
+                .breweryId(brewery.getId())
+                .status(1)
+                .build();
+        portalAccountMapper.insert(account);
+        return portalAccountMapper.selectById(account.getId());
     }
 
     private LoginResponse buildJudgeLoginResponse(JudgeAccount account) {

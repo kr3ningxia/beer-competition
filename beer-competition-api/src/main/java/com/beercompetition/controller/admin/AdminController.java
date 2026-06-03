@@ -27,6 +27,7 @@ import com.beercompetition.pojo.vo.ScoreConfigVO;
 import com.beercompetition.pojo.vo.StyleLibraryVO;
 import com.beercompetition.service.AuthService;
 import com.beercompetition.service.CompetitionService;
+import com.beercompetition.service.EntryService;
 import com.beercompetition.service.JudgeService;
 import com.beercompetition.service.RoundService;
 import com.beercompetition.service.StyleLibraryService;
@@ -52,6 +53,7 @@ public class AdminController {
 
     private final AuthService authService;
     private final CompetitionService competitionService;
+    private final EntryService entryService;
     private final JudgeService judgeService;
     private final StyleLibraryService styleLibraryService;
     private final RoundService roundService;
@@ -203,6 +205,24 @@ public class AdminController {
     public Result<CompetitionDetailVO> publishResults(@PathVariable Long id) {
         roundService.publishResults(id);
         return Result.success(competitionService.getCompetitionDetail(id));
+    }
+
+    @PostMapping("/entries/{id}/confirm-payment")
+    public Result<String> confirmEntryPayment(@PathVariable Long id) {
+        entryService.confirmPayment(id);
+        return Result.success("确认成功");
+    }
+
+    @PostMapping("/entries/{id}/mark-stored")
+    public Result<String> markEntryStored(@PathVariable Long id) {
+        entryService.markStored(id);
+        return Result.success("入库成功");
+    }
+
+    @PostMapping("/entries/{id}/cancel")
+    public Result<String> cancelEntry(@PathVariable Long id) {
+        entryService.cancelEntry(id);
+        return Result.success("取消成功");
     }
 
     @GetMapping("/judges")

@@ -271,20 +271,40 @@
             </div>
             <div class="data-table entries-table">
               <div class="table-head">
+                <span>酒款 / 厂牌</span>
                 <span>匿名编号</span>
-                <span>短编号</span>
                 <span>投递组别</span>
-                <span>基础风格</span>
+                <span>付款 / 送样</span>
+                <span>基础风格 / 单号</span>
                 <span>轮次轨迹</span>
                 <span>状态</span>
+                <span>操作</span>
               </div>
               <div v-for="entry in roundEntryPool" :key="entry.uuid" class="table-row">
+                <div class="entry-main">
+                  <strong>{{ entry.name || '-' }}</strong>
+                  <small>{{ entry.breweryCompanyName || '未关联厂牌' }}</small>
+                </div>
                 <strong>{{ entry.uuid }}</strong>
-                <span>{{ entry.shortCode }}</span>
                 <span>{{ entry.categoryName }}</span>
-                <span>{{ entry.style }}</span>
+                <div class="entry-meta">
+                  <span>{{ paymentStatusText(entry.paymentStatus) }}</span>
+                  <small>{{ deliveryStatusText(entry.deliveryStatus) }}</small>
+                </div>
+                <div class="entry-meta">
+                  <span>{{ entry.style }}</span>
+                  <small>{{ entry.trackingNo || entry.shortCode || '-' }}</small>
+                </div>
                 <span>{{ getEntryPath(entry.uuid) }}</span>
-                <span>{{ entryStatusLabels[entry.status] || entry.status }}</span>
+                <div class="entry-meta">
+                  <span>{{ entryStatusLabels[entry.status] || entry.status }}</span>
+                  <small>{{ entry.shortCode }}</small>
+                </div>
+                <div class="entry-actions">
+                  <button class="mini-action" type="button" :disabled="!entry.canConfirmPayment" @click="confirmEntryPaymentAction(entry)">确认付款</button>
+                  <button class="mini-action" type="button" :disabled="!entry.canMarkStored" @click="markEntryStoredAction(entry)">确认入库</button>
+                  <button class="mini-action danger" type="button" :disabled="!entry.canCancel" @click="cancelEntryAction(entry)">取消</button>
+                </div>
               </div>
             </div>
           </article>
@@ -308,6 +328,7 @@
             :selected-table-local-id="selectedTableLocalId"
             :selected-role="selectedRole"
             :judge-metrics="judgeMetrics"
+            :judge-filter-counts="judgeFilterCounts"
             :validation-issues="validationIssues"
             :filtered-judge-pool="filteredJudgePool"
             :assignments-for-table="assignmentsForTable"
@@ -323,6 +344,7 @@
             :can-publish="canPublishCurrentRound"
             :get-judge="getJudge"
             :get-judge-initial="getJudgeInitial"
+            :get-judge-assignment-summary="getJudgeAssignmentSummary"
             :is-assigned="isAssigned"
             :is-judge-active="isJudgeActive"
             :get-round-entry-assignment="getRoundEntryAssignment"
@@ -690,8 +712,10 @@ import {
   statusMeta,
 } from './competitionStore'
 import {
+  cancelEntry,
   closeCompetitionRegistration,
   completeFirstRound,
+  confirmEntryPayment,
   createFirstRound,
   createNextRound,
   deleteCompetition,
@@ -699,6 +723,7 @@ import {
   fetchJudges,
   fetchStyleLibraries,
   lockRound,
+  markEntryStored,
   openCompetitionRegistration,
   prepareCompetitionJudging,
   publishCompetitionResults,
@@ -728,7 +753,7 @@ const judgeAssignmentForm = reactive([])
 const scoreConfigForm = reactive([])
 const judgePool = ref([])
 const judgeKeyword = ref('')
-const judgeRoleFilter = ref('ALL')
+const judgeRoleFilter = ref('UNASSIGNED')
 const allocationMode = ref('judges')
 const selectedTableLocalId = ref(null)
 const selectedRole = ref('CAPTAIN')
@@ -771,11 +796,8 @@ const roleOptions = [
 ]
 
 const roleFilters = [
-  { label: '全部', value: 'ALL' },
   { label: '未分配', value: 'UNASSIGNED' },
-  { label: '桌长候选', value: 'CAPTAIN' },
-  { label: '专业', value: 'PROFESSIONAL' },
-  { label: '跨界', value: 'CROSS' },
+  { label: '全部', value: 'ALL' },
 ]
 
 const roundStatusLabels = {
@@ -785,17 +807,6 @@ const roundStatusLabels = {
   SUBMITTED: '已提交',
   LOCKED: '已锁定',
 }
-
-const fallbackJudgePool = [
-  { publicId: 'J-DEMO-001', name: '张远', maskedPhone: '138****0001', qualification: 'BJCP 认证 · 桌长候选', status: 1 },
-  { publicId: 'J-DEMO-002', name: '李澄', maskedPhone: '138****0002', qualification: '专业评审 · 酒厂顾问', status: 1 },
-  { publicId: 'J-DEMO-003', name: '王禾', maskedPhone: '138****0003', qualification: '专业评审 · 酿酒师', status: 1 },
-  { publicId: 'J-DEMO-004', name: '陈乐', maskedPhone: '138****0004', qualification: '跨界评审 · 媒体', status: 1 },
-  { publicId: 'J-DEMO-005', name: '赵予', maskedPhone: '138****0005', qualification: 'BJCP 认证 · 专业评审', status: 1 },
-  { publicId: 'J-DEMO-006', name: '周亦', maskedPhone: '138****0006', qualification: '跨界评审 · 餐饮主理人', status: 1 },
-  { publicId: 'J-DEMO-007', name: '吴嘉', maskedPhone: '-', qualification: '专业评审 · 待补手机号', status: 1 },
-  { publicId: 'J-DEMO-008', name: '郑南', maskedPhone: '138****0008', qualification: '桌长候选 · 赛事经验', status: 1 },
-]
 
 const statusInfo = computed(() => statusMeta[competition.value?.status] || statusMeta.DRAFT)
 const editable = computed(() => competition.value?.editableScopes || {})
@@ -918,13 +929,8 @@ const canSubmitRankingRound = computed(() => {
   if (!['IN_PROGRESS', 'DRAFT'].includes(currentRound.value.status)) return false
   return currentRound.value.tables.every((table) => getFilledRankingCount(table) === Number(table.targetCount || 0))
 })
-const captainCandidates = computed(() => {
-  const pool = [...judgePool.value]
-  fallbackJudgePool.forEach((judge) => {
-    if (!pool.some((item) => item.publicId === judge.publicId)) pool.push(judge)
-  })
-  return pool.filter((judge) => inferJudgeRoles(judge).includes('CAPTAIN') && isJudgeActive(judge))
-})
+const captainCandidates = computed(() => judgePool.value
+  .filter((judge) => inferJudgeRoles(judge).includes('CAPTAIN') && isJudgeActive(judge)))
 const advancedCategoryStats = computed(() => {
   const map = new Map()
   advancedPool.value.forEach((entry) => map.set(entry.categoryName, (map.get(entry.categoryName) || 0) + 1))
@@ -949,6 +955,10 @@ const judgeMetrics = computed(() => ({
   professional: countAssignedRole('PROFESSIONAL'),
   cross: countAssignedRole('CROSS'),
 }))
+const judgeFilterCounts = computed(() => ({
+  ALL: judgePool.value.length,
+  UNASSIGNED: judgePool.value.filter((judge) => !isAssigned(judge.publicId)).length,
+}))
 const validationIssues = computed(() => {
   const issues = []
   if (!judgeTableForm.length) issues.push('至少需要创建 1 张基础桌')
@@ -967,11 +977,10 @@ const filteredJudgePool = computed(() => {
     const matchesKeyword = !query || [judge.name, judge.maskedPhone, judge.qualification]
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(query))
-    const matchesRole =
-      judgeRoleFilter.value === 'ALL' ||
-      (judgeRoleFilter.value === 'UNASSIGNED' && !isAssigned(judge.publicId)) ||
-      inferJudgeRoles(judge).includes(judgeRoleFilter.value)
-    return matchesKeyword && matchesRole
+    if (!matchesKeyword) return false
+
+    return judgeRoleFilter.value === 'ALL'
+      || (judgeRoleFilter.value === 'UNASSIGNED' && !isAssigned(judge.publicId))
   })
 })
 
@@ -999,18 +1008,10 @@ async function loadDetail() {
 async function loadJudgePool() {
   try {
     const data = await fetchJudges()
-    judgePool.value = mergeJudgePool(data || [])
+    judgePool.value = data || []
   } catch {
-    judgePool.value = mergeJudgePool([])
+    judgePool.value = []
   }
-}
-
-function mergeJudgePool(source) {
-  const merged = [...source]
-  fallbackJudgePool.forEach((judge) => {
-    if (!merged.some((item) => item.publicId === judge.publicId)) merged.push(judge)
-  })
-  return merged
 }
 
 function normalizeDetail(data) {
@@ -1047,12 +1048,6 @@ function resetForms() {
     ...item,
     localId: item.id || `table-${index}`,
   })))
-  if (!judgeTableForm.length) {
-    judgeTableForm.push(
-      { localId: 'base-A', tableName: 'A桌', captainCount: 1, professionalCount: 2, crossCount: 1 },
-      { localId: 'base-B', tableName: 'B桌', captainCount: 1, professionalCount: 2, crossCount: 1 },
-    )
-  }
   const persistedAssignments = judgeTableForm.flatMap((table) => (table.assignments || []).map((assignment) => ({
     localId: `assignment-${assignment.id || `${table.localId}-${assignment.judgePublicId}`}`,
     tableLocalId: table.localId,
@@ -1061,7 +1056,6 @@ function resetForms() {
     role: assignment.role,
   })))
   judgeAssignmentForm.splice(0, judgeAssignmentForm.length, ...persistedAssignments)
-  if (!judgeAssignmentForm.length) seedJudgeAssignments()
   selectedTableLocalId.value = judgeTableForm[0]?.localId || null
   const sourceScoreConfigs = competition.value.scoreConfigs.length ? competition.value.scoreConfigs : defaultScoreConfigs().map((item) => ({
     judgeRoleType: item.role,
@@ -1083,9 +1077,17 @@ function resetForms() {
 function applyRoundState(preferredRoundId = activeRoundId.value) {
   roundEntryPool.value = (competition.value?.entryPool || competition.value?.entries || []).map((entry) => ({
     ...entry,
+    name: entry.name || '',
+    breweryCompanyName: entry.breweryCompanyName || '',
     shortCode: entry.shortCode || '-',
     categoryName: entry.categoryName || entry.category || '-',
     style: entry.style || '未填写',
+    paymentStatus: entry.paymentStatus || 'UNPAID',
+    deliveryStatus: entry.deliveryStatus || 'NOT_SUBMITTED',
+    trackingNo: entry.trackingNo || '',
+    canConfirmPayment: Boolean(entry.canConfirmPayment),
+    canMarkStored: Boolean(entry.canMarkStored),
+    canCancel: Boolean(entry.canCancel),
     stored: Boolean(entry.stored),
     advanced: Boolean(entry.advanced),
     sourceTable: entry.sourceTable || '',
@@ -1106,6 +1108,16 @@ function applyRoundState(preferredRoundId = activeRoundId.value) {
   selectedEntryUuids.value = []
 }
 
+function paymentStatusText(status) {
+  return status === 'PAID' ? '已付款' : '待付款'
+}
+
+function deliveryStatusText(status) {
+  if (status === 'RECEIVED') return '已入库'
+  if (status === 'SUBMITTED') return '已提交送样'
+  return '待送样'
+}
+
 async function loadStyleLibraries() {
   try {
     const data = await fetchStyleLibraries()
@@ -1113,29 +1125,6 @@ async function loadStyleLibraries() {
   } catch {
     styleLibraryOptions.value = normalizeStyleLibraries(fallbackStyleLibraries)
   }
-}
-
-function seedJudgeAssignments() {
-  const sourceJudges = fallbackJudgePool
-  const seeded = []
-  judgeTableForm.forEach((table, tableIndex) => {
-    const offset = tableIndex * 4
-    const roles = [
-      ['CAPTAIN', sourceJudges[offset] || sourceJudges[0]],
-      ['PROFESSIONAL', sourceJudges[offset + 1] || sourceJudges[1]],
-      ['PROFESSIONAL', sourceJudges[offset + 2] || sourceJudges[2]],
-      ['CROSS', sourceJudges[offset + 3] || sourceJudges[3]],
-    ]
-    roles.forEach(([role, judge], index) => {
-      seeded.push({
-        localId: `assignment-${table.localId}-${role}-${index}`,
-        tableLocalId: table.localId,
-        judgePublicId: judge.publicId,
-        role,
-      })
-    })
-  })
-  judgeAssignmentForm.splice(0, judgeAssignmentForm.length, ...seeded)
 }
 
 async function generateFirstRoundFromJudges() {
@@ -1699,6 +1688,33 @@ async function publishResultsAction() {
   ElMessage.success('结果已发布')
 }
 
+async function confirmEntryPaymentAction(entry) {
+  await confirmEntryPayment(entry.id)
+  await loadDetail()
+  ElMessage.success(`${entry.name || entry.uuid} 已确认付款`)
+}
+
+async function markEntryStoredAction(entry) {
+  await markEntryStored(entry.id)
+  await loadDetail()
+  ElMessage.success(`${entry.name || entry.uuid} 已确认入库`)
+}
+
+async function cancelEntryAction(entry) {
+  try {
+    await ElMessageBox.confirm(`确认取消「${entry.name || entry.uuid}」的报名吗？`, '取消报名', {
+      confirmButtonText: '确认取消',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+    await cancelEntry(entry.id)
+    await loadDetail()
+    ElMessage.success(`${entry.name || entry.uuid} 已取消报名`)
+  } catch {
+    // User cancelled.
+  }
+}
+
 function addEntryField() {
   entryFieldForm.push({
     localId: `new-field-${Date.now()}`,
@@ -1818,8 +1834,16 @@ function tableValidationIssues(table) {
   return issues
 }
 
+function getJudgeAssignmentSummary(judgePublicId) {
+  const assignment = judgeAssignmentForm.find((item) => item.judgePublicId === judgePublicId)
+  if (!assignment) return ''
+  const table = judgeTableForm.find((item) => item.localId === assignment.tableLocalId)
+  const roleLabel = roleLabels[assignment.role] || assignment.role
+  return [table?.tableName, roleLabel].filter(Boolean).join(' · ')
+}
+
 function getJudge(judgePublicId) {
-  return judgePool.value.find((judge) => judge.publicId === judgePublicId) || fallbackJudgePool.find((judge) => judge.publicId === judgePublicId)
+  return judgePool.value.find((judge) => judge.publicId === judgePublicId)
 }
 
 function getJudgeInitial(name) {
@@ -2813,7 +2837,39 @@ input[type="checkbox"] {
 
 .entries-table .table-head,
 .entries-table .table-row {
-  grid-template-columns: minmax(180px, 1.2fr) 88px 110px 160px minmax(260px, 1.5fr) 96px;
+  grid-template-columns: minmax(180px, 1.2fr) minmax(160px, 1.1fr) 110px 120px minmax(150px, 1.1fr) minmax(240px, 1.5fr) 110px minmax(220px, 1.2fr);
+}
+
+.entry-main,
+.entry-meta,
+.entry-actions {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.entry-main small,
+.entry-meta small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.entry-actions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.mini-action {
+  min-height: 32px;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.mini-action.danger {
+  color: #ffb4b4;
+  border-color: rgba(224, 82, 82, 0.4);
 }
 
 .path-table .table-head,

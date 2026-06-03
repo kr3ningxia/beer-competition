@@ -3,12 +3,12 @@
     <section class="profile-hero brewer-card">
       <div>
         <span class="label-chip tone-green">厂牌资料</span>
-        <h2>{{ breweryProfile.breweryName }}</h2>
-        <p>{{ breweryProfile.bio }}</p>
+        <h2>{{ profileForm.companyName || '完善厂牌资料' }}</h2>
+        <p>用于报名核对和主办方联系。</p>
       </div>
       <div class="seal">
         <span>资料</span>
-        <strong>报名与收件使用</strong>
+        <strong>报名核对使用</strong>
       </div>
     </section>
 
@@ -16,32 +16,12 @@
       <article class="brewer-card profile-card">
         <h3 class="portal-section-title">联系人信息</h3>
         <el-form :model="profileForm" label-position="top">
-          <el-form-item label="厂牌名称"><el-input v-model="profileForm.breweryName" /></el-form-item>
+          <el-form-item label="账号名称"><el-input v-model="profileForm.displayName" /></el-form-item>
+          <el-form-item label="厂牌名称"><el-input v-model="profileForm.companyName" /></el-form-item>
           <el-form-item label="联系人"><el-input v-model="profileForm.contactName" /></el-form-item>
-          <el-form-item label="手机号"><el-input v-model="profileForm.phone" /></el-form-item>
+          <el-form-item label="手机号"><el-input v-model="profileForm.phone" disabled /></el-form-item>
           <el-form-item label="微信号"><el-input v-model="profileForm.wechat" /></el-form-item>
-          <el-form-item label="所在城市"><el-input v-model="profileForm.city" /></el-form-item>
-          <el-form-item label="厂牌简介">
-            <el-input v-model="profileForm.bio" type="textarea" :rows="4" />
-          </el-form-item>
           <el-button type="primary" @click="saveProfile">保存资料</el-button>
-        </el-form>
-      </article>
-
-      <article class="brewer-card profile-card">
-        <h3 class="portal-section-title">奖项收件地址</h3>
-        <el-form :model="addressForm" label-position="top">
-          <el-form-item label="收件人"><el-input v-model="addressForm.receiver" /></el-form-item>
-          <el-form-item label="联系电话"><el-input v-model="addressForm.phone" /></el-form-item>
-          <el-form-item label="省市区"><el-input v-model="addressForm.region" /></el-form-item>
-          <el-form-item label="详细地址">
-            <el-input v-model="addressForm.detail" type="textarea" :rows="4" />
-          </el-form-item>
-          <div class="address-tip">
-            <strong>用于获奖后寄送奖牌、奖状或主办方物料。</strong>
-            <p>结果发布前也可以提前维护，减少赛后沟通成本。</p>
-          </div>
-          <el-button @click="saveProfile">保存地址</el-button>
         </el-form>
       </article>
     </section>
@@ -49,14 +29,32 @@
 </template>
 
 <script setup>
-import { reactive } from 'vue'
+import { onMounted, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
-import { breweryProfile, deliveryAddress } from './mockData'
+import { fetchPortalProfile, updatePortalProfile } from '@/api/portal'
+import { setDisplayName } from '@/utils/auth'
 
-const profileForm = reactive({ ...breweryProfile })
-const addressForm = reactive({ ...deliveryAddress })
+const profileForm = reactive({
+  displayName: '',
+  companyName: '',
+  contactName: '',
+  phone: '',
+  wechat: '',
+})
 
-function saveProfile() {
+onMounted(async () => {
+  Object.assign(profileForm, await fetchPortalProfile())
+})
+
+async function saveProfile() {
+  const data = await updatePortalProfile({
+    displayName: profileForm.displayName,
+    companyName: profileForm.companyName,
+    contactName: profileForm.contactName,
+    wechat: profileForm.wechat,
+  })
+  Object.assign(profileForm, data)
+  setDisplayName('portal', data.displayName)
   ElMessage.success('已保存')
 }
 </script>
@@ -119,7 +117,7 @@ function saveProfile() {
 
 .profile-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 760px);
   gap: 20px;
 }
 

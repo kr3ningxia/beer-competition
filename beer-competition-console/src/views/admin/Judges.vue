@@ -52,64 +52,65 @@
           <span>状态</span>
           <span>操作</span>
         </div>
-        <div v-for="judge in filteredJudges" :key="judge.publicId" class="table-row">
-          <div class="judge-cell">
-            <span class="avatar">{{ getInitial(judge.name) }}</span>
-            <div>
-              <strong>{{ judge.name || '未填写姓名' }}</strong>
-              <small>{{ judge.statusLabel || statusLabel(judge.status) }}</small>
+        <div class="table-body">
+          <div v-for="judge in filteredJudges" :key="judge.publicId" class="table-row">
+            <div class="judge-cell">
+              <span class="avatar">{{ getInitial(judge.name) }}</span>
+              <div>
+                <strong>{{ judge.name || '未填写姓名' }}</strong>
+                <small>{{ judge.statusLabel || statusLabel(judge.status) }}</small>
+              </div>
+            </div>
+            <div class="contact-cell">
+              <span>{{ judge.maskedPhone || '-' }}</span>
+              <small>{{ judge.maskedWechat || '未填写微信号' }}</small>
+            </div>
+            <span class="qualification">{{ judge.qualification || '未填写资质' }}</span>
+            <span :class="['status-badge', statusTone(judge)]">
+              {{ judge.statusLabel || statusLabel(judge.status) }}
+            </span>
+            <div class="row-actions">
+              <button class="row-action" type="button" @click="openEditor(judge)">编辑</button>
+              <button
+                v-if="Number(judge.status) === 2"
+                class="row-action success"
+                type="button"
+                @click="changeStatus(judge, 1)"
+              >
+                通过
+              </button>
+              <button
+                v-if="Number(judge.status) !== 0"
+                class="row-action danger"
+                type="button"
+                @click="changeStatus(judge, 0)"
+              >
+                停用
+              </button>
+              <button
+                v-if="Number(judge.status) === 0"
+                class="row-action success"
+                type="button"
+                @click="changeStatus(judge, 1)"
+              >
+                启用
+              </button>
+              <button
+                v-if="isActive(judge)"
+                class="row-action"
+                type="button"
+                @click="router.push('/admin/assignments')"
+              >
+                编排
+                <Right />
+              </button>
             </div>
           </div>
-          <div class="contact-cell">
-            <span>{{ judge.maskedPhone || '-' }}</span>
-            <small>{{ judge.maskedWechat || '未填写微信号' }}</small>
-          </div>
-          <span class="qualification">{{ judge.qualification || '未填写资质' }}</span>
-          <span :class="['status-badge', statusTone(judge)]">
-            {{ judge.statusLabel || statusLabel(judge.status) }}
-          </span>
-          <div class="row-actions">
-            <button class="row-action" type="button" @click="openEditor(judge)">编辑</button>
-            <button
-              v-if="Number(judge.status) === 2"
-              class="row-action success"
-              type="button"
-              @click="changeStatus(judge, 1)"
-            >
-              通过
-            </button>
-            <button
-              v-if="Number(judge.status) !== 0"
-              class="row-action danger"
-              type="button"
-              @click="changeStatus(judge, 0)"
-            >
-              停用
-            </button>
-            <button
-              v-if="Number(judge.status) === 0"
-              class="row-action success"
-              type="button"
-              @click="changeStatus(judge, 1)"
-            >
-              启用
-            </button>
-            <button
-              v-if="isActive(judge)"
-              class="row-action"
-              type="button"
-              @click="router.push('/admin/assignments')"
-            >
-              编排
-              <Right />
-            </button>
+          <div v-if="!loading && filteredJudges.length === 0" class="empty-state">
+            <h2>没有匹配的评审</h2>
+            <p>调整搜索条件或状态筛选后再查看。</p>
           </div>
         </div>
-      </div>
-
-      <div v-if="!loading && filteredJudges.length === 0" class="empty-state">
-        <h2>没有匹配的评审</h2>
-        <p>调整搜索条件或状态筛选后再查看。</p>
       </div>
     </section>
 
@@ -327,7 +328,10 @@ async function savePhoneEditor() {
   --gold-soft: #e0b84a;
   --green: #6fcf7a;
   --orange: #f2994a;
-  min-height: 100vh;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   padding: 28px;
   color: var(--text);
   background:
@@ -336,6 +340,7 @@ async function savePhoneEditor() {
     radial-gradient(circle at 17% 7%, rgba(216, 169, 53, 0.13), transparent 18rem),
     linear-gradient(135deg, #0d1418 0%, #111c20 50%, #0c1519 100%);
   background-size: 48px 48px, 48px 48px, auto, auto;
+  overflow: hidden;
 }
 
 h1,
@@ -372,6 +377,7 @@ svg {
 }
 
 .page-head {
+  flex: 0 0 auto;
   justify-content: space-between;
   gap: 20px;
   padding-bottom: 24px;
@@ -427,6 +433,7 @@ svg {
 }
 
 .toolbar {
+  flex: 0 0 auto;
   justify-content: space-between;
   gap: 16px;
   margin-top: 22px;
@@ -475,11 +482,16 @@ svg {
 }
 
 .table-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   margin-top: 18px;
   padding: 16px;
 }
 
 .table-headline {
+  flex: 0 0 auto;
   display: flex;
   justify-content: space-between;
   gap: 12px;
@@ -495,8 +507,41 @@ svg {
 }
 
 .judge-table {
-  display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
+}
+
+.table-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+  scrollbar-gutter: stable;
+}
+
+.table-body::-webkit-scrollbar {
+  width: 10px;
+}
+
+.table-body::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.table-body::-webkit-scrollbar-thumb {
+  border: 2px solid rgba(22, 32, 36, 0.95);
+  border-radius: 999px;
+  background: rgba(216, 169, 53, 0.28);
+}
+
+.table-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(216, 169, 53, 0.42);
 }
 
 .table-head,

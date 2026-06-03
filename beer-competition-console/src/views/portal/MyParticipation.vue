@@ -31,10 +31,10 @@
         <article v-for="competition in myCompetitions" :key="competition.id" class="progress-row">
           <div>
             <span :class="['label-chip', competition.status === 'PUBLISHED' ? 'tone-gold' : 'tone-green']">
-              {{ competition.stage }}
+              {{ competition.currentStageLabel }}
             </span>
             <h3>{{ competition.name }}</h3>
-            <p>{{ competition.city }} · {{ competition.venue }}</p>
+            <p>{{ competition.code }} · {{ competition.edition }}</p>
           </div>
           <div class="summary-strip">
             <span><small>已提交</small><b>{{ summary(competition.id).submitted }}</b></span>
@@ -82,10 +82,10 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { CircleCheck, Money, Tickets } from '@element-plus/icons-vue'
-import { breweryProfile, competitions, entries } from './mockData'
+import { fetchMyParticipation } from '@/api/portal'
 import {
   entryPrimaryAction,
   entryStatusMeta,
@@ -94,7 +94,13 @@ import {
   priorityEntry,
 } from './portalViewModels'
 
-const highestPriorityEntry = computed(() => priorityEntry(entries))
+const profile = ref({})
+const entries = ref([])
+const competitions = ref([])
+const breweryProfile = computed(() => ({
+  breweryName: profile.value.companyName || profile.value.displayName || '完善厂牌资料',
+}))
+const highestPriorityEntry = computed(() => priorityEntry(entries.value))
 const heroAction = computed(() => entryPrimaryAction(highestPriorityEntry.value))
 const heroCopy = computed(() => {
   if (!highestPriorityEntry.value) {
@@ -103,11 +109,11 @@ const heroCopy = computed(() => {
   return `${highestPriorityEntry.value.name} 当前需要你${nextActionText(highestPriorityEntry.value)}。`
 })
 
-const unpaidEntries = computed(() => entries.filter((entry) => entry.status === 'PENDING_PAYMENT'))
-const labelEntries = computed(() => entries.filter((entry) => entry.status === 'REGISTERED'))
-const storedEntries = computed(() => entries.filter((entry) => entry.status === 'STORED' || entry.status === 'RESULT_PUBLISHED'))
-const resultEntries = computed(() => entries.filter((entry) => entry.status === 'RESULT_PUBLISHED'))
-const myCompetitions = computed(() => competitions.filter((competition) => entries.some((entry) => entry.competitionId === competition.id)))
+const unpaidEntries = computed(() => entries.value.filter((entry) => entry.status === 'PENDING_PAYMENT'))
+const labelEntries = computed(() => entries.value.filter((entry) => entry.status === 'REGISTERED'))
+const storedEntries = computed(() => entries.value.filter((entry) => entry.status === 'STORED' || entry.status === 'RESULT_PUBLISHED'))
+const resultEntries = computed(() => entries.value.filter((entry) => entry.status === 'RESULT_PUBLISHED'))
+const myCompetitions = computed(() => competitions.value)
 
 const todoCards = computed(() => [
   { label: '待确认付款', value: unpaidEntries.value.length, hint: '线下付款后等待主办方确认', icon: Money, to: '/portal/payment' },
@@ -117,12 +123,19 @@ const todoCards = computed(() => [
 ])
 
 function summary(competitionId) {
-  return entrySummaryForCompetition(competitionId, entries)
+  return entrySummaryForCompetition(competitionId, entries.value)
 }
 
 function competitionName(competitionId) {
-  return competitions.find((competition) => competition.id === competitionId)?.name || '未关联赛事'
+  return competitions.value.find((competition) => competition.id === competitionId)?.name || '未关联赛事'
 }
+
+onMounted(async () => {
+  const data = await fetchMyParticipation()
+  profile.value = data.profile || {}
+  entries.value = data.entries || []
+  competitions.value = data.competitions || []
+})
 </script>
 
 <style scoped>

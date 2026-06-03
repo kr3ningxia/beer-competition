@@ -8,13 +8,20 @@ const USERNAME_KEYS = {
   portal: 'portal_display_name',
 }
 
+const SESSION_EVENT = 'beer-competition-session-updated'
+
 export function getToken(scope) {
   return localStorage.getItem(TOKEN_KEYS[scope])
 }
 
 export function setSession(scope, token, displayName) {
   localStorage.setItem(TOKEN_KEYS[scope], token)
+  setDisplayName(scope, displayName)
+}
+
+export function setDisplayName(scope, displayName) {
   localStorage.setItem(USERNAME_KEYS[scope], displayName || '')
+  window.dispatchEvent(new CustomEvent(SESSION_EVENT, { detail: { scope } }))
 }
 
 export function createLocalSessionToken(scope, displayName) {
@@ -36,6 +43,7 @@ export function createLocalSessionToken(scope, displayName) {
 export function clearSession(scope) {
   localStorage.removeItem(TOKEN_KEYS[scope])
   localStorage.removeItem(USERNAME_KEYS[scope])
+  window.dispatchEvent(new CustomEvent(SESSION_EVENT, { detail: { scope } }))
 }
 
 export function isLoggedIn(scope) {

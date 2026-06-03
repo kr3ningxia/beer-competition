@@ -66,6 +66,9 @@ public class AuthInterceptor implements HandlerInterceptor {
     }
 
     private UserRole resolveRequiredRole(String uri) {
+        if (uri.startsWith("/api/portal/public/")) {
+            return null;
+        }
         if (uri.startsWith("/api/admin/")) {
             return UserRole.ADMIN;
         }

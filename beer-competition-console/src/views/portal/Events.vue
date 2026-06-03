@@ -4,7 +4,7 @@
       <div>
         <span class="label-chip tone-gold">赛事目录</span>
         <h1>选择适合你酒款的赛事</h1>
-        <p>查看报名窗口、投递组别、送样要求和结果开放状态，再进入单场赛事提交酒款。</p>
+        <p>查看报名窗口、投递组别、基础风格和结果开放状态，再进入单场赛事提交酒款。</p>
       </div>
       <RouterLink class="primary-action" to="/portal/home">返回赛事首页</RouterLink>
     </section>
@@ -12,20 +12,19 @@
     <section class="event-list">
       <article v-for="competition in competitions" :key="competition.id" class="event-card brewer-card">
         <div class="event-main">
-          <span :class="['label-chip', stageTone(competition.status)]">{{ competition.stage }}</span>
+          <span :class="['label-chip', stageTone(competition.status)]">{{ competition.currentStageLabel }}</span>
           <h2>{{ competition.name }}</h2>
-          <p>{{ competition.description }}</p>
+          <p>{{ competition.code }} · {{ competition.edition }}</p>
           <div class="fact-row">
-            <span>比赛日期 {{ competition.date }}</span>
-            <span>报名截止 {{ competition.registrationDeadline }}</span>
+            <span>比赛日期 {{ formatDate(competition.competitionDate) }}</span>
+            <span>报名截止 {{ formatDateTime(competition.registrationDeadline) }}</span>
             <span>报名费 ¥{{ competition.entryFee }} / 款</span>
-            <span>{{ competition.city }} · {{ competition.venue }}</span>
           </div>
         </div>
 
         <aside class="event-side">
           <strong>{{ competition.categories.length }} 个投递组别</strong>
-          <p>{{ competition.categories.slice(0, 4).join(' / ') }}</p>
+          <p>{{ competition.categories.slice(0, 4).map((item) => item.name).join(' / ') || '暂未配置' }}</p>
           <div class="event-actions">
             <RouterLink :to="`/portal/events/${competition.id}`">查看赛事详情</RouterLink>
             <RouterLink
@@ -38,23 +37,40 @@
           </div>
         </aside>
       </article>
+      <div v-if="!competitions.length" class="empty-state brewer-card">
+        <strong>暂无可展示赛事</strong>
+        <p>赛事开放后会在这里显示。</p>
+      </div>
     </section>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { isLoggedIn } from '@/utils/auth'
-import { competitions } from './mockData'
+import { fetchPortalCompetitions } from '@/api/portal'
 import { canSubmitEntry } from './portalViewModels'
 
 const loggedIn = computed(() => isLoggedIn('portal'))
+const competitions = ref([])
+
+onMounted(async () => {
+  competitions.value = await fetchPortalCompetitions()
+})
 
 function stageTone(status) {
   if (status === 'PUBLISHED') return 'tone-gold'
   if (status === 'REGISTRATION_OPEN') return 'tone-green'
   return 'tone-amber'
+}
+
+function formatDate(value) {
+  return value || '-'
+}
+
+function formatDateTime(value) {
+  return value ? String(value).replace('T', ' ').slice(0, 16) : '-'
 }
 </script>
 

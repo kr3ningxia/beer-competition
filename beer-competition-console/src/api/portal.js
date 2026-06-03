@@ -28,8 +28,16 @@ export function submitPortalEntry(competitionId, data) {
   return request.post(`/api/portal/competitions/${competitionId}/entries`, data, { authScope: 'portal' })
 }
 
+export function submitPortalEntryDelivery(entryId, data) {
+  return request.post(`/api/portal/entries/${entryId}/delivery`, data, { authScope: 'portal' })
+}
+
 export function fetchPortalEntryLabel(id) {
   return request.get(`/api/portal/entries/${id}/label`, { authScope: 'portal' })
+}
+
+export function fetchPortalProfile() {
+  return request.get('/api/portal/profile', { authScope: 'portal' })
 }
 
 export function fetchPortalResults() {
@@ -42,8 +50,4 @@ export function fetchPortalResultDetail(entryId) {
 
 export function updatePortalProfile(data) {
   return request.put('/api/portal/profile', data, { authScope: 'portal' })
-}
-
-export function updatePortalAwardAddress(data) {
-  return request.put('/api/portal/award-address', data, { authScope: 'portal' })
 }

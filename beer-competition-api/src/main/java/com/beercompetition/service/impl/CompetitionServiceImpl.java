@@ -51,6 +51,8 @@ import com.beercompetition.pojo.vo.EntryFieldConfigVO;
 import com.beercompetition.pojo.vo.EntrySummaryVO;
 import com.beercompetition.pojo.vo.JudgeAssignmentVO;
 import com.beercompetition.pojo.vo.JudgeTableVO;
+import com.beercompetition.pojo.vo.PortalCompetitionVO;
+import com.beercompetition.pojo.vo.PortalHomeVO;
 import com.beercompetition.pojo.vo.ProgressSummaryVO;
 import com.beercompetition.pojo.vo.ResultDraftVO;
 import com.beercompetition.pojo.vo.ResultSetupVO;
@@ -136,6 +138,53 @@ public class CompetitionServiceImpl implements CompetitionService {
                     return toCompetitionVO(competition, detail);
                 })
                 .toList();
+    }
+
+    @Override
+    public PortalHomeVO getPortalHome() {
+        // 1) 查询厂商端可展示赛事
+        List<PortalCompetitionVO> competitions = listPortalCompetitions();
+        List<PortalCompetitionVO> openCompetitions = competitions.stream()
+                .filter(item -> CompetitionStatus.REGISTRATION_OPEN.name().equals(item.getStatus()))
+                .toList();
+
+        // 2) 选择首页主赛事
+        PortalCompetitionVO activeCompetition = openCompetitions.stream()
+                .findFirst()
+                .orElse(competitions.stream().findFirst().orElse(null));
+
+        // 3) 组装首页数据
+        return PortalHomeVO.builder()
+                .activeCompetition(activeCompetition)
+                .openCompetitions(openCompetitions)
+                .competitions(competitions)
+                .build();
+    }
+
+    @Override
+    public List<PortalCompetitionVO> listPortalCompetitions() {
+        // 1) 查询非草稿、非归档赛事
+        return competitionMapper.selectList(new LambdaQueryWrapper<Competition>()
+                        .ne(Competition::getStatus, CompetitionStatus.DRAFT.name())
+                        .ne(Competition::getStatus, CompetitionStatus.ARCHIVED.name())
+                        .orderByDesc(Competition::getCompetitionDate)
+                        .orderByDesc(Competition::getId))
+                .stream()
+                .map(this::toPortalCompetitionVO)
+                .toList();
+    }
+
+    @Override
+    public PortalCompetitionVO getPortalCompetitionDetail(Long id) {
+        // 1) 查询赛事并校验公开范围
+        Competition competition = getCompetitionOrThrow(id);
+        CompetitionStatus status = parseStatus(competition);
+        if (status == CompetitionStatus.DRAFT || status == CompetitionStatus.ARCHIVED) {
+            throw new ResourceNotFoundException("赛事不存在");
+        }
+
+        // 2) 返回厂商端赛事配置
+        return toPortalCompetitionVO(competition);
     }
 
     @Override
@@ -563,6 +612,24 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .progressSummary(detail.getProgressSummary())
                 .judgeTableCount(detail.getJudgeTables().size())
                 .judgeCount(judgeCount)
+                .build();
+    }
+
+    private PortalCompetitionVO toPortalCompetitionVO(Competition competition) {
+        return PortalCompetitionVO.builder()
+                .id(competition.getId())
+                .code(competition.getCode())
+                .name(competition.getName())
+                .edition(competition.getEdition())
+                .competitionDate(competition.getCompetitionDate())
+                .registrationStart(competition.getRegistrationStart())
+                .registrationDeadline(competition.getRegistrationDeadline())
+                .status(competition.getStatus())
+                .entryFee(competition.getEntryFee())
+                .currentStageLabel(resolveStageLabel(parseStatus(competition)))
+                .categories(listCategories(competition.getId()))
+                .styles(listStyles(competition.getId()))
+                .entryFields(listEntryFields(competition.getId()))
                 .build();
     }
 

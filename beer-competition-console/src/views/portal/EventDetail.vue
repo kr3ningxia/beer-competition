@@ -3,10 +3,10 @@
     <section class="detail-hero">
       <div>
         <span :class="['label-chip', competition.status === 'PUBLISHED' ? 'tone-gold' : 'tone-green']">
-          {{ competition.stage }}
+          {{ competition.currentStageLabel }}
         </span>
         <h1>{{ competition.name }}</h1>
-        <p>{{ competition.description }}</p>
+        <p>{{ competition.code }} · {{ competition.edition }}</p>
         <div class="hero-actions">
           <RouterLink
             v-if="canSubmitEntry(competition)"
@@ -19,53 +19,49 @@
         </div>
       </div>
       <aside class="event-ticket">
-        <span>{{ competition.shortName }}</span>
+        <span>{{ competition.code }}</span>
         <dl>
-          <div><dt>比赛日期</dt><dd>{{ competition.date }}</dd></div>
-          <div><dt>报名截止</dt><dd>{{ competition.registrationDeadline }}</dd></div>
+          <div><dt>比赛日期</dt><dd>{{ formatDate(competition.competitionDate) }}</dd></div>
+          <div><dt>报名截止</dt><dd>{{ formatDateTime(competition.registrationDeadline) }}</dd></div>
           <div><dt>报名费</dt><dd>¥{{ competition.entryFee }} / 款</dd></div>
-          <div><dt>比赛地点</dt><dd>{{ competition.city }} · {{ competition.venue }}</dd></div>
         </dl>
       </aside>
     </section>
 
     <section class="detail-grid">
       <article class="brewer-card info-card">
-        <h2 class="portal-section-title">赛事简介</h2>
+        <h2 class="portal-section-title">赛事信息</h2>
         <dl>
-          <div><dt>主办方</dt><dd>{{ competition.organizer }}</dd></div>
-          <div><dt>适合提交</dt><dd>{{ competition.audience }}</dd></div>
-          <div><dt>赛事说明</dt><dd>{{ competition.description }}</dd></div>
+          <div><dt>赛事编号</dt><dd>{{ competition.code }}</dd></div>
+          <div><dt>届次</dt><dd>{{ competition.edition }}</dd></div>
+          <div><dt>当前阶段</dt><dd>{{ competition.currentStageLabel }}</dd></div>
         </dl>
       </article>
 
       <article class="brewer-card info-card">
         <h2 class="portal-section-title">报名要求</h2>
         <dl>
-          <div><dt>投递组别</dt><dd>{{ competition.categories.join(' / ') }}</dd></div>
-          <div><dt>基础风格</dt><dd>{{ competition.styleOptions.join(' / ') }}</dd></div>
-          <div><dt>额外字段</dt><dd>{{ competition.entryFields.join(' / ') }}</dd></div>
-          <div><dt>酒款简介</dt><dd>建议 300 字以内，请避免填写厂牌、联系人或其他可识别身份的信息。</dd></div>
+          <div><dt>投递组别</dt><dd>{{ competition.categories.map((item) => item.name).join(' / ') || '暂未配置' }}</dd></div>
+          <div><dt>基础风格</dt><dd>{{ competition.styles.map((item) => item.name).join(' / ') || '暂未配置' }}</dd></div>
+          <div><dt>额外字段</dt><dd>{{ entryFieldSummary }}</dd></div>
         </dl>
       </article>
     </section>
 
     <section class="detail-grid">
       <article class="brewer-card info-card">
-        <h2 class="portal-section-title">送样要求</h2>
+        <h2 class="portal-section-title">标签与入库</h2>
         <dl>
-          <div><dt>酒样数量</dt><dd>{{ competition.sampleRequirement }}</dd></div>
-          <div><dt>送样截止</dt><dd>{{ competition.sampleDeadline }}</dd></div>
-          <div><dt>送样地址</dt><dd>{{ competition.sampleAddress }}</dd></div>
+          <div><dt>付款确认</dt><dd>提交后等待主办方确认付款，确认后报名成功。</dd></div>
           <div><dt>标签粘贴</dt><dd>付款确认后下载现场标签，贴在酒瓶或外箱便于收样核对。</dd></div>
+          <div><dt>酒样入库</dt><dd>主办方收样后会更新入库状态。</dd></div>
         </dl>
       </article>
 
       <article class="brewer-card info-card">
-        <h2 class="portal-section-title">奖项与反馈</h2>
+        <h2 class="portal-section-title">结果反馈</h2>
         <dl>
-          <div><dt>奖项说明</dt><dd>{{ competition.awardNote }}</dd></div>
-          <div><dt>厂商可见反馈</dt><dd>结果发布后可查看评分明细、桌长综合评语和奖状相关信息。</dd></div>
+          <div><dt>厂商可见反馈</dt><dd>结果发布后可查看评分明细、桌长综合评语和轮次结果。</dd></div>
           <div><dt>历史赛事</dt><dd>{{ competition.status === 'PUBLISHED' ? '该赛事已发布结果。' : '比赛结束并确认结果后开放查看。' }}</dd></div>
         </dl>
       </article>
@@ -121,16 +117,39 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { isLoggedIn } from '@/utils/auth'
-import { competitions, entries } from './mockData'
+import { fetchPortalCompetitionDetail, fetchPortalEntries } from '@/api/portal'
 import { canSubmitEntry, entryPrimaryAction, entryStatusMeta, nextActionText } from './portalViewModels'
 
 const route = useRoute()
 const loggedIn = computed(() => isLoggedIn('portal'))
-const competition = computed(() => competitions.find((item) => item.id === route.params.id) || competitions[0])
-const eventEntries = computed(() => entries.filter((entry) => entry.competitionId === competition.value.id))
+const competition = ref({ categories: [], styles: [], entryFields: [] })
+const entries = ref([])
+const eventEntries = computed(() => entries.value.filter((entry) => entry.competitionId === competition.value.id))
+const entryFieldSummary = computed(() => {
+  const fields = competition.value.entryFields || []
+  if (!fields.length) {
+    return '无'
+  }
+  return fields.map((field) => (typeof field === 'string' ? field : field.fieldLabel)).join(' / ')
+})
+
+onMounted(async () => {
+  competition.value = await fetchPortalCompetitionDetail(route.params.id)
+  if (loggedIn.value) {
+    entries.value = await fetchPortalEntries()
+  }
+})
+
+function formatDate(value) {
+  return value || '-'
+}
+
+function formatDateTime(value) {
+  return value ? String(value).replace('T', ' ').slice(0, 16) : '-'
+}
 </script>
 
 <style scoped>

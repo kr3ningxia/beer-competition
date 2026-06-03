@@ -6,11 +6,14 @@ import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ForbiddenException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.mapper.BeerEntryMapper;
+import com.beercompetition.mapper.BreweryMapper;
 import com.beercompetition.mapper.CompetitionCategoryMapper;
 import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.CompetitionRoundMapper;
 import com.beercompetition.mapper.CompetitionScoreConfigMapper;
 import com.beercompetition.mapper.CompetitionStyleConfigMapper;
+import com.beercompetition.mapper.EntryDeliveryMapper;
+import com.beercompetition.mapper.EntryPaymentMapper;
 import com.beercompetition.mapper.JudgeAccountMapper;
 import com.beercompetition.mapper.JudgeAssignmentMapper;
 import com.beercompetition.mapper.JudgeTableMapper;
@@ -26,6 +29,8 @@ import com.beercompetition.pojo.dto.RankingSubmitRequest;
 import com.beercompetition.pojo.dto.RoundAllocationRequest;
 import com.beercompetition.pojo.dto.RoundTableAllocationRequest;
 import com.beercompetition.pojo.enums.CompetitionStatus;
+import com.beercompetition.pojo.enums.EntryStatus;
+import com.beercompetition.pojo.enums.EntryPaymentStatus;
 import com.beercompetition.pojo.enums.JudgeAccountStatus;
 import com.beercompetition.pojo.enums.JudgeRoleType;
 import com.beercompetition.pojo.enums.JudgeTaskType;
@@ -36,11 +41,14 @@ import com.beercompetition.pojo.enums.RoundStatus;
 import com.beercompetition.pojo.enums.RoundTargetMode;
 import com.beercompetition.pojo.enums.RoundType;
 import com.beercompetition.pojo.po.BeerEntry;
+import com.beercompetition.pojo.po.Brewery;
 import com.beercompetition.pojo.po.Competition;
 import com.beercompetition.pojo.po.CompetitionCategory;
 import com.beercompetition.pojo.po.CompetitionRound;
 import com.beercompetition.pojo.po.CompetitionScoreConfig;
 import com.beercompetition.pojo.po.CompetitionStyleConfig;
+import com.beercompetition.pojo.po.EntryDelivery;
+import com.beercompetition.pojo.po.EntryPayment;
 import com.beercompetition.pojo.po.JudgeAccount;
 import com.beercompetition.pojo.po.JudgeAssignment;
 import com.beercompetition.pojo.po.JudgeTable;
@@ -91,6 +99,9 @@ public class RoundServiceImpl implements RoundService {
     private final CompetitionCategoryMapper competitionCategoryMapper;
     private final CompetitionScoreConfigMapper competitionScoreConfigMapper;
     private final CompetitionStyleConfigMapper competitionStyleConfigMapper;
+    private final BreweryMapper breweryMapper;
+    private final EntryPaymentMapper entryPaymentMapper;
+    private final EntryDeliveryMapper entryDeliveryMapper;
     private final JudgeTableMapper judgeTableMapper;
     private final JudgeAssignmentMapper judgeAssignmentMapper;
     private final JudgeAccountMapper judgeAccountMapper;
@@ -133,15 +144,19 @@ public class RoundServiceImpl implements RoundService {
         Map<Long, String> categoryNameById = listCategoryNames(competitionId);
         Map<String, CompetitionStyleConfig> styleByName = listStyleSnapshot(competitionId);
         Map<Long, RoundResult> latestResultByEntry = latestResultByEntry(competitionId);
+        List<BeerEntry> entries = beerEntryMapper.selectList(new LambdaQueryWrapper<BeerEntry>()
+                .eq(BeerEntry::getCompetitionId, competitionId)
+                .orderByDesc(BeerEntry::getCreateTime)
+                .orderByAsc(BeerEntry::getId));
         Map<Long, RoundTable> tableById = loadRoundTables(latestResultByEntry.values().stream()
                 .map(RoundResult::getRoundTableId)
                 .collect(Collectors.toSet()));
-        return beerEntryMapper.selectList(new LambdaQueryWrapper<BeerEntry>()
-                        .eq(BeerEntry::getCompetitionId, competitionId)
-                        .orderByDesc(BeerEntry::getCreateTime)
-                        .orderByAsc(BeerEntry::getId))
-                .stream()
-                .map(entry -> toEntryVO(entry, categoryNameById, styleByName, latestResultByEntry.get(entry.getId()), tableById))
+        Map<Long, Brewery> breweryById = loadBreweries(entries.stream().map(BeerEntry::getBreweryId).collect(Collectors.toSet()));
+        Map<Long, EntryPayment> paymentByEntryId = loadPayments(entries.stream().map(BeerEntry::getId).collect(Collectors.toSet()));
+        Map<Long, EntryDelivery> deliveryByEntryId = loadDeliveries(entries.stream().map(BeerEntry::getId).collect(Collectors.toSet()));
+        return entries.stream()
+                .map(entry -> toEntryVO(entry, categoryNameById, styleByName, latestResultByEntry.get(entry.getId()), tableById,
+                        breweryById.get(entry.getBreweryId()), paymentByEntryId.get(entry.getId()), deliveryByEntryId.get(entry.getId())))
                 .toList();
     }
 
@@ -573,7 +588,17 @@ public class RoundServiceImpl implements RoundService {
                 .targetCount(table.getTargetCount())
                 .targetMode(table.getTargetMode())
                 .status(table.getStatus())
-                .entries(entries.stream().map(item -> toEntryVO(entryById.get(item.getBeerEntryId()), categoryNameById, styleByName, null, Map.of())).toList())
+                .entries(entries.stream()
+                        .map(item -> toEntryVO(
+                                entryById.get(item.getBeerEntryId()),
+                                categoryNameById,
+                                styleByName,
+                                null,
+                                Map.of(),
+                                null,
+                                null,
+                                null))
+                        .toList())
                 .rankings(buildRankings(table, results, entryById))
                 .build();
     }
@@ -704,26 +729,73 @@ public class RoundServiceImpl implements RoundService {
                                          Map<Long, String> categoryNameById,
                                          Map<String, CompetitionStyleConfig> styleByName,
                                          RoundResult latestResult,
-                                         Map<Long, RoundTable> tableById) {
+                                         Map<Long, RoundTable> tableById,
+                                         Brewery brewery,
+                                         EntryPayment payment,
+                                         EntryDelivery delivery) {
         if (entry == null) {
             return CompetitionEntryVO.builder().build();
         }
         CompetitionStyleConfig style = styleByName.get(entry.getStyle());
+        boolean canConfirmPayment = EntryStatus.PENDING_PAYMENT.name().equals(entry.getStatus());
+        boolean canMarkStored = EntryStatus.REGISTERED.name().equals(entry.getStatus());
+        boolean canCancel = Set.of(EntryStatus.PENDING_PAYMENT.name(), EntryStatus.REGISTERED.name()).contains(entry.getStatus());
         return CompetitionEntryVO.builder()
                 .id(entry.getId())
                 .uuid(entry.getUuid())
                 .shortCode(entry.getShortCode())
+                .name(entry.getName())
+                .breweryCompanyName(brewery == null ? null : brewery.getCompanyName())
+                .breweryContactName(brewery == null ? null : brewery.getContactName())
                 .categoryName(categoryNameById.getOrDefault(entry.getCategoryId(), "-"))
                 .style(entry.getStyle())
+                .description(entry.getDescription())
                 .styleCategoryName(style == null ? null : style.getCategoryName())
                 .styleCode(style == null ? null : style.getStyleCode())
                 .styleDescription(style == null ? null : style.getDescription())
                 .status(entry.getStatus())
+                .paymentStatus(payment == null ? EntryPaymentStatus.UNPAID.name() : payment.getStatus())
+                .paidTime(payment == null ? null : payment.getPaidTime())
+                .deliveryMethod(delivery == null ? null : delivery.getDeliveryMethod())
+                .deliveryStatus(delivery == null ? null : delivery.getDeliveryStatus())
+                .carrier(delivery == null ? null : delivery.getCarrier())
+                .trackingNo(delivery == null ? null : delivery.getTrackingNo())
+                .deliverySubmittedAt(delivery == null ? null : delivery.getSubmittedTime())
                 .stored(Objects.equals(entry.getStoredFlag(), FLAG_TRUE))
                 .advanced(latestResult != null)
+                .canConfirmPayment(canConfirmPayment)
+                .canMarkStored(canMarkStored)
+                .canCancel(canCancel)
                 .sourceTable(latestResult == null || tableById.get(latestResult.getRoundTableId()) == null ? "" : tableById.get(latestResult.getRoundTableId()).getTableName())
                 .sourceResult(latestResult == null ? "" : resolveSlotLabel(latestResult))
                 .build();
+    }
+
+    private Map<Long, Brewery> loadBreweries(Set<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return Map.of();
+        }
+        return breweryMapper.selectBatchIds(ids).stream().collect(Collectors.toMap(Brewery::getId, Function.identity()));
+    }
+
+    private Map<Long, EntryPayment> loadPayments(Set<Long> entryIds) {
+        if (entryIds == null || entryIds.isEmpty()) {
+            return Map.of();
+        }
+        return entryPaymentMapper.selectList(new LambdaQueryWrapper<EntryPayment>()
+                        .in(EntryPayment::getBeerEntryId, entryIds))
+                .stream()
+                .collect(Collectors.toMap(EntryPayment::getBeerEntryId, Function.identity(), (left, right) -> left));
+    }
+
+    private Map<Long, EntryDelivery> loadDeliveries(Set<Long> entryIds) {
+        if (entryIds == null || entryIds.isEmpty()) {
+            return Map.of();
+        }
+        return entryDeliveryMapper.selectList(new LambdaQueryWrapper<EntryDelivery>()
+                        .in(EntryDelivery::getBeerEntryId, entryIds))
+                .stream()
+                .collect(Collectors.toMap(EntryDelivery::getBeerEntryId, Function.identity(), (left, right) -> left));
     }
 
     private Map<String, CompetitionStyleConfig> listStyleSnapshot(Long competitionId) {

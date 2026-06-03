@@ -5,15 +5,14 @@
     </RouterLink>
 
     <section class="site-hero">
-      <div class="hero-copy">
-        <span class="label-chip tone-green">{{ activeCompetition.stage }}</span>
-        <h1>Greater Bay Craft Beer Awards</h1>
-        <p>{{ activeCompetition.description }}</p>
+      <div v-if="activeCompetition" class="hero-copy">
+        <span class="label-chip tone-green">{{ activeCompetition.currentStageLabel }}</span>
+        <h1>{{ activeCompetition.name }}</h1>
+        <p>查看报名窗口、投递组别、基础风格和报名费，确认后提交本厂牌酒款。</p>
         <div class="hero-facts">
-          <span>比赛日期 {{ activeCompetition.date }}</span>
-          <span>报名截止 {{ activeCompetition.registrationDeadline }}</span>
+          <span>比赛日期 {{ formatDate(activeCompetition.competitionDate) }}</span>
+          <span>报名截止 {{ formatDateTime(activeCompetition.registrationDeadline) }}</span>
           <span>报名费 ¥{{ activeCompetition.entryFee }} / 款</span>
-          <span>{{ activeCompetition.city }} · {{ activeCompetition.venue }}</span>
         </div>
         <div class="hero-actions">
           <RouterLink class="primary-action" to="/portal/events">查看开放赛事</RouterLink>
@@ -27,13 +26,18 @@
           </RouterLink>
         </div>
       </div>
+      <div v-else class="hero-copy">
+        <span class="label-chip tone-amber">赛事报名</span>
+        <h1>厂牌参赛入口</h1>
+        <p>当前暂无开放展示赛事，可以稍后再回来查看。</p>
+      </div>
       <aside class="hero-card">
-        <span>{{ activeCompetition.shortName }}</span>
-        <strong>精酿厂牌年度征集</strong>
+        <span>{{ activeCompetition?.code || 'BEER AWARDS' }}</span>
+        <strong>{{ activeCompetition ? '精酿厂牌赛事报名' : '等待赛事开放' }}</strong>
         <dl>
-          <div><dt>主办方</dt><dd>{{ activeCompetition.organizer }}</dd></div>
-          <div><dt>投递组别</dt><dd>{{ activeCompetition.categories.length }} 个组别</dd></div>
-          <div><dt>结果反馈</dt><dd>奖项、评分、桌长评语</dd></div>
+          <div><dt>投递组别</dt><dd>{{ activeCompetition?.categories?.length || 0 }} 个组别</dd></div>
+          <div><dt>基础风格</dt><dd>{{ activeCompetition?.styles?.length || 0 }} 个风格</dd></div>
+          <div><dt>结果反馈</dt><dd>评分、评语、轮次结果</dd></div>
         </dl>
       </aside>
     </section>
@@ -48,15 +52,15 @@
       </div>
       <div class="event-grid">
         <article v-for="competition in openCompetitions" :key="competition.id" class="event-card brewer-card">
-          <span :class="['label-chip', competition.id === activeCompetition.id ? 'tone-green' : 'tone-amber']">
-            {{ competition.id === activeCompetition.id ? '重点赛事' : competition.stage }}
+          <span :class="['label-chip', competition.id === activeCompetition?.id ? 'tone-green' : 'tone-amber']">
+            {{ competition.id === activeCompetition?.id ? '重点赛事' : competition.currentStageLabel }}
           </span>
           <h3>{{ competition.name }}</h3>
-          <p>{{ competition.city }} · {{ competition.venue }}</p>
+          <p>{{ competition.code }} · {{ competition.edition }}</p>
           <dl>
-            <div><dt>报名截止</dt><dd>{{ competition.registrationDeadline }}</dd></div>
+            <div><dt>报名截止</dt><dd>{{ formatDateTime(competition.registrationDeadline) }}</dd></div>
             <div><dt>报名费</dt><dd>¥{{ competition.entryFee }} / 款</dd></div>
-            <div><dt>比赛日期</dt><dd>{{ competition.date }}</dd></div>
+            <div><dt>比赛日期</dt><dd>{{ formatDate(competition.competitionDate) }}</dd></div>
           </dl>
           <div class="card-actions">
             <RouterLink :to="`/portal/events/${competition.id}`">查看赛事</RouterLink>
@@ -69,6 +73,10 @@
             </RouterLink>
           </div>
         </article>
+      </div>
+      <div v-if="!openCompetitions.length" class="empty-state">
+        <strong>暂无开放报名赛事</strong>
+        <p>赛事开放后会在这里显示报名入口。</p>
       </div>
     </section>
 
@@ -124,15 +132,25 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { isLoggedIn } from '@/utils/auth'
-import { activeCompetition, competitions, entries } from './mockData'
+import { fetchPortalEntries, fetchPortalHome } from '@/api/portal'
 import { canSubmitEntry } from './portalViewModels'
 
 const loggedIn = computed(() => isLoggedIn('portal'))
-const openCompetitions = computed(() => competitions.filter((competition) => competition.status === 'REGISTRATION_OPEN'))
-const pendingCount = computed(() => entries.filter((entry) => entry.status === 'PENDING_PAYMENT' || entry.status === 'REGISTERED').length)
+const homeData = ref({ activeCompetition: null, openCompetitions: [], competitions: [] })
+const entries = ref([])
+const activeCompetition = computed(() => homeData.value.activeCompetition)
+const openCompetitions = computed(() => homeData.value.openCompetitions || [])
+const pendingCount = computed(() => entries.value.filter((entry) => entry.status === 'PENDING_PAYMENT' || entry.status === 'REGISTERED').length)
+
+onMounted(async () => {
+  homeData.value = await fetchPortalHome()
+  if (loggedIn.value) {
+    entries.value = await fetchPortalEntries()
+  }
+})
 
 const reasons = [
   { title: '奖项背书', text: '通过组别奖项和结果发布，为年度代表作积累可传播的赛事证明。' },
@@ -142,19 +160,27 @@ const reasons = [
 
 const flowSteps = [
   { index: '01', title: '选择赛事', text: '查看日期、费用、投递组别和送样要求，确认适合提交的酒款。' },
-  { index: '02', title: '提交酒款', text: '填写酒名、组别、基础风格、ABV、简介和赛事配置的额外字段。' },
+  { index: '02', title: '提交酒款', text: '填写酒名、组别、基础风格、ABV 和赛事配置的额外字段。' },
   { index: '03', title: '付款确认', text: '按赛事说明完成线下付款，等待主办方确认报名状态。' },
   { index: '04', title: '下载标签', text: '付款确认后下载现场标签，标签包含参赛编号和现场短编号。' },
   { index: '05', title: '送样入库', text: '按要求寄送或现场交付酒样，主办方收样后更新入库状态。' },
-  { index: '06', title: '查看结果', text: '结果发布后查看奖项、评分、桌长评语和奖状相关信息。' },
+  { index: '06', title: '查看结果', text: '结果发布后查看评分、桌长评语和轮次结果。' },
 ]
 
 const faqs = [
   { question: '报名截止后还能提交酒款吗？', answer: '报名截止后不再开放提交入口，如需调整请联系主办方确认。' },
   { question: '付款后多久可以下载标签？', answer: '本版本采用线下付款确认，主办方确认后酒款状态变为报名成功，即可下载标签。' },
-  { question: '酒样需要寄几瓶？', answer: '不同赛事要求可能不同，请以单场赛事详情页的送样要求为准。' },
-  { question: '结果发布后能看到什么？', answer: '可查看奖项、评分明细、桌长综合评语；获奖酒款可处理奖状和收件地址。' },
+  { question: '酒样需要寄几瓶？', answer: '不同赛事要求可能不同，请以主办方发布的单场通知为准。' },
+  { question: '结果发布后能看到什么？', answer: '可查看评分明细、桌长综合评语和轮次结果。' },
 ]
+
+function formatDate(value) {
+  return value || '-'
+}
+
+function formatDateTime(value) {
+  return value ? String(value).replace('T', ' ').slice(0, 16) : '-'
+}
 </script>
 
 <style scoped>

@@ -7,77 +7,94 @@
         <p>结果发布后，厂商可查看奖项、桌长综合评语和评审原始反馈。</p>
       </div>
       <el-select v-model="selectedId">
-        <el-option v-for="entry in entries" :key="entry.id" :label="entry.name" :value="entry.id" />
+        <el-option v-for="entry in results" :key="entry.entryId" :label="entry.entryName" :value="entry.entryId" />
       </el-select>
     </section>
 
-    <template v-if="selectedEntry.status === 'RESULT_PUBLISHED'">
+    <template v-if="selectedEntry?.published">
       <section class="published-grid">
         <article class="award-card">
-          <span>{{ activeCompetition.shortName }}</span>
-          <h3>{{ selectedEntry.award }}</h3>
-          <strong>{{ selectedEntry.name }}</strong>
-          <p>{{ selectedEntry.categoryName }} · 共 {{ selectedEntry.groupTotal }} 款参赛作品</p>
+          <span>{{ selectedEntry.competitionName }}</span>
+          <h3>{{ selectedEntry.roundResult?.slotLabel || selectedEntry.roundResult?.resultType || '结果已发布' }}</h3>
+          <strong>{{ selectedEntry.entryName }}</strong>
+          <p>{{ selectedEntry.categoryName }} · {{ selectedEntry.style }}</p>
           <div class="score-medallion">
             <small>共识分</small>
-            <b>{{ selectedEntry.finalScore }}</b>
+            <b>{{ finalScore || '-' }}</b>
           </div>
         </article>
 
         <article class="captain-card brewer-card">
           <h3>桌长综合评语</h3>
-          <p>{{ selectedEntry.captainComment }}</p>
-          <div class="result-actions">
-            <el-button type="primary">下载奖状</el-button>
-            <el-button>填写收件地址</el-button>
-          </div>
+          <p>{{ captainScore?.comments || '暂无桌长评语' }}</p>
         </article>
       </section>
 
       <section class="feedback-card brewer-card">
         <h3 class="portal-section-title">评审反馈明细</h3>
         <div class="feedback-list">
-          <article v-for="comment in selectedEntry.comments" :key="comment.judge" class="feedback-row">
+          <article v-for="score in resultDetail.scores" :key="score.judgeLabel" class="feedback-row">
             <div>
-              <strong>{{ comment.judge }}</strong>
-              <p>{{ comment.text }}</p>
+              <strong>{{ score.judgeLabel }}</strong>
+              <p>{{ score.comments || '暂无评语' }}</p>
             </div>
             <div class="score-grid">
-              <span><small>香气</small><b>{{ comment.aroma }}</b></span>
-              <span><small>外观</small><b>{{ comment.appearance }}</b></span>
-              <span><small>味道</small><b>{{ comment.flavor }}</b></span>
-              <span><small>口感</small><b>{{ comment.mouthfeel }}</b></span>
-              <span><small>总分</small><b>{{ comment.total }}</b></span>
+              <span v-for="dimension in score.dimensions" :key="dimension.key || dimension.label">
+                <small>{{ dimension.label || dimension.key }}</small>
+                <b>{{ dimension.score ?? '-' }}</b>
+              </span>
+              <span><small>总分</small><b>{{ score.totalScore }}</b></span>
             </div>
           </article>
         </div>
       </section>
     </template>
 
-    <section v-else class="locked-card brewer-card">
+    <section v-else-if="selectedEntry" class="locked-card brewer-card">
       <span :class="['label-chip', `tone-${entryStatusMeta[selectedEntry.status].tone}`]">
         {{ entryStatusMeta[selectedEntry.status].label }}
       </span>
-      <h3>{{ selectedEntry.name }}</h3>
+      <h3>{{ selectedEntry.entryName }}</h3>
       <p>该酒款结果暂未发布。比赛结束并由主办方确认结果后，这里会展示评分反馈、桌长评语和奖项信息。</p>
       <div class="locked-progress">
         <span class="done">提交</span>
-        <span :class="{ done: selectedEntry.paymentStatus === 'PAID' }">付款确认</span>
-        <span :class="{ done: selectedEntry.storedAt }">入库</span>
+        <span :class="{ done: selectedEntry.status !== 'PENDING_PAYMENT' }">付款确认</span>
+        <span :class="{ done: selectedEntry.status === 'STORED' || selectedEntry.status === 'RESULT_PUBLISHED' }">入库</span>
         <span>评审</span>
         <span>结果发布</span>
       </div>
+    </section>
+    <section v-else class="locked-card brewer-card">
+      <h3>暂无参赛结果</h3>
+      <p>提交报名后，比赛结果会在发布后显示。</p>
     </section>
   </div>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
-import { activeCompetition, entries } from './mockData'
+import { computed, onMounted, ref, watch } from 'vue'
+import { fetchPortalResultDetail, fetchPortalResults } from '@/api/portal'
 import { entryStatusMeta } from './portalViewModels'
 
-const selectedId = ref(entries.find((entry) => entry.status === 'RESULT_PUBLISHED')?.id || entries[0].id)
-const selectedEntry = computed(() => entries.find((entry) => entry.id === selectedId.value) || entries[0])
+const results = ref([])
+const selectedId = ref(null)
+const resultDetail = ref({ summary: null, scores: [], roundResults: [] })
+const selectedEntry = computed(() => resultDetail.value.summary || results.value.find((entry) => entry.entryId === selectedId.value))
+const captainScore = computed(() => resultDetail.value.scores.find((score) => score.finalScore) || null)
+const finalScore = computed(() => captainScore.value?.consensusScore || captainScore.value?.totalScore || null)
+
+onMounted(async () => {
+  results.value = await fetchPortalResults()
+  selectedId.value = results.value.find((entry) => entry.published)?.entryId || results.value[0]?.entryId || null
+})
+
+watch(selectedId, async (id) => {
+  if (!id) {
+    resultDetail.value = { summary: null, scores: [], roundResults: [] }
+    return
+  }
+  resultDetail.value = await fetchPortalResultDetail(id)
+})
 </script>
 
 <style scoped>

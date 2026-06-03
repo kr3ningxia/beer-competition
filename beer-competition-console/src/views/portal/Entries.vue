@@ -31,12 +31,12 @@
         <p>{{ entry.categoryName }} · {{ entry.style }}</p>
         <div class="meta-grid">
           <span>
-            <small>IBU</small>
-            <strong>{{ entry.ibu }}</strong>
+            <small>ABV</small>
+            <strong>{{ entry.abv }}%</strong>
           </span>
           <span>
             <small>报名费</small>
-            <strong>¥{{ entry.fee }}</strong>
+            <strong>¥{{ entry.entryFee }}</strong>
           </span>
           <span>
             <small>支付</small>
@@ -77,11 +77,11 @@
           <dl>
             <div><dt>投递组别</dt><dd>{{ selectedEntry.categoryName }}</dd></div>
             <div><dt>基础风格</dt><dd>{{ selectedEntry.style }}</dd></div>
-            <div><dt>ABV / IBU</dt><dd>{{ selectedEntry.abv }} / {{ selectedEntry.ibu }}</dd></div>
+            <div><dt>ABV</dt><dd>{{ selectedEntry.abv }}%</dd></div>
             <div><dt>现场短编号</dt><dd>{{ selectedEntry.shortCode }}</dd></div>
             <div><dt>提交时间</dt><dd>{{ selectedEntry.submittedAt }}</dd></div>
-            <div><dt>付款时间</dt><dd>{{ selectedEntry.paidAt || '-' }}</dd></div>
-            <div><dt>入库时间</dt><dd>{{ selectedEntry.storedAt || '-' }}</dd></div>
+            <div><dt>付款状态</dt><dd>{{ selectedEntry.paymentStatus === 'PAID' ? '已确认' : '待确认' }}</dd></div>
+            <div><dt>入库状态</dt><dd>{{ isStored(selectedEntry) ? '已入库' : '待入库' }}</dd></div>
           </dl>
         </section>
 
@@ -90,9 +90,8 @@
           <div class="anonymous-preview">
             <strong>参赛编号 {{ selectedEntry.uuid }}</strong>
             <p>{{ selectedEntry.categoryName }} · {{ selectedEntry.style }} · {{ selectedEntry.abv }}</p>
-            <p>{{ selectedEntry.description }}</p>
             <ul>
-              <li v-for="field in selectedEntry.extraFields" :key="field.label">
+              <li v-for="field in selectedEntry.extraFields || []" :key="field.label">
                 <span>{{ field.label }}</span>
                 <b>{{ field.value }}</b>
               </li>
@@ -128,34 +127,35 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { competitions, entries } from './mockData'
+import { fetchPortalEntries, fetchPortalEntryDetail } from '@/api/portal'
 import { entryPrimaryAction, entryStatusMeta } from './portalViewModels'
 
 const keyword = ref('')
 const statusFilter = ref('')
 const drawerVisible = ref(false)
 const selectedEntry = ref(null)
+const entries = ref([])
 
 const statusOptions = Object.entries(entryStatusMeta).map(([value, meta]) => ({ value, label: meta.label }))
 
 const filteredEntries = computed(() => {
   const word = keyword.value.trim().toLowerCase()
-  return entries.filter((entry) => {
+  return entries.value.filter((entry) => {
     const hitStatus = !statusFilter.value || entry.status === statusFilter.value
     const hitWord = !word || `${entry.name} ${entry.uuid} ${entry.shortCode}`.toLowerCase().includes(word)
     return hitStatus && hitWord
   })
 })
 
-function selectEntry(entry) {
-  selectedEntry.value = entry
+async function selectEntry(entry) {
+  selectedEntry.value = await fetchPortalEntryDetail(entry.id)
   drawerVisible.value = true
 }
 
 function competitionName(competitionId) {
-  return competitions.find((competition) => competition.id === competitionId)?.name || '未关联赛事'
+  return entries.value.find((entry) => entry.competitionId === competitionId)?.competitionName || '未关联赛事'
 }
 
 function primaryAction(entry) {
@@ -165,12 +165,20 @@ function primaryAction(entry) {
 function timeline(entry) {
   return [
     { label: '提交资料', time: entry.submittedAt, done: true },
-    { label: '付款确认', time: entry.paidAt, hint: '等待支付报名费', done: Boolean(entry.paidAt) },
-            { label: '标签可下载', hint: entry.paidAt ? '已生成现场标签' : '付款确认后开放下载', done: Boolean(entry.paidAt) },
-    { label: '酒样入库', time: entry.storedAt, hint: '等待主办方确认收样', done: Boolean(entry.storedAt) },
+    { label: '付款确认', hint: entry.paymentStatus === 'PAID' ? '已确认' : '等待主办方确认付款', done: entry.paymentStatus === 'PAID' },
+    { label: '标签可下载', hint: entry.canDownloadLabel ? '已生成现场标签' : '付款确认后开放下载', done: entry.canDownloadLabel },
+    { label: '酒样入库', hint: isStored(entry) ? '已入库' : '等待主办方确认收样', done: isStored(entry) },
     { label: '结果发布', hint: entry.status === 'RESULT_PUBLISHED' ? '评分反馈可查看' : '等待比赛结束', done: entry.status === 'RESULT_PUBLISHED' },
   ]
 }
+
+function isStored(entry) {
+  return entry?.stored || entry?.status === 'STORED' || entry?.status === 'RESULT_PUBLISHED'
+}
+
+onMounted(async () => {
+  entries.value = await fetchPortalEntries()
+})
 </script>
 
 <style scoped>

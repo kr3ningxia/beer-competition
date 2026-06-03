@@ -30,7 +30,7 @@
             to="/portal/profile"
             aria-label="进入厂牌资料"
           >
-            <span class="avatar">SM</span>
+            <span class="avatar">{{ accountInitial }}</span>
             <span>{{ accountName }}</span>
           </RouterLink>
           <el-button class="logout-button" text @click="logout">退出</el-button>
@@ -46,7 +46,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
   CircleCheck,
@@ -54,13 +54,15 @@ import {
   Document,
   Tickets,
 } from '@element-plus/icons-vue'
-import { clearSession, getDisplayName, isLoggedIn } from '@/utils/auth'
+import { getPortalMe } from '@/api/auth'
+import { clearSession, getDisplayName, isLoggedIn, setDisplayName } from '@/utils/auth'
 
 const router = useRouter()
 const route = useRoute()
-const displayName = getDisplayName('portal')
+const displayName = ref(getDisplayName('portal'))
 const loggedIn = computed(() => isLoggedIn('portal'))
-const accountName = computed(() => displayName || '完善厂牌资料')
+const accountName = computed(() => isQuestionPlaceholder(displayName.value) ? '完善厂牌资料' : displayName.value || '完善厂牌资料')
+const accountInitial = computed(() => getAccountInitial(accountName.value))
 
 const navItems = [
   { path: '/portal/home', label: '赛事首页', icon: Tickets, public: true },
@@ -81,6 +83,60 @@ function logout() {
   clearSession('portal')
   router.push('/portal/home')
 }
+
+function syncDisplayNameFromStorage() {
+  displayName.value = getDisplayName('portal')
+}
+
+async function refreshCurrentUser() {
+  if (!loggedIn.value) {
+    return
+  }
+  try {
+    const me = await getPortalMe()
+    if (me?.displayName) {
+      setDisplayName('portal', me.displayName)
+    }
+  } catch {
+    // Request interceptor handles expired sessions.
+  }
+}
+
+function handleSessionUpdate(event) {
+  if (!event.detail?.scope || event.detail.scope === 'portal') {
+    syncDisplayNameFromStorage()
+  }
+}
+
+function handleStorageUpdate(event) {
+  if (event.key === 'portal_display_name' || event.key === 'portal_token') {
+    syncDisplayNameFromStorage()
+  }
+}
+
+function isQuestionPlaceholder(value) {
+  return /^\?{2,}$/.test((value || '').trim())
+}
+
+function getAccountInitial(value) {
+  const normalized = (value || '').trim()
+  if (!normalized || isQuestionPlaceholder(normalized) || normalized === '完善厂牌资料') {
+    return '厂'
+  }
+  const ascii = normalized.match(/[A-Za-z0-9]/)
+  return (ascii ? ascii[0] : Array.from(normalized)[0]).toUpperCase()
+}
+
+onMounted(() => {
+  window.addEventListener('beer-competition-session-updated', handleSessionUpdate)
+  window.addEventListener('storage', handleStorageUpdate)
+  refreshCurrentUser()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('beer-competition-session-updated', handleSessionUpdate)
+  window.removeEventListener('storage', handleStorageUpdate)
+})
 </script>
 
 <style scoped>

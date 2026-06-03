@@ -93,6 +93,59 @@ CREATE TABLE `beer_entry`  (
 INSERT INTO `beer_entry` VALUES (1, 'BC-2026-IPA-0001', 'A19K', 1, 1, 1, '????IPA', 'Double IPA', 7.5, '????????????????????', '{\"specialIngredients\": \"????\"}', 'REGISTERED', 1, '2026-06-02 21:39:35', '2026-06-02 21:39:35');
 
 -- ----------------------------
+-- Table structure for entry_payment
+-- ----------------------------
+DROP TABLE IF EXISTS `entry_payment`;
+CREATE TABLE `entry_payment`  (
+  `id` bigint(0) NOT NULL AUTO_INCREMENT,
+  `beer_entry_id` bigint(0) NOT NULL,
+  `amount` decimal(10, 2) NOT NULL,
+  `status` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+  `pay_method` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+  `out_trade_no` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL,
+  `wechat_transaction_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL,
+  `paid_time` datetime(0) NULL DEFAULT NULL,
+  `confirmed_by_admin_id` bigint(0) NULL DEFAULT NULL,
+  `confirm_remark` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL,
+  `create_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0),
+  `update_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) ON UPDATE CURRENT_TIMESTAMP(0),
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE INDEX `uk_entry_payment_entry`(`beer_entry_id`) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = 'entry payment' ROW_FORMAT = Dynamic;
+
+-- ----------------------------
+-- Records of entry_payment
+-- ----------------------------
+INSERT INTO `entry_payment` VALUES (1, 1, 299.00, 'PAID', 'MANUAL', NULL, NULL, '2026-06-02 21:45:00', 1, 'manual confirm', '2026-06-02 21:39:35', '2026-06-02 21:45:00');
+
+-- ----------------------------
+-- Table structure for entry_delivery
+-- ----------------------------
+DROP TABLE IF EXISTS `entry_delivery`;
+CREATE TABLE `entry_delivery`  (
+  `id` bigint(0) NOT NULL AUTO_INCREMENT,
+  `beer_entry_id` bigint(0) NOT NULL,
+  `delivery_method` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL,
+  `carrier` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL,
+  `tracking_no` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL,
+  `delivery_note` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL,
+  `delivery_status` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+  `submitted_time` datetime(0) NULL DEFAULT NULL,
+  `received_time` datetime(0) NULL DEFAULT NULL,
+  `received_by_admin_id` bigint(0) NULL DEFAULT NULL,
+  `receive_remark` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL,
+  `create_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0),
+  `update_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) ON UPDATE CURRENT_TIMESTAMP(0),
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE INDEX `uk_entry_delivery_entry`(`beer_entry_id`) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = 'entry delivery' ROW_FORMAT = Dynamic;
+
+-- ----------------------------
+-- Records of entry_delivery
+-- ----------------------------
+INSERT INTO `entry_delivery` VALUES (1, 1, 'EXPRESS', 'SF', 'SF1234567890', 'sample delivered', 'RECEIVED', '2026-06-03 09:00:00', '2026-06-03 10:00:00', 1, 'received', '2026-06-02 21:39:35', '2026-06-03 10:00:00');
+
+-- ----------------------------
 -- Table structure for beer_entry_extra_field
 -- ----------------------------
 DROP TABLE IF EXISTS `beer_entry_extra_field`;

@@ -127,3 +127,15 @@ export function lockRound(competitionId, roundId) {
 export function publishCompetitionResults(competitionId) {
   return request.post(`/api/admin/competitions/${competitionId}/results/publish`, {}, { authScope: 'admin' })
 }
+
+export function confirmEntryPayment(entryId) {
+  return request.post(`/api/admin/entries/${entryId}/confirm-payment`, {}, { authScope: 'admin' })
+}
+
+export function markEntryStored(entryId) {
+  return request.post(`/api/admin/entries/${entryId}/mark-stored`, {}, { authScope: 'admin' })
+}
+
+export function cancelEntry(entryId) {
+  return request.post(`/api/admin/entries/${entryId}/cancel`, {}, { authScope: 'admin' })
+}

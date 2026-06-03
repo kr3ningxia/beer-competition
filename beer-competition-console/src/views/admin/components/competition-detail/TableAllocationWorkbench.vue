@@ -10,7 +10,7 @@
           <Search />
           <input v-model="judgeKeywordModel" placeholder="搜索姓名、手机号、资质" />
         </label>
-        <div class="filter-row">
+        <div class="filter-row primary-filter-row">
           <button
             v-for="filter in roleFilters"
             :key="filter.value"
@@ -18,7 +18,8 @@
             type="button"
             @click="$emit('update:judgeRoleFilter', filter.value)"
           >
-            {{ filter.label }}
+            <span>{{ filter.label }}</span>
+            <b>{{ judgeFilterCounts[filter.value] || 0 }}</b>
           </button>
         </div>
         <div class="resource-list">
@@ -31,12 +32,14 @@
             @dragend="$emit('clearDrag')"
           >
             <span class="avatar">{{ getJudgeInitial(judge.name) }}</span>
-            <div>
+            <div class="resource-body">
               <strong>{{ judge.name || '未填写姓名' }}</strong>
               <small>{{ judge.qualification || '未填写资质' }}</small>
-              <em>{{ isAssigned(judge.publicId) ? '已安排' : '未安排' }}</em>
+              <em v-if="getJudgeAssignmentSummary(judge.publicId)">{{ getJudgeAssignmentSummary(judge.publicId) }}</em>
             </div>
-            <button type="button" :disabled="!editableJudges || !isJudgeActive(judge)" @click="$emit('addJudgeToTarget', judge)">加入</button>
+            <button type="button" :disabled="!editableJudges || !isJudgeActive(judge)" @click="$emit('addJudgeToTarget', judge)">
+              {{ isAssigned(judge.publicId) ? '调整' : '加入' }}
+            </button>
           </article>
         </div>
       </aside>
@@ -408,6 +411,7 @@ const props = defineProps({
   judgeTableForm: { type: Array, required: true },
   roleOptions: { type: Array, required: true },
   roleFilters: { type: Array, required: true },
+  judgeFilterCounts: { type: Object, required: true },
   judgeKeyword: { type: String, default: '' },
   judgeRoleFilter: { type: String, default: 'ALL' },
   selectedTableLocalId: { type: [String, Number], default: null },
@@ -427,6 +431,7 @@ const props = defineProps({
   canPublish: Boolean,
   getJudge: { type: Function, required: true },
   getJudgeInitial: { type: Function, required: true },
+  getJudgeAssignmentSummary: { type: Function, required: true },
   isAssigned: { type: Function, required: true },
   isJudgeActive: { type: Function, required: true },
   getRoundEntryAssignment: { type: Function, required: true },
@@ -774,6 +779,27 @@ dt,
   font-size: 12px;
 }
 
+.primary-filter-row {
+  margin-bottom: 2px;
+}
+
+.filter-row button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.filter-row button b {
+  min-width: 18px;
+  color: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
 .resource-card {
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr) auto;
@@ -790,8 +816,24 @@ dt,
 }
 
 .resource-card.assigned {
-  border-color: rgba(111, 207, 122, 0.22);
-  background: rgba(111, 207, 122, 0.055);
+  border-color: rgba(219, 232, 237, 0.1);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.resource-card.assigned .avatar,
+.resource-card.assigned strong {
+  opacity: 0.88;
+}
+
+.resource-body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.resource-body em {
+  font-size: 12px;
+  color: #6fcf7a;
 }
 
 .resource-card.selected {
