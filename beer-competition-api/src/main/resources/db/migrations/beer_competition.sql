@@ -518,6 +518,8 @@ CREATE TABLE `round_table`  (
   `round_id` bigint(0) NOT NULL,
   `table_name` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
   `captain_judge_id` bigint(0) NULL DEFAULT NULL,
+  `category_id` bigint(0) NULL DEFAULT NULL,
+  `category_mode` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL DEFAULT 'EMPTY',
   `target_count` int(0) NOT NULL DEFAULT 1,
   `target_mode` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
   `status` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
@@ -527,7 +529,8 @@ CREATE TABLE `round_table`  (
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_round_table_name`(`round_id`, `table_name`) USING BTREE,
   INDEX `idx_round_table_competition`(`competition_id`) USING BTREE,
-  INDEX `idx_round_table_captain`(`captain_judge_id`) USING BTREE
+  INDEX `idx_round_table_captain`(`captain_judge_id`) USING BTREE,
+  INDEX `idx_round_table_category`(`category_id`) USING BTREE
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '?????' ROW_FORMAT = Dynamic;
 
 -- ----------------------------

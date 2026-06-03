@@ -14,6 +14,9 @@ public class RoundTableVO {
     private String captainPublicId;
     private Integer professionalCount;
     private Integer crossCount;
+    private Long categoryId;
+    private String categoryMode;
+    private String categoryName;
     private Integer targetCount;
     private String targetMode;
     private String status;

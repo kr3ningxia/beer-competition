@@ -15,6 +15,7 @@ public class CompetitionEntryVO {
     private String name;
     private String breweryCompanyName;
     private String breweryContactName;
+    private Long categoryId;
     private String categoryName;
     private String style;
     private String description;

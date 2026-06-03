@@ -18,6 +18,9 @@ public class RoundTableAllocationRequest {
     @NotBlank(message = "桌长不能为空")
     private String captainPublicId;
 
+    private Long categoryId;
+    private String categoryMode;
+
     @NotNull(message = "目标数量不能为空")
     @Min(value = 1, message = "目标数量必须大于 0")
     private Integer targetCount;

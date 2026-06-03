@@ -5,19 +5,6 @@
       <h1>评审登录</h1>
       <p class="login-note">已提交资料的评审可用手机号验证码进入。</p>
 
-      <div class="quick-roles" aria-label="选择体验身份">
-        <button
-          v-for="item in demoAccounts"
-          :key="item.phone"
-          type="button"
-          :class="['role-chip', { active: form.phone === item.phone }]"
-          @click="pickDemo(item)"
-        >
-          <strong>{{ item.role }}</strong>
-          <span>{{ item.name }}</span>
-        </button>
-      </div>
-
       <label class="field">
         手机号
         <input v-model="form.phone" class="input" inputmode="tel" placeholder="请输入手机号" />
@@ -47,20 +34,8 @@ import { setSession } from '@/utils/auth'
 const router = useRouter()
 const message = ref('')
 
-const demoAccounts = [
-  { role: '专业评委', name: '林晓峰', phone: '13800000011' },
-  { role: '大众评委', name: '陈可', phone: '13800000012' },
-  { role: '桌长', name: '周明', phone: '13800000013' },
-]
-
-const form = reactive({ phone: demoAccounts[0].phone, code: '123456' })
+const form = reactive({ phone: '', code: '' })
 const canSubmit = computed(() => form.phone.length >= 11 && form.code.length >= 4)
-
-function pickDemo(item) {
-  form.phone = item.phone
-  form.code = '123456'
-  message.value = `已切换为${item.role}账号`
-}
 
 async function send() {
   await sendSmsCode({ phone: form.phone, bizType: 'JUDGE_LOGIN' })
@@ -118,43 +93,6 @@ h1 {
   margin: 8px 0 18px;
   color: #667085;
   line-height: 1.5;
-}
-
-.quick-roles {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.role-chip {
-  min-height: 66px;
-  border: 1px solid #d0d5dd;
-  border-radius: 8px;
-  padding: 9px 6px;
-  color: #344054;
-  background: #f7f8f6;
-  text-align: left;
-}
-
-.role-chip strong,
-.role-chip span {
-  display: block;
-}
-
-.role-chip strong {
-  font-size: 14px;
-}
-
-.role-chip span {
-  margin-top: 4px;
-  color: #667085;
-  font-size: 12px;
-}
-
-.role-chip.active {
-  border-color: #a75517;
-  color: #8a3f10;
-  background: #fff3e8;
 }
 
 .code-row {

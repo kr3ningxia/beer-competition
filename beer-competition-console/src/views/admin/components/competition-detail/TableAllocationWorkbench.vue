@@ -172,7 +172,7 @@
         </div>
         <label class="search-box">
           <Search />
-          <input v-model="roundKeywordModel" placeholder="搜索编号、短编号、风格" />
+          <input v-model="roundKeywordModel" placeholder="搜索酒名、编号、短编号、风格" />
         </label>
         <div class="filter-row">
           <button
@@ -187,9 +187,6 @@
         </div>
         <div v-if="currentRound?.type === 'SCORE'" class="bulk-row">
           <button type="button" :disabled="!selectedEntryUuids.length" @click="$emit('addSelectedToTable')">加入选中桌</button>
-          <button type="button" @click="$emit('assignEvenly')">平均分配</button>
-          <button type="button" @click="$emit('assignByCategory')">按组别分配</button>
-          <button type="button" @click="$emit('clearRoundAssignments')">清空</button>
         </div>
         <div class="resource-list">
           <article
@@ -202,9 +199,11 @@
           >
             <input type="checkbox" :checked="selectedEntryUuids.includes(entry.uuid)" @change="$emit('toggleEntrySelection', entry.uuid)" />
             <div>
-              <strong>{{ entry.uuid }}</strong>
-              <small>{{ entry.shortCode }} · {{ entry.categoryName }} · {{ entry.style }}</small>
-              <em>{{ getRoundEntryAssignment(entry.uuid) || '未分配' }}</em>
+              <strong>{{ formatEntryName(entry) }}</strong>
+              <span class="entry-meta-line">
+                <small>{{ entry.shortCode }} · {{ entry.categoryName }} · {{ entry.style }}</small>
+                <em :class="{ pending: !getRoundEntryAssignment(entry.uuid) }">{{ getRoundEntryAssignment(entry.uuid) || '未分配' }}</em>
+              </span>
             </div>
             <button type="button" :disabled="!selectedRoundTableId" @click="$emit('addEntryToSelectedTable', entry.uuid)">加入</button>
           </article>
@@ -220,17 +219,34 @@
           @dragover.prevent
           @drop.prevent="$emit('dropEntryOnRoundTable', table.id)"
         >
-          <header>
-            <div>
-              <span>{{ currentRound?.type === 'SCORE' ? '评分桌' : '排序桌' }}</span>
+          <header class="entry-desk-header">
+            <div class="entry-desk-title">
               <h3>{{ table.name }}</h3>
+              <span>{{ table.entryUuids.length }} 款</span>
+              <span>桌长 {{ getJudge(table.captainPublicId)?.name || '未指定' }}</span>
             </div>
-            <em>{{ table.entryUuids.length }} 款</em>
+            <div class="desk-header-actions">
+              <button
+                v-if="currentRound?.type === 'SCORE'"
+                class="desk-auto-action"
+                type="button"
+                @click.stop="$emit('openEntryAutoAssign', table.id)"
+              >
+                自动分配
+              </button>
+            </div>
           </header>
-          <div class="desk-meta">
-            <span>桌长 <strong>{{ getJudge(table.captainPublicId)?.name || '未指定' }}</strong></span>
-            <label class="inline-target" @click.stop>
-              <span>{{ currentRound?.type === 'SCORE' ? '晋级' : '排序目标' }}</span>
+          <div class="desk-config-row">
+            <label v-if="currentRound?.type === 'SCORE'" class="inline-scope compact-scope" @click.stop>
+              <span>范围</span>
+              <select :value="getTableScopeValue(table)" disabled>
+                <option v-for="option in tableScopeOptions" :key="option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
+            </label>
+            <label class="inline-target compact-target" @click.stop>
+              <span>{{ currentRound?.type === 'SCORE' ? '晋级' : '排序' }}</span>
               <input
                 :value="table.targetCount"
                 min="1"
@@ -241,7 +257,7 @@
           </div>
           <div class="entry-list">
             <article v-for="uuid in table.entryUuids" :key="uuid">
-              <span>{{ uuid }}</span>
+              <span>{{ formatEntryBrief(uuid) }}</span>
               <button type="button" @click.stop="$emit('removeEntryFromRoundTable', table.id, uuid)">移除</button>
             </article>
             <p v-if="!table.entryUuids.length">从左侧加入酒款。</p>
@@ -426,7 +442,6 @@ const props = defineProps({
   roundCategoryFilter: { type: String, default: '全部' },
   roundKeyword: { type: String, default: '' },
   selectedEntryUuids: { type: Array, default: () => [] },
-  captainCandidates: { type: Array, required: true },
   roundValidationIssues: { type: Array, required: true },
   canPublish: Boolean,
   getJudge: { type: Function, required: true },
@@ -460,9 +475,7 @@ const emit = defineEmits([
   'addSelectedToTable',
   'addEntryToSelectedTable',
   'startEntryDrag',
-  'assignEvenly',
-  'assignByCategory',
-  'clearRoundAssignments',
+  'openEntryAutoAssign',
   'selectRoundTable',
   'dropEntryOnRoundTable',
   'removeEntryFromRoundTable',
@@ -482,6 +495,22 @@ const roundKeywordModel = computed({
 })
 
 const firstRoundExists = computed(() => props.rounds.some((round) => round.roundNo === 1))
+const tableScopeOptions = computed(() => {
+  const categories = new Map()
+  props.currentPoolEntries.forEach((entry) => {
+    if (entry.categoryId == null || !entry.categoryName) return
+    categories.set(entry.categoryId, entry.categoryName)
+  })
+  props.currentRoundTables.forEach((table) => {
+    if (table.categoryId == null || !table.categoryName) return
+    categories.set(table.categoryId, table.categoryName)
+  })
+  return [
+    { value: 'EMPTY', label: '空选' },
+    { value: 'MIXED', label: '混合' },
+    ...[...categories.entries()].map(([id, name]) => ({ value: `CATEGORY:${id}`, label: name })),
+  ]
+})
 
 const overviewMetrics = computed(() => {
   const assignedEntries = new Set(props.currentRoundTables.flatMap((table) => table.entryUuids)).size
@@ -499,6 +528,23 @@ const overviewMetrics = computed(() => {
 
 function getEntry(uuid) {
   return props.currentPoolEntries.find((entry) => entry.uuid === uuid)
+}
+
+function formatEntryName(entry) {
+  return entry?.name || entry?.uuid || '-'
+}
+
+function formatEntryBrief(uuid) {
+  const entry = getEntry(uuid)
+  const name = formatEntryName(entry)
+  const shortCode = entry?.shortCode
+  return shortCode ? `${name} ·${shortCode}` : name
+}
+
+function getTableScopeValue(table) {
+  if (table?.categoryMode === 'MIXED') return 'MIXED'
+  if (table?.categoryId != null) return `CATEGORY:${table.categoryId}`
+  return 'EMPTY'
 }
 
 function getJudgeTable(roundTable) {
@@ -718,7 +764,8 @@ button:disabled {
 .role-lane header,
 .resource-card,
 .mini-card,
-.check-panel p {
+.check-panel p,
+.desk-header-actions {
   display: flex;
   align-items: center;
 }
@@ -728,6 +775,11 @@ button:disabled {
 .role-lane header {
   justify-content: space-between;
   gap: 10px;
+}
+
+.desk-header-actions {
+  flex: 0 0 auto;
+  gap: 8px;
 }
 
 .panel-head span,
@@ -804,7 +856,7 @@ dt,
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr) auto;
   gap: 9px;
-  padding: 9px;
+  padding: 8px;
   border: 1px solid rgba(219, 232, 237, 0.1);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.026);
@@ -813,6 +865,7 @@ dt,
 .resource-card.entry {
   grid-template-columns: 18px minmax(0, 1fr) auto;
   align-items: center;
+  min-height: 66px;
 }
 
 .resource-card.assigned {
@@ -821,7 +874,8 @@ dt,
 }
 
 .resource-card.assigned .avatar,
-.resource-card.assigned strong {
+.resource-card.assigned strong,
+.resource-card.assigned small {
   opacity: 0.88;
 }
 
@@ -866,6 +920,37 @@ dt,
   display: grid;
   gap: 3px;
   min-width: 0;
+}
+
+.entry-meta-line {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  min-width: 0;
+}
+
+.entry-meta-line small {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.entry-meta-line em {
+  flex: 0 0 auto;
+  max-width: 86px;
+  padding: 2px 6px;
+  color: #6fcf7a;
+  border: 1px solid rgba(111, 207, 122, 0.18);
+  border-radius: 999px;
+  background: rgba(111, 207, 122, 0.06);
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.2;
+}
+
+.entry-meta-line em.pending {
+  color: #8da1aa;
+  border-color: rgba(219, 232, 237, 0.1);
+  background: rgba(255, 255, 255, 0.026);
 }
 
 .resource-card strong,
@@ -1067,6 +1152,8 @@ p {
 }
 
 .desk-meta span,
+.desk-category-line,
+.inline-scope,
 .inline-target,
 .entry-list article,
 .overview-card dl div {
@@ -1076,6 +1163,44 @@ p {
   background: rgba(255, 255, 255, 0.026);
 }
 
+.entry-desk-header {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.entry-desk-title {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: center;
+  min-width: 0;
+}
+
+.entry-desk-title h3 {
+  flex: 0 0 auto;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.entry-desk-title > span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  color: #a9bac2;
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.desk-config-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 220px) minmax(94px, 120px);
+  gap: 8px;
+  align-items: center;
+}
+
 .inline-target {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 58px;
@@ -1083,17 +1208,62 @@ p {
   align-items: center;
 }
 
-.inline-target span {
-  color: #8da1aa;
+.inline-scope {
+  display: grid;
+  grid-template-columns: auto minmax(84px, 126px);
+  gap: 6px;
+  align-items: center;
 }
 
-.inline-target input {
+.compact-target {
+  grid-template-columns: auto 46px;
+  gap: 6px;
+  min-height: 28px;
+  padding: 3px 4px 3px 8px;
+}
+
+.compact-scope {
+  min-height: 28px;
+  padding: 3px 4px 3px 8px;
+}
+
+.desk-category-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.desk-category-line strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desk-auto-action {
+  min-height: 28px;
+  padding: 0 10px;
+  color: #e0b84a;
+  border-color: rgba(216, 169, 53, 0.24);
+  background: rgba(216, 169, 53, 0.08);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.inline-target span,
+.inline-scope span {
+  color: #8da1aa;
+  white-space: nowrap;
+}
+
+.inline-target input,
+.inline-scope select {
   width: 100%;
   box-sizing: border-box;
   min-height: 28px;
   padding: 0 6px;
   color: #e6edf0;
-  text-align: center;
   border: 1px solid rgba(216, 169, 53, 0.24);
   border-radius: 8px;
   outline: 0;
@@ -1101,15 +1271,42 @@ p {
   font-weight: 800;
 }
 
+.inline-target input {
+  text-align: center;
+}
+
+.inline-scope select {
+  min-width: 0;
+  padding-right: 18px;
+  text-overflow: ellipsis;
+}
+
+.inline-scope select:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.entry-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
 .entry-list article {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
+  min-height: 34px;
+  padding: 5px 8px;
+}
+
+.entry-list p {
+  grid-column: 1 / -1;
 }
 
 .entry-list button {
-  min-height: 28px;
+  min-height: 26px;
+  padding: 0 8px;
   color: #e0b84a;
 }
 
@@ -1243,6 +1440,10 @@ p {
 
   .check-panel {
     position: static;
+  }
+
+  .entry-list {
+    grid-template-columns: 1fr;
   }
 }
 

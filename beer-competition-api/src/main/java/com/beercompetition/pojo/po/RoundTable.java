@@ -23,6 +23,8 @@ public class RoundTable {
     private Long roundId;
     private String tableName;
     private Long captainJudgeId;
+    private Long categoryId;
+    private String categoryMode;
     private Integer targetCount;
     private String targetMode;
     private String status;

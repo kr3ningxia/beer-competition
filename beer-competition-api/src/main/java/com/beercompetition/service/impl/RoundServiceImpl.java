@@ -91,6 +91,9 @@ public class RoundServiceImpl implements RoundService {
     private static final int FLAG_TRUE = 1;
     private static final int FLAG_FALSE = 0;
     private static final int FULL_PROGRESS = 100;
+    private static final String CATEGORY_MODE_EMPTY = "EMPTY";
+    private static final String CATEGORY_MODE_MIXED = "MIXED";
+    private static final String CATEGORY_MODE_CATEGORY = "CATEGORY";
     private static final String SLOT_GOLD = "金奖";
     private static final String SLOT_SILVER = "银奖";
     private static final String SLOT_BRONZE = "铜奖";
@@ -128,13 +131,14 @@ public class RoundServiceImpl implements RoundService {
         Map<Long, List<RoundResult>> resultsByTable = results.stream().collect(Collectors.groupingBy(RoundResult::getRoundTableId));
         Map<Long, BeerEntry> entryById = loadEntries(tableEntries.stream().map(RoundTableEntry::getBeerEntryId).collect(Collectors.toSet()));
         Map<Long, JudgeAccount> judgeById = loadJudges(tables.stream().map(RoundTable::getCaptainJudgeId).filter(Objects::nonNull).collect(Collectors.toSet()));
+        Map<Long, String> categoryNameById = listCategoryNames(competitionId);
         Map<Long, List<RoundTableMember>> membersByTable = listMembers(tables.stream().map(RoundTable::getId).toList())
                 .stream()
                 .collect(Collectors.groupingBy(RoundTableMember::getRoundTableId));
 
         return rounds.stream()
                 .map(round -> toRoundVO(round, tablesByRound.getOrDefault(round.getId(), List.of()), entriesByTable,
-                        resultsByTable, entryById, judgeById, membersByTable))
+                        resultsByTable, entryById, judgeById, membersByTable, categoryNameById))
                 .toList();
     }
 
@@ -244,6 +248,7 @@ public class RoundServiceImpl implements RoundService {
                     .roundId(round.getId())
                     .tableName(baseTable.getTableName())
                     .captainJudgeId(captainId)
+                    .categoryMode(CATEGORY_MODE_EMPTY)
                     .targetCount(request.getDefaultTargetCount())
                     .targetMode(RoundTargetMode.ADVANCE_COUNT.name())
                     .status(RoundStatus.DRAFT.name())
@@ -254,18 +259,7 @@ public class RoundServiceImpl implements RoundService {
             insertMembers(table, assignmentsByTable.getOrDefault(baseTable.getId(), List.of()), true);
         }
 
-        // 3) 按桌平均写入第一轮酒款分配
-        for (int index = 0; index < entries.size(); index++) {
-            RoundTable table = roundTables.get(index % roundTables.size());
-            roundTableEntryMapper.insert(RoundTableEntry.builder()
-                    .competitionId(competitionId)
-                    .roundId(round.getId())
-                    .roundTableId(table.getId())
-                    .beerEntryId(entries.get(index).getId())
-                    .status(RoundEntryStatus.ASSIGNED.name())
-                    .sortOrder(index)
-                    .build());
-        }
+        // 3) 第一轮只生成空桌，酒款在编排页按投递组别分配
     }
 
     @Override
@@ -301,11 +295,14 @@ public class RoundServiceImpl implements RoundService {
         int tableIndex = 0;
         for (RoundTableAllocationRequest item : request.getTables()) {
             JudgeAccount captain = captainMap.get(item.getCaptainPublicId());
+            Long categoryId = resolveCategoryId(item, entryMap);
             RoundTable table = RoundTable.builder()
                     .competitionId(competitionId)
                     .roundId(roundId)
                     .tableName(item.getName().trim())
                     .captainJudgeId(captain.getId())
+                    .categoryId(categoryId)
+                    .categoryMode(resolveCategoryMode(item, entryMap))
                     .targetCount(item.getTargetCount())
                     .targetMode(resolveTargetMode(round, item.getTargetMode()))
                     .status(RoundStatus.DRAFT.name())
@@ -460,6 +457,7 @@ public class RoundServiceImpl implements RoundService {
                     .roundId(round.getId())
                     .tableName(resolveNextRoundTableName(nextRoundNo, index, request.getTableCount()))
                     .captainJudgeId(captain == null ? null : captain.getId())
+                    .categoryMode(CATEGORY_MODE_EMPTY)
                     .targetCount(request.getTargetCount())
                     .targetMode(targetMode.name())
                     .status(RoundStatus.DRAFT.name())
@@ -659,7 +657,8 @@ public class RoundServiceImpl implements RoundService {
                                          Map<Long, List<RoundResult>> resultsByTable,
                                          Map<Long, BeerEntry> entryById,
                                          Map<Long, JudgeAccount> judgeById,
-                                         Map<Long, List<RoundTableMember>> membersByTable) {
+                                         Map<Long, List<RoundTableMember>> membersByTable,
+                                         Map<Long, String> categoryNameById) {
         Set<String> sourceEntryUuids = new LinkedHashSet<>();
         if (round.getSourceRoundId() != null) {
             listCandidateResults(round.getSourceRoundId()).forEach(result -> {
@@ -683,7 +682,8 @@ public class RoundServiceImpl implements RoundService {
                 .tables(tables.stream()
                         .sorted(Comparator.comparing(RoundTable::getSortOrder, Comparator.nullsLast(Integer::compareTo)).thenComparing(RoundTable::getId))
                         .map(table -> toRoundTableVO(table, entriesByTable.getOrDefault(table.getId(), List.of()),
-                                resultsByTable.getOrDefault(table.getId(), List.of()), entryById, judgeById, membersByTable.getOrDefault(table.getId(), List.of())))
+                                resultsByTable.getOrDefault(table.getId(), List.of()), entryById, judgeById,
+                                membersByTable.getOrDefault(table.getId(), List.of()), categoryNameById))
                         .toList())
                 .build();
     }
@@ -693,7 +693,8 @@ public class RoundServiceImpl implements RoundService {
                                         List<RoundResult> results,
                                         Map<Long, BeerEntry> entryById,
                                         Map<Long, JudgeAccount> judgeById,
-                                        List<RoundTableMember> members) {
+                                        List<RoundTableMember> members,
+                                        Map<Long, String> categoryNameById) {
         int advancedCount = (int) entries.stream()
                 .filter(entry -> RoundEntryStatus.ADVANCED.name().equals(entry.getStatus()) || RoundEntryStatus.RANKED.name().equals(entry.getStatus()))
                 .count();
@@ -709,6 +710,9 @@ public class RoundServiceImpl implements RoundService {
                 .captainPublicId(judgeById.get(table.getCaptainJudgeId()) == null ? "" : judgeById.get(table.getCaptainJudgeId()).getPublicId())
                 .professionalCount(countMembers(members, JudgeRoleType.PROFESSIONAL.name()))
                 .crossCount(countMembers(members, JudgeRoleType.CROSS.name()))
+                .categoryId(table.getCategoryId())
+                .categoryMode(resolveCategoryMode(table))
+                .categoryName(resolveCategoryName(table, categoryNameById))
                 .targetCount(table.getTargetCount())
                 .targetMode(table.getTargetMode())
                 .status(table.getStatus())
@@ -747,6 +751,7 @@ public class RoundServiceImpl implements RoundService {
                 .name(entry.getName())
                 .breweryCompanyName(brewery == null ? null : brewery.getCompanyName())
                 .breweryContactName(brewery == null ? null : brewery.getContactName())
+                .categoryId(entry.getCategoryId())
                 .categoryName(categoryNameById.getOrDefault(entry.getCategoryId(), "-"))
                 .style(entry.getStyle())
                 .description(entry.getDescription())
@@ -769,6 +774,51 @@ public class RoundServiceImpl implements RoundService {
                 .sourceTable(latestResult == null || tableById.get(latestResult.getRoundTableId()) == null ? "" : tableById.get(latestResult.getRoundTableId()).getTableName())
                 .sourceResult(latestResult == null ? "" : resolveSlotLabel(latestResult))
                 .build();
+    }
+
+    private Long resolveCategoryId(RoundTableAllocationRequest table, Map<String, BeerEntry> entryMap) {
+        List<Long> categoryIds = safeList(table.getEntryUuids()).stream()
+                .map(entryMap::get)
+                .filter(Objects::nonNull)
+                .map(BeerEntry::getCategoryId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        return categoryIds.size() == 1 ? categoryIds.get(0) : null;
+    }
+
+    private String resolveCategoryMode(RoundTableAllocationRequest table, Map<String, BeerEntry> entryMap) {
+        List<Long> categoryIds = safeList(table.getEntryUuids()).stream()
+                .map(entryMap::get)
+                .filter(Objects::nonNull)
+                .map(BeerEntry::getCategoryId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (categoryIds.isEmpty()) {
+            return CATEGORY_MODE_EMPTY;
+        }
+        if (categoryIds.size() == 1) {
+            return CATEGORY_MODE_CATEGORY;
+        }
+        return CATEGORY_MODE_MIXED;
+    }
+
+    private String resolveCategoryMode(RoundTable table) {
+        if (table.getCategoryId() != null) {
+            return CATEGORY_MODE_CATEGORY;
+        }
+        if (StringUtils.hasText(table.getCategoryMode()) && CATEGORY_MODE_MIXED.equals(table.getCategoryMode())) {
+            return CATEGORY_MODE_MIXED;
+        }
+        return CATEGORY_MODE_EMPTY;
+    }
+
+    private String resolveCategoryName(RoundTable table, Map<Long, String> categoryNameById) {
+        if (table.getCategoryId() != null) {
+            return categoryNameById.getOrDefault(table.getCategoryId(), "");
+        }
+        return CATEGORY_MODE_MIXED.equals(resolveCategoryMode(table)) ? "混合" : "";
     }
 
     private Map<Long, Brewery> loadBreweries(Set<Long> ids) {

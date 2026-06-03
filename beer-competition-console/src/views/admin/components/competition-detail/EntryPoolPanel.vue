@@ -10,7 +10,7 @@
 
     <label class="search-box">
       <Search />
-      <input v-model="keywordModel" placeholder="搜索匿名编号、短编号、风格" />
+      <input v-model="keywordModel" placeholder="搜索酒名、编号、短编号、风格" />
     </label>
 
     <div class="category-summary">
@@ -57,7 +57,7 @@
             @change="$emit('toggleEntrySelection', entry.uuid)"
           />
           <span>
-            <strong>{{ entry.uuid }}</strong>
+            <strong>{{ entry.name || entry.uuid }}</strong>
             <small>{{ entry.shortCode }} · {{ entry.categoryName }} · {{ entry.style }}</small>
             <em v-if="entry.sourceTable">{{ entry.sourceTable }} · {{ entry.sourceResult }}</em>
           </span>

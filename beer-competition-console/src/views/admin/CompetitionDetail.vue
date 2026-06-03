@@ -267,17 +267,14 @@
           <article class="panel-card">
             <div class="panel-heading">
               <h2>参赛酒款</h2>
-              <span>匿名编号、短编号和轮次轨迹</span>
+              <span>短编号、付款、入库和轮次轨迹</span>
             </div>
             <div class="data-table entries-table">
               <div class="table-head">
-                <span>酒款 / 厂牌</span>
-                <span>匿名编号</span>
-                <span>投递组别</span>
-                <span>付款 / 送样</span>
-                <span>基础风格 / 单号</span>
-                <span>轮次轨迹</span>
-                <span>状态</span>
+                <span>参赛酒款</span>
+                <span>编号</span>
+                <span>风格</span>
+                <span>进度</span>
                 <span>操作</span>
               </div>
               <div v-for="entry in roundEntryPool" :key="entry.uuid" class="table-row">
@@ -285,20 +282,19 @@
                   <strong>{{ entry.name || '-' }}</strong>
                   <small>{{ entry.breweryCompanyName || '未关联厂牌' }}</small>
                 </div>
-                <strong>{{ entry.uuid }}</strong>
-                <span>{{ entry.categoryName }}</span>
-                <div class="entry-meta">
-                  <span>{{ paymentStatusText(entry.paymentStatus) }}</span>
-                  <small>{{ deliveryStatusText(entry.deliveryStatus) }}</small>
-                </div>
-                <div class="entry-meta">
-                  <span>{{ entry.style }}</span>
-                  <small>{{ entry.trackingNo || entry.shortCode || '-' }}</small>
-                </div>
-                <span>{{ getEntryPath(entry.uuid) }}</span>
-                <div class="entry-meta">
-                  <span>{{ entryStatusLabels[entry.status] || entry.status }}</span>
+                <div class="entry-code-cell">
+                  <strong>{{ entry.uuid }}</strong>
                   <small>{{ entry.shortCode }}</small>
+                </div>
+                <div class="entry-style-cell">
+                  <strong>{{ entry.categoryName }}</strong>
+                  <small>{{ entry.style }}</small>
+                </div>
+                <div class="entry-followup">
+                  <span class="entry-state-pill">{{ entryStatusLabels[entry.status] || entry.status }}</span>
+                  <span>{{ paymentStatusText(entry.paymentStatus) }}</span>
+                  <span>{{ deliveryStatusText(entry.deliveryStatus) }}</span>
+                  <em>{{ getEntryPathText(entry.uuid) }}</em>
                 </div>
                 <div class="entry-actions">
                   <button class="mini-action" type="button" :disabled="!entry.canConfirmPayment" @click="confirmEntryPaymentAction(entry)">确认付款</button>
@@ -339,7 +335,6 @@
             :round-category-filter="roundCategoryFilter"
             :round-keyword="roundKeyword"
             :selected-entry-uuids="selectedEntryUuids"
-            :captain-candidates="captainCandidates"
             :round-validation-issues="roundValidationIssues"
             :can-publish="canPublishCurrentRound"
             :get-judge="getJudge"
@@ -370,9 +365,7 @@
             @add-selected-to-table="addSelectedEntriesToTable"
             @add-entry-to-selected-table="addEntryToSelectedRoundTable"
             @start-entry-drag="startEntryDrag"
-            @assign-evenly="assignCurrentRoundEvenly"
-            @assign-by-category="assignCurrentRoundByCategory"
-            @clear-round-assignments="clearCurrentRoundAssignments"
+            @open-entry-auto-assign="openEntryAutoAssignDialog"
             @select-round-table="selectedRoundTableId = $event"
             @drop-entry-on-round-table="dropEntryOnRoundTable"
             @remove-entry-from-round-table="removeEntryFromRoundTable"
@@ -676,6 +669,78 @@
       @close="closeCreateRoundDialog"
       @finish="finishCreateRound"
     />
+
+    <el-dialog
+      v-model="entryAutoAssignDialogOpen"
+      class="entry-auto-assign-dialog-shell"
+      width="420px"
+      :title="entryAutoAssignTable ? `${entryAutoAssignTable.name} · 自动分配` : '自动分配'"
+      align-center
+      destroy-on-close
+    >
+      <div class="entry-auto-assign-dialog">
+        <label class="entry-auto-assign-field">
+          <span>范围</span>
+          <el-select
+            v-model="entryAutoAssignForm.categoryId"
+            placeholder="选择范围"
+            popper-class="entry-auto-assign-popper"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="option in entryAutoAssignCategoryOptions"
+              :key="option.id"
+              :label="option.name"
+              :value="option.id"
+            >
+              <div class="entry-auto-assign-option">
+                <span>{{ option.name }}</span>
+                <small>{{ option.unassigned }} 款可用</small>
+              </div>
+            </el-option>
+          </el-select>
+        </label>
+
+        <label class="entry-auto-assign-field">
+          <span>数量</span>
+          <el-input-number
+            v-model="entryAutoAssignForm.quantity"
+            :min="1"
+            :max="Math.max(entryAutoAssignStats.unassigned, 1)"
+            controls-position="right"
+          />
+        </label>
+
+        <div class="entry-auto-assign-stats">
+          <span>
+            <strong>{{ entryAutoAssignStats.total }}</strong>
+            总计
+          </span>
+          <span>
+            <strong>{{ entryAutoAssignStats.unassigned }}</strong>
+            未分配
+          </span>
+          <span class="highlight">
+            <strong>{{ entryAutoAssignStats.adding }}</strong>
+            本次加入
+          </span>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="dialog-actions">
+          <button class="tool-button" type="button" @click="closeEntryAutoAssignDialog">取消</button>
+          <button
+            class="tool-button primary"
+            type="button"
+            :disabled="!entryAutoAssignForm.categoryId || entryAutoAssignStats.unassigned === 0"
+            @click="confirmEntryAutoAssign"
+          >
+            加入
+          </button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -767,6 +832,12 @@ const roundKeyword = ref('')
 const roundCategoryFilter = ref('全部')
 const selectedEntryUuids = ref([])
 const createRoundDialogOpen = ref(false)
+const entryAutoAssignDialogOpen = ref(false)
+const entryAutoAssignTableId = ref('')
+const entryAutoAssignForm = reactive({
+  categoryId: null,
+  quantity: 1,
+})
 const selectedStyleLibraryVersion = ref('')
 const styleLibraryOptions = ref(normalizeStyleLibraries(fallbackStyleLibraries))
 
@@ -850,6 +921,7 @@ const futureStageTasks = computed(() => buildFutureStageTasks())
 const currentRound = computed(() => rounds.value.find((round) => round.id === activeRoundId.value) || rounds.value[0])
 const currentRoundTables = computed(() => currentRound.value?.tables || [])
 const selectedRoundTable = computed(() => currentRoundTables.value.find((table) => table.id === selectedRoundTableId.value) || currentRoundTables.value[0])
+const entryAutoAssignTable = computed(() => currentRoundTables.value.find((table) => table.id === entryAutoAssignTableId.value) || null)
 const currentRoundTypeLabel = computed(() => (currentRound.value?.type === 'SCORE' ? '评分制' : '选择排序制'))
 const currentRoundStatusText = computed(() => roundStatusLabels[currentRound.value?.status] || currentRound.value?.status || '-')
 const currentRoundEntryCount = computed(() => new Set(currentRoundTables.value.flatMap((table) => table.entryUuids)).size)
@@ -860,25 +932,20 @@ const roundCategoryFilters = computed(() => ['全部', ...new Set(currentPoolEnt
 const currentPoolEntries = computed(() => getPoolEntriesForRound(currentRound.value))
 const filteredRoundPool = computed(() => {
   const query = roundKeyword.value.toLowerCase()
-  return currentPoolEntries.value.filter((entry) => {
-    const matchesCategory = roundCategoryFilter.value === '全部' || entry.categoryName === roundCategoryFilter.value
-    const matchesQuery = !query || [entry.uuid, entry.shortCode, entry.categoryName, entry.style, entry.sourceTable]
-      .filter(Boolean)
-      .some((value) => String(value).toLowerCase().includes(query))
-    return matchesCategory && matchesQuery
-  })
-})
-const unassignedRoundEntries = computed(() => currentPoolEntries.value.filter((entry) => !getRoundEntryAssignment(entry.uuid)))
-const roundCategoryStats = computed(() => {
-  const map = new Map()
-  currentPoolEntries.value.forEach((entry) => {
-    const current = map.get(entry.categoryName) || { category: entry.categoryName, total: 0, assigned: 0, unassigned: 0 }
-    current.total += 1
-    if (getRoundEntryAssignment(entry.uuid)) current.assigned += 1
-    else current.unassigned += 1
-    map.set(entry.categoryName, current)
-  })
-  return [...map.values()]
+  return currentPoolEntries.value
+    .filter((entry) => {
+      const matchesCategory = roundCategoryFilter.value === '全部' || entry.categoryName === roundCategoryFilter.value
+      const matchesQuery = !query || [entry.name, entry.uuid, entry.shortCode, entry.categoryName, entry.style, entry.sourceTable]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query))
+      return matchesCategory && matchesQuery
+    })
+    .sort((left, right) => {
+      const leftAssigned = getRoundEntryAssignment(left.uuid) ? 1 : 0
+      const rightAssigned = getRoundEntryAssignment(right.uuid) ? 1 : 0
+      if (leftAssigned !== rightAssigned) return leftAssigned - rightAssigned
+      return String(left.shortCode || left.uuid).localeCompare(String(right.shortCode || right.uuid), 'zh-CN')
+    })
 })
 const roundValidationIssues = computed(() => buildRoundValidationIssues(currentRound.value))
 const canPublishCurrentRound = computed(() => currentRound.value?.status === 'DRAFT' && roundValidationIssues.value.length === 0)
@@ -929,12 +996,35 @@ const canSubmitRankingRound = computed(() => {
   if (!['IN_PROGRESS', 'DRAFT'].includes(currentRound.value.status)) return false
   return currentRound.value.tables.every((table) => getFilledRankingCount(table) === Number(table.targetCount || 0))
 })
-const captainCandidates = computed(() => judgePool.value
-  .filter((judge) => inferJudgeRoles(judge).includes('CAPTAIN') && isJudgeActive(judge)))
 const advancedCategoryStats = computed(() => {
   const map = new Map()
   advancedPool.value.forEach((entry) => map.set(entry.categoryName, (map.get(entry.categoryName) || 0) + 1))
   return [...map.entries()].map(([category, count]) => ({ category, count }))
+})
+const entryAutoAssignCategoryOptions = computed(() => {
+  const map = new Map()
+  currentPoolEntries.value.forEach((entry) => {
+    const key = entry.categoryId
+    if (key == null) return
+    const current = map.get(key) || { id: key, name: entry.categoryName || '-', total: 0, unassigned: 0 }
+    current.total += 1
+    if (!getRoundEntryAssignment(entry.uuid)) current.unassigned += 1
+    map.set(key, current)
+  })
+  return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
+})
+const entryAutoAssignSelectedCategory = computed(() => entryAutoAssignCategoryOptions.value
+  .find((option) => option.id === entryAutoAssignForm.categoryId) || null)
+const entryAutoAssignStats = computed(() => {
+  const selected = entryAutoAssignSelectedCategory.value
+  const total = selected?.total ?? currentPoolEntries.value.length
+  const unassigned = selected?.unassigned ?? currentPoolEntries.value.filter((entry) => !getRoundEntryAssignment(entry.uuid)).length
+  const quantity = Math.max(Number(entryAutoAssignForm.quantity || 1), 1)
+  return {
+    total,
+    unassigned,
+    adding: Math.min(quantity, unassigned),
+  }
 })
 const roundRestructureText = computed(() => rounds.value.map((round) => `${round.name} ${round.tables.length}桌`).join(' -> '))
 const awardDrafts = computed(() => competition.value?.resultDrafts || [])
@@ -992,6 +1082,12 @@ onMounted(() => {
 watch(() => route.params.id, loadDetail)
 watch(() => route.query.tab, (tab) => {
   if (tab) activeTab.value = tab
+})
+watch(entryAutoAssignStats, (stats) => {
+  const maxQuantity = Math.max(stats.unassigned, 1)
+  if (Number(entryAutoAssignForm.quantity || 1) > maxQuantity) {
+    entryAutoAssignForm.quantity = maxQuantity
+  }
 })
 async function loadDetail() {
   loading.value = true
@@ -1077,6 +1173,7 @@ function resetForms() {
 function applyRoundState(preferredRoundId = activeRoundId.value) {
   roundEntryPool.value = (competition.value?.entryPool || competition.value?.entries || []).map((entry) => ({
     ...entry,
+    categoryId: entry.categoryId ?? null,
     name: entry.name || '',
     breweryCompanyName: entry.breweryCompanyName || '',
     shortCode: entry.shortCode || '-',
@@ -1097,10 +1194,17 @@ function applyRoundState(preferredRoundId = activeRoundId.value) {
     ...round,
     tables: (round.tables || []).map((table) => ({
       ...table,
+      categoryId: table.categoryId ?? null,
+      categoryMode: table.categoryMode || (table.categoryId != null ? 'CATEGORY' : 'EMPTY'),
+      categoryName: table.categoryName || '',
       entryUuids: table.entryUuids || [],
       rankings: table.rankings || buildEmptyRankings(Number(table.targetCount || 3), table.targetMode),
     })),
   }))
+  rounds.value.forEach((round) => {
+    const pool = getPoolEntriesForRound(round)
+    round.tables.forEach((table) => syncRoundTableScope(table, pool))
+  })
   const preferred = rounds.value.find((round) => round.id === preferredRoundId)
   const current = preferred || competition.value?.currentRound || rounds.value[rounds.value.length - 1] || rounds.value[0]
   activeRoundId.value = current?.id || ''
@@ -1116,6 +1220,11 @@ function deliveryStatusText(status) {
   if (status === 'RECEIVED') return '已入库'
   if (status === 'SUBMITTED') return '已提交送样'
   return '待送样'
+}
+
+function getEntryPathText(uuid) {
+  const path = getEntryPath(uuid)
+  return path === '-' ? '未分配' : path
 }
 
 async function loadStyleLibraries() {
@@ -1288,6 +1397,7 @@ function selectRound(roundId) {
   const round = rounds.value.find((item) => item.id === roundId)
   selectedRoundTableId.value = round?.tables[0]?.id || ''
   selectedEntryUuids.value = []
+  closeEntryAutoAssignDialog()
 }
 
 function editRoundAllocation(roundId, mode = 'entries') {
@@ -1399,6 +1509,44 @@ function getRoundEntryAssignment(uuid) {
   return table?.name || ''
 }
 
+function inferTableScope(table, poolEntries = currentPoolEntries.value) {
+  const entries = (table?.entryUuids || [])
+    .map((uuid) => poolEntries.find((entry) => entry.uuid === uuid))
+    .filter(Boolean)
+  const categories = new Map()
+  entries.forEach((entry) => {
+    if (entry.categoryId == null) return
+    categories.set(entry.categoryId, entry.categoryName || getCategoryNameById(entry.categoryId))
+  })
+  if (!entries.length || categories.size === 0) {
+    return { categoryId: null, categoryMode: 'EMPTY', categoryName: '' }
+  }
+  if (categories.size === 1) {
+    const [[categoryId, categoryName]] = [...categories.entries()]
+    return { categoryId, categoryMode: 'CATEGORY', categoryName }
+  }
+  return { categoryId: null, categoryMode: 'MIXED', categoryName: '混合' }
+}
+
+function syncRoundTableScope(table, poolEntries = currentPoolEntries.value) {
+  if (!table) return
+  const scope = inferTableScope(table, poolEntries)
+  table.categoryId = scope.categoryId
+  table.categoryMode = scope.categoryMode
+  table.categoryName = scope.categoryName
+}
+
+function getCategoryNameById(categoryId) {
+  return competition.value?.categories?.find((item) => item.id === categoryId)?.name
+    || currentPoolEntries.value.find((entry) => entry.categoryId === categoryId)?.categoryName
+    || '未命名组别'
+}
+
+function resetEntryAutoAssignForm(table = null) {
+  entryAutoAssignForm.categoryId = table?.categoryId ?? null
+  entryAutoAssignForm.quantity = 1
+}
+
 function toggleEntrySelection(uuid) {
   if (selectedEntryUuids.value.includes(uuid)) {
     selectedEntryUuids.value = selectedEntryUuids.value.filter((item) => item !== uuid)
@@ -1409,6 +1557,45 @@ function toggleEntrySelection(uuid) {
 
 function clearEntrySelection() {
   selectedEntryUuids.value = []
+}
+
+function openEntryAutoAssignDialog(tableId) {
+  const table = currentRoundTables.value.find((item) => item.id === tableId)
+  if (!table || currentRound.value?.type !== 'SCORE' || currentRound.value?.status !== 'DRAFT') return
+  entryAutoAssignTableId.value = tableId
+  resetEntryAutoAssignForm(table)
+  entryAutoAssignDialogOpen.value = true
+}
+
+function closeEntryAutoAssignDialog() {
+  entryAutoAssignDialogOpen.value = false
+  entryAutoAssignTableId.value = ''
+  resetEntryAutoAssignForm()
+}
+
+function confirmEntryAutoAssign() {
+  const table = entryAutoAssignTable.value
+  if (!table) return
+  const categoryId = entryAutoAssignForm.categoryId
+  if (!categoryId) {
+    ElMessage.warning('请选择范围')
+    return
+  }
+  const quantity = Math.max(Number(entryAutoAssignForm.quantity || 1), 1)
+  const candidates = currentPoolEntries.value
+    .filter((entry) => entry.categoryId === categoryId && !getRoundEntryAssignment(entry.uuid))
+    .slice(0, quantity)
+  if (!candidates.length) {
+    ElMessage.warning('当前范围没有可加入酒款')
+    return
+  }
+  candidates.forEach((entry) => {
+    table.entryUuids.push(entry.uuid)
+  })
+  syncRoundTableScope(table)
+  clearEntrySelection()
+  closeEntryAutoAssignDialog()
+  ElMessage.success(`${table.name} 已加入 ${candidates.length} 款酒`)
 }
 
 function addSelectedEntriesToTable() {
@@ -1427,51 +1614,17 @@ function addEntryToSelectedRoundTable(uuid, notify = true) {
     ElMessage.warning('请先选择要加入的轮次桌')
     return
   }
+  if (currentRound.value?.status !== 'DRAFT') return
+  const entry = currentPoolEntries.value.find((item) => item.uuid === uuid)
+  if (!entry) return
   currentRoundTables.value.forEach((item) => {
+    if (!item.entryUuids.includes(uuid)) return
     item.entryUuids = item.entryUuids.filter((entryUuid) => entryUuid !== uuid)
+    syncRoundTableScope(item)
   })
   table.entryUuids.push(uuid)
+  syncRoundTableScope(table)
   if (notify) ElMessage.success(`${uuid} 已加入 ${table.name}`)
-}
-
-function assignCurrentRoundEvenly() {
-  if (!currentRound.value || !currentRoundTables.value.length) return
-  const entries = currentPoolEntries.value.map((entry) => entry.uuid)
-  currentRoundTables.value.forEach((table) => { table.entryUuids = [] })
-  entries.forEach((uuid, index) => {
-    currentRoundTables.value[index % currentRoundTables.value.length].entryUuids.push(uuid)
-  })
-  clearEntrySelection()
-  ElMessage.success('已按桌数平均分配酒款')
-}
-
-function assignCurrentRoundByCategory() {
-  if (!currentRound.value || !currentRoundTables.value.length) return
-  const groups = new Map()
-  currentPoolEntries.value.forEach((entry) => {
-    const list = groups.get(entry.categoryName) || []
-    list.push(entry.uuid)
-    groups.set(entry.categoryName, list)
-  })
-  currentRoundTables.value.forEach((table) => { table.entryUuids = [] })
-  let tableIndex = 0
-  groups.forEach((uuids) => {
-    uuids.forEach((uuid) => {
-      currentRoundTables.value[tableIndex % currentRoundTables.value.length].entryUuids.push(uuid)
-    })
-    tableIndex += 1
-  })
-  clearEntrySelection()
-  ElMessage.success('已按投递组别分配酒款')
-}
-
-function clearCurrentRoundAssignments() {
-  currentRoundTables.value.forEach((table) => {
-    table.entryUuids = []
-    table.rankings = buildEmptyRankings(Number(table.targetCount || 3))
-  })
-  clearEntrySelection()
-  ElMessage.success('当前轮次酒款已清空')
 }
 
 function updateRoundTableCaptain(tableId, judgePublicId) {
@@ -1480,6 +1633,7 @@ function updateRoundTableCaptain(tableId, judgePublicId) {
 }
 
 function updateRoundTableTarget(tableId, targetCount) {
+  if (currentRound.value?.status !== 'DRAFT') return
   const table = currentRoundTables.value.find((item) => item.id === tableId)
   if (!table) return
   table.targetCount = Math.max(1, Number(targetCount || 1))
@@ -1487,9 +1641,11 @@ function updateRoundTableTarget(tableId, targetCount) {
 }
 
 function removeEntryFromRoundTable(tableId, uuid) {
+  if (currentRound.value?.status !== 'DRAFT') return
   const table = currentRoundTables.value.find((item) => item.id === tableId)
   if (!table) return
   table.entryUuids = table.entryUuids.filter((entryUuid) => entryUuid !== uuid)
+  syncRoundTableScope(table)
   if (table.rankings?.length) {
     table.rankings.forEach((slot) => {
       if (slot.uuid === uuid) slot.uuid = ''
@@ -1503,6 +1659,7 @@ function startEntryDrag(uuid) {
 
 function dropEntryOnRoundTable(tableId) {
   if (!draggingItem.value || draggingItem.value.type !== 'entry') return
+  if (currentRound.value?.status !== 'DRAFT') return
   selectedRoundTableId.value = tableId
   addEntryToSelectedRoundTable(draggingItem.value.uuid)
   clearDrag()
@@ -1516,11 +1673,14 @@ function removeRoundTable(tableId) {
 
 async function persistCurrentRoundAllocation() {
   if (!currentRound.value || currentRound.value.status !== 'DRAFT') return
+  currentRoundTables.value.forEach((table) => syncRoundTableScope(table))
   const payload = {
     tables: currentRoundTables.value.map((table, index) => ({
       id: Number.isFinite(Number(table.id)) ? Number(table.id) : undefined,
       name: table.name,
       captainPublicId: table.captainPublicId,
+      categoryId: table.categoryId ?? undefined,
+      categoryMode: table.categoryMode || (table.categoryId != null ? 'CATEGORY' : 'EMPTY'),
       targetCount: Number(table.targetCount || 1),
       targetMode: table.targetMode || (currentRound.value.type === 'SCORE' ? 'ADVANCE_COUNT' : 'TOP_N'),
       sortOrder: index,
@@ -2245,6 +2405,224 @@ svg {
   background: rgba(216, 169, 53, 0.08);
 }
 
+:global(.entry-auto-assign-dialog-shell) {
+  --entry-dialog-bg: #10191d;
+  --entry-dialog-panel: rgba(7, 14, 17, 0.72);
+  --entry-dialog-text: #e6edf0;
+  --entry-dialog-muted: #8da1aa;
+  --entry-dialog-line: rgba(219, 232, 237, 0.12);
+  --entry-dialog-gold: #e0b84a;
+}
+
+:global(.entry-auto-assign-dialog-shell.el-dialog) {
+  overflow: hidden;
+  border: 1px solid var(--entry-dialog-line);
+  border-radius: 8px;
+  background: var(--entry-dialog-bg);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.46);
+}
+
+:global(.entry-auto-assign-dialog-shell .el-dialog__header) {
+  margin: 0;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid rgba(219, 232, 237, 0.08);
+}
+
+:global(.entry-auto-assign-dialog-shell .el-dialog__title) {
+  color: var(--entry-dialog-text);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+:global(.entry-auto-assign-dialog-shell .el-dialog__headerbtn) {
+  top: 4px;
+}
+
+:global(.entry-auto-assign-dialog-shell .el-dialog__close) {
+  color: var(--entry-dialog-muted);
+}
+
+:global(.entry-auto-assign-dialog-shell .el-dialog__body) {
+  padding: 14px 16px;
+}
+
+:global(.entry-auto-assign-dialog-shell .el-dialog__footer) {
+  padding: 10px 16px 14px;
+  border-top: 1px solid rgba(219, 232, 237, 0.08);
+}
+
+.entry-auto-assign-dialog {
+  display: grid;
+  gap: 10px;
+}
+
+.entry-auto-assign-field {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.entry-auto-assign-field > span {
+  color: #8da1aa;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.entry-auto-assign-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-left: 62px;
+}
+
+.entry-auto-assign-stats span {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 30px;
+  padding: 0 8px;
+  color: #8da1aa;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  border: 1px solid rgba(219, 232, 237, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.026);
+}
+
+.entry-auto-assign-stats strong {
+  color: #e6edf0;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.entry-auto-assign-stats .highlight {
+  color: #e0b84a;
+  border-color: rgba(216, 169, 53, 0.24);
+  background: rgba(216, 169, 53, 0.07);
+}
+
+.entry-auto-assign-stats .highlight strong {
+  color: #e0b84a;
+}
+
+.entry-auto-assign-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.entry-auto-assign-option span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.entry-auto-assign-option small {
+  flex: 0 0 auto;
+  color: #8da1aa;
+  font-size: 12px;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+:global(.entry-auto-assign-dialog-shell .el-input__wrapper) {
+  background: var(--entry-dialog-panel);
+  border: 1px solid rgba(219, 232, 237, 0.14);
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+:global(.entry-auto-assign-dialog-shell .el-input__wrapper:hover),
+:global(.entry-auto-assign-dialog-shell .el-input__wrapper.is-focus) {
+  border-color: rgba(216, 169, 53, 0.36);
+  box-shadow: 0 0 0 2px rgba(216, 169, 53, 0.08);
+}
+
+:global(.entry-auto-assign-dialog-shell .el-select__wrapper) {
+  min-height: 42px;
+  background: var(--entry-dialog-panel);
+  border: 1px solid rgba(219, 232, 237, 0.14);
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+:global(.entry-auto-assign-dialog-shell .el-select__wrapper:hover),
+:global(.entry-auto-assign-dialog-shell .el-select__wrapper.is-focused) {
+  border-color: rgba(216, 169, 53, 0.36);
+  box-shadow: 0 0 0 2px rgba(216, 169, 53, 0.08);
+}
+
+:global(.entry-auto-assign-dialog-shell .el-input__inner) {
+  color: var(--entry-dialog-text);
+}
+
+:global(.entry-auto-assign-dialog-shell .el-select__selected-item),
+:global(.entry-auto-assign-dialog-shell .el-select__placeholder) {
+  color: var(--entry-dialog-text);
+}
+
+:global(.entry-auto-assign-dialog-shell .el-select__placeholder.is-transparent) {
+  color: var(--entry-dialog-muted);
+}
+
+:global(.entry-auto-assign-dialog-shell .el-select__caret) {
+  color: var(--entry-dialog-muted);
+}
+
+:global(.entry-auto-assign-dialog-shell .el-input-number) {
+  width: 100%;
+}
+
+:global(.entry-auto-assign-dialog-shell .el-input-number__decrease),
+:global(.entry-auto-assign-dialog-shell .el-input-number__increase) {
+  color: var(--entry-dialog-muted);
+  border-color: rgba(219, 232, 237, 0.1);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+:global(.entry-auto-assign-popper.el-popper) {
+  border: 1px solid rgba(219, 232, 237, 0.12);
+  background: #10191d;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.36);
+}
+
+:global(.entry-auto-assign-popper .el-select-dropdown) {
+  background: #10191d;
+}
+
+:global(.entry-auto-assign-popper .el-select-dropdown__list) {
+  background: #10191d;
+}
+
+:global(.entry-auto-assign-popper .el-popper__arrow::before) {
+  border-color: rgba(219, 232, 237, 0.12);
+  background: #10191d;
+}
+
+:global(.entry-auto-assign-popper .el-select-dropdown__item) {
+  color: #e6edf0;
+}
+
+:global(.entry-auto-assign-popper .el-select-dropdown__item.hover),
+:global(.entry-auto-assign-popper .el-select-dropdown__item:hover) {
+  background: rgba(216, 169, 53, 0.08);
+}
+
+:global(.entry-auto-assign-popper .el-select-dropdown__item.selected) {
+  color: #e0b84a;
+  background: rgba(216, 169, 53, 0.11);
+}
+
 .icon-button {
   display: grid;
   place-items: center;
@@ -2837,31 +3215,99 @@ input[type="checkbox"] {
 
 .entries-table .table-head,
 .entries-table .table-row {
-  grid-template-columns: minmax(180px, 1.2fr) minmax(160px, 1.1fr) 110px 120px minmax(150px, 1.1fr) minmax(240px, 1.5fr) 110px minmax(220px, 1.2fr);
+  grid-template-columns: minmax(260px, 1.2fr) minmax(168px, 0.72fr) minmax(170px, 0.78fr) minmax(420px, 1.45fr) minmax(282px, auto);
+  gap: 14px;
+}
+
+.entries-table .table-head {
+  padding: 0 12px;
+}
+
+.entries-table .table-row {
+  min-height: 68px;
+  padding: 10px 12px;
 }
 
 .entry-main,
 .entry-meta,
+.entry-code-cell,
+.entry-style-cell,
 .entry-actions {
   display: grid;
   gap: 4px;
   min-width: 0;
 }
 
+.entry-main strong,
+.entry-code-cell strong,
+.entry-style-cell strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  line-height: 1.35;
+}
+
 .entry-main small,
-.entry-meta small {
+.entry-meta small,
+.entry-code-cell small,
+.entry-style-cell small {
   color: var(--muted);
   font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.entry-followup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+
+.entry-followup span,
+.entry-followup em,
+.entry-state-pill {
+  max-width: 100%;
+  padding: 5px 8px;
+  color: var(--text);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow-wrap: anywhere;
+  border: 1px solid rgba(219, 232, 237, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.026);
+}
+
+.entry-followup em {
+  min-width: 0;
+  max-width: 190px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.entry-state-pill {
+  color: var(--gold-soft);
+  border-color: rgba(216, 169, 53, 0.25);
+  background: rgba(216, 169, 53, 0.08);
 }
 
 .entry-actions {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-self: center;
+  grid-template-columns: repeat(3, minmax(82px, 1fr));
   gap: 8px;
 }
 
 .mini-action {
   min-height: 32px;
+  padding: 0 10px;
   color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.03);
@@ -2870,6 +3316,39 @@ input[type="checkbox"] {
 .mini-action.danger {
   color: #ffb4b4;
   border-color: rgba(224, 82, 82, 0.4);
+}
+
+@media (max-width: 1280px) {
+  .entries-table .table-head {
+    display: none;
+  }
+
+  .entries-table .table-row {
+    grid-template-columns: minmax(220px, 1fr) minmax(150px, 0.7fr);
+    align-items: stretch;
+  }
+
+  .entry-followup,
+  .entry-actions {
+    grid-column: 1 / -1;
+  }
+
+  .entry-actions {
+    justify-content: start;
+    grid-template-columns: repeat(3, minmax(92px, 128px));
+  }
+}
+
+@media (max-width: 760px) {
+  .entries-table .table-row,
+  .entry-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mini-action {
+    justify-content: center;
+    min-height: 38px;
+  }
 }
 
 .path-table .table-head,
