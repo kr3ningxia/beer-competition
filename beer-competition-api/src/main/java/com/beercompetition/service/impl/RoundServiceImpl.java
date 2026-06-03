@@ -190,8 +190,8 @@ public class RoundServiceImpl implements RoundService {
     public void createFirstRound(Long competitionId, FirstRoundCreateRequest request) {
         // 1) 查询比赛、基础桌和可分配酒款
         Competition competition = requireCompetition(competitionId);
-        if (parseCompetitionStatus(competition) != CompetitionStatus.JUDGING_PREP) {
-            throw new BaseException("请先进入评审准备阶段，再创建第一轮");
+        if (!isPreJudgingStage(parseCompetitionStatus(competition))) {
+            throw new BaseException("评审已开始，不能再创建第一轮编排");
         }
         if (competitionRoundMapper.selectCount(new LambdaQueryWrapper<CompetitionRound>()
                 .eq(CompetitionRound::getCompetitionId, competitionId)
@@ -258,11 +258,8 @@ public class RoundServiceImpl implements RoundService {
     public void saveRoundAllocation(Long competitionId, Long roundId, RoundAllocationRequest request) {
         // 1) 查询轮次并校验编辑状态
         Competition competition = requireCompetition(competitionId);
-        if (parseCompetitionStatus(competition) != CompetitionStatus.JUDGING_PREP
-                && parseCompetitionStatus(competition) != CompetitionStatus.JUDGING) {
-            throw new BaseException("当前比赛阶段不能保存轮次编排");
-        }
         CompetitionRound round = requireRound(competitionId, roundId);
+        validateCompetitionStageForRoundAllocation(competition, round);
         if (!RoundStatus.DRAFT.name().equals(round.getStatus())) {
             throw new BaseException("只有草稿轮次可以保存编排");
         }
@@ -1240,6 +1237,16 @@ public class RoundServiceImpl implements RoundService {
         }
     }
 
+    private void validateCompetitionStageForRoundAllocation(Competition competition, CompetitionRound round) {
+        CompetitionStatus status = parseCompetitionStatus(competition);
+        if (RoundType.SCORE.name().equals(round.getRoundType()) && !isPreJudgingStage(status)) {
+            throw new BaseException("评审已开始，不能再保存第一轮编排");
+        }
+        if (RoundType.RANKING.name().equals(round.getRoundType()) && status != CompetitionStatus.JUDGING) {
+            throw new BaseException("后续轮只能在评审中保存编排");
+        }
+    }
+
     private void validateCompetitionStageForRoundPublish(Competition competition, CompetitionRound round) {
         CompetitionStatus status = parseCompetitionStatus(competition);
         if (RoundType.SCORE.name().equals(round.getRoundType()) && status != CompetitionStatus.JUDGING_PREP) {
@@ -1248,6 +1255,13 @@ public class RoundServiceImpl implements RoundService {
         if (RoundType.RANKING.name().equals(round.getRoundType()) && status != CompetitionStatus.JUDGING) {
             throw new BaseException("后续轮只能在评审中发布");
         }
+    }
+
+    private boolean isPreJudgingStage(CompetitionStatus status) {
+        return status == CompetitionStatus.DRAFT
+                || status == CompetitionStatus.REGISTRATION_OPEN
+                || status == CompetitionStatus.REGISTRATION_CLOSED
+                || status == CompetitionStatus.JUDGING_PREP;
     }
 
     private void validateSourceIsLatestLockedRound(Long competitionId, CompetitionRound sourceRound) {

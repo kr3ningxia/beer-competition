@@ -53,18 +53,26 @@
     </section>
 
     <section v-if="competition" class="detail-shell">
-      <nav class="detail-tabs" aria-label="比赛详情导航">
-        <button
-          v-for="tab in tabs"
-          :key="tab.key"
-          :class="{ active: activeTab === tab.key }"
-          type="button"
-          @click="activeTab = tab.key"
-        >
-          <component :is="tab.icon" />
-          {{ tab.label }}
-        </button>
-      </nav>
+      <div class="detail-tabbar">
+        <nav class="detail-tabs" aria-label="比赛详情导航">
+          <button
+            v-for="tab in tabs"
+            :key="tab.key"
+            :class="{ active: activeTab === tab.key }"
+            type="button"
+            @click="activeTab = tab.key"
+          >
+            <component :is="tab.icon" />
+            {{ tab.label }}
+          </button>
+        </nav>
+        <div v-if="tabSaveAction" class="tab-save-actions">
+          <button class="tool-button primary" type="button" @click="tabSaveAction.handler">
+            <Check />
+            {{ tabSaveAction.label }}
+          </button>
+        </div>
+      </div>
 
       <main class="tab-content">
         <section v-if="activeTab === 'overview'" class="tab-panel">
@@ -157,7 +165,6 @@
             <div class="panel-heading">
               <div>
                 <h2>投递组别</h2>
-                <span>{{ categoryForm.length }} 个组别</span>
               </div>
               <button v-if="editable.entryStructure" class="tool-button" type="button" @click="categoryForm.push('')">
                 <Plus />
@@ -181,47 +188,40 @@
           <article class="panel-card library-card">
             <div class="panel-heading library-heading">
               <div>
-                <h2>风格口径</h2>
-                <span>{{ editable.styleLibrary ? '选择这场比赛报名时使用的风格库' : '当前阶段已锁定风格库' }}</span>
+                <h2>报名风格</h2>
               </div>
-              <button class="tool-button" type="button" @click="router.push('/admin/style-libraries')">
-                查看风格库
-              </button>
             </div>
-            <div class="library-config-grid">
-              <label class="library-select-field">
-                <span>当前风格库</span>
+            <div class="library-config-block">
+              <div class="library-control-row">
                 <select v-model="selectedStyleLibraryVersion" :disabled="!editable.styleLibrary" aria-label="当前风格库">
                   <option v-for="library in styleLibraryOptions" :key="library.value" :value="library.value">
                     {{ library.label }}
                   </option>
                 </select>
-              </label>
-              <div class="library-summary compact">
-                <strong>{{ selectedStyleLibrary.label }}</strong>
-                <small>{{ selectedStyleLibrary.categoryCount }} 个分类 · {{ selectedStyleLibrary.styleCount }} 个风格</small>
-                <p>{{ editable.styleLibrary ? '保存后会更新本场报名可选风格。' : '本场报名使用下方已锁定快照。' }}</p>
+                <button class="tool-button" type="button" @click="router.push('/admin/style-libraries')">
+                  查看风格库
+                </button>
               </div>
             </div>
-            <div class="style-snapshot">
-              <div class="style-snapshot-head">
-                <strong>本场风格快照</strong>
-                <span>{{ styleSnapshot.length }} 个风格</span>
+            <div class="style-distribution">
+              <div class="style-distribution-head">
+                <strong>分类分布</strong>
               </div>
-              <div class="style-snapshot-list">
-                <span v-for="style in styleSnapshot.slice(0, 12)" :key="style.id || style.name">
-                  <b>{{ styleDisplayName(style) }}</b>
-                  <small>{{ style.categoryName || '未归类' }}</small>
+              <div class="style-distribution-list">
+                <span v-for="category in styleCategorySummary" :key="category.name">
+                  <b>{{ category.name }}</b>
+                  <small>{{ category.count }} 个风格</small>
                 </span>
-                <em v-if="styleSnapshot.length > 12">还有 {{ styleSnapshot.length - 12 }} 个</em>
-                <p v-if="styleSnapshot.length === 0" class="empty-line">当前没有风格快照。</p>
+                <p v-if="styleCategorySummary.length === 0" class="empty-line">当前风格库还没有可用分类。</p>
               </div>
             </div>
           </article>
 
           <article class="panel-card field-config-card">
             <div class="panel-heading">
-              <h2>报名补充信息</h2>
+              <div>
+                <h2>报名补充信息</h2>
+              </div>
               <button v-if="editable.entryStructure" class="tool-button" type="button" @click="addEntryField">
                 <Plus />
                 添加字段
@@ -254,12 +254,6 @@
               </div>
               <p v-if="entryFieldForm.length === 0" class="empty-line">当前没有报名补充字段。</p>
             </div>
-            <footer v-if="editable.entryStructure" class="panel-actions">
-              <button class="tool-button primary" type="button" @click="saveEntryConfig">
-                <Check />
-                保存报名配置
-              </button>
-            </footer>
           </article>
         </section>
 
@@ -466,16 +460,11 @@
         </section>
 
         <section v-if="activeTab === 'score'" class="tab-panel score-config-panel">
-          <div class="edit-banner">
-            <Finished />
-            评分表用于第一轮；后续排序轮由桌长选择排序，不需要打分和备注。
-          </div>
           <div class="score-panels">
             <article v-for="config in scoreConfigForm" :key="config.role" class="panel-card score-config-card">
               <div class="panel-heading">
                 <div>
                   <h2>{{ roleLabels[config.role] }}</h2>
-                  <small>{{ scoreConfigHint(config) }}</small>
                 </div>
                 <div class="score-card-actions">
                   <span :class="['score-total-pill', { success: getScoreTotal(config) === 50, danger: getScoreTotal(config) !== 50 }]">
@@ -532,12 +521,6 @@
               </div>
             </article>
           </div>
-          <footer v-if="editable.scoreConfigs" class="panel-actions">
-            <button class="tool-button primary" type="button" @click="saveScoreConfigs">
-              <Check />
-              保存评分表
-            </button>
-          </footer>
         </section>
 
         <section v-if="activeTab === 'progress'" class="tab-panel">
@@ -827,9 +810,31 @@ const registrationBlockText = computed(() => {
 })
 const selectedStyleLibrary = computed(() => getStyleLibrary(selectedStyleLibraryVersion.value || competition.value?.styleLibraryVersion, styleLibraryOptions.value))
 const styleSnapshot = computed(() => competition.value?.styles || [])
+const selectedStyleItems = computed(() => {
+  const libraryItems = selectedStyleLibrary.value?.styleItems || []
+  const items = libraryItems.length ? libraryItems : styleSnapshot.value
+  return items.filter((style) => style.status !== 0)
+})
+const styleCategorySummary = computed(() => {
+  const counts = new Map()
+  selectedStyleItems.value.forEach((style) => {
+    const name = style.categoryName || '未归类'
+    counts.set(name, (counts.get(name) || 0) + 1)
+  })
+  return [...counts.entries()].map(([name, count]) => ({ name, count }))
+})
 const registrationWindowInfo = computed(() => resolveRegistrationWindowInfo())
 const stagePrimaryAction = computed(() => resolveStagePrimaryAction())
 const stageSecondaryActions = computed(() => resolveStageSecondaryActions())
+const tabSaveAction = computed(() => {
+  if (activeTab.value === 'entryConfig' && editable.value.entryStructure) {
+    return { label: '保存报名配置', handler: saveEntryConfig }
+  }
+  if (activeTab.value === 'score' && editable.value.scoreConfigs) {
+    return { label: '保存评分表', handler: saveScoreConfigs }
+  }
+  return null
+})
 const futureStageTasks = computed(() => buildFutureStageTasks())
 const currentRound = computed(() => rounds.value.find((round) => round.id === activeRoundId.value) || rounds.value[0])
 const currentRoundTables = computed(() => currentRound.value?.tables || [])
@@ -865,7 +870,7 @@ const roundCategoryStats = computed(() => {
   return [...map.values()]
 })
 const roundValidationIssues = computed(() => buildRoundValidationIssues(currentRound.value))
-const canPublishCurrentRound = computed(() => currentRound.value && ['DRAFT', 'SUBMITTED'].includes(currentRound.value.status) && roundValidationIssues.value.length === 0)
+const canPublishCurrentRound = computed(() => currentRound.value?.status === 'DRAFT' && roundValidationIssues.value.length === 0)
 const roundReadinessChecks = computed(() => buildRoundReadinessChecks())
 const currentRoundTargetLabel = computed(() => (currentRound.value?.type === 'SCORE' ? '晋级' : '排序'))
 const currentRoundTargetDisplay = computed(() => {
@@ -874,10 +879,11 @@ const currentRoundTargetDisplay = computed(() => {
   const targets = [...new Set(currentRoundTables.value.map((table) => Number(table.targetCount || 0)).filter(Boolean))]
   return targets.length === 1 ? `每桌 ${targets[0]}，共 ${currentRoundTargetCount.value}` : `共 ${currentRoundTargetCount.value}`
 })
+const currentRoundPublishTarget = computed(() => (currentRound.value?.type === 'RANKING' ? '桌长' : '评委'))
 const roundReadinessTitle = computed(() => {
   if (!currentRound.value) return '还没有轮次'
-  if (currentRound.value.status === 'DRAFT') return canPublishCurrentRound.value ? `${currentRound.value.name}已准备好，可以发布给评委` : `${currentRound.value.name}发布前还有问题`
-  if (currentRound.value.status === 'PUBLISHED') return `${currentRound.value.name}已发布给评委`
+  if (currentRound.value.status === 'DRAFT') return canPublishCurrentRound.value ? `${currentRound.value.name}已准备好，可以发布给${currentRoundPublishTarget.value}` : `${currentRound.value.name}发布前还有问题`
+  if (currentRound.value.status === 'PUBLISHED') return `${currentRound.value.name}已发布给${currentRoundPublishTarget.value}`
   if (currentRound.value.status === 'IN_PROGRESS') return '本轮排序进行中'
   if (currentRound.value.status === 'SUBMITTED') return '排序已提交，等待确认'
   if (currentRound.value.status === 'LOCKED') return `${currentRound.value.name}已锁定`
@@ -894,7 +900,7 @@ const roundReadinessDetail = computed(() => {
 })
 const roundNextStepText = computed(() => {
   if (!currentRound.value) return '请先创建并配置第一轮。'
-  if (currentRound.value.status === 'DRAFT') return canPublishCurrentRound.value ? `点击发布，让评委开始${currentRound.value.name}。` : '先处理发布前检查里的问题。'
+  if (currentRound.value.status === 'DRAFT') return canPublishCurrentRound.value ? `点击发布，让${currentRoundPublishTarget.value}开始${currentRound.value.name}。` : '先处理发布前检查里的问题。'
   if (currentRound.value.status === 'PUBLISHED') return '等待评委评分完成，再由桌长汇总第一轮结果。'
   if (currentRound.value.status === 'IN_PROGRESS') return '等待桌长提交排序。'
   if (currentRound.value.status === 'SUBMITTED') return '确认排序无误后锁定本轮。'
@@ -1109,10 +1115,6 @@ async function loadStyleLibraries() {
   }
 }
 
-function styleDisplayName(style) {
-  return [style.styleCode, style.name].filter(Boolean).join(' ')
-}
-
 function seedJudgeAssignments() {
   const sourceJudges = fallbackJudgePool
   const seeded = []
@@ -1187,6 +1189,18 @@ function toChineseNumber(value) {
 
 function resolveStagePrimaryAction() {
   if (!competition.value) return { text: '加载中', enabled: false, action: 'noop' }
+  if (competition.value.status === 'DRAFT') {
+    return { text: '发布报名', enabled: true, action: 'publishRegistration' }
+  }
+  if (competition.value.status === 'REGISTRATION_OPEN') {
+    return { text: '截止报名', enabled: true, action: 'closeRegistration' }
+  }
+  if (competition.value.status === 'REGISTRATION_CLOSED') {
+    return { text: '进入评审准备', enabled: true, action: 'prepareJudging' }
+  }
+  if (competition.value.status === 'JUDGING_PREP' && !rounds.value.length) {
+    return { text: '创建第一轮', enabled: true, action: 'createFirstRound' }
+  }
   if (currentRound.value?.status === 'DRAFT') {
     return {
       text: currentRound.value.type === 'RANKING' ? '发布给桌长' : '发布当前轮次',
@@ -1199,18 +1213,6 @@ function resolveStagePrimaryAction() {
   }
   if (canCreateNextRound.value) {
     return { text: `创建${nextRoundName.value}`, enabled: true, action: 'createNextRound' }
-  }
-  if (competition.value.status === 'DRAFT') {
-    return { text: '发布报名', enabled: true, action: 'publishRegistration' }
-  }
-  if (competition.value.status === 'REGISTRATION_OPEN') {
-    return { text: '截止报名', enabled: true, action: 'closeRegistration' }
-  }
-  if (competition.value.status === 'REGISTRATION_CLOSED') {
-    return { text: '进入评审准备', enabled: true, action: 'prepareJudging' }
-  }
-  if (competition.value.status === 'JUDGING_PREP' && !rounds.value.length) {
-    return { text: '创建第一轮', enabled: true, action: 'createFirstRound' }
   }
   return { text: '查看现场进度', enabled: true, action: 'viewProgress' }
 }
@@ -1369,6 +1371,8 @@ function getPoolEntriesForRound(round) {
 function buildRoundValidationIssues(round) {
   if (!round) return ['请先创建轮次']
   const issues = []
+  const stageIssue = getRoundPublishStageIssue(round)
+  if (stageIssue) issues.push(stageIssue)
   if (!round.tables.length) issues.push(`${round.name}至少需要 1 张桌`)
   const assigned = round.tables.flatMap((table) => table.entryUuids)
   if (!assigned.length) issues.push(`${round.name}尚未分配酒款`)
@@ -1379,6 +1383,17 @@ function buildRoundValidationIssues(round) {
   if (duplicates.length) issues.push(`${round.name}存在重复分配酒款`)
   round.tables.forEach((table) => issues.push(...getRoundTableIssues(table)))
   return [...new Set(issues)]
+}
+
+function getRoundPublishStageIssue(round) {
+  if (round?.status !== 'DRAFT') return ''
+  if (round.type === 'SCORE' && competition.value?.status !== 'JUDGING_PREP') {
+    return '进入评审准备后才能发布第一轮'
+  }
+  if (round.type === 'RANKING' && competition.value?.status !== 'JUDGING') {
+    return '评审中才能发布后续轮'
+  }
+  return ''
 }
 
 function getRoundTableIssues(table) {
@@ -1942,12 +1957,6 @@ function removeScoreDimension(config, index) {
   config.dimensions.splice(index, 1)
 }
 
-function scoreConfigHint(config) {
-  if (config.role === 'CROSS') return '可配置 2-4 个维度，总分 50'
-  if (config.role === 'PROFESSIONAL') return '专业评审固定 5 个维度'
-  return '桌长填写共识分和综合评语'
-}
-
 function defaultMinCommentLength(role) {
   if (role === 'CROSS') return 50
   if (role === 'PROFESSIONAL') return 30
@@ -2328,12 +2337,21 @@ svg {
   flex-direction: column;
 }
 
-.detail-tabs {
+.detail-tabbar {
   flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  width: min(100%, 1360px);
+}
+
+.detail-tabs {
+  flex: 1 1 auto;
   justify-content: flex-start;
   gap: 8px;
   flex-wrap: wrap;
-  width: min(100%, 1360px);
+  width: auto;
   margin: 0;
   padding-left: 4px;
   box-sizing: border-box;
@@ -2355,6 +2373,20 @@ svg {
   color: var(--gold-soft);
   border-color: rgba(216, 169, 53, 0.32);
   background: rgba(216, 169, 53, 0.08);
+}
+
+.tab-save-actions {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  min-height: 40px;
+}
+
+.tab-save-actions .tool-button {
+  min-width: 148px;
+  min-height: 40px;
+  justify-content: center;
+  white-space: nowrap;
 }
 
 .tab-content {
@@ -2606,14 +2638,6 @@ small,
   gap: 8px;
 }
 
-.pill-list span,
-.library-summary.compact {
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.026);
-}
-
 .pill-list span {
   padding: 7px 10px;
   color: var(--text);
@@ -2626,23 +2650,27 @@ small,
   margin-bottom: 4px;
 }
 
-.library-config-grid {
-  display: grid;
-  grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
-  gap: 14px;
-  align-items: stretch;
-}
-
-.library-select-field,
+.library-config-block,
 .library-summary {
   display: grid;
   gap: 8px;
   align-content: start;
 }
 
-.library-select-field span,
 .library-summary small {
   color: var(--muted);
+}
+
+.library-control-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.library-control-row select {
+  flex: 0 1 460px;
+  width: min(460px, 100%);
 }
 
 .library-summary strong {
@@ -2656,52 +2684,43 @@ small,
   line-height: 1.6;
 }
 
-.style-snapshot {
+.style-distribution {
   display: grid;
   gap: 10px;
   padding-top: 12px;
   border-top: 1px solid var(--line);
 }
 
-.style-snapshot-head {
+.style-distribution-head {
   display: flex;
   justify-content: space-between;
   gap: 12px;
   align-items: center;
 }
 
-.style-snapshot-head span {
+.style-distribution-head span {
   color: var(--muted);
 }
 
-.style-snapshot-list {
+.style-distribution-list {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.style-snapshot-list span {
+.style-distribution-list span {
   display: inline-grid;
-  gap: 2px;
-  max-width: 220px;
-  padding: 8px 10px;
+  grid-template-columns: auto auto;
+  gap: 8px;
+  align-items: baseline;
+  padding: 7px 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.026);
+  background: rgba(255, 255, 255, 0.022);
 }
 
-.style-snapshot-list b,
-.style-snapshot-list small {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.style-snapshot-list small,
-.style-snapshot-list em {
+.style-distribution-list small {
   color: var(--muted);
-  font-style: normal;
 }
 
 .category-editor-list {
@@ -2789,7 +2808,7 @@ input[type="checkbox"] {
 
 .field-table .table-head,
 .field-table .table-row {
-  grid-template-columns: minmax(150px, 1fr) minmax(104px, 124px) minmax(190px, 1.2fr) 72px 96px 38px;
+  grid-template-columns: minmax(150px, 0.9fr) minmax(104px, 124px) minmax(260px, 1.8fr) 72px 96px 38px;
 }
 
 .entries-table .table-head,
@@ -3775,6 +3794,7 @@ input[type="checkbox"] {
   }
 
   .head-main,
+  .detail-tabbar,
   .two-column,
   .judge-workbench,
   .round-workbench,
@@ -3796,6 +3816,15 @@ input[type="checkbox"] {
 
   .round-flow {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .detail-tabbar {
+    align-items: stretch;
+  }
+
+  .tab-save-actions {
+    justify-content: flex-start;
+    padding-left: 4px;
   }
 }
 </style>

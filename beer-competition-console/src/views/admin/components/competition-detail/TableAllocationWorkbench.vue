@@ -128,6 +128,7 @@
         <section class="control-section">
           <strong>操作</strong>
           <button
+            v-if="!firstRoundExists"
             class="main-action"
             type="button"
             :disabled="validationIssues.length > 0"
@@ -135,6 +136,10 @@
           >
             生成第一轮编排
           </button>
+          <p v-else class="ok">
+            <CircleCheck />
+            <span>第一轮编排已生成。</span>
+          </p>
           <button v-if="editableJudges" class="add-desk" type="button" @click="$emit('addJudgeTable')">新增基础桌</button>
           <button v-if="editableJudges" type="button" @click="$emit('saveJudgeDraft')">保存评审人员</button>
         </section>
@@ -144,9 +149,13 @@
           <Warning />
           <span>{{ issue }}</span>
         </p>
-        <p v-if="validationIssues.length === 0" class="ok">
+        <p v-if="validationIssues.length === 0 && !firstRoundExists" class="ok">
           <CircleCheck />
           <span>可以生成第一轮编排。</span>
+        </p>
+        <p v-if="validationIssues.length === 0 && firstRoundExists" class="ok">
+          <CircleCheck />
+          <span>可以继续调整第一轮草稿。</span>
         </p>
         </section>
       </aside>
@@ -466,6 +475,8 @@ const roundKeywordModel = computed({
   get: () => props.roundKeyword,
   set: (value) => emit('update:roundKeyword', value),
 })
+
+const firstRoundExists = computed(() => props.rounds.some((round) => round.roundNo === 1))
 
 const overviewMetrics = computed(() => {
   const assignedEntries = new Set(props.currentRoundTables.flatMap((table) => table.entryUuids)).size

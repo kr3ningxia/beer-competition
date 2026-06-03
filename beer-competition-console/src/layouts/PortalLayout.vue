@@ -24,10 +24,16 @@
           </RouterLink>
         </nav>
 
-        <div v-if="loggedIn" class="account-pill">
-          <span class="avatar">SM</span>
-          <span>{{ accountName }}</span>
-          <el-button text @click="logout">退出</el-button>
+        <div v-if="loggedIn" class="account-actions">
+          <RouterLink
+            :class="['account-pill', { active: route.path === '/portal/profile' }]"
+            to="/portal/profile"
+            aria-label="进入厂牌资料"
+          >
+            <span class="avatar">SM</span>
+            <span>{{ accountName }}</span>
+          </RouterLink>
+          <el-button class="logout-button" text @click="logout">退出</el-button>
         </div>
         <RouterLink v-else class="login-link" to="/portal/login">登录报名</RouterLink>
       </div>
@@ -46,9 +52,7 @@ import {
   CircleCheck,
   CoffeeCup,
   Document,
-  Money,
   Tickets,
-  User,
 } from '@element-plus/icons-vue'
 import { clearSession, getDisplayName, isLoggedIn } from '@/utils/auth'
 
@@ -62,10 +66,6 @@ const navItems = [
   { path: '/portal/home', label: '赛事首页', icon: Tickets, public: true },
   { path: '/portal/events', label: '全部赛事', icon: Document, public: true, match: ['/portal/events'] },
   { path: '/portal/my', label: '我的参赛', icon: CircleCheck, auth: true },
-  { path: '/portal/entries', label: '我的酒款', icon: Document, auth: true },
-  { path: '/portal/payment', label: '付款与标签', icon: Money, auth: true },
-  { path: '/portal/results', label: '结果反馈', icon: CircleCheck, auth: true },
-  { path: '/portal/profile', label: '厂牌资料', icon: User, auth: true },
 ]
 
 const visibleNavItems = computed(() => navItems.filter((item) => item.public || loggedIn.value))
@@ -200,18 +200,39 @@ function logout() {
   border-color: rgba(184, 117, 23, 0.28);
 }
 
-.account-pill {
+.account-actions {
   display: flex;
   align-items: center;
   gap: 9px;
   min-height: 42px;
   padding: 5px 6px 5px 5px;
-  color: #33251a;
   background: #fffaf0;
   border: 1px solid rgba(87, 58, 26, 0.12);
   border-radius: 999px;
   box-shadow: 0 10px 24px rgba(83, 51, 17, 0.08);
   white-space: nowrap;
+}
+
+.account-pill {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 32px;
+  padding: 0 10px 0 0;
+  color: #33251a;
+  text-decoration: none;
+  border-radius: 999px;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.account-pill:hover,
+.account-pill.active {
+  color: #2b1d10;
+  background: #fff4d7;
+}
+
+.logout-button {
+  flex: 0 0 auto;
 }
 
 .login-link {
@@ -308,7 +329,7 @@ function logout() {
     padding-bottom: 4px;
   }
 
-  .account-pill {
+  .account-actions {
     justify-self: end;
   }
 }
@@ -325,7 +346,7 @@ function logout() {
     flex: 1 1 auto;
   }
 
-  .account-pill {
+  .account-actions {
     max-width: 100%;
   }
 
