@@ -1,139 +1,83 @@
 <template>
   <main :class="['live-board', densityClass]">
     <header class="board-header">
-      <div class="event-copy">
-        <span class="eyebrow">现场投屏看板</span>
-        <h1>{{ board.title }}</h1>
-        <p>{{ board.dateText }} · {{ board.roundText }} · {{ board.statusText }}</p>
-      </div>
-
-      <div class="board-actions">
-        <div class="refresh-pill">
-          <Refresh />
-          <span>{{ loading ? '刷新中' : `${refreshCountdown} 秒后刷新` }}</span>
-          <strong>{{ currentTimeText }}</strong>
+      <section class="title-zone">
+        <div class="stage-line">
+          <span>{{ board.roundName }}</span>
+          <b>{{ board.statusText }}</b>
+          <em>{{ board.roundTypeText }}</em>
         </div>
-        <button type="button" @click="manualRefresh">
-          <Refresh />
-          刷新
-        </button>
-        <button type="button" @click="returnToRounds">
-          <Back />
-          返回轮次编排
-        </button>
-      </div>
+        <h1>{{ board.title }}</h1>
+      </section>
+
+      <section :class="['notice-panel', board.noticeTone]" aria-label="现场状态">
+        <span class="notice-dot" />
+        <strong>{{ board.noticeTitle }}</strong>
+        <p>{{ board.noticeText }}</p>
+      </section>
     </header>
 
-    <section class="metric-strip" aria-label="核心进度">
-      <article v-for="metric in board.metrics" :key="metric.label" :class="['metric-tile', metric.tone]">
+    <section class="metric-strip" aria-label="本轮总览">
+      <article v-for="metric in board.metrics" :key="metric.label" :class="['metric-card', metric.tone]">
         <span>{{ metric.label }}</span>
         <strong>{{ metric.value }}</strong>
-        <small>{{ metric.hint }}</small>
+        <small>{{ metric.unit }}</small>
       </article>
     </section>
 
-    <section class="board-body">
-      <div class="table-panel">
-        <div class="section-title">
-          <h2>评审桌进度</h2>
-          <span>{{ board.tables.length }} 桌 · {{ board.tableModeText }}</span>
-        </div>
-
-        <div class="table-board-grid">
-          <article v-for="table in board.tables" :key="table.id" :class="['table-tile', table.tone]">
-            <header>
-              <div>
-                <b>{{ table.shortName }}</b>
-                <h3>{{ table.name }}</h3>
-              </div>
-              <em>{{ table.statusText }}</em>
-            </header>
-
-            <p class="captain-line">{{ table.entryCount }} 款 · 桌长 {{ table.captainName }}</p>
-            <p class="state-line">{{ table.stateLine }}</p>
-
-            <div class="progress-pair">
-              <div>
-                <span>{{ table.primaryLabel }}</span>
-                <strong>{{ table.primaryText }}</strong>
-                <i><b :style="{ width: `${table.primaryPercent}%` }" /></i>
-                <small>{{ table.primaryHint }}</small>
-              </div>
-              <div>
-                <span>{{ table.secondaryLabel }}</span>
-                <strong>{{ table.secondaryText }}</strong>
-                <i><b :style="{ width: `${table.secondaryPercent}%` }" /></i>
-                <small>{{ table.secondaryHint }}</small>
-              </div>
-            </div>
-
-            <footer>
-              <span>{{ table.targetLabel }} {{ table.targetText }}</span>
-              <small>{{ table.issueText || table.nextText }}</small>
-            </footer>
-          </article>
-          <article v-if="!board.tables.length" class="table-empty">
-            <strong>等待轮次发布</strong>
-            <span>轮次创建并发布后，评审桌进度会显示在这里。</span>
-          </article>
-        </div>
-      </div>
-
-      <aside class="side-panel">
-        <section>
-          <div class="section-title compact">
-            <h2>轮次路径</h2>
+    <section class="table-grid" aria-label="评审桌状态">
+      <article v-for="table in board.tables" :key="table.id" :class="['table-card', table.tone]">
+        <header class="table-head">
+          <div class="table-name">
+            <h2>{{ table.displayName }}</h2>
+            <span>{{ table.entryCount }} 款酒</span>
           </div>
-          <div class="round-path-board">
-            <span v-for="round in board.roundPath" :key="round.key" :class="round.state">
-              <strong>{{ round.label }}</strong>
-              <small>{{ round.detail }}</small>
-            </span>
+          <b class="status-pill">{{ table.statusText }}</b>
+        </header>
+
+        <section class="progress-zone">
+          <div class="progress-main">
+            <span>{{ table.primaryLabel }}</span>
+            <strong>{{ table.primaryValue }}</strong>
+          </div>
+          <div class="progress-track" aria-hidden="true">
+            <i :style="{ width: `${table.visualPercent}%` }" />
           </div>
         </section>
 
-        <section>
-          <div class="section-title compact">
-            <h2>现场提示</h2>
-            <span>{{ board.issueCount }} 项</span>
-          </div>
-          <div class="issue-list">
-            <p v-if="!board.issues.length" class="empty-issue">暂无影响评审推进的问题</p>
-            <p v-for="issue in board.issues" :key="issue" class="issue-item">{{ issue }}</p>
-          </div>
+        <section class="table-facts">
+          <span v-for="stat in table.stats" :key="stat.label" :class="{ accent: stat.accent }">
+            <small>{{ stat.label }}</small>
+            <strong>{{ stat.value }}</strong>
+          </span>
         </section>
-      </aside>
+
+        <p v-if="table.issueText" class="issue-text">{{ table.issueText }}</p>
+      </article>
+
+      <article v-if="!board.tables.length" class="empty-card">
+        <strong>等待轮次发布</strong>
+        <span>轮次发布后，评审桌状态会显示在这里。</span>
+      </article>
     </section>
   </main>
 </template>
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { Back, Refresh } from '@element-plus/icons-vue'
+import { useRoute } from 'vue-router'
 import { fetchCompetitionProgress, fetchCompetitions } from '@/api/admin'
 
 const REFRESH_SECONDS = 10
 
 const route = useRoute()
-const router = useRouter()
 const loading = ref(false)
 const detail = ref(null)
 const selectedCompetitionId = ref(route.query.competitionId || '')
-const refreshCountdown = ref(REFRESH_SECONDS)
-const currentTime = ref(new Date())
 let refreshTimer = null
-let clockTimer = null
 
 const board = computed(() => buildBoard(detail.value))
-const densityClass = computed(() => {
-  const count = board.value.tables.length
-  if (count <= 2) return 'few-tables'
-  if (count <= 4) return 'normal-tables'
-  if (count <= 8) return 'many-tables'
-  return 'dense-tables'
-})
-const currentTimeText = computed(() => formatTime(currentTime.value))
+const densityClass = computed(() => `tables-${Math.min(Math.max(board.value.tables.length || 1, 1), 8)}`)
 
 onMounted(async () => {
   await ensureCompetition()
@@ -143,7 +87,6 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.clearInterval(refreshTimer)
-  window.clearInterval(clockTimer)
 })
 
 async function ensureCompetition() {
@@ -155,36 +98,17 @@ async function ensureCompetition() {
 }
 
 function startTimers() {
-  refreshTimer = window.setInterval(async () => {
-    refreshCountdown.value -= 1
-    if (refreshCountdown.value <= 0) await refreshBoard()
-  }, 1000)
-  clockTimer = window.setInterval(() => {
-    currentTime.value = new Date()
-  }, 1000)
+  refreshTimer = window.setInterval(refreshBoard, REFRESH_SECONDS * 1000)
 }
 
 async function refreshBoard() {
-  if (!selectedCompetitionId.value) return
+  if (!selectedCompetitionId.value || loading.value) return
   loading.value = true
   try {
     detail.value = normalizeDetail(await fetchCompetitionProgress(selectedCompetitionId.value))
-    refreshCountdown.value = REFRESH_SECONDS
   } finally {
     loading.value = false
   }
-}
-
-async function manualRefresh() {
-  await refreshBoard()
-}
-
-function returnToRounds() {
-  if (!selectedCompetitionId.value) {
-    router.push('/admin/competitions')
-    return
-  }
-  router.push(`/admin/competitions/${selectedCompetitionId.value}?tab=rounds`)
 }
 
 function normalizeDetail(data) {
@@ -203,206 +127,206 @@ function buildBoard(data) {
   const currentRound = data.currentRound || rounds.find((round) => ['PUBLISHED', 'IN_PROGRESS', 'SUBMITTED'].includes(round.status))
     || rounds[rounds.length - 1]
     || rounds[0]
-  const tables = (currentRound?.tables || []).map((table) => buildTableTile(currentRound, table))
-  const issueTexts = collectIssues(currentRound, tables)
-  const metrics = buildMetrics(data, currentRound, tables, issueTexts.length)
+  const tables = (currentRound?.tables || []).slice(0, 8).map((table) => buildTableTile(currentRound, table))
+  const notices = collectNotices(currentRound, tables)
+  const primaryNotice = notices[0] || buildDefaultNotice(currentRound, tables)
   return {
     title: data.name || '现场比赛',
-    dateText: formatDate(data.date),
-    roundText: currentRound ? `${currentRound.name} · ${currentRound.type === 'SCORE' ? '评分制' : '选择排序'}` : '未创建轮次',
+    roundName: currentRound?.name || '未创建轮次',
+    roundTypeText: currentRound?.type === 'RANKING' ? '排序轮' : '评分轮',
     statusText: resolveStatusText(data.status, currentRound),
-    tableModeText: currentRound?.type === 'SCORE' ? '评分与桌长汇总' : '桌长选择排序',
-    metrics,
+    metrics: buildMetrics(currentRound, tables),
     tables,
-    issueCount: issueTexts.length,
-    issues: issueTexts.slice(0, 4),
-    roundPath: buildRoundPath(rounds, currentRound),
+    noticeTone: primaryNotice.tone,
+    noticeTitle: primaryNotice.title,
+    noticeText: primaryNotice.text,
   }
 }
 
 function buildEmptyBoard() {
   return {
     title: '现场比赛',
-    dateText: '-',
-    roundText: '加载中',
-    statusText: '准备看板',
-    tableModeText: '等待数据',
+    roundName: '未创建轮次',
+    roundTypeText: '等待发布',
+    statusText: '现场准备中',
     metrics: [
-      { label: '本轮酒款', value: '-', hint: '等待数据', tone: 'neutral' },
-      { label: '普通评分', value: '-', hint: '等待数据', tone: 'neutral' },
-      { label: '桌长汇总', value: '-', hint: '等待数据', tone: 'neutral' },
-      { label: '已选晋级', value: '-', hint: '等待数据', tone: 'neutral' },
-      { label: '待处理', value: '-', hint: '等待数据', tone: 'neutral' },
+      { label: '本轮酒款', value: '-', unit: '款', tone: 'neutral' },
+      { label: '评审桌', value: '-', unit: '桌', tone: 'neutral' },
+      { label: '已提交', value: '-', unit: '份', tone: 'gold' },
+      { label: '完成桌数', value: '-', unit: '桌', tone: 'success' },
     ],
     tables: [],
-    issues: [],
-    issueCount: 0,
-    roundPath: [],
+    noticeTone: 'warning',
+    noticeTitle: '等待轮次',
+    noticeText: '当前比赛还没有发布可投屏的评审轮次。',
   }
 }
 
-function buildMetrics(data, round, tables, issueCount) {
+function buildMetrics(round, tables) {
   const entryCount = countRoundEntries(round)
+  const doneTables = tables.filter((table) => table.done).length
   if (round?.type === 'RANKING') {
     const selected = tables.reduce((sum, table) => sum + table.selectedCount, 0)
     const target = tables.reduce((sum, table) => sum + table.targetCount, 0)
-    const doneTables = tables.filter((table) => table.tone === 'success').length
     return [
-      { label: '候选酒款', value: entryCount, hint: '本轮候选', tone: 'neutral' },
-      { label: '桌长排序', value: `${selected} / ${target}`, hint: '已填排序槽位', tone: selected >= target ? 'success' : 'warning' },
-      { label: '完成桌数', value: `${doneTables} / ${tables.length}`, hint: '本轮已完成', tone: doneTables === tables.length ? 'success' : 'neutral' },
-      { label: '晋级池', value: `${(data.entryPool || []).filter((entry) => entry.advanced).length}`, hint: '已标记晋级', tone: 'gold' },
-      { label: '待处理', value: issueCount, hint: '影响推进的问题', tone: issueCount ? 'danger' : 'success' },
+      { label: '候选酒款', value: entryCount, unit: '款', tone: 'neutral' },
+      { label: '评审桌', value: tables.length, unit: '桌', tone: 'neutral' },
+      { label: '已排序', value: `${selected} / ${target}`, unit: '席位', tone: selected >= target && target > 0 ? 'success' : 'gold' },
+      { label: '完成桌数', value: `${doneTables} / ${tables.length}`, unit: '桌', tone: doneTables === tables.length && tables.length ? 'success' : 'warning' },
     ]
   }
-  const judgeAverage = average(tables.map((table) => table.primaryPercent))
-  const captainAverage = average(tables.map((table) => table.secondaryPercent))
-  const advanced = tables.reduce((sum, table) => sum + table.selectedCount, 0)
-  const target = tables.reduce((sum, table) => sum + table.targetCount, 0)
+  const submitted = tables.reduce((sum, table) => sum + table.submittedCount, 0)
+  const total = tables.reduce((sum, table) => sum + table.submittedTotal, 0)
   return [
-    { label: '本轮酒款', value: entryCount, hint: '当前轮次酒款', tone: 'neutral' },
-    { label: '普通评分', value: `${judgeAverage}%`, hint: '评委评分进度', tone: judgeAverage >= 100 ? 'success' : 'neutral' },
-    { label: '桌长汇总', value: `${captainAverage}%`, hint: '桌长确认进度', tone: captainAverage >= 100 ? 'success' : 'warning' },
-    { label: '已选晋级', value: `${advanced} / ${target}`, hint: '桌长已选晋级', tone: advanced >= target && target > 0 ? 'success' : 'gold' },
-    { label: '待处理', value: issueCount, hint: '影响推进的问题', tone: issueCount ? 'danger' : 'success' },
+    { label: '本轮酒款', value: entryCount, unit: '款', tone: 'neutral' },
+    { label: '评审桌', value: tables.length, unit: '桌', tone: 'neutral' },
+    { label: '已提交', value: `${submitted} / ${total}`, unit: '份', tone: submitted >= total && total > 0 ? 'success' : 'gold' },
+    { label: '完成桌数', value: `${doneTables} / ${tables.length}`, unit: '桌', tone: doneTables === tables.length && tables.length ? 'success' : 'warning' },
   ]
 }
 
 function buildTableTile(round, table) {
   const entryCount = table.entryUuids?.length || 0
-  const captainName = table.captainName || table.captain?.name || '未指定'
   const targetCount = Number(table.targetCount || 0)
+  const displayName = table.name || '未命名桌'
   if (round?.type === 'RANKING') {
     const selectedCount = (table.rankings || []).filter((slot) => slot.uuid).length
-    const percent = targetCount ? Math.round(selectedCount / targetCount * 100) : 0
     const issueText = getTableIssue(table)
+    const done = !issueText && selectedCount >= targetCount && targetCount > 0
+    const statusText = issueText ? '需关注' : done ? '已完成' : selectedCount ? '排序中' : '待排序'
     return {
-      id: table.id || table.name,
-      name: table.name,
-      shortName: table.name?.slice(0, 1) || '桌',
-      captainName,
+      id: table.id || displayName,
+      displayName,
       entryCount,
       targetCount,
       selectedCount,
-      primaryLabel: '候选',
-      primaryText: `${entryCount} 款`,
-      primaryPercent: 100,
-      primaryHint: '本轮候选酒款',
-      secondaryLabel: '已选',
-      secondaryText: `${selectedCount} / ${targetCount}`,
-      secondaryPercent: percent,
-      secondaryHint: selectedCount ? '桌长已选择排序' : '等待桌长选择排序',
-      targetLabel: '排序目标',
-      targetText: `${targetCount} 款`,
-      statusText: issueText ? '需要处理' : selectedCount >= targetCount && targetCount > 0 ? '已完成' : '排序中',
-      stateLine: issueText || (selectedCount >= targetCount && targetCount > 0 ? '本桌排序已完成' : '等待桌长提交本桌排序'),
-      nextText: selectedCount >= targetCount && targetCount > 0 ? '等待确认锁定' : '等待桌长提交排序',
+      submittedCount: selectedCount,
+      submittedTotal: Math.max(targetCount, 0),
+      primaryLabel: '排序进度',
+      primaryValue: `${selectedCount} / ${targetCount}`,
+      visualPercent: targetCount ? normalizePercent(selectedCount * 100 / targetCount) : 0,
+      statusText,
+      done,
       issueText,
-      tone: issueText ? 'danger' : selectedCount >= targetCount && targetCount > 0 ? 'success' : 'warning',
+      tone: issueText ? 'danger' : done ? 'success' : selectedCount ? 'active' : 'warning',
+      stats: [
+        { label: '候选', value: `${entryCount} 款` },
+        { label: '桌长', value: selectedCount ? `${selectedCount} / ${targetCount}` : '未开始', accent: selectedCount > 0 },
+        { label: '目标', value: `${targetCount} 款`, accent: true },
+      ],
     }
   }
+
   const judgeProgress = normalizePercent(table.judgeProgress)
   const captainProgress = normalizePercent(table.captainProgress)
   const selectedCount = Number(table.advancedCount || 0)
+  const submittedTotal = entryCount
+  const submittedCount = estimateCount(submittedTotal, judgeProgress)
+  const captainConfirmedCount = estimateCount(entryCount, captainProgress)
   const issueText = getTableIssue(table)
-  let statusText = '评分中'
-  let tone = 'neutral'
+  const done = !issueText && captainProgress >= 100
+  let statusText = '等待评分'
+  let tone = 'idle'
   if (issueText) {
-    statusText = '需要处理'
+    statusText = '需关注'
     tone = 'danger'
-  } else if (captainProgress >= 100) {
+  } else if (done) {
     statusText = '已完成'
     tone = 'success'
+  } else if (captainProgress > 0) {
+    statusText = '确认中'
+    tone = 'warning'
   } else if (judgeProgress >= 100) {
-    statusText = '待桌长汇总'
+    statusText = '待确认'
     tone = 'warning'
   } else if (judgeProgress > 0) {
     statusText = '评分中'
-    tone = 'neutral'
+    tone = 'active'
   }
-  const stateLine = issueText
-    || (captainProgress >= 100 ? '本桌结果已完成'
-      : judgeProgress >= 100 ? '评分完成，等待桌长汇总'
-        : judgeProgress > 0 ? '评委正在提交评分'
-          : '等待评委提交评分')
+
   return {
-    id: table.id || table.name,
-    name: table.name,
-    shortName: table.name?.slice(0, 1) || '桌',
-    captainName,
+    id: table.id || displayName,
+    displayName,
     entryCount,
     targetCount,
     selectedCount,
-    primaryLabel: '普通评分',
-    primaryText: `${judgeProgress}%`,
-    primaryPercent: judgeProgress,
-    primaryHint: judgeProgress > 0 ? '评委评分正在推进' : '等待评委提交评分',
-    secondaryLabel: '桌长汇总',
-    secondaryText: `${captainProgress}%`,
-    secondaryPercent: captainProgress,
-    secondaryHint: captainProgress > 0 ? '桌长正在汇总结果' : '评分完成后由桌长汇总',
-    targetLabel: '晋级',
-    targetText: `${selectedCount} / ${targetCount}`,
+    submittedCount,
+    submittedTotal,
+    captainConfirmedCount,
+    primaryLabel: '评分提交',
+    primaryValue: `${submittedCount} / ${submittedTotal}`,
+    visualPercent: judgeProgress,
     statusText,
-    stateLine,
-    nextText: captainProgress >= 100 ? '本桌结果已完成' : judgeProgress >= 100 ? '等待桌长汇总' : '等待评委评分',
+    done,
     issueText,
     tone,
+    stats: [
+      { label: '桌长', value: resolveCaptainText(captainProgress, captainConfirmedCount, entryCount), accent: captainProgress > 0 || judgeProgress >= 100 },
+      { label: '晋级', value: `${targetCount} 款`, accent: true },
+      { label: '进度', value: `${judgeProgress}%` },
+    ],
   }
+}
+
+function resolveCaptainText(progress, confirmedCount, entryCount) {
+  if (progress >= 100) return '已完成'
+  if (progress > 0) return `${confirmedCount} / ${entryCount}`
+  return '未开始'
 }
 
 function getTableIssue(table) {
-  if (!table.captainPublicId && !table.captainName && !table.captain?.name) return '缺少桌长'
+  if (!table.captainPublicId && !table.captainName && !table.captain?.name) return '桌长未指定'
   if (!(table.entryUuids || []).length) return '尚未分配酒款'
-  if (!Number(table.targetCount || 0)) return '目标数量未设置'
+  if (!Number(table.targetCount || 0)) return '晋级名额未设置'
   return ''
 }
 
-function collectIssues(round, tables) {
-  if (!round) return ['当前比赛还没有轮次']
-  return tables
-    .filter((table) => table.issueText)
-    .map((table) => `${table.name}：${table.issueText}`)
+function collectNotices(round, tables) {
+  if (!round) return [{ title: '等待轮次', text: '当前比赛还没有发布可投屏的评审轮次。', tone: 'warning' }]
+  const issue = tables.find((table) => table.issueText)
+  if (issue) return [{ title: '需现场处理', text: `${issue.displayName}${issue.issueText}，请工作人员处理。`, tone: 'danger' }]
+
+  const waitingCaptain = tables.find((table) => table.statusText === '待确认')
+  const scoring = tables.find((table) => table.statusText === '评分中')
+  const captainWorking = tables.find((table) => table.statusText === '确认中')
+  if (scoring) {
+    const pending = Math.max(scoring.submittedTotal - scoring.submittedCount, 0)
+    return [{ title: '评审进行中', text: `${scoring.displayName}还有 ${pending} 份评分待提交。`, tone: 'gold' }]
+  }
+  if (waitingCaptain) {
+    return [{ title: '等待桌长', text: `${waitingCaptain.displayName}评分已完成，等待桌长确认。`, tone: 'warning' }]
+  }
+  if (captainWorking) {
+    return [{ title: '桌长确认中', text: `${captainWorking.displayName}桌长正在确认本桌结果。`, tone: 'warning' }]
+  }
+  if (tables.length && tables.every((table) => table.done)) {
+    return [{ title: '本轮已完成', text: '所有评审桌已完成，请等待主办方确认本轮结果。', tone: 'success' }]
+  }
+  return []
 }
 
-function buildRoundPath(rounds, currentRound) {
-  const items = rounds.map((round) => ({
-    key: round.id,
-    label: round.name,
-    detail: `${round.tables?.length || 0} 桌 · ${roundStatusText(round.status)}`,
-    state: round.id === currentRound?.id ? 'active' : round.status === 'LOCKED' ? 'done' : 'pending',
-  }))
-  items.push({
-    key: 'result',
-    label: '结果',
-    detail: rounds.length ? '完成全部轮次后确认' : '等待轮次创建',
-    state: 'pending',
-  })
-  return items
+function buildDefaultNotice(round, tables) {
+  if (!round) return { title: '等待轮次', text: '当前比赛还没有发布可投屏的评审轮次。', tone: 'warning' }
+  if (!tables.length) return { title: '等待分桌', text: '当前轮次还没有评审桌。', tone: 'warning' }
+  return { title: '现场正常', text: '评审桌状态正常，暂无需要现场处理的事项。', tone: 'success' }
 }
 
 function resolveStatusText(status, round) {
-  if (round?.status === 'PUBLISHED') return '评审进行中'
+  if (round?.status === 'PUBLISHED') return '评分进行中'
   if (round?.status === 'IN_PROGRESS') return '处理中'
   if (round?.status === 'SUBMITTED') return '等待确认'
   if (round?.status === 'LOCKED') return '本轮已锁定'
-  if (status === 'JUDGING') return '评审进行中'
+  if (status === 'JUDGING') return '评分进行中'
   return '现场准备中'
-}
-
-function roundStatusText(status) {
-  const labels = {
-    DRAFT: '草稿',
-    PUBLISHED: '已发布',
-    IN_PROGRESS: '处理中',
-    SUBMITTED: '已提交',
-    LOCKED: '已锁定',
-  }
-  return labels[status] || status || '-'
 }
 
 function countRoundEntries(round) {
   return new Set((round?.tables || []).flatMap((table) => table.entryUuids || [])).size
+}
+
+function estimateCount(total, percent) {
+  if (!total) return 0
+  return Math.min(total, Math.round(total * normalizePercent(percent) / 100))
 }
 
 function normalizePercent(value) {
@@ -410,77 +334,58 @@ function normalizePercent(value) {
   if (!Number.isFinite(number)) return 0
   return Math.max(0, Math.min(100, Math.round(number)))
 }
-
-function average(values) {
-  if (!values.length) return 0
-  return Math.round(values.reduce((sum, value) => sum + normalizePercent(value), 0) / values.length)
-}
-
-function formatDate(value) {
-  if (!value) return '比赛日未设置'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return String(value)
-  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`
-}
-
-function formatTime(value) {
-  return `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}:${String(value.getSeconds()).padStart(2, '0')}`
-}
 </script>
 
 <style scoped>
 .live-board {
-  --board-bg: #081116;
-  --panel: rgba(19, 31, 36, 0.9);
-  --panel-soft: rgba(255, 255, 255, 0.035);
-  --line: rgba(219, 232, 237, 0.12);
-  --text: #ecf4f6;
-  --muted: #91a7af;
-  --gold: #e0b84a;
-  --green: #75d783;
-  --amber: #f1bd79;
-  --red: #ff7d74;
+  --bg: #0d0f0e;
+  --panel: #171a17;
+  --panel-soft: #20231e;
+  --line: rgba(239, 191, 91, 0.22);
+  --line-strong: rgba(239, 191, 91, 0.42);
+  --text: #fff8e8;
+  --muted: #d4c5a2;
+  --dim: #92876f;
+  --gold: #f2bf4f;
+  --gold-soft: #ffe08d;
+  --green: #a8d46f;
+  --blue: #75b7ff;
+  --orange: #ff9d45;
+  --danger: #ff665a;
   position: fixed;
   inset: 0;
   display: grid;
-  grid-template-rows: 126px 138px minmax(0, 1fr);
-  gap: 14px;
-  padding: 28px 32px 24px;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 18px;
+  padding: 32px 40px 34px;
   overflow: hidden;
   color: var(--text);
   background:
-    radial-gradient(circle at 92% 14%, rgba(224, 184, 74, 0.16), transparent 15rem),
-    radial-gradient(circle at 14% 10%, rgba(216, 169, 53, 0.14), transparent 22rem),
-    radial-gradient(circle at 82% 82%, rgba(117, 215, 131, 0.08), transparent 18rem),
-    linear-gradient(rgba(255, 255, 255, 0.026) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.026) 1px, transparent 1px),
-    var(--board-bg);
-  background-size: auto, 96px 96px, 96px 96px, auto;
+    linear-gradient(90deg, rgba(242, 191, 79, 0.07), transparent 42%),
+    linear-gradient(180deg, #18140d 0%, var(--bg) 62%, #080908 100%);
+  font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
+  letter-spacing: 0;
 }
 
 .live-board::before {
   content: "";
   position: absolute;
-  top: 0;
-  left: 8vw;
-  right: 8vw;
-  height: 3px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, transparent, rgba(224, 184, 74, 0.88), transparent);
-  box-shadow: 0 0 36px rgba(224, 184, 74, 0.38);
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.13;
+  background-image:
+    linear-gradient(rgba(255, 232, 178, 0.18) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 232, 178, 0.12) 1px, transparent 1px);
+  background-size: 56px 56px;
 }
 
 .live-board::after {
   content: "";
   position: absolute;
-  inset: 0;
+  inset: auto 40px 22px;
+  height: 3px;
   pointer-events: none;
-  opacity: 0.26;
-  background-image:
-    radial-gradient(circle, rgba(255, 255, 255, 0.2) 0 1px, transparent 1.5px),
-    radial-gradient(circle, rgba(224, 184, 74, 0.22) 0 1px, transparent 1.5px);
-  background-position: 28px 34px, 92px 76px;
-  background-size: 140px 120px, 190px 160px;
+  background: linear-gradient(90deg, var(--gold), rgba(168, 212, 111, 0.75), transparent);
 }
 
 .live-board > * {
@@ -488,439 +393,756 @@ function formatTime(value) {
   z-index: 1;
 }
 
-.board-header,
-.metric-tile,
-.table-tile,
-.side-panel section {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.26);
-}
-
 .board-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(380px, 33%);
+  gap: 28px;
+  align-items: stretch;
+}
+
+.title-zone {
+  min-width: 0;
+}
+
+.stage-line {
+  display: flex;
   align-items: center;
-  padding: 18px 24px;
+  gap: 12px;
+  min-width: 0;
 }
 
-.eyebrow,
-.section-title span,
-.metric-tile span,
-.metric-tile small,
-.captain-line,
-.side-panel small,
-.round-path-board small,
-.issue-list p {
-  color: var(--muted);
-}
-
-.event-copy h1,
-.event-copy p,
-.section-title h2,
-.table-tile h3,
-.captain-line,
-.issue-list p {
-  margin: 0;
-}
-
-.event-copy h1 {
-  margin-top: 6px;
-  font-size: clamp(34px, 3vw, 52px);
-  line-height: 1.04;
-}
-
-.event-copy p {
-  margin-top: 10px;
-  font-size: 20px;
-}
-
-.board-actions {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 10px;
-  align-items: center;
-}
-
-.board-actions button,
-.refresh-pill {
+.stage-line span,
+.stage-line b,
+.stage-line em {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  min-height: 42px;
-  padding: 0 13px;
-  color: var(--text);
-  border: 1px solid var(--line);
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
-  font: inherit;
-  font-weight: 800;
+  background: rgba(0, 0, 0, 0.24);
+  font-size: 18px;
+  font-style: normal;
+  font-weight: 900;
   white-space: nowrap;
 }
 
-.board-actions button:last-child {
-  opacity: 0.78;
+.stage-line span {
+  color: var(--gold-soft);
+  border-color: var(--line-strong);
+  background: rgba(242, 191, 79, 0.12);
 }
 
-.refresh-pill strong {
-  color: var(--gold);
+.stage-line b {
+  color: var(--green);
 }
 
-.board-actions svg {
-  width: 17px;
-  height: 17px;
+.stage-line em {
+  color: var(--muted);
+}
+
+.title-zone h1 {
+  max-width: 1120px;
+  margin: 14px 0 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 58px;
+  line-height: 1.02;
+  font-weight: 950;
+  letter-spacing: 0;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+}
+
+.notice-panel {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  gap: 6px 14px;
+  align-content: center;
+  min-width: 0;
+  min-height: 104px;
+  padding: 18px 22px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(18, 20, 18, 0.82);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.notice-dot {
+  grid-row: 1 / 3;
+  align-self: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--gold);
+  box-shadow: 0 0 24px rgba(242, 191, 79, 0.45);
+}
+
+.notice-panel strong {
+  color: var(--gold-soft);
+  font-size: 22px;
+  line-height: 1;
+  font-weight: 950;
+}
+
+.notice-panel p {
+  margin: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 17px;
+  line-height: 1.35;
+  font-weight: 850;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.notice-panel.success .notice-dot {
+  background: var(--green);
+  box-shadow: 0 0 24px rgba(168, 212, 111, 0.45);
+}
+
+.notice-panel.success strong {
+  color: var(--green);
+}
+
+.notice-panel.warning .notice-dot {
+  background: var(--orange);
+  box-shadow: 0 0 24px rgba(255, 157, 69, 0.45);
+}
+
+.notice-panel.warning strong {
+  color: var(--orange);
+}
+
+.notice-panel.danger {
+  border-color: rgba(255, 102, 90, 0.48);
+  background: rgba(42, 15, 12, 0.86);
+}
+
+.notice-panel.danger .notice-dot {
+  background: var(--danger);
+  box-shadow: 0 0 28px rgba(255, 102, 90, 0.55);
+}
+
+.notice-panel.danger strong {
+  color: #ff9b92;
 }
 
 .metric-strip {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
 }
 
-.metric-tile {
+.metric-card {
+  position: relative;
   display: grid;
-  align-content: center;
-  gap: 8px;
-  padding: 14px 18px;
-  border-left: 3px solid rgba(224, 184, 74, 0.3);
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 10px;
+  min-width: 0;
+  min-height: 90px;
+  padding: 16px 20px 15px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(23, 26, 23, 0.82);
 }
 
-.metric-tile strong {
-  font-size: clamp(32px, 3.1vw, 54px);
+.metric-card span {
+  grid-column: 1 / 3;
+  color: var(--muted);
+  font-size: 18px;
   line-height: 1;
+  font-weight: 900;
 }
 
-.metric-tile.success strong {
+.metric-card strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 42px;
+  line-height: 1;
+  font-weight: 950;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.metric-card small {
+  align-self: end;
+  color: var(--dim);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.metric-card.gold strong,
+.metric-card.warning strong {
+  color: var(--gold-soft);
+}
+
+.metric-card.success strong {
   color: var(--green);
 }
 
-.metric-tile.warning strong,
-.metric-tile.gold strong {
-  color: var(--gold);
-}
-
-.metric-tile.danger strong {
-  color: var(--red);
-}
-
-.board-body {
+.table-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 330px;
   gap: 16px;
   min-height: 0;
 }
 
-.few-tables .board-body,
-.normal-tables .board-body {
-  grid-template-columns: 1fr;
-  grid-template-rows: minmax(0, 1fr) auto;
+.tables-1 .table-grid {
+  grid-template-columns: minmax(0, 1fr);
 }
 
-.table-panel {
+.tables-2 .table-grid,
+.tables-3 .table-grid,
+.tables-4 .table-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.tables-5 .table-grid,
+.tables-6 .table-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.tables-7 .table-grid,
+.tables-8 .table-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.tables-1 .table-grid,
+.tables-2 .table-grid {
+  grid-auto-rows: minmax(0, 1fr);
+  align-content: stretch;
+}
+
+.tables-3 .table-grid,
+.tables-4 .table-grid,
+.tables-5 .table-grid,
+.tables-6 .table-grid,
+.tables-7 .table-grid,
+.tables-8 .table-grid {
+  grid-auto-rows: minmax(0, 1fr);
+}
+
+.table-card {
+  position: relative;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 12px;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  gap: 16px;
+  min-width: 0;
+  min-height: 0;
+  padding: 24px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(32, 35, 30, 0.94), rgba(15, 17, 15, 0.96));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 22px 46px rgba(0, 0, 0, 0.22);
+}
+
+.table-card.danger {
+  border-color: rgba(255, 102, 90, 0.62);
+  background: linear-gradient(180deg, rgba(48, 20, 16, 0.94), rgba(18, 13, 12, 0.98));
+}
+
+.table-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+}
+
+.table-name {
+  min-width: 0;
+}
+
+.table-name h2 {
+  margin: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 68px;
+  line-height: 0.96;
+  font-weight: 950;
+  letter-spacing: 0;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.table-name span {
+  display: block;
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+  font-weight: 900;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 104px;
+  height: 42px;
+  padding: 0 14px;
+  color: #11130f;
+  border-radius: 999px;
+  background: var(--gold);
+  font-size: 18px;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.table-card.success .status-pill {
+  background: var(--green);
+}
+
+.table-card.active .status-pill {
+  background: var(--blue);
+}
+
+.table-card.warning .status-pill {
+  background: var(--orange);
+}
+
+.table-card.danger .status-pill {
+  background: var(--danger);
+  color: #fff8f0;
+}
+
+.progress-zone {
+  display: grid;
+  align-content: center;
+  gap: 18px;
   min-width: 0;
   min-height: 0;
 }
 
-.section-title {
+.progress-main {
   display: flex;
-  align-items: baseline;
+  align-items: end;
   justify-content: space-between;
-  gap: 14px;
+  gap: 18px;
+  min-width: 0;
 }
 
-.section-title h2 {
+.progress-main span {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 22px;
+  line-height: 1.1;
+  font-weight: 900;
+}
+
+.progress-main strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--gold-soft);
+  font-size: 72px;
+  line-height: 0.92;
+  font-weight: 950;
+  text-align: right;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.table-card.success .progress-main strong {
+  color: var(--green);
+}
+
+.table-card.active .progress-main strong {
+  color: #a9d5ff;
+}
+
+.table-card.warning .progress-main strong {
+  color: #ffc07a;
+}
+
+.table-card.danger .progress-main strong {
+  color: #ff9b92;
+}
+
+.progress-track {
+  height: 18px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.progress-track i {
+  display: block;
+  height: 100%;
+  min-width: 6px;
+  max-width: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--gold), var(--gold-soft));
+  transition: width 0.28s ease;
+}
+
+.table-card.success .progress-track i {
+  background: linear-gradient(90deg, #78b84e, var(--green));
+}
+
+.table-card.active .progress-track i {
+  background: linear-gradient(90deg, #4f9dea, var(--blue));
+}
+
+.table-card.warning .progress-track i {
+  background: linear-gradient(90deg, #ff7d34, var(--orange));
+}
+
+.table-card.danger .progress-track i {
+  background: linear-gradient(90deg, #e7443d, var(--danger));
+}
+
+.table-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.table-facts span {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 13px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.table-facts small {
+  color: var(--dim);
+  font-size: 16px;
+  line-height: 1;
+  font-weight: 900;
+}
+
+.table-facts strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 28px;
+  line-height: 1;
+  font-weight: 950;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.table-facts .accent strong {
+  color: var(--gold-soft);
+}
+
+.table-card.success .table-facts .accent strong {
+  color: var(--green);
+}
+
+.table-card.warning .table-facts .accent strong {
+  color: #ffc07a;
+}
+
+.table-card.danger .table-facts .accent strong {
+  color: #ff9b92;
+}
+
+.issue-text {
+  margin: 0;
+  color: #ffbbb4;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.empty-card {
+  display: grid;
+  place-content: center;
+  gap: 12px;
+  min-height: 340px;
+  color: var(--muted);
+  text-align: center;
+  border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+  background: rgba(23, 26, 23, 0.65);
+}
+
+.empty-card strong {
+  color: var(--text);
+  font-size: 42px;
+}
+
+.empty-card span {
+  font-size: 20px;
+  font-weight: 850;
+}
+
+.tables-1 .table-card {
+  padding: 38px 42px;
+}
+
+.tables-1 .table-name h2 {
+  font-size: 124px;
+}
+
+.tables-1 .table-name span {
+  font-size: 28px;
+}
+
+.tables-1 .status-pill {
+  min-width: 146px;
+  height: 56px;
   font-size: 24px;
 }
 
-.table-board-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+.tables-1 .progress-main span {
+  font-size: 30px;
+}
+
+.tables-1 .progress-main strong {
+  font-size: 126px;
+}
+
+.tables-1 .progress-track {
+  height: 28px;
+}
+
+.tables-1 .table-facts strong {
+  font-size: 46px;
+}
+
+.tables-1 .table-facts small {
+  font-size: 20px;
+}
+
+.tables-3 .table-card,
+.tables-4 .table-card {
+  padding: 22px;
+}
+
+.tables-3 .table-name h2,
+.tables-4 .table-name h2 {
+  font-size: 58px;
+}
+
+.tables-3 .progress-main strong,
+.tables-4 .progress-main strong {
+  font-size: 58px;
+}
+
+.live-board.tables-5,
+.live-board.tables-6,
+.live-board.tables-7,
+.live-board.tables-8 {
   gap: 14px;
-  align-content: start;
-  min-height: 0;
 }
 
-.few-tables .table-board-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.normal-tables .table-board-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.many-tables .table-board-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.dense-tables .table-board-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.table-tile {
-  display: grid;
-  align-content: start;
-  gap: 14px;
-  min-height: 0;
+.tables-5 .table-card,
+.tables-6 .table-card {
+  gap: 12px;
   padding: 18px;
 }
 
-.few-tables .table-tile,
-.normal-tables .table-tile {
-  min-height: 330px;
+.tables-5 .table-name h2,
+.tables-6 .table-name h2 {
+  font-size: 48px;
 }
 
-.table-tile.success {
-  border-color: rgba(117, 215, 131, 0.32);
+.tables-5 .table-name span,
+.tables-6 .table-name span {
+  font-size: 17px;
 }
 
-.table-tile.warning {
-  border-color: rgba(224, 184, 74, 0.38);
+.tables-5 .status-pill,
+.tables-6 .status-pill {
+  min-width: 86px;
+  height: 34px;
+  font-size: 15px;
 }
 
-.table-tile.danger {
-  border-color: rgba(255, 125, 116, 0.46);
-  background: linear-gradient(180deg, rgba(255, 125, 116, 0.08), rgba(19, 31, 36, 0.9));
-}
-
-.table-tile header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.table-tile header > div {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-
-.table-tile b {
+.tables-5 .progress-main,
+.tables-6 .progress-main {
   display: grid;
-  place-items: center;
-  width: 46px;
-  height: 46px;
-  color: var(--gold);
-  border: 1px solid rgba(216, 169, 53, 0.28);
-  border-radius: 8px;
-  background: rgba(216, 169, 53, 0.1);
-  font-size: 22px;
+  gap: 8px;
 }
 
-.table-tile h3 {
-  font-size: 30px;
-}
-
-.table-tile em {
-  padding: 7px 10px;
-  color: var(--green);
-  font-style: normal;
-  font-weight: 900;
-  border: 1px solid rgba(117, 215, 131, 0.24);
-  border-radius: 8px;
-  background: rgba(117, 215, 131, 0.09);
-}
-
-.table-tile.warning em {
-  color: var(--gold);
-  border-color: rgba(224, 184, 74, 0.28);
-  background: rgba(224, 184, 74, 0.1);
-}
-
-.table-tile.danger em {
-  color: var(--red);
-  border-color: rgba(255, 125, 116, 0.32);
-  background: rgba(255, 125, 116, 0.12);
-}
-
-.captain-line {
+.tables-5 .progress-main span,
+.tables-6 .progress-main span {
   font-size: 18px;
 }
 
-.state-line {
-  margin: -4px 0 0;
-  color: var(--text);
-  font-size: 20px;
-  font-weight: 900;
+.tables-5 .progress-main strong,
+.tables-6 .progress-main strong {
+  font-size: 48px;
+  text-align: left;
 }
 
-.progress-pair {
-  display: grid;
-  gap: 18px;
+.tables-5 .progress-track,
+.tables-6 .progress-track {
+  height: 14px;
 }
 
-.progress-pair div {
-  display: grid;
-  grid-template-columns: minmax(80px, 1fr) auto;
-  gap: 7px 8px;
-  align-items: center;
+.tables-5 .table-facts,
+.tables-6 .table-facts {
+  gap: 8px;
 }
 
-.progress-pair span {
-  color: var(--muted);
-  font-size: 17px;
+.tables-5 .table-facts span,
+.tables-6 .table-facts span {
+  padding: 10px;
 }
 
-.progress-pair strong {
-  font-size: 20px;
+.tables-5 .table-facts small,
+.tables-6 .table-facts small {
+  font-size: 13px;
 }
 
-.progress-pair i {
-  grid-column: 1 / -1;
-  height: 12px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+.tables-5 .table-facts strong,
+.tables-6 .table-facts strong {
+  font-size: 22px;
 }
 
-.progress-pair small {
-  grid-column: 1 / -1;
-  color: var(--muted);
+.tables-7 .table-card,
+.tables-8 .table-card {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 16px;
+}
+
+.tables-7 .table-head,
+.tables-8 .table-head {
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.tables-7 .table-name h2,
+.tables-8 .table-name h2 {
+  font-size: 42px;
+}
+
+.tables-7 .table-name span,
+.tables-8 .table-name span {
+  font-size: 15px;
+}
+
+.tables-7 .status-pill,
+.tables-8 .status-pill {
+  min-width: 76px;
+  height: 30px;
+  padding: 0 10px;
   font-size: 14px;
 }
 
-.progress-pair i b {
-  display: block;
-  width: 0;
-  height: 100%;
-  border: 0;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--green), #a9e48d);
+.tables-7 .progress-zone,
+.tables-8 .progress-zone {
+  gap: 10px;
+  align-content: start;
 }
 
-.progress-pair div:nth-child(2) i b {
-  background: linear-gradient(90deg, var(--gold), #f3d783);
-}
-
-.table-tile footer {
+.tables-7 .progress-main,
+.tables-8 .progress-main {
   display: grid;
   gap: 6px;
-  color: var(--gold);
-  font-size: 17px;
-  font-weight: 900;
 }
 
-.table-tile footer small {
-  color: var(--muted);
-  font-size: 14px;
-  font-weight: 700;
+.tables-7 .progress-main span,
+.tables-8 .progress-main span {
+  font-size: 16px;
 }
 
-.table-tile.danger footer small {
-  color: #ffb4ae;
+.tables-7 .progress-main strong,
+.tables-8 .progress-main strong {
+  font-size: 40px;
+  text-align: left;
 }
 
-.side-panel {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 12px;
-  min-height: 0;
+.tables-7 .progress-track,
+.tables-8 .progress-track {
+  height: 12px;
 }
 
-.few-tables .side-panel,
-.normal-tables .side-panel {
-  grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.75fr);
-  grid-template-rows: auto;
+.tables-7 .table-facts,
+.tables-8 .table-facts {
+  grid-template-columns: 1fr;
+  gap: 7px;
 }
 
-.side-panel section {
-  display: grid;
-  gap: 12px;
-  padding: 13px 14px;
-}
-
-.section-title.compact h2 {
-  font-size: 20px;
-}
-
-.round-path-board {
-  display: flex;
-  flex-wrap: wrap;
+.tables-7 .table-facts span,
+.tables-8 .table-facts span {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
   gap: 8px;
+  padding: 8px 10px;
 }
 
-.round-path-board span {
-  display: grid;
-  gap: 4px;
-  min-width: 132px;
-  padding: 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel-soft);
+.tables-7 .table-facts small,
+.tables-8 .table-facts small {
+  font-size: 13px;
 }
 
-.round-path-board span.active {
-  color: var(--gold);
-  border-color: rgba(224, 184, 74, 0.28);
-  background: rgba(224, 184, 74, 0.08);
+.tables-7 .table-facts strong,
+.tables-8 .table-facts strong {
+  font-size: 19px;
 }
 
-.round-path-board span.done {
-  color: var(--green);
-}
-
-.issue-list {
-  display: grid;
-  gap: 8px;
-  align-content: start;
-  min-height: 0;
-}
-
-.few-tables .issue-list,
-.normal-tables .issue-list {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.issue-item,
-.empty-issue {
-  grid-column: 1 / -1;
-  padding: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.issue-item {
-  color: #ffb4ae;
-  border-color: rgba(255, 125, 116, 0.24);
-  background: rgba(255, 125, 116, 0.08);
-}
-
-.table-empty {
-  display: grid;
-  place-content: center;
-  gap: 10px;
-  min-height: 260px;
-  color: var(--muted);
-  text-align: center;
-  border: 1px dashed rgba(219, 232, 237, 0.16);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.022);
-}
-
-.table-empty strong {
-  color: var(--text);
-  font-size: 30px;
-}
-
-@media (max-width: 1400px) {
+@media (max-width: 1500px) {
   .live-board {
-    padding: 20px;
-    grid-template-rows: 108px 128px minmax(0, 1fr);
+    gap: 14px;
+    padding: 24px 30px 28px;
   }
 
-  .board-body {
-    grid-template-columns: minmax(0, 1fr) 300px;
+  .board-header {
+    grid-template-columns: minmax(0, 1fr) minmax(340px, 32%);
+    gap: 20px;
   }
 
-  .table-tile h3 {
-    font-size: 24px;
+  .title-zone h1 {
+    font-size: 48px;
+  }
+
+  .stage-line span,
+  .stage-line b,
+  .stage-line em {
+    min-height: 32px;
+    font-size: 16px;
+  }
+
+  .notice-panel {
+    min-height: 92px;
+    padding: 15px 18px;
+  }
+
+  .notice-panel strong {
+    font-size: 20px;
+  }
+
+  .notice-panel p {
+    font-size: 15px;
+  }
+
+  .metric-card {
+    min-height: 78px;
+    padding: 13px 16px 12px;
+  }
+
+  .metric-card span {
+    font-size: 16px;
+  }
+
+  .metric-card strong {
+    font-size: 34px;
+  }
+
+  .table-card {
+    padding: 18px;
+  }
+
+  .table-name h2 {
+    font-size: 54px;
+  }
+
+  .progress-main strong {
+    font-size: 56px;
   }
 }
 </style>

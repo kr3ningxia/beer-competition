@@ -1194,7 +1194,10 @@ function resetForms() {
     ...item,
     localId: item.id || `field-${index}`,
   })))
-  judgeTableForm.splice(0, judgeTableForm.length, ...competition.value.judgeTables.map((item, index) => ({
+  const sourceJudgeTables = competition.value.judgeTables.length
+    ? competition.value.judgeTables
+    : [{ tableName: 'A桌', captainCount: 0, professionalCount: 0, crossCount: 0 }]
+  judgeTableForm.splice(0, judgeTableForm.length, ...sourceJudgeTables.map((item, index) => ({
     ...item,
     localId: item.id || `table-${index}`,
   })))

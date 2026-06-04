@@ -1,11 +1,7 @@
 <template>
   <section class="allocation-workbench">
     <section v-if="allocationMode === 'judges'" class="allocation-grid">
-      <aside class="resource-panel">
-        <div class="panel-head">
-          <strong>评审池</strong>
-          <span>{{ filteredJudgePool.length }} 人</span>
-        </div>
+      <aside class="resource-panel judge-resource-panel">
         <label class="search-box">
           <Search />
           <input v-model="judgeKeywordModel" placeholder="搜索姓名、手机号、资质" />
@@ -620,9 +616,24 @@ function getOverviewTableIssues(roundTable) {
   gap: 10px;
 }
 
+.allocation-workbench {
+  min-height: 0;
+  height: 100%;
+  max-height: calc(100vh - 254px);
+  overflow: hidden;
+}
+
+.allocation-grid {
+  min-height: 0;
+  height: 100%;
+}
+
 .resource-list,
 .table-board,
 .check-panel {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
   scrollbar-width: thin;
   scrollbar-color: rgba(216, 169, 53, 0.46) rgba(255, 255, 255, 0.04);
 }
@@ -739,13 +750,13 @@ button:disabled {
   font-weight: 800;
 }
 
-.allocation-grid {
-  grid-template-columns: 320px minmax(0, 1fr) 300px;
-  align-items: start;
-}
-
 .overview-shell {
   grid-template-columns: minmax(0, 1fr) 300px;
+}
+
+.allocation-grid {
+  grid-template-columns: 320px minmax(0, 1fr) 300px;
+  align-items: stretch;
 }
 
 .resource-panel,
@@ -757,6 +768,15 @@ button:disabled {
   border: 1px solid rgba(219, 232, 237, 0.1);
   border-radius: 8px;
   background: rgba(22, 32, 36, 0.9);
+}
+
+.resource-panel,
+.check-panel {
+  min-height: 0;
+}
+
+.judge-resource-panel {
+  grid-template-rows: auto auto minmax(0, 1fr);
 }
 
 .panel-head,
@@ -966,15 +986,19 @@ dt,
 
 .table-board {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  align-items: start;
 }
 
 .judge-board {
   grid-template-columns: 1fr;
+  grid-auto-rows: max-content;
 }
 
 .desk-card {
   display: grid;
   gap: 8px;
+  align-self: start;
 }
 
 .desk-card.active {
