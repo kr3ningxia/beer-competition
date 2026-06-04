@@ -36,6 +36,7 @@ import com.beercompetition.pojo.enums.EntryStatus;
 import com.beercompetition.pojo.enums.JudgeAccountStatus;
 import com.beercompetition.pojo.enums.JudgeRoleType;
 import com.beercompetition.pojo.enums.JudgeTaskType;
+import com.beercompetition.pojo.enums.LogisticsVisibility;
 import com.beercompetition.pojo.enums.RoundStatus;
 import com.beercompetition.pojo.enums.RoundType;
 import com.beercompetition.pojo.po.BeerEntry;
@@ -62,6 +63,7 @@ import com.beercompetition.pojo.vo.EntryDetailVO;
 import com.beercompetition.pojo.vo.EntryExtraFieldVO;
 import com.beercompetition.pojo.vo.EntryPaymentVO;
 import com.beercompetition.pojo.vo.EntrySummaryVO;
+import com.beercompetition.pojo.vo.CompetitionLogisticsVO;
 import com.beercompetition.pojo.vo.JudgeEntryVO;
 import com.beercompetition.pojo.vo.PortalCompetitionVO;
 import com.beercompetition.pojo.vo.PortalEntryLabelVO;
@@ -518,6 +520,7 @@ public class EntryServiceImpl implements EntryService {
                 .categoryName(category == null ? null : category.getName())
                 .competitionName(competition == null ? null : competition.getName())
                 .competitionDate(competition == null ? null : competition.getCompetitionDate())
+                .competitionLogistics(toEntryCompetitionLogisticsVO(competition, entry, payment))
                 .status(entry.getStatus())
                 .entryFee(competition == null ? null : competition.getEntryFee())
                 .storedFlag(entry.getStoredFlag())
@@ -554,6 +557,7 @@ public class EntryServiceImpl implements EntryService {
                 .competitionCode(competition == null ? null : competition.getCode())
                 .name(entry.getName())
                 .competitionName(competition == null ? null : competition.getName())
+                .competitionLogistics(toEntryCompetitionLogisticsVO(competition, entry, payment))
                 .categoryId(entry.getCategoryId())
                 .categoryName(category == null ? null : category.getName())
                 .style(entry.getStyle())
@@ -571,6 +575,49 @@ public class EntryServiceImpl implements EntryService {
                 .canDownloadLabel(LABEL_ALLOWED_STATUSES.contains(entry.getStatus()))
                 .submittedAt(entry.getCreateTime())
                 .build();
+    }
+
+    private CompetitionLogisticsVO toEntryCompetitionLogisticsVO(Competition competition, BeerEntry entry, EntryPayment payment) {
+        if (competition == null) {
+            return null;
+        }
+        CompetitionLogisticsVO logistics = CompetitionLogisticsVO.builder()
+                .deliveryMethod(competition.getDeliveryMethod())
+                .sampleArrivalStart(competition.getSampleArrivalStart())
+                .sampleArrivalDeadline(competition.getSampleArrivalDeadline())
+                .sampleQuantityNote(competition.getSampleQuantityNote())
+                .deliveryRecipient(competition.getDeliveryRecipient())
+                .deliveryPhone(competition.getDeliveryPhone())
+                .deliveryAddress(competition.getDeliveryAddress())
+                .deliveryNote(competition.getDeliveryNote())
+                .venueName(competition.getVenueName())
+                .venueAddress(competition.getVenueAddress())
+                .venueTimeNote(competition.getVenueTimeNote())
+                .venueContact(competition.getVenueContact())
+                .venueMapUrl(competition.getVenueMapUrl())
+                .logisticsVisibility(competition.getLogisticsVisibility())
+                .build();
+        if (canViewFullLogistics(logistics, entry, payment)) {
+            return logistics;
+        }
+        logistics.setDeliveryRecipient(null);
+        logistics.setDeliveryPhone(null);
+        logistics.setDeliveryAddress(null);
+        return logistics;
+    }
+
+    private boolean canViewFullLogistics(CompetitionLogisticsVO logistics, BeerEntry entry, EntryPayment payment) {
+        if (logistics == null || !StringUtils.hasText(logistics.getLogisticsVisibility())) {
+            return false;
+        }
+        if (LogisticsVisibility.PUBLIC.name().equals(logistics.getLogisticsVisibility())) {
+            return true;
+        }
+        if (LogisticsVisibility.LOGIN_REQUIRED.name().equals(logistics.getLogisticsVisibility())) {
+            return true;
+        }
+        return EntryPaymentStatus.PAID.name().equals(resolvePaymentStatus(entry, payment))
+                || LABEL_ALLOWED_STATUSES.contains(entry.getStatus());
     }
 
     private PortalResultSummaryVO toResultSummaryVO(BeerEntry entry) {
@@ -784,9 +831,6 @@ public class EntryServiceImpl implements EntryService {
             throw new BaseException("当前赛事暂未开放报名");
         }
         LocalDateTime now = LocalDateTime.now();
-        if (competition.getRegistrationStart() != null && now.isBefore(competition.getRegistrationStart())) {
-            throw new BaseException("报名尚未开始");
-        }
         if (competition.getRegistrationDeadline() != null && now.isAfter(competition.getRegistrationDeadline())) {
             throw new BaseException("报名已截止");
         }

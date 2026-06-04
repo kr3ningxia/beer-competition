@@ -23,6 +23,7 @@
         <dl>
           <div><dt>比赛日期</dt><dd>{{ formatDate(competition.competitionDate) }}</dd></div>
           <div><dt>报名截止</dt><dd>{{ formatDateTime(competition.registrationDeadline) }}</dd></div>
+          <div><dt>送样截止</dt><dd>{{ formatDateTime(logistics.sampleArrivalDeadline) }}</dd></div>
           <div><dt>报名费</dt><dd>¥{{ competition.entryFee }} / 款</dd></div>
         </dl>
       </aside>
@@ -45,6 +46,30 @@
           <div><dt>基础风格</dt><dd>{{ competition.styles.map((item) => item.name).join(' / ') || '暂未配置' }}</dd></div>
           <div><dt>额外字段</dt><dd>{{ entryFieldSummary }}</dd></div>
         </dl>
+      </article>
+    </section>
+
+    <section class="detail-grid">
+      <article class="brewer-card info-card logistics-card">
+        <h2 class="portal-section-title">酒样寄送</h2>
+        <dl>
+          <div><dt>送样方式</dt><dd>{{ deliveryMethodText(logistics.deliveryMethod) }}</dd></div>
+          <div><dt>建议送达</dt><dd>{{ arrivalWindowText }}</dd></div>
+          <div><dt>酒样要求</dt><dd>{{ logistics.sampleQuantityNote || '以主办方后续通知为准' }}</dd></div>
+          <div><dt>收件信息</dt><dd>{{ deliveryAddressText }}</dd></div>
+          <div v-if="logistics.deliveryNote"><dt>包装说明</dt><dd>{{ logistics.deliveryNote }}</dd></div>
+        </dl>
+      </article>
+
+      <article class="brewer-card info-card logistics-card">
+        <h2 class="portal-section-title">比赛场地</h2>
+        <dl>
+          <div><dt>场地名称</dt><dd>{{ logistics.venueName || '待主办方确认' }}</dd></div>
+          <div><dt>场地地址</dt><dd>{{ logistics.venueAddress || '待主办方确认' }}</dd></div>
+          <div><dt>现场时间</dt><dd>{{ logistics.venueTimeNote || formatDate(competition.competitionDate) }}</dd></div>
+          <div><dt>现场联系</dt><dd>{{ logistics.venueContact || '以赛事通知为准' }}</dd></div>
+        </dl>
+        <a v-if="logistics.venueMapUrl" class="map-link" :href="logistics.venueMapUrl" target="_blank" rel="noreferrer">打开地图</a>
       </article>
     </section>
 
@@ -128,12 +153,36 @@ const loggedIn = computed(() => isLoggedIn('portal'))
 const competition = ref({ categories: [], styles: [], entryFields: [] })
 const entries = ref([])
 const eventEntries = computed(() => entries.value.filter((entry) => entry.competitionId === competition.value.id))
+const logistics = computed(() => competition.value.logistics || {})
 const entryFieldSummary = computed(() => {
   const fields = competition.value.entryFields || []
   if (!fields.length) {
     return '无'
   }
   return fields.map((field) => (typeof field === 'string' ? field : field.fieldLabel)).join(' / ')
+})
+const arrivalWindowText = computed(() => {
+  const start = formatDateTime(logistics.value.sampleArrivalStart)
+  const deadline = formatDateTime(logistics.value.sampleArrivalDeadline)
+  if (start !== '-' && deadline !== '-') return `${start} 至 ${deadline}`
+  if (deadline !== '-') return `${deadline} 前送达`
+  return '以主办方通知为准'
+})
+const deliveryAddressText = computed(() => {
+  if (logistics.value.deliveryAddress) {
+    return [
+      logistics.value.deliveryRecipient,
+      logistics.value.deliveryPhone,
+      logistics.value.deliveryAddress,
+    ].filter(Boolean).join(' · ')
+  }
+  if (logistics.value.logisticsVisibility === 'LOGIN_REQUIRED') {
+    return '登录后在付款与寄样页查看完整收件信息'
+  }
+  if (logistics.value.logisticsVisibility === 'PUBLIC') {
+    return '主办方暂未填写完整地址'
+  }
+  return '付款确认后显示完整收件信息'
 })
 
 onMounted(async () => {
@@ -149,6 +198,12 @@ function formatDate(value) {
 
 function formatDateTime(value) {
   return value ? String(value).replace('T', ' ').slice(0, 16) : '-'
+}
+
+function deliveryMethodText(value) {
+  if (value === 'EXPRESS') return '快递寄送'
+  if (value === 'ONSITE') return '现场送样'
+  return '快递寄送 / 现场送样'
 }
 </script>
 
@@ -242,6 +297,25 @@ function formatDateTime(value) {
 .info-card,
 .my-event-card {
   padding: 24px;
+}
+
+.logistics-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.map-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  margin-top: 14px;
+  padding: 0 13px;
+  color: #6b4710;
+  background: #fff7e6;
+  border: 1px solid rgba(87, 58, 26, 0.14);
+  border-radius: 8px;
+  font-weight: 800;
+  text-decoration: none;
 }
 
 dl {

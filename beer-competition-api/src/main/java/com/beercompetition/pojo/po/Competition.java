@@ -31,6 +31,20 @@ public class Competition {
     private String status;
     private BigDecimal entryFee;
     private String styleLibraryVersion;
+    private String deliveryMethod;
+    private LocalDateTime sampleArrivalStart;
+    private LocalDateTime sampleArrivalDeadline;
+    private String sampleQuantityNote;
+    private String deliveryRecipient;
+    private String deliveryPhone;
+    private String deliveryAddress;
+    private String deliveryNote;
+    private String venueName;
+    private String venueAddress;
+    private String venueTimeNote;
+    private String venueContact;
+    private String venueMapUrl;
+    private String logisticsVisibility;
     @TableLogic(value = "0", delval = "1")
     private Integer deletedFlag;
     private LocalDateTime createTime;

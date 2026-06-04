@@ -19,6 +19,7 @@ public class EntrySummaryVO {
     private String competitionCode;
     private String name;
     private String competitionName;
+    private CompetitionLogisticsVO competitionLogistics;
     private Long categoryId;
     private String categoryName;
     private String style;

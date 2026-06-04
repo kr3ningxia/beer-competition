@@ -713,7 +713,8 @@ function normalizePercent(value) {
 .table-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: minmax(0, 1fr);
+  grid-auto-rows: clamp(260px, 32vh, 340px);
+  align-content: start;
   gap: 16px;
   min-height: 0;
 }
@@ -721,7 +722,7 @@ function normalizePercent(value) {
 .table-card {
   position: relative;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto auto;
+  grid-template-rows: minmax(136px, 1fr) auto auto;
   gap: 14px;
   min-width: 0;
   min-height: 0;
@@ -1053,6 +1054,7 @@ function normalizePercent(value) {
 
 .tables-1 .table-grid {
   grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: clamp(360px, 48vh, 520px);
 }
 
 .tables-1 .table-card {
@@ -1095,22 +1097,23 @@ function normalizePercent(value) {
 }
 
 .tables-2 .table-grid {
-  align-content: start;
-  grid-auto-rows: minmax(0, 1fr);
+  grid-auto-rows: clamp(300px, 42vh, 420px);
 }
 
 .tables-2 .table-card {
-  min-height: 100%;
+  min-height: 0;
 }
 
 .tables-5 .table-grid,
 .tables-6 .table-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: clamp(210px, 27vh, 260px);
 }
 
 .tables-7 .table-grid,
 .tables-8 .table-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: clamp(190px, 24vh, 230px);
 }
 
 .tables-5,
@@ -1261,6 +1264,7 @@ function normalizePercent(value) {
   }
 
   .table-card {
+    grid-template-rows: minmax(118px, 1fr) auto auto;
     padding: 16px 16px 11px;
   }
 

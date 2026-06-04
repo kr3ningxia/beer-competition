@@ -44,6 +44,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -72,10 +73,12 @@ public class ScoreServiceImpl implements ScoreService {
     public ScoreRecordVO createScore(JudgeScoreSaveRequest request) {
         // 1) 校验评分表和当前评审任务
         validateDimensions(request.getDimensions());
+        Long judgeId = BaseContext.getCurrentId();
         BeerEntry entry = requireEntry(request.getBeerUuid());
         JudgeAssignment assignment = requireAssignment(entry.getCompetitionId());
         requireScoreRoundTask(entry.getId(), request.getJudgeRoleType().name(), false);
         rejectNormalScoreAfterFinal(entry.getId());
+        rejectDuplicatePersonalScore(entry.getId(), judgeId);
         if (!isScoreSubmissionAllowed(assignment.getRole(), request.getJudgeRoleType().name())) {
             throw new ForbiddenException("当前评审角色与提交评分类型不匹配");
         }
@@ -93,7 +96,11 @@ public class ScoreServiceImpl implements ScoreService {
                 .finalFlag(0)
                 .advancedFlag(0)
                 .build();
-        scoreRecordMapper.insert(scoreRecord);
+        try {
+            scoreRecordMapper.insert(scoreRecord);
+        } catch (DuplicateKeyException ex) {
+            throw new BaseException("这款酒已经提交过评分，请返回评分页修改");
+        }
         return toScoreRecordVO(scoreRecordMapper.selectById(scoreRecord.getId()));
     }
 
@@ -199,7 +206,11 @@ public class ScoreServiceImpl implements ScoreService {
         finalRecord.setAdvancedFlag(Boolean.TRUE.equals(request.getAdvanced()) ? 1 : 0);
 
         if (finalRecord.getId() == null) {
-            scoreRecordMapper.insert(finalRecord);
+            try {
+                scoreRecordMapper.insert(finalRecord);
+            } catch (DuplicateKeyException ex) {
+                throw new BaseException("本桌最终意见已存在，请刷新后修改");
+            }
         } else {
             scoreRecordMapper.updateById(finalRecord);
         }
@@ -286,6 +297,16 @@ public class ScoreServiceImpl implements ScoreService {
                 .eq(ScoreRecord::getFinalFlag, 1));
         if (finalCount > 0) {
             throw new BaseException("桌长已汇总，普通评审不能再修改评分");
+        }
+    }
+
+    private void rejectDuplicatePersonalScore(Long beerEntryId, Long judgeId) {
+        Long existingCount = scoreRecordMapper.selectCount(new LambdaQueryWrapper<ScoreRecord>()
+                .eq(ScoreRecord::getBeerEntryId, beerEntryId)
+                .eq(ScoreRecord::getJudgeAccountId, judgeId)
+                .eq(ScoreRecord::getFinalFlag, 0));
+        if (existingCount > 0) {
+            throw new BaseException("这款酒已经提交过评分，请返回评分页修改");
         }
     }
 

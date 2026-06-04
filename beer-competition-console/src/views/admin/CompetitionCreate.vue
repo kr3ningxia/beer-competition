@@ -21,6 +21,7 @@
 
     <nav class="anchor-bar" aria-label="新建比赛分区导航">
       <button :class="{ active: activeSection === 'base-info', issue: sectionIssueMap['base-info'] }" type="button" @click="scrollToSection('base-info')">基础信息</button>
+      <button :class="{ active: activeSection === 'logistics-info', issue: sectionIssueMap['logistics-info'] }" type="button" @click="scrollToSection('logistics-info')">送样场地</button>
       <button :class="{ active: activeSection === 'entry-config', issue: sectionIssueMap['entry-config'] }" type="button" @click="scrollToSection('entry-config')">报名表</button>
       <button :class="{ active: activeSection === 'score-config', issue: sectionIssueMap['score-config'] }" type="button" @click="scrollToSection('score-config')">评分表</button>
       <button :class="{ active: activeSection === 'review-draft' }" type="button" @click="scrollToSection('review-draft')">确认</button>
@@ -62,6 +63,115 @@
           </div>
         </section>
 
+        <section id="logistics-info" class="form-section">
+          <header class="section-head">
+            <h2>送样与场地</h2>
+          </header>
+          <div class="logistics-layout">
+            <section class="entry-section logistics-section">
+              <div class="card-title">
+                <div>
+                  <h3>酒样接收</h3>
+                  <small>厂商付款确认后按这里的地址和要求寄样。</small>
+                </div>
+              </div>
+              <div class="form-grid two">
+                <label>
+                  <span>送样方式</span>
+                  <el-select
+                    v-model="draft.deliveryMethod"
+                    class="form-select"
+                    popper-class="competition-create-select-popper"
+                    aria-label="送样方式"
+                  >
+                    <el-option
+                      v-for="option in deliveryMethodOptions"
+                      :key="option.value"
+                      :label="option.label"
+                      :value="option.value"
+                    />
+                  </el-select>
+                </label>
+                <label>
+                  <span>地址展示</span>
+                  <el-select
+                    v-model="draft.logisticsVisibility"
+                    class="form-select"
+                    popper-class="competition-create-select-popper"
+                    aria-label="地址展示"
+                  >
+                    <el-option
+                      v-for="option in logisticsVisibilityOptions"
+                      :key="option.value"
+                      :label="option.label"
+                      :value="option.value"
+                    />
+                  </el-select>
+                </label>
+                <label>
+                  <span>建议送达开始</span>
+                  <input v-model="draft.sampleArrivalStart" type="datetime-local" />
+                </label>
+                <label>
+                  <span>建议送达截止</span>
+                  <input v-model="draft.sampleArrivalDeadline" type="datetime-local" />
+                </label>
+                <label>
+                  <span>收件人</span>
+                  <input v-model.trim="draft.deliveryRecipient" placeholder="例如 赛事收样组" />
+                </label>
+                <label>
+                  <span>收件联系电话</span>
+                  <input v-model.trim="draft.deliveryPhone" placeholder="用于快递面单和异常联系" />
+                </label>
+                <label class="wide-field">
+                  <span>收件地址</span>
+                  <input v-model.trim="draft.deliveryAddress" placeholder="省市区、详细地址、收样点名称" />
+                </label>
+                <label>
+                  <span>酒样数量要求</span>
+                  <input v-model.trim="draft.sampleQuantityNote" placeholder="例如 每款 6 瓶，单瓶不低于 330ml" />
+                </label>
+                <label class="wide-field">
+                  <span>送样说明</span>
+                  <textarea v-model.trim="draft.deliveryNote" rows="3" placeholder="包装、防漏、外箱贴标签、随箱清单等要求" />
+                </label>
+              </div>
+            </section>
+
+            <section class="entry-section logistics-section">
+              <div class="card-title">
+                <div>
+                  <h3>比赛场地</h3>
+                  <small>用于厂商了解现场交样、观赛或后续活动地点。</small>
+                </div>
+              </div>
+              <div class="form-grid two">
+                <label>
+                  <span>场地名称</span>
+                  <input v-model.trim="draft.venueName" placeholder="例如 深圳蛇口价值工厂" />
+                </label>
+                <label>
+                  <span>现场联系人</span>
+                  <input v-model.trim="draft.venueContact" placeholder="例如 现场执行组" />
+                </label>
+                <label class="wide-field">
+                  <span>场地地址</span>
+                  <input v-model.trim="draft.venueAddress" placeholder="比赛或现场交样地点" />
+                </label>
+                <label>
+                  <span>现场时间说明</span>
+                  <input v-model.trim="draft.venueTimeNote" placeholder="例如 8 月 20 日 09:00-18:00" />
+                </label>
+                <label class="wide-field">
+                  <span>地图链接</span>
+                  <input v-model.trim="draft.venueMapUrl" placeholder="高德、百度或腾讯地图链接" />
+                </label>
+              </div>
+            </section>
+          </div>
+        </section>
+
         <section id="entry-config" class="form-section">
           <header class="section-head">
             <h2>报名表配置</h2>
@@ -79,13 +189,19 @@
           <section class="entry-section library-section">
             <div class="library-row">
               <h3>基础风格库</h3>
-              <label class="library-select">
-                <select v-model="draft.styleLibraryVersion" aria-label="风格库版本">
-                  <option v-for="library in styleLibraryOptions" :key="library.value" :value="library.value">
-                    {{ library.label }}
-                  </option>
-                </select>
-              </label>
+              <el-select
+                v-model="draft.styleLibraryVersion"
+                class="library-select"
+                popper-class="competition-create-library-popper"
+                aria-label="风格库版本"
+              >
+                <el-option
+                  v-for="library in styleLibraryOptions"
+                  :key="library.value"
+                  :label="library.label"
+                  :value="library.value"
+                />
+              </el-select>
               <div class="library-tags">
                 <span v-for="tag in selectedStyleLibrary.tags.slice(0, 2)" :key="tag">{{ tag }}</span>
               </div>
@@ -130,13 +246,19 @@
                   </label>
                   <label>
                     <span>类型</span>
-                    <select v-model="field.type">
-                      <option value="text">短文本</option>
-                      <option value="textarea">长文本</option>
-                      <option value="number">数字</option>
-                      <option value="select">选项</option>
-                      <option value="multi_select">多选</option>
-                    </select>
+                    <el-select
+                      v-model="field.type"
+                      class="form-select"
+                      popper-class="competition-create-select-popper"
+                      :aria-label="`补充字段 ${index + 1} 类型`"
+                    >
+                      <el-option
+                        v-for="option in fieldTypeOptions"
+                        :key="option.value"
+                        :label="option.label"
+                        :value="option.value"
+                      />
+                    </el-select>
                   </label>
                   <button class="icon-button" title="删除补充字段" type="button" @click="removeItem(draft.entryFields, index)"><Delete /></button>
                 </div>
@@ -273,6 +395,18 @@
                   <dd>{{ draft.entryFee }} 元 / 款</dd>
                 </div>
                 <div>
+                  <dt>送样方式</dt>
+                  <dd>{{ deliveryMethodText(draft.deliveryMethod) }}</dd>
+                </div>
+                <div>
+                  <dt>送样截止</dt>
+                  <dd>{{ formatDateTime(draft.sampleArrivalDeadline) }}</dd>
+                </div>
+                <div>
+                  <dt>比赛场地</dt>
+                  <dd>{{ draft.venueName || draft.venueAddress || '-' }}</dd>
+                </div>
+                <div>
                   <dt>投递组别</dt>
                   <dd>{{ categorySummary }}</dd>
                 </div>
@@ -309,6 +443,26 @@ import { defaultStyleLibraryValue, fallbackStyleLibraries, getStyleLibrary, norm
 const router = useRouter()
 const activeSection = ref('base-info')
 
+const deliveryMethodOptions = [
+  { label: '快递寄送 / 现场送样', value: 'BOTH' },
+  { label: '仅快递寄送', value: 'EXPRESS' },
+  { label: '仅现场送样', value: 'ONSITE' },
+]
+
+const logisticsVisibilityOptions = [
+  { label: '付款确认后显示完整地址', value: 'PAYMENT_CONFIRMED' },
+  { label: '登录后显示完整地址', value: 'LOGIN_REQUIRED' },
+  { label: '公开显示完整地址', value: 'PUBLIC' },
+]
+
+const fieldTypeOptions = [
+  { label: '短文本', value: 'text' },
+  { label: '长文本', value: 'textarea' },
+  { label: '数字', value: 'number' },
+  { label: '选项', value: 'select' },
+  { label: '多选', value: 'multi_select' },
+]
+
 const draft = reactive({
   name: '2026 新建精酿啤酒赛',
   edition: '第一批次',
@@ -316,6 +470,20 @@ const draft = reactive({
   registrationStart: '2026-06-10T10:00',
   registrationDeadline: '2026-07-30T18:00',
   entryFee: 199,
+  deliveryMethod: 'BOTH',
+  sampleArrivalStart: '2026-08-10T10:00',
+  sampleArrivalDeadline: '2026-08-15T18:00',
+  sampleQuantityNote: '每款 6 瓶，单瓶容量建议不低于 330ml。',
+  deliveryRecipient: '赛事收样组',
+  deliveryPhone: '',
+  deliveryAddress: '',
+  deliveryNote: '请做好防震、防漏和外箱加固；每款酒瓶身至少贴 1 张现场标签，整箱寄送时建议外箱再贴 1 张。',
+  venueName: '',
+  venueAddress: '',
+  venueTimeNote: '',
+  venueContact: '',
+  venueMapUrl: '',
+  logisticsVisibility: 'PAYMENT_CONFIRMED',
   categories: [
     { id: 'cat-1', name: '浅色拉格' },
     { id: 'cat-2', name: '深色拉格' },
@@ -405,6 +573,20 @@ async function submitDraft() {
       registrationStart: toBackendDateTime(draft.registrationStart),
       registrationDeadline: toBackendDateTime(draft.registrationDeadline),
       entryFee: Number(draft.entryFee || 0),
+      deliveryMethod: draft.deliveryMethod,
+      sampleArrivalStart: toBackendDateTime(draft.sampleArrivalStart),
+      sampleArrivalDeadline: toBackendDateTime(draft.sampleArrivalDeadline),
+      sampleQuantityNote: draft.sampleQuantityNote,
+      deliveryRecipient: draft.deliveryRecipient,
+      deliveryPhone: draft.deliveryPhone,
+      deliveryAddress: draft.deliveryAddress,
+      deliveryNote: draft.deliveryNote,
+      venueName: draft.venueName,
+      venueAddress: draft.venueAddress,
+      venueTimeNote: draft.venueTimeNote,
+      venueContact: draft.venueContact,
+      venueMapUrl: draft.venueMapUrl,
+      logisticsVisibility: draft.logisticsVisibility,
       styleLibraryVersion: draft.styleLibraryVersion,
       categories: draft.categories
         .filter((category) => category.name)
@@ -470,7 +652,7 @@ function scrollToSection(id) {
 }
 
 function syncActiveSection() {
-  const sections = ['base-info', 'entry-config', 'score-config', 'review-draft']
+  const sections = ['base-info', 'logistics-info', 'entry-config', 'score-config', 'review-draft']
   const current = sections
     .map((id) => ({ id, top: Math.abs(document.getElementById(id)?.getBoundingClientRect().top ?? Number.POSITIVE_INFINITY) }))
     .sort((a, b) => a.top - b.top)[0]
@@ -532,6 +714,20 @@ function toDraftSnapshot(source) {
     registrationStart: source.registrationStart,
     registrationDeadline: source.registrationDeadline,
     entryFee: source.entryFee,
+    deliveryMethod: source.deliveryMethod,
+    sampleArrivalStart: source.sampleArrivalStart,
+    sampleArrivalDeadline: source.sampleArrivalDeadline,
+    sampleQuantityNote: source.sampleQuantityNote,
+    deliveryRecipient: source.deliveryRecipient,
+    deliveryPhone: source.deliveryPhone,
+    deliveryAddress: source.deliveryAddress,
+    deliveryNote: source.deliveryNote,
+    venueName: source.venueName,
+    venueAddress: source.venueAddress,
+    venueTimeNote: source.venueTimeNote,
+    venueContact: source.venueContact,
+    venueMapUrl: source.venueMapUrl,
+    logisticsVisibility: source.logisticsVisibility,
     categories: source.categories.map((category) => ({ name: category.name })),
     styleLibraryVersion: source.styleLibraryVersion,
     entryFields: source.entryFields.map((field) => ({
@@ -582,6 +778,19 @@ function isDeadlineAfterStart(start, deadline) {
   return new Date(deadline).getTime() > new Date(start).getTime()
 }
 
+function isOptionalDeadlineAfterStart(start, deadline) {
+  if (!start || !deadline) {
+    return true
+  }
+  return new Date(deadline).getTime() > new Date(start).getTime()
+}
+
+function deliveryMethodText(value) {
+  if (value === 'EXPRESS') return '仅快递寄送'
+  if (value === 'ONSITE') return '仅现场送样'
+  return '快递寄送 / 现场送样'
+}
+
 function createEntryFieldKey() {
   return `custom_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
 }
@@ -628,6 +837,11 @@ function buildReviewItems(source) {
   const crossDimensionValid = crossConfig && crossConfig.dimensions.length >= 2 && crossConfig.dimensions.length <= 4
   const visibleFields = getJudgeVisibleFields(source)
   const incompleteEntryFields = getIncompleteEntryFields(source)
+  const logisticsSummary = [
+    source.sampleArrivalDeadline ? `送达截止 ${formatDateTime(source.sampleArrivalDeadline)}` : '',
+    source.deliveryAddress ? '已填收件地址' : '',
+    source.venueName || source.venueAddress ? '已填比赛场地' : '',
+  ].filter(Boolean)
 
   return [
     {
@@ -645,6 +859,15 @@ function buildReviewItems(source) {
       detail: isDeadlineAfterStart(source.registrationStart, source.registrationDeadline)
         ? `截止 ${formatDateTime(source.registrationDeadline)}`
         : '报名截止需晚于报名开始',
+    },
+    {
+      key: 'logistics',
+      label: '送样场地',
+      target: 'logistics-info',
+      status: isOptionalDeadlineAfterStart(source.sampleArrivalStart, source.sampleArrivalDeadline) ? 'done' : 'pending',
+      detail: isOptionalDeadlineAfterStart(source.sampleArrivalStart, source.sampleArrivalDeadline)
+        ? logisticsSummary.join('，') || '可保存草稿，开放报名前建议补齐送样信息'
+        : '建议送达截止需晚于开始时间',
     },
     {
       key: 'categories',
@@ -720,7 +943,8 @@ p {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -961,7 +1185,8 @@ label {
 }
 
 input,
-select {
+select,
+textarea {
   min-width: 0;
   min-height: 42px;
   padding: 0 12px;
@@ -972,8 +1197,30 @@ select {
   background: rgba(255, 255, 255, 0.04);
 }
 
-input::placeholder {
+textarea {
+  min-height: 92px;
+  padding-top: 10px;
+  line-height: 1.55;
+  resize: vertical;
+}
+
+input::placeholder,
+textarea::placeholder {
   color: var(--faint);
+}
+
+.wide-field {
+  grid-column: 1 / -1;
+}
+
+.logistics-layout {
+  display: grid;
+  gap: 18px;
+}
+
+.logistics-section {
+  display: grid;
+  gap: 16px;
 }
 
 .fee-field {
@@ -1270,8 +1517,85 @@ input::placeholder {
   align-self: center;
 }
 
-.library-select {
-  gap: 0;
+.library-select,
+.form-select {
+  width: 100%;
+}
+
+.library-select :deep(.el-select__wrapper),
+.form-select :deep(.el-select__wrapper) {
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: none;
+}
+
+.library-select :deep(.el-select__wrapper:hover),
+.library-select :deep(.el-select__wrapper.is-focused),
+.form-select :deep(.el-select__wrapper:hover),
+.form-select :deep(.el-select__wrapper.is-focused) {
+  border-color: rgba(216, 169, 53, 0.36);
+  box-shadow: 0 0 0 2px rgba(216, 169, 53, 0.08);
+}
+
+.library-select :deep(.el-select__selected-item),
+.library-select :deep(.el-select__placeholder),
+.form-select :deep(.el-select__selected-item),
+.form-select :deep(.el-select__placeholder) {
+  color: var(--text);
+}
+
+.library-select :deep(.el-select__caret),
+.form-select :deep(.el-select__caret) {
+  color: var(--muted);
+}
+
+:global(.competition-create-library-popper.el-popper),
+:global(.competition-create-select-popper.el-popper) {
+  border: 1px solid rgba(219, 232, 237, 0.12);
+  background: #10191d;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.36);
+}
+
+:global(.competition-create-library-popper .el-select-dropdown),
+:global(.competition-create-library-popper .el-select-dropdown__list),
+:global(.competition-create-select-popper .el-select-dropdown),
+:global(.competition-create-select-popper .el-select-dropdown__list) {
+  background: #10191d;
+}
+
+:global(.competition-create-library-popper .el-popper__arrow::before),
+:global(.competition-create-select-popper .el-popper__arrow::before) {
+  border-color: rgba(219, 232, 237, 0.12);
+  background: #10191d;
+}
+
+:global(.competition-create-library-popper .el-select-dropdown__item),
+:global(.competition-create-select-popper .el-select-dropdown__item) {
+  height: 36px;
+  padding: 0 14px;
+  color: #e6edf0;
+  line-height: 36px;
+}
+
+:global(.competition-create-library-popper .el-select-dropdown__item.hover),
+:global(.competition-create-library-popper .el-select-dropdown__item:hover),
+:global(.competition-create-select-popper .el-select-dropdown__item.hover),
+:global(.competition-create-select-popper .el-select-dropdown__item:hover) {
+  background: rgba(216, 169, 53, 0.08);
+}
+
+:global(.competition-create-library-popper .el-select-dropdown__item.selected),
+:global(.competition-create-select-popper .el-select-dropdown__item.selected) {
+  color: #e0b84a;
+  background: rgba(216, 169, 53, 0.11);
+}
+
+:global(.competition-create-library-popper .el-select-dropdown__item.is-disabled),
+:global(.competition-create-select-popper .el-select-dropdown__item.is-disabled) {
+  color: rgba(230, 237, 240, 0.3);
 }
 
 .library-tags {

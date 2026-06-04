@@ -22,6 +22,7 @@ public class CompetitionVO {
     private String status;
     private BigDecimal entryFee;
     private String styleLibraryVersion;
+    private CompetitionLogisticsVO logistics;
     private String currentStageLabel;
     private CompetitionPrimaryActionVO primaryAction;
     private Integer readyCount;

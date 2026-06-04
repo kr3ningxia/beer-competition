@@ -1,80 +1,91 @@
 <template>
   <div class="payment-page">
-    <section class="entry-panel brewer-card">
-      <div class="panel-head">
-        <div>
-          <h2 class="portal-section-title">完成付款并提交寄样</h2>
-          <p>按酒款逐一处理付款确认、标签下载和快递信息提交，避免漏寄或贴错标签。</p>
-        </div>
-        <RouterLink to="/portal/my">返回我的参赛</RouterLink>
+    <section class="page-head brewer-card">
+      <div class="page-title">
+        <span class="section-kicker">BREWER ENTRY DELIVERY</span>
+        <h1>完成付款并提交寄样</h1>
+        <p>{{ currentAction.description }}</p>
       </div>
-
-      <div class="entry-list">
-        <article
-          v-for="entry in payableEntries"
-          :key="entry.id"
-          :class="['entry-row', { active: selectedEntry?.id === entry.id }]"
-          @click="selectEntry(entry)"
-        >
-          <div class="entry-row-main">
-            <div class="entry-row-top">
-              <strong>{{ entry.name }}</strong>
-              <b v-if="entry.paymentStatus !== 'PAID'">{{ formatCurrency(entry.entryFee) }}</b>
-            </div>
-            <p>{{ competitionLabel(entry) }}</p>
-          </div>
-          <div class="entry-row-side">
-            <span :class="['task-chip', taskTone(entry)]">{{ entryTaskLabel(entry) }}</span>
-          </div>
-        </article>
-
-        <div v-if="!payableEntries.length" class="empty-state">
-          <strong>暂无报名酒款</strong>
-          <p>提交报名后，这里会显示每款酒的付款、标签和寄样进度。</p>
-        </div>
+      <RouterLink class="back-link" to="/portal/my">返回我的参赛</RouterLink>
+      <div v-if="selectedEntry" class="flow-steps" aria-label="寄样进度">
+        <span :class="{ done: selectedEntry.paymentStatus === 'PAID' || selectedEntry.canDownloadLabel, active: selectedEntry.paymentStatus !== 'PAID' }">
+          <b>1</b>付款确认
+        </span>
+        <span :class="{ done: selectedEntry.canDownloadLabel, active: selectedEntry.paymentStatus === 'PAID' && !selectedEntry.canDownloadLabel }">
+          <b>2</b>标签下载
+        </span>
+        <span :class="{ done: hasSubmittedDelivery, active: selectedEntry.canDownloadLabel && !hasSubmittedDelivery }">
+          <b>3</b>寄样信息
+        </span>
+        <span :class="{ done: selectedEntry.deliveryStatus === 'RECEIVED' || isStored(selectedEntry), active: hasSubmittedDelivery && selectedEntry.deliveryStatus !== 'RECEIVED' && !isStored(selectedEntry) }">
+          <b>4</b>主办方签收
+        </span>
       </div>
     </section>
 
-    <aside v-if="selectedEntry" class="workspace-panel">
-      <section class="hero-card brewer-card">
-        <div class="hero-copy">
-          <span class="section-kicker">当前酒款</span>
-          <h3>{{ selectedEntry.name }}</h3>
-          <p>{{ entryMetaLine(selectedEntry) }}</p>
+    <section class="delivery-workbench">
+      <aside class="entry-panel brewer-card">
+        <div class="panel-head compact-head">
+          <div>
+            <span class="section-kicker">MY ENTRIES</span>
+            <h2>报名酒款</h2>
+          </div>
         </div>
-        <div class="hero-side">
-          <span :class="['task-chip', taskTone(selectedEntry)]">{{ entryTaskLabel(selectedEntry) }}</span>
-          <strong v-if="selectedEntry.paymentStatus !== 'PAID'">{{ formatCurrency(selectedEntry.entryFee) }}</strong>
-        </div>
-      </section>
 
-      <section class="next-card brewer-card">
-        <div>
-          <span class="section-kicker">当前待办</span>
-          <h3>{{ currentAction.title }}</h3>
-          <p>{{ currentAction.description }}</p>
-        </div>
-        <span :class="['task-chip', taskTone(selectedEntry)]">{{ entryTaskLabel(selectedEntry) }}</span>
-      </section>
+        <div class="entry-list">
+          <article
+            v-for="entry in payableEntries"
+            :key="entry.id"
+            :class="['entry-row', { active: selectedEntry?.id === entry.id }]"
+            @click="selectEntry(entry)"
+          >
+            <div class="entry-row-main">
+              <div class="entry-row-top">
+                <strong>{{ entry.name }}</strong>
+                <b v-if="entry.paymentStatus !== 'PAID'">{{ formatCurrency(entry.entryFee) }}</b>
+              </div>
+              <p>{{ competitionLabel(entry) }}</p>
+              <small>{{ entryTaskLabel(entry) }}</small>
+            </div>
+          </article>
 
-      <div class="workspace-grid">
-        <section v-if="showPaymentCard" class="payment-card brewer-card full-span">
+          <div v-if="!payableEntries.length" class="empty-state">
+            <strong>暂无报名酒款</strong>
+            <p>提交报名后，这里会显示每款酒的付款、标签和寄样进度。</p>
+          </div>
+        </div>
+      </aside>
+
+      <main v-if="selectedEntry" class="task-panel">
+        <section class="current-card brewer-card">
+          <div>
+            <span class="section-kicker">CURRENT ENTRY</span>
+            <h2>{{ selectedEntry.name }}</h2>
+            <p>{{ entryMetaLine(selectedEntry) }}</p>
+          </div>
+          <div class="current-side">
+            <span :class="['task-chip', taskTone(selectedEntry)]">{{ entryTaskLabel(selectedEntry) }}</span>
+            <el-button @click="refreshEntries(selectedEntry.id)">刷新状态</el-button>
+          </div>
+        </section>
+
+        <section v-if="showPaymentCard" class="payment-card brewer-card">
           <div class="card-head">
             <div>
-              <span class="section-kicker">付款确认</span>
-              <h3>先完成这款酒的付款确认</h3>
-              <p>主办方确认到账后，这一款酒才会开放标签下载和寄样信息填写。</p>
+              <span class="section-kicker">PAYMENT</span>
+              <h3>先等待主办方确认付款</h3>
+              <p>确认到账后会开放标签下载和寄样信息填写。</p>
             </div>
+            <strong>{{ formatCurrency(selectedEntry.payment?.amount || selectedEntry.entryFee) }}</strong>
           </div>
-
-          <dl class="summary-grid compact-grid">
-            <div>
-              <dt>报名费</dt>
-              <dd>{{ formatCurrency(selectedEntry.payment?.amount || selectedEntry.entryFee) }}</dd>
-            </div>
+          <dl class="inline-facts">
             <div>
               <dt>付款方式</dt>
               <dd>{{ paymentMethodText(selectedEntry.payment?.payMethod) }}</dd>
+            </div>
+            <div>
+              <dt>当前状态</dt>
+              <dd>{{ entryTaskLabel(selectedEntry) }}</dd>
             </div>
           </dl>
         </section>
@@ -82,7 +93,7 @@
         <section v-if="showLabelCard" class="label-card brewer-card">
           <div class="card-head">
             <div>
-              <span class="section-kicker">下载并打印标签</span>
+              <span class="section-kicker">LABEL</span>
               <h3>{{ labelCardTitle }}</h3>
               <p>{{ labelCardDescription }}</p>
             </div>
@@ -91,74 +102,24 @@
             </span>
           </div>
 
-          <div class="label-layout">
+          <div class="label-preview-wrap">
             <div class="label-preview" v-html="labelSvg" />
-
-            <div class="label-actions">
-              <div class="label-action-copy">
-                <strong>{{ selectedEntry.canDownloadLabel ? '标签已开放' : '付款确认后自动开放' }}</strong>
-                <p>{{ labelActionDescription }}</p>
-              </div>
-              <div class="button-row">
-                <el-button
-                  type="primary"
-                  :disabled="!selectedEntry.canDownloadLabel"
-                  @click="downloadLabelPng"
-                >
-                  下载 PNG
-                </el-button>
-                <el-button
-                  :disabled="!selectedEntry.canDownloadLabel"
-                  @click="openPrintLabel"
-                >
-                  打印标签 / 保存 PDF
-                </el-button>
-              </div>
-              <p class="label-tip">整箱寄送时，建议外箱也贴 1 张标签，收样时更容易核对。</p>
-            </div>
           </div>
+          <div class="label-actions">
+            <el-button type="primary" :disabled="!selectedEntry.canDownloadLabel" @click="downloadLabelPng">
+              下载 PNG
+            </el-button>
+            <el-button :disabled="!selectedEntry.canDownloadLabel" @click="openPrintLabel">
+              打印标签 / 保存 PDF
+            </el-button>
+          </div>
+          <p class="label-tip">瓶身至少贴 1 张；整箱寄送时，建议外箱再贴 1 张。</p>
         </section>
 
-        <section v-if="showPreparationCards" class="requirements-card brewer-card">
+        <section v-if="showDeliveryCard" class="delivery-card brewer-card">
           <div class="card-head">
             <div>
-              <span class="section-kicker">寄样要求</span>
-              <h3>寄出前请核对这几项</h3>
-            </div>
-          </div>
-
-          <dl class="requirement-list">
-            <div>
-              <dt>赛事信息</dt>
-              <dd>{{ selectedEntry.competitionName || competitionName(selectedEntry.competitionId) || '当前赛事' }}</dd>
-            </div>
-            <div>
-              <dt>建议送达时间</dt>
-              <dd>{{ suggestedArrivalText }}</dd>
-            </div>
-            <div>
-              <dt>标签粘贴</dt>
-              <dd>每款酒至少贴 1 张，整箱寄送时建议外箱再贴 1 张。</dd>
-            </div>
-            <div>
-              <dt>包装检查</dt>
-              <dd>请确认防震、防漏和外箱加固，避免运输中破损。</dd>
-            </div>
-            <div>
-              <dt>快递信息</dt>
-              <dd>寄出后请尽快回填快递公司和单号，方便主办方签收。</dd>
-            </div>
-            <div>
-              <dt>地址与联系人</dt>
-              <dd>如页面外的赛事通知尚未提供收件信息，请先联系主办方确认后再寄送。</dd>
-            </div>
-          </dl>
-        </section>
-
-        <section v-if="showDeliveryCard" class="delivery-card brewer-card full-span">
-          <div class="card-head">
-            <div>
-              <span class="section-kicker">填写快递信息</span>
+              <span class="section-kicker">DELIVERY FORM</span>
               <h3>{{ deliveryCardTitle }}</h3>
               <p>{{ deliveryCardDescription }}</p>
             </div>
@@ -168,7 +129,7 @@
           </div>
 
           <div v-if="showDeliverySummary" class="delivery-summary">
-            <dl class="summary-grid">
+            <dl class="summary-list">
               <div v-for="item in deliverySummaryItems" :key="item.label">
                 <dt>{{ item.label }}</dt>
                 <dd>{{ item.value }}</dd>
@@ -182,7 +143,7 @@
                 plain
                 @click="editingDelivery = true"
               >
-                修改快递信息
+                修改寄样信息
               </el-button>
               <el-button @click="refreshEntries(selectedEntry.id)">刷新状态</el-button>
             </div>
@@ -192,24 +153,17 @@
             <div class="delivery-grid">
               <el-form-item label="送样方式">
                 <el-radio-group v-model="deliveryForm.deliveryMethod">
-                  <el-radio-button label="EXPRESS">快递寄送</el-radio-button>
-                  <el-radio-button label="ONSITE">现场送样</el-radio-button>
+                  <el-radio-button label="EXPRESS" :disabled="selectedLogistics.deliveryMethod === 'ONSITE'">快递寄送</el-radio-button>
+                  <el-radio-button label="ONSITE" :disabled="selectedLogistics.deliveryMethod === 'EXPRESS'">现场送样</el-radio-button>
                 </el-radio-group>
-                <p class="field-tip">如果你准备现场交样，也建议备注到场时间，方便主办方安排签收。</p>
               </el-form-item>
 
               <el-form-item v-if="deliveryForm.deliveryMethod === 'EXPRESS'" label="快递公司">
-                <el-input
-                  v-model.trim="deliveryForm.carrier"
-                  placeholder="例如：顺丰、京东快递"
-                />
+                <el-input v-model.trim="deliveryForm.carrier" placeholder="例如：顺丰、京东快递" />
               </el-form-item>
 
               <el-form-item v-if="deliveryForm.deliveryMethod === 'EXPRESS'" label="快递单号">
-                <el-input
-                  v-model.trim="deliveryForm.trackingNo"
-                  placeholder="填写本次寄样的快递单号"
-                />
+                <el-input v-model.trim="deliveryForm.trackingNo" placeholder="填写本次寄样的快递单号" />
               </el-form-item>
 
               <el-form-item label="送样备注" class="full-width">
@@ -232,8 +186,51 @@
             </div>
           </el-form>
         </section>
-      </div>
-    </aside>
+      </main>
+
+      <aside v-if="selectedEntry" class="requirement-aside brewer-card">
+        <div class="aside-head">
+          <span class="section-kicker">REQUIREMENTS</span>
+          <h2>寄样要求</h2>
+        </div>
+
+        <dl class="aside-list">
+          <div>
+            <dt>建议送达</dt>
+            <dd>{{ arrivalWindowText }}</dd>
+          </div>
+          <div>
+            <dt>送样方式</dt>
+            <dd>{{ competitionDeliveryMethodText }}</dd>
+          </div>
+          <div>
+            <dt>酒样要求</dt>
+            <dd>{{ selectedLogistics.sampleQuantityNote || '以主办方赛事通知为准。' }}</dd>
+          </div>
+          <div>
+            <dt>标签粘贴</dt>
+            <dd>每款酒瓶身至少贴 1 张，整箱寄送时外箱再贴 1 张。</dd>
+          </div>
+          <div>
+            <dt>包装检查</dt>
+            <dd>{{ selectedLogistics.deliveryNote || '请做好防震、防漏和外箱加固，避免运输中破损。' }}</dd>
+          </div>
+        </dl>
+
+        <section class="address-block">
+          <span class="section-kicker">ADDRESS</span>
+          <h3>收件信息</h3>
+          <p>{{ logisticsAddressText }}</p>
+          <el-button v-if="canCopyLogisticsAddress" @click="copyLogisticsAddress">复制收件信息</el-button>
+        </section>
+
+        <section v-if="selectedLogistics.venueName || selectedLogistics.venueAddress" class="address-block">
+          <span class="section-kicker">ONSITE</span>
+          <h3>现场送样</h3>
+          <p>{{ onsiteDeliveryText }}</p>
+        </section>
+      </aside>
+    </section>
   </div>
 </template>
 
@@ -273,6 +270,7 @@ const currencyFormatter = new Intl.NumberFormat('zh-CN', {
 const payableEntries = computed(() => {
   return [...entries.value].sort((a, b) => entrySortWeight(a) - entrySortWeight(b) || b.id - a.id)
 })
+const selectedLogistics = computed(() => selectedEntry.value?.competitionLogistics || {})
 
 const hasSubmittedDelivery = computed(() => hasDeliveryProgress(selectedEntry.value))
 const showPaymentCard = computed(() => selectedEntry.value?.paymentStatus !== 'PAID')
@@ -314,10 +312,36 @@ const labelActionDescription = computed(() => {
   return '打印后直接贴标，再回到下方填写寄样方式和快递单号。'
 })
 
-const suggestedArrivalText = computed(() => {
+const arrivalWindowText = computed(() => {
+  const start = formatDateTime(selectedLogistics.value.sampleArrivalStart)
+  const deadline = formatDateTime(selectedLogistics.value.sampleArrivalDeadline)
+  if (start !== '待更新' && deadline !== '待更新') return `${start} 至 ${deadline}`
+  if (deadline !== '待更新') return `${deadline} 前送达`
   if (!selectedEntry.value?.competitionDate) return '请至少预留 2 到 3 天运输时间，具体以主办方通知为准'
   return `${formatDate(selectedEntry.value.competitionDate)} 前送达更稳妥`
 })
+const competitionDeliveryMethodText = computed(() => {
+  if (selectedLogistics.value.deliveryMethod === 'EXPRESS') return '快递寄送'
+  if (selectedLogistics.value.deliveryMethod === 'ONSITE') return '现场送样'
+  return '快递寄送 / 现场送样'
+})
+const logisticsAddressLines = computed(() => [
+  selectedLogistics.value.deliveryRecipient,
+  selectedLogistics.value.deliveryPhone,
+  selectedLogistics.value.deliveryAddress,
+].filter(Boolean))
+const canCopyLogisticsAddress = computed(() => logisticsAddressLines.value.length > 0)
+const logisticsAddressText = computed(() => {
+  if (logisticsAddressLines.value.length) return logisticsAddressLines.value.join(' · ')
+  if (selectedLogistics.value.logisticsVisibility === 'PAYMENT_CONFIRMED') return '付款确认后显示完整收件信息。'
+  return '主办方暂未填写完整收件信息，寄出前请先联系确认。'
+})
+const onsiteDeliveryText = computed(() => [
+  selectedLogistics.value.venueName,
+  selectedLogistics.value.venueAddress,
+  selectedLogistics.value.venueTimeNote,
+  selectedLogistics.value.venueContact,
+].filter(Boolean).join(' · '))
 
 const currentAction = computed(() => {
   const entry = selectedEntry.value
@@ -501,7 +525,7 @@ function hasDeliveryProgress(entry) {
 }
 
 function syncDeliveryForm(entry) {
-  deliveryForm.deliveryMethod = entry?.deliveryMethod || 'EXPRESS'
+  deliveryForm.deliveryMethod = entry?.deliveryMethod || defaultDeliveryMethod()
   deliveryForm.carrier = entry?.carrier || ''
   deliveryForm.trackingNo = entry?.trackingNo || ''
   deliveryForm.deliveryNote = entry?.deliveryNote || ''
@@ -514,7 +538,7 @@ function cancelEditingDelivery() {
 
 function normalizeDeliveryPayload(source) {
   return {
-    deliveryMethod: source.deliveryMethod || 'EXPRESS',
+    deliveryMethod: source.deliveryMethod || defaultDeliveryMethod(),
     carrier: source.deliveryMethod === 'EXPRESS' ? (source.carrier || '').trim() : '',
     trackingNo: source.deliveryMethod === 'EXPRESS' ? (source.trackingNo || '').trim() : '',
     deliveryNote: (source.deliveryNote || '').trim(),
@@ -523,11 +547,15 @@ function normalizeDeliveryPayload(source) {
 
 function entryDeliverySnapshot(entry) {
   return normalizeDeliveryPayload({
-    deliveryMethod: entry?.deliveryMethod || 'EXPRESS',
+    deliveryMethod: entry?.deliveryMethod || defaultDeliveryMethod(),
     carrier: entry?.carrier || '',
     trackingNo: entry?.trackingNo || '',
     deliveryNote: entry?.deliveryNote || '',
   })
+}
+
+function defaultDeliveryMethod() {
+  return selectedLogistics.value.deliveryMethod === 'ONSITE' ? 'ONSITE' : 'EXPRESS'
 }
 
 async function selectEntry(entry, options = {}) {
@@ -588,6 +616,13 @@ async function saveDelivery() {
   } finally {
     savingDelivery.value = false
   }
+}
+
+async function copyLogisticsAddress() {
+  const text = logisticsAddressLines.value.join('\n')
+  if (!text) return
+  await navigator.clipboard.writeText(text)
+  ElMessage.success('收件信息已复制')
 }
 
 function formatCurrency(value) {
@@ -786,263 +821,329 @@ function triggerDownload(objectUrl, fileName) {
 <style scoped>
 .payment-page {
   --ink: #2f2116;
-  --subtle-ink: #74624f;
-  --line: rgba(103, 72, 39, 0.12);
+  --subtle-ink: #75624d;
+  --muted-ink: #9a856a;
+  --line: rgba(103, 72, 39, 0.13);
   --cream: #fff9ef;
-  --cream-deep: #f8ecd7;
-  --paper: #fffdf9;
+  --paper: #fffdf8;
   --accent: #b9781f;
+  --accent-deep: #8d5b18;
   display: grid;
-  grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
-  gap: 22px;
+  gap: 18px;
+  width: min(100%, 1240px);
+  margin: 0 auto;
+  color: var(--ink);
+}
+
+.page-head,
+.entry-panel,
+.current-card,
+.payment-card,
+.label-card,
+.delivery-card,
+.requirement-aside {
+  padding: 22px;
+  border-radius: 8px;
+}
+
+.page-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px 24px;
   align-items: start;
 }
 
-.entry-panel,
-.hero-card,
-.next-card,
-.steps-card,
-.label-card,
-.requirements-card,
-.delivery-card {
-  padding: 24px;
+.page-title h1,
+.compact-head h2,
+.current-card h2,
+.aside-head h2 {
+  margin: 8px 0 6px;
+  line-height: 1.15;
 }
 
-.workspace-panel {
-  display: grid;
-  gap: 16px;
+.page-title h1 {
+  font-size: 30px;
 }
 
-.panel-head,
-.card-head,
-.hero-card,
-.next-card {
-  display: flex;
-  justify-content: space-between;
-  gap: 18px;
-}
-
-.panel-head p,
+.page-title p,
+.current-card p,
 .card-head p,
-.hero-copy p,
-.next-card p,
 .entry-row p,
-.field-tip,
-.label-tip {
+.label-tip,
+.address-block p {
+  margin: 0;
   color: var(--subtle-ink);
   line-height: 1.65;
 }
 
-.panel-head a {
-  color: #8b5c19;
+.section-kicker {
+  display: block;
+  color: var(--accent-deep);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.back-link {
+  color: var(--accent-deep);
   font-weight: 800;
   text-decoration: none;
   white-space: nowrap;
 }
 
-.payment-card,
-.entry-list-note,
-.summary-grid div,
-.requirement-list div {
-  background: var(--cream);
-  border: 1px solid var(--line);
-  border-radius: 14px;
+.flow-steps {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding-top: 4px;
 }
 
-.payment-card,
-.summary-grid dt,
-.requirement-list dt {
-  display: block;
-  color: #8a755c;
+.flow-steps span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 12px;
+  color: var(--muted-ink);
+  background: #fff7e8;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-weight: 800;
+}
+
+.flow-steps b {
+  display: grid;
+  place-items: center;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  color: #8b5c19;
+  background: #f3dfb9;
+  border-radius: 50%;
   font-size: 12px;
 }
 
-.entry-list {
+.flow-steps span.done {
+  color: #23603d;
+  background: #e4f3e2;
+}
+
+.flow-steps span.active {
+  color: #3a2615;
+  background: #f4d995;
+  border-color: rgba(185, 120, 31, 0.26);
+}
+
+.delivery-workbench {
+  display: grid;
+  grid-template-columns: 276px minmax(520px, 1fr) 320px;
+  gap: 16px;
+  align-items: start;
+}
+
+.entry-panel,
+.requirement-aside {
+  position: sticky;
+  top: 76px;
+}
+
+.compact-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.entry-list,
+.task-panel {
   display: grid;
   gap: 12px;
-  margin-top: 18px;
+}
+
+.entry-list {
+  margin-top: 14px;
 }
 
 .entry-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 18px;
-  padding: 16px;
+  position: relative;
+  padding: 14px 14px 14px 16px;
   cursor: pointer;
   background: linear-gradient(180deg, #fffaf1 0%, #fff6e7 100%);
   border: 1px solid var(--line);
-  border-radius: 16px;
-  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  border-radius: 8px;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.entry-row::before {
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 0;
+  width: 3px;
+  border-radius: 999px;
+  background: transparent;
+  content: '';
 }
 
 .entry-row:hover {
   transform: translateY(-1px);
-  border-color: rgba(121, 82, 40, 0.24);
-  box-shadow: 0 12px 28px rgba(81, 56, 26, 0.08);
+  border-color: rgba(185, 120, 31, 0.28);
+  box-shadow: 0 10px 24px rgba(85, 56, 25, 0.08);
 }
 
 .entry-row.active {
-  background: linear-gradient(180deg, #2f2116 0%, #43301f 100%);
-  border-color: rgba(255, 230, 193, 0.18);
-  box-shadow: 0 16px 34px rgba(47, 33, 22, 0.24);
+  background: #fffdf8;
+  border-color: rgba(185, 120, 31, 0.34);
 }
 
-.entry-row.active strong,
-.entry-row.active b,
-.hero-side strong,
-.summary-grid dd,
-.requirement-list dd {
-  color: #fff8ee;
-}
-
-.entry-row.active p {
-  color: #ddc8a8;
+.entry-row.active::before {
+  background: var(--accent);
 }
 
 .entry-row-top {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
-  align-items: start;
+  gap: 10px;
+  align-items: flex-start;
 }
 
-.entry-row-top strong,
-.entry-row-top b {
+.entry-row strong {
   color: var(--ink);
+  line-height: 1.35;
 }
 
-.entry-row-top strong {
-  font-size: 18px;
+.entry-row b {
+  color: var(--accent-deep);
+  font-size: 13px;
+  white-space: nowrap;
 }
 
 .entry-row p {
-  margin: 8px 0 4px;
+  margin-top: 6px;
+  font-size: 13px;
 }
 
 .entry-row small {
   display: block;
+  margin-top: 8px;
+  color: var(--accent-deep);
+  font-weight: 800;
 }
 
-.entry-row-side {
-  display: grid;
-  justify-items: end;
-  align-content: start;
-}
-
-.section-kicker {
-  display: block;
-  color: #8b5c19;
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.hero-card h3,
-.next-card h3,
-.card-head h3 {
-  margin: 10px 0 8px;
-  color: var(--ink);
-  font-size: 28px;
-  line-height: 1.25;
-}
-
-.hero-side {
-  min-width: 160px;
-  display: grid;
-  gap: 8px;
-  justify-items: end;
-  align-content: start;
-  text-align: right;
-}
-
-.workspace-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
-  gap: 16px;
-}
-
-.full-span {
-  grid-column: 1 / -1;
-}
-
-.label-card,
-.requirements-card,
-.delivery-card {
-  background:
-    linear-gradient(180deg, rgba(255, 253, 249, 0.98) 0%, rgba(255, 248, 236, 0.98) 100%);
-}
-
-.label-layout {
-  display: grid;
-  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+.current-card,
+.card-head {
+  display: flex;
+  justify-content: space-between;
   gap: 18px;
-  align-items: start;
-  margin-top: 18px;
+  align-items: flex-start;
+}
+
+.current-card h2,
+.card-head h3 {
+  margin: 8px 0 6px;
+  font-size: 28px;
+  line-height: 1.2;
+}
+
+.current-side {
+  display: grid;
+  gap: 10px;
+  justify-items: end;
+}
+
+.payment-card,
+.label-card,
+.delivery-card {
+  background: linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(255, 248, 236, 0.98));
+}
+
+.card-head strong {
+  color: var(--accent-deep);
+  font-size: 24px;
+  white-space: nowrap;
+}
+
+.inline-facts,
+.summary-list,
+.aside-list {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0 0;
+}
+
+.inline-facts {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.inline-facts div,
+.summary-list div,
+.aside-list div {
+  padding: 13px;
+  background: var(--cream);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+dt,
+dd {
+  margin: 0;
+}
+
+dt {
+  color: var(--muted-ink);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+dd {
+  margin-top: 6px;
+  color: var(--ink);
+  font-weight: 800;
+  line-height: 1.55;
+}
+
+.label-preview-wrap {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
 }
 
 .label-preview {
-  min-height: 360px;
-  padding: 18px;
+  width: min(100%, 320px);
+  padding: 16px;
   background: linear-gradient(180deg, #f6ebd7 0%, #fff7ea 100%);
-  border: 1px solid rgba(102, 70, 36, 0.12);
-  border-radius: 18px;
+  border: 1px solid rgba(102, 70, 36, 0.13);
+  border-radius: 8px;
 }
 
 .label-preview :deep(svg) {
   display: block;
   width: 100%;
   height: auto;
+  max-height: 390px;
 }
 
-.label-actions {
-  display: grid;
-  gap: 16px;
-}
-
-.label-action-copy strong {
-  color: var(--ink);
-  font-size: 18px;
-}
-
-.label-tip {
-  margin: 0;
-  font-size: 13px;
-}
-
+.label-actions,
 .button-row {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
 }
 
-.requirement-list,
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin: 18px 0 0;
+.label-actions {
+  justify-content: center;
+  margin-top: 14px;
 }
 
-.requirement-list div,
-.summary-grid div {
-  padding: 16px;
+.label-tip {
+  margin-top: 10px;
+  text-align: center;
+  font-size: 13px;
 }
 
-.requirement-list dd,
-.summary-grid dd {
-  margin: 8px 0 0;
-  font-weight: 700;
-  line-height: 1.6;
-  color: var(--ink);
-}
-
-.compact-grid {
-  margin-top: 18px;
-}
-
-.delivery-form {
-  margin-top: 18px;
+.delivery-form,
+.delivery-summary {
+  margin-top: 16px;
 }
 
 .delivery-grid {
@@ -1055,15 +1156,31 @@ function triggerDownload(objectUrl, fileName) {
   grid-column: 1 / -1;
 }
 
-.field-tip {
-  margin: 8px 0 0;
-  font-size: 12px;
+.summary-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.delivery-summary {
+.requirement-aside {
   display: grid;
-  gap: 18px;
-  margin-top: 18px;
+  gap: 16px;
+}
+
+.aside-list div {
+  background: #fffaf1;
+}
+
+.address-block {
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.address-block h3 {
+  margin: 7px 0 8px;
+  font-size: 18px;
+}
+
+.address-block .el-button {
+  margin-top: 12px;
 }
 
 .task-chip {
@@ -1098,45 +1215,54 @@ function triggerDownload(objectUrl, fileName) {
 }
 
 .empty-state {
-  padding: 18px;
+  padding: 16px;
   color: var(--subtle-ink);
   background: var(--cream);
   border: 1px dashed rgba(87, 58, 26, 0.18);
-  border-radius: 14px;
+  border-radius: 8px;
 }
 
-@media (max-width: 1280px) {
-  .payment-page,
-  .workspace-grid,
-  .label-layout {
-    grid-template-columns: 1fr;
+.empty-state p {
+  margin: 6px 0 0;
+}
+
+@media (max-width: 1180px) {
+  .delivery-workbench {
+    grid-template-columns: 260px minmax(0, 1fr);
+  }
+
+  .requirement-aside {
+    position: static;
+    grid-column: 2;
   }
 }
 
-@media (max-width: 720px) {
-  .panel-head,
-  .card-head,
-  .hero-card,
-  .next-card,
-  .entry-row-top {
+@media (max-width: 820px) {
+  .page-head,
+  .delivery-workbench,
+  .inline-facts,
+  .summary-list,
+  .delivery-grid,
+  .flow-steps {
+    grid-template-columns: 1fr;
+  }
+
+  .entry-panel,
+  .requirement-aside {
+    position: static;
+  }
+
+  .requirement-aside {
+    grid-column: auto;
+  }
+
+  .current-card,
+  .card-head {
     display: grid;
   }
 
-  .panel-brief,
-  .requirement-list,
-  .summary-grid,
-  .delivery-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .entry-row {
-    grid-template-columns: 1fr;
-  }
-
-  .entry-row-side,
-  .hero-side {
+  .current-side {
     justify-items: start;
-    text-align: left;
   }
 }
 </style>

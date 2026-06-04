@@ -77,7 +77,6 @@
           <p v-if="entry.styleDescription">{{ entry.styleDescription }}</p>
         </div>
 
-        <h2 class="section-title score-title">同桌评分</h2>
         <div v-if="!myScoreSubmitted" class="captain-alert">
           你还没有提交这款酒的专业评分。
           <button type="button" @click="$router.push(`/score/${uuid}`)">去填写</button>
@@ -87,7 +86,6 @@
             <div class="split">
               <div>
                 <h3>{{ score.judgeName }}</h3>
-                <p>{{ score.judgeName === me?.displayName ? '我的专业评分' : score.roleLabel }}</p>
               </div>
               <strong>{{ score.totalScore }} 分</strong>
             </div>
@@ -494,31 +492,42 @@ onMounted(async () => {
 }
 
 .dimension-notes {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 12px;
 }
 
 .dimension-notes div {
-  border-radius: 8px;
-  padding: 9px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  border-radius: 999px;
+  padding: 4px 8px;
   background: #f7f8f6;
 }
 
 .dimension-notes span {
   display: inline-flex;
   border-radius: 999px;
-  padding: 5px 8px;
+  padding: 4px 8px;
   color: #344054;
   background: #e6ece8;
   font-size: 12px;
   font-weight: 750;
+  white-space: nowrap;
 }
 
 .dimension-notes p {
-  margin: 7px 0 0;
+  max-width: 220px;
+  margin: 0;
+  overflow: hidden;
   color: #344054;
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .member-comment {

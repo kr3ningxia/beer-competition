@@ -125,6 +125,7 @@
             <span :class="entry.finalized ? 'ok-text' : ''">汇总：{{ entry.finalized ? '已确认' : readyForFinalize(entry) ? '可汇总' : '等待' }}</span>
           </div>
           <button
+            v-if="captainAction(entry)"
             type="button"
             :class="['button', captainAction(entry).primary ? 'primary' : 'secondary', 'full', 'entry-action']"
             @click="openCaptainAction(entry)"
@@ -308,9 +309,9 @@ function readyForFinalize(entry) {
 
 function captainAction(entry) {
   if (entry.finalized) return { label: '查看桌长意见', primary: false }
-  if (!entry.scored) return { label: '填写我的评分', primary: true }
+  if (!entry.scored) return null
   if (readyForFinalize(entry)) return { label: '去汇总', primary: true }
-  return { label: '查看评分进度', primary: false }
+  return null
 }
 
 async function toggleScanner() {

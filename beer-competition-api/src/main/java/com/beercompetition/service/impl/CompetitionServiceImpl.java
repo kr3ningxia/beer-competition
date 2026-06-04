@@ -26,8 +26,10 @@ import com.beercompetition.pojo.dto.JudgeTableBatchUpdateRequest;
 import com.beercompetition.pojo.dto.JudgeTableItemRequest;
 import com.beercompetition.pojo.dto.ScoreConfigBatchUpdateRequest;
 import com.beercompetition.pojo.dto.ScoreConfigItemRequest;
+import com.beercompetition.pojo.enums.CompetitionDeliveryMethod;
 import com.beercompetition.pojo.enums.CompetitionStatus;
 import com.beercompetition.pojo.enums.JudgeRoleType;
+import com.beercompetition.pojo.enums.LogisticsVisibility;
 import com.beercompetition.pojo.po.BeerEntry;
 import com.beercompetition.pojo.po.Competition;
 import com.beercompetition.pojo.po.CompetitionCategory;
@@ -44,6 +46,7 @@ import com.beercompetition.pojo.vo.CompetitionCheckVO;
 import com.beercompetition.pojo.vo.CompetitionConfigNameVO;
 import com.beercompetition.pojo.vo.CompetitionDetailVO;
 import com.beercompetition.pojo.vo.CompetitionEntryVO;
+import com.beercompetition.pojo.vo.CompetitionLogisticsVO;
 import com.beercompetition.pojo.vo.CompetitionRoundVO;
 import com.beercompetition.pojo.vo.CompetitionPrimaryActionVO;
 import com.beercompetition.pojo.vo.CompetitionStageCheckVO;
@@ -111,6 +114,8 @@ public class CompetitionServiceImpl implements CompetitionService {
     private static final int CROSS_MAX_DIMENSIONS = 4;
     private static final int DEFAULT_MIN_COMMENT_LENGTH = 0;
     private static final String COMPETITION_CODE_PREFIX = "BC";
+    private static final String DEFAULT_DELIVERY_METHOD = "BOTH";
+    private static final String DEFAULT_LOGISTICS_VISIBILITY = "PAYMENT_CONFIRMED";
     private static final DateTimeFormatter COMPETITION_CODE_DATE_FORMAT = DateTimeFormatter.BASIC_ISO_DATE;
     private static final Set<String> ENTRY_FIELD_TYPES = Set.of("text", "textarea", "number", "select", "multi_select");
 
@@ -216,6 +221,7 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .entryFee(request.getEntryFee())
                 .styleLibraryVersion(styleLibraryVersion)
                 .build();
+        applyCreateLogistics(competition, request);
 
         // 3) 事务内写入比赛和新建页完整配置
         insertCompetitionWithGeneratedCode(competition);
@@ -265,6 +271,7 @@ public class CompetitionServiceImpl implements CompetitionService {
         competition.setRegistrationStart(request.getRegistrationStart());
         competition.setRegistrationDeadline(request.getRegistrationDeadline());
         competition.setEntryFee(request.getEntryFee());
+        applyBaseInfoLogistics(competition, request);
 
         // 3) 更新比赛主记录
         try {
@@ -571,6 +578,7 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .status(competition.getStatus())
                 .entryFee(competition.getEntryFee())
                 .styleLibraryVersion(competition.getStyleLibraryVersion())
+                .logistics(toCompetitionLogisticsVO(competition))
                 .currentStageLabel(resolveStageLabel(parseStatus(competition)))
                 .primaryAction(primaryAction)
                 .categories(categories)
@@ -612,6 +620,7 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .status(competition.getStatus())
                 .entryFee(competition.getEntryFee())
                 .styleLibraryVersion(competition.getStyleLibraryVersion())
+                .logistics(toCompetitionLogisticsVO(competition))
                 .currentStageLabel(detail.getCurrentStageLabel())
                 .primaryAction(detail.getPrimaryAction())
                 .readyCount(readyCount)
@@ -637,11 +646,118 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .registrationDeadline(competition.getRegistrationDeadline())
                 .status(competition.getStatus())
                 .entryFee(competition.getEntryFee())
+                .logistics(toPublicCompetitionLogisticsVO(competition))
                 .currentStageLabel(resolveStageLabel(parseStatus(competition)))
                 .categories(listCategories(competition.getId()))
                 .styles(listStyles(competition.getId()))
                 .entryFields(listEntryFields(competition.getId()))
                 .build();
+    }
+
+    private void applyCreateLogistics(Competition competition, CompetitionCreateRequest request) {
+        competition.setDeliveryMethod(normalizeDeliveryMethod(request.getDeliveryMethod()));
+        competition.setSampleArrivalStart(request.getSampleArrivalStart());
+        competition.setSampleArrivalDeadline(request.getSampleArrivalDeadline());
+        competition.setSampleQuantityNote(normalizeNullable(request.getSampleQuantityNote()));
+        competition.setDeliveryRecipient(normalizeNullable(request.getDeliveryRecipient()));
+        competition.setDeliveryPhone(normalizeNullable(request.getDeliveryPhone()));
+        competition.setDeliveryAddress(normalizeNullable(request.getDeliveryAddress()));
+        competition.setDeliveryNote(normalizeNullable(request.getDeliveryNote()));
+        competition.setVenueName(normalizeNullable(request.getVenueName()));
+        competition.setVenueAddress(normalizeNullable(request.getVenueAddress()));
+        competition.setVenueTimeNote(normalizeNullable(request.getVenueTimeNote()));
+        competition.setVenueContact(normalizeNullable(request.getVenueContact()));
+        competition.setVenueMapUrl(normalizeNullable(request.getVenueMapUrl()));
+        competition.setLogisticsVisibility(normalizeLogisticsVisibility(request.getLogisticsVisibility()));
+        validateLogisticsTime(competition);
+    }
+
+    private void applyBaseInfoLogistics(Competition competition, CompetitionBaseInfoUpdateRequest request) {
+        competition.setDeliveryMethod(normalizeDeliveryMethod(request.getDeliveryMethod()));
+        competition.setSampleArrivalStart(request.getSampleArrivalStart());
+        competition.setSampleArrivalDeadline(request.getSampleArrivalDeadline());
+        competition.setSampleQuantityNote(normalizeNullable(request.getSampleQuantityNote()));
+        competition.setDeliveryRecipient(normalizeNullable(request.getDeliveryRecipient()));
+        competition.setDeliveryPhone(normalizeNullable(request.getDeliveryPhone()));
+        competition.setDeliveryAddress(normalizeNullable(request.getDeliveryAddress()));
+        competition.setDeliveryNote(normalizeNullable(request.getDeliveryNote()));
+        competition.setVenueName(normalizeNullable(request.getVenueName()));
+        competition.setVenueAddress(normalizeNullable(request.getVenueAddress()));
+        competition.setVenueTimeNote(normalizeNullable(request.getVenueTimeNote()));
+        competition.setVenueContact(normalizeNullable(request.getVenueContact()));
+        competition.setVenueMapUrl(normalizeNullable(request.getVenueMapUrl()));
+        competition.setLogisticsVisibility(normalizeLogisticsVisibility(request.getLogisticsVisibility()));
+        validateLogisticsTime(competition);
+    }
+
+    private CompetitionLogisticsVO toCompetitionLogisticsVO(Competition competition) {
+        return CompetitionLogisticsVO.builder()
+                .deliveryMethod(resolveDeliveryMethod(competition.getDeliveryMethod()))
+                .sampleArrivalStart(competition.getSampleArrivalStart())
+                .sampleArrivalDeadline(competition.getSampleArrivalDeadline())
+                .sampleQuantityNote(competition.getSampleQuantityNote())
+                .deliveryRecipient(competition.getDeliveryRecipient())
+                .deliveryPhone(competition.getDeliveryPhone())
+                .deliveryAddress(competition.getDeliveryAddress())
+                .deliveryNote(competition.getDeliveryNote())
+                .venueName(competition.getVenueName())
+                .venueAddress(competition.getVenueAddress())
+                .venueTimeNote(competition.getVenueTimeNote())
+                .venueContact(competition.getVenueContact())
+                .venueMapUrl(competition.getVenueMapUrl())
+                .logisticsVisibility(resolveLogisticsVisibility(competition.getLogisticsVisibility()))
+                .build();
+    }
+
+    private CompetitionLogisticsVO toPublicCompetitionLogisticsVO(Competition competition) {
+        CompetitionLogisticsVO logistics = toCompetitionLogisticsVO(competition);
+        if (LogisticsVisibility.PUBLIC.name().equals(logistics.getLogisticsVisibility())) {
+            return logistics;
+        }
+        logistics.setDeliveryRecipient(null);
+        logistics.setDeliveryPhone(null);
+        logistics.setDeliveryAddress(null);
+        return logistics;
+    }
+
+    private String normalizeDeliveryMethod(String deliveryMethod) {
+        String normalized = normalizeNullable(deliveryMethod);
+        if (!StringUtils.hasText(normalized)) {
+            return DEFAULT_DELIVERY_METHOD;
+        }
+        try {
+            return CompetitionDeliveryMethod.valueOf(normalized.toUpperCase()).name();
+        } catch (IllegalArgumentException ex) {
+            throw new BaseException("送样方式不正确");
+        }
+    }
+
+    private String normalizeLogisticsVisibility(String logisticsVisibility) {
+        String normalized = normalizeNullable(logisticsVisibility);
+        if (!StringUtils.hasText(normalized)) {
+            return DEFAULT_LOGISTICS_VISIBILITY;
+        }
+        try {
+            return LogisticsVisibility.valueOf(normalized.toUpperCase()).name();
+        } catch (IllegalArgumentException ex) {
+            throw new BaseException("寄样地址展示规则不正确");
+        }
+    }
+
+    private String resolveDeliveryMethod(String deliveryMethod) {
+        return StringUtils.hasText(deliveryMethod) ? deliveryMethod : DEFAULT_DELIVERY_METHOD;
+    }
+
+    private String resolveLogisticsVisibility(String logisticsVisibility) {
+        return StringUtils.hasText(logisticsVisibility) ? logisticsVisibility : DEFAULT_LOGISTICS_VISIBILITY;
+    }
+
+    private void validateLogisticsTime(Competition competition) {
+        if (competition.getSampleArrivalStart() != null
+                && competition.getSampleArrivalDeadline() != null
+                && !competition.getSampleArrivalDeadline().isAfter(competition.getSampleArrivalStart())) {
+            throw new BaseException("建议送达截止时间必须晚于开始时间");
+        }
     }
 
     private List<CompetitionConfigNameVO> listCategories(Long competitionId) {
@@ -1115,7 +1231,7 @@ public class CompetitionServiceImpl implements CompetitionService {
                 || !Objects.equals(competition.getCode(), request.getCode())
                 || !Objects.equals(competition.getEdition(), request.getEdition())
                 || !Objects.equals(competition.getRegistrationStart(), request.getRegistrationStart())) {
-            throw new BaseException("报名已开放，仅允许修改比赛日期、报名截止时间和报名费");
+            throw new BaseException("报名已开放，仅允许修改比赛日期、报名截止时间、报名费和送样场地信息");
         }
         if (competition.getEntryFee().compareTo(request.getEntryFee()) != 0 && hasEntries(competition.getId())) {
             throw new BaseException("已有报名酒款，报名费已锁定");

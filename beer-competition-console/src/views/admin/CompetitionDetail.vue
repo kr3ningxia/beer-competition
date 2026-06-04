@@ -283,8 +283,8 @@
                   <small>{{ entry.breweryCompanyName || '未关联厂牌' }}</small>
                 </div>
                 <div class="entry-code-cell">
-                  <strong>{{ entry.uuid }}</strong>
-                  <small>{{ entry.shortCode }}</small>
+                  <strong>{{ entry.shortCode }}</strong>
+                  <small>{{ entry.uuid }}</small>
                 </div>
                 <div class="entry-style-cell">
                   <strong>{{ entry.categoryName }}</strong>
@@ -370,6 +370,7 @@
             @drop-entry-on-round-table="dropEntryOnRoundTable"
             @remove-entry-from-round-table="removeEntryFromRoundTable"
             @update-table-captain="updateRoundTableCaptain"
+            @update-table-scope="updateRoundTableScope"
             @update-table-target="updateRoundTableTarget"
             @publish-current-round="publishCurrentRound"
           />
@@ -436,7 +437,7 @@
                 <div class="round-current-main">
                   <small>{{ currentRound?.name || '未创建轮次' }} · {{ currentRoundTypeLabel }} · {{ currentRoundStatusText }}</small>
                   <h2>{{ roundReadinessTitle }}</h2>
-                  <p>{{ roundReadinessDetail }}</p>
+                  <p v-if="roundReadinessDetail">{{ roundReadinessDetail }}</p>
                 </div>
 
                 <div class="round-console-metrics">
@@ -487,12 +488,15 @@
                 </header>
 
                 <div class="round-table-list">
-                  <button
+                  <div
                     v-for="table in currentRoundTableSummaries"
                     :key="`round-summary-${table.id}`"
                     :class="['round-table-row', table.tone, { active: selectedRoundTableId === table.id }]"
-                    type="button"
                     @click="selectedRoundTableId = table.id"
+                    @keydown.enter="selectedRoundTableId = table.id"
+                    @keydown.space.prevent="selectedRoundTableId = table.id"
+                    role="button"
+                    tabindex="0"
                   >
                     <strong>{{ table.name }}</strong>
                     <span>{{ table.entryCount }} 款</span>
@@ -501,7 +505,16 @@
                     <span>{{ table.secondaryProgressLabel }} {{ table.secondaryProgress }}</span>
                     <span>{{ table.targetLabel }} {{ table.targetDisplay }}</span>
                     <em>{{ table.statusText }}</em>
-                  </button>
+                    <button
+                      class="round-table-detail-button"
+                      type="button"
+                      :disabled="currentRound?.type !== 'SCORE'"
+                      @click.stop="openRoundTableScoreDetail(table.id)"
+                    >
+                      <Search />
+                      详情
+                    </button>
+                  </div>
                   <p v-if="!currentRoundTables.length" class="empty-line">还没有轮次桌。先完成分桌分配，再生成第一轮编排。</p>
                 </div>
               </section>
@@ -750,6 +763,50 @@
         </div>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="roundScoreDetailDialogOpen"
+      class="round-score-detail-dialog-shell"
+      width="980px"
+      :title="roundScoreDetailTable ? `${roundScoreDetailTable.name} · 评分详情` : '评分详情'"
+      align-center
+      destroy-on-close
+    >
+      <div v-if="roundScoreDetailTable" class="round-score-detail-dialog">
+        <section class="score-detail-summary">
+          <span>
+            <small>评分进度</small>
+            <strong>{{ roundScoreDetailStats.submitted }} / {{ roundScoreDetailStats.total }}</strong>
+          </span>
+          <span class="pending-judge-summary">
+            <small>未完成评分评委</small>
+            <strong>{{ roundScoreDetailStats.pendingJudgeNames || '无' }}</strong>
+          </span>
+          <span>
+            <small>酒款</small>
+            <strong>{{ roundScoreDetailEntries.length }} 款</strong>
+          </span>
+        </section>
+
+        <section class="score-detail-progress-list">
+          <article
+            v-for="judge in roundScoreDetailJudges"
+            :key="judge.judgePublicId || judge.judgeName"
+            :class="['score-detail-progress-row', { pending: getJudgeRemainingCount(judge) > 0 }]"
+          >
+            <div class="score-detail-judge-name">
+              <strong>{{ judge.judgeName }}</strong>
+              <small>{{ judge.roleLabel }}</small>
+            </div>
+            <div class="score-detail-progress-track" :aria-label="`${judge.judgeName}评分进度`">
+              <i :style="{ width: `${formatJudgeDetailProgress(judge)}%` }"></i>
+            </div>
+            <span>{{ judge.submittedCount }} / {{ judge.totalCount }}</span>
+            <em>{{ getJudgeRemainingCount(judge) > 0 ? `剩余 ${getJudgeRemainingCount(judge)} 杯` : '已完成' }}</em>
+          </article>
+        </section>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -836,9 +893,20 @@ const draggingItem = ref(null)
 
 const rounds = ref([])
 const roundEntryPool = ref([])
+const firstRoundDraft = reactive({
+  id: 'first-round-draft',
+  roundNo: 1,
+  name: '第一轮草稿',
+  type: 'SCORE',
+  status: 'DRAFT',
+  tables: [],
+  isPreparationDraft: true,
+})
 const activeRoundId = ref('')
 const selectedRoundTableId = ref('')
 const roundProgressSection = ref(null)
+const roundScoreDetailDialogOpen = ref(false)
+const roundScoreDetailTableId = ref('')
 const roundKeyword = ref('')
 const roundCategoryFilter = ref('全部')
 const selectedEntryUuids = ref([])
@@ -933,9 +1001,10 @@ const tabSaveAction = computed(() => {
   return null
 })
 const futureStageTasks = computed(() => buildFutureStageTasks())
-const currentRound = computed(() => rounds.value.find((round) => round.id === activeRoundId.value) || rounds.value[0])
+const currentRound = computed(() => rounds.value.find((round) => round.id === activeRoundId.value) || rounds.value[0] || firstRoundDraft)
 const currentRoundTables = computed(() => currentRound.value?.tables || [])
 const selectedRoundTable = computed(() => currentRoundTables.value.find((table) => table.id === selectedRoundTableId.value) || currentRoundTables.value[0])
+const roundScoreDetailTable = computed(() => currentRoundTables.value.find((table) => table.id === roundScoreDetailTableId.value) || null)
 const entryAutoAssignTable = computed(() => currentRoundTables.value.find((table) => table.id === entryAutoAssignTableId.value) || null)
 const currentRoundTypeLabel = computed(() => (currentRound.value?.type === 'SCORE' ? '评分制' : '选择排序制'))
 const currentRoundStatusText = computed(() => roundStatusLabels[currentRound.value?.status] || currentRound.value?.status || '-')
@@ -945,6 +1014,43 @@ const advancedPool = computed(() => roundEntryPool.value.filter((entry) => entry
 const overviewActionItems = computed(() => buildOverviewActionItems())
 const roundCategoryFilters = computed(() => ['全部', ...new Set(currentPoolEntries.value.map((entry) => entry.categoryName).filter(Boolean))])
 const currentPoolEntries = computed(() => getPoolEntriesForRound(currentRound.value))
+const entryLookup = computed(() => {
+  const entries = [...roundEntryPool.value, ...(competition.value?.entries || [])]
+  return new Map(entries.map((entry) => [entry.uuid, entry]))
+})
+const roundScoreDetailJudges = computed(() => {
+  const details = roundScoreDetailTable.value?.judgeDetails || []
+  const source = details.length ? details : buildFallbackRoundScoreDetailJudges(roundScoreDetailTable.value)
+  return source
+    .slice()
+    .sort((left, right) => {
+      const leftPending = Number(left.totalCount || 0) - Number(left.submittedCount || 0)
+      const rightPending = Number(right.totalCount || 0) - Number(right.submittedCount || 0)
+      if (leftPending !== rightPending) return rightPending - leftPending
+      return String(left.judgeName || '').localeCompare(String(right.judgeName || ''), 'zh-CN')
+    })
+})
+const roundScoreDetailEntries = computed(() => (roundScoreDetailTable.value?.entryUuids || []).map((uuid) => {
+  const entry = entryLookup.value.get(uuid) || {}
+  return {
+    uuid,
+    name: entry.name || '未命名酒款',
+    shortCode: entry.shortCode || '',
+    categoryName: entry.categoryName || entry.category || '-',
+  }
+}))
+const roundScoreDetailStats = computed(() => roundScoreDetailJudges.value.reduce((summary, judge) => {
+  const total = Number(judge.totalCount || 0)
+  const submitted = Number(judge.submittedCount || 0)
+  summary.total += total
+  summary.submitted += submitted
+  if (submitted < total) {
+    summary.pendingJudges += 1
+    if (judge.judgeName) summary.pendingJudgeNamesList.push(judge.judgeName)
+  }
+  summary.pendingJudgeNames = summary.pendingJudgeNamesList.join('、')
+  return summary
+}, { submitted: 0, total: 0, pendingJudges: 0, pendingJudgeNamesList: [], pendingJudgeNames: '' }))
 const filteredRoundPool = computed(() => {
   const query = roundKeyword.value.toLowerCase()
   return currentPoolEntries.value
@@ -963,7 +1069,7 @@ const filteredRoundPool = computed(() => {
     })
 })
 const roundValidationIssues = computed(() => buildRoundValidationIssues(currentRound.value))
-const canPublishCurrentRound = computed(() => currentRound.value?.status === 'DRAFT' && roundValidationIssues.value.length === 0)
+const canPublishCurrentRound = computed(() => !currentRound.value?.isPreparationDraft && currentRound.value?.status === 'DRAFT' && roundValidationIssues.value.length === 0)
 const roundReadinessChecks = computed(() => buildRoundReadinessChecks())
 const currentRoundTargetLabel = computed(() => (currentRound.value?.type === 'SCORE' ? '晋级' : '排序'))
 const currentRoundTargetDisplay = computed(() => {
@@ -989,7 +1095,7 @@ const roundReadinessDetail = computed(() => {
     ? '发布后，评委开始评分，桌长可查看本桌酒款并汇总结果。'
     : '发布后，桌长可以进入排序任务并提交本桌结果。'
   if (currentRound.value.status === 'PUBLISHED') return currentRound.value.type === 'SCORE'
-    ? '等待评委提交评分，完成后由桌长汇总本轮结果。'
+    ? ''
     : '等待桌长提交排序结果。'
   if (currentRound.value.status === 'IN_PROGRESS') return '各桌正在处理排序任务。'
   if (currentRound.value.status === 'SUBMITTED') return '排序结果已提交，确认无误后可以锁定本轮。'
@@ -1135,6 +1241,12 @@ watch(() => route.params.id, loadDetail)
 watch(() => route.query.tab, (tab) => {
   if (tab) activeTab.value = tab === 'progress' ? 'rounds' : tab
 })
+watch([
+  () => judgeTableForm.map((table) => `${table.localId}:${table.tableName}`).join('|'),
+  () => judgeAssignmentForm.map((assignment) => `${assignment.localId}:${assignment.tableLocalId}:${assignment.judgePublicId}:${assignment.role}`).join('|'),
+], () => {
+  if (!rounds.value.some((round) => round.roundNo === 1)) syncFirstRoundDraftTables()
+})
 watch(entryAutoAssignStats, (stats) => {
   const maxQuantity = Math.max(stats.unassigned, 1)
   if (Number(entryAutoAssignForm.quantity || 1) > maxQuantity) {
@@ -1262,11 +1374,52 @@ function applyRoundState(preferredRoundId = activeRoundId.value) {
     const pool = getPoolEntriesForRound(round)
     round.tables.forEach((table) => syncRoundTableScope(table, pool))
   })
+  if (!rounds.value.some((round) => round.roundNo === 1)) {
+    syncFirstRoundDraftTables()
+  } else {
+    firstRoundDraft.tables.splice(0)
+  }
   const preferred = rounds.value.find((round) => round.id === preferredRoundId)
-  const current = preferred || competition.value?.currentRound || rounds.value[rounds.value.length - 1] || rounds.value[0]
-  activeRoundId.value = current?.id || ''
+  const current = preferred || competition.value?.currentRound || rounds.value[rounds.value.length - 1] || rounds.value[0] || firstRoundDraft
+  activeRoundId.value = current?.id || firstRoundDraft.id
   selectedRoundTableId.value = current?.tables?.[0]?.id || ''
   selectedEntryUuids.value = []
+}
+
+function syncFirstRoundDraftTables() {
+  const previousByName = new Map(firstRoundDraft.tables.map((table) => [table.name, table]))
+  const previousById = new Map(firstRoundDraft.tables.map((table) => [table.id, table]))
+  const storedPool = roundEntryPool.value.filter((entry) => entry.stored)
+  const storedUuids = new Set(storedPool.map((entry) => entry.uuid))
+  const tables = judgeTableForm
+    .filter((table) => table.tableName?.trim())
+    .map((table, index) => {
+      const id = `draft-table-${table.localId}`
+      const previous = previousByName.get(table.tableName) || previousById.get(id) || firstRoundDraft.tables[index] || {}
+      const captain = assignmentsForTable(table, 'CAPTAIN')[0]
+      const draftTable = {
+        id,
+        name: table.tableName.trim(),
+        captainPublicId: captain?.judgePublicId || '',
+        categoryId: previous.categoryId ?? null,
+        categoryMode: previous.categoryMode || 'EMPTY',
+        categoryName: previous.categoryName || '',
+        targetCount: Number(previous.targetCount || 3),
+        targetMode: 'ADVANCE_COUNT',
+        sortOrder: index,
+        entryUuids: (previous.entryUuids || []).filter((uuid) => storedUuids.has(uuid)),
+        rankings: previous.rankings || buildEmptyRankings(Number(previous.targetCount || 3), 'ADVANCE_COUNT'),
+      }
+      syncRoundTableScope(draftTable, storedPool)
+      return draftTable
+    })
+  firstRoundDraft.tables.splice(0, firstRoundDraft.tables.length, ...tables)
+  if (!rounds.value.length || activeRoundId.value === firstRoundDraft.id) {
+    activeRoundId.value = firstRoundDraft.id
+    if (!tables.some((table) => table.id === selectedRoundTableId.value)) {
+      selectedRoundTableId.value = tables[0]?.id || ''
+    }
+  }
 }
 
 function paymentStatusText(status) {
@@ -1294,13 +1447,21 @@ async function loadStyleLibraries() {
 }
 
 async function generateFirstRoundFromJudges() {
+  syncFirstRoundDraftTables()
   if (validationIssues.value.length) {
     ElMessage.warning(`还有 ${validationIssues.value.length} 项评审配置需要处理`)
     return
   }
+  if (roundValidationIssues.value.length) {
+    ElMessage.warning(roundValidationIssues.value[0])
+    return
+  }
+  const payload = buildRoundAllocationPayload(firstRoundDraft)
+  await saveJudgeDraft({ silent: true })
   const detail = await createFirstRound(competition.value.id, {
     allocationStrategy: 'EVEN_SPLIT',
     defaultTargetCount: 3,
+    tables: payload.tables,
   })
   competition.value = normalizeDetail(detail)
   resetForms()
@@ -1313,11 +1474,9 @@ async function generateFirstRoundFromJudges() {
 function resolveRegistrationWindowInfo() {
   const status = competition.value?.status
   const now = Date.now()
-  const start = parseDateTime(competition.value?.registrationStart)
   const deadline = parseDateTime(competition.value?.registrationDeadline)
-  if (status === 'DRAFT') return { label: '未发布', tone: 'neutral', detail: start ? `发布后按 ${formatDateTime(competition.value.registrationStart)} 开放` : '报名窗口尚未完整' }
+  if (status === 'DRAFT') return { label: '未发布', tone: 'neutral', detail: '开放报名后厂商可立即提交' }
   if (status === 'REGISTRATION_OPEN') {
-    if (start && now < start) return { label: '待开始', tone: 'gold', detail: `将于 ${formatDateTime(competition.value.registrationStart)} 自动开放` }
     if (deadline && now > deadline) return { label: '已过截止', tone: 'warning', detail: '已到报名截止时间，建议结束报名' }
     return { label: '报名中', tone: 'success', detail: deadline ? `将于 ${formatDateTime(competition.value.registrationDeadline)} 自动截止` : '正在接受报名' }
   }
@@ -1451,7 +1610,7 @@ function handleFutureTask(task) {
 
 function selectRound(roundId) {
   activeRoundId.value = roundId
-  const round = rounds.value.find((item) => item.id === roundId)
+  const round = rounds.value.find((item) => item.id === roundId) || (roundId === firstRoundDraft.id ? firstRoundDraft : null)
   selectedRoundTableId.value = round?.tables[0]?.id || ''
   selectedEntryUuids.value = []
   closeEntryAutoAssignDialog()
@@ -1729,6 +1888,49 @@ function formatJudgeProgress(table) {
   return `${counts.done} / ${counts.total}`
 }
 
+function openRoundTableScoreDetail(tableId) {
+  roundScoreDetailTableId.value = tableId
+  roundScoreDetailDialogOpen.value = true
+}
+
+function buildFallbackRoundScoreDetailJudges(table) {
+  if (!table?.entryUuids?.length) return []
+  const baseTable = judgeTableForm.find((item) => item.tableName === table.name)
+  if (!baseTable) return []
+  const assignments = judgeAssignmentForm
+    .filter((assignment) => assignment.tableLocalId === baseTable.localId)
+  return assignments.map((assignment) => {
+    const judge = getJudge(assignment.judgePublicId)
+    const entryScores = table.entryUuids.map((uuid) => ({
+      beerUuid: uuid,
+      scored: false,
+      totalScore: null,
+      submittedAt: null,
+    }))
+    return {
+      judgePublicId: assignment.judgePublicId,
+      judgeName: judge?.name || assignment.judgePublicId || '未知评委',
+      role: assignment.role,
+      roleLabel: roleLabels[assignment.role] || assignment.role,
+      submittedCount: 0,
+      totalCount: table.entryUuids.length,
+      progress: 0,
+      missingEntryUuids: [...table.entryUuids],
+      entryScores,
+    }
+  })
+}
+
+function getJudgeRemainingCount(judge) {
+  return Math.max(0, Number(judge.totalCount || 0) - Number(judge.submittedCount || 0))
+}
+
+function formatJudgeDetailProgress(judge) {
+  const total = Number(judge.totalCount || 0)
+  if (!total) return 0
+  return Math.min(100, Math.max(0, Math.round(Number(judge.submittedCount || 0) * 100 / total)))
+}
+
 function buildPyramidTablePreview(round, table) {
   const progress = getRoundTableProgressSummary(round, table)
   const captainName = getJudge(table.captainPublicId)?.name || '未指定桌长'
@@ -1895,6 +2097,7 @@ function buildRoundValidationIssues(round) {
 }
 
 function getRoundPublishStageIssue(round) {
+  if (round?.isPreparationDraft) return ''
   if (round?.status !== 'DRAFT') return ''
   if (round.type === 'SCORE' && competition.value?.status !== 'JUDGING_PREP') {
     return '进入评审准备后才能发布第一轮'
@@ -2045,6 +2248,29 @@ function updateRoundTableCaptain(tableId, judgePublicId) {
   if (table) table.captainPublicId = judgePublicId
 }
 
+function updateRoundTableScope(tableId, scopeValue) {
+  if (currentRound.value?.status !== 'DRAFT') return
+  const table = currentRoundTables.value.find((item) => item.id === tableId)
+  if (!table) return
+  if (scopeValue === 'MIXED') {
+    table.categoryId = null
+    table.categoryMode = 'MIXED'
+    table.categoryName = '混合'
+    return
+  }
+  if (scopeValue?.startsWith('CATEGORY:')) {
+    const categoryId = Number(scopeValue.slice('CATEGORY:'.length))
+    if (!Number.isFinite(categoryId)) return
+    table.categoryId = categoryId
+    table.categoryMode = 'CATEGORY'
+    table.categoryName = getCategoryNameById(categoryId)
+    return
+  }
+  table.categoryId = null
+  table.categoryMode = 'EMPTY'
+  table.categoryName = ''
+}
+
 function updateRoundTableTarget(tableId, targetCount) {
   if (currentRound.value?.status !== 'DRAFT') return
   const table = currentRoundTables.value.find((item) => item.id === tableId)
@@ -2085,29 +2311,39 @@ function removeRoundTable(tableId) {
 }
 
 async function persistCurrentRoundAllocation() {
-  if (!currentRound.value || currentRound.value.status !== 'DRAFT') return
-  currentRoundTables.value.forEach((table) => syncRoundTableScope(table))
-  const payload = {
-    tables: currentRoundTables.value.map((table, index) => ({
-      id: Number.isFinite(Number(table.id)) ? Number(table.id) : undefined,
-      name: table.name,
-      captainPublicId: table.captainPublicId,
-      categoryId: table.categoryId ?? undefined,
-      categoryMode: table.categoryMode || (table.categoryId != null ? 'CATEGORY' : 'EMPTY'),
-      targetCount: Number(table.targetCount || 1),
-      targetMode: table.targetMode || (currentRound.value.type === 'SCORE' ? 'ADVANCE_COUNT' : 'TOP_N'),
-      sortOrder: index,
-      entryUuids: table.entryUuids || [],
-    })),
-  }
+  if (!currentRound.value || currentRound.value.isPreparationDraft || currentRound.value.status !== 'DRAFT') return
+  const payload = buildRoundAllocationPayload(currentRound.value)
   const detail = await saveRoundAllocation(competition.value.id, currentRound.value.id, payload)
   competition.value = normalizeDetail(detail)
   resetForms()
   applyRoundState(currentRound.value?.id)
 }
 
+function buildRoundAllocationPayload(round) {
+  const pool = getPoolEntriesForRound(round)
+  round.tables.forEach((table) => syncRoundTableScope(table, pool))
+  return {
+    tables: round.tables.map((table, index) => ({
+      id: Number.isFinite(Number(table.id)) ? Number(table.id) : undefined,
+      name: table.name,
+      captainPublicId: table.captainPublicId,
+      categoryId: table.categoryId ?? undefined,
+      categoryMode: table.categoryMode || (table.categoryId != null ? 'CATEGORY' : 'EMPTY'),
+      targetCount: Number(table.targetCount || 1),
+      targetMode: table.targetMode || (round.type === 'SCORE' ? 'ADVANCE_COUNT' : 'TOP_N'),
+      sortOrder: index,
+      entryUuids: table.entryUuids || [],
+    })),
+  }
+}
+
 async function publishCurrentRound() {
-  if (!currentRound.value || roundValidationIssues.value.length) return
+  if (!currentRound.value) return
+  if (currentRound.value.isPreparationDraft) {
+    await generateFirstRoundFromJudges()
+    return
+  }
+  if (roundValidationIssues.value.length) return
   const targetRoundId = currentRound.value.id
   if (currentRound.value.status === 'DRAFT') await persistCurrentRoundAllocation()
   const detail = await publishRound(competition.value.id, targetRoundId)
@@ -2496,7 +2732,7 @@ function inferJudgeRoles(judge) {
   return roles.length ? roles : ['PROFESSIONAL']
 }
 
-async function saveJudgeDraft() {
+async function saveJudgeDraft(options = {}) {
   if (validationIssues.value.length) {
     ElMessage.warning(`还有 ${validationIssues.value.length} 项评审配置需要处理`)
     return
@@ -2520,7 +2756,7 @@ async function saveJudgeDraft() {
   competition.value = normalizeDetail(detail)
   resetForms()
   applyRoundState()
-  ElMessage.success('评审人员已保存')
+  if (!options.silent) ElMessage.success('评审人员已保存')
 }
 
 async function saveEntryConfig() {
@@ -2937,6 +3173,150 @@ svg {
 .entry-auto-assign-dialog {
   display: grid;
   gap: 10px;
+}
+
+:global(.round-score-detail-dialog-shell.el-dialog) {
+  overflow: hidden;
+  border: 1px solid rgba(219, 232, 237, 0.12);
+  border-radius: 8px;
+  background: #10191d;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.46);
+}
+
+:global(.round-score-detail-dialog-shell .el-dialog__header) {
+  margin: 0;
+  padding: 16px 18px 10px;
+  border-bottom: 1px solid rgba(219, 232, 237, 0.08);
+}
+
+:global(.round-score-detail-dialog-shell .el-dialog__title) {
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 900;
+}
+
+:global(.round-score-detail-dialog-shell .el-dialog__headerbtn) {
+  top: 6px;
+}
+
+:global(.round-score-detail-dialog-shell .el-dialog__close) {
+  color: var(--muted);
+}
+
+:global(.round-score-detail-dialog-shell .el-dialog__body) {
+  padding: 16px 18px 18px;
+}
+
+.round-score-detail-dialog {
+  display: grid;
+  gap: 14px;
+}
+
+.score-detail-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.score-detail-summary span {
+  display: grid;
+  gap: 7px;
+  min-height: 68px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.score-detail-summary small {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.score-detail-summary strong {
+  font-size: 20px;
+}
+
+.score-detail-summary .pending-judge-summary strong {
+  overflow: hidden;
+  font-size: 16px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.score-detail-progress-list {
+  display: grid;
+  gap: 8px;
+}
+
+.score-detail-progress-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.8fr) minmax(220px, 1fr) 82px 100px;
+  gap: 14px;
+  align-items: center;
+  min-height: 58px;
+  padding: 11px 12px;
+  border: 1px solid rgba(111, 207, 122, 0.18);
+  border-radius: 8px;
+  background: rgba(111, 207, 122, 0.045);
+}
+
+.score-detail-progress-row.pending {
+  border-color: rgba(242, 153, 74, 0.26);
+  background: rgba(242, 153, 74, 0.065);
+}
+
+.score-detail-judge-name {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.score-detail-judge-name strong,
+.score-detail-judge-name small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.score-detail-judge-name strong {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.score-detail-judge-name small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.score-detail-progress-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.score-detail-progress-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #e0b84a, #6fcf7a);
+}
+
+.score-detail-progress-row span,
+.score-detail-progress-row em {
+  color: var(--muted);
+  font-style: normal;
+  font-weight: 900;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.score-detail-progress-row.pending em {
+  color: #f1bd79;
 }
 
 .entry-auto-assign-field {
@@ -4504,7 +4884,7 @@ button.pyramid-placeholder-mark {
 
 .round-table-row {
   display: grid;
-  grid-template-columns: minmax(72px, 0.55fr) minmax(62px, 0.4fr) minmax(140px, 0.95fr) minmax(118px, 0.8fr) minmax(118px, 0.8fr) minmax(96px, 0.7fr) minmax(110px, 0.75fr);
+  grid-template-columns: minmax(72px, 0.55fr) minmax(62px, 0.4fr) minmax(140px, 0.95fr) minmax(118px, 0.8fr) minmax(118px, 0.8fr) minmax(96px, 0.7fr) minmax(110px, 0.75fr) 88px;
   gap: 10px;
   align-items: center;
   min-height: 52px;
@@ -4515,6 +4895,7 @@ button.pyramid-placeholder-mark {
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.022);
   font: inherit;
+  cursor: pointer;
 }
 
 .round-table-row.active {
@@ -4546,6 +4927,30 @@ button.pyramid-placeholder-mark {
   justify-self: end;
   color: inherit;
   font-weight: 900;
+}
+
+.round-table-detail-button {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  min-width: 72px;
+  min-height: 34px;
+  color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.045);
+  font-weight: 800;
+}
+
+.round-table-detail-button svg {
+  width: 15px;
+  height: 15px;
+}
+
+.round-table-detail-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
 }
 
 .round-task-hint {
@@ -5277,6 +5682,11 @@ button.pyramid-placeholder-mark {
   .round-table-row span:nth-of-type(n + 3),
   .round-table-row em {
     grid-column: span 1;
+  }
+
+  .round-table-detail-button {
+    grid-column: 1 / -1;
+    justify-self: stretch;
   }
 
   .detail-tabbar {

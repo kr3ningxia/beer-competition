@@ -106,7 +106,7 @@
           <strong>当前轮次</strong>
           <div class="round-switch" aria-label="当前轮次">
             <button
-              v-for="round in rounds"
+              v-for="round in displayRounds"
               :key="round.id"
               :class="{ active: round.id === activeRoundId }"
               type="button"
@@ -235,7 +235,11 @@
           <div class="desk-config-row">
             <label v-if="currentRound?.type === 'SCORE'" class="inline-scope compact-scope" @click.stop>
               <span>范围</span>
-              <select :value="getTableScopeValue(table)" disabled>
+              <select
+                :value="getTableScopeValue(table)"
+                :disabled="currentRound?.status !== 'DRAFT'"
+                @change="$emit('updateTableScope', table.id, $event.target.value)"
+              >
                 <option v-for="option in tableScopeOptions" :key="option.value" :value="option.value">
                   {{ option.label }}
                 </option>
@@ -266,7 +270,7 @@
           <strong>当前轮次</strong>
           <div class="round-switch" aria-label="当前轮次">
             <button
-              v-for="round in rounds"
+              v-for="round in displayRounds"
               :key="round.id"
               :class="{ active: round.id === activeRoundId }"
               type="button"
@@ -290,10 +294,10 @@
             v-if="currentRound"
             class="main-action"
             type="button"
-            :disabled="!canPublish"
-            @click="$emit('publishCurrentRound')"
+            :disabled="!canRunPrimaryRoundAction"
+            @click="$emit(currentRound?.isPreparationDraft ? 'generateFirstRound' : 'publishCurrentRound')"
           >
-            {{ currentRound?.type === 'SCORE' ? '发布给评委' : '发布给桌长' }}
+            {{ currentRound?.isPreparationDraft ? '生成第一轮编排' : (currentRound?.type === 'SCORE' ? '发布给评委' : '发布给桌长') }}
           </button>
         </section>
         <section class="control-section">
@@ -304,13 +308,13 @@
           </p>
           <p v-if="roundValidationIssues.length === 0" class="ok">
             <CircleCheck />
-            <span>当前轮次可以发布。</span>
+            <span>{{ currentRound?.isPreparationDraft ? '当前分配可以生成第一轮。' : '当前轮次可以发布。' }}</span>
           </p>
         </section>
       </aside>
     </section>
 
-    <section v-else class="allocation-grid overview-shell">
+    <section v-else class="overview-shell">
       <main class="overview-board">
         <section class="overview-summary">
           <article>
@@ -339,37 +343,93 @@
           </article>
         </section>
 
+        <section class="overview-toolbar">
+          <div class="overview-toolbar-group">
+            <strong>当前轮次</strong>
+            <div class="round-switch compact-switch" aria-label="当前轮次">
+              <button
+                v-for="round in displayRounds"
+                :key="round.id"
+                :class="{ active: round.id === activeRoundId }"
+                type="button"
+                @click="$emit('selectRound', round.id)"
+              >
+                {{ round.name }}
+              </button>
+            </div>
+          </div>
+          <div class="overview-toolbar-group">
+            <strong>分配对象</strong>
+            <div class="mode-switch compact-switch" aria-label="编辑对象">
+              <button :class="{ active: allocationMode === 'judges' }" type="button" @click="$emit('update:allocationMode', 'judges')">评审</button>
+              <button :class="{ active: allocationMode === 'entries' }" type="button" @click="$emit('update:allocationMode', 'entries')">酒款</button>
+              <button :class="{ active: allocationMode === 'overview' }" type="button" @click="$emit('update:allocationMode', 'overview')">总览</button>
+            </div>
+          </div>
+        </section>
+
         <section class="overview-grid">
           <article
             v-for="table in currentRoundTables"
             :key="table.id"
             :class="['overview-card', { danger: getOverviewTableIssues(table).length }]"
           >
-            <header>
-              <div>
+            <header class="overview-card-header">
+              <div class="overview-title-block">
                 <h3>{{ table.name }}</h3>
-                <small>{{ table.entryUuids.length }} 款 · {{ currentRound?.type === 'SCORE' ? '晋级' : '排序目标' }} {{ table.targetCount }}</small>
+                <div class="overview-card-meta">
+                  <span>{{ getOverviewJudgeItems(table).length }} 名成员</span>
+                  <span>{{ table.entryUuids.length }} 款酒</span>
+                  <span>{{ currentRound?.type === 'SCORE' ? '晋级' : '排序目标' }} {{ table.targetCount }}</span>
+                </div>
               </div>
               <em :class="getOverviewTableIssues(table).length ? 'warning' : 'ok'">
                 {{ getOverviewTableIssues(table).length ? '需处理' : '已就绪' }}
               </em>
             </header>
 
-            <div class="overview-line">
-              <span>桌长</span>
-              <strong>{{ getJudge(table.captainPublicId)?.name || '未指定' }}</strong>
-            </div>
+            <div class="overview-content-grid">
+              <section class="overview-block overview-members">
+                <div class="overview-block-head">
+                  <span>成员</span>
+                  <small>{{ formatRoleSummary(table) }}</small>
+                </div>
+                <div v-if="getOverviewJudgeItems(table).length" class="overview-member-list">
+                  <article
+                    v-for="judge in getOverviewJudgeItems(table)"
+                    :key="judge.key"
+                    class="overview-member-card"
+                  >
+                    <em :class="`role-${judge.role}`">{{ judge.roleLabel }}</em>
+                    <div>
+                      <strong>{{ judge.name }}</strong>
+                      <small>{{ judge.qualification }}</small>
+                    </div>
+                  </article>
+                </div>
+                <p v-else class="overview-empty">还没有安排成员。</p>
+              </section>
 
-            <div class="overview-block">
-              <span>评审</span>
-              <p>{{ formatJudgeNames(table) }}</p>
-              <small>{{ formatRoleSummary(table) }}</small>
-            </div>
-
-            <div class="overview-block">
-              <span>酒款</span>
-              <p>{{ formatEntryCodes(table) }}</p>
-              <small>{{ formatCategorySummary(table) }}</small>
+              <section class="overview-block overview-entries">
+                <div class="overview-block-head">
+                  <span>酒款</span>
+                  <small>{{ formatCategorySummary(table) }}</small>
+                </div>
+                <div v-if="getOverviewEntryItems(table).length" class="overview-entry-list">
+                  <article
+                    v-for="entry in getOverviewEntryItems(table)"
+                    :key="entry.uuid"
+                    class="overview-entry-card"
+                  >
+                    <strong>{{ entry.code }}</strong>
+                    <div>
+                      <span>{{ entry.name }}</span>
+                      <small>{{ entry.categoryName }} · {{ entry.style }}</small>
+                    </div>
+                  </article>
+                </div>
+                <p v-else class="overview-empty">还没有分配酒款。</p>
+              </section>
             </div>
 
             <p v-if="getOverviewTableIssues(table).length" class="overview-issue">
@@ -379,30 +439,6 @@
           </article>
         </section>
       </main>
-      <aside class="control-panel check-panel">
-        <section class="control-section">
-          <strong>当前轮次</strong>
-          <div class="round-switch" aria-label="当前轮次">
-            <button
-              v-for="round in rounds"
-              :key="round.id"
-              :class="{ active: round.id === activeRoundId }"
-              type="button"
-              @click="$emit('selectRound', round.id)"
-            >
-              {{ round.name }}
-            </button>
-          </div>
-        </section>
-        <section class="control-section">
-          <strong>分配对象</strong>
-          <div class="mode-switch" aria-label="编辑对象">
-            <button :class="{ active: allocationMode === 'judges' }" type="button" @click="$emit('update:allocationMode', 'judges')">评审</button>
-            <button :class="{ active: allocationMode === 'entries' }" type="button" @click="$emit('update:allocationMode', 'entries')">酒款</button>
-            <button :class="{ active: allocationMode === 'overview' }" type="button" @click="$emit('update:allocationMode', 'overview')">总览</button>
-          </div>
-        </section>
-      </aside>
     </section>
   </section>
 </template>
@@ -476,6 +512,7 @@ const emit = defineEmits([
   'dropEntryOnRoundTable',
   'removeEntryFromRoundTable',
   'updateTableCaptain',
+  'updateTableScope',
   'updateTableTarget',
   'publishCurrentRound',
 ])
@@ -491,6 +528,16 @@ const roundKeywordModel = computed({
 })
 
 const firstRoundExists = computed(() => props.rounds.some((round) => round.roundNo === 1))
+const displayRounds = computed(() => {
+  if (props.currentRound?.isPreparationDraft && !firstRoundExists.value) return [props.currentRound]
+  return props.rounds
+})
+const canRunPrimaryRoundAction = computed(() => {
+  if (props.currentRound?.isPreparationDraft) {
+    return props.validationIssues.length === 0 && props.roundValidationIssues.length === 0
+  }
+  return props.canPublish
+})
 const tableScopeOptions = computed(() => {
   const categories = new Map()
   props.currentPoolEntries.forEach((entry) => {
@@ -502,7 +549,7 @@ const tableScopeOptions = computed(() => {
     categories.set(table.categoryId, table.categoryName)
   })
   return [
-    { value: 'EMPTY', label: '空选' },
+    { value: 'EMPTY', label: '未指定' },
     { value: 'MIXED', label: '混合' },
     ...[...categories.entries()].map(([id, name]) => ({ value: `CATEGORY:${id}`, label: name })),
   ]
@@ -553,6 +600,25 @@ function getTableJudgeAssignments(roundTable) {
   return roundTable.captainPublicId ? [{ judgePublicId: roundTable.captainPublicId, role: 'CAPTAIN' }] : []
 }
 
+function getRoleLabel(role) {
+  return props.roleOptions.find((option) => option.value === role)?.label || '评审'
+}
+
+function getOverviewJudgeItems(roundTable) {
+  return getTableJudgeAssignments(roundTable).map((assignment, index) => {
+    const judge = props.getJudge(assignment.judgePublicId)
+    const role = assignment.role || 'JUDGE'
+    return {
+      key: assignment.localId || `${assignment.judgePublicId || 'judge'}-${role}-${index}`,
+      name: judge?.name || '未知评审',
+      qualification: judge?.qualification || '未填写资质',
+      initial: props.getJudgeInitial(judge?.name),
+      role,
+      roleLabel: getRoleLabel(role),
+    }
+  })
+}
+
 function formatJudgeNames(roundTable) {
   const names = getTableJudgeAssignments(roundTable)
     .map((assignment) => props.getJudge(assignment.judgePublicId)?.name)
@@ -577,6 +643,19 @@ function formatEntryCodes(roundTable) {
     .filter(Boolean)
   if (!codes.length) return '未分配酒款'
   return codes.length > 6 ? `${codes.slice(0, 6).join(' · ')} +${codes.length - 6}` : codes.join(' · ')
+}
+
+function getOverviewEntryItems(roundTable) {
+  return roundTable.entryUuids.map((uuid) => {
+    const entry = getEntry(uuid)
+    return {
+      uuid,
+      code: entry?.shortCode || uuid,
+      name: formatEntryName(entry),
+      categoryName: entry?.categoryName || '未归类',
+      style: entry?.style || '未填写风格',
+    }
+  })
 }
 
 function formatCategorySummary(roundTable) {
@@ -630,7 +709,8 @@ function getOverviewTableIssues(roundTable) {
 
 .resource-list,
 .table-board,
-.check-panel {
+.check-panel,
+.overview-board {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
@@ -640,20 +720,23 @@ function getOverviewTableIssues(roundTable) {
 
 .resource-list::-webkit-scrollbar,
 .table-board::-webkit-scrollbar,
-.check-panel::-webkit-scrollbar {
+.check-panel::-webkit-scrollbar,
+.overview-board::-webkit-scrollbar {
   width: 8px;
 }
 
 .resource-list::-webkit-scrollbar-track,
 .table-board::-webkit-scrollbar-track,
-.check-panel::-webkit-scrollbar-track {
+.check-panel::-webkit-scrollbar-track,
+.overview-board::-webkit-scrollbar-track {
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.035);
 }
 
 .resource-list::-webkit-scrollbar-thumb,
 .table-board::-webkit-scrollbar-thumb,
-.check-panel::-webkit-scrollbar-thumb {
+.check-panel::-webkit-scrollbar-thumb,
+.overview-board::-webkit-scrollbar-thumb {
   border: 1px solid rgba(9, 16, 20, 0.9);
   border-radius: 999px;
   background: linear-gradient(180deg, rgba(216, 169, 53, 0.64), rgba(216, 169, 53, 0.3));
@@ -661,7 +744,8 @@ function getOverviewTableIssues(roundTable) {
 
 .resource-list::-webkit-scrollbar-thumb:hover,
 .table-board::-webkit-scrollbar-thumb:hover,
-.check-panel::-webkit-scrollbar-thumb:hover {
+.check-panel::-webkit-scrollbar-thumb:hover,
+.overview-board::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(180deg, rgba(224, 184, 74, 0.78), rgba(216, 169, 53, 0.42));
 }
 
@@ -750,13 +834,18 @@ button:disabled {
   font-weight: 800;
 }
 
-.overview-shell {
-  grid-template-columns: minmax(0, 1fr) 300px;
-}
-
 .allocation-grid {
   grid-template-columns: 320px minmax(0, 1fr) 300px;
   align-items: stretch;
+}
+
+.overview-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 10px;
+  min-height: 0;
+  height: 100%;
 }
 
 .resource-panel,
@@ -1360,53 +1449,103 @@ p {
   color: #6fcf7a;
 }
 
-.overview-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
 .overview-card {
   display: grid;
-  gap: 10px;
+  gap: 8px;
+  align-self: start;
+  padding: 10px;
 }
 
 .overview-card.danger {
   border-color: rgba(242, 153, 74, 0.3);
 }
 
-.overview-card header,
-.overview-line,
+.overview-board {
+  align-content: start;
+  grid-auto-rows: max-content;
+}
+
+.overview-grid {
+  grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+  align-content: start;
+  align-items: start;
+}
+
+.overview-card-header,
+.overview-card-meta,
+.overview-block-head,
+.overview-member-card,
+.overview-entry-card,
 .overview-issue {
   display: flex;
   align-items: center;
 }
 
-.overview-card header,
-.overview-line {
+.overview-card-header,
+.overview-block-head {
   justify-content: space-between;
   gap: 10px;
 }
 
-.overview-card header em {
+.overview-block-head span {
   flex: 0 0 auto;
-  padding: 5px 8px;
+}
+
+.overview-block-head small {
+  min-width: 0;
+  text-align: right;
+}
+
+.overview-title-block {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.overview-title-block h3 {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.overview-card-meta {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.overview-card-meta span {
+  min-height: 22px;
+  padding: 0 7px;
+  color: #a9bac2;
+  border: 1px solid rgba(219, 232, 237, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.026);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 22px;
+}
+
+.overview-card-header > em {
+  flex: 0 0 auto;
+  min-height: 26px;
+  padding: 0 8px;
   border: 1px solid rgba(219, 232, 237, 0.1);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.026);
   font-style: normal;
   font-weight: 800;
+  line-height: 26px;
 }
 
 .overview-summary {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
 }
 
 .overview-summary article,
-.overview-line,
 .overview-block {
   min-width: 0;
-  padding: 9px;
+  padding: 8px;
   border: 1px solid rgba(219, 232, 237, 0.1);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.026);
@@ -1414,11 +1553,12 @@ p {
 
 .overview-summary article {
   display: grid;
-  gap: 4px;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
 }
 
 .overview-summary span,
-.overview-line span,
 .overview-block span,
 .overview-card small {
   color: #8da1aa;
@@ -1426,23 +1566,165 @@ p {
 
 .overview-summary strong {
   color: #e6edf0;
-  font-size: 18px;
+  font-size: 17px;
 }
 
 .overview-block {
   display: grid;
+  align-content: start;
+  gap: 6px;
+}
+
+.overview-content-grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.58fr) minmax(280px, 1fr);
+  gap: 8px;
+}
+
+.overview-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid rgba(219, 232, 237, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.026);
+}
+
+.overview-toolbar-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.overview-toolbar-group strong {
+  color: #a9bac2;
+  font-size: 13px;
+}
+
+.compact-switch button {
+  min-height: 28px;
+  padding: 0 10px;
+}
+
+.overview-member-list,
+.overview-entry-list {
+  display: grid;
   gap: 5px;
 }
 
-.overview-block p,
-.overview-block small {
-  overflow: hidden;
-  text-overflow: ellipsis;
+.overview-entry-list {
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+}
+
+.overview-member-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+  min-height: 31px;
+  padding: 4px 6px;
+  border: 1px solid rgba(219, 232, 237, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.026);
+}
+
+.overview-member-card div,
+.overview-entry-card div {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.overview-member-card strong,
+.overview-entry-card span {
+  color: #e6edf0;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.overview-member-card small,
+.overview-entry-card small,
+.overview-block-head small {
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.overview-member-card em {
+  align-self: center;
+  min-height: 24px;
+  padding: 0 7px;
+  border: 1px solid rgba(219, 232, 237, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.026);
+  color: #a9bac2;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 24px;
   white-space: nowrap;
+}
+
+.overview-member-card em.role-CAPTAIN {
+  color: #e0b84a;
+  border-color: rgba(216, 169, 53, 0.24);
+  background: rgba(216, 169, 53, 0.08);
+}
+
+.overview-member-card em.role-PROFESSIONAL {
+  color: #8ed6ff;
+  border-color: rgba(98, 170, 215, 0.2);
+  background: rgba(98, 170, 215, 0.08);
+}
+
+.overview-member-card em.role-CROSS {
+  color: #9be6b0;
+  border-color: rgba(111, 207, 122, 0.2);
+  background: rgba(111, 207, 122, 0.07);
+}
+
+.overview-entry-card {
+  display: grid;
+  grid-template-columns: minmax(54px, auto) minmax(0, 1fr);
+  gap: 7px;
+  min-width: 0;
+  min-height: 34px;
+  padding: 5px 7px;
+  border: 1px solid rgba(219, 232, 237, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.026);
+}
+
+.overview-entry-card > strong {
+  min-width: 54px;
+  max-width: 92px;
+  color: #e0b84a;
+  font-size: 14px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.overview-empty {
+  padding: 8px;
+  color: #6f848d;
+  border: 1px dashed rgba(219, 232, 237, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.018);
+  font-size: 13px;
 }
 
 .overview-issue {
   gap: 7px;
+  padding: 9px;
+  border: 1px solid rgba(242, 153, 74, 0.2);
+  border-radius: 8px;
+  background: rgba(242, 153, 74, 0.07);
   color: #f1bd79;
 }
 
@@ -1458,6 +1740,7 @@ p {
   .table-board,
   .overview-grid,
   .overview-summary,
+  .overview-content-grid,
   .role-grid {
     grid-template-columns: 1fr;
   }

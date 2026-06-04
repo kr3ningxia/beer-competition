@@ -64,6 +64,8 @@ import com.beercompetition.pojo.vo.JudgeRoundTableVO;
 import com.beercompetition.pojo.vo.JudgeTaskVO;
 import com.beercompetition.pojo.vo.ResultDraftVO;
 import com.beercompetition.pojo.vo.RoundRankingSlotVO;
+import com.beercompetition.pojo.vo.RoundTableJudgeEntryScoreVO;
+import com.beercompetition.pojo.vo.RoundTableJudgeProgressVO;
 import com.beercompetition.pojo.vo.RoundTableVO;
 import com.beercompetition.service.AwardService;
 import com.beercompetition.service.EntryScanLabelService;
@@ -135,11 +137,13 @@ public class RoundServiceImpl implements RoundService {
         Map<Long, List<RoundTableEntry>> entriesByTable = tableEntries.stream().collect(Collectors.groupingBy(RoundTableEntry::getRoundTableId));
         Map<Long, List<RoundResult>> resultsByTable = results.stream().collect(Collectors.groupingBy(RoundResult::getRoundTableId));
         Map<Long, BeerEntry> entryById = loadEntries(tableEntries.stream().map(RoundTableEntry::getBeerEntryId).collect(Collectors.toSet()));
-        Map<Long, JudgeAccount> judgeById = loadJudges(tables.stream().map(RoundTable::getCaptainJudgeId).filter(Objects::nonNull).collect(Collectors.toSet()));
         Map<Long, String> categoryNameById = listCategoryNames(competitionId);
-        Map<Long, List<RoundTableMember>> membersByTable = listMembers(tables.stream().map(RoundTable::getId).toList())
-                .stream()
-                .collect(Collectors.groupingBy(RoundTableMember::getRoundTableId));
+        List<RoundTableMember> members = listMembers(tables.stream().map(RoundTable::getId).toList());
+        Set<Long> judgeIds = new HashSet<>();
+        tables.stream().map(RoundTable::getCaptainJudgeId).filter(Objects::nonNull).forEach(judgeIds::add);
+        members.stream().map(RoundTableMember::getJudgeAccountId).filter(Objects::nonNull).forEach(judgeIds::add);
+        Map<Long, JudgeAccount> judgeById = loadJudges(judgeIds);
+        Map<Long, List<RoundTableMember>> membersByTable = members.stream().collect(Collectors.groupingBy(RoundTableMember::getRoundTableId));
 
         return rounds.stream()
                 .map(round -> toRoundVO(round, tablesByRound.getOrDefault(round.getId(), List.of()), entriesByTable,
@@ -235,7 +239,7 @@ public class RoundServiceImpl implements RoundService {
             throw new BaseException("没有可分配的已入库酒款");
         }
 
-        // 2) 创建第一轮和轮次桌
+        // 2) 创建第一轮
         CompetitionRound round = CompetitionRound.builder()
                 .competitionId(competitionId)
                 .roundNo(1)
@@ -245,6 +249,15 @@ public class RoundServiceImpl implements RoundService {
                 .sortOrder(1)
                 .build();
         competitionRoundMapper.insert(round);
+        if (request.getTables() != null && !request.getTables().isEmpty()) {
+            RoundAllocationRequest allocation = new RoundAllocationRequest();
+            allocation.setTables(request.getTables());
+            validateAllocationRequest(round, allocation);
+            saveAllocationTables(competitionId, round, allocation);
+            return;
+        }
+
+        // 3) 没有传入酒款草稿时，只按基础桌生成空的第一轮桌
         Map<Long, List<JudgeAssignment>> assignmentsByTable = assignments.stream().collect(Collectors.groupingBy(JudgeAssignment::getTableId));
         List<RoundTable> roundTables = new ArrayList<>();
         for (int index = 0; index < baseTables.size(); index++) {
@@ -265,8 +278,6 @@ public class RoundServiceImpl implements RoundService {
             roundTables.add(table);
             insertMembers(table, assignmentsByTable.getOrDefault(baseTable.getId(), List.of()), true);
         }
-
-        // 3) 第一轮只生成空桌，酒款在编排页按投递组别分配
     }
 
     @Override
@@ -292,6 +303,10 @@ public class RoundServiceImpl implements RoundService {
         }
 
         // 3) 全量写入新的轮次桌、桌长和酒款
+        saveAllocationTables(competitionId, round, request);
+    }
+
+    private void saveAllocationTables(Long competitionId, CompetitionRound round, RoundAllocationRequest request) {
         Map<String, JudgeAccount> captainMap = loadJudgeByPublicIds(request.getTables().stream()
                 .map(RoundTableAllocationRequest::getCaptainPublicId)
                 .collect(Collectors.toSet()));
@@ -305,7 +320,7 @@ public class RoundServiceImpl implements RoundService {
             Long categoryId = resolveCategoryId(item, entryMap);
             RoundTable table = RoundTable.builder()
                     .competitionId(competitionId)
-                    .roundId(roundId)
+                    .roundId(round.getId())
                     .tableName(item.getName().trim())
                     .captainJudgeId(captain.getId())
                     .categoryId(categoryId)
@@ -325,7 +340,7 @@ public class RoundServiceImpl implements RoundService {
                 BeerEntry entry = entryMap.get(uuid);
                 roundTableEntryMapper.insert(RoundTableEntry.builder()
                         .competitionId(competitionId)
-                        .roundId(roundId)
+                        .roundId(round.getId())
                         .roundTableId(table.getId())
                         .beerEntryId(entry.getId())
                         .sourceRoundTableId(resolveSourceRoundTableId(round, entry.getId()))
@@ -780,8 +795,80 @@ public class RoundServiceImpl implements RoundService {
                 .advancedCount(advancedCount)
                 .judgeProgress(resolveJudgeProgress(table, entries))
                 .captainProgress(entries.isEmpty() ? 0 : finalCount * FULL_PROGRESS / entries.size())
+                .judgeDetails(buildJudgeDetails(table, entries, entryById, judgeById, members))
                 .rankings(buildRankings(table, results, entryById))
                 .build();
+    }
+
+    private List<RoundTableJudgeProgressVO> buildJudgeDetails(RoundTable table,
+                                                              List<RoundTableEntry> entries,
+                                                              Map<Long, BeerEntry> entryById,
+                                                              Map<Long, JudgeAccount> judgeById,
+                                                              List<RoundTableMember> members) {
+        List<RoundTableEntry> sortedEntries = entries.stream()
+                .sorted(Comparator.comparing(RoundTableEntry::getSortOrder, Comparator.nullsLast(Integer::compareTo)).thenComparing(RoundTableEntry::getId))
+                .toList();
+        if (sortedEntries.isEmpty()) {
+            return List.of();
+        }
+        List<RoundTableMember> taskJudges = members.stream()
+                .filter(member -> Objects.equals(member.getSystemTaskRequired(), FLAG_TRUE))
+                .sorted(Comparator.comparing(RoundTableMember::getRole, Comparator.nullsLast(String::compareTo))
+                        .thenComparing(member -> {
+                            JudgeAccount judge = judgeById.get(member.getJudgeAccountId());
+                            return judge == null ? "" : judge.getName();
+                        }, Comparator.nullsLast(String::compareTo)))
+                .toList();
+        if (taskJudges.isEmpty()) {
+            return List.of();
+        }
+        List<Long> entryIds = sortedEntries.stream().map(RoundTableEntry::getBeerEntryId).toList();
+        List<Long> judgeIds = taskJudges.stream().map(RoundTableMember::getJudgeAccountId).toList();
+        Map<String, ScoreRecord> scoreByJudgeAndEntry = scoreRecordMapper.selectList(new LambdaQueryWrapper<ScoreRecord>()
+                        .eq(ScoreRecord::getCompetitionId, table.getCompetitionId())
+                        .in(ScoreRecord::getBeerEntryId, entryIds)
+                        .in(ScoreRecord::getJudgeAccountId, judgeIds)
+                        .eq(ScoreRecord::getFinalFlag, FLAG_FALSE))
+                .stream()
+                .collect(Collectors.toMap(
+                        record -> scoreKey(record.getJudgeAccountId(), record.getBeerEntryId()),
+                        Function.identity(),
+                        (first, second) -> first.getUpdateTime() != null
+                                && (second.getUpdateTime() == null || first.getUpdateTime().isAfter(second.getUpdateTime())) ? first : second));
+        return taskJudges.stream().map(member -> {
+            JudgeAccount judge = judgeById.get(member.getJudgeAccountId());
+            List<RoundTableJudgeEntryScoreVO> entryScores = sortedEntries.stream().map(entry -> {
+                BeerEntry beerEntry = entryById.get(entry.getBeerEntryId());
+                ScoreRecord score = scoreByJudgeAndEntry.get(scoreKey(member.getJudgeAccountId(), entry.getBeerEntryId()));
+                return RoundTableJudgeEntryScoreVO.builder()
+                        .beerUuid(beerEntry == null ? "" : beerEntry.getUuid())
+                        .scored(score != null)
+                        .totalScore(score == null ? null : score.getTotalScore())
+                        .submittedAt(score == null ? null : score.getUpdateTime())
+                        .build();
+            }).toList();
+            int total = entryScores.size();
+            int submitted = (int) entryScores.stream().filter(score -> Boolean.TRUE.equals(score.getScored())).count();
+            return RoundTableJudgeProgressVO.builder()
+                    .judgePublicId(judge == null ? "" : judge.getPublicId())
+                    .judgeName(judge == null ? "未知评委" : judge.getName())
+                    .role(member.getRole())
+                    .roleLabel(roleLabel(member.getRole()))
+                    .submittedCount(submitted)
+                    .totalCount(total)
+                    .progress(total == 0 ? 0 : submitted * FULL_PROGRESS / total)
+                    .missingEntryUuids(entryScores.stream()
+                            .filter(score -> !Boolean.TRUE.equals(score.getScored()))
+                            .map(RoundTableJudgeEntryScoreVO::getBeerUuid)
+                            .filter(StringUtils::hasText)
+                            .toList())
+                    .entryScores(entryScores)
+                    .build();
+        }).toList();
+    }
+
+    private String scoreKey(Long judgeAccountId, Long beerEntryId) {
+        return judgeAccountId + ":" + beerEntryId;
     }
 
     private CompetitionEntryVO toEntryVO(BeerEntry entry,
@@ -1091,6 +1178,7 @@ public class RoundServiceImpl implements RoundService {
                 .map(RoundTableMember::getJudgeAccountId)
                 .collect(Collectors.toSet());
         assignments.stream()
+                .filter(assignment -> !JudgeRoleType.CAPTAIN.name().equals(assignment.getRole()))
                 .filter(assignment -> !existingIds.contains(assignment.getJudgeAccountId()))
                 .forEach(assignment -> roundTableMemberMapper.insert(RoundTableMember.builder()
                         .roundTableId(table.getId())
@@ -1560,8 +1648,7 @@ public class RoundServiceImpl implements RoundService {
         List<Long> entryIds = entries.stream().map(RoundTableEntry::getBeerEntryId).toList();
         int taskJudges = Math.toIntExact(roundTableMemberMapper.selectCount(new LambdaQueryWrapper<RoundTableMember>()
                 .eq(RoundTableMember::getRoundTableId, table.getId())
-                .eq(RoundTableMember::getSystemTaskRequired, FLAG_TRUE)
-                .ne(RoundTableMember::getRole, JudgeRoleType.CAPTAIN.name())));
+                .eq(RoundTableMember::getSystemTaskRequired, FLAG_TRUE)));
         if (taskJudges <= 0) {
             return 0;
         }

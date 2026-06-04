@@ -1,13 +1,12 @@
 <template>
-  <main class="app-shell">
-    <section class="top-panel">
+  <main class="app-shell score-shell">
+    <section class="top-panel score-top">
       <button class="back-link" type="button" @click="$router.push(`/scan-result/${uuid}`)">返回酒款</button>
       <p class="eyebrow">{{ scoreRoleLabel }}评分表</p>
-      <h1 class="page-title">{{ displayShortCode(entry) }}</h1>
-      <div class="total-strip">
-        <div>
-          <span>当前总分</span>
-          <strong>{{ totalScore }} / {{ totalMaxScore }}</strong>
+      <div class="score-meta-strip">
+        <div class="code-panel">
+          <span>编号</span>
+          <strong>{{ displayPlainShortCode(entry) }}</strong>
         </div>
         <div>
           <span>备注字数</span>
@@ -17,110 +16,114 @@
       <p class="score-brief">分数需填写整数；备注合计达到要求后可提交。</p>
     </section>
 
-    <section v-if="entry && config" class="card">
-      <div class="entry-summary">
-        <div>
-          <span>{{ entry.categoryName }}</span>
-          <strong>{{ styleDisplayName(entry) }} · {{ entry.abv }}</strong>
-        </div>
-        <em>{{ displayShortCode(entry) }}</em>
-      </div>
-
-      <div v-if="entry.styleCategoryName || entry.styleDescription" class="style-reference">
-        <div>
-          <span>风格分类</span>
-          <strong>{{ entry.styleCategoryName || entry.categoryName }}</strong>
-        </div>
-        <p v-if="entry.styleDescription">{{ entry.styleDescription }}</p>
-      </div>
-
-      <div v-if="entry.locked" class="locked-alert">
-        桌长已确认本桌结果，此评分不可继续修改。
-      </div>
-
-      <div class="dimension-list">
-        <article v-for="item in form.dimensions" :key="item.key" class="dimension-card">
-          <div class="dimension-head">
+    <div class="score-scroll-wrap">
+      <div class="score-scroll">
+        <section v-if="entry && config" class="card">
+          <div class="entry-summary">
             <div>
-              <h2>{{ item.label }}（{{ item.maxScore }}分）</h2>
-              <p v-if="item.description">{{ item.description }}</p>
+              <span>{{ entry.categoryName }}</span>
+              <strong>{{ styleDisplayName(entry) }} · {{ entry.abv }}</strong>
             </div>
-            <div class="score-stepper" :aria-label="`${item.label}分数`">
-              <button type="button" :disabled="entry.locked || Number(item.score || 0) <= 0" @click="adjustScore(item, -1)">-</button>
-              <input
-                v-model.number="item.score"
-                class="score-input"
-                type="number"
-                inputmode="numeric"
-                min="0"
-                :max="item.maxScore"
-                step="1"
-                :disabled="entry.locked"
-                @blur="clampScore(item)"
-              />
-              <button type="button" :disabled="entry.locked || Number(item.score || 0) >= item.maxScore" @click="adjustScore(item, 1)">+</button>
-            </div>
+            <em>{{ displayShortCode(entry) }}</em>
           </div>
-          <div class="range-wrap" :style="{ '--range-progress': `${rangePercent(item)}%` }">
-            <div class="range-rail" aria-hidden="true">
-              <span class="range-fill"></span>
-              <span
-                v-for="tick in tickValues(item)"
-                :key="tick.value"
-                class="range-tick"
-                :class="{ active: Number(item.score || 0) >= tick.value, major: tick.label }"
-                :style="{ left: `${tick.percent}%` }"
-              >
-                <i></i>
-              </span>
-            </div>
-            <input
-              v-model.number="item.score"
-              class="range"
-              type="range"
-              min="0"
-              :max="item.maxScore"
-              step="1"
-              :disabled="entry.locked"
-              @input="clampScore(item)"
-            />
-            <div class="range-labels" aria-hidden="true">
-              <span
-                v-for="tick in tickValues(item).filter((tick) => tick.label)"
-                :key="tick.value"
-                class="range-label"
-                :style="{ left: `${tick.percent}%` }"
-              >
-                {{ tick.label }}
-              </span>
-            </div>
-          </div>
-          <div class="dimension-note">
-            <textarea
-              v-model="item.note"
-              class="textarea note-textarea"
-              :disabled="entry.locked"
-              :aria-label="`${item.label}备注`"
-              :placeholder="item.notePlaceholder || '记录本项依据'"
-            />
-          </div>
-        </article>
-      </div>
 
-      <div class="note-summary">
-        <p :class="['caption', commentReady ? 'ok-text' : 'warn-text']">
-          备注合计 {{ notesLength }} / {{ minNoteLength }} 字
-        </p>
-        <span v-if="existingScore" class="pill status-warn">已提交过</span>
-      </div>
-    </section>
+          <div v-if="entry.styleCategoryName || entry.styleDescription" class="style-reference">
+            <div>
+              <span>风格分类</span>
+              <strong>{{ entry.styleCategoryName || entry.categoryName }}</strong>
+            </div>
+            <p v-if="entry.styleDescription">{{ entry.styleDescription }}</p>
+          </div>
 
-    <div class="sticky-actions">
-      <button class="button primary full" type="button" :disabled="!canSubmit" @click="submit">
-        {{ entry?.locked ? '本桌结果已确认' : existingScore ? '保存修改' : '提交评分' }}
-      </button>
-      <p v-if="submitHint" class="submit-hint">{{ submitHint }}</p>
-      <p v-if="message" class="message">{{ message }}</p>
+          <div v-if="entry.locked" class="locked-alert">
+            桌长已确认本桌结果，此评分不可继续修改。
+          </div>
+
+          <div class="dimension-list">
+            <article v-for="item in form.dimensions" :key="item.key" class="dimension-card">
+              <div class="dimension-head">
+                <div>
+                  <h2>{{ item.label }}（{{ item.maxScore }}分）</h2>
+                  <p v-if="item.description">{{ item.description }}</p>
+                </div>
+                <div class="score-stepper" :aria-label="`${item.label}分数`">
+                  <button type="button" :disabled="entry.locked || Number(item.score || 0) <= 0" @click="adjustScore(item, -1)">-</button>
+                  <input
+                    v-model.number="item.score"
+                    class="score-input"
+                    type="number"
+                    inputmode="numeric"
+                    min="0"
+                    :max="item.maxScore"
+                    step="1"
+                    :disabled="entry.locked"
+                    @blur="clampScore(item)"
+                  />
+                  <button type="button" :disabled="entry.locked || Number(item.score || 0) >= item.maxScore" @click="adjustScore(item, 1)">+</button>
+                </div>
+              </div>
+              <div class="range-wrap" :style="{ '--range-progress': `${rangePercent(item)}%` }">
+                <div class="range-rail" aria-hidden="true">
+                  <span class="range-fill"></span>
+                  <span
+                    v-for="tick in tickValues(item)"
+                    :key="tick.value"
+                    class="range-tick"
+                    :class="{ active: Number(item.score || 0) >= tick.value, major: tick.label }"
+                    :style="{ left: `${tick.percent}%` }"
+                  >
+                    <i></i>
+                  </span>
+                </div>
+                <input
+                  v-model.number="item.score"
+                  class="range"
+                  type="range"
+                  min="0"
+                  :max="item.maxScore"
+                  step="1"
+                  :disabled="entry.locked"
+                  @input="clampScore(item)"
+                />
+                <div class="range-labels" aria-hidden="true">
+                  <span
+                    v-for="tick in tickValues(item).filter((tick) => tick.label)"
+                    :key="tick.value"
+                    class="range-label"
+                    :style="{ left: `${tick.percent}%` }"
+                  >
+                    {{ tick.label }}
+                  </span>
+                </div>
+              </div>
+              <div class="dimension-note">
+                <textarea
+                  v-model="item.note"
+                  class="textarea note-textarea"
+                  :disabled="entry.locked"
+                  :aria-label="`${item.label}备注`"
+                  :placeholder="item.notePlaceholder || '记录本项依据'"
+                />
+              </div>
+            </article>
+          </div>
+
+          <div class="note-summary">
+            <p :class="['caption', commentReady ? 'ok-text' : 'warn-text']">
+              备注合计 {{ notesLength }} / {{ minNoteLength }} 字
+            </p>
+            <span v-if="existingScore" class="pill status-warn">已提交过</span>
+          </div>
+        </section>
+
+        <div class="sticky-actions">
+          <button class="button primary full" type="button" :disabled="!canSubmit" @click="submit">
+            {{ submitButtonText }}
+          </button>
+          <p v-if="submitHint" class="submit-hint">{{ submitHint }}</p>
+          <p v-if="message" class="message">{{ message }}</p>
+        </div>
+      </div>
     </div>
   </main>
 </template>
@@ -138,6 +141,7 @@ const entry = ref(null)
 const config = ref(null)
 const existingScore = ref(null)
 const message = ref('')
+const submitting = ref(false)
 
 const form = reactive({
   beerUuid: uuid,
@@ -148,9 +152,6 @@ const form = reactive({
 const totalScore = computed(() => (
   form.dimensions.reduce((sum, item) => sum + Number(item.score || 0), 0)
 ))
-const totalMaxScore = computed(() => (
-  form.dimensions.reduce((sum, item) => sum + Number(item.maxScore || 0), 0)
-))
 const notesLength = computed(() => (
   form.dimensions.reduce((sum, item) => sum + String(item.note || '').length, 0)
 ))
@@ -160,6 +161,7 @@ const commentReady = computed(() => notesLength.value >= minNoteLength.value)
 const remainingNotes = computed(() => Math.max(0, minNoteLength.value - notesLength.value))
 const canSubmit = computed(() => (
   !entry.value?.locked
+  && !submitting.value
   && form.dimensions.length > 0
   && form.dimensions.every((item) => (
     item.score !== ''
@@ -170,6 +172,7 @@ const canSubmit = computed(() => (
   && commentReady.value
 ))
 const submitHint = computed(() => {
+  if (submitting.value) return ''
   if (entry.value?.locked) return '本桌结果已确认，评分不可修改。'
   if (remainingNotes.value > 0) return `备注还差 ${remainingNotes.value} 字`
   if (!form.dimensions.length) return ''
@@ -180,6 +183,11 @@ const submitHint = computed(() => {
     || Number(item.score) > item.maxScore
   ))
   return invalid ? '请检查各项分数，必须为整数且不超过满分。' : ''
+})
+const submitButtonText = computed(() => {
+  if (entry.value?.locked) return '本桌结果已确认'
+  if (submitting.value) return existingScore.value ? '保存中...' : '提交中...'
+  return existingScore.value ? '保存修改' : '提交评分'
 })
 
 function clampScore(item) {
@@ -224,6 +232,10 @@ function displayShortCode(source) {
   return source?.shortCode ? `编号： ${source.shortCode}` : '编号'
 }
 
+function displayPlainShortCode(source) {
+  return source?.shortCode || '待生成'
+}
+
 function parseCommentNotes(comments = '') {
   return String(comments)
     .split('\n')
@@ -247,6 +259,16 @@ function buildComments(dimensions) {
     .join('\n')
 }
 
+function buildDimensionPayload(item) {
+  return {
+    key: item.key,
+    label: item.label,
+    score: Number(item.score || 0),
+    maxScore: item.maxScore,
+    notePrompt: item.notePrompt,
+  }
+}
+
 function buildDimensionForm(configDimensions, savedDimensions = [], savedComments = '') {
   const savedByKey = new Map(savedDimensions.map((item) => [item.key, item]))
   const savedByLabel = parseCommentNotes(savedComments)
@@ -261,24 +283,27 @@ function buildDimensionForm(configDimensions, savedDimensions = [], savedComment
 }
 
 async function submit() {
+  if (!canSubmit.value) return
+  submitting.value = true
   const payload = {
     ...form,
     totalScore: totalScore.value,
     comments: buildComments(form.dimensions),
-    dimensions: form.dimensions.map((item) => ({
-      ...item,
-      score: Number(item.score || 0),
-      note: String(item.note || '').trim(),
-    })),
+    dimensions: form.dimensions.map(buildDimensionPayload),
   }
-  if (existingScore.value) {
-    await updateScore(existingScore.value.id, payload)
-    message.value = '修改已保存'
-  } else {
-    await createScore(payload)
-    message.value = '评分已提交'
+  try {
+    if (existingScore.value) {
+      await updateScore(existingScore.value.id, payload)
+      message.value = '修改已保存'
+    } else {
+      await createScore(payload)
+      message.value = '评分已提交'
+    }
+    window.setTimeout(() => router.push('/judged'), 360)
+  } catch (error) {
+    submitting.value = false
+    throw error
   }
-  window.setTimeout(() => router.push('/judged'), 360)
 }
 
 onMounted(async () => {
@@ -304,9 +329,23 @@ const scoreRoleLabel = computed(() => (
 </script>
 
 <style scoped>
+.score-shell {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  padding: 10px 14px 0;
+  overflow: hidden;
+}
+
+.score-shell > * + * {
+  margin-top: 0;
+}
+
 .back-link {
   border: 0;
-  margin: 0 0 10px;
+  margin: 0 0 7px;
   padding: 0;
   color: rgba(255, 255, 255, 0.74);
   background: transparent;
@@ -314,48 +353,77 @@ const scoreRoleLabel = computed(() => (
 }
 
 .top-panel {
-  padding: 16px 18px;
+  padding: 12px 16px 14px;
 }
 
-.page-title {
-  font-size: 23px;
+.score-top {
+  position: relative;
+  z-index: 3;
 }
 
-.total-strip {
+.score-meta-strip {
   display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(92px, 0.7fr);
+  grid-template-columns: minmax(0, 1.25fr) minmax(104px, 0.75fr);
   gap: 10px;
-  margin-top: 14px;
+  margin-top: 9px;
 }
 
-.total-strip div {
+.score-meta-strip div {
   display: grid;
-  gap: 5px;
+  gap: 4px;
   border-radius: 8px;
-  padding: 10px 12px;
+  padding: 9px 12px;
   background: rgba(255, 255, 255, 0.1);
 }
 
-.total-strip span {
+.score-meta-strip span {
   color: rgba(248, 250, 252, 0.7);
   font-size: 13px;
 }
 
-.total-strip strong {
+.score-meta-strip strong {
   color: #fff;
-  font-size: 23px;
+  font-size: 22px;
   line-height: 1;
 }
 
-.total-strip .sub-score {
+.score-meta-strip .sub-score {
   font-size: 18px;
 }
 
 .score-brief {
-  margin: 10px 0 0;
+  margin: 8px 0 0;
   color: rgba(248, 250, 252, 0.72);
   font-size: 13px;
   line-height: 1.45;
+}
+
+.score-scroll-wrap {
+  position: relative;
+  min-height: 0;
+  margin-top: 12px;
+  overflow: hidden;
+}
+
+.score-scroll-wrap::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 2;
+  height: 24px;
+  background: linear-gradient(180deg, #eef1f0 0%, rgba(238, 241, 240, 0.86) 36%, rgba(238, 241, 240, 0) 100%);
+  pointer-events: none;
+}
+
+.score-scroll {
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px 0 96px;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
 }
 
 .card {

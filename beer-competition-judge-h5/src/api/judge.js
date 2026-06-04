@@ -203,6 +203,8 @@ export async function fetchMyScore(uuid) {
 
 export async function createScore(payload) {
   const saved = await request.post('/api/judge/scores', payload)
+  if (saved) return normalizeScoreRecord(saved)
+
   const scores = readScores()
   const user = readUser()
   const existingIndex = scores.findIndex((item) => (
@@ -217,11 +219,13 @@ export async function createScore(payload) {
     scores.push(next)
   }
   writeScores(scores)
-  return saved ? normalizeScoreRecord(saved) : next
+  return next
 }
 
 export async function updateScore(id, payload) {
   const saved = await request.put(`/api/judge/scores/${id}`, payload)
+  if (saved) return normalizeScoreRecord(saved)
+
   const scores = readScores()
   const index = scores.findIndex((item) => item.id === id)
   if (index < 0) return createScore(payload)

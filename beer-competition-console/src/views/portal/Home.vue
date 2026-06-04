@@ -12,6 +12,7 @@
         <div class="hero-facts">
           <span>比赛日期 {{ formatDate(activeCompetition.competitionDate) }}</span>
           <span>报名截止 {{ formatDateTime(activeCompetition.registrationDeadline) }}</span>
+          <span>送样截止 {{ formatDateTime(activeCompetition.logistics?.sampleArrivalDeadline) }}</span>
           <span>报名费 ¥{{ activeCompetition.entryFee }} / 款</span>
         </div>
         <div class="hero-actions">
@@ -61,6 +62,7 @@
             <div><dt>报名截止</dt><dd>{{ formatDateTime(competition.registrationDeadline) }}</dd></div>
             <div><dt>报名费</dt><dd>¥{{ competition.entryFee }} / 款</dd></div>
             <div><dt>比赛日期</dt><dd>{{ formatDate(competition.competitionDate) }}</dd></div>
+            <div><dt>送样截止</dt><dd>{{ formatDateTime(competition.logistics?.sampleArrivalDeadline) }}</dd></div>
           </dl>
           <div class="card-actions">
             <RouterLink :to="`/portal/events/${competition.id}`">查看赛事</RouterLink>

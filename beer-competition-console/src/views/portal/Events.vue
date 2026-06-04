@@ -18,6 +18,7 @@
           <div class="fact-row">
             <span>比赛日期 {{ formatDate(competition.competitionDate) }}</span>
             <span>报名截止 {{ formatDateTime(competition.registrationDeadline) }}</span>
+            <span>送样截止 {{ formatDateTime(competition.logistics?.sampleArrivalDeadline) }}</span>
             <span>报名费 ¥{{ competition.entryFee }} / 款</span>
           </div>
         </div>

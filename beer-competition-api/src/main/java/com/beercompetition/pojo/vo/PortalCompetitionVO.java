@@ -21,6 +21,7 @@ public class PortalCompetitionVO {
     private LocalDateTime registrationDeadline;
     private String status;
     private BigDecimal entryFee;
+    private CompetitionLogisticsVO logistics;
     private String currentStageLabel;
     private List<CompetitionConfigNameVO> categories;
     private List<CompetitionConfigNameVO> styles;

@@ -24,5 +24,6 @@ public class RoundTableVO {
     private Integer advancedCount;
     private Integer judgeProgress;
     private Integer captainProgress;
+    private List<RoundTableJudgeProgressVO> judgeDetails;
     private List<RoundRankingSlotVO> rankings;
 }
