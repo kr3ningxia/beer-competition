@@ -15,7 +15,7 @@
       <section class="published-grid">
         <article class="award-card">
           <span>{{ selectedEntry.competitionName }}</span>
-          <h3>{{ selectedEntry.roundResult?.slotLabel || selectedEntry.roundResult?.resultType || '结果已发布' }}</h3>
+          <h3>{{ selectedEntry.awardName || selectedEntry.roundResult?.awardName || selectedEntry.roundResult?.slotLabel || selectedEntry.roundResult?.resultType || '结果已发布' }}</h3>
           <strong>{{ selectedEntry.entryName }}</strong>
           <p>{{ selectedEntry.categoryName }} · {{ selectedEntry.style }}</p>
           <div class="score-medallion">
@@ -46,6 +46,17 @@
               <span><small>总分</small><b>{{ score.totalScore }}</b></span>
             </div>
           </article>
+        </div>
+      </section>
+
+      <section v-if="resultDetail.roundResults.length" class="round-result-card brewer-card">
+        <h3 class="portal-section-title">晋级与奖项记录</h3>
+        <div class="round-result-list">
+          <span v-for="(roundResult, index) in resultDetail.roundResults" :key="`${roundResult.resultType}-${roundResult.rankNo}-${index}`">
+            <small>{{ roundResult.awardType || roundResult.resultType || '轮次结果' }}</small>
+            <strong>{{ roundResult.awardName || roundResult.slotLabel || resultTypeLabel(roundResult.resultType) }}</strong>
+            <em v-if="roundResult.rankNo">第 {{ roundResult.rankNo }} 名</em>
+          </span>
         </div>
       </section>
     </template>
@@ -82,6 +93,16 @@ const resultDetail = ref({ summary: null, scores: [], roundResults: [] })
 const selectedEntry = computed(() => resultDetail.value.summary || results.value.find((entry) => entry.entryId === selectedId.value))
 const captainScore = computed(() => resultDetail.value.scores.find((score) => score.finalScore) || null)
 const finalScore = computed(() => captainScore.value?.consensusScore || captainScore.value?.totalScore || null)
+
+function resultTypeLabel(type) {
+  const labels = {
+    ADVANCE: '晋级',
+    RANK: '排序结果',
+    MEDAL: '组别奖项',
+    CHAMPION: '总冠军',
+  }
+  return labels[type] || type || '轮次结果'
+}
 
 onMounted(async () => {
   results.value = await fetchPortalResults()
@@ -207,6 +228,7 @@ watch(selectedId, async (id) => {
 
 .captain-card,
 .feedback-card,
+.round-result-card,
 .locked-card {
   padding: 24px;
 }
@@ -232,6 +254,33 @@ watch(selectedId, async (id) => {
 .feedback-list {
   display: grid;
   gap: 14px;
+}
+
+.round-result-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.round-result-list span {
+  display: grid;
+  gap: 6px;
+  min-height: 92px;
+  padding: 14px;
+  background: #fff7e6;
+  border: 1px solid rgba(87, 58, 26, 0.1);
+  border-radius: 8px;
+}
+
+.round-result-list small,
+.round-result-list em {
+  color: #746a5f;
+  font-style: normal;
+}
+
+.round-result-list strong {
+  color: #2b1d10;
+  font-size: 18px;
 }
 
 .feedback-row {
@@ -303,7 +352,8 @@ watch(selectedId, async (id) => {
 
 @media (max-width: 1100px) {
   .published-grid,
-  .feedback-row {
+  .feedback-row,
+  .round-result-list {
     grid-template-columns: 1fr;
   }
 

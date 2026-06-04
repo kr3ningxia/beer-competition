@@ -55,10 +55,13 @@ import com.beercompetition.pojo.vo.JudgeTableVO;
 import com.beercompetition.pojo.vo.PortalCompetitionVO;
 import com.beercompetition.pojo.vo.PortalHomeVO;
 import com.beercompetition.pojo.vo.ProgressSummaryVO;
+import com.beercompetition.pojo.vo.AwardResultVO;
+import com.beercompetition.pojo.vo.AwardRuleVO;
 import com.beercompetition.pojo.vo.ResultDraftVO;
 import com.beercompetition.pojo.vo.ResultSetupVO;
 import com.beercompetition.pojo.vo.ScoreConfigVO;
 import com.beercompetition.pojo.vo.StyleItemVO;
+import com.beercompetition.service.AwardService;
 import com.beercompetition.service.CompetitionService;
 import com.beercompetition.service.EntryScanLabelService;
 import com.beercompetition.service.RoundService;
@@ -125,6 +128,7 @@ public class CompetitionServiceImpl implements CompetitionService {
     private final StyleLibraryService styleLibraryService;
     private final EntryScanLabelService entryScanLabelService;
     private final RoundService roundService;
+    private final AwardService awardService;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -549,6 +553,8 @@ public class CompetitionServiceImpl implements CompetitionService {
         List<CompetitionRoundVO> rounds = roundService.listCompetitionRounds(competitionId);
         List<CompetitionEntryVO> entryPool = roundService.listEntryPool(competitionId);
         List<ResultDraftVO> resultDrafts = roundService.buildResultDrafts(competitionId);
+        List<AwardRuleVO> awardRules = awardService.listAwardRules(competitionId);
+        List<AwardResultVO> awardResults = awardService.listAwardResults(competitionId);
         List<String> dataIntegrityIssues = buildDataIntegrityIssues(competition, checks);
         List<CompetitionStageCheckVO> stageChecks = buildStageChecks(competition, checks, dataIntegrityIssues);
         List<CompetitionAlertVO> alerts = buildAlerts(checks, entriesSummary, dataIntegrityIssues);
@@ -581,6 +587,8 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .rounds(rounds)
                 .currentRound(rounds.isEmpty() ? null : rounds.get(rounds.size() - 1))
                 .resultDrafts(resultDrafts)
+                .awardRules(awardRules)
+                .awardResults(awardResults)
                 .progressSummary(progressSummary)
                 .resultSetup(resultSetup)
                 .alerts(alerts)
@@ -830,11 +838,14 @@ public class CompetitionServiceImpl implements CompetitionService {
     private ResultSetupVO buildResultSetup(Competition competition) {
         CompetitionStatus status = parseStatus(competition);
         boolean published = status == CompetitionStatus.PUBLISHED || status == CompetitionStatus.ARCHIVED;
-        boolean ready = status == CompetitionStatus.RESULT_CONFIRMING || published;
+        List<AwardResultVO> awardResults = awardService.listAwardResults(competition.getId());
+        boolean confirmed = awardResults.stream().anyMatch(result -> "CONFIRMED".equals(result.getStatus()) || "PUBLISHED".equals(result.getStatus()));
+        boolean championReady = awardResults.stream().anyMatch(result -> Boolean.TRUE.equals(result.getChampion())
+                && ("CONFIRMED".equals(result.getStatus()) || "PUBLISHED".equals(result.getStatus())));
         return ResultSetupVO.builder()
-                .awardsReady(ready)
+                .awardsReady(confirmed || published)
                 .published(published)
-                .championReady(published)
+                .championReady(championReady || published)
                 .build();
     }
 

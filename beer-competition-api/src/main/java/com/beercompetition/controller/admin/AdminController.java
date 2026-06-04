@@ -7,6 +7,7 @@ import com.beercompetition.pojo.dto.CompetitionStyleLibraryUpdateRequest;
 import com.beercompetition.pojo.dto.ConfigNameBatchUpdateRequest;
 import com.beercompetition.pojo.dto.EntryFieldBatchUpdateRequest;
 import com.beercompetition.pojo.dto.FirstRoundCreateRequest;
+import com.beercompetition.pojo.dto.AwardConfirmRequest;
 import com.beercompetition.pojo.dto.AdminJudgeStatusUpdateRequest;
 import com.beercompetition.pojo.dto.AdminJudgeUpdateRequest;
 import com.beercompetition.pojo.dto.AdminJudgePhoneUpdateRequest;
@@ -22,10 +23,13 @@ import com.beercompetition.pojo.vo.CompetitionDetailVO;
 import com.beercompetition.pojo.vo.CompetitionVO;
 import com.beercompetition.pojo.vo.CurrentUserResponse;
 import com.beercompetition.pojo.vo.JudgeAccountVO;
+import com.beercompetition.pojo.vo.AwardResultVO;
+import com.beercompetition.pojo.vo.AwardRuleVO;
 import com.beercompetition.pojo.vo.ResultDraftVO;
 import com.beercompetition.pojo.vo.ScoreConfigVO;
 import com.beercompetition.pojo.vo.StyleLibraryVO;
 import com.beercompetition.service.AuthService;
+import com.beercompetition.service.AwardService;
 import com.beercompetition.service.CompetitionService;
 import com.beercompetition.service.EntryService;
 import com.beercompetition.service.JudgeService;
@@ -57,6 +61,7 @@ public class AdminController {
     private final JudgeService judgeService;
     private final StyleLibraryService styleLibraryService;
     private final RoundService roundService;
+    private final AwardService awardService;
 
     @GetMapping("/me")
     public Result<CurrentUserResponse> me() {
@@ -199,6 +204,27 @@ public class AdminController {
     @GetMapping("/competitions/{id}/results/draft")
     public Result<List<ResultDraftVO>> resultDraft(@PathVariable Long id) {
         return Result.success(roundService.buildResultDrafts(id));
+    }
+
+    @GetMapping("/competitions/{id}/award-rules")
+    public Result<List<AwardRuleVO>> awardRules(@PathVariable Long id) {
+        return Result.success(awardService.listAwardRules(id));
+    }
+
+    @GetMapping("/competitions/{id}/awards")
+    public Result<List<AwardResultVO>> awards(@PathVariable Long id) {
+        return Result.success(awardService.listAwardResults(id));
+    }
+
+    @PostMapping("/competitions/{id}/awards/generate")
+    public Result<List<AwardResultVO>> generateAwards(@PathVariable Long id) {
+        return Result.success(awardService.generateAwardDrafts(id));
+    }
+
+    @PutMapping("/competitions/{id}/awards/confirm")
+    public Result<List<AwardResultVO>> confirmAwards(@PathVariable Long id,
+                                                     @RequestBody @Valid AwardConfirmRequest request) {
+        return Result.success(awardService.confirmAwards(id, request));
     }
 
     @PostMapping("/competitions/{id}/results/publish")

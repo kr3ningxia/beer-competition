@@ -164,26 +164,12 @@ export function submitRanking(roundTableId, payload) {
 
 export async function fetchEntry(uuid) {
   const entry = await request.get(`/api/judge/entries/${uuid}`)
-  const scores = readScores()
-  const finalScore = scores.find((item) => item.beerUuid === entry.uuid && item.finalFlag)
-  return {
-    ...entry,
-    locked: Boolean(finalScore),
-    finalScore: finalScore?.totalScore,
-    advanced: Boolean(finalScore?.advanced),
-  }
+  return normalizeEntry(entry)
 }
 
 export async function resolveScanEntry(code) {
   const entry = await request.get('/api/judge/scan/resolve', { params: { code } })
-  const scores = readScores()
-  const finalScore = scores.find((item) => item.beerUuid === entry.uuid && item.finalFlag)
-  return {
-    ...entry,
-    locked: Boolean(entry.locked || finalScore),
-    finalScore: finalScore?.totalScore,
-    advanced: Boolean(finalScore?.advanced),
-  }
+  return normalizeEntry(entry)
 }
 
 export function fetchEntries() {
@@ -205,31 +191,14 @@ export function fetchScoreConfig(role) {
   return wait(scoreConfigs[role] || scoreConfigs.CROSS)
 }
 
-export function fetchMyScores() {
-  const user = readUser()
-  const scores = readScores()
-  return wait(scores
-    .filter((item) => item.judgeName === user?.displayName && !item.finalFlag)
-    .map((score) => {
-      const entry = entries.find((item) => item.uuid === score.beerUuid)
-      const finalScore = scores.find((item) => item.beerUuid === score.beerUuid && item.finalFlag)
-      return {
-        ...score,
-        categoryName: entry?.categoryName,
-        style: entry?.style,
-        locked: Boolean(finalScore),
-      }
-    }))
+export async function fetchMyScores() {
+  const scores = await request.get('/api/judge/my-scores')
+  return scores.map(normalizeScoreRecord)
 }
 
-export function fetchMyScore(uuid) {
-  const user = readUser()
-  const scores = readScores()
-  return wait(scores.find((item) => (
-    item.beerUuid === uuid
-    && item.judgeName === user?.displayName
-    && !item.finalFlag
-  )) || null)
+export async function fetchMyScore(uuid) {
+  const score = await request.get(`/api/judge/my-scores/${uuid}`)
+  return score ? normalizeScoreRecord(score) : null
 }
 
 export async function createScore(payload) {
@@ -248,7 +217,7 @@ export async function createScore(payload) {
     scores.push(next)
   }
   writeScores(scores)
-  return saved || next
+  return saved ? normalizeScoreRecord(saved) : next
 }
 
 export async function updateScore(id, payload) {
@@ -259,12 +228,12 @@ export async function updateScore(id, payload) {
   const next = normalizeScore(payload, scores[index])
   scores.splice(index, 1, next)
   writeScores(scores)
-  return saved || next
+  return saved ? normalizeScoreRecord(saved) : next
 }
 
-export function fetchTableScores(uuid) {
-  const scores = readScores()
-  return wait(scores.filter((item) => item.beerUuid === uuid && !item.finalFlag))
+export async function fetchTableScores(uuid) {
+  const scores = await request.get(`/api/judge/table-scores/${uuid}`)
+  return scores.map(normalizeScoreRecord)
 }
 
 export async function fetchCaptainBoard(roundTableId) {
@@ -273,7 +242,27 @@ export async function fetchCaptainBoard(roundTableId) {
     ? tasks.find((item) => item.roundTableId === Number(roundTableId))
     : tasks.find((item) => item.taskType === 'CAPTAIN_FINALIZE') || tasks.find((item) => item.taskType === 'RANKING_ROUND')
   if (!task) return { competition: null, entries: [] }
-  const table = await fetchRoundTable(task.roundTableId)
+  const [table, myScores] = await Promise.all([
+    fetchRoundTable(task.roundTableId),
+    fetchMyScores(),
+  ])
+  const myScoredUuids = new Set(myScores.map((score) => score.beerUuid))
+  const entriesWithScores = await Promise.all((table.entries || []).map(async (entry) => {
+    const tableScores = task.taskType === 'CAPTAIN_FINALIZE'
+      ? await fetchTableScores(entry.uuid)
+      : []
+    const finalScore = tableScores.find((score) => score.finalFlag)
+    const normalScores = tableScores.filter((score) => !score.finalFlag)
+    return {
+      ...entry,
+      scored: myScoredUuids.has(entry.uuid),
+      submittedCount: normalScores.length,
+      expectedCount: table.expectedJudgeCount || 0,
+      finalized: Boolean(finalScore || entry.advanced),
+      finalScore: finalScore?.totalScore,
+      advanced: Boolean(finalScore?.advanced || entry.advanced),
+    }
+  }))
   return {
     competition: {
       name: task.competitionName,
@@ -282,39 +271,15 @@ export async function fetchCaptainBoard(roundTableId) {
       taskType: task.taskType,
       roundTableId: task.roundTableId,
     },
-    entries: (table.entries || []).map((entry) => ({
-      ...entry,
-      submittedCount: 0,
-      expectedCount: 0,
-      finalized: Boolean(entry.advanced),
-      advanced: Boolean(entry.advanced),
-    })),
+    entries: entriesWithScores,
     rankings: table.rankings || [],
     roundTable: table,
   }
 }
 
-export function finalizeTableScore(uuid, payload) {
-  const scores = readScores()
-  const existingIndex = scores.findIndex((item) => item.beerUuid === uuid && item.finalFlag)
-  const finalPayload = {
-    beerUuid: uuid,
-    judgeRoleType: 'CAPTAIN',
-    dimensions: payload.dimensions,
-    totalScore: payload.consensusScore,
-    comments: payload.comments,
-    finalFlag: true,
-    advanced: payload.advanced,
-  }
-  const next = normalizeScore(finalPayload, existingIndex >= 0 ? scores[existingIndex] : {})
-  next.locked = true
-  if (existingIndex >= 0) {
-    scores.splice(existingIndex, 1, next)
-  } else {
-    scores.push(next)
-  }
-  writeScores(scores)
-  return wait(next)
+export async function finalizeTableScore(uuid, payload) {
+  const saved = await request.post(`/api/judge/table-scores/${uuid}/finalize`, payload)
+  return normalizeScoreRecord(saved)
 }
 
 export function updateAdvancedList(uuids) {
@@ -325,4 +290,36 @@ export function updateAdvancedList(uuids) {
   ))
   writeScores(scores)
   return wait({ advancedUuids: uuids })
+}
+
+function normalizeEntry(entry) {
+  const canScore = entry.canScore ?? (entry.action === 'SCORE' || entry.action === 'CAPTAIN')
+  const canFinalize = entry.canFinalize ?? (entry.action === 'CAPTAIN' || entry.action === 'RANKING')
+  return {
+    ...entry,
+    canScore,
+    canFinalize,
+    scoreRoleType: entry.scoreRoleType || (entry.judgeRoleType === 'CAPTAIN' ? 'PROFESSIONAL' : entry.judgeRoleType),
+  }
+}
+
+function normalizeScoreRecord(score) {
+  return {
+    ...score,
+    finalFlag: Boolean(score.isFinal ?? score.finalFlag),
+    advanced: Boolean(score.isAdvanced ?? score.advanced),
+    locked: Boolean(score.locked),
+    submittedAt: formatSubmittedAt(score.submittedAt),
+  }
+}
+
+function formatSubmittedAt(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return new Intl.DateTimeFormat('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date)
 }

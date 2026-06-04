@@ -10,5 +10,8 @@ public class PortalRoundResultVO {
     private String resultType;
     private Integer rankNo;
     private String slotLabel;
+    private String awardType;
+    private String awardName;
+    private Boolean champion;
     private Boolean locked;
 }

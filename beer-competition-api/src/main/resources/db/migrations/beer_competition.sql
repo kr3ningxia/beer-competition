@@ -513,6 +513,67 @@ CREATE TABLE `portal_account`  (
 INSERT INTO `portal_account` VALUES (1, '13800000001', 'brewery-zhangsan', '???????', 1, 1, '2026-06-02 21:39:35', '2026-06-02 21:39:35');
 
 -- ----------------------------
+-- Table structure for award_rule
+-- ----------------------------
+DROP TABLE IF EXISTS `award_rule`;
+CREATE TABLE `award_rule`  (
+  `id` bigint(0) NOT NULL AUTO_INCREMENT,
+  `competition_id` bigint(0) NOT NULL,
+  `category_id` bigint(0) NULL DEFAULT NULL,
+  `category_key` bigint(0) GENERATED ALWAYS AS (coalesce(`category_id`, 0)) STORED,
+  `award_type` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+  `award_name` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+  `rank_no` int(0) NULL DEFAULT NULL,
+  `enabled_flag` tinyint(0) NOT NULL DEFAULT 1,
+  `sort_order` int(0) NOT NULL DEFAULT 0,
+  `create_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0),
+  `update_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) ON UPDATE CURRENT_TIMESTAMP(0),
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE INDEX `uk_award_rule_slot`(`competition_id`, `category_key`, `award_type`, `rank_no`) USING BTREE,
+  INDEX `idx_award_rule_competition`(`competition_id`) USING BTREE,
+  INDEX `idx_award_rule_category`(`category_id`) USING BTREE
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = 'award rules' ROW_FORMAT = Dynamic;
+
+-- ----------------------------
+-- Records of award_rule
+-- ----------------------------
+
+-- ----------------------------
+-- Table structure for award_result
+-- ----------------------------
+DROP TABLE IF EXISTS `award_result`;
+CREATE TABLE `award_result`  (
+  `id` bigint(0) NOT NULL AUTO_INCREMENT,
+  `competition_id` bigint(0) NOT NULL,
+  `category_id` bigint(0) NULL DEFAULT NULL,
+  `category_key` bigint(0) GENERATED ALWAYS AS (coalesce(`category_id`, 0)) STORED,
+  `beer_entry_id` bigint(0) NOT NULL,
+  `award_rule_id` bigint(0) NULL DEFAULT NULL,
+  `award_type` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+  `award_name` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+  `rank_no` int(0) NULL DEFAULT NULL,
+  `source_round_id` bigint(0) NULL DEFAULT NULL,
+  `source_round_table_id` bigint(0) NULL DEFAULT NULL,
+  `source_result_id` bigint(0) NULL DEFAULT NULL,
+  `champion_flag` tinyint(0) NOT NULL DEFAULT 0,
+  `confirmed_by` bigint(0) NULL DEFAULT NULL,
+  `confirmed_time` datetime(0) NULL DEFAULT NULL,
+  `published_time` datetime(0) NULL DEFAULT NULL,
+  `status` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+  `create_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0),
+  `update_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) ON UPDATE CURRENT_TIMESTAMP(0),
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE INDEX `uk_award_result_slot`(`competition_id`, `category_key`, `award_type`, `rank_no`, `status`) USING BTREE,
+  INDEX `idx_award_result_entry`(`beer_entry_id`) USING BTREE,
+  INDEX `idx_award_result_competition`(`competition_id`) USING BTREE,
+  INDEX `idx_award_result_source`(`source_result_id`) USING BTREE
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = 'award results' ROW_FORMAT = Dynamic;
+
+-- ----------------------------
+-- Records of award_result
+-- ----------------------------
+
+-- ----------------------------
 -- Table structure for round_result
 -- ----------------------------
 DROP TABLE IF EXISTS `round_result`;

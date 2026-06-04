@@ -100,6 +100,16 @@ public class JudgeController {
         return Result.success(scoreService.updateScore(id, request));
     }
 
+    @GetMapping("/my-scores")
+    public Result<List<ScoreRecordVO>> myScores() {
+        return Result.success(scoreService.listMyScores());
+    }
+
+    @GetMapping("/my-scores/{uuid}")
+    public Result<ScoreRecordVO> myScore(@PathVariable String uuid) {
+        return Result.success(scoreService.getMyScore(uuid));
+    }
+
     @GetMapping("/table-scores/{uuid}")
     public Result<List<ScoreRecordVO>> tableScores(@PathVariable String uuid) {
         return Result.success(scoreService.listTableScores(uuid));

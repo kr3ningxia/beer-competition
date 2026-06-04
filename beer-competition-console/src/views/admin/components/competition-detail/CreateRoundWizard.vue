@@ -23,6 +23,38 @@
         </div>
       </section>
 
+      <section class="round-config-panel">
+        <label>
+          <span>轮次目标</span>
+          <select :value="targetMode" @change="$emit('update:targetMode', $event.target.value)">
+            <option v-for="option in targetOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+          <small>{{ selectedTargetOption?.description }}</small>
+        </label>
+        <label>
+          <span>桌数</span>
+          <input
+            :value="tableCount"
+            min="1"
+            type="number"
+            :disabled="Boolean(selectedTargetOption?.fixedTableCount)"
+            @input="$emit('update:tableCount', Number($event.target.value || 1))"
+          />
+        </label>
+        <label>
+          <span>每桌目标</span>
+          <input
+            :value="targetCount"
+            min="1"
+            type="number"
+            :disabled="Boolean(selectedTargetOption?.fixedTargetCount)"
+            @input="$emit('update:targetCount', Number($event.target.value || 1))"
+          />
+        </label>
+      </section>
+
       <section class="result-panel">
         <article>
           <strong>创建后</strong>
@@ -45,14 +77,22 @@
 </template>
 
 <script setup>
-defineProps({
+import { computed } from 'vue'
+
+const props = defineProps({
   open: Boolean,
   nextRoundName: { type: String, required: true },
   advancedPool: { type: Array, required: true },
   advancedCategoryStats: { type: Array, required: true },
+  targetMode: { type: String, required: true },
+  targetCount: { type: Number, required: true },
+  tableCount: { type: Number, required: true },
+  targetOptions: { type: Array, required: true },
 })
 
-defineEmits(['close', 'finish'])
+defineEmits(['close', 'finish', 'update:targetMode', 'update:targetCount', 'update:tableCount'])
+
+const selectedTargetOption = computed(() => props.targetOptions.find((option) => option.value === props.targetMode))
 </script>
 
 <style scoped>
@@ -147,6 +187,13 @@ button:disabled {
   gap: 10px;
 }
 
+.round-config-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(96px, 0.6fr) minmax(120px, 0.6fr);
+  gap: 10px;
+}
+
+.round-config-panel label,
 .summary-main,
 .summary-list span,
 .result-panel article {
@@ -154,6 +201,39 @@ button:disabled {
   border: 1px solid rgba(219, 232, 237, 0.1);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.026);
+}
+
+.round-config-panel label {
+  display: grid;
+  gap: 8px;
+}
+
+.round-config-panel span {
+  color: #e6edf0;
+  font-weight: 800;
+}
+
+.round-config-panel select,
+.round-config-panel input {
+  width: 100%;
+  min-height: 36px;
+  color: #e6edf0;
+  border: 1px solid rgba(219, 232, 237, 0.14);
+  border-radius: 8px;
+  background: rgba(1, 7, 9, 0.42);
+}
+
+.round-config-panel input {
+  padding: 0 10px;
+}
+
+.round-config-panel select {
+  padding: 0 8px;
+}
+
+.round-config-panel input:disabled {
+  color: #8da1aa;
+  cursor: not-allowed;
 }
 
 .summary-main {
@@ -196,6 +276,7 @@ button:disabled {
 
 @media (max-width: 760px) {
   .summary-panel,
+  .round-config-panel,
   .summary-list,
   .result-panel {
     grid-template-columns: 1fr;

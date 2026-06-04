@@ -46,6 +46,15 @@ a {
   color: inherit;
 }
 
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 3px solid rgba(167, 85, 23, 0.28);
+  outline-offset: 2px;
+}
+
 .app-shell {
   width: min(100%, 520px);
   min-height: 100vh;

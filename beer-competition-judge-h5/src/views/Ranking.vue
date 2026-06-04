@@ -27,7 +27,7 @@
           <select v-model="slot.beerEntryId">
             <option :value="null">待选择</option>
             <option v-for="entry in selectableEntries(slot.beerEntryId)" :key="entry.id" :value="entry.id">
-              {{ entry.uuid }} · {{ entry.categoryName }} · {{ entry.style }}
+              {{ displayShortCode(entry) }} · {{ entry.categoryName }} · {{ entry.style }}
             </option>
           </select>
         </label>
@@ -40,13 +40,13 @@
 
     <section class="card">
       <div class="split">
-        <h2 class="section-title compact">候选酒款</h2>
+        <h2 class="section-title compact">候选任务</h2>
         <span class="pill">{{ entries.length }} 款</span>
       </div>
       <div class="entry-list">
         <article v-for="entry in entries" :key="entry.id" class="entry-row">
-          <strong>{{ entry.uuid }}</strong>
-          <small>{{ entry.shortCode }} · {{ entry.categoryName }} · {{ entry.style }}</small>
+          <strong>{{ displayShortCode(entry) }}</strong>
+          <small>{{ entry.categoryName }} · {{ entry.style }}</small>
         </article>
       </div>
     </section>
@@ -71,6 +71,10 @@ const canSubmit = computed(() => slots.value.length > 0 && filledCount.value ===
 function selectableEntries(currentId) {
   const selected = new Set(slots.value.map((slot) => slot.beerEntryId).filter((id) => id && id !== currentId))
   return entries.value.filter((entry) => !selected.has(entry.id))
+}
+
+function displayShortCode(entry) {
+  return entry?.shortCode ? `编号： ${entry.shortCode}` : '编号'
 }
 
 async function submit() {

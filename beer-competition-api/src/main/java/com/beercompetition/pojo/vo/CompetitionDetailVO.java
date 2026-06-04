@@ -39,6 +39,8 @@ public class CompetitionDetailVO {
     private List<CompetitionRoundVO> rounds;
     private CompetitionRoundVO currentRound;
     private List<ResultDraftVO> resultDrafts;
+    private List<AwardRuleVO> awardRules;
+    private List<AwardResultVO> awardResults;
     private ProgressSummaryVO progressSummary;
     private ResultSetupVO resultSetup;
     private List<CompetitionAlertVO> alerts;

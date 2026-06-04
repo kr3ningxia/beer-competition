@@ -13,6 +13,10 @@ public interface ScoreService {
 
     ScoreRecordVO updateScore(Long scoreId, JudgeScoreUpdateRequest request);
 
+    List<ScoreRecordVO> listMyScores();
+
+    ScoreRecordVO getMyScore(String uuid);
+
     List<ScoreRecordVO> listTableScores(String uuid);
 
     ScoreRecordVO finalizeTableScore(String uuid, TableScoreFinalizeRequest request);

@@ -65,6 +65,7 @@ import com.beercompetition.pojo.vo.JudgeTaskVO;
 import com.beercompetition.pojo.vo.ResultDraftVO;
 import com.beercompetition.pojo.vo.RoundRankingSlotVO;
 import com.beercompetition.pojo.vo.RoundTableVO;
+import com.beercompetition.service.AwardService;
 import com.beercompetition.service.EntryScanLabelService;
 import com.beercompetition.service.RoundService;
 import lombok.RequiredArgsConstructor;
@@ -118,6 +119,7 @@ public class RoundServiceImpl implements RoundService {
     private final RoundTableEntryMapper roundTableEntryMapper;
     private final RoundResultMapper roundResultMapper;
     private final EntryScanLabelService entryScanLabelService;
+    private final AwardService awardService;
 
     @Override
     public List<CompetitionRoundVO> listCompetitionRounds(Long competitionId) {
@@ -378,17 +380,32 @@ public class RoundServiceImpl implements RoundService {
         if (entries.isEmpty()) {
             throw new BaseException("第一轮没有酒款分配");
         }
+        List<RoundTable> tables = listRoundTables(roundId);
+        Map<Long, RoundTable> tableById = tables.stream().collect(Collectors.toMap(RoundTable::getId, Function.identity()));
         Map<Long, ScoreRecord> finalScoreByEntry = scoreRecordMapper.selectList(new LambdaQueryWrapper<ScoreRecord>()
                         .eq(ScoreRecord::getCompetitionId, competitionId)
                         .eq(ScoreRecord::getFinalFlag, FLAG_TRUE))
                 .stream()
                 .collect(Collectors.toMap(ScoreRecord::getBeerEntryId, Function.identity(), (left, right) -> right));
-        List<Long> missing = entries.stream()
-                .map(RoundTableEntry::getBeerEntryId)
-                .filter(entryId -> !finalScoreByEntry.containsKey(entryId))
-                .toList();
-        if (!missing.isEmpty()) {
-            throw new BaseException("还有酒款未完成桌长汇总");
+        Map<Long, List<RoundTableEntry>> entriesByTable = entries.stream().collect(Collectors.groupingBy(RoundTableEntry::getRoundTableId));
+        for (RoundTable table : tables) {
+            List<RoundTableEntry> tableEntries = entriesByTable.getOrDefault(table.getId(), List.of());
+            List<Long> missing = tableEntries.stream()
+                    .map(RoundTableEntry::getBeerEntryId)
+                    .filter(entryId -> !finalScoreByEntry.containsKey(entryId))
+                    .toList();
+            if (!missing.isEmpty()) {
+                throw new BaseException(table.getTableName() + "还有酒款未完成桌长汇总");
+            }
+            long advancedCount = tableEntries.stream()
+                    .map(RoundTableEntry::getBeerEntryId)
+                    .map(finalScoreByEntry::get)
+                    .filter(Objects::nonNull)
+                    .filter(score -> Objects.equals(score.getAdvancedFlag(), FLAG_TRUE))
+                    .count();
+            if (advancedCount != table.getTargetCount()) {
+                throw new BaseException(table.getTableName() + "晋级数量必须等于目标数量 " + table.getTargetCount());
+            }
         }
 
         // 2) 根据桌长汇总写入晋级结果
@@ -396,6 +413,7 @@ public class RoundServiceImpl implements RoundService {
         for (RoundTableEntry entry : entries) {
             ScoreRecord finalScore = finalScoreByEntry.get(entry.getBeerEntryId());
             boolean advanced = Objects.equals(finalScore.getAdvancedFlag(), FLAG_TRUE);
+            RoundTable table = tableById.get(entry.getRoundTableId());
             entry.setStatus(advanced ? RoundEntryStatus.ADVANCED.name() : RoundEntryStatus.ELIMINATED.name());
             roundTableEntryMapper.updateById(entry);
             if (advanced) {
@@ -405,6 +423,8 @@ public class RoundServiceImpl implements RoundService {
                         .roundTableId(entry.getRoundTableId())
                         .beerEntryId(entry.getBeerEntryId())
                         .resultType(RoundResultType.ADVANCE.name())
+                        .rankNo(null)
+                        .slotLabel(table == null ? "晋级" : table.getTableName() + "晋级")
                         .submittedBy(finalScore.getJudgeAccountId())
                         .submittedTime(LocalDateTime.now())
                         .lockedFlag(FLAG_TRUE)
@@ -421,9 +441,13 @@ public class RoundServiceImpl implements RoundService {
     public void createNextRound(Long competitionId, NextRoundCreateRequest request) {
         // 1) 查询来源轮次和晋级候选
         Competition competition = requireCompetition(competitionId);
-        if (parseCompetitionStatus(competition) != CompetitionStatus.JUDGING) {
+        CompetitionStatus competitionStatus = parseCompetitionStatus(competition);
+        RoundTargetMode targetMode = RoundTargetMode.of(request.getTargetMode());
+        boolean creatingChampionRound = targetMode == RoundTargetMode.CHAMPION && competitionStatus == CompetitionStatus.RESULT_CONFIRMING;
+        if (competitionStatus != CompetitionStatus.JUDGING && !creatingChampionRound) {
             throw new BaseException("只有评审中的比赛可以创建后续轮次");
         }
+        validateTargetCountForMode(request.getRoundName(), targetMode.name(), request.getTargetCount());
         CompetitionRound sourceRound = requireRound(competitionId, request.getSourceRoundId());
         if (!RoundStatus.LOCKED.name().equals(sourceRound.getStatus())) {
             throw new BaseException("请先锁定上一轮");
@@ -435,12 +459,18 @@ public class RoundServiceImpl implements RoundService {
             throw new BaseException("已基于该轮次创建过下一轮");
         }
         List<RoundResult> candidates = listCandidateResults(sourceRound.getId());
+        if (targetMode == RoundTargetMode.CHAMPION) {
+            candidates = candidates.stream()
+                    .filter(result -> Objects.equals(result.getRankNo(), 1)
+                            || SLOT_GOLD.equals(result.getSlotLabel())
+                            || RoundResultType.CHAMPION.name().equals(result.getResultType()))
+                    .toList();
+        }
         if (candidates.isEmpty()) {
             throw new BaseException("上一轮没有可用于创建下一轮的候选酒款");
         }
         int nextRoundNo = listRounds(competitionId).stream().mapToInt(CompetitionRound::getRoundNo).max().orElse(1) + 1;
         RoundCreationStrategy strategy = RoundCreationStrategy.of(request.getStrategy());
-        RoundTargetMode targetMode = RoundTargetMode.of(request.getTargetMode());
 
         // 2) 创建后续轮与草稿桌
         CompetitionRound round = CompetitionRound.builder()
@@ -491,6 +521,10 @@ public class RoundServiceImpl implements RoundService {
                         .build());
             }
         }
+        if (creatingChampionRound) {
+            competition.setStatus(CompetitionStatus.JUDGING.name());
+            competitionMapper.updateById(competition);
+        }
     }
 
     @Override
@@ -528,7 +562,7 @@ public class RoundServiceImpl implements RoundService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void publishResults(Long competitionId) {
-        // 1) 校验比赛和奖项草稿
+        // 1) 校验比赛和正式奖项
         Competition competition = requireCompetition(competitionId);
         if (parseCompetitionStatus(competition) != CompetitionStatus.RESULT_CONFIRMING) {
             throw new BaseException("请先完成评审并确认奖项，再发布结果");
@@ -537,11 +571,9 @@ public class RoundServiceImpl implements RoundService {
         if (lastLocked == null || !isFinalResultRound(lastLocked)) {
             throw new BaseException("最后一轮结果未锁定，暂不能发布结果");
         }
-        if (buildResultDrafts(competitionId).isEmpty()) {
-            throw new BaseException("没有可发布的奖项结果");
-        }
+        awardService.publishAwards(competitionId);
 
-        // 2) 发布比赛结果
+        // 2) 发布比赛状态
         competition.setStatus(CompetitionStatus.PUBLISHED.name());
         competitionMapper.updateById(competition);
     }
@@ -571,6 +603,15 @@ public class RoundServiceImpl implements RoundService {
         requireActiveJudge(judgeId);
         RoundTable table = requireRoundTable(roundTableId);
         CompetitionRound round = competitionRoundMapper.selectById(table.getRoundId());
+        if (round == null) {
+            throw new ResourceNotFoundException("轮次不存在");
+        }
+        if (RoundType.SCORE.name().equals(round.getRoundType()) && !RoundStatus.PUBLISHED.name().equals(round.getStatus())) {
+            throw new BaseException("当前评分轮次未发布或已锁定");
+        }
+        if (RoundType.RANKING.name().equals(round.getRoundType()) && !RoundStatus.IN_PROGRESS.name().equals(round.getStatus())) {
+            throw new BaseException("当前排序轮次未发布或已锁定");
+        }
         requireTaskMember(roundTableId, judgeId);
         Map<Long, String> categoryNameById = listCategoryNames(table.getCompetitionId());
         Map<String, CompetitionStyleConfig> styleByName = listStyleSnapshot(table.getCompetitionId());
@@ -590,6 +631,7 @@ public class RoundServiceImpl implements RoundService {
                 .roundType(round.getRoundType())
                 .tableName(table.getTableName())
                 .targetCount(table.getTargetCount())
+                .expectedJudgeCount(resolveExpectedJudgeCount(table.getId()))
                 .targetMode(table.getTargetMode())
                 .status(table.getStatus())
                 .entries(entries.stream()
@@ -606,6 +648,12 @@ public class RoundServiceImpl implements RoundService {
                         .toList())
                 .rankings(buildRankings(table, results, entryById))
                 .build();
+    }
+
+    private Integer resolveExpectedJudgeCount(Long roundTableId) {
+        return Math.toIntExact(roundTableMemberMapper.selectCount(new LambdaQueryWrapper<RoundTableMember>()
+                .eq(RoundTableMember::getRoundTableId, roundTableId)
+                .eq(RoundTableMember::getSystemTaskRequired, FLAG_TRUE)));
     }
 
     @Override
@@ -880,6 +928,8 @@ public class RoundServiceImpl implements RoundService {
             if (table.getTargetCount() == null || table.getTargetCount() <= 0) {
                 throw new BaseException(table.getName() + "目标数量必须大于 0");
             }
+            String targetMode = resolveTargetMode(round, table.getTargetMode());
+            validateTargetCountForMode(table.getName(), targetMode, table.getTargetCount());
             List<String> uuids = safeList(table.getEntryUuids());
             if (table.getTargetCount() > uuids.size()) {
                 throw new BaseException(table.getName() + "目标数量超过酒款数");
@@ -936,6 +986,20 @@ public class RoundServiceImpl implements RoundService {
             if (table.getTargetCount() == null || table.getTargetCount() <= 0 || table.getTargetCount() > entries.size()) {
                 throw new BaseException(table.getTableName() + "目标数量不合法");
             }
+            validateTargetCountForMode(table.getTableName(), table.getTargetMode(), table.getTargetCount());
+            if (RoundTargetMode.MEDALS.name().equals(table.getTargetMode())
+                    && (table.getCategoryId() == null || !CATEGORY_MODE_CATEGORY.equals(table.getCategoryMode()))) {
+                throw new BaseException(table.getTableName() + "奖牌轮必须只包含一个投递组别");
+            }
+        }
+    }
+
+    private void validateTargetCountForMode(String tableName, String targetMode, Integer targetCount) {
+        if (RoundTargetMode.MEDALS.name().equals(targetMode) && !Objects.equals(targetCount, 3)) {
+            throw new BaseException(tableName + "奖牌排序目标必须为 3");
+        }
+        if (RoundTargetMode.CHAMPION.name().equals(targetMode) && !Objects.equals(targetCount, 1)) {
+            throw new BaseException(tableName + "总冠军排序目标必须为 1");
         }
     }
 

@@ -25,8 +25,11 @@ public class JudgeEntryVO {
     private String judgeRoleType;
     private String taskType;
     private String action;
+    private Boolean canScore;
+    private Boolean canFinalize;
     private Boolean scored;
     private Boolean locked;
+    private String scoreRoleType;
     private String categoryName;
     private String style;
     private String styleCategoryName;

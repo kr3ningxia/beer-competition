@@ -3,7 +3,7 @@
     <section class="top-panel">
       <button v-if="uuid" class="back-link" type="button" @click="$router.push('/captain')">返回本桌</button>
       <p class="eyebrow">桌长工作台</p>
-      <h1 class="page-title">{{ uuid || `${me?.tableName || 'A 桌'}评分汇总` }}</h1>
+      <h1 class="page-title">{{ uuid ? displayShortCode(entry) : `${me?.tableName || 'A 桌'}评分汇总` }}</h1>
       <div class="captain-stats">
         <div>
           <span>已确认</span>
@@ -11,50 +11,55 @@
         </div>
         <div>
           <span>已选晋级</span>
-          <strong>{{ advancedUuids.length }} 款</strong>
+          <strong>{{ advancedUuids.length }} / {{ advanceTargetCount }}</strong>
         </div>
       </div>
     </section>
 
     <template v-if="!uuid">
+      <section :class="['card', 'captain-check-card', { ready: tableReadyForReview }]">
+        <div class="split">
+          <div>
+            <h2 class="section-title compact">{{ tableReadyForReview ? '本桌结果可核对' : '本桌结果未完成' }}</h2>
+            <p class="captain-check-text">{{ tableCheckText }}</p>
+          </div>
+          <span :class="['pill', tableReadyForReview ? 'status-ok' : 'status-warn']">{{ advancedUuids.length }} / {{ advanceTargetCount }}</span>
+        </div>
+        <div v-if="captainBlockers.length" class="check-blockers">
+          <span v-for="item in captainBlockers" :key="item">{{ item }}</span>
+        </div>
+        <button
+          class="button primary full check-action"
+          type="button"
+          :disabled="!nextActionEntry"
+          @click="openNextAction"
+        >
+          {{ tableReadyForReview ? '查看晋级名单' : '继续处理未完成酒款' }}
+        </button>
+      </section>
+
       <section class="card">
         <div class="split">
-          <h2 class="section-title compact">本轮酒款</h2>
+          <h2 class="section-title compact">本轮任务</h2>
           <span class="pill status-warn">{{ board?.competition?.flightName }}</span>
         </div>
         <div class="board-list">
           <article v-for="entry in boardEntries" :key="entry.uuid" class="board-row">
             <button type="button" @click="$router.push(`/captain/${entry.uuid}`)">
               <span>
-                <strong>{{ entry.uuid }}</strong>
+                <strong>{{ displayShortCode(entry) }}</strong>
                 <small>{{ entry.categoryName }} · {{ styleDisplayName(entry) }}</small>
+                <small>我的评分：{{ entry.scored ? '已提交' : '待提交' }}</small>
               </span>
               <em :class="['pill', entry.finalized ? 'status-lock' : 'status-warn']">
-                {{ entry.finalized ? `${entry.finalScore} 分` : `${entry.submittedCount}/${entry.expectedCount} 人已评` }}
+                {{ entry.finalized ? `${entry.finalScore} 分` : `${entry.submittedCount}/${entry.expectedCount} 份评分` }}
               </em>
             </button>
-            <label :class="['advance-check', { disabled: !entry.finalized }]">
-              <input
-                v-model="advancedUuids"
-                type="checkbox"
-                :value="entry.uuid"
-                :disabled="!entry.finalized"
-              />
-              加入晋级名单
-            </label>
+            <span :class="['advance-check', { disabled: !entry.finalized }]">
+              {{ entry.advanced ? '已加入晋级名单' : '晋级候选' }}
+            </span>
           </article>
         </div>
-      </section>
-
-      <section class="card">
-        <h2 class="section-title">确认晋级名单</h2>
-        <p :class="['caption', advanceReady ? 'ok-text' : 'warn-text']">
-          请选择 2-4 款进入下一轮，当前已选择 {{ advancedUuids.length }} 款。
-        </p>
-        <button class="button primary full" type="button" :disabled="!advanceReady" @click="saveAdvanced">
-          确认晋级名单
-        </button>
-        <p v-if="message" class="message">{{ message }}</p>
       </section>
     </template>
 
@@ -73,12 +78,16 @@
         </div>
 
         <h2 class="section-title score-title">同桌评分</h2>
+        <div v-if="!myScoreSubmitted" class="captain-alert">
+          你还没有提交这款酒的专业评分。
+          <button type="button" @click="$router.push(`/score/${uuid}`)">去填写</button>
+        </div>
         <div class="member-list">
-          <article v-for="score in tableScores" :key="score.id" class="member-card">
+          <article v-for="score in normalScores" :key="score.id" class="member-card">
             <div class="split">
               <div>
                 <h3>{{ score.judgeName }}</h3>
-                <p>{{ score.roleLabel }}</p>
+                <p>{{ score.judgeName === me?.displayName ? '我的专业评分' : score.roleLabel }}</p>
               </div>
               <strong>{{ score.totalScore }} 分</strong>
             </div>
@@ -97,8 +106,9 @@
         <h2 class="section-title">本桌最终意见</h2>
         <label class="field">
           共识分
-          <input v-model.number="form.consensusScore" class="input" type="number" inputmode="numeric" min="0" max="50" step="1" />
+          <input v-model="form.consensusScore" class="input" type="number" inputmode="numeric" min="0" max="50" step="1" />
         </label>
+        <p v-if="scoreReference" class="caption">参考：{{ scoreReference }}</p>
         <label class="field">
           综合评语
           <textarea
@@ -111,8 +121,9 @@
           <input v-model="form.advanced" type="checkbox" />
           加入晋级名单
         </label>
+        <p class="caption">本桌需晋级 {{ advanceTargetCount }} 款，当前已选 {{ advancedUuids.length }} 款。</p>
         <button class="button primary full" type="button" :disabled="!canFinalize" @click="submitFinal">
-          确认本桌评分
+          保存这款酒的桌长意见
         </button>
         <p v-if="message" class="message">{{ message }}</p>
       </section>
@@ -148,14 +159,48 @@ const tableScores = ref([])
 const advancedUuids = ref([])
 const message = ref('')
 const form = reactive({
-  consensusScore: 0,
+  consensusScore: '',
   comments: '',
   advanced: false,
 })
 
 const boardEntries = computed(() => board.value?.entries || [])
+const normalScores = computed(() => tableScores.value.filter((score) => !score.finalFlag))
+const finalScore = computed(() => tableScores.value.find((score) => score.finalFlag) || null)
+const myScoreSubmitted = computed(() => normalScores.value.some((score) => score.judgeName === me.value?.displayName))
 const finalizedCount = computed(() => boardEntries.value.filter((item) => item.finalized).length)
-const advanceReady = computed(() => advancedUuids.value.length >= 2 && advancedUuids.value.length <= 4)
+const advanceTargetCount = computed(() => Number(board.value?.roundTable?.targetCount || 0) || '-')
+const numericAdvanceTarget = computed(() => Number(board.value?.roundTable?.targetCount || 0))
+const tableReadyForReview = computed(() => {
+  if (!boardEntries.value.length) return false
+  const targetOk = numericAdvanceTarget.value <= 0 || advancedUuids.value.length === numericAdvanceTarget.value
+  return finalizedCount.value === boardEntries.value.length && targetOk
+})
+const captainBlockers = computed(() => {
+  const blockers = []
+  if (!boardEntries.value.length) blockers.push('本桌未分配酒款')
+  if (finalizedCount.value < boardEntries.value.length) blockers.push(`未汇总 ${boardEntries.value.length - finalizedCount.value} 款`)
+  if (numericAdvanceTarget.value > 0 && advancedUuids.value.length !== numericAdvanceTarget.value) {
+    blockers.push(`晋级需 ${numericAdvanceTarget.value} 款`)
+  }
+  return blockers
+})
+const tableCheckText = computed(() => {
+  if (!boardEntries.value.length) return '请联系现场工作人员确认本轮评审桌和酒款配置。'
+  if (tableReadyForReview.value) return '所有酒款已完成桌长意见，晋级数量符合本桌目标。'
+  return '先完成每款酒的桌长意见，再核对晋级名单。'
+})
+const nextActionEntry = computed(() => (
+  boardEntries.value.find((item) => !item.finalized)
+  || boardEntries.value.find((item) => item.advanced)
+  || boardEntries.value[0]
+))
+const scoreReference = computed(() => {
+  if (!normalScores.value.length) return ''
+  const totals = normalScores.value.map((score) => Number(score.totalScore || 0))
+  const average = totals.reduce((sum, value) => sum + value, 0) / totals.length
+  return `平均 ${Math.round(average)} 分，最高 ${Math.max(...totals)} 分，最低 ${Math.min(...totals)} 分`
+})
 const canFinalize = computed(() => (
   Number.isInteger(Number(form.consensusScore))
   && Number(form.consensusScore) >= 0
@@ -172,12 +217,9 @@ async function loadDetail() {
   if (!uuid.value) return
   entry.value = await fetchEntry(uuid.value)
   tableScores.value = await fetchTableScores(uuid.value)
-  const average = tableScores.value.length
-    ? tableScores.value.reduce((sum, item) => sum + Number(item.totalScore || 0), 0) / tableScores.value.length
-    : 0
-  form.consensusScore = Math.round(average)
-  form.comments = ''
-  form.advanced = Boolean(entry.value.advanced)
+  form.consensusScore = finalScore.value?.consensusScore || finalScore.value?.totalScore || ''
+  form.comments = finalScore.value?.comments || ''
+  form.advanced = Boolean(finalScore.value?.advanced || entry.value.advanced)
 }
 
 async function submitFinal() {
@@ -191,13 +233,17 @@ async function submitFinal() {
   window.setTimeout(() => router.push('/captain'), 420)
 }
 
-async function saveAdvanced() {
-  message.value = '请在每款酒的本桌最终意见中勾选晋级'
-  await loadBoard()
+function openNextAction() {
+  if (!nextActionEntry.value?.uuid) return
+  router.push(`/captain/${nextActionEntry.value.uuid}`)
 }
 
 function styleDisplayName(source) {
   return [source?.styleCode, source?.style].filter(Boolean).join(' ')
+}
+
+function displayShortCode(source) {
+  return source?.shortCode ? `编号： ${source.shortCode}` : '编号'
 }
 
 watch(uuid, async () => {
@@ -254,6 +300,43 @@ onMounted(async () => {
 
 .compact {
   margin-bottom: 0;
+}
+
+.captain-check-card {
+  border-color: #fedf89;
+  background: #fffaeb;
+}
+
+.captain-check-card.ready {
+  border-color: #abefc6;
+  background: #ecfdf3;
+}
+
+.captain-check-text {
+  margin: 6px 0 0;
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.check-blockers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.check-blockers span {
+  border-radius: 999px;
+  padding: 5px 9px;
+  color: #92400e;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.check-action {
+  margin-top: 12px;
 }
 
 .board-list,
@@ -361,6 +444,31 @@ onMounted(async () => {
 
 .score-title {
   margin-top: 18px;
+}
+
+.captain-alert {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  border: 1px solid #fedf89;
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #92400e;
+  background: #fffaeb;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.captain-alert button {
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 8px;
+  padding: 7px 10px;
+  color: #fff;
+  background: #a75517;
+  font-weight: 850;
 }
 
 .member-card {

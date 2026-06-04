@@ -31,6 +31,11 @@ const routes = [
     meta: { public: true, scope: 'admin' },
   },
   {
+    path: '/admin/live-board',
+    component: () => import('@/views/admin/LiveBoard.vue'),
+    meta: { requiresAuth: true, scope: 'admin' },
+  },
+  {
     path: '/admin',
     component: () => import('@/layouts/AdminLayout.vue'),
     redirect: '/admin/dashboard',

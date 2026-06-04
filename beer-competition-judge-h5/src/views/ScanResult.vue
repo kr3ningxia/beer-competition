@@ -3,12 +3,11 @@
     <section class="top-panel">
       <button class="back-link" type="button" @click="$router.push('/competitions')">返回扫码</button>
       <p class="eyebrow">{{ entry?.competitionName || '酒款信息' }}</p>
-      <h1 class="page-title">{{ entry?.labelCode || entry?.uuid || code }}</h1>
+      <h1 class="page-title">{{ displayShortCode(entry) }}</h1>
       <div class="scan-status">
         <span :class="['pill', entry?.locked ? 'status-lock' : 'status-ok']">
           {{ entry?.locked ? '本桌已确认' : actionLabel }}
         </span>
-        <span v-if="entry?.shortCode" class="pill status-warn">短编号 {{ entry.shortCode }}</span>
         <span v-if="entry?.scored" class="pill status-ok">已提交</span>
       </div>
     </section>
@@ -64,29 +63,29 @@
 
     <section v-else class="card">
       <h2 class="section-title">没有找到这款酒</h2>
-      <p class="caption">请确认酒款编号是否完整，或联系现场工作人员。</p>
+      <p class="caption">请确认编号是否完整，或联系现场工作人员。</p>
     </section>
 
     <div v-if="entry" class="sticky-actions">
       <button
-        v-if="entry.action === 'SCORE'"
+        v-if="entry.canScore"
         class="button primary full"
         type="button"
         :disabled="entry.locked"
         @click="$router.push(`/score/${entry.uuid}`)"
       >
-        {{ entry.locked ? '本桌结果已确认' : '开始评分' }}
+        {{ entry.locked ? '本桌结果已确认' : entry.scored ? '修改我的专业评分' : scoreButtonLabel }}
       </button>
       <button
-        v-else-if="entry.action === 'CAPTAIN'"
-        class="button primary full"
+        v-if="entry.action === 'CAPTAIN'"
+        class="button secondary full"
         type="button"
         @click="$router.push(`/captain/${entry.uuid}`)"
       >
         查看本桌评分
       </button>
       <button
-        v-else
+        v-if="entry.action === 'RANKING'"
         class="button primary full"
         type="button"
         @click="$router.push(`/ranking/${entry.roundTableId}`)"
@@ -121,6 +120,9 @@ const actionLabel = computed(() => {
   if (entry.value?.action === 'RANKING') return '本轮排序'
   return entry.value?.scored ? '可修改评分' : '可评分'
 })
+const scoreButtonLabel = computed(() => (
+  me.value?.role === 'CAPTAIN' ? '填写我的专业评分' : '开始评分'
+))
 
 const navItems = computed(() => {
   const items = [
@@ -143,6 +145,11 @@ onMounted(async () => {
 
 function styleDisplayName(source) {
   return [source?.styleCode, source?.style].filter(Boolean).join(' ')
+}
+
+function displayShortCode(source) {
+  if (source?.shortCode) return `编号： ${source.shortCode}`
+  return '正在读取'
 }
 </script>
 

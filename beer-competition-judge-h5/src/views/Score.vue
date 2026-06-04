@@ -2,8 +2,8 @@
   <main class="app-shell">
     <section class="top-panel">
       <button class="back-link" type="button" @click="$router.push(`/scan-result/${uuid}`)">返回酒款</button>
-      <p class="eyebrow">{{ config?.roleLabel || me?.roleLabel }}评分表</p>
-      <h1 class="page-title">{{ uuid }}</h1>
+      <p class="eyebrow">{{ scoreRoleLabel }}评分表</p>
+      <h1 class="page-title">{{ displayShortCode(entry) }}</h1>
       <div class="total-strip">
         <div>
           <span>当前总分</span>
@@ -14,6 +14,7 @@
           <strong class="sub-score">{{ notesLength }} / {{ minNoteLength }}</strong>
         </div>
       </div>
+      <p class="score-brief">分数需填写整数；备注合计达到要求后可提交。</p>
     </section>
 
     <section v-if="entry && config" class="card">
@@ -22,7 +23,7 @@
           <span>{{ entry.categoryName }}</span>
           <strong>{{ styleDisplayName(entry) }} · {{ entry.abv }}</strong>
         </div>
-        <em v-if="entry.shortCode">短编号 {{ entry.shortCode }}</em>
+        <em>{{ displayShortCode(entry) }}</em>
       </div>
 
       <div v-if="entry.styleCategoryName || entry.styleDescription" class="style-reference">
@@ -42,19 +43,23 @@
           <div class="dimension-head">
             <div>
               <h2>{{ item.label }}（{{ item.maxScore }}分）</h2>
-              <p>{{ item.description || '请按本场评分表要求填写整数分。' }}</p>
+              <p v-if="item.description">{{ item.description }}</p>
             </div>
-            <input
-              v-model.number="item.score"
-              class="score-input"
-              type="number"
-              inputmode="numeric"
-              min="0"
-              :max="item.maxScore"
-              step="1"
-              :disabled="entry.locked"
-              @blur="clampScore(item)"
-            />
+            <div class="score-stepper" :aria-label="`${item.label}分数`">
+              <button type="button" :disabled="entry.locked || Number(item.score || 0) <= 0" @click="adjustScore(item, -1)">-</button>
+              <input
+                v-model.number="item.score"
+                class="score-input"
+                type="number"
+                inputmode="numeric"
+                min="0"
+                :max="item.maxScore"
+                step="1"
+                :disabled="entry.locked"
+                @blur="clampScore(item)"
+              />
+              <button type="button" :disabled="entry.locked || Number(item.score || 0) >= item.maxScore" @click="adjustScore(item, 1)">+</button>
+            </div>
           </div>
           <div class="range-wrap" :style="{ '--range-progress': `${rangePercent(item)}%` }">
             <div class="range-rail" aria-hidden="true">
@@ -96,7 +101,7 @@
               class="textarea note-textarea"
               :disabled="entry.locked"
               :aria-label="`${item.label}备注`"
-              :placeholder="item.notePlaceholder || '可记录风味表现、缺陷、推荐理由或改进建议。'"
+              :placeholder="item.notePlaceholder || '记录本项依据'"
             />
           </div>
         </article>
@@ -114,6 +119,7 @@
       <button class="button primary full" type="button" :disabled="!canSubmit" @click="submit">
         {{ entry?.locked ? '本桌结果已确认' : existingScore ? '保存修改' : '提交评分' }}
       </button>
+      <p v-if="submitHint" class="submit-hint">{{ submitHint }}</p>
       <p v-if="message" class="message">{{ message }}</p>
     </div>
   </main>
@@ -151,6 +157,7 @@ const notesLength = computed(() => (
 
 const minNoteLength = computed(() => Number(config.value?.commentMinLength || 0))
 const commentReady = computed(() => notesLength.value >= minNoteLength.value)
+const remainingNotes = computed(() => Math.max(0, minNoteLength.value - notesLength.value))
 const canSubmit = computed(() => (
   !entry.value?.locked
   && form.dimensions.length > 0
@@ -162,10 +169,27 @@ const canSubmit = computed(() => (
   ))
   && commentReady.value
 ))
+const submitHint = computed(() => {
+  if (entry.value?.locked) return '本桌结果已确认，评分不可修改。'
+  if (remainingNotes.value > 0) return `备注还差 ${remainingNotes.value} 字`
+  if (!form.dimensions.length) return ''
+  const invalid = form.dimensions.some((item) => (
+    item.score === ''
+    || !Number.isInteger(Number(item.score))
+    || Number(item.score) < 0
+    || Number(item.score) > item.maxScore
+  ))
+  return invalid ? '请检查各项分数，必须为整数且不超过满分。' : ''
+})
 
 function clampScore(item) {
   const value = Number(item.score || 0)
   item.score = Math.min(Number(item.maxScore), Math.max(0, Math.round(value)))
+}
+
+function adjustScore(item, delta) {
+  item.score = Number(item.score || 0) + delta
+  clampScore(item)
 }
 
 function tickValues(item) {
@@ -194,6 +218,10 @@ function rangePercent(item) {
 
 function styleDisplayName(source) {
   return [source?.styleCode, source?.style].filter(Boolean).join(' ')
+}
+
+function displayShortCode(source) {
+  return source?.shortCode ? `编号： ${source.shortCode}` : '编号'
 }
 
 function parseCommentNotes(comments = '') {
@@ -256,9 +284,10 @@ async function submit() {
 onMounted(async () => {
   me.value = await fetchMe()
   entry.value = await fetchEntry(uuid)
-  config.value = await fetchScoreConfig(me.value.role)
+  const scoreRole = entry.value?.scoreRoleType || me.value.role
+  config.value = await fetchScoreConfig(scoreRole)
   existingScore.value = await fetchMyScore(uuid)
-  form.judgeRoleType = me.value.role
+  form.judgeRoleType = scoreRole
 
   if (existingScore.value) {
     form.dimensions = buildDimensionForm(config.value.dimensions, existingScore.value.dimensions, existingScore.value.comments)
@@ -266,6 +295,12 @@ onMounted(async () => {
     form.dimensions = buildDimensionForm(config.value.dimensions)
   }
 })
+
+const scoreRoleLabel = computed(() => (
+  entry.value?.scoreRoleType === 'PROFESSIONAL' && me.value?.role === 'CAPTAIN'
+    ? '专业评委'
+    : config.value?.roleLabel || me.value?.roleLabel
+))
 </script>
 
 <style scoped>
@@ -314,6 +349,13 @@ onMounted(async () => {
 
 .total-strip .sub-score {
   font-size: 18px;
+}
+
+.score-brief {
+  margin: 10px 0 0;
+  color: rgba(248, 250, 252, 0.72);
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .card {
@@ -413,7 +455,7 @@ onMounted(async () => {
 
 .dimension-head {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 72px;
+  grid-template-columns: minmax(0, 1fr) 116px;
   gap: 12px;
   align-items: start;
 }
@@ -431,11 +473,37 @@ onMounted(async () => {
   font-size: 13px;
 }
 
-.score-input {
-  width: 72px;
+.score-stepper {
+  display: grid;
+  grid-template-columns: 28px 56px 28px;
+  gap: 2px;
+  align-items: center;
+  justify-content: end;
+  width: 116px;
+}
+
+.score-stepper button {
   min-height: 42px;
   border: 1px solid #cbd5d1;
-  border-radius: 8px;
+  color: #18222f;
+  background: #f7f8f6;
+  font-size: 18px;
+  font-weight: 850;
+}
+
+.score-stepper button:first-child {
+  border-radius: 8px 0 0 8px;
+}
+
+.score-stepper button:last-child {
+  border-radius: 0 8px 8px 0;
+}
+
+.score-input {
+  width: 56px;
+  min-height: 42px;
+  border: 1px solid #cbd5d1;
+  border-radius: 0;
   color: #18222f;
   text-align: center;
   font-size: 17px;
@@ -616,5 +684,23 @@ onMounted(async () => {
   text-align: center;
   font-size: 14px;
   font-weight: 750;
+}
+
+.submit-hint {
+  margin: 0;
+  color: #b54708;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+@media (max-width: 380px) {
+  .dimension-head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .score-stepper {
+    justify-content: start;
+  }
 }
 </style>

@@ -7,6 +7,7 @@ import com.beercompetition.common.exception.ForbiddenException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.mapper.BeerEntryExtraFieldMapper;
 import com.beercompetition.mapper.BeerEntryMapper;
+import com.beercompetition.mapper.AwardResultMapper;
 import com.beercompetition.mapper.BreweryMapper;
 import com.beercompetition.mapper.CompetitionCategoryMapper;
 import com.beercompetition.mapper.CompetitionMapper;
@@ -26,6 +27,7 @@ import com.beercompetition.pojo.dto.PortalEntryDeliverySubmitRequest;
 import com.beercompetition.pojo.dto.PortalEntrySubmitRequest;
 import com.beercompetition.pojo.dto.PortalProfileUpdateRequest;
 import com.beercompetition.pojo.enums.CompetitionStatus;
+import com.beercompetition.pojo.enums.AwardResultStatus;
 import com.beercompetition.pojo.enums.EntryDeliveryMethod;
 import com.beercompetition.pojo.enums.EntryDeliveryStatus;
 import com.beercompetition.pojo.enums.EntryPayMethod;
@@ -37,6 +39,7 @@ import com.beercompetition.pojo.enums.JudgeTaskType;
 import com.beercompetition.pojo.enums.RoundStatus;
 import com.beercompetition.pojo.enums.RoundType;
 import com.beercompetition.pojo.po.BeerEntry;
+import com.beercompetition.pojo.po.AwardResult;
 import com.beercompetition.pojo.po.BeerEntryExtraField;
 import com.beercompetition.pojo.po.Brewery;
 import com.beercompetition.pojo.po.Competition;
@@ -104,6 +107,7 @@ public class EntryServiceImpl implements EntryService {
     private static final Set<String> OPTION_FIELD_TYPES = Set.of("select", "multi_select");
 
     private final PortalAccountMapper portalAccountMapper;
+    private final AwardResultMapper awardResultMapper;
     private final BeerEntryMapper beerEntryMapper;
     private final CompetitionMapper competitionMapper;
     private final CompetitionCategoryMapper competitionCategoryMapper;
@@ -476,8 +480,11 @@ public class EntryServiceImpl implements EntryService {
                 .judgeRoleType(context.member().getRole())
                 .taskType(context.taskType())
                 .action(resolveJudgeAction(context.taskType()))
+                .canScore(canSubmitPersonalScore(context.taskType()))
+                .canFinalize(canFinalizeTable(context.taskType()))
                 .scored(hasSubmittedJudgeScore(entry.getId(), context.judge().getId()))
                 .locked(hasFinalScore(entry.getId()))
+                .scoreRoleType(resolveScoreRoleType(context.member().getRole(), context.taskType()))
                 .categoryName(category == null ? null : category.getName())
                 .style(entry.getStyle())
                 .styleCategoryName(style == null ? null : style.getCategoryName())
@@ -570,6 +577,7 @@ public class EntryServiceImpl implements EntryService {
         Competition competition = competitionMapper.selectById(entry.getCompetitionId());
         CompetitionCategory category = competitionCategoryMapper.selectById(entry.getCategoryId());
         boolean published = isResultPublished(competition, entry);
+        PortalRoundResultVO formalAward = findPublishedAwardResult(entry.getId());
         return PortalResultSummaryVO.builder()
                 .entryId(entry.getId())
                 .entryName(entry.getName())
@@ -580,7 +588,10 @@ public class EntryServiceImpl implements EntryService {
                 .status(entry.getStatus())
                 .published(published)
                 .lockReason(published ? null : "比赛结果暂未发布")
-                .roundResult(listRoundResults(entry.getId()).stream().findFirst().orElse(null))
+                .awardName(formalAward == null ? null : formalAward.getAwardName())
+                .awardType(formalAward == null ? null : formalAward.getAwardType())
+                .champion(formalAward == null ? false : formalAward.getChampion())
+                .roundResult(formalAward == null ? listRoundResults(entry.getId()).stream().findFirst().orElse(null) : formalAward)
                 .build();
     }
 
@@ -598,6 +609,10 @@ public class EntryServiceImpl implements EntryService {
     }
 
     private List<PortalRoundResultVO> listRoundResults(Long entryId) {
+        List<PortalRoundResultVO> formalAwards = listPublishedAwardResults(entryId);
+        if (!formalAwards.isEmpty()) {
+            return formalAwards;
+        }
         return roundResultMapper.selectList(new LambdaQueryWrapper<RoundResult>()
                         .eq(RoundResult::getBeerEntryId, entryId)
                         .orderByAsc(RoundResult::getResultType)
@@ -609,6 +624,30 @@ public class EntryServiceImpl implements EntryService {
                         .rankNo(result.getRankNo())
                         .slotLabel(result.getSlotLabel())
                         .locked(Objects.equals(result.getLockedFlag(), 1))
+                        .build())
+                .toList();
+    }
+
+    private PortalRoundResultVO findPublishedAwardResult(Long entryId) {
+        return listPublishedAwardResults(entryId).stream().findFirst().orElse(null);
+    }
+
+    private List<PortalRoundResultVO> listPublishedAwardResults(Long entryId) {
+        return awardResultMapper.selectList(new LambdaQueryWrapper<AwardResult>()
+                        .eq(AwardResult::getBeerEntryId, entryId)
+                        .eq(AwardResult::getStatus, AwardResultStatus.PUBLISHED.name())
+                        .orderByDesc(AwardResult::getChampionFlag)
+                        .orderByAsc(AwardResult::getRankNo)
+                        .orderByAsc(AwardResult::getId))
+                .stream()
+                .map(result -> PortalRoundResultVO.builder()
+                        .resultType(result.getAwardType())
+                        .rankNo(result.getRankNo())
+                        .slotLabel(result.getAwardName())
+                        .awardType(result.getAwardType())
+                        .awardName(result.getAwardName())
+                        .champion(Objects.equals(result.getChampionFlag(), 1))
+                        .locked(true)
                         .build())
                 .toList();
     }
@@ -954,6 +993,26 @@ public class EntryServiceImpl implements EntryService {
             return "RANKING";
         }
         return "SCORE";
+    }
+
+    private boolean canSubmitPersonalScore(String taskType) {
+        return JudgeTaskType.SCORE_ENTRY.name().equals(taskType)
+                || JudgeTaskType.CAPTAIN_FINALIZE.name().equals(taskType);
+    }
+
+    private boolean canFinalizeTable(String taskType) {
+        return JudgeTaskType.CAPTAIN_FINALIZE.name().equals(taskType)
+                || JudgeTaskType.RANKING_ROUND.name().equals(taskType);
+    }
+
+    private String resolveScoreRoleType(String memberRole, String taskType) {
+        if (!canSubmitPersonalScore(taskType)) {
+            return null;
+        }
+        if (JudgeRoleType.CAPTAIN.name().equals(memberRole)) {
+            return JudgeRoleType.PROFESSIONAL.name();
+        }
+        return memberRole;
     }
 
     private boolean hasSubmittedJudgeScore(Long beerEntryId, Long judgeId) {

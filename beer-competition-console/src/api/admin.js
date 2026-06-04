@@ -12,6 +12,10 @@ export function fetchCompetitionDetail(id) {
   return request.get(`/api/admin/competitions/${id}`, { authScope: 'admin' })
 }
 
+export function fetchCompetitionProgress(id) {
+  return request.get(`/api/admin/competitions/${id}/progress`, { authScope: 'admin' })
+}
+
 export function deleteCompetition(id) {
   return request.delete(`/api/admin/competitions/${id}`, { authScope: 'admin' })
 }
@@ -126,6 +130,14 @@ export function lockRound(competitionId, roundId) {
 
 export function publishCompetitionResults(competitionId) {
   return request.post(`/api/admin/competitions/${competitionId}/results/publish`, {}, { authScope: 'admin' })
+}
+
+export function generateCompetitionAwards(competitionId) {
+  return request.post(`/api/admin/competitions/${competitionId}/awards/generate`, {}, { authScope: 'admin' })
+}
+
+export function confirmCompetitionAwards(competitionId, payload) {
+  return request.put(`/api/admin/competitions/${competitionId}/awards/confirm`, payload, { authScope: 'admin' })
 }
 
 export function confirmEntryPayment(entryId) {

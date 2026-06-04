@@ -376,101 +376,149 @@
         </section>
 
         <section v-if="activeTab === 'rounds'" class="tab-panel rounds-panel">
-          <RoundStepper
-            :rounds="rounds"
-            :active-round-id="activeRoundId"
-            :round-status-labels="roundStatusLabels"
-            @select-round="selectRound"
-          />
-
-          <section class="round-console">
-            <article class="round-control-panel">
-              <header>
-                <div>
-                  <small>{{ currentRound?.name }} · {{ currentRoundTypeLabel }} · {{ currentRoundStatusText }}</small>
-                  <h2>{{ currentRound?.name || '未创建轮次' }}</h2>
-                </div>
+          <section class="round-planning-shell">
+            <aside class="round-pyramid-panel" aria-label="晋级路径">
+              <header class="round-pyramid-head">
+                <h2>晋级路径</h2>
               </header>
 
-              <div class="round-readiness">
-                <strong>{{ roundReadinessTitle }}</strong>
-                <span>{{ roundReadinessDetail }}</span>
-              </div>
-
-              <div class="round-console-metrics">
-                <span>桌数 <strong>{{ currentRoundTables.length }}</strong></span>
-                <span>酒款 <strong>{{ currentRoundEntryCount }} / {{ currentPoolEntries.length }}</strong></span>
-                <span>{{ currentRoundTargetLabel }} <strong>{{ currentRoundTargetDisplay }}</strong></span>
-                <span>问题 <strong>{{ roundValidationIssues.length }}</strong></span>
-              </div>
-
-              <div class="round-primary-actions">
-                <button class="tool-button" type="button" @click="editRoundAllocation(currentRound.id, 'entries')">
-                  查看分桌
-                </button>
-                <button
-                  v-if="currentRound?.status === 'DRAFT'"
-                  class="tool-button primary"
-                  type="button"
-                  :disabled="!canPublishCurrentRound"
-                  @click="publishCurrentRound"
+              <div class="round-pyramid">
+                <article
+                  v-for="node in roundPyramidNodes"
+                  :key="node.key"
+                  :class="['pyramid-node', node.state, { active: node.active, actionable: node.actionable }]"
+                  :style="{ '--node-width': `${node.width}%` }"
+                  :role="node.actionable ? 'button' : undefined"
+                  :tabindex="node.actionable ? 0 : undefined"
+                  :title="node.hint"
+                  @click="handleRoundPyramidNode(node)"
+                  @keydown.enter.prevent="handleRoundPyramidNode(node)"
+                  @keydown.space.prevent="handleRoundPyramidNode(node)"
                 >
-                  {{ currentRound?.type === 'SCORE' ? '发布给评委' : '发布给桌长' }}
-                </button>
-                <button v-if="currentRound?.roundNo === 1 && currentRound?.status === 'PUBLISHED'" class="tool-button primary" type="button" @click="completeFirstRoundAction">
-                  确认第一轮完成
-                </button>
-                <button v-if="currentRound?.type === 'RANKING' && ['DRAFT', 'IN_PROGRESS'].includes(currentRound?.status)" class="tool-button primary" type="button" :disabled="!canSubmitRankingRound" @click="submitRankingRound">
-                  提交排序
-                </button>
-                <button v-if="currentRound?.status === 'SUBMITTED'" class="tool-button primary" type="button" @click="lockCurrentRound">
-                  确认锁定
-                </button>
-              </div>
-            </article>
+                  <span v-if="node.tableChips.length" class="pyramid-table-row">
+                    <button
+                      v-for="table in node.tableChips"
+                      :key="`${node.key}-${table.id}`"
+                      :class="{ active: table.active }"
+                      type="button"
+                      :title="table.label"
+                      @click.stop="selectPyramidTable(node, table)"
+                    >
+                      {{ table.label }}
+                      <span class="pyramid-table-popover">
+                        <strong>{{ table.label }}</strong>
+                        <small v-for="line in table.previewLines" :key="`${table.id}-${line}`">{{ line }}</small>
+                      </span>
+                    </button>
+                    <i v-if="node.extraTableCount">+{{ node.extraTableCount }}</i>
+                  </span>
+                  <button
+                    v-else-if="node.actionable"
+                    class="pyramid-placeholder-mark"
+                    type="button"
+                    @click.stop="handleRoundPyramidNode(node)"
+                  >
+                    {{ node.placeholderText }}
+                  </button>
+                  <span v-else class="pyramid-placeholder-mark">{{ node.placeholderText }}</span>
 
-            <aside class="round-side-panel">
-              <article>
-                <h3>发布前检查</h3>
-                <div class="round-check-list">
-                  <p v-for="check in roundReadinessChecks" :key="check.label" :class="check.done ? 'ok' : 'warning'">
-                    <CircleCheck v-if="check.done" />
-                    <Warning v-else />
-                    <span>{{ check.label }}</span>
-                    <strong>{{ check.value }}</strong>
-                  </p>
+                  <span class="pyramid-layer-caption">
+                    <strong>{{ node.label }}</strong>
+                    <em>{{ node.statusText }}</em>
+                  </span>
+                  <b v-if="node.summary">{{ node.summary }}</b>
+                </article>
+              </div>
+            </aside>
+
+            <section class="round-workspace">
+              <article class="round-current-card">
+                <div class="round-current-main">
+                  <small>{{ currentRound?.name || '未创建轮次' }} · {{ currentRoundTypeLabel }} · {{ currentRoundStatusText }}</small>
+                  <h2>{{ roundReadinessTitle }}</h2>
+                  <p>{{ roundReadinessDetail }}</p>
+                </div>
+
+                <div class="round-console-metrics">
+                  <span v-for="metric in currentRoundMetrics" :key="metric.label">
+                    {{ metric.label }}
+                    <strong>{{ metric.value }}</strong>
+                  </span>
+                </div>
+
+                <div class="round-primary-actions">
+                  <button class="tool-button" type="button" :disabled="!currentRound" @click="editRoundAllocation(currentRound.id, 'entries')">
+                    查看分桌
+                  </button>
+                  <button
+                    v-if="currentRound?.status === 'DRAFT'"
+                    class="tool-button primary"
+                    type="button"
+                    :disabled="!canPublishCurrentRound"
+                    @click="publishCurrentRound"
+                  >
+                    {{ currentRound?.type === 'SCORE' ? '发布给评委' : '发布给桌长' }}
+                  </button>
+                  <button v-if="currentRound?.roundNo === 1 && currentRound?.status === 'PUBLISHED'" class="tool-button primary" type="button" @click="completeFirstRoundAction">
+                    确认第一轮完成
+                  </button>
+                  <button v-if="currentRound?.type === 'RANKING' && ['DRAFT', 'IN_PROGRESS'].includes(currentRound?.status)" class="tool-button primary" type="button" :disabled="!canSubmitRankingRound" @click="submitRankingRound">
+                    提交排序
+                  </button>
+                  <button v-if="currentRound?.status === 'SUBMITTED'" class="tool-button primary" type="button" @click="lockCurrentRound">
+                    确认锁定
+                  </button>
+                  <button v-if="canCreateNextRound" class="tool-button primary" type="button" @click="openCreateRoundDialog">
+                    创建{{ nextRoundName }}
+                  </button>
+                  <button class="tool-button" type="button" @click="openLiveDashboard">
+                    打开投屏看板
+                  </button>
                 </div>
               </article>
 
-              <article v-if="canCreateNextRound" class="next-round-card">
-                <h3>下一步</h3>
-                <p>{{ advancedPool.length }} 款晋级酒款可用于创建{{ nextRoundName }}。</p>
-                <button class="tool-button primary" type="button" @click="openCreateRoundDialog">创建{{ nextRoundName }}</button>
-              </article>
-              <article v-else class="next-round-card muted">
-                <h3>下一步</h3>
-                <p>{{ roundNextStepText }}</p>
-              </article>
-            </aside>
-          </section>
+              <section ref="roundProgressSection" class="round-table-overview">
+                <header>
+                  <div>
+                    <small>当前轮次</small>
+                    <h3>桌次进度</h3>
+                  </div>
+                  <span>{{ currentRoundTables.length }} 桌</span>
+                </header>
 
-          <section class="round-table-summary">
-            <article v-for="table in currentRoundTables" :key="`round-summary-${table.id}`">
-              <header>
-                <strong>{{ table.name }}</strong>
-                <em>{{ table.entryUuids.length }} 款</em>
-              </header>
-              <div>
-                <span>桌长</span>
-                <strong>{{ getJudge(table.captainPublicId)?.name || '未指定' }}</strong>
-              </div>
-              <div>
-                <span>{{ currentRound?.type === 'SCORE' ? '每桌晋级' : '排序目标' }}</span>
-                <strong>{{ table.targetCount }}</strong>
-              </div>
-              <p v-if="getRoundTableIssues(table).length" class="warning">{{ getRoundTableIssues(table)[0] }}</p>
-              <p v-else class="ok">本桌已就绪</p>
-            </article>
+                <div class="round-table-list">
+                  <button
+                    v-for="table in currentRoundTableSummaries"
+                    :key="`round-summary-${table.id}`"
+                    :class="['round-table-row', table.tone, { active: selectedRoundTableId === table.id }]"
+                    type="button"
+                    @click="selectedRoundTableId = table.id"
+                  >
+                    <strong>{{ table.name }}</strong>
+                    <span>{{ table.entryCount }} 款</span>
+                    <span>桌长 {{ table.captainName }}</span>
+                    <span>{{ table.primaryProgressLabel }} {{ table.primaryProgress }}</span>
+                    <span>{{ table.secondaryProgressLabel }} {{ table.secondaryProgress }}</span>
+                    <span>{{ table.targetLabel }} {{ table.targetDisplay }}</span>
+                    <em>{{ table.statusText }}</em>
+                  </button>
+                  <p v-if="!currentRoundTables.length" class="empty-line">还没有轮次桌。先完成分桌分配，再生成第一轮编排。</p>
+                </div>
+              </section>
+
+              <article :class="['round-task-hint', roundTodoHint.tone]">
+                <div>
+                  <strong>{{ roundTodoHint.title }}</strong>
+                  <span>{{ roundTodoHint.detail }}</span>
+                </div>
+                <button v-if="roundTodoHint.action === 'createNextRound'" class="tool-button primary" type="button" @click="openCreateRoundDialog">
+                  创建{{ nextRoundName }}
+                </button>
+                <button v-else-if="roundTodoHint.action === 'focusRoundProgress'" class="tool-button" type="button" @click="focusRoundProgress">
+                  查看桌次进度
+                </button>
+              </article>
+            </section>
           </section>
         </section>
 
@@ -538,76 +586,30 @@
           </div>
         </section>
 
-        <section v-if="activeTab === 'progress'" class="tab-panel">
-          <div class="round-flow compact-flow">
-            <button
-              v-for="round in rounds"
-              :key="`progress-${round.id}`"
-              :class="['round-flow-item', { active: round.id === activeRoundId }]"
-              type="button"
-              @click="selectRound(round.id)"
-            >
-              <small>{{ round.type === 'SCORE' ? '评分制' : '选择排序' }}</small>
-              <strong>{{ round.name }}</strong>
-              <em>{{ roundStatusLabels[round.status] || round.status }}</em>
-            </button>
-          </div>
-          <article class="panel-card">
-            <div class="panel-heading">
-              <h2>桌次重组</h2>
-              <span>{{ roundRestructureText }}</span>
-            </div>
-            <div class="round-path wide">
-              <span v-for="round in rounds" :key="`path-${round.id}`">
-                <strong>{{ round.name }}</strong>
-                <small>{{ round.tables.map((table) => table.name).join(' / ') }}</small>
-              </span>
-            </div>
-          </article>
-          <div class="progress-card-grid">
-            <article v-for="table in currentRoundTables" :key="`progress-${table.id}`" class="panel-card progress-card">
-              <div class="panel-heading">
-                <h2>{{ table.name }}</h2>
-                <span>{{ getJudge(table.captainPublicId)?.name || '未指定桌长' }}</span>
-              </div>
-              <template v-if="currentRound?.type === 'SCORE'">
-                <div class="progress-row">
-                  <strong>普通评委评分</strong>
-                  <div class="progress-bar"><span :style="{ width: `${table.judgeProgress || 0}%` }" /></div>
-                  <em>{{ table.judgeProgress || 0 }}%</em>
-                </div>
-                <div class="progress-row">
-                  <strong>桌长汇总</strong>
-                  <div class="progress-bar"><span :style="{ width: `${table.captainProgress || 0}%` }" /></div>
-                  <em>{{ table.captainProgress || 0 }}%</em>
-                </div>
-                <p>已选晋级 {{ table.advancedCount || 0 }} / {{ table.targetCount }}</p>
-              </template>
-              <template v-else>
-                <div class="ranking-slots">
-                  <span v-for="slot in getRankingSlots(table)" :key="slot.label" :class="{ filled: slot.uuid }">
-                    <small>{{ slot.label }}</small>
-                    <strong>{{ slot.uuid || '待选择' }}</strong>
-                  </span>
-                </div>
-                <p>桌长排序 {{ getFilledRankingCount(table) }} / {{ table.targetCount }} · {{ roundStatusLabels[table.status] || table.status }}</p>
-              </template>
-            </article>
-          </div>
-        </section>
-
         <section v-if="activeTab === 'results'" class="tab-panel">
           <div class="two-column results-layout">
             <article class="panel-card">
               <div class="panel-heading">
-                <h2>组别奖项草稿</h2>
+                <h2>正式奖项</h2>
                 <span>{{ awardDrafts.length }} 项</span>
               </div>
+              <div class="publish-actions">
+                <button class="tool-button" type="button" @click="generateAwardsAction">生成奖项</button>
+                <button class="tool-button primary" type="button" :disabled="!canConfirmAwards" @click="confirmAwardsAction">确认奖项</button>
+              </div>
               <div class="award-list">
-                <article v-for="award in awardDrafts" :key="`${award.category}-${award.slot}`">
-                  <span>{{ award.category }}</span>
-                  <strong>{{ award.slot }}</strong>
-                  <em>{{ award.uuid || '待确认' }}</em>
+                <article v-for="award in awardDrafts" :key="`${award.awardType}-${award.categoryId || 'all'}-${award.rankNo}`">
+                  <span>{{ award.categoryName }}</span>
+                  <strong>{{ award.awardName }}</strong>
+                  <el-select v-model="award.beerEntryId" filterable>
+                    <el-option
+                      v-for="entry in awardEntryOptions(award)"
+                      :key="entry.id"
+                      :label="`${entry.uuid} · ${entry.name || entry.style}`"
+                      :value="entry.id"
+                    />
+                  </el-select>
+                  <em>{{ award.status === 'CONFIRMED' ? '已确认' : award.status === 'PUBLISHED' ? '已发布' : '待确认' }}</em>
                 </article>
               </div>
             </article>
@@ -666,6 +668,13 @@
       :next-round-name="nextRoundName"
       :advanced-pool="advancedPool"
       :advanced-category-stats="advancedCategoryStats"
+      :target-mode="createRoundForm.targetMode"
+      :target-count="createRoundForm.targetCount"
+      :table-count="createRoundForm.tableCount"
+      :target-options="createRoundTargetOptions"
+      @update:target-mode="updateCreateRoundTargetMode"
+      @update:target-count="createRoundForm.targetCount = $event"
+      @update:table-count="createRoundForm.tableCount = $event"
       @close="closeCreateRoundDialog"
       @finish="finishCreateRound"
     />
@@ -780,6 +789,7 @@ import {
   cancelEntry,
   closeCompetitionRegistration,
   completeFirstRound,
+  confirmCompetitionAwards,
   confirmEntryPayment,
   createFirstRound,
   createNextRound,
@@ -787,6 +797,7 @@ import {
   fetchCompetitionDetail,
   fetchJudges,
   fetchStyleLibraries,
+  generateCompetitionAwards,
   lockRound,
   markEntryStored,
   openCompetitionRegistration,
@@ -803,12 +814,11 @@ import {
 } from '@/api/admin'
 import { fallbackStyleLibraries, getStyleLibrary, normalizeStyleLibraries } from './styleLibraries'
 import CreateRoundWizard from './components/competition-detail/CreateRoundWizard.vue'
-import RoundStepper from './components/competition-detail/RoundStepper.vue'
 import TableAllocationWorkbench from './components/competition-detail/TableAllocationWorkbench.vue'
 
 const route = useRoute()
 const router = useRouter()
-const activeTab = ref(route.query.tab || 'overview')
+const activeTab = ref(route.query.tab === 'progress' ? 'rounds' : (route.query.tab || 'overview'))
 const loading = ref(false)
 const competition = ref(null)
 const categoryForm = reactive([])
@@ -828,10 +838,16 @@ const rounds = ref([])
 const roundEntryPool = ref([])
 const activeRoundId = ref('')
 const selectedRoundTableId = ref('')
+const roundProgressSection = ref(null)
 const roundKeyword = ref('')
 const roundCategoryFilter = ref('全部')
 const selectedEntryUuids = ref([])
 const createRoundDialogOpen = ref(false)
+const createRoundForm = reactive({
+  targetMode: 'TOP_N',
+  targetCount: 3,
+  tableCount: 1,
+})
 const entryAutoAssignDialogOpen = ref(false)
 const entryAutoAssignTableId = ref('')
 const entryAutoAssignForm = reactive({
@@ -848,7 +864,6 @@ const tabs = [
   { key: 'judges', label: '分桌分配', icon: Files },
   { key: 'rounds', label: '轮次编排', icon: Calendar },
   { key: 'score', label: '评分表', icon: Finished },
-  { key: 'progress', label: '现场进度', icon: Clock },
   { key: 'results', label: '结果发布', icon: Medal },
 ]
 
@@ -973,8 +988,13 @@ const roundReadinessDetail = computed(() => {
   if (currentRound.value.status === 'DRAFT') return currentRound.value.type === 'SCORE'
     ? '发布后，评委开始评分，桌长可查看本桌酒款并汇总结果。'
     : '发布后，桌长可以进入排序任务并提交本桌结果。'
+  if (currentRound.value.status === 'PUBLISHED') return currentRound.value.type === 'SCORE'
+    ? '等待评委提交评分，完成后由桌长汇总本轮结果。'
+    : '等待桌长提交排序结果。'
+  if (currentRound.value.status === 'IN_PROGRESS') return '各桌正在处理排序任务。'
+  if (currentRound.value.status === 'SUBMITTED') return '排序结果已提交，确认无误后可以锁定本轮。'
   if (currentRound.value.status === 'LOCKED') return canCreateNextRound.value ? `可以创建${nextRoundName.value}。` : '可以进入结果确认或等待后续安排。'
-  return '请根据现场完成情况继续推进。'
+  return roundNextStepText.value
 })
 const roundNextStepText = computed(() => {
   if (!currentRound.value) return '请先创建并配置第一轮。'
@@ -991,11 +1011,42 @@ const canCreateNextRound = computed(() => {
 })
 const nextRoundNumber = computed(() => rounds.value.length + 1)
 const nextRoundName = computed(() => `第${toChineseNumber(nextRoundNumber.value)}轮`)
+const createRoundTargetOptions = computed(() => {
+  if (competition.value?.status === 'RESULT_CONFIRMING') {
+    return [
+      {
+        value: 'CHAMPION',
+        label: '跨类总冠军轮',
+        description: '从各组别金奖中选出 1 款全场总冠军。',
+        fixedTargetCount: 1,
+        fixedTableCount: 1,
+      },
+    ]
+  }
+  return [
+    {
+      value: 'TOP_N',
+      label: '普通排序轮',
+      description: '从晋级池继续筛选，可按现场需要设置排序数量。',
+      defaultTargetCount: 3,
+    },
+    {
+      value: 'MEDALS',
+      label: '组别金银铜轮',
+      description: '每张桌只放同一投递组别，排序出金、银、铜。',
+      fixedTargetCount: 3,
+    },
+  ]
+})
 const canSubmitRankingRound = computed(() => {
   if (!currentRound.value || currentRound.value.type !== 'RANKING') return false
   if (!['IN_PROGRESS', 'DRAFT'].includes(currentRound.value.status)) return false
   return currentRound.value.tables.every((table) => getFilledRankingCount(table) === Number(table.targetCount || 0))
 })
+const currentRoundMetrics = computed(() => buildCurrentRoundMetrics())
+const roundPyramidNodes = computed(() => buildRoundPyramidNodes())
+const currentRoundTableSummaries = computed(() => currentRoundTables.value.map((table) => buildRoundTableSummary(table)))
+const roundTodoHint = computed(() => buildRoundTodoHint())
 const advancedCategoryStats = computed(() => {
   const map = new Map()
   advancedPool.value.forEach((entry) => map.set(entry.categoryName, (map.get(entry.categoryName) || 0) + 1))
@@ -1027,13 +1078,14 @@ const entryAutoAssignStats = computed(() => {
   }
 })
 const roundRestructureText = computed(() => rounds.value.map((round) => `${round.name} ${round.tables.length}桌`).join(' -> '))
-const awardDrafts = computed(() => competition.value?.resultDrafts || [])
+const awardDrafts = computed(() => competition.value?.awardResults || [])
+const canConfirmAwards = computed(() => awardDrafts.value.length > 0 && awardDrafts.value.every((award) => award.beerEntryId))
 const resultPathEntries = computed(() => roundEntryPool.value.filter((entry) => entry.advanced || getEntryAward(entry.uuid)).slice(0, 8))
 const resultChecks = computed(() => [
   { label: '第一轮桌长汇总已完成', done: rounds.value.find((round) => round.roundNo === 1)?.status === 'LOCKED' },
   { label: '后续轮排序已锁定', done: rounds.value.filter((round) => round.type === 'RANKING').every((round) => round.status === 'LOCKED') },
-  { label: '组别奖项无重复', done: awardDrafts.value.every((award) => award.uuid) },
-  { label: '总冠军候选已确认', done: Boolean(getEntryAward(roundEntryPool.value[0]?.uuid) || awardDrafts.value.find((award) => award.slot === '金奖')?.uuid) },
+  { label: '组别奖项已确认', done: awardDrafts.value.some((award) => award.awardType === 'MEDAL') && awardDrafts.value.filter((award) => award.awardType === 'MEDAL').every((award) => ['CONFIRMED', 'PUBLISHED'].includes(award.status)) },
+  { label: '总冠军已确认', done: awardDrafts.value.some((award) => award.awardType === 'CHAMPION' && ['CONFIRMED', 'PUBLISHED'].includes(award.status)) },
 ])
 
 const selectedTable = computed(() => judgeTableForm.find((table) => table.localId === selectedTableLocalId.value))
@@ -1081,7 +1133,7 @@ onMounted(() => {
 })
 watch(() => route.params.id, loadDetail)
 watch(() => route.query.tab, (tab) => {
-  if (tab) activeTab.value = tab
+  if (tab) activeTab.value = tab === 'progress' ? 'rounds' : tab
 })
 watch(entryAutoAssignStats, (stats) => {
   const maxQuantity = Math.max(stats.unassigned, 1)
@@ -1126,6 +1178,8 @@ function normalizeDetail(data) {
     entryPool: data.entryPool || data.entries || [],
     rounds: data.rounds || [],
     resultDrafts: data.resultDrafts || [],
+    awardRules: data.awardRules || [],
+    awardResults: data.awardResults || [],
     editableScopes: data.editableScopes || {},
     entriesSummary: data.entriesSummary || { total: 0, pendingPayment: 0, registered: 0, stored: 0, canceled: 0, resultPublished: 0 },
     progressSummary: data.progressSummary || { finalized: 0, total: 0, advanced: 0, commentWarnings: 0 },
@@ -1312,7 +1366,7 @@ function resolveStagePrimaryAction() {
   if (canCreateNextRound.value) {
     return { text: `创建${nextRoundName.value}`, enabled: true, action: 'createNextRound' }
   }
-  return { text: '查看现场进度', enabled: true, action: 'viewProgress' }
+  return { text: '打开投屏看板', enabled: true, action: 'openLiveDashboard' }
 }
 
 function resolveStageSecondaryActions() {
@@ -1354,7 +1408,7 @@ function buildFutureStageTasks() {
     tasks.push({
       key: `${round.id}-work`,
       label: round.type === 'SCORE' ? `${round.name}评审` : `${round.name}排序`,
-      targetTab: round.type === 'SCORE' ? 'progress' : 'rounds',
+      targetTab: 'rounds',
       roundId: round.id,
       detail: round.type === 'SCORE' ? '评委评分与桌长汇总' : '桌长提交排序后再确认锁定',
       state: round.status === 'LOCKED' ? 'done' : 'pending',
@@ -1435,6 +1489,359 @@ function buildRoundReadinessChecks() {
   return checks
 }
 
+function buildCurrentRoundMetrics() {
+  if (!currentRound.value) {
+    return [
+      { label: '桌数', value: '0' },
+      { label: '酒款', value: '0' },
+      { label: '晋级', value: '-' },
+      { label: '问题', value: '-' },
+    ]
+  }
+  if (currentRound.value.status === 'DRAFT') {
+    return [
+      { label: '桌数', value: currentRoundTables.value.length },
+      { label: '酒款', value: `${currentRoundEntryCount.value} / ${currentPoolEntries.value.length}` },
+      { label: currentRoundTargetLabel.value, value: currentRoundTargetDisplay.value },
+      { label: '问题', value: roundValidationIssues.value.length },
+    ]
+  }
+  if (currentRound.value.status === 'LOCKED') {
+    const unlockedCount = currentRoundTables.value.filter((table) => table.status !== 'LOCKED').length
+    return [
+      { label: '晋级池', value: `${advancedPool.value.length} 款` },
+      { label: '下一轮', value: canCreateNextRound.value ? '可创建' : '待安排' },
+      { label: '未锁定', value: `${unlockedCount} 桌` },
+      { label: '结果', value: resultChecks.value.every((item) => item.done) ? '可发布' : '待确认' },
+    ]
+  }
+  if (currentRound.value.type === 'RANKING') {
+    const filled = currentRoundTables.value.reduce((sum, table) => sum + getFilledRankingCount(table), 0)
+    return [
+      { label: '桌数', value: currentRoundTables.value.length },
+      { label: '候选', value: `${currentRoundEntryCount.value} 款` },
+      { label: '已选择', value: `${filled} / ${currentRoundTargetCount.value}` },
+      { label: '问题', value: roundValidationIssues.value.length },
+    ]
+  }
+  const judgeCounts = currentRoundTables.value.reduce((summary, table) => {
+    const counts = getJudgeProgressCounts(table)
+    summary.done += counts.done
+    summary.total += counts.total
+    return summary
+  }, { done: 0, total: 0 })
+  const captainAverage = getAverageProgress(currentRoundTables.value.map((table) => table.captainProgress))
+  return [
+    { label: '桌数', value: currentRoundTables.value.length },
+    { label: '评委评分', value: `${judgeCounts.done} / ${judgeCounts.total}` },
+    { label: '桌长汇总', value: `${captainAverage}%` },
+    { label: '待处理', value: roundValidationIssues.value.length },
+  ]
+}
+
+function buildRoundPyramidNodes() {
+  const maxRounds = 4
+  const nodes = [{
+    key: 'result',
+    kind: 'result',
+    label: '结果',
+    subtitle: '组别奖项 / 总冠军',
+    statusText: resultChecks.value.every((item) => item.done) ? '可发布' : '待完成',
+    summary: '',
+    note: rounds.value.length ? '待轮次完成' : '完成轮次后进入',
+    placeholderText: '结果',
+    hint: resultChecks.value.some((item) => item.done) ? '确认组别奖项和总冠军。' : '完成全部评审轮次后，再进入结果确认。',
+    tableChips: [],
+    extraTableCount: 0,
+    width: 48,
+    state: resultChecks.value.every((item) => item.done) ? 'done' : 'ghost',
+    active: activeTab.value === 'results',
+    actionable: resultChecks.value.some((item) => item.done) || awardDrafts.value.length > 0,
+  }]
+
+  if (rounds.value.length > 0 && rounds.value.length < maxRounds) {
+    const lastRound = rounds.value[rounds.value.length - 1]
+    nodes.push({
+      key: 'next-round',
+      kind: 'placeholder',
+      label: canCreateNextRound.value ? nextRoundName.value : '下一轮',
+      subtitle: canCreateNextRound.value ? `${advancedPool.value.length} 款晋级酒` : `${lastRound.name}完成后再决定`,
+      statusText: canCreateNextRound.value ? '可创建' : '未创建',
+      summary: canCreateNextRound.value ? `${advancedPool.value.length} 款晋级酒` : '',
+      note: canCreateNextRound.value ? `点击创建${nextRoundName.value}` : '',
+      placeholderText: canCreateNextRound.value ? '创建' : '下一轮',
+      hint: canCreateNextRound.value ? `创建${nextRoundName.value}。` : '比赛轮次不固定，下一轮创建后才会进入路径。',
+      tableChips: [],
+      extraTableCount: 0,
+      width: 58,
+      state: canCreateNextRound.value ? 'create' : 'ghost',
+      active: false,
+      actionable: canCreateNextRound.value,
+    })
+  }
+
+  const maxRoundNo = Math.max(...rounds.value.map((round) => Number(round.roundNo || 1)), 1)
+  rounds.value
+    .slice()
+    .reverse()
+    .forEach((round) => {
+      const tableChips = round.tables.slice(0, 6).map((table) => ({
+        id: table.id,
+        label: table.name,
+        active: round.id === activeRoundId.value && table.id === selectedRoundTableId.value,
+        previewLines: buildPyramidTablePreview(round, table),
+      }))
+      const roundNo = Number(round.roundNo || 1)
+      const width = Math.min(100, 58 + Math.max(maxRoundNo - roundNo, 0) * 13 + (roundNo === 1 ? 14 : 0))
+      nodes.push({
+        key: round.id,
+        kind: 'round',
+        roundId: round.id,
+        label: round.name,
+        subtitle: round.type === 'SCORE' ? '评分制' : '选择排序',
+        statusText: roundStatusLabels[round.status] || round.status,
+        summary: getRoundNodeDetail(round),
+        note: round.id === activeRoundId.value ? '当前轮次' : '',
+        placeholderText: '',
+        hint: getRoundNodeHint(round),
+        tableChips,
+        extraTableCount: Math.max(round.tables.length - tableChips.length, 0),
+        width,
+        state: round.status === 'LOCKED' ? 'done' : round.status === 'DRAFT' ? 'draft' : 'running',
+        active: round.id === activeRoundId.value,
+        actionable: true,
+      })
+    })
+
+  if (!rounds.value.length) {
+    nodes.push({
+      key: 'first-round-empty',
+      kind: 'empty',
+      label: '第一轮',
+      subtitle: '分桌后生成',
+      statusText: '未创建',
+      summary: '',
+      note: '',
+      placeholderText: '第一轮',
+      hint: '先在分桌分配中生成第一轮编排。',
+      tableChips: [],
+      extraTableCount: 0,
+      width: 96,
+      state: 'pending',
+      active: false,
+      actionable: false,
+    })
+  }
+
+  return nodes
+}
+
+function getRoundNodeDetail(round) {
+  const entryCount = countRoundEntries(round)
+  const targetCount = countRoundTarget(round)
+  if (round.type === 'SCORE') return `${entryCount} 款 · 晋级 ${targetCount} 款`
+  return `${entryCount} 款 · 选择 ${targetCount} 款`
+}
+
+function getRoundNodeHint(round) {
+  if (round.type === 'SCORE') return '评委评分，桌长从本桌酒款中选择晋级。'
+  return '桌长从晋级酒款中选择并排序。'
+}
+
+function buildRoundTableSummary(table) {
+  const issues = getRoundTableIssues(table)
+  const captainName = getJudge(table.captainPublicId)?.name || '未指定'
+  const isRankingRound = currentRound.value?.type === 'RANKING'
+  const progress = getRoundTableProgressSummary(currentRound.value, table)
+  const filledCount = isRankingRound ? getFilledRankingCount(table) : 0
+  const statusText = issues[0]
+    || progress.statusText
+  return {
+    id: table.id,
+    name: table.name,
+    entryCount: table.entryUuids.length,
+    captainName,
+    primaryProgressLabel: progress.primaryLabel,
+    primaryProgress: progress.primaryValue,
+    secondaryProgressLabel: progress.secondaryLabel,
+    secondaryProgress: progress.secondaryValue,
+    targetLabel: isRankingRound ? '已选' : '晋级',
+    targetDisplay: isRankingRound ? `${filledCount} / ${table.targetCount}` : `${table.targetCount} 款`,
+    statusText,
+    tone: issues.length ? 'warning' : table.status === 'LOCKED' ? 'done' : 'ok',
+  }
+}
+
+function getRoundTableProgressSummary(round, table) {
+  if (!round) {
+    return {
+      primaryLabel: '评委评分',
+      primaryValue: '-',
+      secondaryLabel: '桌长汇总',
+      secondaryValue: '-',
+      statusText: '未开始',
+    }
+  }
+  if (round.type === 'RANKING') {
+    const filled = getFilledRankingCount(table)
+    const target = Number(table.targetCount || 0)
+    const statusText = filled >= target && target > 0 ? '已完成' : (roundStatusLabels[table.status] || '待排序')
+    return {
+      primaryLabel: '候选',
+      primaryValue: `${table.entryUuids.length} 款`,
+      secondaryLabel: '已选',
+      secondaryValue: `${filled} / ${target}`,
+      statusText,
+    }
+  }
+  const judgeProgress = normalizeProgress(table.judgeProgress)
+  const captainProgress = normalizeProgress(table.captainProgress)
+  const advancedCount = Number(table.advancedCount || 0)
+  const target = Number(table.targetCount || 0)
+  let statusText = roundStatusLabels[table.status] || '已发布'
+  if (table.status === 'LOCKED' || (captainProgress >= 100 && target > 0 && advancedCount >= target)) statusText = '已完成'
+  else if (captainProgress > 0) statusText = '桌长汇总中'
+  else if (judgeProgress >= 100) statusText = '待桌长汇总'
+  else if (judgeProgress > 0) statusText = '评分中'
+  return {
+    primaryLabel: '评委评分',
+    primaryValue: formatJudgeProgress(table),
+    secondaryLabel: '桌长汇总',
+    secondaryValue: captainProgress >= 100 ? '已汇总' : '未汇总',
+    statusText,
+  }
+}
+
+function getJudgeProgressCounts(table) {
+  const judgeCount = Number(table.professionalCount || 0) + Number(table.crossCount || 0)
+  const total = table.entryUuids.length * judgeCount
+  if (!total) return { done: 0, total: 0 }
+  const progress = normalizeProgress(table.judgeProgress)
+  const done = progress >= 100 ? total : Math.min(total, Math.max(0, Math.round(total * progress / 100)))
+  return { done, total }
+}
+
+function formatJudgeProgress(table) {
+  const counts = getJudgeProgressCounts(table)
+  return `${counts.done} / ${counts.total}`
+}
+
+function buildPyramidTablePreview(round, table) {
+  const progress = getRoundTableProgressSummary(round, table)
+  const captainName = getJudge(table.captainPublicId)?.name || '未指定桌长'
+  if (round?.type === 'RANKING') {
+    return [
+      `${table.entryUuids.length} 款 · ${captainName}`,
+      `${progress.secondaryLabel} ${progress.secondaryValue}`,
+      progress.statusText,
+    ]
+  }
+  return [
+    `${table.entryUuids.length} 款 · ${captainName}`,
+    `${progress.primaryLabel} ${progress.primaryValue}`,
+    `${progress.secondaryLabel} ${progress.secondaryValue}`,
+  ]
+}
+
+function normalizeProgress(value) {
+  const number = Number(value || 0)
+  if (!Number.isFinite(number)) return 0
+  return Math.max(0, Math.min(100, Math.round(number)))
+}
+
+function getAverageProgress(values) {
+  const normalized = values.map((value) => normalizeProgress(value))
+  if (!normalized.length) return 0
+  return Math.round(normalized.reduce((sum, value) => sum + value, 0) / normalized.length)
+}
+
+function buildRoundTodoHint() {
+  if (!currentRound.value) {
+    return {
+      tone: 'warning',
+      title: '还没有轮次',
+      detail: '先完成评委分桌，再生成第一轮编排。',
+      action: '',
+    }
+  }
+  if (roundValidationIssues.value.length && currentRound.value.status === 'DRAFT') {
+    return {
+      tone: 'warning',
+      title: '发布前需要处理',
+      detail: roundValidationIssues.value[0],
+      action: '',
+    }
+  }
+  if (currentRound.value.status === 'DRAFT') {
+    return {
+      tone: canPublishCurrentRound.value ? 'ready' : 'warning',
+      title: canPublishCurrentRound.value ? `${currentRound.value.name}可以发布` : '继续完善本轮配置',
+      detail: canPublishCurrentRound.value ? `发布后，${currentRoundPublishTarget.value}会看到本轮任务。` : roundNextStepText.value,
+      action: '',
+    }
+  }
+  if (currentRound.value.status === 'PUBLISHED') {
+    return {
+      tone: 'ready',
+      title: currentRound.value.type === 'SCORE' ? '等待评委评分' : '等待桌长排序',
+      detail: currentRound.value.type === 'SCORE'
+        ? '评委评分完成后，由桌长汇总本轮结果。'
+        : '桌长提交排序后，再确认并锁定本轮结果。',
+      action: 'focusRoundProgress',
+    }
+  }
+  if (currentRound.value.status === 'IN_PROGRESS') {
+    return {
+      tone: 'ready',
+      title: '排序处理中',
+      detail: '等待各桌完成选择和排序。',
+      action: 'focusRoundProgress',
+    }
+  }
+  if (currentRound.value.status === 'SUBMITTED') {
+    return {
+      tone: 'ready',
+      title: '可以确认锁定',
+      detail: '确认本轮结果无误后锁定，锁定后可作为下一步依据。',
+      action: '',
+    }
+  }
+  if (currentRound.value.status === 'LOCKED') {
+    return {
+      tone: canCreateNextRound.value ? 'ready' : 'done',
+      title: `${currentRound.value.name}结果已固定`,
+      detail: canCreateNextRound.value ? `${advancedPool.value.length} 款晋级酒可用于${nextRoundName.value}。` : '可以进入结果确认，或等待后续安排。',
+      action: canCreateNextRound.value ? 'createNextRound' : '',
+    }
+  }
+  return {
+    tone: 'ready',
+    title: '继续推进当前轮次',
+    detail: roundNextStepText.value,
+    action: '',
+  }
+}
+
+function handleRoundPyramidNode(node) {
+  if (node.kind === 'round' && node.roundId) {
+    selectRound(node.roundId)
+    return
+  }
+  if (node.kind === 'placeholder' && node.actionable) {
+    openCreateRoundDialog()
+    return
+  }
+  if (node.kind === 'result' && node.actionable) {
+    activeTab.value = 'results'
+  }
+}
+
+function selectPyramidTable(node, table) {
+  if (node.kind !== 'round' || !node.roundId) return
+  selectRound(node.roundId)
+  selectedRoundTableId.value = table.id
+}
+
 function submitRankingRoundById(roundId) {
   selectRound(roundId)
   submitRankingRound()
@@ -1501,6 +1908,9 @@ function getRoundTableIssues(table) {
   if (!table.entryUuids.length) issues.push(`${table.name}尚未分配酒款`)
   if (!Number(table.targetCount || 0)) issues.push(`${table.name}目标数量不能为空`)
   if (Number(table.targetCount || 0) > table.entryUuids.length) issues.push(`${table.name}目标数量超过酒款数`)
+  if (table.targetMode === 'MEDALS' && Number(table.targetCount || 0) !== 3) issues.push(`${table.name}奖牌轮必须选择 3 款`)
+  if (table.targetMode === 'MEDALS' && table.categoryMode !== 'CATEGORY') issues.push(`${table.name}奖牌轮只能包含一个投递组别`)
+  if (table.targetMode === 'CHAMPION' && Number(table.targetCount || 0) !== 1) issues.push(`${table.name}总冠军轮只能选择 1 款`)
   return issues
 }
 
@@ -1728,6 +2138,7 @@ function openCreateRoundDialog() {
     ElMessage.warning('请先完成并锁定上一轮')
     return
   }
+  resetCreateRoundForm()
   createRoundDialogOpen.value = true
 }
 
@@ -1738,13 +2149,16 @@ function closeCreateRoundDialog() {
 async function finishCreateRound() {
   const lastRound = rounds.value[rounds.value.length - 1]
   if (!lastRound) return
+  const mode = createRoundForm.targetMode
+  const targetCount = mode === 'CHAMPION' ? 1 : mode === 'MEDALS' ? 3 : Math.max(1, Number(createRoundForm.targetCount || 3))
+  const tableCount = mode === 'CHAMPION' ? 1 : Math.max(1, Number(createRoundForm.tableCount || 1))
   const detail = await createNextRound(competition.value.id, {
     sourceRoundId: lastRound.id,
     roundName: nextRoundName.value,
     strategy: 'MANUAL',
-    tableCount: 1,
-    targetMode: 'TOP_N',
-    targetCount: 3,
+    tableCount,
+    targetMode: mode,
+    targetCount,
     captainPublicIds: [],
   })
   competition.value = normalizeDetail(detail)
@@ -1755,6 +2169,18 @@ async function finishCreateRound() {
   selectedEntryUuids.value = []
   createRoundDialogOpen.value = false
   ElMessage.success(`${nextRoundName.value}已创建，请重新分配桌长和酒款`)
+}
+
+function resetCreateRoundForm() {
+  const defaultOption = createRoundTargetOptions.value[0]
+  updateCreateRoundTargetMode(defaultOption?.value || 'TOP_N')
+}
+
+function updateCreateRoundTargetMode(mode) {
+  const option = createRoundTargetOptions.value.find((item) => item.value === mode) || createRoundTargetOptions.value[0]
+  createRoundForm.targetMode = option?.value || 'TOP_N'
+  createRoundForm.targetCount = option?.fixedTargetCount || option?.defaultTargetCount || 3
+  createRoundForm.tableCount = option?.fixedTableCount || createRoundForm.tableCount || 1
 }
 
 function buildEmptyRankings(count, mode = 'TOP3') {
@@ -1822,7 +2248,21 @@ function buildAwardDrafts() {
 }
 
 function getEntryAward(uuid) {
-  return awardDrafts.value.find((award) => award.uuid === uuid)?.slot || ''
+  const entry = roundEntryPool.value.find((item) => item.uuid === uuid)
+  const awards = awardDrafts.value.filter((award) => award.uuid === uuid || (entry && award.beerEntryId === entry.id))
+  return awards.map((award) => award.awardName).filter(Boolean).join(' / ')
+}
+
+function awardEntryOptions(award) {
+  if (award.awardType === 'CHAMPION') {
+    const goldEntryIds = awardDrafts.value
+      .filter((item) => item.awardType === 'MEDAL' && (item.rankNo === 1 || item.awardName === '金奖'))
+      .map((item) => item.beerEntryId)
+      .filter(Boolean)
+    const goldEntries = roundEntryPool.value.filter((entry) => goldEntryIds.includes(entry.id))
+    return goldEntries.length ? goldEntries : roundEntryPool.value.filter((entry) => entry.advanced)
+  }
+  return roundEntryPool.value.filter((entry) => !award.categoryId || entry.categoryId === award.categoryId)
 }
 
 function getEntryPath(uuid) {
@@ -1846,6 +2286,32 @@ async function publishResultsAction() {
   resetForms()
   applyRoundState()
   ElMessage.success('结果已发布')
+}
+
+async function generateAwardsAction() {
+  await generateCompetitionAwards(competition.value.id)
+  await loadDetail()
+  activeTab.value = 'results'
+  ElMessage.success('奖项草稿已生成')
+}
+
+async function confirmAwardsAction() {
+  const awards = awardDrafts.value.map((award) => ({
+    id: award.id,
+    categoryId: award.categoryId,
+    beerEntryId: award.beerEntryId,
+    awardRuleId: award.awardRuleId,
+    awardType: award.awardType,
+    awardName: award.awardName,
+    rankNo: award.rankNo,
+    sourceRoundId: award.sourceRoundId,
+    sourceRoundTableId: award.sourceRoundTableId,
+    sourceResultId: award.sourceResultId,
+  }))
+  await confirmCompetitionAwards(competition.value.id, { awards })
+  await loadDetail()
+  activeTab.value = 'results'
+  ElMessage.success('奖项已确认')
 }
 
 async function confirmEntryPaymentAction(entry) {
@@ -2233,13 +2699,27 @@ async function handleStageAction(action) {
     openCreateRoundDialog()
     return
   }
-  if (action === 'viewProgress') {
-    activeTab.value = 'progress'
+  if (action === 'openLiveDashboard') {
+    openLiveDashboard()
   }
 }
 
 function showPendingStageMessage(actionName) {
   ElMessage.info(`${actionName}暂未开放`)
+}
+
+function openLiveDashboard() {
+  router.push({
+    path: '/admin/live-board',
+    query: competition.value?.id ? { competitionId: competition.value.id } : {},
+  })
+}
+
+function focusRoundProgress() {
+  activeTab.value = 'rounds'
+  requestAnimationFrame(() => {
+    roundProgressSection.value?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  })
 }
 </script>
 
@@ -3683,6 +4163,426 @@ input[type="checkbox"] {
   background: rgba(255, 255, 255, 0.026);
 }
 
+.rounds-panel {
+  align-content: start;
+}
+
+.round-planning-shell {
+  display: grid;
+  grid-template-columns: 388px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  width: min(100%, 1500px);
+}
+
+.round-pyramid-panel,
+.round-current-card,
+.round-table-overview,
+.round-task-hint {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.16);
+}
+
+.round-pyramid-panel {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  padding: 18px;
+}
+
+.round-pyramid-head,
+.round-table-overview header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.round-pyramid-head h2,
+.round-current-card h2,
+.round-table-overview h3,
+.round-task-hint strong,
+.round-current-main p {
+  margin: 0;
+}
+
+.round-pyramid-head h2 {
+  color: var(--text);
+  font-size: 18px;
+}
+
+.round-table-overview header > span {
+  flex: 0 0 auto;
+  padding: 6px 9px;
+  color: var(--gold-soft);
+  font-size: 12px;
+  font-weight: 900;
+  border: 1px solid rgba(216, 169, 53, 0.24);
+  border-radius: 8px;
+  background: rgba(216, 169, 53, 0.08);
+}
+
+.round-pyramid {
+  display: grid;
+  gap: 14px;
+  justify-items: center;
+  padding: 2px 4px 0;
+}
+
+.pyramid-node {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  width: var(--node-width);
+  min-width: 170px;
+  min-height: 54px;
+  padding: 0;
+  color: var(--text);
+  text-align: center;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  cursor: default;
+}
+
+.pyramid-node::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -14px;
+  width: 1px;
+  height: 14px;
+  background: linear-gradient(180deg, rgba(216, 169, 53, 0.28), rgba(219, 232, 237, 0.06));
+}
+
+.pyramid-node:last-child::after {
+  display: none;
+}
+
+.pyramid-node.actionable {
+  cursor: pointer;
+}
+
+.pyramid-node.active {
+  color: var(--gold-soft);
+}
+
+.pyramid-node.done {
+  color: var(--green);
+}
+
+.pyramid-node.create {
+  color: var(--gold-soft);
+}
+
+.pyramid-node.pending,
+.pyramid-node.draft,
+.pyramid-node.ghost {
+  color: var(--muted);
+}
+
+.pyramid-node.ghost {
+  opacity: 0.58;
+}
+
+.pyramid-layer-caption {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  max-width: 100%;
+}
+
+.pyramid-layer-caption strong {
+  min-width: 0;
+  overflow: hidden;
+  color: inherit;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pyramid-layer-caption em {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.pyramid-node small,
+.pyramid-node b,
+.round-current-card small,
+.round-current-main p,
+.round-table-overview small,
+.round-task-hint span {
+  color: var(--muted);
+}
+
+.pyramid-node b {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.pyramid-table-row {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.pyramid-table-row button,
+.pyramid-table-row i,
+.pyramid-placeholder-mark {
+  position: relative;
+  z-index: 1;
+  display: inline-grid;
+  place-items: center;
+  min-width: 52px;
+  max-width: 68px;
+  min-height: 34px;
+  padding: 0 8px;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid rgba(219, 232, 237, 0.14);
+  border-radius: 6px;
+  background: #142024;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
+  font-family: inherit;
+}
+
+.pyramid-table-row button {
+  overflow: visible;
+  cursor: pointer;
+}
+
+.pyramid-table-row button.active {
+  color: var(--gold-soft);
+  border-color: rgba(216, 169, 53, 0.42);
+  background: rgba(216, 169, 53, 0.13);
+}
+
+.pyramid-table-row i {
+  min-width: 46px;
+  color: var(--muted);
+}
+
+.pyramid-placeholder-mark {
+  min-width: 72px;
+  color: var(--muted);
+  border-style: dashed;
+  background: rgba(255, 255, 255, 0.018);
+  box-shadow: none;
+}
+
+button.pyramid-placeholder-mark {
+  color: var(--gold-soft);
+  border-color: rgba(216, 169, 53, 0.34);
+  cursor: pointer;
+}
+
+.pyramid-table-popover {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  z-index: 8;
+  display: none;
+  width: 184px;
+  padding: 10px;
+  color: var(--text);
+  text-align: left;
+  border: 1px solid rgba(219, 232, 237, 0.14);
+  border-radius: 8px;
+  background: rgba(12, 20, 24, 0.98);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.34);
+  transform: translateX(-50%);
+}
+
+.pyramid-table-popover::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  width: 9px;
+  height: 9px;
+  border-right: 1px solid rgba(219, 232, 237, 0.14);
+  border-bottom: 1px solid rgba(219, 232, 237, 0.14);
+  background: rgba(12, 20, 24, 0.98);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.pyramid-table-popover strong,
+.pyramid-table-popover small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pyramid-table-popover strong {
+  margin-bottom: 5px;
+  color: var(--gold-soft);
+  font-size: 13px;
+}
+
+.pyramid-table-popover small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.pyramid-table-row button:hover .pyramid-table-popover,
+.pyramid-table-row button:focus-visible .pyramid-table-popover {
+  display: block;
+}
+
+.round-workspace {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  min-width: 0;
+}
+
+.round-current-card {
+  display: grid;
+  grid-template-columns: minmax(280px, 1.1fr) minmax(420px, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 16px;
+  border-color: rgba(216, 169, 53, 0.28);
+  background: rgba(216, 169, 53, 0.038);
+}
+
+.round-current-main {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.round-current-card h2 {
+  font-size: 24px;
+  line-height: 1.25;
+}
+
+.round-current-card .round-console-metrics {
+  align-self: stretch;
+}
+
+.round-current-card .round-primary-actions {
+  grid-column: 1 / -1;
+}
+
+.round-table-overview {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  padding: 14px;
+}
+
+.round-table-overview h3 {
+  margin-top: 3px;
+  font-size: 18px;
+}
+
+.round-table-list {
+  display: grid;
+  gap: 8px;
+}
+
+.round-table-row {
+  display: grid;
+  grid-template-columns: minmax(72px, 0.55fr) minmax(62px, 0.4fr) minmax(140px, 0.95fr) minmax(118px, 0.8fr) minmax(118px, 0.8fr) minmax(96px, 0.7fr) minmax(110px, 0.75fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 52px;
+  padding: 9px 10px;
+  color: var(--text);
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.022);
+  font: inherit;
+}
+
+.round-table-row.active {
+  border-color: rgba(216, 169, 53, 0.34);
+  background: rgba(216, 169, 53, 0.075);
+}
+
+.round-table-row.warning {
+  color: #f1bd79;
+  border-color: rgba(242, 153, 74, 0.24);
+  background: rgba(242, 153, 74, 0.065);
+}
+
+.round-table-row.done {
+  border-color: rgba(111, 207, 122, 0.22);
+}
+
+.round-table-row span,
+.round-table-row em {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.round-table-row em {
+  justify-self: end;
+  color: inherit;
+  font-weight: 900;
+}
+
+.round-task-hint {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  min-height: 62px;
+  padding: 12px 14px;
+}
+
+.round-task-hint div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.round-task-hint.ready {
+  border-color: rgba(216, 169, 53, 0.24);
+  background: rgba(216, 169, 53, 0.055);
+}
+
+.round-task-hint.warning {
+  border-color: rgba(242, 153, 74, 0.26);
+  background: rgba(242, 153, 74, 0.075);
+}
+
+.round-task-hint.warning strong {
+  color: #f1bd79;
+}
+
+.round-task-hint.done {
+  border-color: rgba(111, 207, 122, 0.24);
+  background: rgba(111, 207, 122, 0.065);
+}
+
+.round-task-hint.done strong {
+  color: var(--green);
+}
+
 .round-console {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 360px;
@@ -4308,6 +5208,14 @@ input[type="checkbox"] {
 }
 
 @media (max-width: 1400px) {
+  .round-planning-shell {
+    grid-template-columns: 350px minmax(0, 1fr);
+  }
+
+  .round-current-card {
+    grid-template-columns: 1fr;
+  }
+
   .round-workbench {
     grid-template-columns: 280px minmax(0, 1fr) 280px;
   }
@@ -4332,6 +5240,8 @@ input[type="checkbox"] {
   .detail-tabbar,
   .two-column,
   .judge-workbench,
+  .round-planning-shell,
+  .round-current-card,
   .round-workbench,
   .round-console,
   .round-table-summary,
@@ -4351,6 +5261,19 @@ input[type="checkbox"] {
 
   .round-flow {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .round-pyramid-panel {
+    min-height: auto;
+  }
+
+  .round-table-row {
+    grid-template-columns: minmax(72px, 0.7fr) minmax(68px, 0.45fr) minmax(130px, 1fr);
+  }
+
+  .round-table-row span:nth-of-type(n + 3),
+  .round-table-row em {
+    grid-column: span 1;
   }
 
   .detail-tabbar {

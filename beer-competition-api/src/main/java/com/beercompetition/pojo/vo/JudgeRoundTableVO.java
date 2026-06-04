@@ -15,6 +15,7 @@ public class JudgeRoundTableVO {
     private String roundType;
     private String tableName;
     private Integer targetCount;
+    private Integer expectedJudgeCount;
     private String targetMode;
     private String status;
     private List<CompetitionEntryVO> entries;

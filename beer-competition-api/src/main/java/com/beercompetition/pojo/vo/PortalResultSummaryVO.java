@@ -16,5 +16,8 @@ public class PortalResultSummaryVO {
     private String status;
     private Boolean published;
     private String lockReason;
+    private String awardName;
+    private String awardType;
+    private Boolean champion;
     private PortalRoundResultVO roundResult;
 }

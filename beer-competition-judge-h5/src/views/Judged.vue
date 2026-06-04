@@ -14,7 +14,7 @@
         <article v-for="score in scores" :key="score.id" class="score-row">
           <div class="split">
             <div>
-              <h2>{{ score.beerUuid }}</h2>
+              <h2>{{ score.shortCode ? `编号： ${score.shortCode}` : '编号' }}</h2>
               <p>{{ score.categoryName }} · {{ score.style }}</p>
             </div>
             <span :class="['pill', score.locked ? 'status-lock' : 'status-warn']">
@@ -39,7 +39,7 @@
 
       <div v-else class="empty">
         <h2 class="section-title">还没有提交评分</h2>
-        <p class="caption">扫码或输入酒款编号后，就可以开始本轮评分。</p>
+        <p class="caption">扫码或输入编号后，就可以开始本轮评分。</p>
         <button class="button primary full" type="button" @click="$router.push('/competitions')">去扫码</button>
       </div>
     </section>
