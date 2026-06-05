@@ -131,6 +131,59 @@ public class AwardServiceImpl implements AwardService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public List<AwardResultVO> generateAwardDraftsForRound(Long competitionId, Long roundId) {
+        // 1) 校验比赛阶段和已锁定排序轮
+        Competition competition = requireCompetition(competitionId);
+        if (!CompetitionStatus.JUDGING.name().equals(competition.getStatus())
+                && !CompetitionStatus.RESULT_CONFIRMING.name().equals(competition.getStatus())) {
+            throw new BaseException("当前比赛阶段不能生成奖项草稿");
+        }
+        ensureDefaultRules(competitionId);
+        if (hasPublishedAwards(competitionId)) {
+            throw new BaseException("结果已发布，不能重新生成奖项");
+        }
+        CompetitionRound round = competitionRoundMapper.selectById(roundId);
+        if (round == null || !competitionId.equals(round.getCompetitionId())) {
+            throw new ResourceNotFoundException("轮次不存在");
+        }
+        if (!RoundType.RANKING.name().equals(round.getRoundType()) || !RoundStatus.LOCKED.name().equals(round.getStatus())) {
+            throw new BaseException("只有已锁定的排序轮可以生成奖项草稿");
+        }
+        List<String> targetModes = resolveRoundTargetModes(roundId);
+        if (targetModes.stream().noneMatch(mode -> RoundTargetMode.MEDALS.name().equals(mode) || RoundTargetMode.CHAMPION.name().equals(mode))) {
+            return listAwardResults(competitionId);
+        }
+
+        // 2) 清理当前轮次旧草稿并写入本轮奖项草稿
+        awardResultMapper.delete(new LambdaQueryWrapper<AwardResult>()
+                .eq(AwardResult::getCompetitionId, competitionId)
+                .eq(AwardResult::getSourceRoundId, roundId)
+                .ne(AwardResult::getStatus, AwardResultStatus.PUBLISHED.name()));
+        List<AwardResult> drafts = new ArrayList<>();
+        if (targetModes.contains(RoundTargetMode.MEDALS.name())) {
+            List<AwardResult> medalDrafts = buildDraftResults(competitionId, round, RoundTargetMode.MEDALS.name());
+            if (medalDrafts.isEmpty()) {
+                throw new BaseException("奖牌轮没有可生成的奖项结果");
+            }
+            validateMedalDraftCompleteness(medalDrafts);
+            drafts.addAll(medalDrafts);
+        }
+        if (targetModes.contains(RoundTargetMode.CHAMPION.name())) {
+            List<AwardResult> championDrafts = buildDraftResults(competitionId, round, RoundTargetMode.CHAMPION.name());
+            if (championDrafts.isEmpty()) {
+                throw new BaseException("总冠军轮没有可生成的奖项结果");
+            }
+            if (championDrafts.stream().noneMatch(result -> Objects.equals(result.getChampionFlag(), FLAG_TRUE))) {
+                throw new BaseException("总冠军轮没有总冠军结果");
+            }
+            drafts.addAll(championDrafts);
+        }
+        drafts.forEach(awardResultMapper::insert);
+        return listAwardResults(competitionId);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public List<AwardResultVO> confirmAwards(Long competitionId, AwardConfirmRequest request) {
         // 1) 校验比赛阶段和奖项结果
         Competition competition = requireCompetition(competitionId);
@@ -460,6 +513,16 @@ public class AwardServiceImpl implements AwardService {
         List<RoundTable> tables = roundTableMapper.selectList(new LambdaQueryWrapper<RoundTable>()
                 .eq(RoundTable::getRoundId, round.getId()));
         return !tables.isEmpty() && tables.stream().anyMatch(table -> targetMode.equals(table.getTargetMode()));
+    }
+
+    private List<String> resolveRoundTargetModes(Long roundId) {
+        return roundTableMapper.selectList(new LambdaQueryWrapper<RoundTable>()
+                        .eq(RoundTable::getRoundId, roundId))
+                .stream()
+                .map(RoundTable::getTargetMode)
+                .filter(StringUtils::hasText)
+                .distinct()
+                .toList();
     }
 
     private List<AwardResultVO> toResultVOs(List<AwardResult> results) {

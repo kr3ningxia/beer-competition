@@ -160,11 +160,7 @@
       </section>
     </template>
 
-    <nav class="bottom-nav" style="grid-template-columns: repeat(3, minmax(0, 1fr));">
-      <router-link class="nav-item" to="/competitions">扫码</router-link>
-      <router-link class="nav-item" to="/captain">本桌</router-link>
-      <router-link class="nav-item" to="/profile">我的</router-link>
-    </nav>
+    <JudgeBottomNav :role="me?.role || 'CAPTAIN'" />
   </main>
 </template>
 
@@ -178,6 +174,7 @@ import {
   fetchTableScores,
   finalizeTableScore,
 } from '@/api/judge'
+import JudgeBottomNav from '@/components/JudgeBottomNav.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -240,9 +237,9 @@ const captainSummaryBadges = computed(() => {
 })
 const tableCheckText = computed(() => {
   if (!boardEntries.value.length) return '请联系现场工作人员确认本轮评审桌和酒款配置。'
-  if (tableReadyForReview.value) return '所有酒款已完成桌长意见，晋级数量符合本桌目标。'
-  if (captainSummaryState.value === 'advance-check') return '桌长意见已完成，请确认晋级数量后再提交本桌结果。'
-  if (captainSummaryState.value === 'ready-finalize') return '同桌评分已齐，可以填写桌长意见。'
+  if (tableReadyForReview.value) return '酒款意见和晋级名单已齐，请核对无误后提交本桌结果。'
+  if (captainSummaryState.value === 'advance-check') return '酒款意见已完成，还需按本桌目标确认晋级名单。'
+  if (captainSummaryState.value === 'ready-finalize') return '同桌评分已齐，可填写桌长意见。'
   if (captainSummaryState.value === 'need-score') return '先扫码完成自己的评分；同桌评分齐全后，再填写桌长意见。'
   return '你的评分已完成，等同桌提交后再填写桌长意见。'
 })
@@ -253,7 +250,8 @@ const nextActionEntry = computed(() => (
   || boardEntries.value[0]
 ))
 const captainSummaryActionLabel = computed(() => {
-  if (captainSummaryState.value === 'ready-review' || captainSummaryState.value === 'advance-check') return '核对晋级名单'
+  if (captainSummaryState.value === 'ready-review') return '核对本桌结果'
+  if (captainSummaryState.value === 'advance-check') return '核对晋级名单'
   if (captainSummaryState.value === 'ready-finalize') return '处理可汇总酒款'
   if (captainSummaryState.value === 'need-score') return '去扫码评分'
   if (captainSummaryState.value === 'waiting-peer') return '查看评分进度'

@@ -1,65 +1,67 @@
 <template>
-  <main class="app-shell">
-    <section class="top-panel scan-hero">
-      <div class="hero-topline">
-        <button class="back-link" type="button" @click="$router.push('/competitions')">返回扫码</button>
-        <span :class="['hero-status', entry?.locked ? 'locked' : 'active']">
-          {{ entry?.locked ? '本桌已确认' : actionLabel }}
-        </span>
+  <main class="app-shell scan-result-page">
+    <section class="scan-hero">
+      <div class="hero-back-row">
+        <button class="hero-back" type="button" @click="$router.push('/competitions')">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M15 18 9 12l6-6" />
+          </svg>
+          <span>返回扫码</span>
+        </button>
       </div>
-      <p class="eyebrow">{{ entry?.competitionName || '酒款信息' }}</p>
-      <div class="code-lockup">
-        <span>编号</span>
-        <strong>{{ shortCodeText(entry) }}</strong>
-      </div>
-      <p v-if="actionHint" class="hero-hint">{{ actionHint }}</p>
-      <div v-if="entry" class="hero-meta">
-        <span>{{ entry.roundName || '未发布轮次' }}</span>
-        <span>{{ entry.tableName || '未分桌' }}</span>
-        <span v-if="entry.scored">我的评分已提交</span>
+
+      <div class="hero-identity">
+        <div class="hero-copy">
+          <p>{{ entry?.competitionName || '酒款信息' }}</p>
+          <div class="code-lockup">
+            <span>编号：</span>
+            <strong>{{ shortCodeText(entry) }}</strong>
+          </div>
+        </div>
+        <div v-if="entry" class="hero-actions">
+          <div class="hero-metrics" aria-label="评审信息">
+            <span>{{ entry.roundName || '-' }}</span>
+            <span>{{ entry.tableName || '-' }}</span>
+          </div>
+        </div>
       </div>
     </section>
 
-    <section v-if="entry" class="card info-card">
-      <div class="card-head">
-        <div>
-          <h2 class="section-title compact">酒款信息</h2>
-        </div>
-        <span :class="['pill', entry.locked ? 'status-lock' : entry.scored ? 'status-ok' : 'status-warn']">
-          {{ entry.locked ? '已锁定' : entry.scored ? '可修改' : '待评分' }}
-        </span>
-      </div>
+    <div v-if="entry" class="scan-content">
+      <section class="card scan-card style-card">
+        <h2 class="scan-section-title">风格信息</h2>
 
-      <dl class="review-grid">
-        <div>
-          <dt>当前轮次</dt>
-          <dd>{{ entry.roundName || '-' }}</dd>
-        </div>
-        <div>
-          <dt>评审桌</dt>
-          <dd>{{ entry.tableName || '-' }}</dd>
-        </div>
-        <div>
-          <dt>投递组别</dt>
-          <dd>{{ entry.categoryName || '-' }}</dd>
-        </div>
-        <div>
-          <dt>ABV</dt>
-          <dd>{{ entry.abv || '-' }}</dd>
-        </div>
-        <div class="wide">
-          <dt>基础风格</dt>
-          <dd>{{ styleDisplayName(entry) || '-' }}</dd>
-        </div>
-      </dl>
+        <dl class="style-summary">
+          <div>
+            <dt>投递组别</dt>
+            <dd>{{ entry.categoryName || '-' }}</dd>
+          </div>
+          <div>
+            <dt>基础风格</dt>
+            <dd>{{ styleDisplayName(entry) || '-' }}</dd>
+          </div>
+          <div>
+            <dt>ABV</dt>
+            <dd class="abv-value">{{ abvText(entry) }}</dd>
+          </div>
+        </dl>
 
-      <section class="description">
-        <h2 class="section-title">酒款简介</h2>
-        <p>{{ entry.description }}</p>
+        <div class="style-category-row">
+          <span>风格分类</span>
+          <strong>{{ styleCategoryText(entry) }}</strong>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m9 18 6-6-6-6" />
+          </svg>
+        </div>
       </section>
 
-      <section v-if="entry.extraFields?.length" class="extra-fields">
-        <h2 class="section-title">补充信息</h2>
+      <section v-if="entry.description" class="card scan-card">
+        <h2 class="scan-section-title">酒款简介</h2>
+        <p class="description-text">{{ entry.description }}</p>
+      </section>
+
+      <section v-if="entry.extraFields?.length" class="card scan-card">
+        <h2 class="scan-section-title">补充信息</h2>
         <div class="extra-list">
           <div v-for="field in entry.extraFields" :key="field.key" class="extra-row">
             <span>{{ field.label }}</span>
@@ -67,52 +69,55 @@
           </div>
         </div>
       </section>
+
+      <div v-if="(!entry.locked && entry.canScore) || entry?.action === 'RANKING'" class="primary-action">
+        <button
+          v-if="!entry.locked && entry.canScore"
+          class="button primary full"
+          type="button"
+          @click="$router.push(`/score/${entry.uuid}`)"
+        >
+          <span>{{ entry.scored ? '修改我的专业评分' : scoreButtonLabel }}</span>
+        </button>
+        <button
+          v-if="entry?.action === 'RANKING'"
+          class="button primary full"
+          type="button"
+          @click="$router.push(`/ranking/${entry.roundTableId}`)"
+        >
+          进入本轮排序
+        </button>
+      </div>
+
+      <div :class="['secondary-actions', { single: entry?.action !== 'CAPTAIN' }]">
+        <button
+          v-if="entry?.action === 'CAPTAIN'"
+          class="button secondary quiet full"
+          type="button"
+          @click="$router.push(`/captain/${entry.uuid}`)"
+        >
+          查看本桌评分
+        </button>
+        <button class="button secondary quiet full" type="button" @click="$router.push('/competitions')">
+          继续扫码
+        </button>
+      </div>
+    </div>
+
+    <section v-else-if="loading" class="card scan-card empty-card">
+      <h2 class="scan-section-title">正在读取酒款</h2>
+      <p class="caption">请稍候。</p>
     </section>
 
-    <section v-else class="card empty-card">
-      <h2 class="section-title">没有找到这款酒</h2>
+    <section v-else class="card scan-card empty-card">
+      <h2 class="scan-section-title">没有找到这款酒</h2>
       <p class="caption">请确认编号是否完整，或联系现场工作人员。</p>
       <button class="button secondary full retry-button" type="button" @click="$router.push('/competitions')">
         返回扫码
       </button>
     </section>
 
-    <div v-if="entry" class="sticky-actions">
-      <button
-        v-if="entry.canScore"
-        class="button primary full"
-        type="button"
-        :disabled="entry.locked"
-        @click="$router.push(`/score/${entry.uuid}`)"
-      >
-        {{ entry.locked ? '本桌结果已确认' : entry.scored ? '修改我的专业评分' : scoreButtonLabel }}
-      </button>
-      <button
-        v-if="entry.action === 'CAPTAIN'"
-        class="button secondary full"
-        type="button"
-        @click="$router.push(`/captain/${entry.uuid}`)"
-      >
-        查看本桌评分
-      </button>
-      <button
-        v-if="entry.action === 'RANKING'"
-        class="button primary full"
-        type="button"
-        @click="$router.push(`/ranking/${entry.roundTableId}`)"
-      >
-        进入本轮排序
-      </button>
-      <button class="button secondary full" type="button" @click="$router.push('/competitions')">
-        继续扫码
-      </button>
-    </div>
-
-    <nav class="bottom-nav" :style="{ gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))` }">
-      <router-link v-for="item in navItems" :key="item.to" class="nav-item" :to="item.to">
-        {{ item.label }}
-      </router-link>
-    </nav>
+    <JudgeBottomNav :role="me?.role" :active="scanResultActiveNav" />
   </main>
 </template>
 
@@ -120,36 +125,19 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { fetchEntry, fetchMe, resolveScanEntry } from '@/api/judge'
+import JudgeBottomNav from '@/components/JudgeBottomNav.vue'
 
 const route = useRoute()
 const code = computed(() => String(route.params.code || route.params.uuid || '').toUpperCase())
 const resolvingScan = computed(() => Boolean(route.params.code))
 const entry = ref(null)
 const me = ref(null)
-const actionLabel = computed(() => {
-  if (entry.value?.action === 'CAPTAIN') return '桌长汇总'
-  if (entry.value?.action === 'RANKING') return '本轮排序'
-  return entry.value?.scored ? '可修改评分' : '可评分'
-})
-const actionHint = computed(() => {
-  if (!entry.value) return '正在读取扫码信息，请稍候。'
-  if (entry.value.locked) return '本桌结果已经确认，评分内容仅供查看。'
-  if (entry.value.action === 'CAPTAIN') return ''
-  if (entry.value.action === 'RANKING') return '本轮需要从候选酒款中完成排序。'
-  return entry.value.scored ? '你已经提交过本款评分，需要时可以继续修改。' : '请先核对酒款信息，再填写本人的评分。'
-})
+const loading = ref(true)
 const scoreButtonLabel = computed(() => (
   me.value?.role === 'CAPTAIN' ? '填写我的专业评分' : '开始评分'
 ))
 
-const navItems = computed(() => {
-  const items = [
-    { label: '扫码', to: '/competitions' },
-  ]
-  if (me.value?.role === 'CAPTAIN') items.push({ label: '本桌', to: '/captain' })
-  items.push({ label: '我的', to: '/profile' })
-  return items
-})
+const scanResultActiveNav = computed(() => (me.value?.role === 'CAPTAIN' ? 'table' : 'scan'))
 
 onMounted(async () => {
   me.value = await fetchMe()
@@ -157,6 +145,8 @@ onMounted(async () => {
     entry.value = resolvingScan.value ? await resolveScanEntry(code.value) : await fetchEntry(code.value)
   } catch {
     entry.value = null
+  } finally {
+    loading.value = false
   }
 })
 
@@ -164,254 +154,445 @@ function styleDisplayName(source) {
   return [source?.styleCode, source?.style].filter(Boolean).join(' ')
 }
 
+function styleCategoryText(source) {
+  return source?.styleCategoryName || source?.categoryName || '-'
+}
+
+function abvText(source) {
+  if (source?.abv === null || source?.abv === undefined || source?.abv === '') return '-'
+  const value = String(source.abv)
+  return value.includes('%') ? value : `${value}%`
+}
+
 function shortCodeText(source) {
   return source?.shortCode || '读取中'
 }
+
 </script>
 
 <style scoped>
+.scan-result-page {
+  width: min(100%, 568px);
+  padding: 0 0 68px;
+  background: #f7f6f2;
+}
+
+.scan-result-page > * + * {
+  margin-top: 0;
+}
+
 .scan-hero {
-  overflow: hidden;
-  padding: 16px 18px 18px;
+  min-height: 176px;
+  padding: 24px 24px 22px;
+  color: #fff;
+  background: #3a4737;
 }
 
-.scan-hero::after {
-  content: "";
-  display: block;
-  height: 1px;
-  margin: 16px -18px -18px;
-  background: linear-gradient(90deg, rgba(241, 174, 103, 0.58), rgba(255, 255, 255, 0));
-}
-
-.hero-topline {
+.hero-back-row {
   display: flex;
-  gap: 10px;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 14px;
+  min-height: 28px;
 }
 
-.back-link {
+.hero-back {
+  display: inline-flex;
+  align-items: center;
   border: 0;
-  margin: 0;
-  padding: 0;
-  color: rgba(255, 255, 255, 0.74);
-  background: transparent;
-  font-weight: 750;
 }
 
-.hero-status {
-  flex: 0 0 auto;
-  border-radius: 999px;
-  padding: 5px 10px;
-  font-size: 12px;
+.hero-back {
+  gap: 9px;
+  padding: 0;
+  color: #f4f7f0;
+  background: transparent;
+  font-size: 20px;
   font-weight: 850;
 }
 
-.hero-status.active {
-  color: #d7f7e6;
-  background: rgba(6, 118, 71, 0.28);
+.hero-back svg {
+  width: 27px;
+  height: 27px;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
-.hero-status.locked {
-  color: #e4e7ec;
-  background: rgba(255, 255, 255, 0.12);
+.hero-identity {
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-top: 18px;
+}
+
+.hero-copy {
+  min-width: 0;
+  padding-top: 4px;
+}
+
+.hero-copy p {
+  margin: 0 0 10px;
+  color: rgba(239, 244, 235, 0.78);
+  font-size: 16px;
+  line-height: 1.25;
 }
 
 .code-lockup {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 10px;
+  display: flex;
   align-items: baseline;
-  margin-top: 10px;
+  min-width: 0;
 }
 
 .code-lockup span {
-  color: rgba(248, 250, 252, 0.68);
-  font-size: 14px;
-  font-weight: 750;
+  flex: 0 0 auto;
+  color: rgba(245, 247, 241, 0.82);
+  font-size: 18px;
+  font-weight: 850;
 }
 
 .code-lockup strong {
+  min-width: 0;
   overflow-wrap: anywhere;
   color: #fff;
   font-size: 34px;
   font-weight: 900;
-  line-height: 1;
+  line-height: 0.95;
 }
 
-.hero-hint {
-  max-width: 34em;
-  margin: 12px 0 0;
-  color: rgba(248, 250, 252, 0.78);
-  font-size: 13px;
-  line-height: 1.55;
+.hero-actions {
+  display: grid;
+  flex: 0 0 auto;
+  justify-items: end;
 }
 
-.hero-meta {
+.hero-metrics {
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
-  margin-top: 13px;
-}
-
-.hero-meta span {
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 999px;
-  padding: 4px 9px;
-  color: rgba(248, 250, 252, 0.82);
-  background: rgba(255, 255, 255, 0.075);
-  font-size: 12px;
-  font-weight: 750;
-}
-
-.info-card {
-  display: grid;
-  gap: 16px;
-  margin-top: 12px;
-}
-
-.card-head {
-  display: flex;
-  gap: 12px;
-  justify-content: space-between;
-  align-items: flex-start;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #edf0ee;
-}
-
-.card-head > div {
-  min-width: 0;
-}
-
-.card-head p {
-  margin: 4px 0 0;
-  color: #667085;
-  font-size: 13px;
-  line-height: 1.45;
-}
-
-.card-head .pill {
-  flex: 0 0 auto;
-}
-
-.compact {
-  margin-bottom: 0;
-}
-
-.review-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  justify-content: flex-end;
   gap: 8px;
+  max-width: 188px;
+}
+
+.hero-metrics span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  max-width: 88px;
+  border-radius: 999px;
+  padding: 6px 12px;
+  color: rgba(255, 255, 255, 0.96);
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.scan-content {
+  display: grid;
+  gap: 22px;
+  padding: 28px 24px 0;
+}
+
+.scan-card {
+  border: 1px solid rgba(30, 34, 27, 0.1);
+  border-radius: 22px;
+  padding: 24px 22px;
+  background: #fff;
+  box-shadow: 0 2px 9px rgba(45, 45, 38, 0.14);
+}
+
+.scan-section-title {
+  position: relative;
+  margin: 0 0 17px;
+  padding-left: 17px;
+  color: #07111f;
+  font-size: 21px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.scan-section-title::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  bottom: 1px;
+  left: 0;
+  width: 5px;
+  border-radius: 999px;
+  background: #d17932;
+}
+
+.style-summary {
+  display: grid;
+  grid-template-columns: 0.8fr 1.25fr 0.55fr;
+  gap: 22px;
   margin: 0;
 }
 
-.review-grid div {
+.style-summary div {
   min-width: 0;
-  border: 1px solid #eef1ef;
-  border-radius: 8px;
-  padding: 11px 10px;
-  background: #f8faf8;
-}
-
-.review-grid .wide {
-  grid-column: 1 / -1;
-  background: #fffaf3;
-  border-color: #f4dfc6;
 }
 
 dt {
-  margin: 0;
-  color: #667085;
-  font-size: 12px;
-  font-weight: 700;
+  margin: 0 0 7px;
+  color: #5f6873;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.25;
 }
 
 dd {
-  margin: 6px 0 0;
-  color: #18222f;
-  font-size: 16px;
-  font-weight: 850;
-  line-height: 1.35;
+  margin: 0;
+  color: #020817;
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1.32;
   overflow-wrap: anywhere;
 }
 
-.description,
-.extra-fields {
-  margin-top: 0;
+.abv-value {
+  color: #d17932;
 }
 
-.description p {
+.style-category-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+  margin: 25px -22px -24px;
+  border-top: 1px solid #e6e1db;
+  padding: 18px 22px 19px;
+}
+
+.style-category-row span {
+  color: #5f6873;
+  font-size: 16px;
+}
+
+.style-category-row strong {
+  min-width: 0;
+  color: #020817;
+  font-size: 19px;
+  font-weight: 900;
+  line-height: 1.25;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.style-category-row svg {
+  width: 21px;
+  height: 21px;
+  stroke: #5d5d57;
+  stroke-width: 2.2;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.description-text {
   margin: 0;
-  color: #344054;
-  line-height: 1.7;
+  color: #4b5563;
+  font-size: 19px;
+  line-height: 1.75;
 }
 
 .extra-list {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .extra-row {
   display: grid;
-  gap: 6px;
-  border: 1px solid #eef1ef;
-  border-radius: 8px;
-  padding: 10px 11px;
-  background: #fbfcfb;
+  gap: 7px;
+  border-radius: 18px;
+  padding: 16px 17px;
+  background: #f8f7f5;
 }
 
 .extra-row span {
-  color: #667085;
-  font-size: 13px;
+  color: #6b7280;
+  font-size: 16px;
+  line-height: 1.25;
 }
 
 .extra-row strong {
-  color: #18222f;
+  color: #020817;
+  font-size: 18px;
+  font-weight: 900;
   line-height: 1.45;
 }
 
+.primary-action {
+  display: grid;
+  margin-top: 2px;
+}
+
+.primary-action .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 64px;
+  border-radius: 16px;
+  background: #d17932;
+  font-size: 19px;
+  font-weight: 900;
+}
+
+.secondary-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: -2px;
+}
+
+.secondary-actions.single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.secondary-actions .button {
+  min-height: 50px;
+  border: 1px solid rgba(30, 34, 27, 0.13);
+  border-radius: 13px;
+  color: #161515;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(45, 45, 38, 0.1);
+  font-size: 16px;
+  font-weight: 850;
+}
+
 .empty-card {
-  margin-top: 12px;
+  margin: 28px 24px 0;
 }
 
 .retry-button {
-  margin-top: 14px;
+  margin-top: 16px;
 }
 
-.sticky-actions {
-  position: sticky;
-  bottom: 72px;
-  display: grid;
-  gap: 9px;
-  margin-top: 12px;
-  padding: 12px;
-  border: 1px solid rgba(24, 34, 47, 0.1);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 12px 30px rgba(24, 34, 47, 0.12);
-  backdrop-filter: blur(14px);
-}
-
-@media (max-width: 360px) {
+@media (max-width: 420px) {
   .scan-hero {
-    padding-inline: 16px;
+    min-height: 164px;
+    padding: 22px 19px 18px;
+  }
+
+  .hero-back {
+    font-size: 19px;
+  }
+
+  .hero-identity {
+    align-items: flex-start;
+    margin-top: 16px;
+  }
+
+  .hero-copy p {
+    font-size: 15px;
+  }
+
+  .code-lockup span {
+    font-size: 17px;
   }
 
   .code-lockup strong {
-    font-size: 30px;
+    font-size: 32px;
   }
 
-  .card-head {
-    display: grid;
+  .hero-metrics {
+    gap: 6px;
+    max-width: 166px;
   }
 
-  .review-grid {
+  .hero-metrics span {
+    min-height: 28px;
+    max-width: 78px;
+    padding: 5px 10px;
+    font-size: 13px;
+  }
+
+  .scan-content {
+    gap: 22px;
+    padding: 22px 18px 0;
+  }
+
+  .scan-card {
+    border-radius: 18px;
+    padding: 20px 16px;
+  }
+
+  .scan-section-title {
+    font-size: 18px;
+  }
+
+  .style-summary {
+    grid-template-columns: 0.85fr 1.15fr 0.5fr;
+    gap: 15px;
+  }
+
+  dt {
+    font-size: 13px;
+  }
+
+  dd {
+    font-size: 15px;
+  }
+
+  .style-category-row {
+    margin: 22px -16px -20px;
+    padding: 16px;
+  }
+
+  .style-category-row span {
+    font-size: 14px;
+  }
+
+  .style-category-row strong {
+    font-size: 16px;
+  }
+
+  .description-text {
+    font-size: 16px;
+  }
+
+  .extra-row {
+    border-radius: 14px;
+    padding: 14px 15px;
+  }
+
+  .extra-row span {
+    font-size: 14px;
+  }
+
+  .extra-row strong {
+    font-size: 16px;
+  }
+
+  .primary-action .button {
+    min-height: 54px;
+    border-radius: 14px;
+    font-size: 17px;
+  }
+
+  .secondary-actions .button {
+    min-height: 50px;
+    font-size: 15px;
+  }
+
+  .empty-card {
+    margin-inline: 18px;
+  }
+
+}
+
+@media (max-width: 340px) {
+  .style-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .secondary-actions {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .review-grid .wide {
-    grid-column: auto;
   }
 }
 </style>

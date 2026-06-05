@@ -14,6 +14,8 @@ public interface AwardService {
 
     List<AwardResultVO> generateAwardDrafts(Long competitionId);
 
+    List<AwardResultVO> generateAwardDraftsForRound(Long competitionId, Long roundId);
+
     List<AwardResultVO> confirmAwards(Long competitionId, AwardConfirmRequest request);
 
     void publishAwards(Long competitionId);

@@ -14,7 +14,7 @@
     <div class="round-summary-strip">
       <span>候选 <strong>{{ candidateCount }}</strong></span>
       <span>桌数 <strong>{{ currentRoundTables.length }}</strong></span>
-      <span>排序目标 <strong>{{ targetCount }}</strong></span>
+      <span>{{ targetSummaryLabel }} <strong>{{ targetCount }}</strong></span>
       <span>已选择 <strong>{{ filledCount }}</strong></span>
       <span>状态 <strong>{{ statusText }}</strong></span>
     </div>
@@ -100,7 +100,9 @@
 
       <RoundCheckPanel
         title="后续轮发布检查"
-        target-label="排序目标"
+        :target-label="selectedTableTargetLabel"
+        :target-hint="selectedTableTargetHint"
+        :target-fixed="selectedTableTargetFixed"
         success-text="本轮可以发布给桌长。"
         :selected-round-table="selectedRoundTable"
         :captain-candidates="captainCandidates"
@@ -171,6 +173,15 @@ const candidateCount = computed(() => new Set(props.currentRoundTables.flatMap((
 const targetCount = computed(() => props.currentRoundTables.reduce((sum, table) => sum + Number(table.targetCount || 0), 0))
 const filledCount = computed(() => props.currentRoundTables.reduce((sum, table) => sum + props.getFilledRankingCount(table), 0))
 const statusText = computed(() => props.roundStatusLabels[props.currentRound?.status] || props.currentRound?.status || '-')
+const targetSummaryLabel = computed(() => {
+  const modes = new Set(props.currentRoundTables.map((table) => table.targetMode).filter(Boolean))
+  if (modes.size === 1 && modes.has('MEDALS')) return '奖项槽位'
+  if (modes.size === 1 && modes.has('CHAMPION')) return '总冠军名额'
+  return '晋级数量'
+})
+const selectedTableTargetLabel = computed(() => targetCountLabel(props.selectedRoundTable))
+const selectedTableTargetHint = computed(() => targetCountHint(props.selectedRoundTable))
+const selectedTableTargetFixed = computed(() => isTargetCountFixed(props.selectedRoundTable))
 const mainActionText = computed(() => {
   if (props.currentRound?.status === 'SUBMITTED') return '确认排序并锁定'
   if (props.currentRound?.status === 'LOCKED') return '已锁定'
@@ -183,6 +194,22 @@ const mainActionEnabled = computed(() => {
 
 function tableStatusLabel(status) {
   return props.roundStatusLabels[status] || status
+}
+
+function targetCountLabel(table) {
+  if (table?.targetMode === 'MEDALS') return '奖项槽位'
+  if (table?.targetMode === 'CHAMPION') return '总冠军名额'
+  return '每桌晋级数量'
+}
+
+function targetCountHint(table) {
+  if (table?.targetMode === 'MEDALS') return '固定为金奖、银奖、铜奖 3 个槽位。'
+  if (table?.targetMode === 'CHAMPION') return '固定为 1 个总冠军名额。'
+  return '桌长需要提交并排序的晋级酒款数量。'
+}
+
+function isTargetCountFixed(table) {
+  return table?.targetMode === 'MEDALS' || table?.targetMode === 'CHAMPION'
 }
 </script>
 

@@ -37,31 +37,19 @@
       <button class="button danger full" type="button" @click="logout">退出登录</button>
     </section>
 
-    <nav class="bottom-nav" :style="{ gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))` }">
-      <router-link v-for="item in navItems" :key="item.to" class="nav-item" :to="item.to">
-        {{ item.label }}
-      </router-link>
-    </nav>
+    <JudgeBottomNav :role="me?.role" />
   </main>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { fetchMe } from '@/api/judge'
+import JudgeBottomNav from '@/components/JudgeBottomNav.vue'
 import { clearSession } from '@/utils/auth'
 
 const router = useRouter()
 const me = ref(null)
-
-const navItems = computed(() => {
-  const items = [
-    { label: '扫码', to: '/competitions' },
-  ]
-  if (me.value?.role === 'CAPTAIN') items.push({ label: '本桌', to: '/captain' })
-  items.push({ label: '我的', to: '/profile' })
-  return items
-})
 
 function logout() {
   clearSession()

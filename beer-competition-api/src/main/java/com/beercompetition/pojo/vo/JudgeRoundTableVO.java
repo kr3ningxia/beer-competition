@@ -18,6 +18,7 @@ public class JudgeRoundTableVO {
     private Integer expectedJudgeCount;
     private String targetMode;
     private String status;
+    private Boolean canSubmitRanking;
     private List<CompetitionEntryVO> entries;
     private List<RoundRankingSlotVO> rankings;
 }

@@ -225,25 +225,46 @@ select:focus-visible {
   z-index: 20;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  width: min(100%, 520px);
+  width: min(100%, 568px);
+  min-height: 60px;
   margin: 0 auto;
   border-top: 1px solid rgba(24, 34, 47, 0.12);
-  background: rgba(255, 255, 255, 0.96);
+  background: rgba(255, 255, 255, 0.98);
   backdrop-filter: blur(12px);
 }
 
 .nav-item {
   display: grid;
+  grid-template-rows: 22px 17px;
+  gap: 2px;
   place-items: center;
-  min-height: 62px;
-  color: #667085;
+  align-content: center;
+  min-height: 60px;
+  color: #6f6b66;
   text-decoration: none;
   font-size: 13px;
-  font-weight: 750;
+  font-weight: 500;
+  line-height: 1.15;
 }
 
-.nav-item.router-link-active {
-  color: #a75517;
+.nav-item svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  stroke-width: 2.1;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.nav-item span {
+  display: block;
+}
+
+.nav-item.router-link-active,
+.nav-item.is-active {
+  color: #d17932;
+  font-weight: 850;
 }
 
 .stack {

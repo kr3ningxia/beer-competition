@@ -30,6 +30,8 @@ public interface RoundService {
 
     void createNextRound(Long competitionId, NextRoundCreateRequest request);
 
+    void syncRoundCandidates(Long competitionId, Long roundId);
+
     void lockRound(Long competitionId, Long roundId);
 
     void publishResults(Long competitionId);

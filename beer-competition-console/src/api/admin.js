@@ -124,6 +124,10 @@ export function createNextRound(competitionId, payload) {
   return request.post(`/api/admin/competitions/${competitionId}/rounds/next`, payload, { authScope: 'admin' })
 }
 
+export function syncRoundCandidates(competitionId, roundId) {
+  return request.post(`/api/admin/competitions/${competitionId}/rounds/${roundId}/sync-candidates`, {}, { authScope: 'admin' })
+}
+
 export function lockRound(competitionId, roundId) {
   return request.post(`/api/admin/competitions/${competitionId}/rounds/${roundId}/lock`, {}, { authScope: 'admin' })
 }

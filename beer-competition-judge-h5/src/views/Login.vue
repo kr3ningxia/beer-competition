@@ -3,7 +3,6 @@
     <section class="login-card">
       <p class="eyebrow dark-text">啤酒大赛现场评审</p>
       <h1>评审登录</h1>
-      <p class="login-note">已提交资料的评审可用手机号验证码进入。</p>
 
       <label class="field">
         手机号
@@ -90,16 +89,24 @@ h1 {
   letter-spacing: 0;
 }
 
-.login-note {
-  margin: 8px 0 18px;
-  color: #667085;
-  line-height: 1.5;
-}
-
 .code-row {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) max-content;
   gap: 8px;
+  margin-top: 8px;
+}
+
+.code-row .input {
+  min-width: 0;
+  margin-top: 0;
+}
+
+.code-row .button {
+  white-space: nowrap;
+}
+
+.login-card > .button.full {
+  margin-top: 10px;
 }
 
 .form-message {

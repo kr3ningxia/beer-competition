@@ -1,8 +1,10 @@
 <template>
   <main class="app-shell score-shell">
-    <section class="top-panel score-top">
-      <button class="back-link" type="button" @click="$router.push(`/scan-result/${uuid}`)">返回酒款</button>
-      <p class="eyebrow">{{ scoreRoleLabel }}评分表</p>
+    <section class="score-top">
+      <button class="back-link" type="button" @click="$router.push(`/scan-result/${uuid}`)">
+        <span class="back-icon" aria-hidden="true"></span>
+        <span>返回酒款</span>
+      </button>
       <div class="score-meta-strip">
         <div class="code-panel">
           <span>编号</span>
@@ -13,18 +15,20 @@
           <strong class="sub-score">{{ notesLength }} / {{ minNoteLength }}</strong>
         </div>
       </div>
-      <p class="score-brief">分数需填写整数；备注合计达到要求后可提交。</p>
     </section>
 
-    <div class="score-scroll-wrap">
-      <div class="score-scroll">
-        <section v-if="entry && config" class="card">
+    <div class="score-content">
+      <section v-if="entry && config" class="score-form">
+        <div class="entry-info">
           <div class="entry-summary">
             <div>
-              <span>{{ entry.categoryName }}</span>
-              <strong>{{ styleDisplayName(entry) }} · {{ entry.abv }}</strong>
+              <span>投递组别：{{ entry.categoryName }}</span>
+              <strong>{{ styleDisplayName(entry) }}</strong>
             </div>
-            <em>{{ displayShortCode(entry) }}</em>
+            <div class="entry-side">
+              <em>编号： <strong>{{ displayPlainShortCode(entry) }}</strong></em>
+              <span>ABV {{ entry.abv }}</span>
+            </div>
           </div>
 
           <div v-if="entry.styleCategoryName || entry.styleDescription" class="style-reference">
@@ -34,6 +38,7 @@
             </div>
             <p v-if="entry.styleDescription">{{ entry.styleDescription }}</p>
           </div>
+        </div>
 
           <div v-if="entry.locked" class="locked-alert">
             桌长已确认本桌结果，此评分不可继续修改。
@@ -87,9 +92,10 @@
                 />
                 <div class="range-labels" aria-hidden="true">
                   <span
-                    v-for="tick in tickValues(item).filter((tick) => tick.label)"
+                    v-for="tick in tickValues(item).filter((tick) => tick.label !== '')"
                     :key="tick.value"
                     class="range-label"
+                    :class="{ start: tick.value === 0, end: tick.value === Number(item.maxScore) }"
                     :style="{ left: `${tick.percent}%` }"
                   >
                     {{ tick.label }}
@@ -115,15 +121,14 @@
             <span v-if="existingScore" class="pill status-warn">已提交过</span>
           </div>
         </section>
+    </div>
 
-        <div class="sticky-actions">
-          <button class="button primary full" type="button" :disabled="!canSubmit" @click="submit">
-            {{ submitButtonText }}
-          </button>
-          <p v-if="submitHint" class="submit-hint">{{ submitHint }}</p>
-          <p v-if="message" class="message">{{ message }}</p>
-        </div>
-      </div>
+    <div class="sticky-actions">
+      <button class="button primary full" type="button" :disabled="!canSubmit" @click="submit">
+        {{ submitButtonText }}
+      </button>
+      <p v-if="submitHint" class="submit-hint">{{ submitHint }}</p>
+      <p v-if="message" class="message">{{ message }}</p>
     </div>
   </main>
 </template>
@@ -214,7 +219,7 @@ function tickValues(item) {
     .map((value) => ({
       value,
       percent: (value / maxScore) * 100,
-      label: value === maxScore || (maxScore >= 10 && value === Math.round(maxScore / 2)) ? value : '',
+      label: value === 0 || value === maxScore || (maxScore >= 10 && value === Math.round(maxScore / 2)) ? value : '',
     }))
 }
 
@@ -321,186 +326,211 @@ onMounted(async () => {
   }
 })
 
-const scoreRoleLabel = computed(() => (
-  entry.value?.scoreRoleType === 'PROFESSIONAL' && me.value?.role === 'CAPTAIN'
-    ? '专业评委'
-    : config.value?.roleLabel || me.value?.roleLabel
-))
 </script>
 
 <style scoped>
 .score-shell {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  height: 100vh;
-  height: 100dvh;
+  --score-bg: #f4f3f0;
+  --score-card: #ffffff;
+  --score-ink: #0b1628;
+  --score-muted: #5f6b7a;
+  --score-border: #dedbd5;
+  --score-primary: #c87434;
+  --score-header: #3d4a3a;
+  width: min(100%, 560px);
   min-height: 0;
-  padding: 10px 14px 0;
-  overflow: hidden;
+  margin: 0 auto;
+  padding: 0 0 116px;
+  background: var(--score-bg);
+  color: var(--score-ink);
 }
 
 .score-shell > * + * {
   margin-top: 0;
 }
 
-.back-link {
-  border: 0;
-  margin: 0 0 7px;
-  padding: 0;
-  color: rgba(255, 255, 255, 0.74);
-  background: transparent;
-  font-weight: 750;
-}
-
-.top-panel {
-  padding: 12px 16px 14px;
-}
-
 .score-top {
-  position: relative;
-  z-index: 3;
+  padding: 22px 20px 28px;
+  color: #fff;
+  background: var(--score-header);
+}
+
+.back-link {
+  display: inline-flex;
+  gap: 12px;
+  align-items: center;
+  border: 0;
+  margin: 0 0 26px;
+  padding: 0;
+  color: rgba(255, 255, 255, 0.92);
+  background: transparent;
+  font-size: 21px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.back-icon {
+  width: 14px;
+  height: 14px;
+  border: solid currentColor;
+  border-width: 0 0 2px 2px;
+  transform: rotate(45deg);
 }
 
 .score-meta-strip {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(104px, 0.75fr);
-  gap: 10px;
-  margin-top: 9px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: end;
 }
 
 .score-meta-strip div {
   display: grid;
-  gap: 4px;
-  border-radius: 8px;
-  padding: 9px 12px;
-  background: rgba(255, 255, 255, 0.1);
+  gap: 8px;
+}
+
+.score-meta-strip div:last-child {
+  min-width: 112px;
+  text-align: right;
 }
 
 .score-meta-strip span {
-  color: rgba(248, 250, 252, 0.7);
-  font-size: 13px;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 16px;
+  font-weight: 650;
 }
 
 .score-meta-strip strong {
   color: #fff;
-  font-size: 22px;
+  font-size: 35px;
   line-height: 1;
+  font-weight: 900;
+  letter-spacing: 0;
 }
 
 .score-meta-strip .sub-score {
-  font-size: 18px;
+  font-size: 35px;
 }
 
-.score-brief {
-  margin: 8px 0 0;
-  color: rgba(248, 250, 252, 0.72);
-  font-size: 13px;
-  line-height: 1.45;
+.score-meta-strip .sub-score::first-letter {
+  letter-spacing: 0;
 }
 
-.score-scroll-wrap {
-  position: relative;
-  min-height: 0;
-  margin-top: 12px;
-  overflow: hidden;
+.score-meta-strip .sub-score {
+  color: rgba(255, 255, 255, 0.68);
 }
 
-.score-scroll-wrap::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  right: 0;
-  left: 0;
-  z-index: 2;
-  height: 24px;
-  background: linear-gradient(180deg, #eef1f0 0%, rgba(238, 241, 240, 0.86) 36%, rgba(238, 241, 240, 0) 100%);
-  pointer-events: none;
+.score-meta-strip .sub-score {
+  white-space: nowrap;
 }
 
-.score-scroll {
-  height: 100%;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 14px 0 96px;
-  scrollbar-gutter: stable;
-  -webkit-overflow-scrolling: touch;
+.score-meta-strip .sub-score::first-line {
+  color: #fff;
 }
 
-.card {
-  padding: 14px;
+.score-content {
+  background: var(--score-bg);
+}
+
+.score-form {
+  display: grid;
+  gap: 0;
+}
+
+.entry-info {
+  border-bottom: 1px solid var(--score-border);
+  background: #fff;
+}
+
+.entry-summary,
+.style-reference {
+  padding: 16px 20px 14px;
 }
 
 .entry-summary {
-  display: flex;
-  gap: 12px;
-  justify-content: space-between;
-  align-items: flex-start;
-  border-radius: 8px;
-  padding: 12px;
-  background: #f7f8f6;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: end;
+  border-bottom: 1px solid var(--score-border);
 }
 
-.entry-summary span {
+.entry-summary span,
+.style-reference span {
   display: block;
-  color: #667085;
-  font-size: 13px;
+  color: #586271;
+  font-size: 16px;
+  line-height: 1.25;
 }
 
 .entry-summary strong {
   display: block;
-  margin-top: 5px;
+  margin-top: 8px;
+  color: #050b16;
+  font-size: 23px;
+  line-height: 1.15;
+  font-weight: 900;
+}
+
+.entry-side {
+  display: grid;
+  gap: 10px;
+  justify-items: end;
+  text-align: right;
 }
 
 .entry-summary em {
-  flex: 0 0 auto;
-  border-radius: 999px;
-  padding: 5px 9px;
-  color: #92400e;
-  background: #fffaeb;
-  font-size: 12px;
+  color: #5c4634;
+  font-size: 16px;
   font-style: normal;
-  font-weight: 800;
+  white-space: nowrap;
+}
+
+.entry-summary em strong {
+  display: inline;
+  margin: 0 0 0 4px;
+  color: #c87434;
+  font-size: inherit;
+  line-height: inherit;
+  font-weight: 850;
+}
+
+.entry-side > span {
+  color: #4b5260;
+  font-size: 18px;
   white-space: nowrap;
 }
 
 .style-reference {
   display: grid;
-  gap: 8px;
-  margin-top: 10px;
-  border: 1px solid #e4e7ec;
-  border-radius: 8px;
-  padding: 10px 12px;
-  background: #fff;
+  gap: 10px;
 }
 
 .style-reference div {
   display: flex;
   justify-content: space-between;
-  gap: 10px;
+  gap: 16px;
   align-items: center;
 }
 
-.style-reference span {
-  color: #667085;
-  font-size: 13px;
-}
-
 .style-reference strong {
-  color: #18222f;
-  font-size: 14px;
+  color: #050b16;
+  text-align: right;
+  font-size: 18px;
+  font-weight: 850;
 }
 
 .style-reference p {
   margin: 0;
-  color: #344054;
+  color: #586271;
   line-height: 1.55;
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .locked-alert {
-  margin-top: 12px;
+  margin: 14px 20px 0;
   border: 1px solid #d0d5dd;
-  border-radius: 8px;
+  border-radius: 14px;
   padding: 10px 12px;
   color: #475467;
   background: #f2f4f7;
@@ -510,79 +540,85 @@ const scoreRoleLabel = computed(() => (
 
 .dimension-list {
   display: grid;
-  gap: 9px;
-  margin-top: 12px;
+  gap: 18px;
+  padding: 18px 20px 32px;
 }
 
 .dimension-card {
-  border: 1px solid #e4e7ec;
-  border-radius: 8px;
-  padding: 12px 14px 14px;
-  background: #fff;
+  border: 1px solid var(--score-border);
+  border-radius: 18px;
+  padding: 18px 16px 20px;
+  background: var(--score-card);
+  box-shadow: none;
 }
 
 .dimension-head {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 116px;
+  grid-template-columns: minmax(0, 1fr) 131px;
   gap: 12px;
   align-items: start;
 }
 
 .dimension-card h2 {
   margin: 0;
-  color: #18222f;
-  font-size: 16px;
-  line-height: 1.25;
+  color: #050b16;
+  font-size: 21px;
+  line-height: 1.15;
+  font-weight: 900;
 }
 
 .dimension-card p {
-  margin: 4px 0 0;
-  color: #667085;
-  font-size: 13px;
+  margin: 6px 0 0;
+  color: #4c5a6c;
+  font-size: 16px;
+  line-height: 1.45;
 }
 
 .score-stepper {
   display: grid;
-  grid-template-columns: 28px 56px 28px;
-  gap: 2px;
+  grid-template-columns: 38px 50px 38px;
+  gap: 3px;
   align-items: center;
   justify-content: end;
-  width: 116px;
+  width: 131px;
 }
 
 .score-stepper button {
-  min-height: 42px;
-  border: 1px solid #cbd5d1;
-  color: #18222f;
-  background: #f7f8f6;
-  font-size: 18px;
-  font-weight: 850;
-}
-
-.score-stepper button:first-child {
-  border-radius: 8px 0 0 8px;
-}
-
-.score-stepper button:last-child {
-  border-radius: 0 8px 8px 0;
+  width: 38px;
+  min-height: 39px;
+  border: 1px solid var(--score-border);
+  border-radius: 11px;
+  color: #4d4d4d;
+  background: #fff;
+  font-size: 25px;
+  line-height: 1;
+  font-weight: 450;
 }
 
 .score-input {
-  width: 56px;
-  min-height: 42px;
-  border: 1px solid #cbd5d1;
-  border-radius: 0;
-  color: #18222f;
+  width: 50px;
+  min-height: 39px;
+  border: 1px solid var(--score-border);
+  border-radius: 11px;
+  color: #06172d;
+  background: #fff;
   text-align: center;
-  font-size: 17px;
-  font-weight: 850;
+  font-size: 20px;
+  font-weight: 900;
+  appearance: textfield;
+}
+
+.score-input::-webkit-outer-spin-button,
+.score-input::-webkit-inner-spin-button {
+  margin: 0;
+  appearance: none;
 }
 
 .range {
   position: relative;
   z-index: 3;
   display: block;
-  height: 26px;
+  height: 28px;
   width: 100%;
   margin: 0;
   appearance: none;
@@ -595,54 +631,54 @@ const scoreRoleLabel = computed(() => (
 }
 
 .range::-webkit-slider-runnable-track {
-  height: 10px;
+  height: 6px;
   border-radius: 999px;
   background: transparent;
 }
 
 .range::-webkit-slider-thumb {
-  width: 22px;
-  height: 22px;
-  margin-top: -6px;
-  border: 3px solid #fff;
+  width: 19px;
+  height: 19px;
+  margin-top: -7px;
+  border: 0;
   border-radius: 999px;
   appearance: none;
-  background: #a75517;
-  box-shadow: 0 2px 8px rgba(24, 34, 47, 0.24);
+  background: var(--score-primary);
+  box-shadow: none;
 }
 
 .range::-moz-range-track {
-  height: 10px;
+  height: 6px;
   border: 0;
   border-radius: 999px;
   background: transparent;
 }
 
 .range::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
-  border: 3px solid #fff;
+  width: 19px;
+  height: 19px;
+  border: 0;
   border-radius: 999px;
-  background: #a75517;
-  box-shadow: 0 2px 8px rgba(24, 34, 47, 0.24);
+  background: var(--score-primary);
+  box-shadow: none;
 }
 
 .range-wrap {
   position: relative;
-  margin-top: 10px;
-  padding: 0 11px 18px;
+  margin-top: 22px;
+  padding: 0 0 23px;
 }
 
 .range-rail {
   position: absolute;
-  top: 8px;
-  right: 11px;
-  left: 11px;
-  height: 10px;
+  top: 11px;
+  right: 0;
+  left: 0;
+  height: 6px;
   overflow: hidden;
   border-radius: 999px;
-  background: #e4e7ec;
-  box-shadow: inset 0 0 0 1px rgba(24, 34, 47, 0.14);
+  background: #dfddd8;
+  box-shadow: none;
   pointer-events: none;
 }
 
@@ -651,7 +687,7 @@ const scoreRoleLabel = computed(() => (
   inset: 0 auto 0 0;
   width: var(--range-progress);
   border-radius: inherit;
-  background: #a75517;
+  background: var(--score-primary);
 }
 
 .range-tick {
@@ -664,26 +700,22 @@ const scoreRoleLabel = computed(() => (
 }
 
 .range-tick i {
-  width: 1px;
-  height: 10px;
-  border-radius: 999px;
-  background: rgba(102, 112, 133, 0.46);
+  display: none;
 }
 
 .range-tick.major i {
-  width: 2px;
-  background: rgba(102, 112, 133, 0.68);
+  display: none;
 }
 
 .range-tick.active i {
-  background: rgba(255, 255, 255, 0.76);
+  display: none;
 }
 
 .range-labels {
   position: absolute;
-  right: 11px;
+  right: 0;
   bottom: 0;
-  left: 11px;
+  left: 0;
   height: 14px;
   pointer-events: none;
 }
@@ -692,25 +724,39 @@ const scoreRoleLabel = computed(() => (
   position: absolute;
   top: 0;
   transform: translateX(-50%);
-  color: #667085;
-  font-size: 11px;
-  font-weight: 750;
+  color: #5f6b7a;
+  font-size: 15px;
+  font-weight: 500;
   line-height: 1;
 }
 
+.range-label.start {
+  transform: translateX(0);
+}
+
+.range-label.end {
+  transform: translateX(-100%);
+}
+
 .dimension-note {
-  margin-top: 10px;
+  margin-top: 15px;
 }
 
 .note-textarea {
   min-height: 78px;
   margin-top: 0;
-  font-size: 15px;
+  border-color: var(--score-border);
+  border-radius: 14px;
+  padding: 16px;
+  color: #172033;
+  background: #fbfbfb;
+  font-size: 17px;
   line-height: 1.45;
+  resize: none;
 }
 
 .note-textarea::placeholder {
-  color: #8a94a6;
+  color: #9a9aa0;
   font-weight: 500;
 }
 
@@ -719,7 +765,7 @@ const scoreRoleLabel = computed(() => (
   gap: 10px;
   justify-content: space-between;
   align-items: center;
-  margin-top: 12px;
+  margin: 0 20px 16px;
 }
 
 .note-summary .pill {
@@ -735,15 +781,36 @@ const scoreRoleLabel = computed(() => (
 }
 
 .sticky-actions {
-  position: static;
+  position: fixed;
+  right: max(0px, calc((100vw - 560px) / 2));
+  bottom: 0;
+  left: max(0px, calc((100vw - 560px) / 2));
+  z-index: 20;
   display: grid;
-  gap: 8px;
-  margin-top: 12px;
-  padding: 10px;
-  border: 1px solid rgba(24, 34, 47, 0.1);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 12px 30px rgba(24, 34, 47, 0.12);
+  gap: 9px;
+  width: min(100%, 560px);
+  margin: 0 auto;
+  padding: 16px 20px calc(16px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--score-border);
+  background: #fff;
+  box-shadow: none;
+}
+
+.sticky-actions .button {
+  min-height: 70px;
+  border-radius: 18px;
+  font-size: 22px;
+  font-weight: 900;
+  box-shadow: 0 14px 28px rgba(200, 116, 52, 0.26);
+}
+
+.sticky-actions .button.primary {
+  color: #fff;
+  background: #e6ba95;
+}
+
+.sticky-actions .button.primary:not(:disabled) {
+  background: #c87434;
 }
 
 .message {
@@ -756,19 +823,36 @@ const scoreRoleLabel = computed(() => (
 
 .submit-hint {
   margin: 0;
-  color: #b54708;
+  color: var(--score-primary);
   text-align: center;
-  font-size: 13px;
-  font-weight: 750;
+  font-size: 16px;
+  font-weight: 500;
 }
 
 @media (max-width: 380px) {
+  .score-top {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .entry-summary,
+  .style-reference,
+  .dimension-list {
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+
   .dimension-head {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .score-stepper {
     justify-content: start;
+  }
+
+  .sticky-actions {
+    padding-right: 14px;
+    padding-left: 14px;
   }
 }
 </style>

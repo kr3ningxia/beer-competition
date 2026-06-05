@@ -372,6 +372,13 @@
             @update-table-captain="updateRoundTableCaptain"
             @update-table-scope="updateRoundTableScope"
             @update-table-target="updateRoundTableTarget"
+            @set-round-captain="setRoundCaptainForSelectedTable"
+            @update-round-target-mode="updateRoundTargetMode"
+            @add-round-table="addRoundTable"
+            @add-round-participant="addRoundParticipantToSelectedTable"
+            @remove-round-participant="removeRoundParticipant"
+            @drop-round-judge="dropRoundJudge"
+            @sync-round-candidates="syncCurrentRoundCandidates"
             @publish-current-round="publishCurrentRound"
           />
         </section>
@@ -448,23 +455,40 @@
                 </div>
 
                 <div class="round-primary-actions">
-                  <button class="tool-button" type="button" :disabled="!currentRound" @click="editRoundAllocation(currentRound.id, 'entries')">
-                    查看分桌
+                  <label v-if="currentRound?.type === 'RANKING' && currentRound?.status === 'DRAFT'" class="round-target-control">
+                    <span>轮次目标</span>
+                    <select :value="currentRoundTargetMode" @change="updateRoundTargetMode($event.target.value)">
+                      <option v-for="option in currentRoundTargetModeOptions" :key="option.value" :value="option.value">
+                        {{ option.label }}
+                      </option>
+                    </select>
+                  </label>
+                  <button
+                    v-if="currentRound?.type === 'RANKING' && currentRound?.status === 'DRAFT' && currentRound?.sourceLocked && !currentRound?.candidatesSynced"
+                    class="tool-button primary"
+                    type="button"
+                    @click="syncCurrentRoundCandidates"
+                  >
+                    同步候选酒款
                   </button>
                   <button
-                    v-if="currentRound?.status === 'DRAFT'"
+                    v-else-if="currentRound?.status === 'DRAFT'"
                     class="tool-button primary"
                     type="button"
                     :disabled="!canPublishCurrentRound"
                     @click="publishCurrentRound"
                   >
-                    {{ currentRound?.type === 'SCORE' ? '发布给评委' : '发布给桌长' }}
+                    {{ currentRound?.type === 'SCORE' ? '发布给评委' : '发布给桌长和参与评委' }}
                   </button>
-                  <button v-if="currentRound?.roundNo === 1 && currentRound?.status === 'PUBLISHED'" class="tool-button primary" type="button" @click="completeFirstRoundAction">
+                  <button
+                    v-if="currentRound?.roundNo === 1 && currentRound?.status === 'PUBLISHED'"
+                    :class="['tool-button', { primary: firstRoundCompletionStatus.ready }]"
+                    type="button"
+                    :disabled="!firstRoundCompletionStatus.ready"
+                    :title="firstRoundCompletionStatus.hint"
+                    @click="completeFirstRoundAction"
+                  >
                     确认第一轮完成
-                  </button>
-                  <button v-if="currentRound?.type === 'RANKING' && ['DRAFT', 'IN_PROGRESS'].includes(currentRound?.status)" class="tool-button primary" type="button" :disabled="!canSubmitRankingRound" @click="submitRankingRound">
-                    提交排序
                   </button>
                   <button v-if="currentRound?.status === 'SUBMITTED'" class="tool-button primary" type="button" @click="lockCurrentRound">
                     确认锁定
@@ -526,6 +550,9 @@
                 </div>
                 <button v-if="roundTodoHint.action === 'createNextRound'" class="tool-button primary" type="button" @click="openCreateRoundDialog">
                   创建{{ nextRoundName }}
+                </button>
+                <button v-else-if="roundTodoHint.action === 'syncRoundCandidates'" class="tool-button primary" type="button" @click="syncCurrentRoundCandidates">
+                  同步候选酒款
                 </button>
                 <button v-else-if="roundTodoHint.action === 'focusRoundProgress'" class="tool-button" type="button" @click="focusRoundProgress">
                   查看桌次进度
@@ -828,7 +855,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -879,6 +906,7 @@ import {
   publishCompetitionResults,
   publishRound,
   saveRoundAllocation,
+  syncRoundCandidates,
   updateCompetitionCategories,
   updateCompetitionEntryFields,
   updateCompetitionJudgeAssignments,
@@ -892,9 +920,13 @@ import TableAllocationWorkbench from './components/competition-detail/TableAlloc
 
 const route = useRoute()
 const router = useRouter()
-const activeTab = ref(route.query.tab === 'progress' ? 'rounds' : (route.query.tab || 'overview'))
+const detailTabKeys = new Set(['overview', 'entryConfig', 'entries', 'judges', 'rounds', 'score', 'results'])
+const roundProgressPollIntervalMs = 8000
+const activeTab = ref(normalizeDetailTab(route.query.tab))
 const loading = ref(false)
 const competition = ref(null)
+let roundProgressPollTimer = null
+let roundProgressRefreshing = false
 const categoryForm = reactive([])
 const entryFieldForm = reactive([])
 const judgeTableForm = reactive([])
@@ -1107,14 +1139,29 @@ const filteredRoundPool = computed(() => {
 const roundValidationIssues = computed(() => buildRoundValidationIssues(currentRound.value))
 const canPublishCurrentRound = computed(() => !currentRound.value?.isPreparationDraft && currentRound.value?.status === 'DRAFT' && roundValidationIssues.value.length === 0)
 const roundReadinessChecks = computed(() => buildRoundReadinessChecks())
-const currentRoundTargetLabel = computed(() => (currentRound.value?.type === 'SCORE' ? '晋级' : '排序'))
+const currentRoundTargetLabel = computed(() => resolveRoundTargetLabel(currentRound.value))
 const currentRoundTargetDisplay = computed(() => {
   if (!currentRound.value) return '-'
-  if (currentRound.value.type !== 'SCORE') return `${currentRoundTargetCount.value} 款`
+  if (currentRound.value.type !== 'SCORE') return formatRoundTargetDisplay(currentRound.value)
   const targets = [...new Set(currentRoundTables.value.map((table) => Number(table.targetCount || 0)).filter(Boolean))]
   return targets.length === 1 ? `每桌 ${targets[0]}，共 ${currentRoundTargetCount.value}` : `共 ${currentRoundTargetCount.value}`
 })
-const currentRoundPublishTarget = computed(() => (currentRound.value?.type === 'RANKING' ? '桌长' : '评委'))
+const currentRoundTargetMode = computed(() => {
+  const modes = new Set(currentRoundTables.value.map((table) => table.targetMode).filter(Boolean))
+  if (modes.size === 1) return [...modes][0]
+  return currentRound.value?.type === 'SCORE' ? 'ADVANCE_COUNT' : 'TOP_N'
+})
+const currentRoundTargetModeOptions = computed(() => {
+  if (currentRoundTargetMode.value === 'CHAMPION') {
+    return [{ value: 'CHAMPION', label: '跨类总冠军轮' }]
+  }
+  return [
+    { value: 'TOP_N', label: '普通排序轮' },
+    { value: 'MEDALS', label: '组别金银铜轮' },
+  ]
+})
+const currentRoundPublishTarget = computed(() => (currentRound.value?.type === 'RANKING' ? '桌长和参与评委' : '评委'))
+const firstRoundCompletionStatus = computed(() => buildFirstRoundCompletionStatus())
 const roundReadinessTitle = computed(() => {
   if (!currentRound.value) return '还没有轮次'
   if (currentRound.value.status === 'DRAFT') return canPublishCurrentRound.value ? `${currentRound.value.name}已准备好，可以发布给${currentRoundPublishTarget.value}` : `${currentRound.value.name}发布前还有问题`
@@ -1129,9 +1176,9 @@ const roundReadinessDetail = computed(() => {
   if (roundValidationIssues.value.length) return roundValidationIssues.value[0]
   if (currentRound.value.status === 'DRAFT') return currentRound.value.type === 'SCORE'
     ? '发布后，评委开始评分，桌长可查看本桌酒款并汇总结果。'
-    : '发布后，桌长可以进入排序任务并提交本桌结果。'
+    : '发布后，桌长提交排序，参与评委查看本桌候选酒款。'
   if (currentRound.value.status === 'PUBLISHED') return currentRound.value.type === 'SCORE'
-    ? ''
+    ? firstRoundCompletionStatus.value.hint
     : '等待桌长提交排序结果。'
   if (currentRound.value.status === 'IN_PROGRESS') return '各桌正在处理排序任务。'
   if (currentRound.value.status === 'SUBMITTED') return '排序结果已提交，确认无误后可以锁定本轮。'
@@ -1149,7 +1196,7 @@ const roundNextStepText = computed(() => {
 })
 const canCreateNextRound = computed(() => {
   const lastRound = rounds.value[rounds.value.length - 1]
-  return lastRound?.status === 'LOCKED' && advancedPool.value.length > 0
+  return Boolean(lastRound && lastRound.status !== 'DRAFT' && rounds.value.length < 4)
 })
 const nextRoundNumber = computed(() => rounds.value.length + 1)
 const nextRoundName = computed(() => `第${toChineseNumber(nextRoundNumber.value)}轮`)
@@ -1263,6 +1310,7 @@ const filteredJudgePool = computed(() => {
       .some((value) => String(value).toLowerCase().includes(query))
     if (!matchesKeyword) return false
 
+    if (currentRound.value?.type === 'RANKING') return true
     return judgeRoleFilter.value === 'ALL'
       || (judgeRoleFilter.value === 'UNASSIGNED' && !isAssigned(judge.publicId))
   })
@@ -1272,10 +1320,22 @@ onMounted(() => {
   loadStyleLibraries()
   loadDetail()
   loadJudgePool()
+  roundProgressPollTimer = window.setInterval(refreshRoundProgress, roundProgressPollIntervalMs)
+})
+onUnmounted(() => {
+  if (roundProgressPollTimer) window.clearInterval(roundProgressPollTimer)
 })
 watch(() => route.params.id, loadDetail)
 watch(() => route.query.tab, (tab) => {
-  if (tab) activeTab.value = tab === 'progress' ? 'rounds' : tab
+  const nextTab = normalizeDetailTab(tab)
+  if (nextTab !== activeTab.value) activeTab.value = nextTab
+})
+watch(activeTab, (tab) => {
+  syncActiveTabQuery(tab)
+  if (tab === 'rounds') refreshRoundProgress()
+}, { immediate: true })
+watch(() => currentRound.value?.status, () => {
+  if (activeTab.value === 'rounds') refreshRoundProgress()
 })
 watch([
   () => judgeTableForm.map((table) => `${table.localId}:${table.tableName}`).join('|'),
@@ -1299,6 +1359,47 @@ async function loadDetail() {
   } finally {
     loading.value = false
   }
+}
+
+async function refreshRoundProgress() {
+  if (!shouldRefreshRoundProgress()) return
+  if (roundProgressRefreshing) return
+  roundProgressRefreshing = true
+  const preferredRoundId = activeRoundId.value
+  const preferredTableId = selectedRoundTableId.value
+  try {
+    const data = await fetchCompetitionDetail(route.params.id)
+    competition.value = normalizeDetail(data)
+    resetForms()
+    applyRoundState(preferredRoundId, { preferredTableId, keepEntrySelection: true })
+  } catch {
+    // 现场进度静默刷新失败时保留当前页面状态。
+  } finally {
+    roundProgressRefreshing = false
+  }
+}
+
+function shouldRefreshRoundProgress() {
+  if (loading.value || activeTab.value !== 'rounds' || !competition.value) return false
+  if (createRoundDialogOpen.value || entryAutoAssignDialogOpen.value || roundScoreDetailDialogOpen.value) return false
+  if (typeof document !== 'undefined' && document.hidden) return false
+  return currentRound.value?.type === 'SCORE' && currentRound.value?.status === 'PUBLISHED'
+}
+
+function normalizeDetailTab(tab) {
+  const value = Array.isArray(tab) ? tab[0] : tab
+  if (value === 'progress') return 'rounds'
+  return detailTabKeys.has(value) ? value : 'overview'
+}
+
+function syncActiveTabQuery(tab) {
+  if (normalizeDetailTab(route.query.tab) === tab && route.query.tab === tab) return
+  router.replace({
+    query: {
+      ...route.query,
+      tab,
+    },
+  }).catch(() => {})
 }
 
 async function loadJudgePool() {
@@ -1375,7 +1476,7 @@ function resetForms() {
   })))
 }
 
-function applyRoundState(preferredRoundId = activeRoundId.value) {
+function applyRoundState(preferredRoundId = activeRoundId.value, options = {}) {
   roundEntryPool.value = (competition.value?.entryPool || competition.value?.entries || []).map((entry) => ({
     ...entry,
     categoryId: entry.categoryId ?? null,
@@ -1403,6 +1504,11 @@ function applyRoundState(preferredRoundId = activeRoundId.value) {
       categoryMode: table.categoryMode || (table.categoryId != null ? 'CATEGORY' : 'EMPTY'),
       categoryName: table.categoryName || '',
       entryUuids: table.entryUuids || [],
+      members: table.members || [],
+      participantPublicIds: (table.members || [])
+        .filter((member) => member.role !== 'CAPTAIN')
+        .map((member) => member.judgePublicId)
+        .filter(Boolean),
       rankings: table.rankings || buildEmptyRankings(Number(table.targetCount || 3), table.targetMode),
     })),
   }))
@@ -1418,8 +1524,10 @@ function applyRoundState(preferredRoundId = activeRoundId.value) {
   const preferred = rounds.value.find((round) => round.id === preferredRoundId)
   const current = preferred || competition.value?.currentRound || rounds.value[rounds.value.length - 1] || rounds.value[0] || firstRoundDraft
   activeRoundId.value = current?.id || firstRoundDraft.id
-  selectedRoundTableId.value = current?.tables?.[0]?.id || ''
-  selectedEntryUuids.value = []
+  selectedRoundTableId.value = current?.tables?.some((table) => table.id === options.preferredTableId)
+    ? options.preferredTableId
+    : current?.tables?.[0]?.id || ''
+  if (!options.keepEntrySelection) selectedEntryUuids.value = []
 }
 
 function syncFirstRoundDraftTables() {
@@ -1553,7 +1661,7 @@ function resolveStagePrimaryAction() {
   }
   if (currentRound.value?.status === 'DRAFT') {
     return {
-      text: currentRound.value.type === 'RANKING' ? '发布给桌长' : '发布当前轮次',
+      text: currentRound.value.type === 'RANKING' ? '发布给桌长和参与评委' : '发布当前轮次',
       enabled: canPublishCurrentRound.value,
       action: 'publishCurrentRound',
     }
@@ -1652,12 +1760,6 @@ function selectRound(roundId) {
   closeEntryAutoAssignDialog()
 }
 
-function editRoundAllocation(roundId, mode = 'entries') {
-  selectRound(roundId)
-  allocationMode.value = mode
-  activeTab.value = 'judges'
-}
-
 function publishRoundById(roundId) {
   selectRound(roundId)
   publishCurrentRound()
@@ -1681,10 +1783,31 @@ function buildRoundReadinessChecks() {
     { label: '桌长', value: `${captainCount} / ${tableCount}`, done: tableCount > 0 && captainCount === tableCount },
     { label: '酒款', value: `${assignedEntryCount} / ${totalEntryCount}`, done: totalEntryCount > 0 && assignedEntryCount === totalEntryCount },
     { label: '未分配', value: `${unassignedCount} 款`, done: unassignedCount === 0 },
-    { label: currentRound.value.type === 'SCORE' ? '晋级' : '排序目标', value: currentRoundTargetDisplay.value, done: currentRoundTargetCount.value > 0 },
+    { label: currentRoundTargetLabel.value, value: currentRoundTargetDisplay.value, done: currentRoundTargetCount.value > 0 },
   ]
   if (invalidTableCount) checks.push({ label: '桌次问题', value: `${invalidTableCount} 桌`, done: false })
   return checks
+}
+
+function buildFirstRoundCompletionStatus() {
+  const tables = currentRoundTables.value
+  const tableCount = tables.length
+  const entryCount = currentRoundEntryCount.value
+  const advancedCount = tables.reduce((sum, table) => sum + Number(table.advancedCount || 0), 0)
+  const base = { ready: false, hint: '等待第一轮汇总完成', tableCount, entryCount, advancedCount }
+  if (!currentRound.value || currentRound.value.roundNo !== 1 || currentRound.value.type !== 'SCORE' || currentRound.value.status !== 'PUBLISHED') return base
+  if (!tableCount) return { ...base, hint: '还没有桌次' }
+  if (!entryCount) return { ...base, hint: '还没有酒款' }
+  const scoringPending = tables.filter((table) => normalizeProgress(table.judgeProgress) < 100).length
+  if (scoringPending) return { ...base, hint: `${scoringPending} 桌还在评分` }
+  const captainPending = tables.filter((table) => normalizeProgress(table.captainProgress) < 100).length
+  if (captainPending) return { ...base, hint: `${captainPending} 桌还未汇总` }
+  const advancePending = tables.filter((table) => {
+    const target = Number(table.targetCount || 0)
+    return target <= 0 || Number(table.advancedCount || 0) !== target
+  }).length
+  if (advancePending) return { ...base, hint: `${advancePending} 桌晋级数待核对` }
+  return { ...base, ready: true, hint: '全部桌次已汇总' }
 }
 
 function buildCurrentRoundMetrics() {
@@ -1838,7 +1961,7 @@ function getRoundNodeDetail(round) {
   const entryCount = countRoundEntries(round)
   const targetCount = countRoundTarget(round)
   if (round.type === 'SCORE') return `${entryCount} 款 · 晋级 ${targetCount} 款`
-  return `${entryCount} 款 · 选择 ${targetCount} 款`
+  return `${entryCount} 款 · ${formatRoundTargetDisplay(round)}`
 }
 
 function getRoundNodeHint(round) {
@@ -1863,11 +1986,23 @@ function buildRoundTableSummary(table) {
     primaryProgress: progress.primaryValue,
     secondaryProgressLabel: progress.secondaryLabel,
     secondaryProgress: progress.secondaryValue,
-    targetLabel: isRankingRound ? '已选' : '晋级',
+    targetLabel: isRankingRound ? resolveTableTargetLabel(table) : '晋级',
     targetDisplay: isRankingRound ? `${filledCount} / ${table.targetCount}` : `${table.targetCount} 款`,
     statusText,
     tone: issues.length ? 'warning' : table.status === 'LOCKED' ? 'done' : 'ok',
   }
+}
+
+function resolveTableTargetLabel(table) {
+  if (table?.targetMode === 'MEDALS') return '奖项槽位'
+  if (table?.targetMode === 'CHAMPION') return '总冠军名额'
+  return '晋级数量'
+}
+
+function formatTargetModeName(mode) {
+  if (mode === 'MEDALS') return '组别金银铜轮'
+  if (mode === 'CHAMPION') return '跨类总冠军轮'
+  return '普通排序轮'
 }
 
 function getRoundTableProgressSummary(round, table) {
@@ -2111,6 +2246,14 @@ function buildRoundTodoHint() {
     }
   }
   if (roundValidationIssues.value.length && currentRound.value.status === 'DRAFT') {
+    if (currentRound.value.type === 'RANKING' && currentRound.value.sourceLocked && !currentRound.value.candidatesSynced) {
+      return {
+        tone: 'warning',
+        title: '候选酒款待同步',
+        detail: '上一轮结果已固定，先同步候选池，再核对分桌。',
+        action: 'syncRoundCandidates',
+      }
+    }
     return {
       tone: 'warning',
       title: '发布前需要处理',
@@ -2210,8 +2353,29 @@ function countRoundTarget(round) {
   return (round?.tables || []).reduce((sum, table) => sum + Number(table.targetCount || 0), 0)
 }
 
+function resolveRoundTargetLabel(round) {
+  if (round?.type === 'SCORE') return '晋级'
+  const modes = new Set((round?.tables || []).map((table) => table.targetMode).filter(Boolean))
+  if (modes.size === 1 && modes.has('MEDALS')) return '奖项槽位'
+  if (modes.size === 1 && modes.has('CHAMPION')) return '总冠军名额'
+  return '晋级数量'
+}
+
+function formatRoundTargetDisplay(round) {
+  const total = countRoundTarget(round)
+  const targets = [...new Set((round?.tables || []).map((table) => Number(table.targetCount || 0)).filter(Boolean))]
+  if ((round?.tables || []).every((table) => table.targetMode === 'MEDALS')) {
+    return targets.length === 1 ? `每桌金银铜 ${targets[0]} 个槽位，共 ${total}` : `共 ${total} 个槽位`
+  }
+  if ((round?.tables || []).every((table) => table.targetMode === 'CHAMPION')) {
+    return `${total} 个总冠军名额`
+  }
+  return targets.length === 1 ? `每桌晋级 ${targets[0]} 款，共 ${total}` : `共 ${total} 款`
+}
+
 function getPoolEntriesForRound(round) {
   if (round?.type === 'SCORE') return roundEntryPool.value.filter((entry) => entry.stored)
+  if (round?.type === 'RANKING' && round.sourceLocked === false) return []
   if (round?.sourceEntryUuids?.length) {
     return round.sourceEntryUuids
       .map((uuid) => roundEntryPool.value.find((entry) => entry.uuid === uuid))
@@ -2225,6 +2389,8 @@ function buildRoundValidationIssues(round) {
   const issues = []
   const stageIssue = getRoundPublishStageIssue(round)
   if (stageIssue) issues.push(stageIssue)
+  if (round.type === 'RANKING' && round.sourceLocked === false) issues.push('等待上一轮结果固定后同步候选酒款')
+  if (round.type === 'RANKING' && round.sourceLocked && !round.candidatesSynced) issues.push('请先同步候选酒款')
   if (!round.tables.length) issues.push(`${round.name}至少需要 1 张桌`)
   const assigned = round.tables.flatMap((table) => table.entryUuids)
   if (!assigned.length) issues.push(`${round.name}尚未分配酒款`)
@@ -2251,13 +2417,14 @@ function getRoundPublishStageIssue(round) {
 
 function getRoundTableIssues(table) {
   const issues = []
+  const targetLabel = resolveTableTargetLabel(table)
   if (!table.captainPublicId) issues.push(`${table.name}缺少桌长`)
   if (!table.entryUuids.length) issues.push(`${table.name}尚未分配酒款`)
-  if (!Number(table.targetCount || 0)) issues.push(`${table.name}目标数量不能为空`)
-  if (Number(table.targetCount || 0) > table.entryUuids.length) issues.push(`${table.name}目标数量超过酒款数`)
-  if (table.targetMode === 'MEDALS' && Number(table.targetCount || 0) !== 3) issues.push(`${table.name}奖牌轮必须选择 3 款`)
+  if (!Number(table.targetCount || 0)) issues.push(`${table.name}${targetLabel}不能为空`)
+  if (Number(table.targetCount || 0) > table.entryUuids.length) issues.push(`${table.name}${targetLabel}超过候选酒款数`)
+  if (table.targetMode === 'MEDALS' && Number(table.targetCount || 0) !== 3) issues.push(`${table.name}奖牌轮固定为金、银、铜 3 个槽位`)
   if (table.targetMode === 'MEDALS' && table.categoryMode !== 'CATEGORY') issues.push(`${table.name}奖牌轮只能包含一个投递组别`)
-  if (table.targetMode === 'CHAMPION' && Number(table.targetCount || 0) !== 1) issues.push(`${table.name}总冠军轮只能选择 1 款`)
+  if (table.targetMode === 'CHAMPION' && Number(table.targetCount || 0) !== 1) issues.push(`${table.name}总冠军轮固定为 1 个名额`)
   return issues
 }
 
@@ -2318,7 +2485,7 @@ function clearEntrySelection() {
 
 function openEntryAutoAssignDialog(tableId) {
   const table = currentRoundTables.value.find((item) => item.id === tableId)
-  if (!table || currentRound.value?.type !== 'SCORE' || currentRound.value?.status !== 'DRAFT') return
+  if (!table || currentRound.value?.status !== 'DRAFT') return
   entryAutoAssignTableId.value = tableId
   resetEntryAutoAssignForm(table)
   entryAutoAssignDialogOpen.value = true
@@ -2385,8 +2552,93 @@ function addEntryToSelectedRoundTable(uuid, notify = true) {
 }
 
 function updateRoundTableCaptain(tableId, judgePublicId) {
+  if (currentRound.value?.type === 'RANKING' && currentRound.value?.status !== 'DRAFT') return
   const table = currentRoundTables.value.find((item) => item.id === tableId)
-  if (table) table.captainPublicId = judgePublicId
+  if (!table) return
+  if (judgePublicId) {
+    const alreadyAssigned = currentRoundTables.value.some((item) => (
+      item.id !== table.id
+        && (item.captainPublicId === judgePublicId || getTableParticipantPublicIds(item).includes(judgePublicId))
+    ))
+    if (alreadyAssigned) {
+      ElMessage.warning('这位评委已安排到其他桌')
+      return
+    }
+  }
+  table.captainPublicId = judgePublicId
+  table.members = [
+    ...(judgePublicId ? [{
+      judgePublicId,
+      name: getJudge(judgePublicId)?.name || '',
+      role: 'CAPTAIN',
+      roleLabel: '桌长',
+      systemTaskRequired: true,
+    }] : []),
+    ...(table.members || []).filter((member) => member.role !== 'CAPTAIN' && member.judgePublicId !== judgePublicId),
+  ]
+  table.participantPublicIds = getTableParticipantPublicIds(table)
+}
+
+function setRoundCaptainForSelectedTable(judgePublicId) {
+  const table = selectedRoundTable.value
+  if (!table || currentRound.value?.type !== 'RANKING') return
+  updateRoundTableCaptain(table.id, judgePublicId)
+}
+
+function getTableParticipantPublicIds(table) {
+  return (table?.participantPublicIds?.length ? table.participantPublicIds : (table?.members || [])
+    .filter((member) => member.role !== 'CAPTAIN')
+    .map((member) => member.judgePublicId))
+    .filter((publicId) => publicId && publicId !== table?.captainPublicId)
+}
+
+function addRoundParticipantToSelectedTable(judgePublicId) {
+  const table = selectedRoundTable.value
+  if (!table || currentRound.value?.type !== 'RANKING' || currentRound.value?.status !== 'DRAFT') return
+  if (!judgePublicId || judgePublicId === table.captainPublicId) {
+    ElMessage.warning('桌长不需要重复加入参与评委')
+    return
+  }
+  const alreadyAssigned = currentRoundTables.value.some((item) => (
+    item.id !== table.id
+      && (item.captainPublicId === judgePublicId || getTableParticipantPublicIds(item).includes(judgePublicId))
+  ))
+  if (alreadyAssigned) {
+    ElMessage.warning('这位评委已安排到其他桌')
+    return
+  }
+  if (getTableParticipantPublicIds(table).includes(judgePublicId)) return
+  const judge = getJudge(judgePublicId)
+  table.members = [
+    ...(table.members || []),
+    {
+      judgePublicId,
+      name: judge?.name || '',
+      role: 'PROFESSIONAL',
+      roleLabel: '参与评委',
+      systemTaskRequired: false,
+    },
+  ]
+  table.participantPublicIds = getTableParticipantPublicIds(table)
+}
+
+function dropRoundJudge(tableId, role) {
+  if (!draggingItem.value || draggingItem.value.type !== 'judge') return
+  if (currentRound.value?.type !== 'RANKING' || currentRound.value?.status !== 'DRAFT') return
+  selectedRoundTableId.value = tableId
+  if (role === 'CAPTAIN') {
+    updateRoundTableCaptain(tableId, draggingItem.value.judgePublicId)
+  } else {
+    addRoundParticipantToSelectedTable(draggingItem.value.judgePublicId)
+  }
+  clearDrag()
+}
+
+function removeRoundParticipant(tableId, judgePublicId) {
+  const table = currentRoundTables.value.find((item) => item.id === tableId)
+  if (!table || currentRound.value?.type !== 'RANKING' || currentRound.value?.status !== 'DRAFT') return
+  table.members = (table.members || []).filter((member) => member.role === 'CAPTAIN' || member.judgePublicId !== judgePublicId)
+  table.participantPublicIds = getTableParticipantPublicIds(table)
 }
 
 function updateRoundTableScope(tableId, scopeValue) {
@@ -2420,6 +2672,44 @@ function updateRoundTableTarget(tableId, targetCount) {
   table.rankings = buildEmptyRankings(table.targetCount, table.targetMode)
 }
 
+function updateRoundTargetMode(mode) {
+  if (!currentRound.value || currentRound.value.type !== 'RANKING' || currentRound.value.status !== 'DRAFT') return
+  const normalizedMode = ['TOP_N', 'MEDALS', 'CHAMPION'].includes(mode) ? mode : 'TOP_N'
+  const fixedTargetCount = normalizedMode === 'CHAMPION' ? 1 : normalizedMode === 'MEDALS' ? 3 : null
+  currentRound.value.tables.forEach((table) => {
+    const nextTargetCount = fixedTargetCount || Math.max(1, Number(table.targetCount || createRoundForm.targetCount || 3))
+    table.targetMode = normalizedMode
+    table.targetCount = nextTargetCount
+    table.rankings = buildEmptyRankings(nextTargetCount, normalizedMode)
+  })
+  ElMessage.success(`已切换为${formatTargetModeName(normalizedMode)}`)
+}
+
+function addRoundTable() {
+  if (!currentRound.value || currentRound.value.status !== 'DRAFT') return
+  const tables = currentRound.value.tables
+  const mode = tables[0]?.targetMode || 'TOP_N'
+  const targetCount = mode === 'CHAMPION' ? 1 : mode === 'MEDALS' ? 3 : Math.max(1, Number(tables[0]?.targetCount || 3))
+  const index = tables.length
+  const table = {
+    id: `draft-${Date.now()}-${index}`,
+    name: resolveDraftRoundTableName(currentRound.value.roundNo, index, index + 1),
+    captainPublicId: '',
+    categoryId: null,
+    categoryMode: 'EMPTY',
+    categoryName: '',
+    entryUuids: [],
+    members: [],
+    participantPublicIds: [],
+    targetCount,
+    targetMode: mode,
+    status: 'DRAFT',
+    rankings: buildEmptyRankings(targetCount, mode),
+  }
+  tables.push(table)
+  selectedRoundTableId.value = table.id
+}
+
 function removeEntryFromRoundTable(tableId, uuid) {
   if (currentRound.value?.status !== 'DRAFT') return
   const table = currentRoundTables.value.find((item) => item.id === tableId)
@@ -2451,6 +2741,11 @@ function removeRoundTable(tableId) {
   selectedRoundTableId.value = currentRound.value.tables[0]?.id || ''
 }
 
+function resolveDraftRoundTableName(roundNo, index, tableCount) {
+  if (tableCount === 1) return roundNo >= 3 ? '决赛桌' : `${roundNo}A桌`
+  return `${roundNo}${String.fromCharCode(65 + index)}桌`
+}
+
 async function persistCurrentRoundAllocation() {
   if (!currentRound.value || currentRound.value.isPreparationDraft || currentRound.value.status !== 'DRAFT') return
   const payload = buildRoundAllocationPayload(currentRound.value)
@@ -2473,6 +2768,7 @@ function buildRoundAllocationPayload(round) {
       targetCount: Number(table.targetCount || 1),
       targetMode: table.targetMode || (round.type === 'SCORE' ? 'ADVANCE_COUNT' : 'TOP_N'),
       sortOrder: index,
+      participantPublicIds: round.type === 'RANKING' ? getTableParticipantPublicIds(table) : [],
       entryUuids: table.entryUuids || [],
     })),
   }
@@ -2491,16 +2787,51 @@ async function publishCurrentRound() {
   competition.value = normalizeDetail(detail)
   resetForms()
   applyRoundState(targetRoundId)
-  ElMessage.success(currentRound.value.type === 'SCORE' ? '当前轮次已发布到评审端' : '排序任务已发布给桌长')
+  ElMessage.success(currentRound.value.type === 'SCORE' ? '当前轮次已发布到评审端' : '排序任务已发布给桌长和参与评委')
+}
+
+async function syncCurrentRoundCandidates() {
+  if (!currentRound.value || currentRound.value.type !== 'RANKING') return
+  if (!currentRound.value.sourceLocked) {
+    ElMessage.warning('请先确认上一轮完成')
+    return
+  }
+  const targetRoundId = currentRound.value.id
+  if (currentRound.value.status === 'DRAFT') await persistCurrentRoundAllocation()
+  const detail = await syncRoundCandidates(competition.value.id, targetRoundId)
+  competition.value = normalizeDetail(detail)
+  resetForms()
+  applyRoundState(targetRoundId)
+  allocationMode.value = 'entries'
+  ElMessage.success('候选酒款已同步，请核对分桌后发布')
 }
 
 async function completeFirstRoundAction() {
   if (!currentRound.value) return
-  const detail = await completeFirstRound(competition.value.id, currentRound.value.id)
+  const completionStatus = firstRoundCompletionStatus.value
+  if (!completionStatus.ready) {
+    ElMessage.warning(completionStatus.hint)
+    return
+  }
+  const targetRoundId = currentRound.value.id
+  try {
+    await ElMessageBox.confirm(
+      `确认后将锁定第一轮，并生成 ${completionStatus.advancedCount} 款晋级酒。`,
+      '确认第一轮完成？',
+      {
+        confirmButtonText: '确认完成',
+        cancelButtonText: '再核对',
+        type: 'warning',
+      },
+    )
+  } catch {
+    return
+  }
+  const detail = await completeFirstRound(competition.value.id, targetRoundId)
   competition.value = normalizeDetail(detail)
   resetForms()
-  applyRoundState(currentRound.value?.id)
-  ElMessage.success('第一轮已确认完成，晋级池已生成')
+  applyRoundState(targetRoundId)
+  ElMessage.success('第一轮已完成，晋级池已生成')
 }
 
 async function lockCurrentRound() {
@@ -2515,7 +2846,7 @@ async function lockCurrentRound() {
 
 function openCreateRoundDialog() {
   if (!canCreateNextRound.value) {
-    ElMessage.warning('请先完成并锁定上一轮')
+    ElMessage.warning('当前已有待处理的轮次')
     return
   }
   resetCreateRoundForm()
@@ -2545,10 +2876,10 @@ async function finishCreateRound() {
   resetForms()
   applyRoundState(competition.value.rounds?.[competition.value.rounds.length - 1]?.id)
   activeTab.value = 'judges'
-  allocationMode.value = 'entries'
+  allocationMode.value = 'judges'
   selectedEntryUuids.value = []
   createRoundDialogOpen.value = false
-  ElMessage.success(`${nextRoundName.value}已创建，请重新分配桌长和酒款`)
+  ElMessage.success(`${nextRoundName.value}排序草稿已创建，请安排桌长和参与评委`)
 }
 
 function resetCreateRoundForm() {
@@ -2798,7 +3129,9 @@ function countAssignedRole(role) {
 }
 
 function startJudgeDrag(judge) {
-  if (!editable.value.judgeTables || !isJudgeActive(judge)) return
+  const canDragRankingJudge = currentRound.value?.type === 'RANKING' && currentRound.value?.status === 'DRAFT'
+  if (!canDragRankingJudge && !editable.value.judgeTables) return
+  if (!isJudgeActive(judge)) return
   draggingItem.value = { type: 'judge', judgePublicId: judge.publicId }
 }
 
@@ -5280,6 +5613,33 @@ button.pyramid-placeholder-mark {
 .round-primary-actions {
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.round-target-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 10px;
+  color: var(--muted);
+  border: 1px solid rgba(219, 232, 237, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.round-target-control span {
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.round-target-control select {
+  min-width: 130px;
+  color: var(--gold-soft);
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
+  font-weight: 800;
 }
 
 .round-check-list p {

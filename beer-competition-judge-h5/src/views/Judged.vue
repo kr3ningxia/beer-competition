@@ -17,8 +17,8 @@
               <h2>{{ score.shortCode ? `编号： ${score.shortCode}` : '编号' }}</h2>
               <p>{{ score.categoryName }} · {{ score.style }}</p>
             </div>
-            <span :class="['pill', score.locked ? 'status-lock' : 'status-warn']">
-              {{ score.locked ? '已锁定' : '可修改' }}
+            <span :class="['pill', score.locked ? 'status-lock' : 'status-ok']">
+              {{ score.locked ? '已锁定' : '已评分' }}
             </span>
           </div>
           <div class="score-meta">
@@ -32,7 +32,7 @@
             :disabled="score.locked"
             @click="$router.push(`/score/${score.beerUuid}`)"
           >
-            {{ score.locked ? '桌长已确认' : '查看并修改' }}
+            {{ score.locked ? '桌长已确认' : '查看/修改' }}
           </button>
         </article>
       </div>
@@ -44,29 +44,17 @@
       </div>
     </section>
 
-    <nav class="bottom-nav" :style="{ gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))` }">
-      <router-link v-for="item in navItems" :key="item.to" class="nav-item" :to="item.to">
-        {{ item.label }}
-      </router-link>
-    </nav>
+    <JudgeBottomNav :role="me?.role" active="profile" />
   </main>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { fetchMe, fetchMyScores } from '@/api/judge'
+import JudgeBottomNav from '@/components/JudgeBottomNav.vue'
 
 const me = ref(null)
 const scores = ref([])
-
-const navItems = computed(() => {
-  const items = [
-    { label: '扫码', to: '/competitions' },
-  ]
-  if (me.value?.role === 'CAPTAIN') items.push({ label: '本桌', to: '/captain' })
-  items.push({ label: '我的', to: '/profile' })
-  return items
-})
 
 onMounted(async () => {
   me.value = await fetchMe()

@@ -3,7 +3,8 @@
     <section class="top-panel">
       <button class="back-link" type="button" @click="$router.push('/competitions')">返回任务</button>
       <p class="eyebrow">{{ table?.roundName || '排序轮次' }}</p>
-      <h1 class="page-title">{{ table?.tableName || '桌长排序' }}</h1>
+      <h1 class="page-title">{{ table?.tableName || '排序任务' }}</h1>
+      <p class="ranking-mode">{{ rankingModeText }}</p>
       <div class="ranking-stats">
         <div>
           <span>候选</span>
@@ -24,7 +25,7 @@
       <div class="slot-list">
         <label v-for="slot in slots" :key="slot.rank" class="slot-row">
           <span>{{ slot.label }}</span>
-          <select v-model="slot.beerEntryId">
+          <select v-model="slot.beerEntryId" :disabled="!canEdit">
             <option :value="null">待选择</option>
             <option v-for="entry in selectableEntries(slot.beerEntryId)" :key="entry.id" :value="entry.id">
               {{ displayShortCode(entry) }} · {{ entry.categoryName }} · {{ entry.style }}
@@ -32,9 +33,10 @@
           </select>
         </label>
       </div>
-      <button class="button primary full" type="button" :disabled="!canSubmit" @click="submit">
+      <button v-if="canEdit" class="button primary full" type="button" :disabled="!canSubmit" @click="submit">
         提交排序
       </button>
+      <p v-else class="readonly-note">本轮由桌长提交排序结果，你可以查看本桌候选和已提交结果。</p>
       <p v-if="message" class="message">{{ message }}</p>
     </section>
 
@@ -66,7 +68,14 @@ const slots = ref([])
 const message = ref('')
 
 const filledCount = computed(() => slots.value.filter((slot) => slot.beerEntryId).length)
-const canSubmit = computed(() => slots.value.length > 0 && filledCount.value === slots.value.length)
+const canEdit = computed(() => Boolean(table.value?.canSubmitRanking))
+const canSubmit = computed(() => canEdit.value && slots.value.length > 0 && filledCount.value === slots.value.length)
+const rankingModeText = computed(() => {
+  const count = table.value?.targetCount || slots.value.length || 0
+  if (table.value?.targetMode === 'MEDALS') return '组别决战：确认金奖、银奖、铜奖'
+  if (table.value?.targetMode === 'CHAMPION') return '总冠军轮：确认全场总冠军'
+  return `继续筛选：选择并排序前 ${count} 款`
+})
 
 function selectableEntries(currentId) {
   const selected = new Set(slots.value.map((slot) => slot.beerEntryId).filter((id) => id && id !== currentId))
@@ -78,6 +87,7 @@ function displayShortCode(entry) {
 }
 
 async function submit() {
+  if (!window.confirm('提交后将进入后台确认，确认锁定前如需调整请联系现场工作人员。')) return
   await submitRanking(route.params.roundTableId, {
     results: slots.value.map((slot) => ({
       beerEntryId: slot.beerEntryId,
@@ -166,6 +176,23 @@ onMounted(async () => {
   padding: 0 10px;
   color: #18222f;
   background: #fff;
+}
+
+.slot-row select:disabled {
+  color: #667085;
+  background: #f2f4f7;
+}
+
+.ranking-mode,
+.readonly-note {
+  margin: 8px 0 0;
+  color: rgba(248, 250, 252, 0.76);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.readonly-note {
+  color: #667085;
 }
 
 .entry-row {

@@ -6,7 +6,7 @@
           <h1 class="page-title compact-title">{{ current?.name || '啤酒大赛' }}</h1>
           <p class="review-context">{{ me?.tableName || current?.tableName || '未分桌' }} · {{ current?.flightName || '未发布轮次' }}</p>
         </div>
-        <span class="role-badge">{{ me?.roleLabel }}</span>
+        <span class="role-badge">{{ current?.roleLabel || me?.roleLabel }}</span>
       </div>
       <div :class="['progress-strip', { 'captain-progress': isScoreRoundCaptain }]">
         <template v-if="isScoreRoundCaptain">
@@ -28,19 +28,19 @@
       <button class="button secondary full empty-action" type="button" @click="router.push('/profile')">查看我的资料</button>
     </section>
 
-    <template v-else-if="current?.taskType === 'RANKING_ROUND'">
+    <template v-else-if="isRankingRound">
     <section class="card ranking-action-card">
       <div class="split">
         <div>
-          <h2 class="section-title compact">排序工作台</h2>
-          <p class="task-hint">本轮从候选酒中选择并排序，提交后进入下一轮或奖项确认。</p>
+          <h2 class="section-title compact">{{ canSubmitRanking ? '排序工作台' : '本桌排序任务' }}</h2>
+          <p class="task-hint">{{ rankingTaskHint }}</p>
         </div>
         <span class="pill status-warn">{{ rankingFilledCount }}/{{ rankingSlots.length }}</span>
       </div>
       <button class="scan-button ranking-button" type="button" @click="router.push(`/ranking/${current.roundTableId}`)">
-        进入选择排序
+        {{ canSubmitRanking ? '进入选择排序' : '查看本桌候选' }}
       </button>
-      <p v-if="!isCaptain" class="caption">本轮由桌长完成排序，普通评委无需提交评分。</p>
+      <p v-if="!canSubmitRanking" class="caption">本轮由桌长提交排序结果。</p>
     </section>
 
     <section class="card">
@@ -119,19 +119,21 @@
             </span>
             <em :class="['pill', entryStatus(entry).className]">{{ entryStatus(entry).label }}</em>
           </button>
-          <div class="captain-entry-meta">
-            <span :class="entry.scored ? 'ok-text' : 'warn-text'">我：{{ entry.scored ? '已评' : '待评' }}</span>
-            <span>同桌：{{ tableScoreProgress(entry) }}</span>
-            <span :class="entry.finalized ? 'ok-text' : ''">汇总：{{ entry.finalized ? '已确认' : readyForFinalize(entry) ? '可汇总' : '等待' }}</span>
+          <div class="captain-entry-footer">
+            <div class="captain-entry-meta">
+              <span :class="entry.scored ? 'ok-text' : 'warn-text'">我：{{ entry.scored ? '已评' : '待评' }}</span>
+              <span>同桌：{{ tableScoreProgress(entry) }}</span>
+              <span :class="entry.finalized ? 'ok-text' : ''">汇总：{{ entry.finalized ? '已确认' : readyForFinalize(entry) ? '可汇总' : '等待' }}</span>
+            </div>
+            <button
+              v-if="captainAction(entry)"
+              type="button"
+              :class="['entry-action', { primary: captainAction(entry).primary }]"
+              @click="openCaptainAction(entry)"
+            >
+              {{ captainAction(entry).label }}
+            </button>
           </div>
-          <button
-            v-if="captainAction(entry)"
-            type="button"
-            :class="['button', captainAction(entry).primary ? 'primary' : 'secondary', 'full', 'entry-action']"
-            @click="openCaptainAction(entry)"
-          >
-            {{ captainAction(entry).label }}
-          </button>
         </article>
       </div>
       <section v-else-if="isScoreRoundCaptain" class="empty-diagnostic">
@@ -163,11 +165,7 @@
     </section>
     </template>
 
-    <nav class="bottom-nav" :style="{ gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))` }">
-      <router-link v-for="item in navItems" :key="item.to" class="nav-item" :to="item.to">
-        {{ item.label }}
-      </router-link>
-    </nav>
+    <JudgeBottomNav :role="me?.role" />
   </main>
 </template>
 
@@ -176,6 +174,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Html5Qrcode } from 'html5-qrcode'
 import { fetchCaptainBoard, fetchCompetitions, fetchMe, fetchMyScores, fetchRoundTable } from '@/api/judge'
+import JudgeBottomNav from '@/components/JudgeBottomNav.vue'
 
 const router = useRouter()
 const me = ref(null)
@@ -191,7 +190,13 @@ let scanLocked = false
 
 const isCaptain = computed(() => me.value?.role === 'CAPTAIN')
 const isScoreRoundCaptain = computed(() => isCaptain.value && current.value?.taskType === 'CAPTAIN_FINALIZE')
-const isRankingRound = computed(() => current.value?.taskType === 'RANKING_ROUND')
+const isRankingRound = computed(() => ['RANKING_ROUND', 'RANKING_PARTICIPANT'].includes(current.value?.taskType))
+const canSubmitRanking = computed(() => current.value?.taskType === 'RANKING_ROUND')
+const rankingTaskHint = computed(() => (
+  canSubmitRanking.value
+    ? '本轮从候选酒中选择并排序，提交后进入下一轮或奖项确认。'
+    : '你已安排到本桌参与讨论，可查看候选酒款，排序结果由桌长提交。'
+))
 const myScoredCount = computed(() => entries.value.filter((entry) => entry.scored).length)
 const finalizedCount = computed(() => entries.value.filter((entry) => entry.finalized).length)
 const advancedCount = computed(() => entries.value.filter((entry) => entry.advanced).length)
@@ -203,11 +208,11 @@ const progressCount = computed(() => (
     ? `${myScoredCount.value} / ${entries.value.length}`
     : `${current.value?.myScoredCount || 0} / ${current.value?.totalEntries || 0}`
 ))
-const taskSectionTitle = computed(() => (isCaptain.value ? '本桌酒款' : '我的待评酒款'))
+const taskSectionTitle = computed(() => (isCaptain.value ? '本桌酒款' : '我的本轮酒款'))
 const taskSectionHint = computed(() => (
   isScoreRoundCaptain.value
     ? `扫码完成自己的专业评分；同桌评分齐全后，从下方进入本桌汇总。`
-    : '扫码或点酒款进入评分。'
+    : '扫码或点酒款进入评分，已评分酒款在确认前可查看或调整。'
 ))
 const tableReadyForReview = computed(() => {
   if (!entries.value.length) return false
@@ -217,12 +222,12 @@ const tableReadyForReview = computed(() => {
 const tableCheckoutText = computed(() => {
   if (!entries.value.length) return ''
   if (finalizedCount.value < entries.value.length) {
-    return `还有 ${entries.value.length - finalizedCount.value} 款未完成桌长汇总。`
+    return `还有 ${entries.value.length - finalizedCount.value} 款未填写桌长意见，完成后再核对本桌结果。`
   }
   if (advanceTargetCount.value > 0 && advancedCount.value !== advanceTargetCount.value) {
-    return `晋级数量需为 ${advanceTargetCount.value} 款，当前 ${advancedCount.value} 款。`
+    return `酒款意见已完成，还需按本桌目标确认 ${advanceTargetCount.value} 款晋级酒。`
   }
-  return '所有酒款已汇总，晋级数量符合本桌目标。'
+  return '酒款意见和晋级名单已齐，请核对无误后提交本桌结果。'
 })
 const emptyStateTitle = computed(() => {
   if (!current.value?.roundTableId) return '当前账号还没有绑定评审桌'
@@ -238,15 +243,6 @@ const emptyStateChecks = computed(() => [
   `评审桌：${me.value?.tableName || current.value?.tableName || '未分配'}`,
   `当前轮次：${current.value?.flightName || '未发布'}`,
 ])
-
-const navItems = computed(() => {
-  const items = [
-    { label: '扫码', to: '/competitions' },
-  ]
-  if (me.value?.role === 'CAPTAIN') items.push({ label: '本桌', to: '/captain' })
-  items.push({ label: '我的', to: '/profile' })
-  return items
-})
 
 function openEntry(uuid) {
   if (!uuid) return
@@ -290,7 +286,7 @@ function entryStatus(entry) {
     if (!entry.scored) return { label: '待我评分', className: 'status-warn' }
     return { label: '待汇总', className: 'status-warn' }
   }
-  if (entry.scored) return { label: '可修改', className: 'status-warn' }
+  if (entry.scored) return { label: '已评分', className: 'status-ok' }
   return { label: '待评分', className: '' }
 }
 
@@ -307,9 +303,9 @@ function readyForFinalize(entry) {
 }
 
 function captainAction(entry) {
-  if (entry.finalized) return { label: '查看桌长意见', primary: false }
+  if (entry.finalized) return { label: '查看意见', primary: false }
   if (!entry.scored) return null
-  if (readyForFinalize(entry)) return { label: '去汇总', primary: true }
+  if (readyForFinalize(entry)) return { label: '汇总意见', primary: true }
   return null
 }
 
@@ -388,8 +384,8 @@ onMounted(async () => {
     router.replace('/review-status')
     return
   }
-  const competitions = await fetchCompetitions()
-  current.value = competitions[0]
+    const competitions = await fetchCompetitions()
+    current.value = selectCurrentTask(competitions)
   captainBoard.value = null
   rankingSlots.value = []
   if (!current.value) {
@@ -403,10 +399,12 @@ onMounted(async () => {
       entries.value = board.entries || []
       return
     }
-    const [table, myScores] = await Promise.all([
-      fetchRoundTable(current.value.roundTableId),
-      fetchMyScores(),
-    ])
+    const [table, myScores] = isRankingRound.value
+      ? [await fetchRoundTable(current.value.roundTableId), []]
+      : await Promise.all([
+        fetchRoundTable(current.value.roundTableId),
+        fetchMyScores(),
+      ])
     rankingSlots.value = table.rankings || []
     const myScoredUuids = new Set(myScores.map((score) => score.beerUuid))
     entries.value = (table.entries || []).map((entry) => ({
@@ -420,6 +418,21 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   stopScanner()
 })
+
+function selectCurrentTask(tasks) {
+  if (!tasks?.length) return null
+  const taskPriority = {
+    RANKING_ROUND: 3,
+    RANKING_PARTICIPANT: 3,
+    CAPTAIN_FINALIZE: 2,
+    SCORE_ENTRY: 1,
+  }
+  return [...tasks].sort((left, right) => (
+    Number(right.roundId || 0) - Number(left.roundId || 0)
+      || Number(taskPriority[right.taskType] || 0) - Number(taskPriority[left.taskType] || 0)
+      || Number(right.roundTableId || 0) - Number(left.roundTableId || 0)
+  ))[0]
+}
 </script>
 
 <style scoped>
@@ -687,11 +700,19 @@ onBeforeUnmount(() => {
   font-style: normal;
 }
 
+.captain-entry-footer {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-top: 8px;
+}
+
 .captain-entry-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 8px;
+  min-width: 0;
 }
 
 .captain-entry-meta span {
@@ -715,9 +736,22 @@ onBeforeUnmount(() => {
 }
 
 .entry-action {
-  margin-top: 8px;
-  min-height: 40px;
-  padding: 9px 12px;
+  flex: 0 0 auto;
+  min-height: 32px;
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+  padding: 6px 10px;
+  color: #344054;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.entry-action.primary {
+  border-color: #d17932;
+  color: #fff;
+  background: #a75517;
 }
 
 .empty-note {
@@ -805,10 +839,6 @@ onBeforeUnmount(() => {
 
 @media (max-width: 380px) {
   .manual-row {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .captain-entry-meta {
     grid-template-columns: minmax(0, 1fr);
   }
 

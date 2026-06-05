@@ -190,6 +190,12 @@ public class AdminController {
         return Result.success(competitionService.getCompetitionDetail(id));
     }
 
+    @PostMapping("/competitions/{id}/rounds/{roundId}/sync-candidates")
+    public Result<CompetitionDetailVO> syncRoundCandidates(@PathVariable Long id, @PathVariable Long roundId) {
+        roundService.syncRoundCandidates(id, roundId);
+        return Result.success(competitionService.getCompetitionDetail(id));
+    }
+
     @PostMapping("/competitions/{id}/rounds/{roundId}/lock")
     public Result<CompetitionDetailVO> lockRound(@PathVariable Long id, @PathVariable Long roundId) {
         roundService.lockRound(id, roundId);

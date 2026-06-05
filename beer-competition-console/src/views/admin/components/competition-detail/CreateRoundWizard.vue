@@ -3,17 +3,17 @@
     <section class="round-dialog" role="dialog" aria-modal="true" aria-labelledby="create-round-title">
       <header>
         <div>
-          <h2 id="create-round-title">创建{{ nextRoundName }}</h2>
-          <p>使用上一轮晋级酒款，创建后重新分配桌长和酒款。</p>
+          <h2 id="create-round-title">准备{{ nextRoundName }}排序</h2>
+          <p>先安排桌长和参与评委，上一轮结果固定后再同步候选酒款。</p>
         </div>
         <button class="icon-action" type="button" @click="$emit('close')">×</button>
       </header>
 
       <section class="summary-panel">
         <div class="summary-main">
-          <span>晋级酒款</span>
+          <span>当前候选</span>
           <strong>{{ advancedPool.length }}</strong>
-          <small>创建后作为{{ nextRoundName }}可分配酒款池</small>
+          <small>来源轮次锁定后可同步到{{ nextRoundName }}</small>
         </div>
         <div class="summary-list">
           <span v-for="item in advancedCategoryStats" :key="item.category">
@@ -43,33 +43,23 @@
             @input="$emit('update:tableCount', Number($event.target.value || 1))"
           />
         </label>
-        <label>
-          <span>每桌目标</span>
+        <label :class="{ 'fixed-count-field': isTargetCountFixed }">
+          <span>{{ targetCountLabel }}</span>
           <input
             :value="targetCount"
             min="1"
             type="number"
-            :disabled="Boolean(selectedTargetOption?.fixedTargetCount)"
+            :disabled="isTargetCountFixed"
             @input="$emit('update:targetCount', Number($event.target.value || 1))"
           />
+          <small>{{ targetCountHint }}</small>
         </label>
-      </section>
-
-      <section class="result-panel">
-        <article>
-          <strong>创建后</strong>
-          <p>{{ nextRoundName }}会有一张空的草稿桌，桌长和酒款都由后台人员在分桌分配页重新安排。</p>
-        </article>
-        <article>
-          <strong>不自动沿用</strong>
-          <p>不复制上一轮桌长，不自动分配酒款，避免现场重组时还要先删掉系统预设。</p>
-        </article>
       </section>
 
       <footer>
         <button class="secondary-action" type="button" @click="$emit('close')">取消</button>
-        <button class="primary-action" type="button" :disabled="advancedPool.length === 0" @click="$emit('finish')">
-          创建并去分桌
+        <button class="primary-action" type="button" @click="$emit('finish')">
+          创建草稿并去分桌
         </button>
       </footer>
     </section>
@@ -93,6 +83,17 @@ const props = defineProps({
 defineEmits(['close', 'finish', 'update:targetMode', 'update:targetCount', 'update:tableCount'])
 
 const selectedTargetOption = computed(() => props.targetOptions.find((option) => option.value === props.targetMode))
+const isTargetCountFixed = computed(() => Boolean(selectedTargetOption.value?.fixedTargetCount))
+const targetCountLabel = computed(() => {
+  if (props.targetMode === 'MEDALS') return '奖项槽位'
+  if (props.targetMode === 'CHAMPION') return '总冠军名额'
+  return '每桌晋级数量'
+})
+const targetCountHint = computed(() => {
+  if (props.targetMode === 'MEDALS') return '固定为金奖、银奖、铜奖 3 个槽位。'
+  if (props.targetMode === 'CHAMPION') return '固定为 1 个总冠军名额。'
+  return '每张桌由桌长提交并排序的晋级酒款数量。'
+})
 </script>
 
 <style scoped>
@@ -195,8 +196,7 @@ button:disabled {
 
 .round-config-panel label,
 .summary-main,
-.summary-list span,
-.result-panel article {
+.summary-list span {
   padding: 12px;
   border: 1px solid rgba(219, 232, 237, 0.1);
   border-radius: 8px;
@@ -236,6 +236,13 @@ button:disabled {
   cursor: not-allowed;
 }
 
+.fixed-count-field input {
+  color: #e0b84a;
+  border-color: rgba(216, 169, 53, 0.28);
+  background: rgba(216, 169, 53, 0.055);
+  font-weight: 850;
+}
+
 .summary-main {
   display: grid;
   gap: 6px;
@@ -263,22 +270,10 @@ button:disabled {
   color: #e6edf0;
 }
 
-.result-panel {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.result-panel article {
-  display: grid;
-  gap: 6px;
-}
-
 @media (max-width: 760px) {
   .summary-panel,
   .round-config-panel,
-  .summary-list,
-  .result-panel {
+  .summary-list {
     grid-template-columns: 1fr;
   }
 }

@@ -15,7 +15,6 @@ public class RoundTableAllocationRequest {
     @NotBlank(message = "轮次桌名称不能为空")
     private String name;
 
-    @NotBlank(message = "桌长不能为空")
     private String captainPublicId;
 
     private Long categoryId;
@@ -28,6 +27,8 @@ public class RoundTableAllocationRequest {
     private String targetMode;
 
     private Integer sortOrder;
+
+    private List<String> participantPublicIds;
 
     private List<String> entryUuids;
 }

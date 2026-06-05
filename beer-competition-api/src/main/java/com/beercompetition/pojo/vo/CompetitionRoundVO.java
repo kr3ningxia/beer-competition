@@ -16,5 +16,8 @@ public class CompetitionRoundVO {
     private String status;
     private Long sourceRoundId;
     private List<String> sourceEntryUuids;
+    private Boolean sourceLocked;
+    private Boolean candidatesSynced;
+    private Boolean preparationDraft;
     private List<RoundTableVO> tables;
 }

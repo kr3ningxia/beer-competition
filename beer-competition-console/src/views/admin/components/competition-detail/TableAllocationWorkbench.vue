@@ -1,6 +1,181 @@
 <template>
   <section class="allocation-workbench">
     <section v-if="allocationMode === 'judges'" class="allocation-grid">
+      <template v-if="currentRound?.type === 'RANKING'">
+      <aside class="resource-panel judge-resource-panel">
+        <label class="search-box">
+          <Search />
+          <input v-model="judgeKeywordModel" placeholder="搜索姓名、手机号、资质" />
+        </label>
+        <div class="resource-list">
+          <article
+            v-for="judge in filteredJudgePool"
+            :key="judge.publicId"
+            :class="['resource-card', { assigned: isRoundJudgeAssigned(judge.publicId), disabled: !isJudgeActive(judge) }]"
+            :draggable="currentRound?.status === 'DRAFT' && isJudgeActive(judge)"
+            @dragstart="$emit('startJudgeDrag', judge)"
+            @dragend="$emit('clearDrag')"
+          >
+            <span class="avatar">{{ getJudgeInitial(judge.name) }}</span>
+            <div class="resource-body">
+              <strong>{{ judge.name || '未填写姓名' }}</strong>
+              <small class="judge-qualification" :data-full="formatJudgeQualification(judge.qualification)">
+                {{ formatJudgeQualification(judge.qualification) }}
+              </small>
+              <em v-if="getRoundJudgeAssignmentSummary(judge.publicId)">{{ getRoundJudgeAssignmentSummary(judge.publicId) }}</em>
+            </div>
+            <div class="resource-card-actions">
+              <button type="button" :disabled="!isJudgeActive(judge) || !selectedRoundTableId || currentRound?.status !== 'DRAFT'" @click="addJudgeToRankingTarget(judge.publicId)">
+                加入
+              </button>
+            </div>
+          </article>
+        </div>
+      </aside>
+
+      <main class="table-board judge-board">
+        <article
+          v-for="table in currentRoundTables"
+          :key="table.id"
+          :class="['desk-card', { active: selectedRoundTableId === table.id, danger: getRoundTableIssues(table).length }]"
+          @click="selectRankingTable(table.id)"
+        >
+          <header class="desk-summary">
+            <div class="desk-summary-main">
+              <h3>{{ table.name }}</h3>
+            </div>
+            <em :class="['desk-status', getRoundTableIssues(table).length ? 'warning' : 'ok']">
+              {{ getRoundTableIssues(table)[0] || '分桌完整' }}
+            </em>
+          </header>
+          <section class="role-grid ranking-role-grid">
+            <div
+              :class="['role-lane', { active: isSelectedRankingRole(table.id, 'CAPTAIN') }]"
+              @click.stop="selectRankingRole(table.id, 'CAPTAIN')"
+              @dragover.prevent
+              @drop.prevent="dropRankingJudge(table.id, 'CAPTAIN')"
+            >
+              <header>
+                <strong>桌长</strong>
+                <span>{{ table.captainPublicId ? 1 : 0 }} 人</span>
+              </header>
+              <article v-if="table.captainPublicId" class="mini-card">
+                <span class="avatar small">{{ getJudgeInitial(getJudge(table.captainPublicId)?.name) }}</span>
+                <div>
+                  <strong>{{ getJudge(table.captainPublicId)?.name || '未知评审' }}</strong>
+                  <small>桌长</small>
+                </div>
+                <button class="icon-action" type="button" @click.stop="$emit('updateTableCaptain', table.id, '')">
+                  <Delete />
+                </button>
+              </article>
+              <p v-else class="role-empty">
+                从左侧拖入，或选中这里后点击“加入”。
+              </p>
+            </div>
+            <div
+              :class="['role-lane', { active: isSelectedRankingRole(table.id, 'PARTICIPANT') }]"
+              @click.stop="selectRankingRole(table.id, 'PARTICIPANT')"
+              @dragover.prevent
+              @drop.prevent="dropRankingJudge(table.id, 'PARTICIPANT')"
+            >
+              <header>
+                <strong>参与评委</strong>
+                <span>{{ getRankingParticipants(table).length }} 人</span>
+              </header>
+              <article
+                v-for="member in getRankingParticipants(table)"
+                :key="member.judgePublicId"
+                class="mini-card"
+              >
+                <span class="avatar small">{{ getJudgeInitial(member.name) }}</span>
+                <div>
+                  <strong>{{ member.name || getJudge(member.judgePublicId)?.name || '未知评审' }}</strong>
+                </div>
+                <button class="icon-action" type="button" @click.stop="$emit('removeRoundParticipant', table.id, member.judgePublicId)">
+                  <Delete />
+                </button>
+              </article>
+              <p v-if="getRankingParticipants(table).length === 0" class="role-empty">
+                默认加入到这里，也可以拖入。
+              </p>
+            </div>
+          </section>
+        </article>
+      </main>
+
+      <aside class="control-panel check-panel">
+        <section class="control-section">
+          <strong>当前轮次</strong>
+          <div class="round-switch" aria-label="当前轮次">
+            <button
+              v-for="round in displayRounds"
+              :key="round.id"
+              :class="{ active: round.id === activeRoundId }"
+              type="button"
+              @click="$emit('selectRound', round.id)"
+            >
+              {{ round.name }}
+            </button>
+          </div>
+        </section>
+        <section class="control-section">
+          <strong>分配对象</strong>
+          <div class="mode-switch" aria-label="编辑对象">
+            <button :class="{ active: allocationMode === 'judges' }" type="button" @click="$emit('update:allocationMode', 'judges')">评审</button>
+            <button :class="{ active: allocationMode === 'entries' }" type="button" @click="$emit('update:allocationMode', 'entries')">酒款</button>
+            <button :class="{ active: allocationMode === 'overview' }" type="button" @click="$emit('update:allocationMode', 'overview')">总览</button>
+          </div>
+        </section>
+        <section v-if="currentRound?.type === 'RANKING'" class="control-section">
+          <strong>轮次目标</strong>
+          <label class="stack-field target-mode-field">
+            <select
+              :value="currentRoundTargetMode"
+              :disabled="currentRound?.status !== 'DRAFT'"
+              @change="$emit('updateRoundTargetMode', $event.target.value)"
+            >
+              <option v-for="option in roundTargetOptions" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </option>
+            </select>
+            <small>{{ currentRoundTargetHint }}</small>
+          </label>
+        </section>
+        <section class="control-section">
+          <strong>操作</strong>
+          <button v-if="currentRound?.type === 'RANKING' && currentRound?.status === 'DRAFT'" class="add-desk" type="button" @click="$emit('addRoundTable')">
+            新增桌
+          </button>
+          <button v-if="currentRound?.preparationDraft && currentRound?.sourceLocked" class="main-action" type="button" @click="$emit('syncRoundCandidates')">
+            同步候选酒款
+          </button>
+          <button
+            v-else
+            class="main-action"
+            type="button"
+            :disabled="!canRunPrimaryRoundAction"
+            :title="primaryActionTitle"
+            @click="$emit('publishCurrentRound')"
+          >
+            发布给桌长和参与评委
+          </button>
+        </section>
+        <section class="control-section">
+          <strong>{{ currentRound?.name }}检查</strong>
+          <p v-for="issue in roundValidationIssues" :key="issue" class="warning">
+            <Warning />
+            <span>{{ issue }}</span>
+          </p>
+          <p v-if="roundValidationIssues.length === 0" class="ok">
+            <CircleCheck />
+            <span>排序轮可以发布。</span>
+          </p>
+        </section>
+      </aside>
+      </template>
+
+      <template v-else>
       <aside class="resource-panel judge-resource-panel">
         <label class="search-box">
           <Search />
@@ -159,6 +334,7 @@
         </p>
         </section>
       </aside>
+      </template>
     </section>
 
     <section v-else-if="allocationMode === 'entries'" class="allocation-grid">
@@ -182,7 +358,7 @@
             {{ category }}
           </button>
         </div>
-        <div v-if="currentRound?.type === 'SCORE'" class="bulk-row">
+        <div v-if="currentRound?.status === 'DRAFT'" class="bulk-row">
           <button type="button" :disabled="!selectedEntryUuids.length" @click="$emit('addSelectedToTable')">加入选中桌</button>
         </div>
         <div class="resource-list">
@@ -224,7 +400,7 @@
             </div>
             <div class="desk-header-actions">
               <button
-                v-if="currentRound?.type === 'SCORE'"
+                v-if="currentRound?.status === 'DRAFT'"
                 class="desk-auto-action"
                 type="button"
                 @click.stop="$emit('openEntryAutoAssign', table.id)"
@@ -247,11 +423,12 @@
               </select>
             </label>
             <label class="inline-target compact-target" @click.stop>
-              <span>{{ currentRound?.type === 'SCORE' ? '晋级' : '排序' }}</span>
+              <span>{{ getTargetCountLabel(table) }}</span>
               <input
                 :value="table.targetCount"
                 min="1"
                 type="number"
+                :disabled="isTargetCountFixed(table)"
                 @input="$emit('updateTableTarget', table.id, Number($event.target.value || 1))"
               />
             </label>
@@ -289,16 +466,35 @@
             <button :class="{ active: allocationMode === 'overview' }" type="button" @click="$emit('update:allocationMode', 'overview')">总览</button>
           </div>
         </section>
+        <section v-if="currentRound?.type === 'RANKING'" class="control-section">
+          <strong>轮次目标</strong>
+          <label class="stack-field target-mode-field">
+            <select
+              :value="currentRoundTargetMode"
+              :disabled="currentRound?.status !== 'DRAFT'"
+              @change="$emit('updateRoundTargetMode', $event.target.value)"
+            >
+              <option v-for="option in roundTargetOptions" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </option>
+            </select>
+            <small>{{ currentRoundTargetHint }}</small>
+          </label>
+        </section>
         <section class="control-section">
           <strong>操作</strong>
+          <button v-if="currentRound?.type === 'RANKING' && currentRound?.status === 'DRAFT'" class="add-desk" type="button" @click="$emit('addRoundTable')">
+            新增桌
+          </button>
           <button
             v-if="currentRound"
             class="main-action"
             type="button"
             :disabled="!canRunPrimaryRoundAction"
+            :title="primaryActionTitle"
             @click="$emit(currentRound?.isPreparationDraft ? 'generateFirstRound' : 'publishCurrentRound')"
           >
-            {{ currentRound?.isPreparationDraft ? '生成第一轮编排' : (currentRound?.type === 'SCORE' ? '发布给评委' : '发布给桌长') }}
+            {{ currentRound?.isPreparationDraft ? '生成第一轮编排' : (currentRound?.type === 'SCORE' ? '发布给评委' : '发布给桌长和参与评委') }}
           </button>
         </section>
         <section class="control-section">
@@ -381,7 +577,7 @@
                 <div class="overview-card-meta">
                   <span>{{ getOverviewJudgeItems(table).length }} 名成员</span>
                   <span>{{ table.entryUuids.length }} 款酒</span>
-                  <span>{{ currentRound?.type === 'SCORE' ? '晋级' : '排序目标' }} {{ table.targetCount }}</span>
+                  <span>{{ getTargetCountLabel(table) }} {{ table.targetCount }}</span>
                 </div>
               </div>
               <em :class="getOverviewTableIssues(table).length ? 'warning' : 'ok'">
@@ -445,7 +641,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { CircleCheck, Delete, Search, Warning } from '@element-plus/icons-vue'
 
 const props = defineProps({
@@ -503,6 +699,7 @@ const emit = defineEmits([
   'startAssignmentDrag',
   'dropOnRole',
   'clearDrag',
+  'dropRoundJudge',
   'generateFirstRound',
   'toggleEntrySelection',
   'addSelectedToTable',
@@ -515,6 +712,12 @@ const emit = defineEmits([
   'updateTableCaptain',
   'updateTableScope',
   'updateTableTarget',
+  'setRoundCaptain',
+  'updateRoundTargetMode',
+  'addRoundTable',
+  'addRoundParticipant',
+  'removeRoundParticipant',
+  'syncRoundCandidates',
   'publishCurrentRound',
 ])
 
@@ -528,6 +731,7 @@ const roundKeywordModel = computed({
   set: (value) => emit('update:roundKeyword', value),
 })
 
+const selectedRankingRole = ref(null)
 const firstRoundExists = computed(() => props.rounds.some((round) => round.roundNo === 1))
 const displayRounds = computed(() => {
   if (props.currentRound?.isPreparationDraft && !firstRoundExists.value) return [props.currentRound]
@@ -538,6 +742,46 @@ const canRunPrimaryRoundAction = computed(() => {
     return props.validationIssues.length === 0 && props.roundValidationIssues.length === 0
   }
   return props.canPublish
+})
+const primaryActionDisabledReason = computed(() => {
+  if (canRunPrimaryRoundAction.value) return ''
+  return props.roundValidationIssues[0]
+    || props.validationIssues[0]
+    || '请先处理发布前检查'
+})
+const primaryActionTitle = computed(() => (canRunPrimaryRoundAction.value ? '' : primaryActionDisabledReason.value))
+const roundTargetOptions = computed(() => {
+  if (currentRoundTargetMode.value === 'CHAMPION') {
+    return [
+      {
+        value: 'CHAMPION',
+        label: '跨类总冠军轮',
+        hint: '从各组别金奖中选出 1 款全场总冠军。',
+      },
+    ]
+  }
+  return [
+    {
+      value: 'TOP_N',
+      label: '普通排序轮',
+      hint: '继续筛选，锁定后进入下一轮候选池。',
+    },
+    {
+      value: 'MEDALS',
+      label: '组别金银铜轮',
+      hint: '',
+    },
+  ]
+})
+const currentRoundTargetMode = computed(() => {
+  const modes = new Set(props.currentRoundTables.map((table) => table.targetMode).filter(Boolean))
+  if (modes.size === 1) return [...modes][0]
+  return 'TOP_N'
+})
+const currentRoundTargetHint = computed(() => {
+  const option = roundTargetOptions.value.find((item) => item.value === currentRoundTargetMode.value)
+  if (props.currentRound?.status !== 'DRAFT') return option ? `${option.label}已发布，不能在这里修改。` : '当前轮次已发布，不能在这里修改。'
+  return option?.hint || '草稿阶段可以修改轮次目标。'
 })
 const tableScopeOptions = computed(() => {
   const categories = new Map()
@@ -560,7 +804,7 @@ const overviewMetrics = computed(() => {
   const assignedEntries = new Set(props.currentRoundTables.flatMap((table) => table.entryUuids)).size
   const assignedJudges = props.currentRound?.type === 'SCORE'
     ? props.judgeTableForm.reduce((sum, table) => sum + props.assignmentsForTable(table).length, 0)
-    : props.currentRoundTables.filter((table) => table.captainPublicId).length
+    : props.currentRoundTables.reduce((sum, table) => sum + getRoundMembers(table).length, 0)
   const issueCount = props.roundValidationIssues.length + props.validationIssues.length
   return {
     assignedEntries,
@@ -569,6 +813,58 @@ const overviewMetrics = computed(() => {
     issueCount,
   }
 })
+
+function getRoundMembers(roundTable) {
+  return roundTable?.members || []
+}
+
+function selectRankingTable(tableId) {
+  selectedRankingRole.value = null
+  emit('selectRoundTable', tableId)
+}
+
+function selectRankingRole(tableId, role) {
+  selectedRankingRole.value = role
+  emit('selectRoundTable', tableId)
+}
+
+function isSelectedRankingRole(tableId, role) {
+  return props.selectedRoundTableId === tableId && selectedRankingRole.value === role
+}
+
+function addJudgeToRankingTarget(judgePublicId) {
+  if (selectedRankingRole.value === 'CAPTAIN') {
+    emit('setRoundCaptain', judgePublicId)
+    return
+  }
+  emit('addRoundParticipant', judgePublicId)
+}
+
+function dropRankingJudge(tableId, role) {
+  selectRankingRole(tableId, role)
+  emit('dropRoundJudge', tableId, role)
+}
+
+function getRankingParticipants(roundTable) {
+  return getRoundMembers(roundTable).filter((member) => member.role !== 'CAPTAIN')
+}
+
+function isRoundJudgeAssigned(judgePublicId) {
+  return props.currentRoundTables.some((table) => (
+    table.captainPublicId === judgePublicId
+      || getRoundMembers(table).some((member) => member.judgePublicId === judgePublicId)
+  ))
+}
+
+function getRoundJudgeAssignmentSummary(judgePublicId) {
+  const table = props.currentRoundTables.find((item) => (
+    item.captainPublicId === judgePublicId
+      || getRoundMembers(item).some((member) => member.judgePublicId === judgePublicId)
+  ))
+  if (!table) return ''
+  if (table.captainPublicId === judgePublicId) return `${table.name} · 桌长`
+  return `${table.name} · 参与评委`
+}
 
 function getEntry(uuid) {
   return props.currentPoolEntries.find((entry) => entry.uuid === uuid)
@@ -585,6 +881,17 @@ function formatEntryBrief(uuid) {
   return shortCode ? `${name} ·${shortCode}` : name
 }
 
+function getTargetCountLabel(table) {
+  if (props.currentRound?.type === 'SCORE') return '晋级数量'
+  if (table?.targetMode === 'MEDALS') return '奖项槽位'
+  if (table?.targetMode === 'CHAMPION') return '总冠军名额'
+  return '晋级数量'
+}
+
+function isTargetCountFixed(table) {
+  return table?.targetMode === 'MEDALS' || table?.targetMode === 'CHAMPION'
+}
+
 function getTableScopeValue(table) {
   if (table?.categoryMode === 'MIXED') return 'MIXED'
   if (table?.categoryId != null) return `CATEGORY:${table.categoryId}`
@@ -596,6 +903,12 @@ function getJudgeTable(roundTable) {
 }
 
 function getTableJudgeAssignments(roundTable) {
+  if (props.currentRound?.type === 'RANKING' && getRoundMembers(roundTable).length) {
+    return getRoundMembers(roundTable).map((member) => ({
+      judgePublicId: member.judgePublicId,
+      role: member.role,
+    }))
+  }
   const judgeTable = getJudgeTable(roundTable)
   if (judgeTable) return props.assignmentsForTable(judgeTable)
   return roundTable.captainPublicId ? [{ judgePublicId: roundTable.captainPublicId, role: 'CAPTAIN' }] : []
@@ -998,6 +1311,18 @@ dt,
   display: grid;
   gap: 2px;
   min-width: 0;
+}
+
+.resource-card-actions {
+  display: grid;
+  gap: 6px;
+  align-content: center;
+}
+
+.resource-card-actions button {
+  min-height: 30px;
+  padding: 0 8px;
+  white-space: nowrap;
 }
 
 .resource-body em {
@@ -1441,6 +1766,14 @@ p {
 
 .inline-target input {
   text-align: center;
+}
+
+.inline-target input:disabled {
+  color: #e0b84a;
+  border-color: rgba(216, 169, 53, 0.28);
+  background: rgba(216, 169, 53, 0.055);
+  cursor: not-allowed;
+  font-weight: 850;
 }
 
 .inline-scope select {

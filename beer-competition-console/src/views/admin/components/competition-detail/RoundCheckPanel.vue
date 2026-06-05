@@ -28,8 +28,10 @@
             :value="selectedRoundTable.targetCount"
             min="1"
             type="number"
+            :disabled="targetFixed"
             @input="$emit('updateTableTarget', selectedRoundTable.id, Number($event.target.value || 1))"
           />
+          <small v-if="targetHint">{{ targetHint }}</small>
         </label>
         <button v-if="canRemoveTable" class="secondary-action" type="button" @click="$emit('removeRoundTable', selectedRoundTable.id)">
           删除草稿桌
@@ -57,7 +59,9 @@ import { CircleCheck, Warning } from '@element-plus/icons-vue'
 
 defineProps({
   title: { type: String, default: '发布检查' },
-  targetLabel: { type: String, default: '目标数量' },
+  targetLabel: { type: String, default: '目标设置' },
+  targetHint: { type: String, default: '' },
+  targetFixed: Boolean,
   successText: { type: String, default: '当前轮次可以发布。' },
   selectedRoundTable: { type: Object, default: null },
   captainCandidates: { type: Array, required: true },
@@ -94,8 +98,13 @@ h3 {
 }
 
 .panel-heading span,
-.stack-field span {
+.stack-field span,
+.stack-field small {
   color: #8da1aa;
+}
+
+.stack-field small {
+  line-height: 1.45;
 }
 
 .stack-field,
@@ -115,6 +124,14 @@ input {
   border-radius: 8px;
   outline: 0;
   background: rgba(7, 14, 17, 0.72);
+}
+
+input:disabled {
+  color: #e0b84a;
+  border-color: rgba(216, 169, 53, 0.28);
+  background: rgba(216, 169, 53, 0.055);
+  cursor: not-allowed;
+  font-weight: 850;
 }
 
 .check-list p {
