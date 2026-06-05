@@ -117,30 +117,35 @@
       </button>
     </section>
 
-    <JudgeBottomNav :role="me?.role" :active="scanResultActiveNav" />
+    <JudgeBottomNav :role="me?.role" :active="scanResultActiveNav" :hide-table="hideTableNav" />
   </main>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { fetchEntry, fetchMe, resolveScanEntry } from '@/api/judge'
+import { fetchCompetitions, fetchEntry, fetchMe, resolveScanEntry } from '@/api/judge'
 import JudgeBottomNav from '@/components/JudgeBottomNav.vue'
+import { isRankingTaskType, selectCurrentTask } from '@/utils/judgeTasks'
 
 const route = useRoute()
 const code = computed(() => String(route.params.code || route.params.uuid || '').toUpperCase())
 const resolvingScan = computed(() => Boolean(route.params.code))
 const entry = ref(null)
 const me = ref(null)
+const currentTask = ref(null)
 const loading = ref(true)
 const scoreButtonLabel = computed(() => (
   me.value?.role === 'CAPTAIN' ? '填写我的专业评分' : '开始评分'
 ))
 
-const scanResultActiveNav = computed(() => (me.value?.role === 'CAPTAIN' ? 'table' : 'scan'))
+const hideTableNav = computed(() => isRankingTaskType(currentTask.value?.taskType))
+const scanResultActiveNav = computed(() => (me.value?.role === 'CAPTAIN' && !hideTableNav.value ? 'table' : 'scan'))
 
 onMounted(async () => {
-  me.value = await fetchMe()
+  const [profile, tasks] = await Promise.all([fetchMe(), fetchCompetitions().catch(() => [])])
+  me.value = profile
+  currentTask.value = selectCurrentTask(tasks)
   try {
     entry.value = resolvingScan.value ? await resolveScanEntry(code.value) : await fetchEntry(code.value)
   } catch {

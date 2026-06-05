@@ -3,17 +3,17 @@
     <section class="round-dialog" role="dialog" aria-modal="true" aria-labelledby="create-round-title">
       <header>
         <div>
-          <h2 id="create-round-title">准备{{ nextRoundName }}排序</h2>
-          <p>先安排桌长和参与评委，上一轮结果固定后再同步候选酒款。</p>
+          <h2 id="create-round-title">{{ dialogTitle }}</h2>
+          <p>{{ dialogHint }}</p>
         </div>
         <button class="icon-action" type="button" @click="$emit('close')">×</button>
       </header>
 
       <section class="summary-panel">
         <div class="summary-main">
-          <span>当前候选</span>
+          <span>{{ candidateLabel }}</span>
           <strong>{{ advancedPool.length }}</strong>
-          <small>来源轮次锁定后可同步到{{ nextRoundName }}</small>
+          <small>{{ candidateHint }}</small>
         </div>
         <div class="summary-list">
           <span v-for="item in advancedCategoryStats" :key="item.category">
@@ -59,7 +59,7 @@
       <footer>
         <button class="secondary-action" type="button" @click="$emit('close')">取消</button>
         <button class="primary-action" type="button" @click="$emit('finish')">
-          创建草稿并去分桌
+          {{ finishLabel }}
         </button>
       </footer>
     </section>
@@ -83,15 +83,21 @@ const props = defineProps({
 defineEmits(['close', 'finish', 'update:targetMode', 'update:targetCount', 'update:tableCount'])
 
 const selectedTargetOption = computed(() => props.targetOptions.find((option) => option.value === props.targetMode))
+const isChampion = computed(() => props.targetMode === 'CHAMPION')
+const dialogTitle = computed(() => (isChampion.value ? '准备决赛轮' : `准备${props.nextRoundName}排序`))
+const dialogHint = computed(() => (isChampion.value ? '安排决赛桌、桌长和参与评委。' : '先安排桌长和参与评委，上一轮结果固定后再分配酒款。'))
+const candidateLabel = computed(() => (isChampion.value ? '各组别金奖' : '当前候选'))
+const candidateHint = computed(() => (isChampion.value ? '用于决出全场总冠军' : `用于${props.nextRoundName}分桌`))
+const finishLabel = computed(() => (isChampion.value ? '创建决赛草稿并去分桌' : '创建草稿并去分桌'))
 const isTargetCountFixed = computed(() => Boolean(selectedTargetOption.value?.fixedTargetCount))
 const targetCountLabel = computed(() => {
   if (props.targetMode === 'MEDALS') return '奖项槽位'
-  if (props.targetMode === 'CHAMPION') return '总冠军名额'
+  if (props.targetMode === 'CHAMPION') return '总冠军'
   return '每桌晋级数量'
 })
 const targetCountHint = computed(() => {
   if (props.targetMode === 'MEDALS') return '固定为金奖、银奖、铜奖 3 个槽位。'
-  if (props.targetMode === 'CHAMPION') return '固定为 1 个总冠军名额。'
+  if (props.targetMode === 'CHAMPION') return '总冠军 1 名。'
   return '每张桌由桌长提交并排序的晋级酒款数量。'
 })
 </script>

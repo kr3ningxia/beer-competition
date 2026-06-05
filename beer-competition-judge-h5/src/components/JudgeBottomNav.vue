@@ -45,6 +45,10 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  hideTable: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const route = useRoute()
@@ -53,7 +57,9 @@ const items = computed(() => {
   const nav = [
     { label: '扫码', to: '/competitions', icon: 'scan', key: 'scan' },
   ]
-  if (props.role === 'CAPTAIN') nav.push({ label: '本桌', to: '/captain', icon: 'table', key: 'table' })
+  if (props.role === 'CAPTAIN' && !props.hideTable) {
+    nav.push({ label: '本桌', to: '/captain', icon: 'table', key: 'table' })
+  }
   nav.push({ label: '我的', to: '/profile', icon: 'profile', key: 'profile' })
   return nav
 })

@@ -37,19 +37,22 @@
       <button class="button danger full" type="button" @click="logout">退出登录</button>
     </section>
 
-    <JudgeBottomNav :role="me?.role" />
+    <JudgeBottomNav :role="me?.role" :hide-table="hideTableNav" />
   </main>
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { fetchMe } from '@/api/judge'
+import { fetchCompetitions, fetchMe } from '@/api/judge'
 import JudgeBottomNav from '@/components/JudgeBottomNav.vue'
 import { clearSession } from '@/utils/auth'
+import { isRankingTaskType, selectCurrentTask } from '@/utils/judgeTasks'
 
 const router = useRouter()
 const me = ref(null)
+const currentTask = ref(null)
+const hideTableNav = computed(() => isRankingTaskType(currentTask.value?.taskType))
 
 function logout() {
   clearSession()
@@ -58,7 +61,9 @@ function logout() {
 }
 
 onMounted(async () => {
-  me.value = await fetchMe()
+  const [profile, tasks] = await Promise.all([fetchMe(), fetchCompetitions().catch(() => [])])
+  me.value = profile
+  currentTask.value = selectCurrentTask(tasks)
 })
 </script>
 

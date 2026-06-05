@@ -104,7 +104,7 @@ public class AwardServiceImpl implements AwardService {
             throw new BaseException("没有已锁定的奖项轮次");
         }
         if (championRound == null) {
-            throw new BaseException("请先完成并锁定跨类总冠军轮次");
+            throw new BaseException("请先完成并锁定决赛轮");
         }
 
         // 2) 从奖项轮次写入可调整草稿
@@ -123,7 +123,7 @@ public class AwardServiceImpl implements AwardService {
         }
         validateMedalDraftCompleteness(drafts);
         if (drafts.stream().noneMatch(result -> Objects.equals(result.getChampionFlag(), FLAG_TRUE))) {
-            throw new BaseException("跨类总冠军轮次没有总冠军结果");
+            throw new BaseException("决赛轮没有总冠军结果");
         }
         drafts.forEach(awardResultMapper::insert);
         return toResultVOs(drafts);
@@ -171,10 +171,10 @@ public class AwardServiceImpl implements AwardService {
         if (targetModes.contains(RoundTargetMode.CHAMPION.name())) {
             List<AwardResult> championDrafts = buildDraftResults(competitionId, round, RoundTargetMode.CHAMPION.name());
             if (championDrafts.isEmpty()) {
-                throw new BaseException("总冠军轮没有可生成的奖项结果");
+                throw new BaseException("决赛轮没有可生成的奖项结果");
             }
             if (championDrafts.stream().noneMatch(result -> Objects.equals(result.getChampionFlag(), FLAG_TRUE))) {
-                throw new BaseException("总冠军轮没有总冠军结果");
+                throw new BaseException("决赛轮没有总冠军结果");
             }
             drafts.addAll(championDrafts);
         }

@@ -44,9 +44,20 @@
             <div class="desk-summary-main">
               <h3>{{ table.name }}</h3>
             </div>
-            <em :class="['desk-status', getRoundTableIssues(table).length ? 'warning' : 'ok']">
-              {{ getRoundTableIssues(table)[0] || '分桌完整' }}
-            </em>
+            <div class="desk-summary-side">
+              <em :class="['desk-status', getRoundTableIssues(table).length ? 'warning' : 'ok']">
+                {{ getRoundTableIssues(table)[0] || '分桌完整' }}
+              </em>
+              <button
+                v-if="currentRound?.status === 'DRAFT'"
+                class="icon-action desk-delete-action"
+                type="button"
+                title="删除桌"
+                @click.stop="$emit('removeRoundTable', table.id)"
+              >
+                <Delete />
+              </button>
+            </div>
           </header>
           <section class="role-grid ranking-role-grid">
             <div
@@ -147,18 +158,14 @@
           <button v-if="currentRound?.type === 'RANKING' && currentRound?.status === 'DRAFT'" class="add-desk" type="button" @click="$emit('addRoundTable')">
             新增桌
           </button>
-          <button v-if="currentRound?.preparationDraft && currentRound?.sourceLocked" class="main-action" type="button" @click="$emit('syncRoundCandidates')">
-            同步候选酒款
-          </button>
           <button
-            v-else
             class="main-action"
             type="button"
             :disabled="!canRunPrimaryRoundAction"
             :title="primaryActionTitle"
             @click="$emit('publishCurrentRound')"
           >
-            发布给桌长和参与评委
+            {{ primaryRoundActionLabel }}
           </button>
         </section>
         <section class="control-section">
@@ -337,16 +344,23 @@
       </template>
     </section>
 
-    <section v-else-if="allocationMode === 'entries'" class="allocation-grid">
+    <section v-else-if="allocationMode === 'entries'" class="allocation-grid entry-allocation-grid">
       <aside class="resource-panel">
-        <div class="panel-head">
-          <strong>{{ currentRound?.type === 'SCORE' ? '已入库酒款' : '晋级酒款' }}</strong>
-          <span>{{ filteredRoundPool.length }} 款</span>
+        <div class="entry-search-row">
+          <label class="search-box">
+            <Search />
+            <input v-model="roundKeywordModel" placeholder="搜索酒名、编号、短编号、风格" />
+          </label>
+          <button
+            v-if="currentRound?.status === 'DRAFT'"
+            class="entry-add-selected"
+            type="button"
+            :disabled="!selectedEntryUuids.length"
+            @click="$emit('addSelectedToTable')"
+          >
+            加入
+          </button>
         </div>
-        <label class="search-box">
-          <Search />
-          <input v-model="roundKeywordModel" placeholder="搜索酒名、编号、短编号、风格" />
-        </label>
         <div class="filter-row">
           <button
             v-for="category in roundCategoryFilters"
@@ -357,9 +371,6 @@
           >
             {{ category }}
           </button>
-        </div>
-        <div v-if="currentRound?.status === 'DRAFT'" class="bulk-row">
-          <button type="button" :disabled="!selectedEntryUuids.length" @click="$emit('addSelectedToTable')">加入选中桌</button>
         </div>
         <div class="resource-list">
           <article
@@ -380,6 +391,7 @@
             </div>
             <button type="button" :disabled="!selectedRoundTableId" @click="$emit('addEntryToSelectedTable', entry.uuid)">加入</button>
           </article>
+          <p v-if="!filteredRoundPool.length" class="resource-empty">暂无可分配酒款。</p>
         </div>
       </aside>
 
@@ -399,6 +411,15 @@
               <span>桌长 {{ getJudge(table.captainPublicId)?.name || '未指定' }}</span>
             </div>
             <div class="desk-header-actions">
+              <button
+                v-if="currentRound?.status === 'DRAFT'"
+                class="icon-action desk-delete-action"
+                type="button"
+                title="删除桌"
+                @click.stop="$emit('removeRoundTable', table.id)"
+              >
+                <Delete />
+              </button>
               <button
                 v-if="currentRound?.status === 'DRAFT'"
                 class="desk-auto-action"
@@ -441,6 +462,10 @@
             <p v-if="!table.entryUuids.length">从左侧加入酒款。</p>
           </div>
         </article>
+        <section v-if="!currentRoundTables.length" class="desk-empty-state">
+          <strong>暂无桌次</strong>
+          <span>先在右侧新增桌，再分配酒款。</span>
+        </section>
       </main>
 
       <aside class="control-panel check-panel">
@@ -492,9 +517,9 @@
             type="button"
             :disabled="!canRunPrimaryRoundAction"
             :title="primaryActionTitle"
-            @click="$emit(currentRound?.isPreparationDraft ? 'generateFirstRound' : 'publishCurrentRound')"
+            @click="$emit(currentRound?.isPreparationDraft && currentRound?.type !== 'RANKING' ? 'generateFirstRound' : 'publishCurrentRound')"
           >
-            {{ currentRound?.isPreparationDraft ? '生成第一轮编排' : (currentRound?.type === 'SCORE' ? '发布给评委' : '发布给桌长和参与评委') }}
+            {{ primaryRoundActionLabel }}
           </button>
         </section>
         <section class="control-section">
@@ -715,6 +740,7 @@ const emit = defineEmits([
   'setRoundCaptain',
   'updateRoundTargetMode',
   'addRoundTable',
+  'removeRoundTable',
   'addRoundParticipant',
   'removeRoundParticipant',
   'syncRoundCandidates',
@@ -738,10 +764,14 @@ const displayRounds = computed(() => {
   return props.rounds
 })
 const canRunPrimaryRoundAction = computed(() => {
-  if (props.currentRound?.isPreparationDraft) {
+  if (props.currentRound?.isPreparationDraft && props.currentRound?.type !== 'RANKING') {
     return props.validationIssues.length === 0 && props.roundValidationIssues.length === 0
   }
   return props.canPublish
+})
+const primaryRoundActionLabel = computed(() => {
+  if (props.currentRound?.isPreparationDraft && props.currentRound?.type !== 'RANKING') return '生成第一轮编排'
+  return props.currentRound?.type === 'SCORE' ? '发布给评委' : '发布给桌长和参与评委'
 })
 const primaryActionDisabledReason = computed(() => {
   if (canRunPrimaryRoundAction.value) return ''
@@ -751,11 +781,21 @@ const primaryActionDisabledReason = computed(() => {
 })
 const primaryActionTitle = computed(() => (canRunPrimaryRoundAction.value ? '' : primaryActionDisabledReason.value))
 const roundTargetOptions = computed(() => {
-  if (currentRoundTargetMode.value === 'CHAMPION') {
+  if (currentRoundTargetMode.value === 'CHAMPION' || canUseChampionTarget.value) {
     return [
       {
+        value: 'TOP_N',
+        label: '普通排序轮',
+        hint: '继续筛选，锁定后可创建下一轮。',
+      },
+      {
+        value: 'MEDALS',
+        label: '组别金银铜轮',
+        hint: '',
+      },
+      {
         value: 'CHAMPION',
-        label: '跨类总冠军轮',
+        label: '决赛轮',
         hint: '从各组别金奖中选出 1 款全场总冠军。',
       },
     ]
@@ -764,7 +804,7 @@ const roundTargetOptions = computed(() => {
     {
       value: 'TOP_N',
       label: '普通排序轮',
-      hint: '继续筛选，锁定后进入下一轮候选池。',
+      hint: '继续筛选，锁定后可创建下一轮。',
     },
     {
       value: 'MEDALS',
@@ -772,6 +812,10 @@ const roundTargetOptions = computed(() => {
       hint: '',
     },
   ]
+})
+const canUseChampionTarget = computed(() => {
+  const sourceRound = props.rounds.find((round) => round.id === props.currentRound?.sourceRoundId)
+  return Boolean(sourceRound?.tables?.some((table) => table.targetMode === 'MEDALS'))
 })
 const currentRoundTargetMode = computed(() => {
   const modes = new Set(props.currentRoundTables.map((table) => table.targetMode).filter(Boolean))
@@ -884,7 +928,7 @@ function formatEntryBrief(uuid) {
 function getTargetCountLabel(table) {
   if (props.currentRound?.type === 'SCORE') return '晋级数量'
   if (table?.targetMode === 'MEDALS') return '奖项槽位'
-  if (table?.targetMode === 'CHAMPION') return '总冠军名额'
+  if (table?.targetMode === 'CHAMPION') return '总冠军'
   return '晋级数量'
 }
 
@@ -1158,6 +1202,10 @@ button:disabled {
   align-items: stretch;
 }
 
+.entry-allocation-grid {
+  grid-template-columns: minmax(300px, 340px) minmax(420px, 1fr) minmax(280px, 300px);
+}
+
 .overview-shell {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -1181,6 +1229,25 @@ button:disabled {
 .resource-panel,
 .check-panel {
   min-height: 0;
+}
+
+.entry-allocation-grid .resource-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.entry-allocation-grid .table-board {
+  min-width: 0;
+  min-height: 0;
+  grid-auto-rows: max-content;
+  align-content: start;
+}
+
+.entry-allocation-grid .resource-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  align-content: start;
+  grid-auto-rows: max-content;
 }
 
 .judge-resource-panel {
@@ -1221,6 +1288,24 @@ dt,
 
 .search-box {
   position: relative;
+}
+
+.entry-search-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.entry-add-selected {
+  min-width: 58px;
+  min-height: 38px;
+  padding: 0 12px;
+  color: #e0b84a;
+  border-color: rgba(216, 169, 53, 0.28);
+  background: rgba(216, 169, 53, 0.08);
+  font-weight: 850;
+  white-space: nowrap;
 }
 
 .search-box :deep(svg) {
@@ -1459,6 +1544,10 @@ dt,
   align-items: start;
 }
 
+.entry-allocation-grid .table-board {
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+}
+
 .judge-board {
   grid-template-columns: 1fr;
   grid-auto-rows: max-content;
@@ -1590,6 +1679,19 @@ p {
   width: 34px;
   height: 34px;
   padding: 0;
+}
+
+.desk-delete-action {
+  flex: 0 0 auto;
+  color: #f1bd79;
+  border-color: rgba(242, 153, 74, 0.22);
+  background: rgba(242, 153, 74, 0.06);
+}
+
+.desk-delete-action:hover {
+  color: #ffd3a6;
+  border-color: rgba(242, 153, 74, 0.38);
+  background: rgba(242, 153, 74, 0.12);
 }
 
 .icon-action :deep(svg),
@@ -1803,6 +1905,34 @@ p {
 
 .entry-list p {
   grid-column: 1 / -1;
+}
+
+.resource-empty,
+.desk-empty-state {
+  display: grid;
+  place-items: center;
+  min-height: 140px;
+  border: 1px dashed rgba(219, 232, 237, 0.14);
+  border-radius: 8px;
+  color: #8da1aa;
+  background: rgba(255, 255, 255, 0.018);
+  font-size: 13px;
+  font-weight: 750;
+  text-align: center;
+}
+
+.desk-empty-state {
+  gap: 6px;
+  min-height: 220px;
+}
+
+.desk-empty-state strong {
+  color: #e6edf0;
+  font-size: 18px;
+}
+
+.desk-empty-state span {
+  color: #8da1aa;
 }
 
 .entry-list button {

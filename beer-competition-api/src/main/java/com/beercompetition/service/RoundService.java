@@ -32,6 +32,8 @@ public interface RoundService {
 
     void syncRoundCandidates(Long competitionId, Long roundId);
 
+    void deleteDraftRound(Long competitionId, Long roundId);
+
     void lockRound(Long competitionId, Long roundId);
 
     void publishResults(Long competitionId);

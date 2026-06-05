@@ -368,14 +368,14 @@ public class RoundServiceImpl implements RoundService {
         // 1) 查询轮次与来源轮次
         CompetitionRound round = requireRound(competitionId, roundId);
         if (!RoundType.RANKING.name().equals(round.getRoundType())) {
-            throw new BaseException("只有后续排序轮需要同步候选酒款");
+            throw new BaseException("只有后续排序轮需要更新晋级酒款");
         }
         if (!RoundStatus.DRAFT.name().equals(round.getStatus())) {
-            throw new BaseException("只有草稿轮次可以同步候选酒款");
+            throw new BaseException("只有草稿轮次可以更新晋级酒款");
         }
         CompetitionRound sourceRound = requireRound(competitionId, round.getSourceRoundId());
         if (!RoundStatus.LOCKED.name().equals(sourceRound.getStatus())) {
-            throw new BaseException("请先锁定上一轮，再同步候选酒款");
+            throw new BaseException("请先锁定上一轮，再更新晋级酒款");
         }
         validateSourceIsLatestLockedRound(competitionId, sourceRound);
 
@@ -433,6 +433,32 @@ public class RoundServiceImpl implements RoundService {
                     .sortOrder(nextSortOrderByTable.compute(table.getId(), (key, value) -> value == null ? 1 : value + 1) - 1)
                     .build());
         }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteDraftRound(Long competitionId, Long roundId) {
+        // 1) 查询轮次并限制只能删除草稿排序轮
+        requireCompetition(competitionId);
+        CompetitionRound round = requireRound(competitionId, roundId);
+        if (!RoundType.RANKING.name().equals(round.getRoundType())) {
+            throw new BaseException("只能删除排序轮草稿");
+        }
+        if (!RoundStatus.DRAFT.name().equals(round.getStatus())) {
+            throw new BaseException("只有草稿轮次可以删除");
+        }
+
+        // 2) 清理草稿轮关联数据
+        List<Long> tableIds = listRoundTables(roundId).stream()
+                .map(RoundTable::getId)
+                .toList();
+        roundResultMapper.delete(new LambdaQueryWrapper<RoundResult>().eq(RoundResult::getRoundId, roundId));
+        roundTableEntryMapper.delete(new LambdaQueryWrapper<RoundTableEntry>().eq(RoundTableEntry::getRoundId, roundId));
+        if (!tableIds.isEmpty()) {
+            roundTableMemberMapper.delete(new LambdaQueryWrapper<RoundTableMember>().in(RoundTableMember::getRoundTableId, tableIds));
+            roundTableMapper.delete(new LambdaQueryWrapper<RoundTable>().in(RoundTable::getId, tableIds));
+        }
+        competitionRoundMapper.deleteById(roundId);
     }
 
     @Override
@@ -547,6 +573,9 @@ public class RoundServiceImpl implements RoundService {
         }
         validateTargetCountForMode(request.getRoundName(), targetMode.name(), request.getTargetCount());
         CompetitionRound sourceRound = requireRound(competitionId, request.getSourceRoundId());
+        if (isTerminalRound(sourceRound)) {
+            throw new BaseException("决赛轮已是最后一轮，不能继续创建轮次");
+        }
         boolean sourceLocked = RoundStatus.LOCKED.name().equals(sourceRound.getStatus());
         if (sourceLocked) {
             validateSourceIsLatestLockedRound(competitionId, sourceRound);
@@ -614,10 +643,6 @@ public class RoundServiceImpl implements RoundService {
                         .build());
             }
         }
-        if (creatingChampionRound) {
-            competition.setStatus(CompetitionStatus.JUDGING.name());
-            competitionMapper.updateById(competition);
-        }
     }
 
     @Override
@@ -625,8 +650,8 @@ public class RoundServiceImpl implements RoundService {
     public void lockRound(Long competitionId, Long roundId) {
         // 1) 查询轮次并校验锁定状态
         Competition competition = requireCompetition(competitionId);
-        if (parseCompetitionStatus(competition) != CompetitionStatus.JUDGING) {
-            throw new BaseException("只有评审中的比赛可以锁定轮次");
+        if (!isRankingRoundStage(parseCompetitionStatus(competition))) {
+            throw new BaseException("当前阶段不能锁定排序轮");
         }
         CompetitionRound round = requireRound(competitionId, roundId);
         if (RoundType.SCORE.name().equals(round.getRoundType())) {
@@ -646,7 +671,7 @@ public class RoundServiceImpl implements RoundService {
 
         // 3) 锁定轮次和桌任务
         lockRoundAndTables(round);
-        if (isFinalResultRound(round)) {
+        if (isAwardRound(round)) {
             awardService.generateAwardDraftsForRound(competitionId, roundId);
             competition.setStatus(CompetitionStatus.RESULT_CONFIRMING.name());
             competitionMapper.updateById(competition);
@@ -662,8 +687,8 @@ public class RoundServiceImpl implements RoundService {
             throw new BaseException("请先完成评审并确认奖项，再发布结果");
         }
         CompetitionRound lastLocked = findLastLockedRound(competitionId);
-        if (lastLocked == null || !isFinalResultRound(lastLocked)) {
-            throw new BaseException("最后一轮结果未锁定，暂不能发布结果");
+        if (lastLocked == null || !isTerminalRound(lastLocked)) {
+            throw new BaseException("决赛轮结果未锁定，暂不能发布结果");
         }
         awardService.publishAwards(competitionId);
 
@@ -1260,7 +1285,7 @@ public class RoundServiceImpl implements RoundService {
                 .map(RoundTableEntry::getBeerEntryId)
                 .collect(Collectors.toSet());
         if (!assignedEntryIds.equals(candidateEntryIds)) {
-            throw new BaseException("候选池已变化，请重新同步候选酒款");
+            throw new BaseException("晋级酒款已变化，请重新载入后核对分桌");
         }
     }
 
@@ -1769,8 +1794,8 @@ public class RoundServiceImpl implements RoundService {
         if (RoundType.SCORE.name().equals(round.getRoundType()) && !isPreJudgingStage(status)) {
             throw new BaseException("评审已开始，不能再保存第一轮编排");
         }
-        if (RoundType.RANKING.name().equals(round.getRoundType()) && status != CompetitionStatus.JUDGING) {
-            throw new BaseException("后续轮只能在评审中保存编排");
+        if (RoundType.RANKING.name().equals(round.getRoundType()) && !isRankingRoundStage(status)) {
+            throw new BaseException("当前阶段不能保存排序轮编排");
         }
     }
 
@@ -1779,9 +1804,14 @@ public class RoundServiceImpl implements RoundService {
         if (RoundType.SCORE.name().equals(round.getRoundType()) && status != CompetitionStatus.JUDGING_PREP) {
             throw new BaseException("第一轮只能在评审准备阶段发布");
         }
-        if (RoundType.RANKING.name().equals(round.getRoundType()) && status != CompetitionStatus.JUDGING) {
-            throw new BaseException("后续轮只能在评审中发布");
+        if (RoundType.RANKING.name().equals(round.getRoundType()) && !isRankingRoundStage(status)) {
+            throw new BaseException("当前阶段不能发布排序轮");
         }
+    }
+
+    private boolean isRankingRoundStage(CompetitionStatus status) {
+        return status == CompetitionStatus.JUDGING
+                || status == CompetitionStatus.RESULT_CONFIRMING;
     }
 
     private boolean isPreJudgingStage(CompetitionStatus status) {
@@ -1805,12 +1835,19 @@ public class RoundServiceImpl implements RoundService {
                 .orElse(null);
     }
 
-    private boolean isFinalResultRound(CompetitionRound round) {
+    private boolean isAwardRound(CompetitionRound round) {
         List<RoundTable> tables = listRoundTables(round.getId());
         return RoundType.RANKING.name().equals(round.getRoundType())
                 && !tables.isEmpty()
                 && tables.stream().allMatch(table -> RoundTargetMode.MEDALS.name().equals(table.getTargetMode())
                 || RoundTargetMode.CHAMPION.name().equals(table.getTargetMode()));
+    }
+
+    private boolean isTerminalRound(CompetitionRound round) {
+        List<RoundTable> tables = listRoundTables(round.getId());
+        return RoundType.RANKING.name().equals(round.getRoundType())
+                && !tables.isEmpty()
+                && tables.stream().allMatch(table -> RoundTargetMode.CHAMPION.name().equals(table.getTargetMode()));
     }
 
     private CompetitionRound requireRound(Long competitionId, Long roundId) {

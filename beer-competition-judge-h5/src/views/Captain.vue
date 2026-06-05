@@ -169,12 +169,14 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   fetchCaptainBoard,
+  fetchCompetitions,
   fetchEntry,
   fetchMe,
   fetchTableScores,
   finalizeTableScore,
 } from '@/api/judge'
 import JudgeBottomNav from '@/components/JudgeBottomNav.vue'
+import { isRankingTaskType, selectCurrentTask } from '@/utils/judgeTasks'
 
 const route = useRoute()
 const router = useRouter()
@@ -326,6 +328,17 @@ async function loadDetail() {
   form.advanced = Boolean(finalScore.value?.advanced || entry.value.advanced)
 }
 
+async function redirectRankingTaskIfNeeded() {
+  try {
+    const currentTask = selectCurrentTask(await fetchCompetitions())
+    if (!isRankingTaskType(currentTask?.taskType)) return false
+    router.replace(currentTask.roundTableId ? `/ranking/${currentTask.roundTableId}` : '/competitions')
+    return true
+  } catch {
+    return false
+  }
+}
+
 async function submitFinal() {
   await finalizeTableScore(uuid.value, {
     dimensions: [{ key: 'consensus', label: '共识分', score: Math.round(Number(form.consensusScore)), maxScore: 50 }],
@@ -396,6 +409,7 @@ watch(uuid, async () => {
 
 onMounted(async () => {
   me.value = await fetchMe()
+  if (await redirectRankingTaskIfNeeded()) return
   await loadBoard()
   await loadDetail()
 })

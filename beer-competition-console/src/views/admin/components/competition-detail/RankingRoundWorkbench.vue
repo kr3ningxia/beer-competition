@@ -176,7 +176,7 @@ const statusText = computed(() => props.roundStatusLabels[props.currentRound?.st
 const targetSummaryLabel = computed(() => {
   const modes = new Set(props.currentRoundTables.map((table) => table.targetMode).filter(Boolean))
   if (modes.size === 1 && modes.has('MEDALS')) return '奖项槽位'
-  if (modes.size === 1 && modes.has('CHAMPION')) return '总冠军名额'
+  if (modes.size === 1 && modes.has('CHAMPION')) return '总冠军'
   return '晋级数量'
 })
 const selectedTableTargetLabel = computed(() => targetCountLabel(props.selectedRoundTable))
@@ -198,13 +198,13 @@ function tableStatusLabel(status) {
 
 function targetCountLabel(table) {
   if (table?.targetMode === 'MEDALS') return '奖项槽位'
-  if (table?.targetMode === 'CHAMPION') return '总冠军名额'
+  if (table?.targetMode === 'CHAMPION') return '总冠军'
   return '每桌晋级数量'
 }
 
 function targetCountHint(table) {
   if (table?.targetMode === 'MEDALS') return '固定为金奖、银奖、铜奖 3 个槽位。'
-  if (table?.targetMode === 'CHAMPION') return '固定为 1 个总冠军名额。'
+  if (table?.targetMode === 'CHAMPION') return '总冠军 1 名。'
   return '桌长需要提交并排序的晋级酒款数量。'
 }
 

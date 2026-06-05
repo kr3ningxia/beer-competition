@@ -165,7 +165,7 @@
     </section>
     </template>
 
-    <JudgeBottomNav :role="me?.role" />
+    <JudgeBottomNav :role="me?.role" :hide-table="isRankingRound" />
   </main>
 </template>
 
@@ -175,6 +175,7 @@ import { useRouter } from 'vue-router'
 import { Html5Qrcode } from 'html5-qrcode'
 import { fetchCaptainBoard, fetchCompetitions, fetchMe, fetchMyScores, fetchRoundTable } from '@/api/judge'
 import JudgeBottomNav from '@/components/JudgeBottomNav.vue'
+import { isRankingTaskType, selectCurrentTask } from '@/utils/judgeTasks'
 
 const router = useRouter()
 const me = ref(null)
@@ -190,7 +191,7 @@ let scanLocked = false
 
 const isCaptain = computed(() => me.value?.role === 'CAPTAIN')
 const isScoreRoundCaptain = computed(() => isCaptain.value && current.value?.taskType === 'CAPTAIN_FINALIZE')
-const isRankingRound = computed(() => ['RANKING_ROUND', 'RANKING_PARTICIPANT'].includes(current.value?.taskType))
+const isRankingRound = computed(() => isRankingTaskType(current.value?.taskType))
 const canSubmitRanking = computed(() => current.value?.taskType === 'RANKING_ROUND')
 const rankingTaskHint = computed(() => (
   canSubmitRanking.value
@@ -419,20 +420,6 @@ onBeforeUnmount(() => {
   stopScanner()
 })
 
-function selectCurrentTask(tasks) {
-  if (!tasks?.length) return null
-  const taskPriority = {
-    RANKING_ROUND: 3,
-    RANKING_PARTICIPANT: 3,
-    CAPTAIN_FINALIZE: 2,
-    SCORE_ENTRY: 1,
-  }
-  return [...tasks].sort((left, right) => (
-    Number(right.roundId || 0) - Number(left.roundId || 0)
-      || Number(taskPriority[right.taskType] || 0) - Number(taskPriority[left.taskType] || 0)
-      || Number(right.roundTableId || 0) - Number(left.roundTableId || 0)
-  ))[0]
-}
 </script>
 
 <style scoped>

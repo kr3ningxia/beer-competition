@@ -44,21 +44,26 @@
       </div>
     </section>
 
-    <JudgeBottomNav :role="me?.role" active="profile" />
+    <JudgeBottomNav :role="me?.role" :hide-table="hideTableNav" active="profile" />
   </main>
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
-import { fetchMe, fetchMyScores } from '@/api/judge'
+import { computed, onMounted, ref } from 'vue'
+import { fetchCompetitions, fetchMe, fetchMyScores } from '@/api/judge'
 import JudgeBottomNav from '@/components/JudgeBottomNav.vue'
+import { isRankingTaskType, selectCurrentTask } from '@/utils/judgeTasks'
 
 const me = ref(null)
 const scores = ref([])
+const currentTask = ref(null)
+const hideTableNav = computed(() => isRankingTaskType(currentTask.value?.taskType))
 
 onMounted(async () => {
-  me.value = await fetchMe()
-  scores.value = await fetchMyScores()
+  const [profile, tasks, myScores] = await Promise.all([fetchMe(), fetchCompetitions().catch(() => []), fetchMyScores()])
+  me.value = profile
+  currentTask.value = selectCurrentTask(tasks)
+  scores.value = myScores
 })
 </script>
 
