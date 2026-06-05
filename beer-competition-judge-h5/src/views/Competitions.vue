@@ -57,7 +57,7 @@
           </span>
         </article>
       </div>
-      <p v-if="!entries.length" class="empty-note">当前还没有排序候选酒款，请联系现场工作人员确认后续轮候选池。</p>
+      <p v-if="!entries.length" class="empty-note">当前还没有排序酒款，请联系现场工作人员确认。</p>
     </section>
     </template>
 
@@ -195,8 +195,8 @@ const isRankingRound = computed(() => isRankingTaskType(current.value?.taskType)
 const canSubmitRanking = computed(() => current.value?.taskType === 'RANKING_ROUND')
 const rankingTaskHint = computed(() => (
   canSubmitRanking.value
-    ? '本轮从候选酒中选择并排序，提交后进入下一轮或奖项确认。'
-    : '你已安排到本桌参与讨论，可查看候选酒款，排序结果由桌长提交。'
+    ? '提交后等待主办方确认，确认锁定前可继续调整。'
+    : '你可以查看本桌候选，排序由桌长提交。'
 ))
 const myScoredCount = computed(() => entries.value.filter((entry) => entry.scored).length)
 const finalizedCount = computed(() => entries.value.filter((entry) => entry.finalized).length)

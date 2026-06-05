@@ -180,7 +180,7 @@
                 <input v-model.trim="selectedStyle.styleCode" placeholder="例如 21A" />
               </label>
               <label>
-                <span>评委可见说明</span>
+                <span>评审可见说明</span>
                 <textarea v-model.trim="selectedStyle.description" rows="5" placeholder="用一两句话说明评审时关注的风格口径"></textarea>
               </label>
               <label>
@@ -197,7 +197,7 @@
 
         <details class="import-box">
           <summary>批量导入</summary>
-          <textarea v-model="importText" rows="5" placeholder="每行：分类 | 风格名称 | 编号 | 评委可见说明"></textarea>
+          <textarea v-model="importText" rows="5" placeholder="每行：分类 | 风格名称 | 编号 | 评审可见说明"></textarea>
           <button type="button" @click="applyImportText">导入到列表</button>
         </details>
 

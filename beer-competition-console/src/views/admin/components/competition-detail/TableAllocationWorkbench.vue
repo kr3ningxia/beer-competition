@@ -91,7 +91,7 @@
               @drop.prevent="dropRankingJudge(table.id, 'PARTICIPANT')"
             >
               <header>
-                <strong>参与评委</strong>
+                <strong>参与评审</strong>
                 <span>{{ getRankingParticipants(table).length }} 人</span>
               </header>
               <article
@@ -771,7 +771,7 @@ const canRunPrimaryRoundAction = computed(() => {
 })
 const primaryRoundActionLabel = computed(() => {
   if (props.currentRound?.isPreparationDraft && props.currentRound?.type !== 'RANKING') return '生成第一轮编排'
-  return props.currentRound?.type === 'SCORE' ? '发布给评委' : '发布给桌长和参与评委'
+  return props.currentRound?.type === 'SCORE' ? '发布给评审' : '发布给桌长和参与评审'
 })
 const primaryActionDisabledReason = computed(() => {
   if (canRunPrimaryRoundAction.value) return ''
@@ -907,7 +907,7 @@ function getRoundJudgeAssignmentSummary(judgePublicId) {
   ))
   if (!table) return ''
   if (table.captainPublicId === judgePublicId) return `${table.name} · 桌长`
-  return `${table.name} · 参与评委`
+  return `${table.name} · 参与评审`
 }
 
 function getEntry(uuid) {

@@ -321,7 +321,7 @@
                     <span>备注合计字数下限</span>
                     <input v-model.number="config.minCommentLength" min="0" type="number" />
                   </label>
-                  <button v-if="config.role === 'CROSS'" class="tool-button" type="button" :disabled="config.dimensions.length >= 4" @click="addCrossDimension(config)">
+                  <button v-if="config.role === 'CROSS'" class="tool-button" type="button" :disabled="config.dimensions.length >= 3" @click="addCrossDimension(config)">
                     <Plus />
                     添加维度
                   </button>
@@ -505,7 +505,7 @@ const draft = reactive({
 const initialDraftSnapshot = JSON.stringify(toDraftSnapshot(draft))
 
 const scoreDescriptions = {
-  CROSS: '每场比赛可配置 2-4 个维度，总分 50。',
+  CROSS: '每场比赛可配置 2-3 个维度，总分 50。',
   PROFESSIONAL: '固定 BJCP 口径，允许调整备注提示。',
   CAPTAIN: '桌长填写独立共识分和综合评语。',
 }
@@ -541,8 +541,8 @@ function addEntryField() {
 }
 
 function addCrossDimension(config) {
-  if (config.dimensions.length >= 4) {
-    ElMessage.warning('跨界评审需配置 2-4 个维度')
+  if (config.dimensions.length >= 3) {
+    ElMessage.warning('跨界评审需配置 2-3 个维度')
     return
   }
   const next = config.dimensions.length + 1
@@ -834,7 +834,7 @@ function buildReviewItems(source) {
     .filter((config) => getScoreTotal(config) !== 50)
     .map((config) => `${roleLabels[config.role]} ${getScoreTotal(config)} 分`)
   const crossConfig = source.scoreConfigs.find((config) => config.role === 'CROSS')
-  const crossDimensionValid = crossConfig && crossConfig.dimensions.length >= 2 && crossConfig.dimensions.length <= 4
+  const crossDimensionValid = crossConfig && crossConfig.dimensions.length >= 2 && crossConfig.dimensions.length <= 3
   const visibleFields = getJudgeVisibleFields(source)
   const incompleteEntryFields = getIncompleteEntryFields(source)
   const logisticsSummary = [
@@ -901,7 +901,7 @@ function buildReviewItems(source) {
       label: '跨界评审',
       target: 'score-config',
       status: crossDimensionValid ? 'done' : 'pending',
-      detail: crossDimensionValid ? `${crossConfig.dimensions.length} 个评分维度` : '跨界评审需配置 2-4 个维度',
+      detail: crossDimensionValid ? `${crossConfig.dimensions.length} 个评分维度` : '跨界评审需配置 2-3 个维度',
     },
   ]
 }

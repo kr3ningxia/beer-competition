@@ -300,12 +300,16 @@ function syncCompetitionDefaults() {
 }
 
 async function submitEntry() {
+  const valid = await entryFormRef.value?.validate().catch(() => false)
+  if (!valid) {
+    ElMessage.warning('请先补全报名表中的必要信息')
+    return
+  }
+  if (!selectedCompetition.value) {
+    ElMessage.warning('请先从赛事详情进入报名')
+    return
+  }
   try {
-    await entryFormRef.value?.validate()
-    if (!selectedCompetition.value) {
-      ElMessage.warning('请先从赛事详情进入报名')
-      return
-    }
     const entry = await submitPortalEntry(selectedCompetition.value.id, {
       name: form.name,
       categoryId: form.categoryId,
@@ -316,8 +320,8 @@ async function submitEntry() {
     })
     ElMessage.success('报名已提交，正在进入付款与送样')
     router.push(`/portal/payment?entryId=${entry.id}`)
-  } catch {
-    ElMessage.warning('请先补全报名表中的必要信息')
+  } catch (error) {
+    ElMessage.warning(error?.message || '报名提交失败，请稍后重试')
   }
 }
 

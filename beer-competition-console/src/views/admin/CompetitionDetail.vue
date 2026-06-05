@@ -479,7 +479,7 @@
                     :disabled="!canPublishCurrentRound"
                     @click="publishCurrentRound"
                   >
-                    {{ currentRound?.type === 'SCORE' ? '发布给评委' : '发布给桌长和参与评委' }}
+                    {{ currentRound?.type === 'SCORE' ? '发布给评审' : '发布给桌长和参与评审' }}
                   </button>
                   <button
                     v-if="currentRound?.roundNo === 1 && currentRound?.status === 'PUBLISHED'"
@@ -587,7 +587,7 @@
                     v-if="editable.scoreConfigs && config.role === 'CROSS'"
                     class="tool-button"
                     type="button"
-                    :disabled="config.dimensions.length >= 4"
+                    :disabled="config.dimensions.length >= 3"
                     @click="addCrossScoreDimension(config)"
                   >
                     <Plus />
@@ -614,9 +614,9 @@
                   <span></span>
                 </div>
                 <div v-for="(dimension, index) in config.dimensions" :key="dimension.localId" class="dimension-row">
-                  <input v-if="editable.scoreConfigs" v-model.trim="dimension.label" placeholder="维度名称" />
+                  <input v-if="editable.scoreConfigs && config.role === 'CROSS'" v-model.trim="dimension.label" placeholder="维度名称" />
                   <span v-else>{{ dimension.label }}</span>
-                  <input v-if="editable.scoreConfigs" v-model.number="dimension.maxScore" min="1" type="number" />
+                  <input v-if="editable.scoreConfigs && config.role === 'CROSS'" v-model.number="dimension.maxScore" min="1" type="number" />
                   <strong v-else>{{ dimension.maxScore }}</strong>
                   <input v-if="editable.scoreConfigs" v-model.trim="dimension.notePrompt" placeholder="这个维度的备注提示" />
                   <span v-else>{{ dimension.notePrompt || '-' }}</span>
@@ -659,11 +659,17 @@
                     <span>全场总冠军</span>
                     <strong>{{ formatAwardEntryName(award) }}</strong>
                   </div>
-                  <el-select v-model="award.beerEntryId" filterable teleported>
+                  <el-select
+                    v-model="award.beerEntryId"
+                    class="award-select"
+                    filterable
+                    teleported
+                    popper-class="award-select-popper"
+                  >
                     <el-option
                       v-for="entry in awardEntryOptions(award)"
                       :key="entry.id"
-                      :label="`${entry.uuid} · ${entry.name || entry.style}`"
+                      :label="formatAwardEntryLabel(entry)"
                       :value="entry.id"
                     />
                   </el-select>
@@ -688,11 +694,17 @@
                 >
                   <span>{{ award.categoryName || '未分组' }}</span>
                   <strong>{{ award.awardName }}</strong>
-                  <el-select v-model="award.beerEntryId" filterable teleported>
+                  <el-select
+                    v-model="award.beerEntryId"
+                    class="award-select"
+                    filterable
+                    teleported
+                    popper-class="award-select-popper"
+                  >
                     <el-option
                       v-for="entry in awardEntryOptions(award)"
                       :key="entry.id"
-                      :label="`${entry.uuid} · ${entry.name || entry.style}`"
+                      :label="formatAwardEntryLabel(entry)"
                       :value="entry.id"
                     />
                   </el-select>
@@ -714,8 +726,8 @@
                 </div>
               </div>
               <div class="publish-actions">
-                <button class="tool-button" type="button" @click="showPendingStageMessage('导出评分数据')">导出评分数据</button>
-                <button class="tool-button primary" type="button" :disabled="!canPublishResults" @click="publishResultsAction">
+                <button class="tool-button" type="button" @click="downloadScoringData">导出评分数据</button>
+                <button class="tool-button primary" type="button" :disabled="!canPublishResults" :title="publishResultsDisabledReason" @click="publishResultsAction">
                   发布结果
                 </button>
               </div>
@@ -861,7 +873,7 @@
             <strong>{{ roundScoreDetailCaptainStats.advance.submitted }} / {{ roundScoreDetailCaptainStats.advance.total }}</strong>
           </span>
           <span class="pending-judge-summary">
-            <small>未完成评分评委</small>
+            <small>未完成评分评审</small>
             <strong>{{ roundScoreDetailStats.pendingJudgeNames || '无' }}</strong>
           </span>
           <span>
@@ -943,6 +955,7 @@ import {
   createNextRound,
   deleteDraftRound,
   deleteCompetition,
+  exportCompetitionScoringData,
   fetchCompetitionDetail,
   fetchJudges,
   fetchStyleLibraries,
@@ -1213,7 +1226,7 @@ const currentRoundTargetModeOptions = computed(() => {
     { value: 'MEDALS', label: '组别金银铜轮' },
   ]
 })
-const currentRoundPublishTarget = computed(() => (currentRound.value?.type === 'RANKING' ? '桌长和参与评委' : '评委'))
+const currentRoundPublishTarget = computed(() => (currentRound.value?.type === 'RANKING' ? '桌长和参与评审' : '评审'))
 const firstRoundCompletionStatus = computed(() => buildFirstRoundCompletionStatus())
 const roundReadinessTitle = computed(() => {
   if (!currentRound.value) return '还没有轮次'
@@ -1228,22 +1241,22 @@ const roundReadinessDetail = computed(() => {
   if (!currentRound.value) return '请先创建轮次。'
   if (roundValidationIssues.value.length) return roundValidationIssues.value[0]
   if (currentRound.value.status === 'DRAFT') return currentRound.value.type === 'SCORE'
-    ? '发布后，评委开始评分，桌长可查看本桌酒款并汇总结果。'
-    : '发布后，桌长提交排序，参与评委查看本桌候选酒款。'
+    ? '发布后，评审开始评分，桌长可查看本桌酒款并汇总结果。'
+    : '发布后，桌长提交排序，参与评审查看本桌候选酒款。'
   if (currentRound.value.status === 'PUBLISHED') return currentRound.value.type === 'SCORE'
     ? firstRoundCompletionStatus.value.hint
     : '等待桌长提交排序结果。'
   if (currentRound.value.status === 'IN_PROGRESS') return '各桌正在处理排序任务。'
-  if (currentRound.value.status === 'SUBMITTED') return currentRoundIsTerminal.value ? '确认总冠军结果无误后锁定，锁定后进入结果确认。' : '排序结果已提交，确认无误后可以锁定本轮。'
+  if (currentRound.value.status === 'SUBMITTED') return currentRoundIsTerminal.value ? '确认总冠军结果无误后锁定，锁定后确认奖项。' : '排序结果已提交，确认无误后可以锁定本轮。'
   if (currentRound.value.status === 'LOCKED') return currentRoundIsTerminal.value
     ? '总冠军结果已固定，请确认奖项并发布结果。'
-    : (canCreateNextRound.value ? `可以创建${nextRoundName.value}。` : '可以进入结果确认。')
+    : (isMedalRound(currentRound.value) ? '组别奖项已生成，下一步创建决赛轮。' : (canCreateNextRound.value ? `可以创建${nextRoundName.value}。` : '本轮结果已固定。'))
   return roundNextStepText.value
 })
 const roundNextStepText = computed(() => {
   if (!currentRound.value) return '请先创建并配置第一轮。'
   if (currentRound.value.status === 'DRAFT') return canPublishCurrentRound.value ? `点击发布，让${currentRoundPublishTarget.value}开始${currentRound.value.name}。` : '先处理发布前检查里的问题。'
-  if (currentRound.value.status === 'PUBLISHED') return '等待评委评分完成，再由桌长汇总第一轮结果。'
+  if (currentRound.value.status === 'PUBLISHED') return '等待评审评分完成，再由桌长汇总第一轮结果。'
   if (currentRound.value.status === 'IN_PROGRESS') return '等待桌长提交排序。'
   if (currentRound.value.status === 'SUBMITTED') return currentRoundIsTerminal.value ? '确认总冠军后锁定决赛轮。' : '确认排序无误后锁定本轮。'
   if (currentRound.value.status === 'LOCKED') return currentRoundIsTerminal.value
@@ -1331,14 +1344,19 @@ const championAwards = computed(() => awardDrafts.value.filter((award) => award.
 const medalAwards = computed(() => awardDrafts.value.filter((award) => award.awardType !== 'CHAMPION'))
 const canConfirmAwards = computed(() => awardDrafts.value.length > 0 && awardDrafts.value.every((award) => award.beerEntryId))
 const terminalRoundLocked = computed(() => rounds.value.some((round) => isTerminalRound(round) && round.status === 'LOCKED'))
-const medalsConfirmed = computed(() => awardDrafts.value.some((award) => award.awardType === 'MEDAL') && awardDrafts.value.filter((award) => award.awardType === 'MEDAL').every((award) => ['CONFIRMED', 'PUBLISHED'].includes(award.status)))
-const championConfirmed = computed(() => awardDrafts.value.some((award) => award.awardType === 'CHAMPION' && ['CONFIRMED', 'PUBLISHED'].includes(award.status)))
-const canPublishResults = computed(() => resultChecks.value.every((item) => item.done))
+const medalsConfirmed = computed(() => Boolean(competition.value?.resultSetup?.medalsReady) || areMedalAwardsConfirmedLocally())
+const championConfirmed = computed(() => Boolean(competition.value?.resultSetup?.championReady) || awardDrafts.value.some((award) => award.awardType === 'CHAMPION' && ['CONFIRMED', 'PUBLISHED'].includes(award.status)))
+const finalRoundLocked = computed(() => Boolean(competition.value?.resultSetup?.terminalRoundLocked) || terminalRoundLocked.value)
+const canPublishResults = computed(() => Boolean(competition.value?.resultSetup?.canPublishResults))
+const publishResultsDisabledReason = computed(() => {
+  const pending = resultChecks.value.find((item) => !item.done)
+  return pending ? pending.label : ''
+})
 const resultPathEntries = computed(() => roundEntryPool.value.filter((entry) => entry.advanced || getEntryAward(entry.uuid)).slice(0, 8))
 const resultChecks = computed(() => [
   { label: '组别奖项已确认', done: medalsConfirmed.value },
   { label: '总冠军已确认', done: championConfirmed.value },
-  { label: '决赛轮已锁定', done: terminalRoundLocked.value },
+  { label: '决赛轮已锁定', done: finalRoundLocked.value },
 ])
 
 const selectedTable = computed(() => judgeTableForm.find((table) => table.localId === selectedTableLocalId.value))
@@ -1362,7 +1380,7 @@ const validationIssues = computed(() => {
     .map((assignment) => assignment.judgePublicId)
     .filter((judgePublicId, index, list) => list.indexOf(judgePublicId) !== index)
   new Set(duplicateJudgeIds).forEach((judgePublicId) => {
-    issues.push(`${getJudge(judgePublicId)?.name || '某位评委'}在本场比赛中被重复分配`)
+    issues.push(`${getJudge(judgePublicId)?.name || '某位评审'}在本场比赛中被重复分配`)
   })
   return issues
 })
@@ -1725,7 +1743,7 @@ function resolveStagePrimaryAction() {
   }
   if (currentRound.value?.status === 'DRAFT') {
     return {
-      text: currentRound.value.type === 'RANKING' ? '发布给桌长和参与评委' : '发布当前轮次',
+      text: currentRound.value.type === 'RANKING' ? '发布给桌长和参与评审' : '发布当前轮次',
       enabled: canPublishCurrentRound.value,
       action: 'publishCurrentRound',
     }
@@ -1743,11 +1761,19 @@ function resolveStagePrimaryAction() {
 }
 
 function resolveStageSecondaryActions() {
-  return [
+  const actions = [
     { key: 'rounds', label: '进入轮次编排', handler: () => { activeTab.value = 'rounds' } },
-    { key: 'export', label: '导出数据', handler: () => showPendingStageMessage('导出数据') },
-    { key: 'delete', label: '删除比赛', danger: true, handler: () => handleDeleteCompetition() },
+    { key: 'export', label: '导出数据', handler: () => downloadScoringData() },
   ]
+  if (competition.value?.status !== 'ARCHIVED') {
+    actions.push({
+      key: 'delete',
+      label: competition.value?.status === 'DRAFT' ? '删除/归档草稿' : '归档比赛',
+      danger: true,
+      handler: () => handleDeleteCompetition(),
+    })
+  }
+  return actions
 }
 
 function buildOverviewActionItems() {
@@ -1783,7 +1809,7 @@ function buildFutureStageTasks() {
       label: round.type === 'SCORE' ? `${round.name}评审` : `${round.name}排序`,
       targetTab: 'rounds',
       roundId: round.id,
-      detail: round.type === 'SCORE' ? '评委评分与桌长汇总' : '桌长提交排序后再确认锁定',
+      detail: round.type === 'SCORE' ? '评审评分与桌长汇总' : '桌长提交排序后再确认锁定',
       state: round.status === 'LOCKED' ? 'done' : 'pending',
       statusText: round.status === 'LOCKED' ? '已完成' : '待处理',
     })
@@ -1939,7 +1965,7 @@ function buildCurrentRoundMetrics() {
   const captainAverage = getAverageProgress(currentRoundTables.value.map((table) => table.captainProgress))
   return [
     { label: '桌数', value: currentRoundTables.value.length },
-    { label: '评委评分', value: `${judgeCounts.done} / ${judgeCounts.total}` },
+    { label: '评审评分', value: `${judgeCounts.done} / ${judgeCounts.total}` },
     { label: '桌长汇总', value: `${captainAverage}%` },
     { label: '待处理', value: roundValidationIssues.value.length },
   ]
@@ -2044,6 +2070,28 @@ function buildRoundPyramidNodes() {
   return nodes
 }
 
+function areMedalAwardsConfirmedLocally() {
+  const categoryIds = new Set(roundEntryPool.value
+    .filter((entry) => entry.categoryId != null && entry.status !== 'CANCELED')
+    .map((entry) => entry.categoryId))
+  if (!categoryIds.size) return false
+  const ranksByCategory = new Map()
+  medalAwards.value
+    .filter((award) => ['CONFIRMED', 'PUBLISHED'].includes(award.status))
+    .forEach((award) => {
+      const entry = roundEntryPool.value.find((item) => item.id === award.beerEntryId || item.uuid === award.uuid)
+      const categoryId = award.categoryId ?? entry?.categoryId
+      if (categoryId == null) return
+      const ranks = ranksByCategory.get(categoryId) || new Set()
+      ranks.add(Number(award.rankNo))
+      ranksByCategory.set(categoryId, ranks)
+    })
+  return [...categoryIds].every((categoryId) => {
+    const ranks = ranksByCategory.get(categoryId) || new Set()
+    return [1, 2, 3].every((rank) => ranks.has(rank))
+  })
+}
+
 function getRoundNodeDetail(round) {
   const entryCount = countRoundEntries(round)
   const targetCount = countRoundTarget(round)
@@ -2052,7 +2100,7 @@ function getRoundNodeDetail(round) {
 }
 
 function getRoundNodeHint(round) {
-  if (round.type === 'SCORE') return '评委评分，桌长从本桌酒款中选择晋级。'
+  if (round.type === 'SCORE') return '评审评分，桌长从本桌酒款中选择晋级。'
   return '桌长从晋级酒款中选择并排序。'
 }
 
@@ -2139,7 +2187,7 @@ function hasRoundTargetMode(round, mode) {
 function getRoundTableProgressSummary(round, table) {
   if (!round) {
     return {
-      primaryLabel: '评委评分',
+      primaryLabel: '评审评分',
       primaryValue: '-',
       secondaryLabel: '桌长汇总',
       secondaryValue: '-',
@@ -2168,7 +2216,7 @@ function getRoundTableProgressSummary(round, table) {
   else if (judgeProgress >= 100) statusText = '待桌长汇总'
   else if (judgeProgress > 0) statusText = '评分中'
   return {
-    primaryLabel: '评委评分',
+    primaryLabel: '评审评分',
     primaryValue: formatJudgeProgress(table),
     secondaryLabel: '桌长汇总',
     secondaryValue: captainProgress >= 100 ? '已汇总' : '未汇总',
@@ -2211,7 +2259,7 @@ function buildFallbackRoundScoreDetailJudges(table) {
     }))
     return {
       judgePublicId: assignment.judgePublicId,
-      judgeName: judge?.name || assignment.judgePublicId || '未知评委',
+      judgeName: judge?.name || assignment.judgePublicId || '未知评审',
       role: assignment.role,
       roleLabel: roleLabels[assignment.role] || assignment.role,
       submittedCount: 0,
@@ -2372,7 +2420,7 @@ function buildRoundTodoHint() {
     return {
       tone: 'warning',
       title: '还没有轮次',
-      detail: '先完成评委分桌，再生成第一轮编排。',
+      detail: '先完成评审分桌，再生成第一轮编排。',
       action: '',
     }
   }
@@ -2403,9 +2451,9 @@ function buildRoundTodoHint() {
   if (currentRound.value.status === 'PUBLISHED') {
     return {
       tone: 'ready',
-      title: currentRound.value.type === 'SCORE' ? '等待评委评分' : '等待桌长排序',
+      title: currentRound.value.type === 'SCORE' ? '等待评审评分' : '等待桌长排序',
       detail: currentRound.value.type === 'SCORE'
-        ? '评委评分完成后，由桌长汇总本轮结果。'
+        ? '评审评分完成后，由桌长汇总本轮结果。'
         : '桌长提交排序后，再确认并锁定本轮结果。',
       action: 'focusRoundProgress',
     }
@@ -2422,7 +2470,7 @@ function buildRoundTodoHint() {
     return {
       tone: 'ready',
       title: '可以确认锁定',
-      detail: currentRoundIsTerminal.value ? '确认总冠军结果无误后锁定，锁定后进入结果确认。' : '确认本轮结果无误后锁定。',
+      detail: currentRoundIsTerminal.value ? '确认总冠军结果无误后锁定，锁定后确认奖项。' : '确认本轮结果无误后锁定。',
       action: '',
     }
   }
@@ -2438,7 +2486,7 @@ function buildRoundTodoHint() {
     return {
       tone: canCreateNextRound.value ? 'ready' : 'done',
       title: `${currentRound.value.name}结果已固定`,
-      detail: canCreateNextRound.value ? `${advancedPool.value.length} 款晋级酒可用于${nextRoundName.value}。` : '可以进入结果确认。',
+      detail: isMedalRound(currentRound.value) ? '组别奖项已生成，下一步创建决赛轮。' : (canCreateNextRound.value ? `${advancedPool.value.length} 款晋级酒可用于${nextRoundName.value}。` : '本轮结果已固定。'),
       action: canCreateNextRound.value ? 'createNextRound' : '',
     }
   }
@@ -2711,7 +2759,7 @@ function updateRoundTableCaptain(tableId, judgePublicId) {
         && (item.captainPublicId === judgePublicId || getTableParticipantPublicIds(item).includes(judgePublicId))
     ))
     if (alreadyAssigned) {
-      ElMessage.warning('这位评委已安排到其他桌')
+      ElMessage.warning('这位评审已安排到其他桌')
       return
     }
   }
@@ -2746,7 +2794,7 @@ function addRoundParticipantToSelectedTable(judgePublicId) {
   const table = selectedRoundTable.value
   if (!table || currentRound.value?.type !== 'RANKING' || currentRound.value?.status !== 'DRAFT') return
   if (!judgePublicId || judgePublicId === table.captainPublicId) {
-    ElMessage.warning('桌长不需要重复加入参与评委')
+    ElMessage.warning('桌长不需要重复加入参与评审')
     return
   }
   const alreadyAssigned = currentRoundTables.value.some((item) => (
@@ -2754,7 +2802,7 @@ function addRoundParticipantToSelectedTable(judgePublicId) {
       && (item.captainPublicId === judgePublicId || getTableParticipantPublicIds(item).includes(judgePublicId))
   ))
   if (alreadyAssigned) {
-    ElMessage.warning('这位评委已安排到其他桌')
+    ElMessage.warning('这位评审已安排到其他桌')
     return
   }
   if (getTableParticipantPublicIds(table).includes(judgePublicId)) return
@@ -2765,7 +2813,7 @@ function addRoundParticipantToSelectedTable(judgePublicId) {
       judgePublicId,
       name: judge?.name || '',
       role: 'PROFESSIONAL',
-      roleLabel: '参与评委',
+      roleLabel: '参与评审',
       systemTaskRequired: false,
     },
   ]
@@ -2937,7 +2985,7 @@ async function publishCurrentRound() {
   competition.value = normalizeDetail(detail)
   resetForms()
   applyRoundState(targetRoundId)
-  ElMessage.success(currentRound.value.type === 'SCORE' ? '当前轮次已发布到评审端' : '排序任务已发布给桌长和参与评委')
+  ElMessage.success(currentRound.value.type === 'SCORE' ? '当前轮次已发布到评审端' : '排序任务已发布给桌长和参与评审')
 }
 
 async function syncCurrentRoundCandidates() {
@@ -3061,7 +3109,7 @@ async function finishCreateRound() {
   allocationMode.value = 'judges'
   selectedEntryUuids.value = []
   createRoundDialogOpen.value = false
-  ElMessage.success(mode === 'CHAMPION' ? '决赛轮草稿已创建，请安排桌长、参与评委和候选酒款' : `${nextRoundName.value}排序草稿已创建，请安排桌长和参与评委`)
+  ElMessage.success(mode === 'CHAMPION' ? '决赛轮草稿已创建，请安排桌长、参与评审和候选酒款' : `${nextRoundName.value}排序草稿已创建，请安排桌长和参与评审`)
 }
 
 function resetCreateRoundForm() {
@@ -3156,7 +3204,13 @@ function formatAwardEntryName(award) {
   const entry = roundEntryPool.value.find((item) => item.id === award.beerEntryId)
     || competition.value?.entries?.find((item) => item.id === award.beerEntryId)
   if (!entry) return '待选择'
-  return `${entry.uuid} · ${entry.name || entry.style || '未命名酒款'}`
+  return formatAwardEntryLabel(entry)
+}
+
+function formatAwardEntryLabel(entry) {
+  const beerName = entry?.name || entry?.style || entry?.uuid || '未命名酒款'
+  const breweryName = entry?.breweryCompanyName || '未关联厂牌'
+  return `${beerName} · ${breweryName}`
 }
 
 function awardEntryOptions(award) {
@@ -3192,6 +3246,19 @@ async function publishResultsAction() {
   resetForms()
   applyRoundState()
   ElMessage.success('结果已发布')
+}
+
+async function downloadScoringData() {
+  if (!competition.value?.id) return
+  const blob = await exportCompetitionScoringData(competition.value.id)
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${competition.value.name || '比赛'}-评分数据.xlsx`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  window.URL.revokeObjectURL(url)
 }
 
 async function generateAwardsAction() {
@@ -3296,7 +3363,7 @@ function addJudgeToTarget(judge) {
     return
   }
   if (!isJudgeActive(judge)) {
-    ElMessage.warning('停用评委不能加入本场比赛')
+    ElMessage.warning('停用评审不能加入本场比赛')
     return
   }
   const existing = judgeAssignmentForm.find((assignment) => assignment.judgePublicId === judge.publicId)
@@ -3364,7 +3431,7 @@ function tableValidationIssues(table) {
   if (!table.tableName?.trim()) issues.push('基础桌名称不能为空')
   if (captainCount === 0) issues.push(`${table.tableName || '未命名基础桌'}缺少桌长`)
   if (captainCount > 1) issues.push(`${table.tableName || '未命名基础桌'}有 ${captainCount} 名桌长`)
-  if (totalCount === 0) issues.push(`${table.tableName || '未命名基础桌'}尚未分配评委`)
+  if (totalCount === 0) issues.push(`${table.tableName || '未命名基础桌'}尚未分配评审`)
   return issues
 }
 
@@ -3464,8 +3531,13 @@ async function saveEntryConfig() {
 
 async function saveScoreConfigs() {
   const crossConfig = scoreConfigForm.find((config) => config.role === 'CROSS')
-  if (!crossConfig || crossConfig.dimensions.length < 2 || crossConfig.dimensions.length > 4) {
-    ElMessage.warning('跨界评审需配置 2-4 个维度')
+  if (!crossConfig || crossConfig.dimensions.length < 2 || crossConfig.dimensions.length > 3) {
+    ElMessage.warning('跨界评审需配置 2-3 个维度')
+    return
+  }
+  const professionalConfig = scoreConfigForm.find((config) => config.role === 'PROFESSIONAL')
+  if (!isProfessionalScoreConfigFixed(professionalConfig)) {
+    ElMessage.warning('专业评审评分表需固定为香气12、外观3、味道20、口感5、整体印象10')
     return
   }
   if (!scoreConfigForm.every((config) => getScoreTotal(config) === 50)) {
@@ -3488,10 +3560,26 @@ async function saveScoreConfigs() {
   ElMessage.success('评分表已保存')
 }
 
+function isProfessionalScoreConfigFixed(config) {
+  const expected = [
+    ['香气', 12],
+    ['外观', 3],
+    ['味道', 20],
+    ['口感', 5],
+    ['整体印象', 10],
+  ]
+  return Boolean(config)
+    && config.dimensions.length === expected.length
+    && expected.every(([label, maxScore], index) => (
+      config.dimensions[index]?.label === label
+      && Number(config.dimensions[index]?.maxScore) === maxScore
+    ))
+}
+
 function addCrossScoreDimension(config) {
   if (config.role !== 'CROSS') return
-  if (config.dimensions.length >= 4) {
-    ElMessage.warning('跨界评审最多配置 4 个维度')
+  if (config.dimensions.length >= 3) {
+    ElMessage.warning('跨界评审最多配置 3 个维度')
     return
   }
   const existingKeys = new Set(config.dimensions.map((dimension) => dimension.key))
@@ -3527,18 +3615,24 @@ async function handlePrimaryAction() {
 
 async function handleDeleteCompetition() {
   if (!competition.value) return
+  const draft = competition.value.status === 'DRAFT'
+  const title = draft ? '删除/归档草稿比赛' : '归档比赛'
+  const confirmText = draft ? '删除/归档草稿' : '归档比赛'
+  const message = draft
+    ? `如果「${competition.value.name}」尚未产生报名或轮次数据，将从管理台账中删除；如果已有业务数据，将改为归档并保留记录。`
+    : `归档后，「${competition.value.name}」将退出厂商端和常用管理列表，报名、评分、轮次与结果记录会保留用于追溯。`
   try {
     await ElMessageBox.confirm(
-      `删除后，这场比赛会从管理台账中移除，已保存的数据会保留在后台。确认删除「${competition.value.name}」吗？`,
-      '删除比赛',
+      message,
+      title,
       {
-        confirmButtonText: '删除比赛',
+        confirmButtonText: confirmText,
         cancelButtonText: '取消',
         type: 'warning',
       },
     )
     await deleteCompetition(competition.value.id)
-    ElMessage.success('比赛已删除')
+    ElMessage.success(draft ? '草稿比赛已处理' : '比赛已归档')
     router.replace('/admin/competitions')
   } catch {
     // 用户取消或请求失败时保持当前页面不变。
@@ -6285,8 +6379,71 @@ button.pyramid-placeholder-mark {
   min-width: 0;
 }
 
-.award-list :deep(.el-input__wrapper) {
+.award-list :deep(.el-select__wrapper) {
   min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid rgba(219, 232, 237, 0.12);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow: none;
+}
+
+.award-list :deep(.el-select__wrapper:hover),
+.award-list :deep(.el-select__wrapper.is-focused) {
+  border-color: rgba(216, 169, 53, 0.36);
+  background: rgba(216, 169, 53, 0.06);
+  box-shadow: 0 0 0 2px rgba(216, 169, 53, 0.08);
+}
+
+.award-list :deep(.el-select__selected-item),
+.award-list :deep(.el-select__placeholder),
+.award-list :deep(.el-select__input) {
+  color: var(--text);
+}
+
+.award-list :deep(.el-select__placeholder.is-transparent) {
+  color: var(--muted);
+}
+
+.award-list :deep(.el-select__caret) {
+  color: var(--muted);
+}
+
+:global(.award-select-popper.el-popper) {
+  border: 1px solid rgba(219, 232, 237, 0.12);
+  background: #10191d;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.36);
+}
+
+:global(.award-select-popper .el-select-dropdown),
+:global(.award-select-popper .el-select-dropdown__list) {
+  background: #10191d;
+}
+
+:global(.award-select-popper .el-popper__arrow::before) {
+  border-color: rgba(219, 232, 237, 0.12);
+  background: #10191d;
+}
+
+:global(.award-select-popper .el-select-dropdown__item) {
+  height: 36px;
+  padding: 0 14px;
+  color: #e6edf0;
+  line-height: 36px;
+}
+
+:global(.award-select-popper .el-select-dropdown__item.hover),
+:global(.award-select-popper .el-select-dropdown__item:hover) {
+  background: rgba(216, 169, 53, 0.08);
+}
+
+:global(.award-select-popper .el-select-dropdown__item.selected) {
+  color: #e0b84a;
+  background: rgba(216, 169, 53, 0.11);
+}
+
+:global(.award-select-popper .el-select-dropdown__item.is-disabled) {
+  color: rgba(230, 237, 240, 0.3);
 }
 
 .award-list strong {

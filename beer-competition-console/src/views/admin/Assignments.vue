@@ -49,7 +49,7 @@
             <dd>{{ competition.judgeTableCount || 0 }} 桌</dd>
           </div>
           <div>
-            <dt>已分配评委</dt>
+            <dt>已分配评审</dt>
             <dd>{{ competition.judgeCount || 0 }} 人</dd>
           </div>
         </dl>

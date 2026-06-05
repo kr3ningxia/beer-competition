@@ -224,6 +224,11 @@ public class AwardServiceImpl implements AwardService {
         if (results.stream().anyMatch(result -> !AwardResultStatus.CONFIRMED.name().equals(result.getStatus()))) {
             throw new BaseException("所有奖项都需要确认后才能发布");
         }
+        validateMedalConfirmationCompleteness(competitionId, results.stream()
+                .filter(result -> AwardType.MEDAL.name().equals(result.getAwardType()))
+                .filter(result -> result.getCategoryId() != null)
+                .collect(Collectors.groupingBy(AwardResult::getCategoryId,
+                        Collectors.mapping(AwardResult::getRankNo, Collectors.toSet()))));
         validateChampionReady(results);
 
         // 2) 发布奖项并写回酒款结果状态
@@ -436,11 +441,7 @@ public class AwardServiceImpl implements AwardService {
         if (championCount != 1) {
             throw new BaseException("必须确认且只能确认 1 个总冠军");
         }
-        for (Set<Integer> ranks : medalRanksByCategory.values()) {
-            if (!ranks.containsAll(Set.of(1, 2, 3)) || ranks.size() != 3) {
-                throw new BaseException("每个投递组别必须确认金、银、铜三个奖项");
-            }
-        }
+        validateMedalConfirmationCompleteness(competitionId, medalRanksByCategory);
     }
 
     private AwardResult toConfirmedResult(Long competitionId, AwardConfirmItemRequest item, Long adminId, LocalDateTime now) {
@@ -471,6 +472,29 @@ public class AwardServiceImpl implements AwardService {
         if (championCount != 1) {
             throw new BaseException("发布前必须确认 1 个总冠军");
         }
+    }
+
+    private void validateMedalConfirmationCompleteness(Long competitionId, Map<Long, Set<Integer>> medalRanksByCategory) {
+        Set<Long> categoryIds = loadAwardableCategoryIds(competitionId);
+        if (categoryIds.isEmpty()) {
+            throw new BaseException("没有可确认奖项的投递组别");
+        }
+        for (Long categoryId : categoryIds) {
+            Set<Integer> ranks = medalRanksByCategory.getOrDefault(categoryId, Set.of());
+            if (!ranks.containsAll(Set.of(1, 2, 3)) || ranks.size() != 3) {
+                throw new BaseException("每个投递组别必须确认金、银、铜三个奖项");
+            }
+        }
+    }
+
+    private Set<Long> loadAwardableCategoryIds(Long competitionId) {
+        return beerEntryMapper.selectList(new LambdaQueryWrapper<BeerEntry>()
+                        .eq(BeerEntry::getCompetitionId, competitionId)
+                        .ne(BeerEntry::getStatus, EntryStatus.CANCELED.name()))
+                .stream()
+                .map(BeerEntry::getCategoryId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
     }
 
     private boolean hasPublishedAwards(Long competitionId) {

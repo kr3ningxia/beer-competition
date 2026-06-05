@@ -7,6 +7,7 @@ import com.beercompetition.pojo.dto.JudgeScoreUpdateRequest;
 import com.beercompetition.pojo.dto.RankingSubmitRequest;
 import com.beercompetition.pojo.dto.TableScoreFinalizeRequest;
 import com.beercompetition.pojo.enums.UserRole;
+import com.beercompetition.pojo.enums.JudgeRoleType;
 import com.beercompetition.pojo.vo.CompetitionVO;
 import com.beercompetition.pojo.vo.CurrentUserResponse;
 import com.beercompetition.pojo.vo.JudgeEntryVO;
@@ -14,6 +15,7 @@ import com.beercompetition.pojo.vo.JudgeAccountVO;
 import com.beercompetition.pojo.vo.JudgeRoundTableVO;
 import com.beercompetition.pojo.vo.JudgeTaskVO;
 import com.beercompetition.pojo.vo.ScoreRecordVO;
+import com.beercompetition.pojo.vo.ScoreConfigVO;
 import com.beercompetition.service.AuthService;
 import com.beercompetition.service.EntryService;
 import com.beercompetition.service.JudgeService;
@@ -73,6 +75,12 @@ public class JudgeController {
         return Result.success(roundService.getMyRoundTable(roundTableId));
     }
 
+    @PostMapping("/round-tables/{roundTableId}/score-submit")
+    public Result<String> submitScoreRoundTable(@PathVariable Long roundTableId) {
+        roundService.submitScoreRoundTable(roundTableId);
+        return Result.success("提交成功");
+    }
+
     @PostMapping("/round-tables/{roundTableId}/ranking")
     public Result<String> submitRanking(@PathVariable Long roundTableId,
                                         @RequestBody @Valid RankingSubmitRequest request) {
@@ -88,6 +96,12 @@ public class JudgeController {
     @GetMapping("/scan/resolve")
     public Result<JudgeEntryVO> resolveScan(@RequestParam String code) {
         return Result.success(entryService.resolveJudgeScan(code));
+    }
+
+    @GetMapping("/score-configs/current")
+    public Result<ScoreConfigVO> currentScoreConfig(@RequestParam JudgeRoleType role,
+                                                    @RequestParam(required = false) Long competitionId) {
+        return Result.success(scoreService.getCurrentScoreConfig(role, competitionId));
     }
 
     @PostMapping("/scores")

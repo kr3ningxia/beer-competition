@@ -4,7 +4,7 @@
       <div>
         <small>后续轮</small>
         <h2>由桌长选择并排序</h2>
-        <p>本轮不会生成普通评委评分任务，只把候选酒款发给桌长处理。</p>
+        <p>桌长提交排序，主办方确认后锁定结果。</p>
       </div>
       <button class="primary-action" type="button" :disabled="!mainActionEnabled" @click="$emit('rankingMainAction')">
         {{ mainActionText }}
@@ -68,7 +68,6 @@
                 <strong>{{ slot.label }}</strong>
                 <small>{{ slot.uuid || '待选择' }}</small>
               </span>
-              <button v-if="slot.uuid" type="button" @click.stop="$emit('clearRankingSlot', table.id, slot.rank)">移出</button>
             </article>
           </section>
 
@@ -77,14 +76,6 @@
             <article v-for="uuid in table.entryUuids" :key="uuid">
               <span>{{ uuid }}</span>
               <div>
-                <button
-                  v-for="slot in getRankingSlots(table)"
-                  :key="slot.rank"
-                  type="button"
-                  @click.stop="$emit('setRankingSlot', table.id, slot.rank, uuid)"
-                >
-                  {{ slot.label }}
-                </button>
                 <button type="button" @click.stop="$emit('removeEntryFromRoundTable', table.id, uuid)">移除</button>
               </div>
             </article>
@@ -103,7 +94,7 @@
         :target-label="selectedTableTargetLabel"
         :target-hint="selectedTableTargetHint"
         :target-fixed="selectedTableTargetFixed"
-        success-text="本轮可以发布给桌长。"
+        success-text="本轮可以发布。"
         :selected-round-table="selectedRoundTable"
         :captain-candidates="captainCandidates"
         :round-validation-issues="roundValidationIssues"
@@ -112,9 +103,6 @@
         @update-table-target="(tableId, value) => $emit('updateTableTarget', tableId, value)"
         @remove-round-table="$emit('removeRoundTable', $event)"
       >
-        <button class="secondary-action" type="button" :disabled="!canSubmitRanking" @click="$emit('submitRankingRound')">
-          桌长排序已完成
-        </button>
       </RoundCheckPanel>
     </section>
   </section>
@@ -185,7 +173,7 @@ const selectedTableTargetFixed = computed(() => isTargetCountFixed(props.selecte
 const mainActionText = computed(() => {
   if (props.currentRound?.status === 'SUBMITTED') return '确认排序并锁定'
   if (props.currentRound?.status === 'LOCKED') return '已锁定'
-  return '发布给桌长'
+  return '发布排序轮'
 })
 const mainActionEnabled = computed(() => {
   if (props.currentRound?.status === 'SUBMITTED') return true

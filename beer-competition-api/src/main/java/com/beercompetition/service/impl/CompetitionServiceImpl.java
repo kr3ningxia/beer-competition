@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.mapper.BeerEntryMapper;
+import com.beercompetition.mapper.AwardResultMapper;
 import com.beercompetition.mapper.CompetitionRoundMapper;
 import com.beercompetition.mapper.CompetitionCategoryMapper;
 import com.beercompetition.mapper.CompetitionMapper;
@@ -13,6 +14,9 @@ import com.beercompetition.mapper.EntryFieldConfigMapper;
 import com.beercompetition.mapper.JudgeAccountMapper;
 import com.beercompetition.mapper.JudgeAssignmentMapper;
 import com.beercompetition.mapper.JudgeTableMapper;
+import com.beercompetition.mapper.RoundTableMapper;
+import com.beercompetition.mapper.RoundResultMapper;
+import com.beercompetition.mapper.RoundTableEntryMapper;
 import com.beercompetition.mapper.ScoreRecordMapper;
 import com.beercompetition.pojo.dto.CompetitionBaseInfoUpdateRequest;
 import com.beercompetition.pojo.dto.CompetitionCreateRequest;
@@ -28,11 +32,19 @@ import com.beercompetition.pojo.dto.ScoreConfigBatchUpdateRequest;
 import com.beercompetition.pojo.dto.ScoreConfigItemRequest;
 import com.beercompetition.pojo.enums.CompetitionDeliveryMethod;
 import com.beercompetition.pojo.enums.CompetitionStatus;
+import com.beercompetition.pojo.enums.EntryStatus;
+import com.beercompetition.pojo.enums.AwardResultStatus;
+import com.beercompetition.pojo.enums.AwardType;
 import com.beercompetition.pojo.enums.JudgeRoleType;
 import com.beercompetition.pojo.enums.LogisticsVisibility;
+import com.beercompetition.pojo.enums.RoundStatus;
+import com.beercompetition.pojo.enums.RoundTargetMode;
+import com.beercompetition.pojo.enums.RoundType;
 import com.beercompetition.pojo.po.BeerEntry;
+import com.beercompetition.pojo.po.AwardResult;
 import com.beercompetition.pojo.po.Competition;
 import com.beercompetition.pojo.po.CompetitionCategory;
+import com.beercompetition.pojo.po.CompetitionRound;
 import com.beercompetition.pojo.po.CompetitionScoreConfig;
 import com.beercompetition.pojo.po.CompetitionStyleConfig;
 import com.beercompetition.pojo.po.EntryScanLabel;
@@ -40,6 +52,9 @@ import com.beercompetition.pojo.po.EntryFieldConfig;
 import com.beercompetition.pojo.po.JudgeAccount;
 import com.beercompetition.pojo.po.JudgeAssignment;
 import com.beercompetition.pojo.po.JudgeTable;
+import com.beercompetition.pojo.po.RoundTable;
+import com.beercompetition.pojo.po.RoundResult;
+import com.beercompetition.pojo.po.RoundTableEntry;
 import com.beercompetition.pojo.po.ScoreRecord;
 import com.beercompetition.pojo.vo.CompetitionAlertVO;
 import com.beercompetition.pojo.vo.CompetitionCheckVO;
@@ -79,6 +94,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumSet;
@@ -90,8 +108,12 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 import java.util.concurrent.ThreadLocalRandom;
+import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 @Service
@@ -111,7 +133,14 @@ public class CompetitionServiceImpl implements CompetitionService {
     private static final int COMPETITION_CODE_RETRY_LIMIT = 5;
     private static final int CODE_SUFFIX_BOUND = 36 * 36 * 36 * 36 * 36;
     private static final int CROSS_MIN_DIMENSIONS = 2;
-    private static final int CROSS_MAX_DIMENSIONS = 4;
+    private static final int CROSS_MAX_DIMENSIONS = 3;
+    private static final List<String> PROFESSIONAL_DIMENSION_LABELS = List.of("香气", "外观", "味道", "口感", "整体印象");
+    private static final List<BigDecimal> PROFESSIONAL_DIMENSION_MAX_SCORES = List.of(
+            BigDecimal.valueOf(12),
+            BigDecimal.valueOf(3),
+            BigDecimal.valueOf(20),
+            BigDecimal.valueOf(5),
+            BigDecimal.valueOf(10));
     private static final int DEFAULT_MIN_COMMENT_LENGTH = 0;
     private static final String COMPETITION_CODE_PREFIX = "BC";
     private static final String DEFAULT_DELIVERY_METHOD = "BOTH";
@@ -128,8 +157,12 @@ public class CompetitionServiceImpl implements CompetitionService {
     private final JudgeAssignmentMapper judgeAssignmentMapper;
     private final CompetitionScoreConfigMapper competitionScoreConfigMapper;
     private final BeerEntryMapper beerEntryMapper;
+    private final AwardResultMapper awardResultMapper;
     private final ScoreRecordMapper scoreRecordMapper;
     private final CompetitionRoundMapper competitionRoundMapper;
+    private final RoundTableMapper roundTableMapper;
+    private final RoundResultMapper roundResultMapper;
+    private final RoundTableEntryMapper roundTableEntryMapper;
     private final StyleLibraryService styleLibraryService;
     private final EntryScanLabelService entryScanLabelService;
     private final RoundService roundService;
@@ -247,11 +280,23 @@ public class CompetitionServiceImpl implements CompetitionService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteCompetition(Long id) {
-        // 1) 查询比赛并确认存在
-        getCompetitionOrThrow(id);
+        // 1) 查询比赛并确认当前阶段
+        Competition competition = getCompetitionOrThrow(id);
+        CompetitionStatus status = parseStatus(competition);
+        if (status == CompetitionStatus.ARCHIVED) {
+            throw new BaseException("比赛已归档");
+        }
 
-        // 2) 执行逻辑删除
-        competitionMapper.deleteById(id);
+        // 2) 草稿且无业务数据时可移除；进入流程后保留台账并归档
+        boolean hasBusinessData = hasEntries(id)
+                || competitionRoundMapper.selectCount(new LambdaQueryWrapper<CompetitionRound>()
+                .eq(CompetitionRound::getCompetitionId, id)) > 0;
+        if (status == CompetitionStatus.DRAFT && !hasBusinessData) {
+            competitionMapper.deleteById(id);
+            return;
+        }
+        competition.setStatus(CompetitionStatus.ARCHIVED.name());
+        competitionMapper.updateById(competition);
     }
 
     @Override
@@ -474,6 +519,287 @@ public class CompetitionServiceImpl implements CompetitionService {
 
         // 3) 返回最新评分表配置
         return listScoreConfigs(competitionId);
+    }
+
+    @Override
+    public byte[] exportScoringData(Long competitionId) {
+        // 1) 查询比赛、酒款和导出关联数据
+        getCompetitionOrThrow(competitionId);
+        List<BeerEntry> entries = beerEntryMapper.selectList(new LambdaQueryWrapper<BeerEntry>()
+                .eq(BeerEntry::getCompetitionId, competitionId)
+                .ne(BeerEntry::getStatus, EntryStatus.CANCELED.name())
+                .orderByAsc(BeerEntry::getCategoryId)
+                .orderByAsc(BeerEntry::getId));
+        Map<Long, CompetitionCategory> categoryById = competitionCategoryMapper.selectList(new LambdaQueryWrapper<CompetitionCategory>()
+                        .eq(CompetitionCategory::getCompetitionId, competitionId))
+                .stream()
+                .collect(Collectors.toMap(CompetitionCategory::getId, Function.identity(), (left, right) -> left));
+        Map<Long, EntryScanLabel> labelByEntryId = entryScanLabelService.listActiveLabels(entries.stream().map(BeerEntry::getId).toList());
+        Map<Long, List<ScoreRecord>> scoresByEntry = scoreRecordMapper.selectList(new LambdaQueryWrapper<ScoreRecord>()
+                        .eq(ScoreRecord::getCompetitionId, competitionId)
+                        .orderByAsc(ScoreRecord::getBeerEntryId)
+                        .orderByAsc(ScoreRecord::getFinalFlag)
+                        .orderByAsc(ScoreRecord::getId))
+                .stream()
+                .collect(Collectors.groupingBy(ScoreRecord::getBeerEntryId, LinkedHashMap::new, Collectors.toList()));
+        Map<Long, JudgeAccount> judgeById = loadJudgeAccounts(scoresByEntry.values().stream()
+                .flatMap(List::stream)
+                .map(ScoreRecord::getJudgeAccountId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet()));
+        List<RoundResult> roundResults = roundResultMapper.selectList(new LambdaQueryWrapper<RoundResult>()
+                .eq(RoundResult::getCompetitionId, competitionId)
+                .orderByAsc(RoundResult::getRoundId)
+                .orderByAsc(RoundResult::getRoundTableId)
+                .orderByAsc(RoundResult::getRankNo)
+                .orderByAsc(RoundResult::getId));
+        Map<Long, CompetitionRound> roundById = loadRounds(roundResults.stream().map(RoundResult::getRoundId).collect(Collectors.toSet()));
+        Map<Long, RoundTable> tableById = loadRoundTables(roundResults.stream().map(RoundResult::getRoundTableId).collect(Collectors.toSet()));
+        Map<Long, List<RoundResult>> roundResultsByEntry = roundResults.stream()
+                .collect(Collectors.groupingBy(RoundResult::getBeerEntryId, LinkedHashMap::new, Collectors.toList()));
+        Map<Long, List<AwardResult>> awardsByEntry = awardResultMapper.selectList(new LambdaQueryWrapper<AwardResult>()
+                        .eq(AwardResult::getCompetitionId, competitionId)
+                        .orderByDesc(AwardResult::getChampionFlag)
+                        .orderByAsc(AwardResult::getRankNo)
+                        .orderByAsc(AwardResult::getId))
+                .stream()
+                .collect(Collectors.groupingBy(AwardResult::getBeerEntryId, LinkedHashMap::new, Collectors.toList()));
+
+        // 2) 组装 Excel 行数据
+        List<List<String>> rows = new ArrayList<>();
+        rows.add(List.of("匿名编号", "短编号", "投递组别", "基础风格", "状态", "评审原始评分",
+                "桌长共识分", "桌长综合评语", "轮次记录", "奖项结果", "发布状态"));
+        for (BeerEntry entry : entries) {
+            EntryScanLabel label = labelByEntryId.get(entry.getId());
+            List<ScoreRecord> scoreRecords = scoresByEntry.getOrDefault(entry.getId(), List.of());
+            ScoreRecord finalScore = scoreRecords.stream()
+                    .filter(record -> Objects.equals(record.getFinalFlag(), 1))
+                    .findFirst()
+                    .orElse(null);
+            rows.add(java.util.Arrays.asList(
+                    firstText(label == null ? null : label.getLabelCode(), entry.getUuid()),
+                    label == null ? "" : label.getShortCode(),
+                    categoryById.get(entry.getCategoryId()) == null ? "" : categoryById.get(entry.getCategoryId()).getName(),
+                    entry.getStyle(),
+                    entry.getStatus(),
+                    formatPersonalScores(scoreRecords, judgeById),
+                    finalScore == null ? "" : toPlain(finalScore.getConsensusScore() == null ? finalScore.getTotalScore() : finalScore.getConsensusScore()),
+                    finalScore == null ? "" : finalScore.getComments(),
+                    formatRoundResults(roundResultsByEntry.getOrDefault(entry.getId(), List.of()), roundById, tableById),
+                    formatAwards(awardsByEntry.getOrDefault(entry.getId(), List.of())),
+                    EntryStatus.RESULT_PUBLISHED.name().equals(entry.getStatus()) ? "已发布" : "未发布"
+            ));
+        }
+
+        // 3) 返回可被 Excel 直接打开的 xlsx 文件
+        return buildXlsx(rows);
+    }
+
+    private Map<Long, JudgeAccount> loadJudgeAccounts(Set<Long> judgeIds) {
+        if (judgeIds.isEmpty()) {
+            return Map.of();
+        }
+        return judgeAccountMapper.selectBatchIds(judgeIds).stream()
+                .collect(Collectors.toMap(JudgeAccount::getId, Function.identity(), (left, right) -> left));
+    }
+
+    private Map<Long, CompetitionRound> loadRounds(Set<Long> roundIds) {
+        if (roundIds.isEmpty()) {
+            return Map.of();
+        }
+        return competitionRoundMapper.selectBatchIds(roundIds).stream()
+                .collect(Collectors.toMap(CompetitionRound::getId, Function.identity(), (left, right) -> left));
+    }
+
+    private Map<Long, RoundTable> loadRoundTables(Set<Long> tableIds) {
+        if (tableIds.isEmpty()) {
+            return Map.of();
+        }
+        return roundTableMapper.selectBatchIds(tableIds).stream()
+                .collect(Collectors.toMap(RoundTable::getId, Function.identity(), (left, right) -> left));
+    }
+
+    private String formatPersonalScores(List<ScoreRecord> records, Map<Long, JudgeAccount> judgeById) {
+        return records.stream()
+                .filter(record -> !Objects.equals(record.getFinalFlag(), 1))
+                .map(record -> {
+                    JudgeAccount judge = judgeById.get(record.getJudgeAccountId());
+                    String judgeName = judge == null ? "未知评审" : judge.getName();
+                    return judgeName + "(" + record.getJudgeRoleType() + ") "
+                            + toPlain(record.getTotalScore()) + "分 "
+                            + formatScoreDimensions(record.getDimensionsJson())
+                            + (StringUtils.hasText(record.getComments()) ? " 反馈：" + normalizeInline(record.getComments()) : "");
+                })
+                .collect(Collectors.joining("; "));
+    }
+
+    private String formatScoreDimensions(String dimensionsJson) {
+        return readDimensions(dimensionsJson).stream()
+                .map(item -> item.getLabel() + " " + toPlain(item.getScore()) + "/" + toPlain(item.getMaxScore()))
+                .collect(Collectors.joining("，"));
+    }
+
+    private String formatRoundResults(List<RoundResult> results,
+                                      Map<Long, CompetitionRound> roundById,
+                                      Map<Long, RoundTable> tableById) {
+        return results.stream()
+                .map(result -> {
+                    CompetitionRound round = roundById.get(result.getRoundId());
+                    RoundTable table = tableById.get(result.getRoundTableId());
+                    return firstText(round == null ? null : round.getRoundName(), "轮次")
+                            + " " + firstText(table == null ? null : table.getTableName(), "评审桌")
+                            + " " + firstText(result.getSlotLabel(), result.getResultType())
+                            + (result.getRankNo() == null ? "" : " 第" + result.getRankNo() + "名")
+                            + (Objects.equals(result.getLockedFlag(), 1) ? " 已锁定" : " 待确认");
+                })
+                .collect(Collectors.joining("; "));
+    }
+
+    private String formatAwards(List<AwardResult> awards) {
+        return awards.stream()
+                .map(award -> award.getAwardName() + " " + formatAwardResultStatus(award.getStatus()))
+                .collect(Collectors.joining("; "));
+    }
+
+    private String formatAwardResultStatus(String status) {
+        if (AwardResultStatus.PUBLISHED.name().equals(status)) {
+            return "已发布";
+        }
+        if (AwardResultStatus.CONFIRMED.name().equals(status)) {
+            return "已确认";
+        }
+        return "待确认";
+    }
+
+    private byte[] buildXlsx(List<List<String>> rows) {
+        try {
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            try (ZipOutputStream zip = new ZipOutputStream(output, StandardCharsets.UTF_8)) {
+                writeZipEntry(zip, "[Content_Types].xml", """
+                        <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                        <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                          <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                          <Default Extension="xml" ContentType="application/xml"/>
+                          <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+                          <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+                          <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+                        </Types>
+                        """);
+                writeZipEntry(zip, "_rels/.rels", """
+                        <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                        <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                          <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+                        </Relationships>
+                        """);
+                writeZipEntry(zip, "xl/workbook.xml", """
+                        <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                        <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                          <sheets>
+                            <sheet name="评分数据" sheetId="1" r:id="rId1"/>
+                          </sheets>
+                        </workbook>
+                        """);
+                writeZipEntry(zip, "xl/_rels/workbook.xml.rels", """
+                        <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                        <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                          <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+                          <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+                        </Relationships>
+                        """);
+                writeZipEntry(zip, "xl/styles.xml", """
+                        <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                        <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                          <fonts count="2"><font/><font><b/></font></fonts>
+                          <fills count="1"><fill><patternFill patternType="none"/></fill></fills>
+                          <borders count="1"><border/></borders>
+                          <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+                          <cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0"/></cellXfs>
+                        </styleSheet>
+                        """);
+                writeZipEntry(zip, "xl/worksheets/sheet1.xml", buildSheetXml(rows));
+            }
+            return output.toByteArray();
+        } catch (IOException ex) {
+            throw new BaseException("导出评分数据失败");
+        }
+    }
+
+    private void writeZipEntry(ZipOutputStream zip, String name, String content) throws IOException {
+        zip.putNextEntry(new ZipEntry(name));
+        zip.write(content.getBytes(StandardCharsets.UTF_8));
+        zip.closeEntry();
+    }
+
+    private String buildSheetXml(List<List<String>> rows) {
+        StringBuilder xml = new StringBuilder();
+        xml.append("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>")
+                .append("<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">")
+                .append("<cols>")
+                .append("<col min=\"1\" max=\"5\" width=\"18\" customWidth=\"1\"/>")
+                .append("<col min=\"6\" max=\"10\" width=\"36\" customWidth=\"1\"/>")
+                .append("<col min=\"11\" max=\"11\" width=\"12\" customWidth=\"1\"/>")
+                .append("</cols><sheetData>");
+        for (int rowIndex = 0; rowIndex < rows.size(); rowIndex++) {
+            int rowNo = rowIndex + 1;
+            xml.append("<row r=\"").append(rowNo).append("\">");
+            List<String> row = rows.get(rowIndex);
+            for (int columnIndex = 0; columnIndex < row.size(); columnIndex++) {
+                String ref = columnName(columnIndex + 1) + rowNo;
+                xml.append("<c r=\"").append(ref).append("\" t=\"inlineStr\"");
+                if (rowIndex == 0) {
+                    xml.append(" s=\"1\"");
+                }
+                xml.append("><is><t>")
+                        .append(escapeXml(row.get(columnIndex)))
+                        .append("</t></is></c>");
+            }
+            xml.append("</row>");
+        }
+        return xml.append("</sheetData></worksheet>").toString();
+    }
+
+    private String columnName(int columnNo) {
+        StringBuilder name = new StringBuilder();
+        int value = columnNo;
+        while (value > 0) {
+            value--;
+            name.insert(0, (char) ('A' + (value % 26)));
+            value /= 26;
+        }
+        return name.toString();
+    }
+
+    private String escapeXml(String value) {
+        String text = value == null ? "" : value;
+        StringBuilder escaped = new StringBuilder(text.length());
+        for (int index = 0; index < text.length(); index++) {
+            char ch = text.charAt(index);
+            switch (ch) {
+                case '&' -> escaped.append("&amp;");
+                case '<' -> escaped.append("&lt;");
+                case '>' -> escaped.append("&gt;");
+                case '"' -> escaped.append("&quot;");
+                case '\'' -> escaped.append("&apos;");
+                default -> {
+                    if (ch == '\t' || ch == '\n' || ch == '\r' || ch >= 0x20) {
+                        escaped.append(ch);
+                    }
+                }
+            }
+        }
+        return escaped.toString();
+    }
+
+    private String firstText(String primary, String fallback) {
+        return StringUtils.hasText(primary) ? primary : (fallback == null ? "" : fallback);
+    }
+
+    private String normalizeInline(String text) {
+        return text == null ? "" : text.replace("\r", " ").replace("\n", " ").trim();
+    }
+
+    private String toPlain(BigDecimal value) {
+        return value == null ? "" : value.stripTrailingZeros().toPlainString();
     }
 
     private void replaceCategories(Long competitionId, List<ConfigNameItemRequest> items) {
@@ -937,32 +1263,160 @@ public class CompetitionServiceImpl implements CompetitionService {
     }
 
     private ProgressSummaryVO buildProgressSummary(Long competitionId, EntrySummaryVO entriesSummary) {
-        List<ScoreRecord> finalScores = scoreRecordMapper.selectList(new LambdaQueryWrapper<ScoreRecord>()
-                .eq(ScoreRecord::getCompetitionId, competitionId)
-                .eq(ScoreRecord::getFinalFlag, 1));
+        CompetitionRound currentRound = competitionRoundMapper.selectList(new LambdaQueryWrapper<CompetitionRound>()
+                        .eq(CompetitionRound::getCompetitionId, competitionId)
+                        .orderByDesc(CompetitionRound::getSortOrder)
+                        .orderByDesc(CompetitionRound::getId))
+                .stream()
+                .filter(round -> !RoundStatus.DRAFT.name().equals(round.getStatus()))
+                .findFirst()
+                .orElse(null);
+        if (currentRound == null) {
+            List<ScoreRecord> finalScores = scoreRecordMapper.selectList(new LambdaQueryWrapper<ScoreRecord>()
+                    .eq(ScoreRecord::getCompetitionId, competitionId)
+                    .eq(ScoreRecord::getFinalFlag, 1));
+            int advanced = (int) finalScores.stream()
+                    .filter(record -> Objects.equals(record.getAdvancedFlag(), 1))
+                    .count();
+            return ProgressSummaryVO.builder()
+                    .finalized(finalScores.size())
+                    .total(entriesSummary.getRegistered())
+                    .advanced(advanced)
+                    .commentWarnings(0)
+                    .averageReviewMinutes(0)
+                    .build();
+        }
+        if (RoundType.RANKING.name().equals(currentRound.getRoundType())) {
+            List<RoundTable> tables = roundTableMapper.selectList(new LambdaQueryWrapper<RoundTable>()
+                    .eq(RoundTable::getRoundId, currentRound.getId()));
+            int submittedTables = (int) tables.stream()
+                    .filter(table -> RoundStatus.SUBMITTED.name().equals(table.getStatus()) || RoundStatus.LOCKED.name().equals(table.getStatus()))
+                    .count();
+            int results = Math.toIntExact(roundResultMapper.selectCount(new LambdaQueryWrapper<RoundResult>()
+                    .eq(RoundResult::getRoundId, currentRound.getId())));
+            List<RoundResult> roundResults = roundResultMapper.selectList(new LambdaQueryWrapper<RoundResult>()
+                    .eq(RoundResult::getRoundId, currentRound.getId()));
+            return ProgressSummaryVO.builder()
+                    .finalized(submittedTables)
+                    .total(tables.size())
+                    .advanced(results)
+                    .commentWarnings(0)
+                    .averageReviewMinutes(averageMinutes(currentRound.getPublishedTime(),
+                            roundResults.stream().map(RoundResult::getSubmittedTime).toList()))
+                    .build();
+        }
+        List<RoundTableEntry> roundEntries = roundTableEntryMapper.selectList(new LambdaQueryWrapper<RoundTableEntry>()
+                .eq(RoundTableEntry::getRoundId, currentRound.getId()));
+        Set<Long> entryIds = roundEntries.stream()
+                .map(RoundTableEntry::getBeerEntryId)
+                .collect(Collectors.toSet());
+        List<ScoreRecord> roundScores = entryIds.isEmpty()
+                ? List.of()
+                : scoreRecordMapper.selectList(new LambdaQueryWrapper<ScoreRecord>()
+                        .eq(ScoreRecord::getCompetitionId, competitionId)
+                        .in(ScoreRecord::getBeerEntryId, entryIds));
+        List<ScoreRecord> finalScores = roundScores.stream()
+                .filter(record -> Objects.equals(record.getFinalFlag(), 1))
+                .toList();
         int advanced = (int) finalScores.stream()
                 .filter(record -> Objects.equals(record.getAdvancedFlag(), 1))
                 .count();
+        int captainMinCommentLength = competitionScoreConfigMapper.selectList(new LambdaQueryWrapper<CompetitionScoreConfig>()
+                        .eq(CompetitionScoreConfig::getCompetitionId, competitionId)
+                        .eq(CompetitionScoreConfig::getJudgeRoleType, JudgeRoleType.CAPTAIN.name()))
+                .stream()
+                .findFirst()
+                .map(CompetitionScoreConfig::getMinCommentLength)
+                .orElse(DEFAULT_MIN_COMMENT_LENGTH);
+        int commentWarnings = captainMinCommentLength <= 0
+                ? 0
+                : (int) finalScores.stream()
+                        .filter(record -> String.valueOf(record.getComments() == null ? "" : record.getComments()).trim().length() < captainMinCommentLength)
+                        .count();
         return ProgressSummaryVO.builder()
                 .finalized(finalScores.size())
-                .total(entriesSummary.getRegistered())
+                .total(roundEntries.size())
                 .advanced(advanced)
-                .commentWarnings(0)
+                .commentWarnings(commentWarnings)
+                .averageReviewMinutes(averageMinutes(currentRound.getPublishedTime(),
+                        roundScores.stream().map(ScoreRecord::getCreateTime).toList()))
                 .build();
+    }
+
+    private int averageMinutes(LocalDateTime startTime, List<LocalDateTime> endTimes) {
+        if (startTime == null || endTimes == null || endTimes.isEmpty()) {
+            return 0;
+        }
+        List<Long> minutes = endTimes.stream()
+                .filter(Objects::nonNull)
+                .filter(endTime -> !endTime.isBefore(startTime))
+                .map(endTime -> Math.max(0L, Duration.between(startTime, endTime).toMinutes()))
+                .toList();
+        if (minutes.isEmpty()) {
+            return 0;
+        }
+        return Math.toIntExact(Math.round(minutes.stream().mapToLong(Long::longValue).average().orElse(0)));
     }
 
     private ResultSetupVO buildResultSetup(Competition competition) {
         CompetitionStatus status = parseStatus(competition);
         boolean published = status == CompetitionStatus.PUBLISHED || status == CompetitionStatus.ARCHIVED;
         List<AwardResultVO> awardResults = awardService.listAwardResults(competition.getId());
-        boolean confirmed = awardResults.stream().anyMatch(result -> "CONFIRMED".equals(result.getStatus()) || "PUBLISHED".equals(result.getStatus()));
+        boolean medalsReady = areMedalAwardsReady(competition.getId(), awardResults);
         boolean championReady = awardResults.stream().anyMatch(result -> Boolean.TRUE.equals(result.getChampion())
-                && ("CONFIRMED".equals(result.getStatus()) || "PUBLISHED".equals(result.getStatus())));
+                && (AwardResultStatus.CONFIRMED.name().equals(result.getStatus()) || AwardResultStatus.PUBLISHED.name().equals(result.getStatus())));
+        boolean terminalRoundLocked = hasLockedTerminalRound(competition.getId());
+        boolean canPublishResults = published || (status == CompetitionStatus.RESULT_CONFIRMING
+                && terminalRoundLocked && medalsReady && championReady);
         return ResultSetupVO.builder()
-                .awardsReady(confirmed || published)
+                .awardsReady((medalsReady && championReady) || published)
                 .published(published)
                 .championReady(championReady || published)
+                .medalsReady(medalsReady || published)
+                .terminalRoundLocked(terminalRoundLocked || published)
+                .canPublishResults(canPublishResults)
                 .build();
+    }
+
+    private boolean hasLockedTerminalRound(Long competitionId) {
+        return competitionRoundMapper.selectList(new LambdaQueryWrapper<CompetitionRound>()
+                        .eq(CompetitionRound::getCompetitionId, competitionId)
+                        .eq(CompetitionRound::getRoundType, RoundType.RANKING.name())
+                        .eq(CompetitionRound::getStatus, RoundStatus.LOCKED.name()))
+                .stream()
+                .anyMatch(round -> roundTableMapper.selectList(new LambdaQueryWrapper<RoundTable>()
+                                .eq(RoundTable::getRoundId, round.getId()))
+                        .stream()
+                        .anyMatch(table -> RoundTargetMode.CHAMPION.name().equals(table.getTargetMode())));
+    }
+
+    private boolean areMedalAwardsReady(Long competitionId, List<AwardResultVO> awardResults) {
+        Set<Long> categoryIds = loadAwardableCategoryIds(competitionId);
+        if (categoryIds.isEmpty()) {
+            return false;
+        }
+        Map<Long, Set<Integer>> confirmedRanksByCategory = awardResults.stream()
+                .filter(result -> AwardType.MEDAL.name().equals(result.getAwardType()))
+                .filter(result -> result.getCategoryId() != null)
+                .filter(result -> AwardResultStatus.CONFIRMED.name().equals(result.getStatus())
+                        || AwardResultStatus.PUBLISHED.name().equals(result.getStatus()))
+                .collect(Collectors.groupingBy(AwardResultVO::getCategoryId,
+                        Collectors.mapping(AwardResultVO::getRankNo, Collectors.toSet())));
+        return categoryIds.stream()
+                .allMatch(categoryId -> {
+                    Set<Integer> ranks = confirmedRanksByCategory.getOrDefault(categoryId, Set.of());
+                    return ranks.containsAll(Set.of(1, 2, 3));
+                });
+    }
+
+    private Set<Long> loadAwardableCategoryIds(Long competitionId) {
+        return beerEntryMapper.selectList(new LambdaQueryWrapper<BeerEntry>()
+                        .eq(BeerEntry::getCompetitionId, competitionId)
+                        .ne(BeerEntry::getStatus, EntryStatus.CANCELED.name()))
+                .stream()
+                .map(BeerEntry::getCategoryId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
     }
 
     private List<CompetitionCheckVO> buildChecks(Competition competition,
@@ -1271,7 +1725,10 @@ public class CompetitionServiceImpl implements CompetitionService {
             });
             if (config.getJudgeRoleType() == JudgeRoleType.CROSS
                     && (config.getDimensions().size() < CROSS_MIN_DIMENSIONS || config.getDimensions().size() > CROSS_MAX_DIMENSIONS)) {
-                throw new BaseException("跨界评审需配置 2-4 个维度");
+                throw new BaseException("跨界评审需配置 2-3 个维度");
+            }
+            if (config.getJudgeRoleType() == JudgeRoleType.PROFESSIONAL) {
+                validateProfessionalScoreDimensions(config.getDimensions());
             }
             if (config.getJudgeRoleType() == JudgeRoleType.CAPTAIN && config.getDimensions().size() != 1) {
                 throw new BaseException("桌长评分表只能配置 1 个共识评分维度");
@@ -1297,7 +1754,46 @@ public class CompetitionServiceImpl implements CompetitionService {
         if (!roles.containsAll(EnumSet.allOf(JudgeRoleType.class).stream().map(Enum::name).toList())) {
             return false;
         }
-        return scoreConfigs.stream().allMatch(config -> getScoreTotal(config.getDimensions()).compareTo(SCORE_FORM_TOTAL) == 0);
+        return scoreConfigs.stream().allMatch(config -> getScoreTotal(config.getDimensions()).compareTo(SCORE_FORM_TOTAL) == 0
+                && isScoreConfigShapeReady(config));
+    }
+
+    private void validateProfessionalScoreDimensions(List<DimensionRequest> dimensions) {
+        if (dimensions.size() != PROFESSIONAL_DIMENSION_LABELS.size()) {
+            throw new BaseException("专业评审评分表需固定为香气、外观、味道、口感、整体印象 5 个维度");
+        }
+        for (int index = 0; index < PROFESSIONAL_DIMENSION_LABELS.size(); index++) {
+            DimensionRequest dimension = dimensions.get(index);
+            String expectedLabel = PROFESSIONAL_DIMENSION_LABELS.get(index);
+            BigDecimal expectedScore = PROFESSIONAL_DIMENSION_MAX_SCORES.get(index);
+            if (!expectedLabel.equals(dimension.getLabel()) || dimension.getMaxScore() == null
+                    || dimension.getMaxScore().compareTo(expectedScore) != 0) {
+                throw new BaseException("专业评审评分表需固定为香气12、外观3、味道20、口感5、整体印象10");
+            }
+        }
+    }
+
+    private boolean isScoreConfigShapeReady(ScoreConfigVO config) {
+        if (JudgeRoleType.CROSS.name().equals(config.getJudgeRoleType())) {
+            return config.getDimensions().size() >= CROSS_MIN_DIMENSIONS && config.getDimensions().size() <= CROSS_MAX_DIMENSIONS;
+        }
+        if (JudgeRoleType.CAPTAIN.name().equals(config.getJudgeRoleType())) {
+            return config.getDimensions().size() == 1;
+        }
+        if (JudgeRoleType.PROFESSIONAL.name().equals(config.getJudgeRoleType())) {
+            if (config.getDimensions().size() != PROFESSIONAL_DIMENSION_LABELS.size()) {
+                return false;
+            }
+            for (int index = 0; index < PROFESSIONAL_DIMENSION_LABELS.size(); index++) {
+                DimensionRequest dimension = config.getDimensions().get(index);
+                if (!PROFESSIONAL_DIMENSION_LABELS.get(index).equals(dimension.getLabel())
+                        || dimension.getMaxScore() == null
+                        || dimension.getMaxScore().compareTo(PROFESSIONAL_DIMENSION_MAX_SCORES.get(index)) != 0) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     private void assertChecksDone(List<CompetitionCheckVO> checks, Set<String> requiredKeys, String actionName) {

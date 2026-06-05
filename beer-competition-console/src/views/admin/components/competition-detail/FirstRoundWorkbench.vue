@@ -4,7 +4,7 @@
       <div>
         <small>第一轮</small>
         <h2>把已入库酒款分到评审桌</h2>
-        <p>第一轮会发给普通评委评分，桌长最后汇总并选择晋级酒款。</p>
+        <p>第一轮会发给评审评分，桌长最后汇总并选择晋级酒款。</p>
       </div>
       <button class="primary-action" type="button" :disabled="!canPublish" @click="$emit('publishCurrentRound')">
         {{ publishText }}
@@ -66,7 +66,7 @@
             <span>晋级 <strong>{{ table.targetCount }}</strong></span>
           </div>
           <div class="member-line">
-            <span>普通评委</span>
+            <span>评审</span>
             <strong>{{ table.professionalCount || 0 }} 专业 · {{ table.crossCount || 0 }} 跨界</strong>
           </div>
           <div class="entry-list">
@@ -86,7 +86,7 @@
       <RoundCheckPanel
         title="第一轮发布检查"
         target-label="晋级数量"
-        success-text="第一轮可以发布给评委。"
+        success-text="第一轮可以发布给评审。"
         :selected-round-table="selectedRoundTable"
         :captain-candidates="captainCandidates"
         :round-validation-issues="roundValidationIssues"
@@ -96,7 +96,7 @@
         @remove-round-table="$emit('removeRoundTable', $event)"
       >
         <button v-if="currentRound?.status === 'PUBLISHED'" class="secondary-action" type="button" @click="$emit('completeFirstRound')">
-          模拟桌长汇总并锁定
+          确认第一轮完成
         </button>
       </RoundCheckPanel>
     </section>

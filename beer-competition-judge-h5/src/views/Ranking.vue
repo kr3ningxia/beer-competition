@@ -10,7 +10,7 @@
     <section class="card">
       <div class="split">
         <h2 class="section-title compact">排序结果</h2>
-        <span :class="['pill', submitted ? 'status-ok' : '']">{{ submitted ? '已提交' : table?.targetMode || 'TOP_N' }}</span>
+        <span :class="['pill', submitted ? 'status-ok' : '']">{{ rankingStatusText }}</span>
       </div>
       <div class="slot-list">
         <div v-for="slot in slots" :key="slot.rank" class="slot-row">
@@ -50,7 +50,7 @@
       <button v-if="canEdit" class="button primary full ranking-submit" type="button" :disabled="!canSubmit" @click="openSubmitConfirm">
         {{ submitted ? '重新提交排序' : '提交排序' }}
       </button>
-      <p v-else class="readonly-note">本轮由桌长提交排序结果，你可以查看本桌候选和已提交结果。</p>
+      <p v-else class="readonly-note">{{ readonlyText }}</p>
       <p v-if="message" class="message">{{ message }}</p>
     </section>
 
@@ -142,6 +142,16 @@ let scanLocked = false
 const filledCount = computed(() => slots.value.filter((slot) => slot.beerEntryId).length)
 const canEdit = computed(() => Boolean(table.value?.canSubmitRanking) && !submitting.value)
 const canSubmit = computed(() => canEdit.value && slots.value.length > 0 && filledCount.value === slots.value.length)
+const rankingStatusText = computed(() => {
+  if (table.value?.status === 'LOCKED') return '已锁定'
+  if (submitted.value) return '待确认'
+  return table.value?.targetMode || 'TOP_N'
+})
+const readonlyText = computed(() => (
+  table.value?.status === 'LOCKED'
+    ? '本桌排序已锁定。'
+    : '本轮由桌长提交排序结果，你可以查看本桌候选和已提交结果。'
+))
 const selectedResults = computed(() => slots.value.map((slot) => {
   const entry = findEntryById(slot.beerEntryId)
   return {
@@ -292,7 +302,8 @@ async function confirmSubmit() {
     })
     confirmOpen.value = false
     submitted.value = true
-    message.value = '排序已提交'
+    table.value = { ...table.value, status: 'SUBMITTED' }
+    message.value = '排序已提交，等待主办方确认'
   } catch {
     submitError.value = '提交失败，请稍后重试或联系现场工作人员。'
   } finally {
@@ -307,6 +318,7 @@ onMounted(async () => {
     ...slot,
     beerEntryId: slot.beerEntryId || null,
   }))
+  submitted.value = ['SUBMITTED', 'LOCKED'].includes(table.value?.status) || slots.value.some((slot) => slot.beerEntryId)
 })
 
 onBeforeUnmount(() => {

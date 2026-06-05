@@ -37,6 +37,9 @@ import com.beercompetition.service.RoundService;
 import com.beercompetition.service.StyleLibraryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -243,6 +246,15 @@ public class AdminController {
     public Result<CompetitionDetailVO> publishResults(@PathVariable Long id) {
         roundService.publishResults(id);
         return Result.success(competitionService.getCompetitionDetail(id));
+    }
+
+    @GetMapping("/competitions/{id}/exports/scoring")
+    public ResponseEntity<byte[]> exportScoringData(@PathVariable Long id) {
+        byte[] content = competitionService.exportScoringData(id);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"scoring-data.xlsx\"")
+                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(content);
     }
 
     @PostMapping("/entries/{id}/confirm-payment")

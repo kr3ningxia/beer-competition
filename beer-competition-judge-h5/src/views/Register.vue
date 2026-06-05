@@ -33,7 +33,7 @@ import { setSession } from '@/utils/auth'
 
 const router = useRouter()
 const message = ref('')
-const form = reactive({ phone: '', code: '123456' })
+const form = reactive({ phone: '', code: '' })
 const canSubmit = computed(() => form.phone.length >= 11 && form.code.length >= 4)
 
 async function send() {

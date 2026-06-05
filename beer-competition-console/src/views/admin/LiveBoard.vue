@@ -164,7 +164,7 @@ function buildBoard(data) {
     roundName: currentRound?.name || '未创建轮次',
     roundTypeText: currentRound?.type === 'RANKING' ? '排序轮' : '评分制',
     statusText: resolveStatusText(data.status, currentRound),
-    metrics: buildMetrics(currentRound, tables),
+    metrics: buildMetrics(currentRound, tables, data.progressSummary || {}),
     tables,
     notices: displayNotices,
     roundSteps: buildRoundSteps(rounds, currentRound),
@@ -189,9 +189,10 @@ function buildEmptyBoard() {
   }
 }
 
-function buildMetrics(round, tables) {
+function buildMetrics(round, tables, progress = {}) {
   const entryCount = countRoundEntries(round)
   const doneTables = tables.filter((table) => table.done).length
+  const averageReviewTime = formatMinutes(progress.averageReviewMinutes)
   if (round?.type === 'RANKING') {
     const selected = tables.reduce((sum, table) => sum + table.selectedCount, 0)
     const target = tables.reduce((sum, table) => sum + table.targetCount, 0)
@@ -200,15 +201,19 @@ function buildMetrics(round, tables) {
       { label: '评审桌', value: tables.length, unit: '桌', tone: 'neutral' },
       { label: '排序提交', value: `${selected} / ${target}`, unit: '', tone: selected >= target && target > 0 ? 'success' : 'gold' },
       { label: '完成桌数', value: `${doneTables} / ${tables.length}`, unit: '桌', tone: doneTables === tables.length && tables.length ? 'success' : 'warning' },
+      { label: '平均耗时', value: averageReviewTime, unit: '', tone: 'neutral' },
     ]
   }
   const submitted = tables.reduce((sum, table) => sum + table.submittedCount, 0)
   const total = tables.reduce((sum, table) => sum + table.submittedTotal, 0)
+  const commentWarnings = Number(progress.commentWarnings || 0)
   return [
     { label: '本轮酒款', value: entryCount, unit: '款', tone: 'neutral' },
     { label: '评审桌', value: tables.length, unit: '桌', tone: 'neutral' },
     { label: '评分提交', value: `${submitted} / ${total}`, unit: '', tone: submitted >= total && total > 0 ? 'success' : 'gold' },
     { label: '完成桌数', value: `${doneTables} / ${tables.length}`, unit: '桌', tone: doneTables === tables.length && tables.length ? 'success' : 'warning' },
+    { label: '平均耗时', value: averageReviewTime, unit: '', tone: 'neutral' },
+    { label: '备注不足', value: commentWarnings, unit: '条', tone: commentWarnings > 0 ? 'warning' : 'success' },
   ]
 }
 
@@ -220,7 +225,11 @@ function buildTableTile(round, table) {
     const selectedCount = (table.rankings || []).filter((slot) => slot.uuid).length
     const issueText = getTableIssue(table)
     const done = !issueText && selectedCount >= targetCount && targetCount > 0
-    const statusText = issueText ? '需关注' : done ? '已完成' : selectedCount ? '排序中' : '待排序'
+    const isChampion = table.targetMode === 'CHAMPION'
+    const isMedals = table.targetMode === 'MEDALS'
+    const statusText = issueText ? '需关注' : done ? (isChampion ? '已提交' : '已完成') : selectedCount ? '排序中' : (isChampion ? '待提交' : '待排序')
+    const targetLabel = isChampion ? '总冠军' : isMedals ? '奖项槽位' : '排序目标'
+    const targetValue = isChampion ? (done ? '已选择' : '待选择') : `${targetCount} 款`
     return {
       id: table.id || displayName,
       displayName,
@@ -236,8 +245,8 @@ function buildTableTile(round, table) {
       tone: issueText ? 'danger' : done ? 'success' : selectedCount ? 'active' : 'warning',
       stats: [
         { label: '排序提交', value: `${selectedCount} / ${targetCount}`, accent: done || selectedCount > 0 },
-        { label: '桌长确认', value: done ? '已完成' : selectedCount ? '待确认' : '未开始' },
-        { label: '晋级名额', value: `${targetCount} 款`, accent: true },
+        { label: '主办方确认', value: round.status === 'LOCKED' ? '已锁定' : done ? '待确认' : '未开始' },
+        { label: targetLabel, value: targetValue, accent: true },
       ],
     }
   }
@@ -300,7 +309,7 @@ function resolveCaptainText(progress, confirmedCount, entryCount) {
 function getTableIssue(table) {
   if (!table.captainPublicId && !table.captainName && !table.captain?.name) return '桌长未指定'
   if (!(table.entryUuids || []).length) return '尚未分配酒款'
-  if (!Number(table.targetCount || 0)) return '晋级名额未设置'
+  if (!Number(table.targetCount || 0)) return table.targetMode === 'CHAMPION' ? '总冠军名额未设置' : '排序目标未设置'
   return ''
 }
 
@@ -348,13 +357,23 @@ function countRoundEntries(round) {
   return new Set((round?.tables || []).flatMap((table) => table.entryUuids || [])).size
 }
 
+function formatMinutes(value) {
+  const minutes = Number(value || 0)
+  if (minutes <= 0) return '-'
+  if (minutes < 60) return `${minutes}分钟`
+  const hours = Math.floor(minutes / 60)
+  const rest = minutes % 60
+  return rest ? `${hours}小时${rest}分钟` : `${hours}小时`
+}
+
 function buildRoundSteps(rounds, currentRound) {
   const currentIndex = Math.max(rounds.findIndex((round) => round.id === currentRound?.id), 0)
   const nextRound = rounds[currentIndex + 1]
+  const terminal = currentRound?.tables?.some((table) => table.targetMode === 'CHAMPION')
   return [
     { label: currentRound?.name || '第一轮', status: resolveShortRoundStatus(currentRound), current: true },
-    { label: nextRound?.name || '第二轮', status: nextRound ? resolveShortRoundStatus(nextRound) : '待创建', muted: !nextRound },
-    { label: '结果', status: '待确认', muted: true },
+    ...(terminal ? [] : [{ label: nextRound?.name || '下一轮', status: nextRound ? resolveShortRoundStatus(nextRound) : '待创建', muted: !nextRound }]),
+    { label: '结果确认', status: currentRound?.status === 'LOCKED' && terminal ? '待发布' : '待确认', muted: true },
   ]
 }
 
@@ -637,7 +656,7 @@ function normalizePercent(value) {
 
 .metric-strip {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 16px;
 }
 

@@ -85,7 +85,7 @@ defineEmits(['close', 'finish', 'update:targetMode', 'update:targetCount', 'upda
 const selectedTargetOption = computed(() => props.targetOptions.find((option) => option.value === props.targetMode))
 const isChampion = computed(() => props.targetMode === 'CHAMPION')
 const dialogTitle = computed(() => (isChampion.value ? '准备决赛轮' : `准备${props.nextRoundName}排序`))
-const dialogHint = computed(() => (isChampion.value ? '安排决赛桌、桌长和参与评委。' : '先安排桌长和参与评委，上一轮结果固定后再分配酒款。'))
+const dialogHint = computed(() => (isChampion.value ? '安排决赛桌、桌长和参与评审。' : '先安排桌长和参与评审，上一轮结果固定后再分配酒款。'))
 const candidateLabel = computed(() => (isChampion.value ? '各组别金奖' : '当前候选'))
 const candidateHint = computed(() => (isChampion.value ? '用于决出全场总冠军' : `用于${props.nextRoundName}分桌`))
 const finishLabel = computed(() => (isChampion.value ? '创建决赛草稿并去分桌' : '创建草稿并去分桌'))

@@ -1,6 +1,6 @@
 const ROLE_LABELS = {
-  CROSS: '大众评委',
-  PROFESSIONAL: '专业评委',
+  CROSS: '跨界评审',
+  PROFESSIONAL: '专业评审',
   CAPTAIN: '桌长',
 }
 
@@ -10,7 +10,7 @@ const people = {
     displayName: '林晓峰',
     phone: '13800000011',
     wechat: 'lin-beer',
-    qualification: 'BJCP 认证评委，6 年精酿评审经验',
+    qualification: 'BJCP 认证评审，6 年精酿评审经验',
     role: 'PROFESSIONAL',
     tableName: 'A 桌',
   },
@@ -28,7 +28,7 @@ const people = {
     displayName: '周明',
     phone: '13800000013',
     wechat: 'captain-zhou',
-    qualification: '国家级啤酒评委，担任 A 桌桌长',
+    qualification: '国家级啤酒评审，担任 A 桌桌长',
     role: 'CAPTAIN',
     tableName: 'A 桌',
   },
@@ -192,7 +192,7 @@ const tableScores = [
     beerUuid: 'BC-2026-IPA-0001',
     judgeName: '林晓峰',
     judgeRoleType: 'PROFESSIONAL',
-    roleLabel: '专业评委',
+    roleLabel: '专业评审',
     dimensions: [
       { key: 'aroma', label: '香气', score: 11, maxScore: 12, note: '热带水果和松针感清晰，香气集中。' },
       { key: 'appearance', label: '外观', score: 3, maxScore: 3, note: '酒体清亮，泡沫状态稳定。' },
@@ -211,7 +211,7 @@ const tableScores = [
     beerUuid: 'BC-2026-IPA-0001',
     judgeName: '陈可',
     judgeRoleType: 'CROSS',
-    roleLabel: '大众评委',
+    roleLabel: '跨界评审',
     dimensions: [
       { key: 'appearance', label: '第一印象', score: 9, maxScore: 10, note: '香气很讨喜，入口第一感觉轻松。' },
       { key: 'drinkability', label: '易饮度', score: 17, maxScore: 20, note: '苦味不会突兀，喝起来比较顺。' },

@@ -37,6 +37,16 @@
         >
           {{ captainSummaryActionLabel }}
         </button>
+        <button
+          v-else
+          class="button primary full check-action"
+          type="button"
+          :disabled="!canSubmitTableResult"
+          @click="submitTableResult"
+        >
+          {{ tableSubmitButtonText }}
+        </button>
+        <p v-if="tableSubmitHint" class="submit-hint">{{ tableSubmitHint }}</p>
       </section>
 
       <section class="card">
@@ -121,22 +131,22 @@
           <span class="final-count">晋级 {{ advancedUuids.length }} / {{ advanceTargetCount }}</span>
         </div>
         <div v-if="scoreStats" class="score-reference-grid">
-          <button type="button" @click="fillConsensusScore(scoreStats.average)">
+          <button type="button" :disabled="tableLocked" @click="fillConsensusScore(scoreStats.average)">
             <span>平均</span>
             <strong>{{ scoreStats.average }}</strong>
           </button>
-          <button type="button" @click="fillConsensusScore(scoreStats.highest)">
+          <button type="button" :disabled="tableLocked" @click="fillConsensusScore(scoreStats.highest)">
             <span>最高</span>
             <strong>{{ scoreStats.highest }}</strong>
           </button>
-          <button type="button" @click="fillConsensusScore(scoreStats.lowest)">
+          <button type="button" :disabled="tableLocked" @click="fillConsensusScore(scoreStats.lowest)">
             <span>最低</span>
             <strong>{{ scoreStats.lowest }}</strong>
           </button>
         </div>
         <label class="field score-field">
           共识分
-          <input v-model="form.consensusScore" class="input" type="number" inputmode="numeric" min="0" max="50" step="1" />
+          <input v-model="form.consensusScore" class="input" type="number" inputmode="numeric" min="0" :max="captainScoreMax" step="1" :disabled="tableLocked" />
         </label>
         <label class="field">
           综合评语
@@ -144,16 +154,17 @@
           <textarea
             v-model.trim="form.comments"
             class="textarea"
+            :disabled="tableLocked"
             placeholder="请写下本桌讨论后的综合意见，作为参赛方最终可见反馈。"
           />
         </label>
         <label :class="['advance-line', 'final-advance', { active: form.advanced }]">
-          <input v-model="form.advanced" type="checkbox" />
+          <input v-model="form.advanced" type="checkbox" :disabled="tableLocked" />
           <span>加入晋级名单</span>
         </label>
         <p class="caption">本桌需晋级 {{ advanceTargetCount }} 款，当前已选 {{ advancedUuids.length }} 款。</p>
         <button class="button primary full" type="button" :disabled="!canFinalize" @click="submitFinal">
-          保存这款酒的桌长意见
+          {{ finalButtonText }}
         </button>
         <p v-if="finalizeHint && !message" class="submit-hint">{{ finalizeHint }}</p>
         <p v-if="message" class="message">{{ message }}</p>
@@ -172,8 +183,10 @@ import {
   fetchCompetitions,
   fetchEntry,
   fetchMe,
+  fetchScoreConfig,
   fetchTableScores,
   finalizeTableScore,
+  submitScoreRoundTable,
 } from '@/api/judge'
 import JudgeBottomNav from '@/components/JudgeBottomNav.vue'
 import { isRankingTaskType, selectCurrentTask } from '@/utils/judgeTasks'
@@ -185,9 +198,11 @@ const me = ref(null)
 const board = ref(null)
 const entry = ref(null)
 const tableScores = ref([])
+const captainConfig = ref(null)
 const advancedUuids = ref([])
 const expandedCommentIds = ref(new Set())
 const message = ref('')
+const submittingTable = ref(false)
 const form = reactive({
   consensusScore: '',
   comments: '',
@@ -271,6 +286,24 @@ const canOpenNextAction = computed(() => (
   || Boolean(nextActionEntry.value?.uuid)
 ))
 const currentBoardEntry = computed(() => boardEntries.value.find((item) => item.uuid === uuid.value) || null)
+const tableSubmitted = computed(() => ['SUBMITTED', 'LOCKED'].includes(board.value?.roundTable?.status))
+const tableLocked = computed(() => board.value?.roundTable?.status === 'LOCKED')
+const canSubmitTableResult = computed(() => (
+  tableReadyForReview.value
+  && !tableSubmitted.value
+  && Boolean(board.value?.roundTable?.canSubmitTableScore)
+  && !submittingTable.value
+))
+const tableSubmitButtonText = computed(() => {
+  if (tableSubmitted.value) return '本桌结果已提交'
+  if (submittingTable.value) return '提交中...'
+  return '提交本桌结果'
+})
+const tableSubmitHint = computed(() => {
+  if (tableSubmitted.value) return '本桌结果已提交，等待主办方确认轮次。'
+  if (tableReadyForReview.value && !board.value?.roundTable?.canSubmitTableScore) return '当前账号不能提交本桌结果。'
+  return ''
+})
 const currentSubmittedCount = computed(() => Number(currentBoardEntry.value?.submittedCount || normalScores.value.length || 0))
 const currentExpectedCount = computed(() => Number(currentBoardEntry.value?.expectedCount || 0))
 const tableScoresReady = computed(() => (
@@ -291,31 +324,39 @@ const scoreReference = computed(() => {
   if (!scoreStats.value) return ''
   return `平均 ${scoreStats.value.average} 分，最高 ${scoreStats.value.highest} 分，最低 ${scoreStats.value.lowest} 分`
 })
-const minFinalCommentLength = 20
-const finalCommentLength = computed(() => form.comments.length)
+const minFinalCommentLength = computed(() => Number(captainConfig.value?.commentMinLength ?? captainConfig.value?.minCommentLength ?? 0))
+const captainScoreMax = computed(() => Number(captainConfig.value?.dimensions?.[0]?.maxScore || 50))
+const finalCommentLength = computed(() => countEffectiveChars(form.comments))
 const consensusScoreValid = computed(() => (
   Number.isInteger(Number(form.consensusScore))
   && Number(form.consensusScore) >= 0
-  && Number(form.consensusScore) <= 50
+  && Number(form.consensusScore) <= captainScoreMax.value
 ))
 const canFinalize = computed(() => (
-  tableScoresReady.value
+  !tableLocked.value
+  && tableScoresReady.value
   && consensusScoreValid.value
-  && finalCommentLength.value >= minFinalCommentLength
+  && finalCommentLength.value >= minFinalCommentLength.value
 ))
 const finalizeHint = computed(() => {
+  if (tableLocked.value) return '本桌结果已锁定，不能继续修改。'
   if (!tableScoresReady.value) {
     const expectedText = currentExpectedCount.value > 0 ? currentExpectedCount.value : '-'
     return `同桌评分未完成（${currentSubmittedCount.value}/${expectedText}），暂不能保存桌长意见。`
   }
-  if (!consensusScoreValid.value) return '请填写 0-50 的共识分。'
-  if (finalCommentLength.value < minFinalCommentLength) return `综合评语还差 ${minFinalCommentLength - finalCommentLength.value} 字。`
+  if (!consensusScoreValid.value) return `请填写 0-${captainScoreMax.value} 的共识分。`
+  if (finalCommentLength.value < minFinalCommentLength.value) return `综合评语还差 ${minFinalCommentLength.value - finalCommentLength.value} 字。`
   return ''
 })
+const finalButtonText = computed(() => (tableLocked.value ? '本桌结果已锁定' : '保存这款酒的桌长意见'))
 
 async function loadBoard() {
   board.value = await fetchCaptainBoard()
   advancedUuids.value = board.value.entries.filter((item) => item.advanced).map((item) => item.uuid)
+  const competitionId = board.value?.competition?.competitionId || me.value?.competitionId
+  if (competitionId && !captainConfig.value) {
+    captainConfig.value = await fetchScoreConfig('CAPTAIN', competitionId)
+  }
 }
 
 async function loadDetail() {
@@ -340,14 +381,39 @@ async function redirectRankingTaskIfNeeded() {
 }
 
 async function submitFinal() {
+  if (!canFinalize.value) return
+  const captainDimension = captainConfig.value?.dimensions?.[0] || { key: 'consensus', label: '共识分', maxScore: captainScoreMax.value }
   await finalizeTableScore(uuid.value, {
-    dimensions: [{ key: 'consensus', label: '共识分', score: Math.round(Number(form.consensusScore)), maxScore: 50 }],
+    dimensions: [{
+      key: captainDimension.key,
+      label: captainDimension.label,
+      score: Math.round(Number(form.consensusScore)),
+      maxScore: captainDimension.maxScore || captainScoreMax.value,
+      notePrompt: captainDimension.notePrompt,
+      note: form.comments.trim(),
+    }],
     consensusScore: Math.round(Number(form.consensusScore)),
     comments: form.comments,
     advanced: form.advanced,
   })
-  message.value = '本桌评分已确认'
+  message.value = '桌长意见已保存'
   window.setTimeout(() => router.push('/captain'), 420)
+}
+
+function countEffectiveChars(text) {
+  return String(text || '').replace(/\s+/g, '').length
+}
+
+async function submitTableResult() {
+  if (!canSubmitTableResult.value) return
+  submittingTable.value = true
+  try {
+    await submitScoreRoundTable(board.value.roundTable.roundTableId)
+    message.value = '本桌结果已提交'
+    await loadBoard()
+  } finally {
+    submittingTable.value = false
+  }
 }
 
 function openNextAction() {

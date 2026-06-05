@@ -10,4 +10,7 @@ public class ResultSetupVO {
     private Boolean awardsReady;
     private Boolean published;
     private Boolean championReady;
+    private Boolean medalsReady;
+    private Boolean terminalRoundLocked;
+    private Boolean canPublishResults;
 }

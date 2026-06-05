@@ -92,7 +92,12 @@
         </button>
       </button>
 
-      <div v-if="filteredCompetitions.length === 0" class="empty-state">
+      <div v-if="loading" class="empty-state">
+        <Search />
+        <strong>正在加载赛事</strong>
+      </div>
+
+      <div v-else-if="filteredCompetitions.length === 0" class="empty-state">
         <Search />
         <strong>没有符合条件的比赛</strong>
         <p>调整名称、年份或状态筛选后再查看赛事台账。</p>
@@ -207,6 +212,7 @@ import { fetchCompetitions } from '@/api/admin'
 
 const router = useRouter()
 const competitions = ref([])
+const loading = ref(false)
 const keyword = ref('')
 const selectedStatus = ref('ALL')
 const selectedYear = ref('ALL')
@@ -245,8 +251,13 @@ const filteredCompetitions = computed(() => {
 onMounted(loadCompetitions)
 
 async function loadCompetitions() {
-  const data = await fetchCompetitions()
-  competitions.value = data.map(normalizeCompetition)
+  loading.value = true
+  try {
+    const data = await fetchCompetitions()
+    competitions.value = data.map(normalizeCompetition)
+  } finally {
+    loading.value = false
+  }
 }
 
 function normalizeCompetition(item) {
@@ -303,7 +314,7 @@ function getConfigHint(competition) {
 }
 
 function exportLedger() {
-  ElMessage.success(`已准备导出 ${filteredCompetitions.value.length} 场比赛的筛选结果`)
+  ElMessage.info('请进入比赛详情导出评分数据')
 }
 
 function getReadyCount(competition) {

@@ -3,7 +3,6 @@ import {
   entries,
   getFallbackPerson,
   getRoleLabel,
-  scoreConfigs,
   seedScores,
 } from './mockJudgeData'
 import request from './request'
@@ -187,8 +186,18 @@ export function fetchEntries() {
   }))
 }
 
-export function fetchScoreConfig(role) {
-  return wait(scoreConfigs[role] || scoreConfigs.CROSS)
+export async function fetchScoreConfig(role, competitionId) {
+  const config = await request.get('/api/judge/score-configs/current', {
+    params: {
+      role,
+      competitionId,
+    },
+  })
+  return normalizeScoreConfig(config)
+}
+
+export function submitScoreRoundTable(roundTableId) {
+  return request.post(`/api/judge/round-tables/${roundTableId}/score-submit`)
 }
 
 export async function fetchMyScores() {
@@ -270,6 +279,7 @@ export async function fetchCaptainBoard(roundTableId) {
   return {
     competition: {
       name: task.competitionName,
+      competitionId: task.competitionId,
       flightName: task.roundName,
       tableName: task.tableName,
       taskType: task.taskType,
@@ -294,6 +304,20 @@ export function updateAdvancedList(uuids) {
   ))
   writeScores(scores)
   return wait({ advancedUuids: uuids })
+}
+
+function normalizeScoreConfig(config) {
+  return {
+    ...config,
+    roleLabel: config.roleLabel || getRoleLabel(config.judgeRoleType),
+    commentMinLength: Number(config.commentMinLength ?? config.minCommentLength ?? 0),
+    dimensions: (config.dimensions || []).map((item) => ({
+      ...item,
+      maxScore: Number(item.maxScore || 0),
+      notePlaceholder: item.notePlaceholder || item.notePrompt || '',
+      description: item.description || item.notePrompt || '',
+    })),
+  }
 }
 
 function normalizeEntry(entry) {

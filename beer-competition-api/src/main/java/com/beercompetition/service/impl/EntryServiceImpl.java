@@ -624,22 +624,33 @@ public class EntryServiceImpl implements EntryService {
         Competition competition = competitionMapper.selectById(entry.getCompetitionId());
         CompetitionCategory category = competitionCategoryMapper.selectById(entry.getCategoryId());
         boolean published = isResultPublished(competition, entry);
-        PortalRoundResultVO formalAward = findPublishedAwardResult(entry.getId());
+        PortalRoundResultVO formalAward = published ? findPublishedAwardResult(entry.getId()) : null;
         return PortalResultSummaryVO.builder()
                 .entryId(entry.getId())
                 .entryName(entry.getName())
                 .competitionId(entry.getCompetitionId())
                 .competitionName(competition == null ? null : competition.getName())
                 .categoryName(category == null ? null : category.getName())
+                .categoryEntryCount(resolveCategoryEntryCount(entry))
                 .style(entry.getStyle())
                 .status(entry.getStatus())
                 .published(published)
                 .lockReason(published ? null : "比赛结果暂未发布")
-                .awardName(formalAward == null ? null : formalAward.getAwardName())
-                .awardType(formalAward == null ? null : formalAward.getAwardType())
-                .champion(formalAward == null ? false : formalAward.getChampion())
-                .roundResult(formalAward == null ? listRoundResults(entry.getId()).stream().findFirst().orElse(null) : formalAward)
+                .awardName(published && formalAward != null ? formalAward.getAwardName() : null)
+                .awardType(published && formalAward != null ? formalAward.getAwardType() : null)
+                .champion(published && formalAward != null && Boolean.TRUE.equals(formalAward.getChampion()))
+                .roundResult(published ? (formalAward == null ? listRoundResults(entry.getId()).stream().findFirst().orElse(null) : formalAward) : null)
                 .build();
+    }
+
+    private Integer resolveCategoryEntryCount(BeerEntry entry) {
+        if (entry.getCompetitionId() == null || entry.getCategoryId() == null) {
+            return 0;
+        }
+        return Math.toIntExact(beerEntryMapper.selectCount(new LambdaQueryWrapper<BeerEntry>()
+                .eq(BeerEntry::getCompetitionId, entry.getCompetitionId())
+                .eq(BeerEntry::getCategoryId, entry.getCategoryId())
+                .ne(BeerEntry::getStatus, EntryStatus.CANCELED.name())));
     }
 
     private PortalScoreRecordVO toPortalScoreRecordVO(ScoreRecord record) {

@@ -50,4 +50,6 @@ public interface CompetitionService {
     List<ScoreConfigVO> getScoreConfigs(Long competitionId);
 
     List<ScoreConfigVO> updateScoreConfigs(Long competitionId, ScoreConfigBatchUpdateRequest request);
+
+    byte[] exportScoringData(Long competitionId);
 }

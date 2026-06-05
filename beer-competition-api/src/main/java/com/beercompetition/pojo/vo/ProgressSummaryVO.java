@@ -11,4 +11,5 @@ public class ProgressSummaryVO {
     private Integer total;
     private Integer advanced;
     private Integer commentWarnings;
+    private Integer averageReviewMinutes;
 }

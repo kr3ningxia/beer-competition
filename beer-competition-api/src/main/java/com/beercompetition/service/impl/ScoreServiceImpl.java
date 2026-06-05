@@ -8,6 +8,7 @@ import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.mapper.BeerEntryMapper;
 import com.beercompetition.mapper.CompetitionCategoryMapper;
 import com.beercompetition.mapper.CompetitionRoundMapper;
+import com.beercompetition.mapper.CompetitionScoreConfigMapper;
 import com.beercompetition.mapper.EntryScanLabelMapper;
 import com.beercompetition.mapper.JudgeAccountMapper;
 import com.beercompetition.mapper.JudgeAssignmentMapper;
@@ -30,6 +31,7 @@ import com.beercompetition.pojo.enums.RoundType;
 import com.beercompetition.pojo.po.BeerEntry;
 import com.beercompetition.pojo.po.CompetitionCategory;
 import com.beercompetition.pojo.po.CompetitionRound;
+import com.beercompetition.pojo.po.CompetitionScoreConfig;
 import com.beercompetition.pojo.po.EntryScanLabel;
 import com.beercompetition.pojo.po.JudgeAccount;
 import com.beercompetition.pojo.po.JudgeAssignment;
@@ -38,6 +40,7 @@ import com.beercompetition.pojo.po.RoundTable;
 import com.beercompetition.pojo.po.RoundTableEntry;
 import com.beercompetition.pojo.po.RoundTableMember;
 import com.beercompetition.pojo.po.ScoreRecord;
+import com.beercompetition.pojo.vo.ScoreConfigVO;
 import com.beercompetition.pojo.vo.ScoreRecordVO;
 import com.beercompetition.service.ScoreService;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -47,9 +50,13 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -59,10 +66,12 @@ public class ScoreServiceImpl implements ScoreService {
 
     private static final int FLAG_FALSE = 0;
     private static final int FLAG_TRUE = 1;
+    private static final BigDecimal SCORE_TOTAL = BigDecimal.valueOf(50);
 
     private final BeerEntryMapper beerEntryMapper;
     private final CompetitionCategoryMapper competitionCategoryMapper;
     private final CompetitionRoundMapper competitionRoundMapper;
+    private final CompetitionScoreConfigMapper competitionScoreConfigMapper;
     private final EntryScanLabelMapper entryScanLabelMapper;
     private final JudgeAccountMapper judgeAccountMapper;
     private final JudgeAssignmentMapper judgeAssignmentMapper;
@@ -74,12 +83,32 @@ public class ScoreServiceImpl implements ScoreService {
     private final ObjectMapper objectMapper;
 
     @Override
+    public ScoreConfigVO getCurrentScoreConfig(JudgeRoleType role, Long competitionId) {
+        // 1) 查询当前评审与目标比赛
+        Long judgeId = BaseContext.getCurrentId();
+        requireActiveJudge(judgeId);
+        Long targetCompetitionId = competitionId == null ? resolveCurrentCompetitionId(judgeId) : competitionId;
+        requireAssignment(targetCompetitionId);
+
+        // 2) 查询并返回当前比赛角色评分表
+        CompetitionScoreConfig config = competitionScoreConfigMapper.selectOne(new LambdaQueryWrapper<CompetitionScoreConfig>()
+                .eq(CompetitionScoreConfig::getCompetitionId, targetCompetitionId)
+                .eq(CompetitionScoreConfig::getJudgeRoleType, role.name())
+                .last("LIMIT 1"));
+        if (config == null) {
+            throw new BaseException("当前角色评分表未配置");
+        }
+        return toScoreConfigVO(config);
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public ScoreRecordVO createScore(JudgeScoreSaveRequest request) {
         // 1) 校验评分表和当前评审任务
-        validateDimensions(request.getDimensions());
         Long judgeId = BaseContext.getCurrentId();
         BeerEntry entry = requireEntry(request.getBeerUuid());
+        validateScoreRequest(entry.getCompetitionId(), request.getJudgeRoleType().name(),
+                request.getDimensions(), request.getTotalScore(), request.getComments());
         JudgeAssignment assignment = requireAssignment(entry.getCompetitionId());
         requireScoreRoundTask(entry.getId(), request.getJudgeRoleType().name(), false);
         rejectNormalScoreAfterFinal(entry.getId());
@@ -113,11 +142,13 @@ public class ScoreServiceImpl implements ScoreService {
     @Transactional(rollbackFor = Exception.class)
     public ScoreRecordVO updateScore(Long scoreId, JudgeScoreUpdateRequest request) {
         // 1) 查询并校验评分记录
-        validateDimensions(request.getDimensions());
         ScoreRecord scoreRecord = scoreRecordMapper.selectById(scoreId);
         if (scoreRecord == null) {
             throw new ResourceNotFoundException("评分记录不存在");
         }
+        BeerEntry entry = requireEntryById(scoreRecord.getBeerEntryId());
+        validateScoreRequest(entry.getCompetitionId(), scoreRecord.getJudgeRoleType(),
+                request.getDimensions(), request.getTotalScore(), request.getComments());
         if (!scoreRecord.getJudgeAccountId().equals(BaseContext.getCurrentId())) {
             throw new ForbiddenException("无权修改该评分");
         }
@@ -184,8 +215,9 @@ public class ScoreServiceImpl implements ScoreService {
     @Transactional(rollbackFor = Exception.class)
     public ScoreRecordVO finalizeTableScore(String uuid, TableScoreFinalizeRequest request) {
         // 1) 校验桌长汇总权限
-        validateDimensions(request.getDimensions());
         BeerEntry entry = requireEntry(uuid);
+        validateConsensusRequest(request.getDimensions(), request.getConsensusScore());
+        applyCaptainScoreConfig(entry.getCompetitionId(), request.getDimensions(), request.getConsensusScore(), request.getComments());
         JudgeAssignment captainAssignment = requireCaptainAssignment(entry.getCompetitionId());
         RoundTableEntry roundEntry = requireScoreRoundTask(entry.getId(), JudgeRoleType.CAPTAIN.name(), true);
         requireAllTableScoresSubmitted(roundEntry);
@@ -231,7 +263,7 @@ public class ScoreServiceImpl implements ScoreService {
                 .eq(RoundTableMember::getRoundTableId, roundEntry.getRoundTableId())
                 .eq(RoundTableMember::getSystemTaskRequired, FLAG_TRUE));
         if (requiredMembers.isEmpty()) {
-            throw new BaseException("本桌未配置评委，暂不能提交桌长意见");
+            throw new BaseException("本桌未配置评审，暂不能提交桌长意见");
         }
 
         Set<Long> requiredJudgeIds = requiredMembers.stream()
@@ -259,7 +291,7 @@ public class ScoreServiceImpl implements ScoreService {
                     CompetitionRound round = competitionRoundMapper.selectById(item.getRoundId());
                     return round != null
                             && RoundType.SCORE.name().equals(round.getRoundType())
-                            && RoundStatus.PUBLISHED.name().equals(round.getStatus());
+                            && isScoreRoundEditable(round.getStatus(), captainOnly);
                 })
                 .findFirst()
                 .orElse(null);
@@ -273,7 +305,7 @@ public class ScoreServiceImpl implements ScoreService {
         if (RoundStatus.LOCKED.name().equals(table.getStatus())) {
             throw new BaseException("当前轮次已锁定，不能修改评分");
         }
-        if (!RoundStatus.PUBLISHED.name().equals(table.getStatus())) {
+        if (!isScoreTableEditable(table.getStatus(), captainOnly)) {
             throw new ForbiddenException("当前轮次尚未发布评分任务");
         }
         RoundTableMember member = roundTableMemberMapper.selectOne(new LambdaQueryWrapper<RoundTableMember>()
@@ -290,6 +322,16 @@ public class ScoreServiceImpl implements ScoreService {
             throw new ForbiddenException("当前评审角色与评分类型不匹配");
         }
         return roundEntry;
+    }
+
+    private boolean isScoreRoundEditable(String status, boolean captainOnly) {
+        return RoundStatus.PUBLISHED.name().equals(status)
+                || (captainOnly && RoundStatus.SUBMITTED.name().equals(status));
+    }
+
+    private boolean isScoreTableEditable(String status, boolean captainOnly) {
+        return RoundStatus.PUBLISHED.name().equals(status)
+                || (captainOnly && RoundStatus.SUBMITTED.name().equals(status));
     }
 
     private boolean isScoreSubmissionAllowed(String memberRole, String requestedRole) {
@@ -360,6 +402,30 @@ public class ScoreServiceImpl implements ScoreService {
         return assignment;
     }
 
+    private Long resolveCurrentCompetitionId(Long judgeId) {
+        List<RoundTableMember> members = roundTableMemberMapper.selectList(new LambdaQueryWrapper<RoundTableMember>()
+                .eq(RoundTableMember::getJudgeAccountId, judgeId)
+                .eq(RoundTableMember::getSystemTaskRequired, FLAG_TRUE));
+        for (RoundTableMember member : members) {
+            RoundTable table = roundTableMapper.selectById(member.getRoundTableId());
+            if (table == null) {
+                continue;
+            }
+            CompetitionRound round = competitionRoundMapper.selectById(table.getRoundId());
+            if (round == null) {
+                continue;
+            }
+            if (RoundType.SCORE.name().equals(round.getRoundType()) && RoundStatus.PUBLISHED.name().equals(round.getStatus())) {
+                return round.getCompetitionId();
+            }
+            if (RoundType.RANKING.name().equals(round.getRoundType())
+                    && (RoundStatus.IN_PROGRESS.name().equals(round.getStatus()) || RoundStatus.SUBMITTED.name().equals(round.getStatus()))) {
+                return round.getCompetitionId();
+            }
+        }
+        throw new ForbiddenException("当前评审没有可用的评分任务");
+    }
+
     private JudgeAccount requireActiveJudge(Long judgeId) {
         JudgeAccount account = judgeAccountMapper.selectById(judgeId);
         if (account == null) {
@@ -418,12 +484,21 @@ public class ScoreServiceImpl implements ScoreService {
             return "桌长";
         }
         if (JudgeRoleType.PROFESSIONAL.name().equals(role)) {
-            return "专业评委";
+            return "专业评审";
         }
         if (JudgeRoleType.CROSS.name().equals(role)) {
-            return "大众评委";
+            return "跨界评审";
         }
         return role;
+    }
+
+    private ScoreConfigVO toScoreConfigVO(CompetitionScoreConfig config) {
+        return ScoreConfigVO.builder()
+                .competitionId(config.getCompetitionId())
+                .judgeRoleType(config.getJudgeRoleType())
+                .minCommentLength(config.getMinCommentLength())
+                .dimensions(readDimensions(config.getDimensionsJson()))
+                .build();
     }
 
     private List<DimensionRequest> readDimensions(String json) {
@@ -447,5 +522,127 @@ public class ScoreServiceImpl implements ScoreService {
         if (dimensions.stream().anyMatch(item -> item.getScore() == null)) {
             throw new BaseException("评分维度分值不能为空");
         }
+    }
+
+    private void validateScoreRequest(Long competitionId,
+                                      String judgeRoleType,
+                                      List<DimensionRequest> dimensions,
+                                      BigDecimal totalScore,
+                                      String comments) {
+        validateDimensions(dimensions);
+        CompetitionScoreConfig config = competitionScoreConfigMapper.selectOne(new LambdaQueryWrapper<CompetitionScoreConfig>()
+                .eq(CompetitionScoreConfig::getCompetitionId, competitionId)
+                .eq(CompetitionScoreConfig::getJudgeRoleType, judgeRoleType)
+                .last("LIMIT 1"));
+        if (config == null) {
+            throw new BaseException("当前角色评分表未配置");
+        }
+        List<DimensionRequest> configuredDimensions = readDimensions(config.getDimensionsJson());
+        Map<String, DimensionRequest> configuredByKey = configuredDimensions.stream()
+                .collect(Collectors.toMap(DimensionRequest::getKey, item -> item, (left, right) -> left, LinkedHashMap::new));
+        if (dimensions.size() != configuredByKey.size()) {
+            throw new BaseException("评分维度与当前评分表不一致，请刷新后重试");
+        }
+        BigDecimal computedTotal = BigDecimal.ZERO;
+        for (DimensionRequest item : dimensions) {
+            DimensionRequest configured = configuredByKey.get(item.getKey());
+            if (configured == null) {
+                throw new BaseException("评分维度与当前评分表不一致，请刷新后重试");
+            }
+            BigDecimal score = item.getScore();
+            BigDecimal maxScore = configured.getMaxScore();
+            if (!isIntegerScore(score)) {
+                throw new BaseException(configured.getLabel() + "必须填写整数分");
+            }
+            if (score.compareTo(BigDecimal.ZERO) < 0 || score.compareTo(maxScore) > 0) {
+                throw new BaseException(configured.getLabel() + "分值必须在 0-" + maxScore.stripTrailingZeros().toPlainString() + " 之间");
+            }
+            item.setLabel(configured.getLabel());
+            item.setMaxScore(maxScore);
+            item.setNotePrompt(configured.getNotePrompt());
+            item.setNote(normalizeNullable(item.getNote()));
+            computedTotal = computedTotal.add(score);
+        }
+        if (totalScore == null || computedTotal.compareTo(totalScore) != 0) {
+            throw new BaseException("总分与各维度分值合计不一致");
+        }
+        if (computedTotal.compareTo(SCORE_TOTAL) > 0) {
+            throw new BaseException("总分不能超过 50 分");
+        }
+        int minCommentLength = config.getMinCommentLength() == null ? 0 : config.getMinCommentLength();
+        if (countEffectiveChars(comments) < minCommentLength) {
+            throw new BaseException("文字反馈至少 " + minCommentLength + " 字");
+        }
+    }
+
+    private void validateConsensusRequest(List<DimensionRequest> dimensions, BigDecimal consensusScore) {
+        validateDimensions(dimensions);
+        if (dimensions.size() != 1) {
+            throw new BaseException("桌长评分表只能提交 1 个共识评分维度");
+        }
+        if (consensusScore == null || !isIntegerScore(consensusScore)) {
+            throw new BaseException("共识分必须填写整数分");
+        }
+        if (consensusScore.compareTo(BigDecimal.ZERO) < 0 || consensusScore.compareTo(SCORE_TOTAL) > 0) {
+            throw new BaseException("共识分必须在 0-50 分之间");
+        }
+        BigDecimal dimensionScore = dimensions.get(0).getScore();
+        if (dimensionScore == null || dimensionScore.compareTo(consensusScore) != 0) {
+            throw new BaseException("共识分与评分维度分值不一致");
+        }
+    }
+
+    private void applyCaptainScoreConfig(Long competitionId,
+                                         List<DimensionRequest> dimensions,
+                                         BigDecimal consensusScore,
+                                         String comments) {
+        CompetitionScoreConfig config = competitionScoreConfigMapper.selectOne(new LambdaQueryWrapper<CompetitionScoreConfig>()
+                .eq(CompetitionScoreConfig::getCompetitionId, competitionId)
+                .eq(CompetitionScoreConfig::getJudgeRoleType, JudgeRoleType.CAPTAIN.name())
+                .last("LIMIT 1"));
+        if (config == null) {
+            throw new BaseException("桌长评分表未配置");
+        }
+        List<DimensionRequest> configuredDimensions = readDimensions(config.getDimensionsJson());
+        if (configuredDimensions.size() != 1) {
+            throw new BaseException("桌长评分表只能配置 1 个共识评分维度");
+        }
+        DimensionRequest configured = configuredDimensions.get(0);
+        if (configured.getMaxScore() == null || configured.getMaxScore().compareTo(SCORE_TOTAL) != 0) {
+            throw new BaseException("桌长评分表总分必须等于 50 分");
+        }
+        int minCommentLength = config.getMinCommentLength() == null ? 0 : config.getMinCommentLength();
+        if (countEffectiveChars(comments) < minCommentLength) {
+            throw new BaseException("桌长综合评语至少 " + minCommentLength + " 字");
+        }
+        DimensionRequest dimension = dimensions.get(0);
+        if (consensusScore.compareTo(configured.getMaxScore()) > 0) {
+            throw new BaseException("共识分必须在 0-" + configured.getMaxScore().stripTrailingZeros().toPlainString() + " 分之间");
+        }
+        dimension.setKey(configured.getKey());
+        dimension.setLabel(configured.getLabel());
+        dimension.setMaxScore(configured.getMaxScore());
+        dimension.setNotePrompt(configured.getNotePrompt());
+        dimension.setNote(normalizeNullable(dimension.getNote()));
+    }
+
+    private boolean isIntegerScore(BigDecimal value) {
+        return value != null && value.stripTrailingZeros().scale() <= 0;
+    }
+
+    private int countEffectiveChars(String text) {
+        return StringUtils.hasText(text) ? text.replaceAll("\\s+", "").length() : 0;
+    }
+
+    private String normalizeNullable(String text) {
+        return StringUtils.hasText(text) ? text.trim() : null;
+    }
+
+    private BeerEntry requireEntryById(Long beerEntryId) {
+        BeerEntry entry = beerEntryMapper.selectById(beerEntryId);
+        if (entry == null) {
+            throw new ResourceNotFoundException("酒款不存在");
+        }
+        return entry;
     }
 }

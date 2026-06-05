@@ -18,6 +18,8 @@
           <h3>{{ selectedEntry.awardName || selectedEntry.roundResult?.awardName || selectedEntry.roundResult?.slotLabel || selectedEntry.roundResult?.resultType || '结果已发布' }}</h3>
           <strong>{{ selectedEntry.entryName }}</strong>
           <p>{{ selectedEntry.categoryName }} · {{ selectedEntry.style }}</p>
+          <p v-if="advanceStatusLabel">{{ advanceStatusLabel }}</p>
+          <p v-if="selectedEntry.categoryEntryCount">本组别共 {{ selectedEntry.categoryEntryCount }} 款参赛酒</p>
           <div class="score-medallion">
             <small>共识分</small>
             <b>{{ finalScore || '-' }}</b>
@@ -33,7 +35,7 @@
       <section class="feedback-card brewer-card">
         <h3 class="portal-section-title">评审反馈明细</h3>
         <div class="feedback-list">
-          <article v-for="score in resultDetail.scores" :key="score.judgeLabel" class="feedback-row">
+          <article v-for="score in judgeScores" :key="score.judgeLabel" class="feedback-row">
             <div>
               <strong>{{ score.judgeLabel }}</strong>
               <p>{{ score.comments || '暂无评语' }}</p>
@@ -42,10 +44,12 @@
               <span v-for="dimension in score.dimensions" :key="dimension.key || dimension.label">
                 <small>{{ dimension.label || dimension.key }}</small>
                 <b>{{ dimension.score ?? '-' }}</b>
+                <em v-if="dimension.note">{{ dimension.note }}</em>
               </span>
               <span><small>总分</small><b>{{ score.totalScore }}</b></span>
             </div>
           </article>
+          <p v-if="!judgeScores.length" class="empty-feedback">暂无评审原始反馈</p>
         </div>
       </section>
 
@@ -92,7 +96,13 @@ const selectedId = ref(null)
 const resultDetail = ref({ summary: null, scores: [], roundResults: [] })
 const selectedEntry = computed(() => resultDetail.value.summary || results.value.find((entry) => entry.entryId === selectedId.value))
 const captainScore = computed(() => resultDetail.value.scores.find((score) => score.finalScore) || null)
+const judgeScores = computed(() => resultDetail.value.scores.filter((score) => !score.finalScore))
 const finalScore = computed(() => captainScore.value?.consensusScore || captainScore.value?.totalScore || null)
+const advanceStatusLabel = computed(() => {
+  if (!resultDetail.value.roundResults.length) return ''
+  const advancedTypes = new Set(['ADVANCE', 'RANK', 'MEDAL', 'CHAMPION'])
+  return resultDetail.value.roundResults.some((item) => advancedTypes.has(item.resultType)) ? '已晋级' : ''
+})
 
 function resultTypeLabel(type) {
   const labels = {
@@ -299,6 +309,15 @@ watch(selectedId, async (id) => {
   line-height: 1.7;
 }
 
+.empty-feedback {
+  margin: 0;
+  padding: 18px;
+  color: #746a5f;
+  background: #fff7e6;
+  border: 1px solid rgba(87, 58, 26, 0.1);
+  border-radius: 8px;
+}
+
 .score-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -308,7 +327,11 @@ watch(selectedId, async (id) => {
 .score-grid span {
   display: grid;
   place-items: center;
+  align-content: center;
+  gap: 4px;
   min-height: 72px;
+  padding: 10px;
+  text-align: center;
   background: #fffdf7;
   border-radius: 8px;
 }
@@ -319,6 +342,14 @@ watch(selectedId, async (id) => {
 
 .score-grid b {
   font-size: 22px;
+}
+
+.score-grid em {
+  max-width: 100%;
+  color: #746a5f;
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.45;
 }
 
 .locked-card {

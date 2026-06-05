@@ -12,6 +12,7 @@ public class PortalResultSummaryVO {
     private Long competitionId;
     private String competitionName;
     private String categoryName;
+    private Integer categoryEntryCount;
     private String style;
     private String status;
     private Boolean published;

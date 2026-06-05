@@ -108,7 +108,7 @@
                   class="textarea note-textarea"
                   :disabled="entry.locked"
                   :aria-label="`${item.label}备注`"
-                  :placeholder="item.notePlaceholder || '记录本项依据'"
+                  :placeholder="item.notePlaceholder || item.notePrompt || '记录本项依据'"
                 />
               </div>
             </article>
@@ -158,10 +158,10 @@ const totalScore = computed(() => (
   form.dimensions.reduce((sum, item) => sum + Number(item.score || 0), 0)
 ))
 const notesLength = computed(() => (
-  form.dimensions.reduce((sum, item) => sum + String(item.note || '').length, 0)
+  form.dimensions.reduce((sum, item) => sum + countEffectiveChars(item.note), 0)
 ))
 
-const minNoteLength = computed(() => Number(config.value?.commentMinLength || 0))
+const minNoteLength = computed(() => Number(config.value?.commentMinLength ?? config.value?.minCommentLength ?? 0))
 const commentReady = computed(() => notesLength.value >= minNoteLength.value)
 const remainingNotes = computed(() => Math.max(0, minNoteLength.value - notesLength.value))
 const canSubmit = computed(() => (
@@ -271,7 +271,12 @@ function buildDimensionPayload(item) {
     score: Number(item.score || 0),
     maxScore: item.maxScore,
     notePrompt: item.notePrompt,
+    note: String(item.note || '').trim(),
   }
+}
+
+function countEffectiveChars(text) {
+  return String(text || '').replace(/\s+/g, '').length
 }
 
 function buildDimensionForm(configDimensions, savedDimensions = [], savedComments = '') {
@@ -315,7 +320,7 @@ onMounted(async () => {
   me.value = await fetchMe()
   entry.value = await fetchEntry(uuid)
   const scoreRole = entry.value?.scoreRoleType || me.value.role
-  config.value = await fetchScoreConfig(scoreRole)
+  config.value = await fetchScoreConfig(scoreRole, entry.value?.competitionId || me.value?.competitionId)
   existingScore.value = await fetchMyScore(uuid)
   form.judgeRoleType = scoreRole
 

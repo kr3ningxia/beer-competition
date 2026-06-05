@@ -148,6 +148,13 @@ export function confirmCompetitionAwards(competitionId, payload) {
   return request.put(`/api/admin/competitions/${competitionId}/awards/confirm`, payload, { authScope: 'admin' })
 }
 
+export function exportCompetitionScoringData(competitionId) {
+  return request.get(`/api/admin/competitions/${competitionId}/exports/scoring`, {
+    authScope: 'admin',
+    responseType: 'blob',
+  })
+}
+
 export function confirmEntryPayment(entryId) {
   return request.post(`/api/admin/entries/${entryId}/confirm-payment`, {}, { authScope: 'admin' })
 }

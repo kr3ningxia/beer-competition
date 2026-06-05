@@ -42,5 +42,7 @@ public interface RoundService {
 
     JudgeRoundTableVO getMyRoundTable(Long roundTableId);
 
+    void submitScoreRoundTable(Long roundTableId);
+
     void submitRanking(Long roundTableId, RankingSubmitRequest request);
 }

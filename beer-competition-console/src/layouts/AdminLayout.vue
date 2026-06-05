@@ -17,6 +17,7 @@
           :key="item.label"
           :to="item.path"
           :class="['nav-item', { active: item.path === $route.path, disabled: !item.path }]"
+          :title="item.path ? item.label : item.disabledReason"
         >
           <component :is="item.icon" />
           <span>{{ item.label }}</span>
@@ -67,10 +68,10 @@ const navItems = [
   { path: '/admin/live-board', label: '现场看板', icon: DataBoard },
   { path: '/admin/competitions', label: '比赛管理', icon: Medal },
   { path: '/admin/judges', label: '评审列表', icon: User },
-  { path: null, label: '酒款管理', icon: Document },
+  { path: null, label: '酒款管理', icon: Document, disabledReason: '请进入比赛详情管理酒款' },
   { path: '/admin/style-libraries', label: '风格库管理', icon: Files },
-  { path: null, label: '结果发布', icon: Medal },
-  { path: null, label: '数据导出', icon: Download },
+  { path: null, label: '结果发布', icon: Medal, disabledReason: '请进入比赛详情发布结果' },
+  { path: null, label: '数据导出', icon: Download, disabledReason: '请进入比赛详情导出数据' },
 ]
 
 function logout() {

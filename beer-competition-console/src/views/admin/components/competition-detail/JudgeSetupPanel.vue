@@ -3,7 +3,7 @@
     <header class="task-hero">
       <div>
         <small>第一轮评审人员</small>
-        <h2>先安排每张基础桌的评委</h2>
+        <h2>先安排每张基础桌的评审</h2>
         <p>完成后生成第一轮编排，再去分配酒款。</p>
       </div>
       <button class="primary-action" type="button" :disabled="validationIssues.length > 0" @click="$emit('generateFirstRound')">
@@ -112,7 +112,7 @@
               >
                 <span class="avatar small">{{ getJudgeInitial(getJudge(assignment.judgePublicId)?.name) }}</span>
                 <div>
-                  <strong>{{ getJudge(assignment.judgePublicId)?.name || '未知评委' }}</strong>
+                  <strong>{{ getJudge(assignment.judgePublicId)?.name || '未知评审' }}</strong>
                   <small>{{ getJudge(assignment.judgePublicId)?.qualification || '未填写资质' }}</small>
                 </div>
                 <button v-if="editable" class="icon-action" type="button" @click.stop="$emit('removeAssignment', assignment)">
