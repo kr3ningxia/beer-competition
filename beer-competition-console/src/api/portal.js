@@ -48,6 +48,13 @@ export function fetchPortalResultDetail(entryId) {
   return request.get(`/api/portal/results/${entryId}`, { authScope: 'portal' })
 }
 
+export function downloadPortalResultCertificate(entryId) {
+  return request.get(`/api/portal/results/${entryId}/certificate`, {
+    authScope: 'portal',
+    responseType: 'blob',
+  })
+}
+
 export function updatePortalProfile(data) {
   return request.put('/api/portal/profile', data, { authScope: 'portal' })
 }

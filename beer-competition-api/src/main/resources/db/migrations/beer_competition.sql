@@ -573,6 +573,9 @@ CREATE TABLE `award_result`  (
   `confirmed_by` bigint(0) NULL DEFAULT NULL,
   `confirmed_time` datetime(0) NULL DEFAULT NULL,
   `published_time` datetime(0) NULL DEFAULT NULL,
+  `certificate_asset_id` bigint(0) NULL DEFAULT NULL,
+  `certificate_uploaded_at` datetime(0) NULL DEFAULT NULL,
+  `certificate_filename` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL,
   `status` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
   `create_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0),
   `update_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) ON UPDATE CURRENT_TIMESTAMP(0),
@@ -580,7 +583,8 @@ CREATE TABLE `award_result`  (
   UNIQUE INDEX `uk_award_result_slot`(`competition_id`, `category_key`, `award_type`, `rank_no`, `status`) USING BTREE,
   INDEX `idx_award_result_entry`(`beer_entry_id`) USING BTREE,
   INDEX `idx_award_result_competition`(`competition_id`) USING BTREE,
-  INDEX `idx_award_result_source`(`source_result_id`) USING BTREE
+  INDEX `idx_award_result_source`(`source_result_id`) USING BTREE,
+  INDEX `idx_award_result_certificate_asset`(`certificate_asset_id`) USING BTREE
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = 'award results' ROW_FORMAT = Dynamic;
 
 -- ----------------------------

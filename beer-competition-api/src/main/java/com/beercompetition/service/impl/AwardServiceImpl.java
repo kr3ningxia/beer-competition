@@ -10,8 +10,10 @@ import com.beercompetition.mapper.BeerEntryMapper;
 import com.beercompetition.mapper.CompetitionCategoryMapper;
 import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.CompetitionRoundMapper;
+import com.beercompetition.mapper.FileAssetMapper;
 import com.beercompetition.mapper.RoundResultMapper;
 import com.beercompetition.mapper.RoundTableMapper;
+import com.beercompetition.properties.StorageProperties;
 import com.beercompetition.pojo.dto.AwardConfirmItemRequest;
 import com.beercompetition.pojo.dto.AwardConfirmRequest;
 import com.beercompetition.pojo.enums.AwardResultStatus;
@@ -28,16 +30,21 @@ import com.beercompetition.pojo.po.BeerEntry;
 import com.beercompetition.pojo.po.Competition;
 import com.beercompetition.pojo.po.CompetitionCategory;
 import com.beercompetition.pojo.po.CompetitionRound;
+import com.beercompetition.pojo.po.FileAsset;
 import com.beercompetition.pojo.po.RoundResult;
 import com.beercompetition.pojo.po.RoundTable;
 import com.beercompetition.pojo.vo.AwardResultVO;
 import com.beercompetition.pojo.vo.AwardRuleVO;
+import com.beercompetition.pojo.vo.FileDownloadVO;
 import com.beercompetition.service.AwardService;
+import com.beercompetition.storage.FileStorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -59,6 +66,9 @@ public class AwardServiceImpl implements AwardService {
     private static final String SILVER = "银奖";
     private static final String BRONZE = "铜奖";
     private static final String CHAMPION = "总冠军";
+    private static final String BUSINESS_TYPE_AWARD_CERTIFICATE = "AWARD_CERTIFICATE";
+    private static final String CONTENT_TYPE_PDF = "application/pdf";
+    private static final long MAX_CERTIFICATE_SIZE = 20L * 1024L * 1024L;
 
     private final CompetitionMapper competitionMapper;
     private final CompetitionCategoryMapper competitionCategoryMapper;
@@ -68,6 +78,9 @@ public class AwardServiceImpl implements AwardService {
     private final BeerEntryMapper beerEntryMapper;
     private final AwardRuleMapper awardRuleMapper;
     private final AwardResultMapper awardResultMapper;
+    private final FileAssetMapper fileAssetMapper;
+    private final FileStorageService fileStorageService;
+    private final StorageProperties storageProperties;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -84,6 +97,64 @@ public class AwardServiceImpl implements AwardService {
     public List<AwardResultVO> listAwardResults(Long competitionId) {
         requireCompetition(competitionId);
         return toResultVOs(listPersistedResults(competitionId));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public AwardResultVO uploadCertificate(Long competitionId, Long awardId, MultipartFile file) {
+        // 1) 参数规范化与前置校验
+        AwardResult award = requireCertificateEditableAward(competitionId, awardId);
+        validateCertificateFile(file);
+        String filename = sanitizeFilename(file.getOriginalFilename());
+
+        // 2) 上传文件并记录资产
+        byte[] bytes = readFileBytes(file);
+        String storagePath = fileStorageService.upload(BUSINESS_TYPE_AWARD_CERTIFICATE, filename, bytes);
+        FileAsset asset = FileAsset.builder()
+                .businessType(BUSINESS_TYPE_AWARD_CERTIFICATE)
+                .storageProvider(storageProperties.getProvider())
+                .fileName(filename)
+                .storagePath(storagePath)
+                .publicUrl(null)
+                .createTime(LocalDateTime.now())
+                .build();
+        fileAssetMapper.insert(asset);
+
+        // 3) 绑定奖项证书
+        award.setCertificateAssetId(asset.getId());
+        award.setCertificateFilename(filename);
+        award.setCertificateUploadedAt(LocalDateTime.now());
+        awardResultMapper.updateById(award);
+
+        // 4) 组装并返回结果
+        return toResultVOs(List.of(award)).stream().findFirst().orElseThrow();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteCertificate(Long competitionId, Long awardId) {
+        // 1) 查询并校验奖项归属
+        AwardResult award = requireAward(competitionId, awardId);
+
+        // 2) 解除奖状绑定，保留文件资产历史
+        award.setCertificateAssetId(null);
+        award.setCertificateFilename(null);
+        award.setCertificateUploadedAt(null);
+        awardResultMapper.updateById(award);
+    }
+
+    @Override
+    public FileDownloadVO downloadCertificate(Long competitionId, Long awardId) {
+        // 1) 查询并校验奖项与文件
+        AwardResult award = requireAward(competitionId, awardId);
+        FileAsset asset = requireCertificateAsset(award);
+
+        // 2) 读取文件并返回下载数据
+        return FileDownloadVO.builder()
+                .fileName(resolveCertificateFilename(award, asset))
+                .contentType(CONTENT_TYPE_PDF)
+                .content(fileStorageService.download(asset.getStoragePath()))
+                .build();
     }
 
     @Override
@@ -585,6 +656,12 @@ public class AwardServiceImpl implements AwardService {
                             .sourceResultId(result.getSourceResultId())
                             .champion(Objects.equals(result.getChampionFlag(), FLAG_TRUE))
                             .status(result.getStatus())
+                            .certificateUploaded(result.getCertificateAssetId() != null)
+                            .certificateFilename(result.getCertificateFilename())
+                            .certificateUploadedAt(result.getCertificateUploadedAt())
+                            .certificateDownloadUrl(result.getCertificateAssetId() == null
+                                    ? null
+                                    : "/api/admin/competitions/" + result.getCompetitionId() + "/awards/" + result.getId() + "/certificate")
                             .build();
                 })
                 .toList();
@@ -638,6 +715,70 @@ public class AwardServiceImpl implements AwardService {
             throw new ResourceNotFoundException("比赛不存在");
         }
         return competition;
+    }
+
+    private AwardResult requireCertificateEditableAward(Long competitionId, Long awardId) {
+        AwardResult award = requireAward(competitionId, awardId);
+        if (!Set.of(AwardResultStatus.CONFIRMED.name(), AwardResultStatus.PUBLISHED.name()).contains(award.getStatus())) {
+            throw new BaseException("请先确认奖项后再上传奖状");
+        }
+        return award;
+    }
+
+    private AwardResult requireAward(Long competitionId, Long awardId) {
+        requireCompetition(competitionId);
+        AwardResult award = awardResultMapper.selectById(awardId);
+        if (award == null || !competitionId.equals(award.getCompetitionId())) {
+            throw new ResourceNotFoundException("奖项不存在");
+        }
+        return award;
+    }
+
+    private FileAsset requireCertificateAsset(AwardResult award) {
+        if (award.getCertificateAssetId() == null) {
+            throw new ResourceNotFoundException("奖状暂未上传");
+        }
+        FileAsset asset = fileAssetMapper.selectById(award.getCertificateAssetId());
+        if (asset == null) {
+            throw new ResourceNotFoundException("奖状文件不存在");
+        }
+        return asset;
+    }
+
+    private void validateCertificateFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new BaseException("请选择奖状 PDF 文件");
+        }
+        if (file.getSize() > MAX_CERTIFICATE_SIZE) {
+            throw new BaseException("奖状 PDF 不能超过 20MB");
+        }
+        String filename = sanitizeFilename(file.getOriginalFilename());
+        String contentType = file.getContentType();
+        if (!filename.toLowerCase().endsWith(".pdf") && !CONTENT_TYPE_PDF.equalsIgnoreCase(contentType)) {
+            throw new BaseException("奖状文件必须是 PDF");
+        }
+    }
+
+    private byte[] readFileBytes(MultipartFile file) {
+        try {
+            return file.getBytes();
+        } catch (IOException ex) {
+            throw new BaseException("读取奖状文件失败");
+        }
+    }
+
+    private String sanitizeFilename(String originalFilename) {
+        String filename = StringUtils.hasText(originalFilename) ? originalFilename.trim() : "certificate.pdf";
+        filename = filename.replace("\\", "/");
+        int index = filename.lastIndexOf('/');
+        return index >= 0 ? filename.substring(index + 1) : filename;
+    }
+
+    private String resolveCertificateFilename(AwardResult award, FileAsset asset) {
+        if (StringUtils.hasText(award.getCertificateFilename())) {
+            return award.getCertificateFilename();
+        }
+        return StringUtils.hasText(asset.getFileName()) ? asset.getFileName() : "certificate.pdf";
     }
 
     private String medalName(Integer rankNo, String slotLabel) {

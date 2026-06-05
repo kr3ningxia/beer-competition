@@ -33,6 +33,9 @@ CREATE TABLE IF NOT EXISTS `award_result` (
   `confirmed_by` bigint NULL DEFAULT NULL,
   `confirmed_time` datetime NULL DEFAULT NULL,
   `published_time` datetime NULL DEFAULT NULL,
+  `certificate_asset_id` bigint NULL DEFAULT NULL,
+  `certificate_uploaded_at` datetime NULL DEFAULT NULL,
+  `certificate_filename` varchar(255) NULL DEFAULT NULL,
   `status` varchar(32) NOT NULL,
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -40,5 +43,6 @@ CREATE TABLE IF NOT EXISTS `award_result` (
   UNIQUE KEY `uk_award_result_slot` (`competition_id`, `category_key`, `award_type`, `rank_no`, `status`),
   KEY `idx_award_result_entry` (`beer_entry_id`),
   KEY `idx_award_result_competition` (`competition_id`),
-  KEY `idx_award_result_source` (`source_result_id`)
+  KEY `idx_award_result_source` (`source_result_id`),
+  KEY `idx_award_result_certificate_asset` (`certificate_asset_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Award results';

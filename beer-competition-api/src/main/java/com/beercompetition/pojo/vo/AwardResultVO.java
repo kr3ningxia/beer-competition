@@ -3,6 +3,8 @@ package com.beercompetition.pojo.vo;
 import lombok.Builder;
 import lombok.Data;
 
+import java.time.LocalDateTime;
+
 @Data
 @Builder
 public class AwardResultVO {
@@ -26,4 +28,8 @@ public class AwardResultVO {
     private Long sourceResultId;
     private Boolean champion;
     private String status;
+    private Boolean certificateUploaded;
+    private String certificateFilename;
+    private LocalDateTime certificateUploadedAt;
+    private String certificateDownloadUrl;
 }

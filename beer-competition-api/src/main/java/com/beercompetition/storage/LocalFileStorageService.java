@@ -32,4 +32,13 @@ public class LocalFileStorageService implements FileStorageService {
             throw new IllegalStateException("保存文件失败", ex);
         }
     }
+
+    @Override
+    public byte[] download(String storagePath) {
+        try {
+            return Files.readAllBytes(Path.of(storagePath));
+        } catch (IOException ex) {
+            throw new IllegalStateException("读取文件失败", ex);
+        }
+    }
 }

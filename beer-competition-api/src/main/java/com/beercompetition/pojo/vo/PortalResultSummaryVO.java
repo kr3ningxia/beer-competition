@@ -20,5 +20,7 @@ public class PortalResultSummaryVO {
     private String awardName;
     private String awardType;
     private Boolean champion;
+    private Boolean certificateAvailable;
+    private String certificateFilename;
     private PortalRoundResultVO roundResult;
 }

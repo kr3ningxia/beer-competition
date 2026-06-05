@@ -20,6 +20,9 @@
           <p>{{ selectedEntry.categoryName }} · {{ selectedEntry.style }}</p>
           <p v-if="advanceStatusLabel">{{ advanceStatusLabel }}</p>
           <p v-if="selectedEntry.categoryEntryCount">本组别共 {{ selectedEntry.categoryEntryCount }} 款参赛酒</p>
+          <button v-if="selectedEntry.certificateAvailable" class="certificate-button" type="button" @click="downloadCertificate">
+            下载 PDF 奖状
+          </button>
           <div class="score-medallion">
             <small>共识分</small>
             <b>{{ finalScore || '-' }}</b>
@@ -88,7 +91,7 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { fetchPortalResultDetail, fetchPortalResults } from '@/api/portal'
+import { downloadPortalResultCertificate, fetchPortalResultDetail, fetchPortalResults } from '@/api/portal'
 import { entryStatusMeta } from './portalViewModels'
 
 const results = ref([])
@@ -112,6 +115,19 @@ function resultTypeLabel(type) {
     CHAMPION: '总冠军',
   }
   return labels[type] || type || '轮次结果'
+}
+
+async function downloadCertificate() {
+  if (!selectedEntry.value?.entryId) return
+  const blob = await downloadPortalResultCertificate(selectedEntry.value.entryId)
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = selectedEntry.value.certificateFilename || `${selectedEntry.value.entryName || '奖状'}.pdf`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  window.URL.revokeObjectURL(url)
 }
 
 onMounted(async () => {
@@ -213,6 +229,19 @@ watch(selectedId, async (id) => {
 
 .award-card p {
   color: #6b4710;
+}
+
+.certificate-button {
+  position: relative;
+  z-index: 2;
+  min-height: 38px;
+  margin-top: 16px;
+  padding: 0 16px;
+  color: #fff6df;
+  border: 1px solid rgba(43, 29, 16, 0.2);
+  border-radius: 8px;
+  background: #2b1d10;
+  font-weight: 900;
 }
 
 .score-medallion {

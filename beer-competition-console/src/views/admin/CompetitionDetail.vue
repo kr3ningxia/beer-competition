@@ -674,6 +674,39 @@
                     />
                   </el-select>
                   <em>{{ formatAwardStatus(award) }}</em>
+                  <div class="award-certificate-row">
+                    <span>奖状 PDF</span>
+                    <strong :class="{ uploaded: award.certificateUploaded }">
+                      {{ award.certificateUploaded ? '已上传' : '未上传' }}
+                    </strong>
+                    <small v-if="award.certificateFilename">{{ award.certificateFilename }}</small>
+                    <div class="award-certificate-actions">
+                      <button
+                        v-if="award.certificateUploaded"
+                        type="button"
+                        :disabled="isCertificateActionBusy(award)"
+                        @click="previewAwardCertificate(award)"
+                      >
+                        预览
+                      </button>
+                      <button
+                        type="button"
+                        :disabled="isCertificateActionBusy(award) || !canUploadAwardCertificate(award)"
+                        :title="canUploadAwardCertificate(award) ? '' : '确认奖项后上传奖状'"
+                        @click="chooseAwardCertificate(award)"
+                      >
+                        {{ award.certificateUploaded ? '更换' : '上传' }}
+                      </button>
+                      <button
+                        v-if="award.certificateUploaded"
+                        type="button"
+                        :disabled="isCertificateActionBusy(award)"
+                        @click="deleteAwardCertificateAction(award)"
+                      >
+                        删除
+                      </button>
+                    </div>
+                  </div>
                 </article>
                 <article v-if="awardDrafts.length && !championAwards.length" class="champion-award-card champion-award-missing">
                   <div class="award-card-title">
@@ -709,8 +742,42 @@
                     />
                   </el-select>
                   <em>{{ formatAwardStatus(award) }}</em>
+                  <div class="award-certificate-row">
+                    <span>奖状 PDF</span>
+                    <strong :class="{ uploaded: award.certificateUploaded }">
+                      {{ award.certificateUploaded ? '已上传' : '未上传' }}
+                    </strong>
+                    <small v-if="award.certificateFilename">{{ award.certificateFilename }}</small>
+                    <div class="award-certificate-actions">
+                      <button
+                        v-if="award.certificateUploaded"
+                        type="button"
+                        :disabled="isCertificateActionBusy(award)"
+                        @click="previewAwardCertificate(award)"
+                      >
+                        预览
+                      </button>
+                      <button
+                        type="button"
+                        :disabled="isCertificateActionBusy(award) || !canUploadAwardCertificate(award)"
+                        :title="canUploadAwardCertificate(award) ? '' : '确认奖项后上传奖状'"
+                        @click="chooseAwardCertificate(award)"
+                      >
+                        {{ award.certificateUploaded ? '更换' : '上传' }}
+                      </button>
+                      <button
+                        v-if="award.certificateUploaded"
+                        type="button"
+                        :disabled="isCertificateActionBusy(award)"
+                        @click="deleteAwardCertificateAction(award)"
+                      >
+                        删除
+                      </button>
+                    </div>
+                  </div>
                 </article>
               </div>
+              <input ref="awardCertificateInput" class="file-input" type="file" accept="application/pdf,.pdf" @change="handleAwardCertificateSelected" />
             </article>
             <article class="panel-card">
               <div class="panel-heading">
@@ -723,6 +790,12 @@
                   <Warning v-else />
                   <span>{{ check.label }}</span>
                   <strong>{{ check.done ? '通过' : '待处理' }}</strong>
+                </div>
+                <div :class="['check-item', certificateCheck.done ? 'done' : 'pending', 'optional']">
+                  <CircleCheck v-if="certificateCheck.done" />
+                  <Warning v-else />
+                  <span>{{ certificateCheck.label }}</span>
+                  <strong>{{ certificateCheck.status }}</strong>
                 </div>
               </div>
               <div class="publish-actions">
@@ -953,8 +1026,10 @@ import {
   confirmEntryPayment,
   createFirstRound,
   createNextRound,
+  deleteAwardCertificate,
   deleteDraftRound,
   deleteCompetition,
+  downloadAwardCertificate,
   exportCompetitionScoringData,
   fetchCompetitionDetail,
   fetchJudges,
@@ -974,6 +1049,7 @@ import {
   updateCompetitionJudgeTables,
   updateCompetitionStyles,
   updateScoreConfigs,
+  uploadAwardCertificate,
 } from '@/api/admin'
 import { fallbackStyleLibraries, getStyleLibrary, normalizeStyleLibraries } from './styleLibraries'
 import CreateRoundWizard from './components/competition-detail/CreateRoundWizard.vue'
@@ -1000,6 +1076,9 @@ const allocationMode = ref('judges')
 const selectedTableLocalId = ref(null)
 const selectedRole = ref('CAPTAIN')
 const draggingItem = ref(null)
+const awardCertificateInput = ref(null)
+const certificateTargetAward = ref(null)
+const certificateActionIds = ref(new Set())
 
 const rounds = ref([])
 const roundEntryPool = ref([])
@@ -1352,6 +1431,13 @@ const publishResultsDisabledReason = computed(() => {
   const pending = resultChecks.value.find((item) => !item.done)
   return pending ? pending.label : ''
 })
+const certificateUploadedCount = computed(() => awardDrafts.value.filter((award) => award.certificateUploaded).length)
+const certificateTotalCount = computed(() => awardDrafts.value.length)
+const certificateCheck = computed(() => ({
+  label: `奖状 PDF ${certificateUploadedCount.value} / ${certificateTotalCount.value}`,
+  done: certificateTotalCount.value === 0 || certificateUploadedCount.value === certificateTotalCount.value,
+  status: certificateTotalCount.value === 0 || certificateUploadedCount.value === certificateTotalCount.value ? '完成' : '可后补',
+}))
 const resultPathEntries = computed(() => roundEntryPool.value.filter((entry) => entry.advanced || getEntryAward(entry.uuid)).slice(0, 8))
 const resultChecks = computed(() => [
   { label: '组别奖项已确认', done: medalsConfirmed.value },
@@ -3251,10 +3337,124 @@ async function publishResultsAction() {
 async function downloadScoringData() {
   if (!competition.value?.id) return
   const blob = await exportCompetitionScoringData(competition.value.id)
+  downloadBlob(blob, `${competition.value.name || '比赛'}-评分数据.xlsx`)
+}
+
+async function chooseAwardCertificate(award) {
+  if (!award?.id) {
+    ElMessage.warning('请先确认奖项后再上传奖状')
+    return
+  }
+  if (!canUploadAwardCertificate(award)) {
+    ElMessage.warning('请先确认奖项后再上传奖状')
+    return
+  }
+  if (award.status === 'PUBLISHED' && award.certificateUploaded) {
+    try {
+      await ElMessageBox.confirm('更换后，厂商端可见奖状会同步变化。', '更换奖状？', {
+        confirmButtonText: '更换奖状',
+        cancelButtonText: '取消',
+        type: 'warning',
+      })
+    } catch {
+      return
+    }
+  }
+  certificateTargetAward.value = award
+  if (awardCertificateInput.value) {
+    awardCertificateInput.value.value = ''
+    awardCertificateInput.value.click()
+  }
+}
+
+async function handleAwardCertificateSelected(event) {
+  const input = event.target
+  const file = input.files?.[0]
+  const award = certificateTargetAward.value
+  certificateTargetAward.value = null
+  if (!file || !award) return
+  if (!isPdfFile(file)) {
+    ElMessage.warning('奖状文件必须是 PDF')
+    input.value = ''
+    return
+  }
+  setCertificateActionBusy(award.id, true)
+  try {
+    const updated = await uploadAwardCertificate(competition.value.id, award.id, file)
+    Object.assign(award, updated)
+    ElMessage.success('奖状已上传')
+  } finally {
+    setCertificateActionBusy(award.id, false)
+    input.value = ''
+  }
+}
+
+async function previewAwardCertificate(award) {
+  if (!award?.id) return
+  setCertificateActionBusy(award.id, true)
+  try {
+    const blob = await downloadAwardCertificate(competition.value.id, award.id)
+    const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }))
+    window.open(url, '_blank', 'noopener,noreferrer')
+    window.setTimeout(() => window.URL.revokeObjectURL(url), 30000)
+  } finally {
+    setCertificateActionBusy(award.id, false)
+  }
+}
+
+async function deleteAwardCertificateAction(award) {
+  if (!award?.id) return
+  const message = award.status === 'PUBLISHED'
+    ? '删除后，厂商端将不能下载这份奖状。'
+    : '删除后，这个奖项将回到未上传奖状状态。'
+  try {
+    await ElMessageBox.confirm(message, '删除奖状？', {
+      confirmButtonText: '删除奖状',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+  } catch {
+    return
+  }
+  setCertificateActionBusy(award.id, true)
+  try {
+    await deleteAwardCertificate(competition.value.id, award.id)
+    Object.assign(award, {
+      certificateUploaded: false,
+      certificateFilename: null,
+      certificateUploadedAt: null,
+      certificateDownloadUrl: null,
+    })
+    ElMessage.success('奖状已删除')
+  } finally {
+    setCertificateActionBusy(award.id, false)
+  }
+}
+
+function canUploadAwardCertificate(award) {
+  return ['CONFIRMED', 'PUBLISHED'].includes(award?.status)
+}
+
+function isCertificateActionBusy(award) {
+  return certificateActionIds.value.has(award?.id)
+}
+
+function setCertificateActionBusy(awardId, busy) {
+  const next = new Set(certificateActionIds.value)
+  if (busy) next.add(awardId)
+  else next.delete(awardId)
+  certificateActionIds.value = next
+}
+
+function isPdfFile(file) {
+  return file.type === 'application/pdf' || file.name?.toLowerCase().endsWith('.pdf')
+}
+
+function downloadBlob(blob, fileName) {
   const url = window.URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = `${competition.value.name || '比赛'}-评分数据.xlsx`
+  link.download = fileName
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)
@@ -4627,6 +4827,10 @@ small,
 .alert-list p.warning {
   color: #f1bd79;
   background: rgba(242, 153, 74, 0.09);
+}
+
+.check-item.optional {
+  color: var(--muted);
 }
 
 .alert-list p.danger,
@@ -6354,6 +6558,10 @@ button.pyramid-placeholder-mark {
   color: var(--muted);
 }
 
+.file-input {
+  display: none;
+}
+
 .award-card-title {
   display: grid;
   min-width: 0;
@@ -6457,6 +6665,56 @@ button.pyramid-placeholder-mark {
 .award-list em {
   color: var(--muted);
   font-style: normal;
+}
+
+.award-certificate-row {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  padding-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  border-top: 1px solid rgba(219, 232, 237, 0.08);
+}
+
+.award-certificate-row strong {
+  color: #f1bd79;
+  font-size: 12px;
+}
+
+.award-certificate-row strong.uploaded {
+  color: var(--green);
+}
+
+.award-certificate-row small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.award-certificate-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.award-certificate-actions button {
+  min-height: 26px;
+  padding: 0 8px;
+  color: var(--gold-soft);
+  border: 1px solid rgba(216, 169, 53, 0.22);
+  border-radius: 6px;
+  background: rgba(216, 169, 53, 0.06);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.award-certificate-actions button:disabled {
+  opacity: 0.48;
 }
 
 .modal-backdrop {

@@ -5,6 +5,7 @@ import com.beercompetition.pojo.dto.PortalEntryDeliverySubmitRequest;
 import com.beercompetition.pojo.dto.PortalProfileUpdateRequest;
 import com.beercompetition.pojo.vo.EntryDetailVO;
 import com.beercompetition.pojo.vo.EntrySummaryVO;
+import com.beercompetition.pojo.vo.FileDownloadVO;
 import com.beercompetition.pojo.vo.JudgeEntryVO;
 import com.beercompetition.pojo.vo.PortalEntryLabelVO;
 import com.beercompetition.pojo.vo.PortalMyParticipationVO;
@@ -35,6 +36,8 @@ public interface EntryService {
     List<PortalResultSummaryVO> listPortalResults();
 
     PortalResultDetailVO getPortalResultDetail(Long entryId);
+
+    FileDownloadVO downloadPortalResultCertificate(Long entryId);
 
     void confirmPayment(Long entryId);
 

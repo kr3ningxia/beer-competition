@@ -16,6 +16,7 @@ import com.beercompetition.mapper.CompetitionStyleConfigMapper;
 import com.beercompetition.mapper.EntryDeliveryMapper;
 import com.beercompetition.mapper.EntryFieldConfigMapper;
 import com.beercompetition.mapper.EntryPaymentMapper;
+import com.beercompetition.mapper.FileAssetMapper;
 import com.beercompetition.mapper.JudgeAccountMapper;
 import com.beercompetition.mapper.PortalAccountMapper;
 import com.beercompetition.mapper.RoundResultMapper;
@@ -51,6 +52,7 @@ import com.beercompetition.pojo.po.EntryScanLabel;
 import com.beercompetition.pojo.po.EntryDelivery;
 import com.beercompetition.pojo.po.EntryFieldConfig;
 import com.beercompetition.pojo.po.EntryPayment;
+import com.beercompetition.pojo.po.FileAsset;
 import com.beercompetition.pojo.po.JudgeAccount;
 import com.beercompetition.pojo.po.PortalAccount;
 import com.beercompetition.pojo.po.RoundResult;
@@ -63,6 +65,7 @@ import com.beercompetition.pojo.vo.EntryDetailVO;
 import com.beercompetition.pojo.vo.EntryExtraFieldVO;
 import com.beercompetition.pojo.vo.EntryPaymentVO;
 import com.beercompetition.pojo.vo.EntrySummaryVO;
+import com.beercompetition.pojo.vo.FileDownloadVO;
 import com.beercompetition.pojo.vo.CompetitionLogisticsVO;
 import com.beercompetition.pojo.vo.JudgeEntryVO;
 import com.beercompetition.pojo.vo.PortalCompetitionVO;
@@ -77,6 +80,7 @@ import com.beercompetition.pojo.vo.PortalScoreRecordVO;
 import com.beercompetition.service.CompetitionService;
 import com.beercompetition.service.EntryService;
 import com.beercompetition.service.EntryScanLabelService;
+import com.beercompetition.storage.FileStorageService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -107,6 +111,7 @@ public class EntryServiceImpl implements EntryService {
             EntryStatus.RESULT_PUBLISHED.name()
     );
     private static final Set<String> OPTION_FIELD_TYPES = Set.of("select", "multi_select");
+    private static final String CONTENT_TYPE_PDF = "application/pdf";
 
     private final PortalAccountMapper portalAccountMapper;
     private final AwardResultMapper awardResultMapper;
@@ -118,6 +123,7 @@ public class EntryServiceImpl implements EntryService {
     private final EntryDeliveryMapper entryDeliveryMapper;
     private final EntryFieldConfigMapper entryFieldConfigMapper;
     private final BeerEntryExtraFieldMapper beerEntryExtraFieldMapper;
+    private final FileAssetMapper fileAssetMapper;
     private final BreweryMapper breweryMapper;
     private final JudgeAccountMapper judgeAccountMapper;
     private final RoundTableEntryMapper roundTableEntryMapper;
@@ -129,6 +135,7 @@ public class EntryServiceImpl implements EntryService {
     private final CompetitionService competitionService;
     private final EntryScanLabelService entryScanLabelService;
     private final ObjectMapper objectMapper;
+    private final FileStorageService fileStorageService;
 
     @Override
     public List<EntrySummaryVO> listPortalEntries() {
@@ -376,6 +383,27 @@ public class EntryServiceImpl implements EntryService {
     }
 
     @Override
+    public FileDownloadVO downloadPortalResultCertificate(Long entryId) {
+        // 1) 查询并校验当前厂商酒款
+        PortalAccount account = requirePortalAccount();
+        BeerEntry entry = requireOwnedEntry(entryId, account.getBreweryId());
+        if (!EntryStatus.RESULT_PUBLISHED.name().equals(entry.getStatus())) {
+            throw new ResourceNotFoundException("奖状暂未开放下载");
+        }
+
+        // 2) 查询已发布奖项和奖状文件
+        AwardResult award = findDownloadableAward(entry.getId());
+        FileAsset asset = requireCertificateAsset(award);
+
+        // 3) 读取并返回文件内容
+        return FileDownloadVO.builder()
+                .fileName(resolveCertificateFilename(award, asset))
+                .contentType(CONTENT_TYPE_PDF)
+                .content(fileStorageService.download(asset.getStoragePath()))
+                .build();
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public void confirmPayment(Long entryId) {
         // 1) 查询作品并校验状态
@@ -466,6 +494,10 @@ public class EntryServiceImpl implements EntryService {
     private JudgeEntryVO buildJudgeEntryVO(BeerEntry entry, EntryScanLabel label, JudgeScanContext context) {
         CompetitionCategory category = competitionCategoryMapper.selectById(entry.getCategoryId());
         CompetitionStyleConfig style = findStyleSnapshot(entry);
+        boolean scoreTableLocked = RoundStatus.LOCKED.name().equals(context.table().getStatus());
+        boolean finalScoreExists = hasFinalScore(entry.getId());
+        boolean canScore = canSubmitPersonalScore(context) && !finalScoreExists;
+        boolean canFinalize = canFinalizeTable(context) && !scoreTableLocked;
         return JudgeEntryVO.builder()
                 .id(entry.getId())
                 .uuid(entry.getUuid())
@@ -482,10 +514,10 @@ public class EntryServiceImpl implements EntryService {
                 .judgeRoleType(context.member().getRole())
                 .taskType(context.taskType())
                 .action(resolveJudgeAction(context.taskType()))
-                .canScore(canSubmitPersonalScore(context.taskType()))
-                .canFinalize(canFinalizeTable(context.taskType()))
+                .canScore(canScore)
+                .canFinalize(canFinalize)
                 .scored(hasSubmittedJudgeScore(entry.getId(), context.judge().getId()))
-                .locked(hasFinalScore(entry.getId()))
+                .locked(scoreTableLocked || finalScoreExists)
                 .scoreRoleType(resolveScoreRoleType(context.member().getRole(), context.taskType()))
                 .categoryName(category == null ? null : category.getName())
                 .style(entry.getStyle())
@@ -639,6 +671,8 @@ public class EntryServiceImpl implements EntryService {
                 .awardName(published && formalAward != null ? formalAward.getAwardName() : null)
                 .awardType(published && formalAward != null ? formalAward.getAwardType() : null)
                 .champion(published && formalAward != null && Boolean.TRUE.equals(formalAward.getChampion()))
+                .certificateAvailable(published && formalAward != null && Boolean.TRUE.equals(formalAward.getCertificateAvailable()))
+                .certificateFilename(published && formalAward != null ? formalAward.getCertificateFilename() : null)
                 .roundResult(published ? (formalAward == null ? listRoundResults(entry.getId()).stream().findFirst().orElse(null) : formalAward) : null)
                 .build();
     }
@@ -705,9 +739,41 @@ public class EntryServiceImpl implements EntryService {
                         .awardType(result.getAwardType())
                         .awardName(result.getAwardName())
                         .champion(Objects.equals(result.getChampionFlag(), 1))
+                        .certificateAvailable(result.getCertificateAssetId() != null)
+                        .certificateFilename(result.getCertificateFilename())
                         .locked(true)
                         .build())
                 .toList();
+    }
+
+    private AwardResult findDownloadableAward(Long entryId) {
+        AwardResult award = awardResultMapper.selectOne(new LambdaQueryWrapper<AwardResult>()
+                .eq(AwardResult::getBeerEntryId, entryId)
+                .eq(AwardResult::getStatus, AwardResultStatus.PUBLISHED.name())
+                .isNotNull(AwardResult::getCertificateAssetId)
+                .orderByDesc(AwardResult::getChampionFlag)
+                .orderByAsc(AwardResult::getRankNo)
+                .orderByAsc(AwardResult::getId)
+                .last("LIMIT 1"));
+        if (award == null) {
+            throw new ResourceNotFoundException("奖状暂未上传");
+        }
+        return award;
+    }
+
+    private FileAsset requireCertificateAsset(AwardResult award) {
+        FileAsset asset = fileAssetMapper.selectById(award.getCertificateAssetId());
+        if (asset == null) {
+            throw new ResourceNotFoundException("奖状文件不存在");
+        }
+        return asset;
+    }
+
+    private String resolveCertificateFilename(AwardResult award, FileAsset asset) {
+        if (StringUtils.hasText(award.getCertificateFilename())) {
+            return award.getCertificateFilename();
+        }
+        return StringUtils.hasText(asset.getFileName()) ? asset.getFileName() : "certificate.pdf";
     }
 
     private List<PortalScoreDimensionVO> readScoreDimensions(String json) {
@@ -1000,11 +1066,11 @@ public class EntryServiceImpl implements EntryService {
             if (table == null) {
                 continue;
             }
+            RoundTableMember member = memberByTableId.get(table.getId());
             CompetitionRound round = competitionRoundMapper.selectById(table.getRoundId());
-            if (round == null || !isRoundVisibleToJudge(round)) {
+            if (round == null || !isRoundVisibleToJudge(round, table, member)) {
                 continue;
             }
-            RoundTableMember member = memberByTableId.get(table.getId());
             String taskType = resolveJudgeTaskType(round, member);
             if (!StringUtils.hasText(taskType)) {
                 continue;
@@ -1015,12 +1081,26 @@ public class EntryServiceImpl implements EntryService {
         throw new ForbiddenException("当前评审无权查看该酒款");
     }
 
-    private boolean isRoundVisibleToJudge(CompetitionRound round) {
+    private boolean isRoundVisibleToJudge(CompetitionRound round, RoundTable table, RoundTableMember member) {
+        if (member == null) {
+            return false;
+        }
         if (RoundType.SCORE.name().equals(round.getRoundType())) {
-            return RoundStatus.PUBLISHED.name().equals(round.getStatus());
+            if (RoundStatus.PUBLISHED.name().equals(round.getStatus())) {
+                return RoundStatus.PUBLISHED.name().equals(table.getStatus())
+                        || JudgeRoleType.CAPTAIN.name().equals(member.getRole());
+            }
+            if (RoundStatus.SUBMITTED.name().equals(round.getStatus())) {
+                return JudgeRoleType.CAPTAIN.name().equals(member.getRole())
+                        && !RoundStatus.LOCKED.name().equals(table.getStatus());
+            }
+            return RoundStatus.LOCKED.name().equals(round.getStatus())
+                    && JudgeRoleType.CAPTAIN.name().equals(member.getRole());
         }
         if (RoundType.RANKING.name().equals(round.getRoundType())) {
-            return RoundStatus.IN_PROGRESS.name().equals(round.getStatus());
+            return RoundStatus.IN_PROGRESS.name().equals(round.getStatus())
+                    || RoundStatus.SUBMITTED.name().equals(round.getStatus())
+                    || RoundStatus.LOCKED.name().equals(round.getStatus());
         }
         return false;
     }
@@ -1050,18 +1130,31 @@ public class EntryServiceImpl implements EntryService {
         return "SCORE";
     }
 
-    private boolean canSubmitPersonalScore(String taskType) {
-        return JudgeTaskType.SCORE_ENTRY.name().equals(taskType)
-                || JudgeTaskType.CAPTAIN_FINALIZE.name().equals(taskType);
+    private boolean canSubmitPersonalScore(JudgeScanContext context) {
+        if (!RoundType.SCORE.name().equals(context.round().getRoundType())) {
+            return false;
+        }
+        if (!RoundStatus.PUBLISHED.name().equals(context.round().getStatus())
+                || !RoundStatus.PUBLISHED.name().equals(context.table().getStatus())) {
+            return false;
+        }
+        return JudgeTaskType.SCORE_ENTRY.name().equals(context.taskType())
+                || JudgeTaskType.CAPTAIN_FINALIZE.name().equals(context.taskType());
     }
 
-    private boolean canFinalizeTable(String taskType) {
-        return JudgeTaskType.CAPTAIN_FINALIZE.name().equals(taskType)
-                || JudgeTaskType.RANKING_ROUND.name().equals(taskType);
+    private boolean canFinalizeTable(JudgeScanContext context) {
+        if (JudgeTaskType.CAPTAIN_FINALIZE.name().equals(context.taskType())) {
+            return RoundType.SCORE.name().equals(context.round().getRoundType())
+                    && JudgeRoleType.CAPTAIN.name().equals(context.member().getRole())
+                    && (RoundStatus.PUBLISHED.name().equals(context.round().getStatus())
+                    || RoundStatus.SUBMITTED.name().equals(context.round().getStatus()));
+        }
+        return JudgeTaskType.RANKING_ROUND.name().equals(context.taskType());
     }
 
     private String resolveScoreRoleType(String memberRole, String taskType) {
-        if (!canSubmitPersonalScore(taskType)) {
+        if (!JudgeTaskType.SCORE_ENTRY.name().equals(taskType)
+                && !JudgeTaskType.CAPTAIN_FINALIZE.name().equals(taskType)) {
             return null;
         }
         if (JudgeRoleType.CAPTAIN.name().equals(memberRole)) {

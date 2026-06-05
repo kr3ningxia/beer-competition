@@ -3,6 +3,8 @@ package com.beercompetition.storage;
 import com.aliyun.oss.OSS;
 import com.aliyun.oss.OSSClientBuilder;
 
+import java.io.IOException;
+
 public class AliOssUtil {
 
     private final String endpoint;
@@ -22,6 +24,17 @@ public class AliOssUtil {
         try {
             ossClient.putObject(bucketName, objectName, new java.io.ByteArrayInputStream(bytes));
             return "https://" + bucketName + "." + endpoint + "/" + objectName;
+        } finally {
+            ossClient.shutdown();
+        }
+    }
+
+    public byte[] download(String objectName) {
+        OSS ossClient = new OSSClientBuilder().build(endpoint, accessKeyId, accessKeySecret);
+        try (var input = ossClient.getObject(bucketName, objectName).getObjectContent()) {
+            return input.readAllBytes();
+        } catch (IOException ex) {
+            throw new IllegalStateException("读取 OSS 文件失败", ex);
         } finally {
             ossClient.shutdown();
         }

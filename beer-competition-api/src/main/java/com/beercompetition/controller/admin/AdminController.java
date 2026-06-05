@@ -22,6 +22,7 @@ import com.beercompetition.pojo.enums.UserRole;
 import com.beercompetition.pojo.vo.CompetitionDetailVO;
 import com.beercompetition.pojo.vo.CompetitionVO;
 import com.beercompetition.pojo.vo.CurrentUserResponse;
+import com.beercompetition.pojo.vo.FileDownloadVO;
 import com.beercompetition.pojo.vo.JudgeAccountVO;
 import com.beercompetition.pojo.vo.AwardResultVO;
 import com.beercompetition.pojo.vo.AwardRuleVO;
@@ -37,6 +38,7 @@ import com.beercompetition.service.RoundService;
 import com.beercompetition.service.StyleLibraryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -50,7 +52,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 @RestController
@@ -242,6 +246,26 @@ public class AdminController {
         return Result.success(awardService.confirmAwards(id, request));
     }
 
+    @PostMapping(value = "/competitions/{id}/awards/{awardId}/certificate", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Result<AwardResultVO> uploadAwardCertificate(@PathVariable Long id,
+                                                        @PathVariable Long awardId,
+                                                        @RequestParam("file") MultipartFile file) {
+        return Result.success(awardService.uploadCertificate(id, awardId, file));
+    }
+
+    @DeleteMapping("/competitions/{id}/awards/{awardId}/certificate")
+    public Result<String> deleteAwardCertificate(@PathVariable Long id,
+                                                 @PathVariable Long awardId) {
+        awardService.deleteCertificate(id, awardId);
+        return Result.success("删除成功");
+    }
+
+    @GetMapping("/competitions/{id}/awards/{awardId}/certificate")
+    public ResponseEntity<byte[]> downloadAwardCertificate(@PathVariable Long id,
+                                                           @PathVariable Long awardId) {
+        return fileResponse(awardService.downloadCertificate(id, awardId));
+    }
+
     @PostMapping("/competitions/{id}/results/publish")
     public Result<CompetitionDetailVO> publishResults(@PathVariable Long id) {
         roundService.publishResults(id);
@@ -326,5 +350,15 @@ public class AdminController {
     public Result<List<ScoreConfigVO>> updateScoreConfigs(@PathVariable Long competitionId,
                                                           @RequestBody @Valid ScoreConfigBatchUpdateRequest request) {
         return Result.success(competitionService.updateScoreConfigs(competitionId, request));
+    }
+
+    private ResponseEntity<byte[]> fileResponse(FileDownloadVO file) {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename(file.getFileName(), StandardCharsets.UTF_8)
+                        .build()
+                        .toString())
+                .contentType(MediaType.parseMediaType(file.getContentType()))
+                .body(file.getContent());
     }
 }

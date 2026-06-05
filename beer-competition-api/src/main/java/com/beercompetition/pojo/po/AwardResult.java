@@ -33,6 +33,9 @@ public class AwardResult {
     private Long confirmedBy;
     private LocalDateTime confirmedTime;
     private LocalDateTime publishedTime;
+    private Long certificateAssetId;
+    private LocalDateTime certificateUploadedAt;
+    private String certificateFilename;
     private String status;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;

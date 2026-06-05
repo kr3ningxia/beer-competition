@@ -26,4 +26,18 @@ public class OssFileStorageService implements FileStorageService {
         String objectName = businessType + "/" + UUID.randomUUID() + "-" + fileName;
         return aliOssUtil.upload(objectName, bytes);
     }
+
+    @Override
+    public byte[] download(String storagePath) {
+        return aliOssUtil.download(extractObjectName(storagePath));
+    }
+
+    private String extractObjectName(String storagePath) {
+        String marker = ".com/";
+        int index = storagePath.indexOf(marker);
+        if (index >= 0) {
+            return storagePath.substring(index + marker.length());
+        }
+        return storagePath;
+    }
 }

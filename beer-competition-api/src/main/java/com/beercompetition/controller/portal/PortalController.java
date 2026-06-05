@@ -8,6 +8,7 @@ import com.beercompetition.pojo.enums.UserRole;
 import com.beercompetition.pojo.vo.CurrentUserResponse;
 import com.beercompetition.pojo.vo.EntryDetailVO;
 import com.beercompetition.pojo.vo.EntrySummaryVO;
+import com.beercompetition.pojo.vo.FileDownloadVO;
 import com.beercompetition.pojo.vo.PortalCompetitionVO;
 import com.beercompetition.pojo.vo.PortalEntryLabelVO;
 import com.beercompetition.pojo.vo.PortalHomeVO;
@@ -20,6 +21,10 @@ import com.beercompetition.service.CompetitionService;
 import com.beercompetition.service.EntryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -28,6 +33,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 @RestController
@@ -109,5 +115,20 @@ public class PortalController {
     @GetMapping("/results/{entryId}")
     public Result<PortalResultDetailVO> resultDetail(@PathVariable Long entryId) {
         return Result.success(entryService.getPortalResultDetail(entryId));
+    }
+
+    @GetMapping("/results/{entryId}/certificate")
+    public ResponseEntity<byte[]> resultCertificate(@PathVariable Long entryId) {
+        return fileResponse(entryService.downloadPortalResultCertificate(entryId));
+    }
+
+    private ResponseEntity<byte[]> fileResponse(FileDownloadVO file) {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename(file.getFileName(), StandardCharsets.UTF_8)
+                        .build()
+                        .toString())
+                .contentType(MediaType.parseMediaType(file.getContentType()))
+                .body(file.getContent());
     }
 }

@@ -148,6 +148,23 @@ export function confirmCompetitionAwards(competitionId, payload) {
   return request.put(`/api/admin/competitions/${competitionId}/awards/confirm`, payload, { authScope: 'admin' })
 }
 
+export function uploadAwardCertificate(competitionId, awardId, file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post(`/api/admin/competitions/${competitionId}/awards/${awardId}/certificate`, formData, { authScope: 'admin' })
+}
+
+export function deleteAwardCertificate(competitionId, awardId) {
+  return request.delete(`/api/admin/competitions/${competitionId}/awards/${awardId}/certificate`, { authScope: 'admin' })
+}
+
+export function downloadAwardCertificate(competitionId, awardId) {
+  return request.get(`/api/admin/competitions/${competitionId}/awards/${awardId}/certificate`, {
+    authScope: 'admin',
+    responseType: 'blob',
+  })
+}
+
 export function exportCompetitionScoringData(competitionId) {
   return request.get(`/api/admin/competitions/${competitionId}/exports/scoring`, {
     authScope: 'admin',

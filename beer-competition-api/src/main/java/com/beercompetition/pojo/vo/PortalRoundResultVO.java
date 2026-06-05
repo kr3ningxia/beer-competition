@@ -13,5 +13,7 @@ public class PortalRoundResultVO {
     private String awardType;
     private String awardName;
     private Boolean champion;
+    private Boolean certificateAvailable;
+    private String certificateFilename;
     private Boolean locked;
 }
