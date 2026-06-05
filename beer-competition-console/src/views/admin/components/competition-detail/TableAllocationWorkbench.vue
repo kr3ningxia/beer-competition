@@ -30,7 +30,9 @@
             <span class="avatar">{{ getJudgeInitial(judge.name) }}</span>
             <div class="resource-body">
               <strong>{{ judge.name || '未填写姓名' }}</strong>
-              <small>{{ judge.qualification || '未填写资质' }}</small>
+              <small class="judge-qualification" :data-full="formatJudgeQualification(judge.qualification)">
+                {{ formatJudgeQualification(judge.qualification) }}
+              </small>
               <em v-if="getJudgeAssignmentSummary(judge.publicId)">{{ getJudgeAssignmentSummary(judge.publicId) }}</em>
             </div>
             <button type="button" :disabled="!editableJudges || !isJudgeActive(judge)" @click="$emit('addJudgeToTarget', judge)">
@@ -87,7 +89,6 @@
                 <span class="avatar small">{{ getJudgeInitial(getJudge(assignment.judgePublicId)?.name) }}</span>
                 <div>
                   <strong>{{ getJudge(assignment.judgePublicId)?.name || '未知评审' }}</strong>
-                  <small>{{ getJudge(assignment.judgePublicId)?.qualification || '未填写资质' }}</small>
                 </div>
                 <button v-if="editableJudges" class="icon-action" type="button" @click.stop="$emit('removeAssignment', assignment)">
                   <Delete />
@@ -394,8 +395,8 @@
                   <span>成员</span>
                   <small>{{ formatRoleSummary(table) }}</small>
                 </div>
-                <div v-if="getOverviewJudgeItems(table).length" class="overview-member-list">
-                  <article
+                <ul v-if="getOverviewJudgeItems(table).length" class="overview-member-list">
+                  <li
                     v-for="judge in getOverviewJudgeItems(table)"
                     :key="judge.key"
                     class="overview-member-card"
@@ -403,10 +404,10 @@
                     <em :class="`role-${judge.role}`">{{ judge.roleLabel }}</em>
                     <div>
                       <strong>{{ judge.name }}</strong>
-                      <small>{{ judge.qualification }}</small>
+                      <small class="judge-qualification" :data-full="judge.qualification">{{ judge.qualification }}</small>
                     </div>
-                  </article>
-                </div>
+                  </li>
+                </ul>
                 <p v-else class="overview-empty">还没有安排成员。</p>
               </section>
 
@@ -415,8 +416,8 @@
                   <span>酒款</span>
                   <small>{{ formatCategorySummary(table) }}</small>
                 </div>
-                <div v-if="getOverviewEntryItems(table).length" class="overview-entry-list">
-                  <article
+                <ul v-if="getOverviewEntryItems(table).length" class="overview-entry-list">
+                  <li
                     v-for="entry in getOverviewEntryItems(table)"
                     :key="entry.uuid"
                     class="overview-entry-card"
@@ -426,8 +427,8 @@
                       <span>{{ entry.name }}</span>
                       <small>{{ entry.categoryName }} · {{ entry.style }}</small>
                     </div>
-                  </article>
-                </div>
+                  </li>
+                </ul>
                 <p v-else class="overview-empty">还没有分配酒款。</p>
               </section>
             </div>
@@ -604,6 +605,11 @@ function getRoleLabel(role) {
   return props.roleOptions.find((option) => option.value === role)?.label || '评审'
 }
 
+function formatJudgeQualification(qualification) {
+  const text = (qualification || '').trim()
+  return text || '未填写资质'
+}
+
 function getOverviewJudgeItems(roundTable) {
   return getTableJudgeAssignments(roundTable).map((assignment, index) => {
     const judge = props.getJudge(assignment.judgePublicId)
@@ -611,7 +617,7 @@ function getOverviewJudgeItems(roundTable) {
     return {
       key: assignment.localId || `${assignment.judgePublicId || 'judge'}-${role}-${index}`,
       name: judge?.name || '未知评审',
-      qualification: judge?.qualification || '未填写资质',
+      qualification: formatJudgeQualification(judge?.qualification),
       initial: props.getJudgeInitial(judge?.name),
       role,
       roleLabel: getRoleLabel(role),
@@ -1063,14 +1069,63 @@ dt,
 }
 
 .resource-card strong,
-.resource-card small,
 .resource-card em,
 .mini-card strong,
-.mini-card small,
 .entry-list span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.judge-qualification {
+  position: relative;
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.judge-qualification:hover {
+  overflow: visible;
+}
+
+.judge-qualification:hover::after {
+  content: attr(data-full);
+  position: absolute;
+  z-index: 20;
+  left: 0;
+  bottom: calc(100% + 7px);
+  width: max-content;
+  max-width: min(360px, 72vw);
+  padding: 7px 9px;
+  color: #e6edf0;
+  border: 1px solid rgba(216, 169, 53, 0.3);
+  border-radius: 8px;
+  background: rgba(7, 14, 17, 0.98);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+
+.judge-qualification:hover::before {
+  content: '';
+  position: absolute;
+  z-index: 21;
+  left: 14px;
+  bottom: calc(100% + 2px);
+  width: 8px;
+  height: 8px;
+  border-right: 1px solid rgba(216, 169, 53, 0.3);
+  border-bottom: 1px solid rgba(216, 169, 53, 0.3);
+  background: rgba(7, 14, 17, 0.98);
+  transform: rotate(45deg);
+  pointer-events: none;
 }
 
 .table-board {
@@ -1451,9 +1506,9 @@ p {
 
 .overview-card {
   display: grid;
-  gap: 8px;
+  gap: 0;
   align-self: start;
-  padding: 10px;
+  padding: 0;
 }
 
 .overview-card.danger {
@@ -1485,6 +1540,12 @@ p {
 .overview-block-head {
   justify-content: space-between;
   gap: 10px;
+}
+
+.overview-card-header {
+  padding: 12px 12px 10px;
+  border-bottom: 1px solid rgba(219, 232, 237, 0.08);
+  background: rgba(255, 255, 255, 0.018);
 }
 
 .overview-block-head span {
@@ -1545,10 +1606,6 @@ p {
 .overview-summary article,
 .overview-block {
   min-width: 0;
-  padding: 8px;
-  border: 1px solid rgba(219, 232, 237, 0.1);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.026);
 }
 
 .overview-summary article {
@@ -1556,6 +1613,10 @@ p {
   grid-template-columns: auto minmax(0, 1fr);
   gap: 8px;
   align-items: baseline;
+  padding: 8px;
+  border: 1px solid rgba(219, 232, 237, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.026);
 }
 
 .overview-summary span,
@@ -1572,13 +1633,14 @@ p {
 .overview-block {
   display: grid;
   align-content: start;
-  gap: 6px;
+  gap: 8px;
 }
 
 .overview-content-grid {
   display: grid;
   grid-template-columns: minmax(180px, 0.58fr) minmax(280px, 1fr);
-  gap: 8px;
+  gap: 14px;
+  padding: 11px 12px 12px;
 }
 
 .overview-toolbar {
@@ -1616,6 +1678,9 @@ p {
 .overview-entry-list {
   display: grid;
   gap: 5px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
 }
 
 .overview-entry-list {
@@ -1625,14 +1690,12 @@ p {
 .overview-member-card {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 6px;
+  gap: 8px;
   align-items: center;
   min-width: 0;
   min-height: 31px;
-  padding: 4px 6px;
-  border: 1px solid rgba(219, 232, 237, 0.1);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.026);
+  padding: 5px 0;
+  border-top: 1px solid rgba(219, 232, 237, 0.08);
 }
 
 .overview-member-card div,
@@ -1692,13 +1755,11 @@ p {
 .overview-entry-card {
   display: grid;
   grid-template-columns: minmax(54px, auto) minmax(0, 1fr);
-  gap: 7px;
+  gap: 8px;
   min-width: 0;
   min-height: 34px;
-  padding: 5px 7px;
-  border: 1px solid rgba(219, 232, 237, 0.1);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.026);
+  padding: 5px 0;
+  border-top: 1px solid rgba(219, 232, 237, 0.08);
 }
 
 .overview-entry-card > strong {
@@ -1711,19 +1772,15 @@ p {
 }
 
 .overview-empty {
-  padding: 8px;
+  padding: 9px 0 4px;
   color: #6f848d;
-  border: 1px dashed rgba(219, 232, 237, 0.12);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.018);
   font-size: 13px;
 }
 
 .overview-issue {
   gap: 7px;
-  padding: 9px;
-  border: 1px solid rgba(242, 153, 74, 0.2);
-  border-radius: 8px;
+  padding: 9px 12px;
+  border-top: 1px solid rgba(242, 153, 74, 0.2);
   background: rgba(242, 153, 74, 0.07);
   color: #f1bd79;
 }
