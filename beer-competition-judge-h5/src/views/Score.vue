@@ -299,7 +299,7 @@ async function submit() {
       await createScore(payload)
       message.value = '评分已提交'
     }
-    window.setTimeout(() => router.push('/judged'), 360)
+    window.setTimeout(() => router.push('/competitions'), 360)
   } catch (error) {
     submitting.value = false
     throw error

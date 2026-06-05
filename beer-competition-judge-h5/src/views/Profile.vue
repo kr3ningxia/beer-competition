@@ -27,17 +27,13 @@
           <span>资质信息</span>
           <strong>{{ me?.qualification || '-' }}</strong>
         </div>
-        <div>
-          <span>账号状态</span>
-          <strong>{{ me?.statusLabel || '-' }}</strong>
-        </div>
       </div>
       <p class="caption">如信息有误，请联系现场工作人员。</p>
     </section>
 
     <section class="card stack">
+      <button class="button secondary full" type="button" @click="$router.push('/judged')">我的评分记录</button>
       <button class="button primary full" type="button" @click="$router.push('/profile/edit')">修改资料</button>
-      <button class="button secondary full" type="button" @click="$router.push('/competitions')">返回扫码</button>
       <button class="button danger full" type="button" @click="logout">退出登录</button>
     </section>
 
@@ -61,7 +57,6 @@ const me = ref(null)
 const navItems = computed(() => {
   const items = [
     { label: '扫码', to: '/competitions' },
-    { label: '已评', to: '/judged' },
   ]
   if (me.value?.role === 'CAPTAIN') items.push({ label: '本桌', to: '/captain' })
   items.push({ label: '我的', to: '/profile' })

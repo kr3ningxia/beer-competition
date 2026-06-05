@@ -775,8 +775,16 @@
       <div v-if="roundScoreDetailTable" class="round-score-detail-dialog">
         <section class="score-detail-summary">
           <span>
-            <small>评分进度</small>
+            <small>个人评分</small>
             <strong>{{ roundScoreDetailStats.submitted }} / {{ roundScoreDetailStats.total }}</strong>
+          </span>
+          <span>
+            <small>桌长共识</small>
+            <strong>{{ roundScoreDetailCaptainStats.consensus.submitted }} / {{ roundScoreDetailCaptainStats.consensus.total }}</strong>
+          </span>
+          <span>
+            <small>选择晋级</small>
+            <strong>{{ roundScoreDetailCaptainStats.advance.submitted }} / {{ roundScoreDetailCaptainStats.advance.total }}</strong>
           </span>
           <span class="pending-judge-summary">
             <small>未完成评分评委</small>
@@ -792,17 +800,26 @@
           <article
             v-for="judge in roundScoreDetailJudges"
             :key="judge.judgePublicId || judge.judgeName"
-            :class="['score-detail-progress-row', { pending: getJudgeRemainingCount(judge) > 0 }]"
+            :class="['score-detail-progress-row', { pending: hasJudgeDetailPendingTasks(judge), captain: isCaptainDetailJudge(judge) }]"
           >
             <div class="score-detail-judge-name">
               <strong>{{ judge.judgeName }}</strong>
               <small>{{ judge.roleLabel }}</small>
             </div>
-            <div class="score-detail-progress-track" :aria-label="`${judge.judgeName}评分进度`">
-              <i :style="{ width: `${formatJudgeDetailProgress(judge)}%` }"></i>
+            <div class="score-detail-task-list">
+              <div
+                v-for="task in buildJudgeDetailTasks(judge)"
+                :key="task.key"
+                :class="['score-detail-task', { pending: task.remaining > 0 }]"
+              >
+                <small>{{ task.label }}</small>
+                <div class="score-detail-progress-track" :aria-label="`${judge.judgeName}${task.label}进度`">
+                  <i :style="{ width: `${task.progress}%` }"></i>
+                </div>
+                <span>{{ task.submitted }} / {{ task.total }}</span>
+                <em>{{ task.statusText }}</em>
+              </div>
             </div>
-            <span>{{ judge.submittedCount }} / {{ judge.totalCount }}</span>
-            <em>{{ getJudgeRemainingCount(judge) > 0 ? `剩余 ${getJudgeRemainingCount(judge)} 杯` : '已完成' }}</em>
           </article>
         </section>
       </div>
@@ -1021,9 +1038,12 @@ const entryLookup = computed(() => {
 const roundScoreDetailJudges = computed(() => {
   const details = roundScoreDetailTable.value?.judgeDetails || []
   const source = details.length ? details : buildFallbackRoundScoreDetailJudges(roundScoreDetailTable.value)
-  return source
+  return mergeCaptainIntoRoundScoreDetailJudges(roundScoreDetailTable.value, source)
     .slice()
     .sort((left, right) => {
+      const leftCaptain = isCaptainDetailJudge(left)
+      const rightCaptain = isCaptainDetailJudge(right)
+      if (leftCaptain !== rightCaptain) return leftCaptain ? -1 : 1
       const leftPending = Number(left.totalCount || 0) - Number(left.submittedCount || 0)
       const rightPending = Number(right.totalCount || 0) - Number(right.submittedCount || 0)
       if (leftPending !== rightPending) return rightPending - leftPending
@@ -1051,6 +1071,22 @@ const roundScoreDetailStats = computed(() => roundScoreDetailJudges.value.reduce
   summary.pendingJudgeNames = summary.pendingJudgeNamesList.join('、')
   return summary
 }, { submitted: 0, total: 0, pendingJudges: 0, pendingJudgeNamesList: [], pendingJudgeNames: '' }))
+const roundScoreDetailCaptainStats = computed(() => {
+  const table = roundScoreDetailTable.value
+  const entryCount = roundScoreDetailEntries.value.length
+  const consensus = buildCountProgressFromPercent(normalizeProgress(table?.captainProgress), entryCount)
+  const advanceTotal = Number(table?.targetCount || 0)
+  const advanceSubmitted = Math.min(advanceTotal, Math.max(0, Number(table?.advancedCount || 0)))
+  return {
+    consensus,
+    advance: {
+      submitted: advanceSubmitted,
+      total: advanceTotal,
+      progress: calculateCountProgress(advanceSubmitted, advanceTotal),
+      remaining: Math.max(0, advanceTotal - advanceSubmitted),
+    },
+  }
+})
 const filteredRoundPool = computed(() => {
   const query = roundKeyword.value.toLowerCase()
   return currentPoolEntries.value
@@ -1875,7 +1911,7 @@ function getRoundTableProgressSummary(round, table) {
 }
 
 function getJudgeProgressCounts(table) {
-  const judgeCount = Number(table.professionalCount || 0) + Number(table.crossCount || 0)
+  const judgeCount = getRoundTableTaskJudgeCount(table)
   const total = table.entryUuids.length * judgeCount
   if (!total) return { done: 0, total: 0 }
   const progress = normalizeProgress(table.judgeProgress)
@@ -1896,9 +1932,9 @@ function openRoundTableScoreDetail(tableId) {
 function buildFallbackRoundScoreDetailJudges(table) {
   if (!table?.entryUuids?.length) return []
   const baseTable = judgeTableForm.find((item) => item.tableName === table.name)
-  if (!baseTable) return []
-  const assignments = judgeAssignmentForm
-    .filter((assignment) => assignment.tableLocalId === baseTable.localId)
+  const assignments = baseTable
+    ? judgeAssignmentForm.filter((assignment) => assignment.tableLocalId === baseTable.localId)
+    : []
   return assignments.map((assignment) => {
     const judge = getJudge(assignment.judgePublicId)
     const entryScores = table.entryUuids.map((uuid) => ({
@@ -1921,14 +1957,119 @@ function buildFallbackRoundScoreDetailJudges(table) {
   })
 }
 
-function getJudgeRemainingCount(judge) {
-  return Math.max(0, Number(judge.totalCount || 0) - Number(judge.submittedCount || 0))
+function mergeCaptainIntoRoundScoreDetailJudges(table, judges) {
+  if (!table?.captainPublicId) return judges
+  const hasCaptain = judges.some((judge) => judge.judgePublicId === table.captainPublicId || judge.role === 'CAPTAIN')
+  if (hasCaptain) return judges
+  return [...judges, buildCaptainProgressFallback(table, judges)]
 }
 
-function formatJudgeDetailProgress(judge) {
-  const total = Number(judge.totalCount || 0)
+function buildCaptainProgressFallback(table, judges = []) {
+  const judge = getJudge(table.captainPublicId)
+  const submittedCount = resolveCaptainFallbackSubmittedCount(table, judges)
+  const entryScores = (table.entryUuids || []).map((uuid, index) => ({
+    beerUuid: uuid,
+    scored: index < submittedCount,
+    totalScore: null,
+    submittedAt: null,
+  }))
+  return {
+    judgePublicId: table.captainPublicId,
+    judgeName: judge?.name || table.captainPublicId || '未指定桌长',
+    role: 'CAPTAIN',
+    roleLabel: roleLabels.CAPTAIN || '桌长',
+    submittedCount,
+    totalCount: entryScores.length,
+    progress: calculateCountProgress(submittedCount, entryScores.length),
+    missingEntryUuids: entryScores
+      .filter((score) => !score.scored)
+      .map((score) => score.beerUuid),
+    entryScores,
+  }
+}
+
+function resolveCaptainFallbackSubmittedCount(table, judges = []) {
+  const entryCount = table?.entryUuids?.length || 0
+  if (!entryCount) return 0
+  const judgeCount = getRoundTableTaskJudgeCount(table)
+  const total = entryCount * judgeCount
   if (!total) return 0
-  return Math.min(100, Math.max(0, Math.round(Number(judge.submittedCount || 0) * 100 / total)))
+  const aggregateSubmitted = normalizeProgress(table?.judgeProgress) >= 100
+    ? total
+    : Math.min(total, Math.max(0, Math.round(total * normalizeProgress(table?.judgeProgress) / 100)))
+  const knownSubmitted = judges.reduce((sum, judge) => sum + Number(judge.submittedCount || 0), 0)
+  return Math.min(entryCount, Math.max(0, aggregateSubmitted - knownSubmitted))
+}
+
+function getRoundTableTaskJudgeCount(table) {
+  if (!table) return 0
+  if (table.judgeDetails?.length) {
+    const taskJudgeIds = new Set(table.judgeDetails.map((judge) => judge.judgePublicId || `${judge.role}-${judge.judgeName}`))
+    if (table.captainPublicId && !table.judgeDetails.some((judge) => judge.judgePublicId === table.captainPublicId || judge.role === 'CAPTAIN')) {
+      taskJudgeIds.add(table.captainPublicId)
+    }
+    return taskJudgeIds.size
+  }
+  const ordinaryJudgeCount = Number(table.professionalCount || 0) + Number(table.crossCount || 0)
+  return ordinaryJudgeCount + (table.captainPublicId ? 1 : 0)
+}
+
+function isCaptainDetailJudge(judge) {
+  if (!judge) return false
+  const captainPublicId = roundScoreDetailTable.value?.captainPublicId
+  return judge.role === 'CAPTAIN' || (captainPublicId && judge.judgePublicId === captainPublicId)
+}
+
+function calculateCountProgress(submitted, total) {
+  if (!total) return 0
+  return Math.min(100, Math.max(0, Math.round(Number(submitted || 0) * 100 / total)))
+}
+
+function buildCountProgressFromPercent(progress, total) {
+  const normalizedTotal = Math.max(0, Number(total || 0))
+  const normalizedProgress = normalizeProgress(progress)
+  const submitted = normalizedProgress >= 100
+    ? normalizedTotal
+    : Math.min(normalizedTotal, Math.max(0, Math.round(normalizedTotal * normalizedProgress / 100)))
+  return {
+    submitted,
+    total: normalizedTotal,
+    progress: calculateCountProgress(submitted, normalizedTotal),
+    remaining: Math.max(0, normalizedTotal - submitted),
+  }
+}
+
+function buildJudgeDetailTasks(judge) {
+  const personalTotal = Number(judge.totalCount || 0)
+  const personalSubmitted = Math.min(personalTotal, Math.max(0, Number(judge.submittedCount || 0)))
+  const tasks = [{
+    key: 'personal',
+    label: '个人评分',
+    submitted: personalSubmitted,
+    total: personalTotal,
+    progress: calculateCountProgress(personalSubmitted, personalTotal),
+    remaining: Math.max(0, personalTotal - personalSubmitted),
+  }]
+  if (isCaptainDetailJudge(judge)) {
+    const captainStats = roundScoreDetailCaptainStats.value
+    tasks.push({
+      key: 'consensus',
+      label: '共识打分',
+      ...captainStats.consensus,
+    }, {
+      key: 'advance',
+      label: '选择晋级',
+      ...captainStats.advance,
+    })
+  }
+  return tasks.map((task) => ({
+    ...task,
+    statusText: task.remaining > 0 ? `剩余 ${task.remaining} 款` : '已完成',
+  }))
+}
+
+function hasJudgeDetailPendingTasks(judge) {
+  return buildJudgeDetailTasks(judge).some((task) => task.remaining > 0)
 }
 
 function buildPyramidTablePreview(round, table) {
@@ -3214,7 +3355,7 @@ svg {
 
 .score-detail-summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -3237,6 +3378,10 @@ svg {
   font-size: 20px;
 }
 
+.score-detail-summary .pending-judge-summary {
+  grid-column: span 2;
+}
+
 .score-detail-summary .pending-judge-summary strong {
   overflow: hidden;
   font-size: 16px;
@@ -3252,9 +3397,9 @@ svg {
 
 .score-detail-progress-row {
   display: grid;
-  grid-template-columns: minmax(150px, 0.8fr) minmax(220px, 1fr) 82px 100px;
+  grid-template-columns: minmax(150px, 0.32fr) minmax(0, 1fr);
   gap: 14px;
-  align-items: center;
+  align-items: start;
   min-height: 58px;
   padding: 11px 12px;
   border: 1px solid rgba(111, 207, 122, 0.18);
@@ -3267,10 +3412,16 @@ svg {
   background: rgba(242, 153, 74, 0.065);
 }
 
+.score-detail-progress-row.captain {
+  border-color: rgba(224, 184, 74, 0.28);
+  background: rgba(224, 184, 74, 0.055);
+}
+
 .score-detail-judge-name {
   display: grid;
   gap: 5px;
   min-width: 0;
+  padding-top: 2px;
 }
 
 .score-detail-judge-name strong,
@@ -3292,6 +3443,29 @@ svg {
   font-weight: 800;
 }
 
+.score-detail-task-list {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.score-detail-task {
+  display: grid;
+  grid-template-columns: 76px minmax(180px, 1fr) 74px 96px;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+}
+
+.score-detail-task small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .score-detail-progress-track {
   height: 8px;
   overflow: hidden;
@@ -3306,8 +3480,8 @@ svg {
   background: linear-gradient(90deg, #e0b84a, #6fcf7a);
 }
 
-.score-detail-progress-row span,
-.score-detail-progress-row em {
+.score-detail-task span,
+.score-detail-task em {
   color: var(--muted);
   font-style: normal;
   font-weight: 900;
@@ -3315,7 +3489,7 @@ svg {
   white-space: nowrap;
 }
 
-.score-detail-progress-row.pending em {
+.score-detail-task.pending em {
   color: #f1bd79;
 }
 

@@ -242,7 +242,6 @@ const emptyStateChecks = computed(() => [
 const navItems = computed(() => {
   const items = [
     { label: '扫码', to: '/competitions' },
-    { label: '已评', to: '/judged' },
   ]
   if (me.value?.role === 'CAPTAIN') items.push({ label: '本桌', to: '/captain' })
   items.push({ label: '我的', to: '/profile' })

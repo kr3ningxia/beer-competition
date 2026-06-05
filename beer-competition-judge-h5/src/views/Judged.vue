@@ -2,7 +2,7 @@
   <main class="app-shell">
     <section class="top-panel">
       <p class="eyebrow">我的评分</p>
-      <h1 class="page-title">已评酒款</h1>
+      <h1 class="page-title">我的评分记录</h1>
       <div class="summary-line">
         <span>{{ me?.roleLabel }}</span>
         <strong>{{ scores.length }} 款</strong>
@@ -40,7 +40,7 @@
       <div v-else class="empty">
         <h2 class="section-title">还没有提交评分</h2>
         <p class="caption">扫码或输入编号后，就可以开始本轮评分。</p>
-        <button class="button primary full" type="button" @click="$router.push('/competitions')">去扫码</button>
+        <button class="button primary full" type="button" @click="$router.push('/competitions')">返回扫码</button>
       </div>
     </section>
 
@@ -62,7 +62,6 @@ const scores = ref([])
 const navItems = computed(() => {
   const items = [
     { label: '扫码', to: '/competitions' },
-    { label: '已评', to: '/judged' },
   ]
   if (me.value?.role === 'CAPTAIN') items.push({ label: '本桌', to: '/captain' })
   items.push({ label: '我的', to: '/profile' })

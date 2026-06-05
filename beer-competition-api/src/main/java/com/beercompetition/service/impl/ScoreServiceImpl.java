@@ -50,10 +50,15 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class ScoreServiceImpl implements ScoreService {
+
+    private static final int FLAG_FALSE = 0;
+    private static final int FLAG_TRUE = 1;
 
     private final BeerEntryMapper beerEntryMapper;
     private final CompetitionCategoryMapper competitionCategoryMapper;
@@ -183,6 +188,7 @@ public class ScoreServiceImpl implements ScoreService {
         BeerEntry entry = requireEntry(uuid);
         JudgeAssignment captainAssignment = requireCaptainAssignment(entry.getCompetitionId());
         RoundTableEntry roundEntry = requireScoreRoundTask(entry.getId(), JudgeRoleType.CAPTAIN.name(), true);
+        requireAllTableScoresSubmitted(roundEntry);
 
         // 2) 新增或更新桌长共识结果
         ScoreRecord finalRecord = scoreRecordMapper.selectOne(new LambdaQueryWrapper<ScoreRecord>()
@@ -218,6 +224,30 @@ public class ScoreServiceImpl implements ScoreService {
         // 3) 同步第一轮晋级状态
         syncFirstRoundAdvance(roundEntry, finalRecord);
         return toScoreRecordVO(scoreRecordMapper.selectById(finalRecord.getId()));
+    }
+
+    private void requireAllTableScoresSubmitted(RoundTableEntry roundEntry) {
+        List<RoundTableMember> requiredMembers = roundTableMemberMapper.selectList(new LambdaQueryWrapper<RoundTableMember>()
+                .eq(RoundTableMember::getRoundTableId, roundEntry.getRoundTableId())
+                .eq(RoundTableMember::getSystemTaskRequired, FLAG_TRUE));
+        if (requiredMembers.isEmpty()) {
+            throw new BaseException("本桌未配置评委，暂不能提交桌长意见");
+        }
+
+        Set<Long> requiredJudgeIds = requiredMembers.stream()
+                .map(RoundTableMember::getJudgeAccountId)
+                .collect(Collectors.toSet());
+        long submittedCount = scoreRecordMapper.selectList(new LambdaQueryWrapper<ScoreRecord>()
+                        .eq(ScoreRecord::getBeerEntryId, roundEntry.getBeerEntryId())
+                        .eq(ScoreRecord::getFinalFlag, FLAG_FALSE)
+                        .in(ScoreRecord::getJudgeAccountId, requiredJudgeIds))
+                .stream()
+                .map(ScoreRecord::getJudgeAccountId)
+                .distinct()
+                .count();
+        if (submittedCount < requiredJudgeIds.size()) {
+            throw new BaseException("同桌评分未完成，暂不能提交桌长意见");
+        }
     }
 
     private RoundTableEntry requireScoreRoundTask(Long beerEntryId, String role, boolean captainOnly) {

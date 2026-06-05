@@ -818,7 +818,15 @@ public class RoundServiceImpl implements RoundService {
                             JudgeAccount judge = judgeById.get(member.getJudgeAccountId());
                             return judge == null ? "" : judge.getName();
                         }, Comparator.nullsLast(String::compareTo)))
-                .toList();
+                .collect(Collectors.toCollection(ArrayList::new));
+        if (table.getCaptainJudgeId() != null && taskJudges.stream().noneMatch(member -> table.getCaptainJudgeId().equals(member.getJudgeAccountId()))) {
+            taskJudges.add(RoundTableMember.builder()
+                    .roundTableId(table.getId())
+                    .judgeAccountId(table.getCaptainJudgeId())
+                    .role(JudgeRoleType.CAPTAIN.name())
+                    .systemTaskRequired(FLAG_TRUE)
+                    .build());
+        }
         if (taskJudges.isEmpty()) {
             return List.of();
         }
@@ -1649,6 +1657,15 @@ public class RoundServiceImpl implements RoundService {
         int taskJudges = Math.toIntExact(roundTableMemberMapper.selectCount(new LambdaQueryWrapper<RoundTableMember>()
                 .eq(RoundTableMember::getRoundTableId, table.getId())
                 .eq(RoundTableMember::getSystemTaskRequired, FLAG_TRUE)));
+        if (table.getCaptainJudgeId() != null) {
+            boolean captainCounted = roundTableMemberMapper.selectCount(new LambdaQueryWrapper<RoundTableMember>()
+                    .eq(RoundTableMember::getRoundTableId, table.getId())
+                    .eq(RoundTableMember::getJudgeAccountId, table.getCaptainJudgeId())
+                    .eq(RoundTableMember::getSystemTaskRequired, FLAG_TRUE)) > 0;
+            if (!captainCounted) {
+                taskJudges++;
+            }
+        }
         if (taskJudges <= 0) {
             return 0;
         }
