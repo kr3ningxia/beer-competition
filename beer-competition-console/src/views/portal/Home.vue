@@ -52,7 +52,6 @@
       <div class="section-head">
         <div>
           <h2 class="portal-section-title">开放报名赛事</h2>
-          <p>先查看赛事规则和送样要求，再决定提交哪一款酒。</p>
         </div>
         <RouterLink to="/portal/events">全部赛事</RouterLink>
       </div>
@@ -372,13 +371,29 @@ function formatDateTime(value) {
 
 .event-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 16px;
   margin-top: 20px;
 }
 
 .event-card {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.74fr) minmax(360px, 1.26fr);
+  column-gap: 36px;
+  row-gap: 14px;
+  align-items: start;
   padding: 22px;
+}
+
+.event-card .label-chip,
+.event-card h3,
+.event-card > p,
+.event-card .card-actions {
+  grid-column: 1;
+}
+
+.event-card .label-chip {
+  justify-self: start;
 }
 
 .event-card h3 {
@@ -399,6 +414,14 @@ dl {
   display: grid;
   gap: 12px;
   margin: 20px 0 0;
+}
+
+.event-card dl {
+  grid-column: 2;
+  grid-row: 1 / span 4;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 18px;
+  margin: 0;
 }
 
 dl div {
@@ -530,9 +553,17 @@ details p {
     grid-template-columns: 1fr;
   }
 
-  .event-grid,
   .flow-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .event-card {
+    grid-template-columns: 1fr;
+  }
+
+  .event-card dl {
+    grid-column: 1;
+    grid-row: auto;
   }
 }
 
@@ -547,9 +578,12 @@ details p {
   }
 
   .section-head,
-  .event-grid,
   .flow-grid {
     display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .event-card dl {
     grid-template-columns: 1fr;
   }
 }
