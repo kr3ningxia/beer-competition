@@ -54,6 +54,7 @@ import {
   Document,
   Files,
   Download,
+  House,
   Medal,
   User,
 } from '@element-plus/icons-vue'
@@ -65,6 +66,7 @@ const displayName = getDisplayName('admin')
 const isDashboard = computed(() => ['/admin/dashboard', '/admin/judges', '/admin/style-libraries'].includes(route.path) || route.path.startsWith('/admin/competitions'))
 
 const navItems = [
+  { path: '/admin/dashboard', label: '首页', icon: House },
   { path: '/admin/live-board', label: '现场看板', icon: DataBoard },
   { path: '/admin/competitions', label: '比赛管理', icon: Medal },
   { path: '/admin/judges', label: '评审列表', icon: User },

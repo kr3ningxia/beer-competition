@@ -24,6 +24,7 @@ public class EntrySummaryVO {
     private String categoryName;
     private String style;
     private String status;
+    private Boolean published;
     private BigDecimal abv;
     private BigDecimal entryFee;
     private Integer storedFlag;

@@ -1,5 +1,10 @@
 <template>
   <div class="home-page">
+    <RouterLink v-if="loggedIn && publishedResultCount > 0" class="result-notice" to="/portal/results">
+      有 {{ publishedResultCount }} 款酒的结果已发布
+      <span>查看我的结果</span>
+    </RouterLink>
+
     <RouterLink v-if="loggedIn && pendingCount > 0" class="my-notice" to="/portal/my">
       你有 {{ pendingCount }} 项参赛事项待处理，进入我的参赛查看
     </RouterLink>
@@ -38,7 +43,7 @@
         <dl>
           <div><dt>投递组别</dt><dd>{{ activeCompetition?.categories?.length || 0 }} 个组别</dd></div>
           <div><dt>基础风格</dt><dd>{{ activeCompetition?.styles?.length || 0 }} 个风格</dd></div>
-          <div><dt>结果反馈</dt><dd>评分、评语、轮次结果</dd></div>
+          <div><dt>我的结果</dt><dd>评分、评语、奖项</dd></div>
         </dl>
       </aside>
     </section>
@@ -137,20 +142,24 @@
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { isLoggedIn } from '@/utils/auth'
-import { fetchPortalEntries, fetchPortalHome } from '@/api/portal'
-import { canSubmitEntry } from './portalViewModels'
+import { fetchPortalEntries, fetchPortalHome, fetchPortalResults } from '@/api/portal'
+import { canSubmitEntry, isEntryResultPublished } from './portalViewModels'
 
 const loggedIn = computed(() => isLoggedIn('portal'))
 const homeData = ref({ activeCompetition: null, openCompetitions: [], competitions: [] })
 const entries = ref([])
+const results = ref([])
 const activeCompetition = computed(() => homeData.value.activeCompetition)
 const openCompetitions = computed(() => homeData.value.openCompetitions || [])
 const pendingCount = computed(() => entries.value.filter((entry) => entry.status === 'PENDING_PAYMENT' || entry.status === 'REGISTERED').length)
+const publishedResultCount = computed(() => results.value.filter((entry) => isEntryResultPublished(entry)).length)
 
 onMounted(async () => {
   homeData.value = await fetchPortalHome()
   if (loggedIn.value) {
-    entries.value = await fetchPortalEntries()
+    const [entryData, resultData] = await Promise.all([fetchPortalEntries(), fetchPortalResults()])
+    entries.value = entryData
+    results.value = resultData
   }
 })
 
@@ -166,14 +175,14 @@ const flowSteps = [
   { index: '03', title: '付款确认', text: '按赛事说明完成线下付款，等待主办方确认报名状态。' },
   { index: '04', title: '下载标签', text: '付款确认后下载现场标签，标签包含参赛编号和现场短编号。' },
   { index: '05', title: '送样入库', text: '按要求寄送或现场交付酒样，主办方收样后更新入库状态。' },
-  { index: '06', title: '查看结果', text: '结果发布后查看评分、桌长评语和轮次结果。' },
+  { index: '06', title: '查看结果', text: '结果发布后查看评分、桌长评语和奖项。' },
 ]
 
 const faqs = [
   { question: '报名截止后还能提交酒款吗？', answer: '报名截止后不再开放提交入口，如需调整请联系主办方确认。' },
   { question: '付款后多久可以下载标签？', answer: '本版本采用线下付款确认，主办方确认后酒款状态变为报名成功，即可下载标签。' },
   { question: '酒样需要寄几瓶？', answer: '不同赛事要求可能不同，请以主办方发布的单场通知为准。' },
-  { question: '结果发布后能看到什么？', answer: '可查看评分明细、桌长综合评语和轮次结果。' },
+  { question: '结果发布后能看到什么？', answer: '可查看评分明细、桌长综合评语和奖项。' },
 ]
 
 function formatDate(value) {
@@ -199,6 +208,24 @@ function formatDateTime(value) {
   border-radius: 8px;
   font-weight: 800;
   text-decoration: none;
+}
+
+.result-notice {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  color: #fff6df;
+  background: #2b1d10;
+  border: 1px solid rgba(255, 250, 240, 0.16);
+  border-radius: 8px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.result-notice span {
+  color: #f3d978;
+  white-space: nowrap;
 }
 
 .site-hero {

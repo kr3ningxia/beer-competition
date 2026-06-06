@@ -12,7 +12,7 @@
     <section class="event-list">
       <article v-for="competition in competitions" :key="competition.id" class="event-card brewer-card">
         <div class="event-main">
-          <span :class="['label-chip', stageTone(competition.status)]">{{ competition.currentStageLabel }}</span>
+          <span :class="['label-chip', stageTone(competition.status)]">{{ stageLabel(competition) }}</span>
           <h2>{{ competition.name }}</h2>
           <p>{{ competition.code }} · {{ competition.edition }}</p>
           <div class="fact-row">
@@ -29,11 +29,11 @@
           <div class="event-actions">
             <RouterLink :to="`/portal/events/${competition.id}`">查看赛事详情</RouterLink>
             <RouterLink
-              v-if="canSubmitEntry(competition)"
+              v-if="showPrimaryAction(competition)"
               class="event-primary"
-              :to="loggedIn ? `/portal/submit?competitionId=${competition.id}` : '/portal/login'"
+              :to="primaryAction(competition).to"
             >
-              {{ loggedIn ? '提交酒款' : '登录报名' }}
+              {{ primaryAction(competition).label }}
             </RouterLink>
           </div>
         </aside>
@@ -51,7 +51,7 @@ import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { isLoggedIn } from '@/utils/auth'
 import { fetchPortalCompetitions } from '@/api/portal'
-import { canSubmitEntry } from './portalViewModels'
+import { canSubmitEntry, competitionAction, isCompetitionResultPublished } from './portalViewModels'
 
 const loggedIn = computed(() => isLoggedIn('portal'))
 const competitions = ref([])
@@ -64,6 +64,18 @@ function stageTone(status) {
   if (status === 'PUBLISHED') return 'tone-gold'
   if (status === 'REGISTRATION_OPEN') return 'tone-green'
   return 'tone-amber'
+}
+
+function stageLabel(competition) {
+  return isCompetitionResultPublished(competition) ? '结果已发布' : competition.currentStageLabel
+}
+
+function primaryAction(competition) {
+  return competitionAction(competition, loggedIn.value)
+}
+
+function showPrimaryAction(competition) {
+  return isCompetitionResultPublished(competition) || canSubmitEntry(competition)
 }
 
 function formatDate(value) {

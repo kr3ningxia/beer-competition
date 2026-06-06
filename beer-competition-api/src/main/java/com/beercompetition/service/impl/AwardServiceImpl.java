@@ -66,6 +66,7 @@ public class AwardServiceImpl implements AwardService {
     private static final String SILVER = "银奖";
     private static final String BRONZE = "铜奖";
     private static final String CHAMPION = "总冠军";
+    private static final String CATEGORY_ALL_KEY = "ALL";
     private static final String BUSINESS_TYPE_AWARD_CERTIFICATE = "AWARD_CERTIFICATE";
     private static final String CONTENT_TYPE_PDF = "application/pdf";
     private static final long MAX_CERTIFICATE_SIZE = 20L * 1024L * 1024L;
@@ -169,6 +170,9 @@ public class AwardServiceImpl implements AwardService {
         if (hasPublishedAwards(competitionId)) {
             throw new BaseException("结果已发布，不能重新生成奖项");
         }
+        if (hasConfirmedAwards(competitionId)) {
+            throw new BaseException("奖项已确认，不能重新生成奖项");
+        }
         CompetitionRound medalRound = findLastLockedFinalRound(competitionId, RoundTargetMode.MEDALS.name());
         CompetitionRound championRound = findLastLockedFinalRound(competitionId, RoundTargetMode.CHAMPION.name());
         if (medalRound == null) {
@@ -224,6 +228,9 @@ public class AwardServiceImpl implements AwardService {
         if (targetModes.stream().noneMatch(mode -> RoundTargetMode.MEDALS.name().equals(mode) || RoundTargetMode.CHAMPION.name().equals(mode))) {
             return listAwardResults(competitionId);
         }
+        if (hasConfirmedAwardsForRound(competitionId, roundId)) {
+            throw new BaseException("奖项已确认，不能重新生成奖项");
+        }
 
         // 2) 清理当前轮次旧草稿并写入本轮奖项草稿
         awardResultMapper.delete(new LambdaQueryWrapper<AwardResult>()
@@ -266,6 +273,13 @@ public class AwardServiceImpl implements AwardService {
         }
         ensureDefaultRules(competitionId);
         validateConfirmItems(competitionId, request.getAwards());
+        List<AwardResult> persistedResults = listPersistedResults(competitionId);
+        if (persistedResults.stream().anyMatch(result -> AwardResultStatus.CONFIRMED.name().equals(result.getStatus()))) {
+            if (matchesConfirmedAwards(persistedResults, request.getAwards())) {
+                return toResultVOs(persistedResults);
+            }
+            throw new BaseException("奖项已确认，请先撤回确认后再调整");
+        }
 
         // 2) 覆盖保存已确认奖项
         awardResultMapper.delete(new LambdaQueryWrapper<AwardResult>()
@@ -504,7 +518,7 @@ public class AwardServiceImpl implements AwardService {
                         .computeIfAbsent(entry.getCategoryId(), key -> new java.util.HashSet<>())
                         .add(item.getRankNo());
             }
-            String key = item.getAwardType() + ":" + (type == AwardType.CHAMPION ? "ALL" : entry.getCategoryId()) + ":" + item.getRankNo();
+            String key = item.getAwardType() + ":" + (type == AwardType.CHAMPION ? CATEGORY_ALL_KEY : entry.getCategoryId()) + ":" + item.getRankNo();
             if (slotKeys.putIfAbsent(key, item.getBeerEntryId()) != null) {
                 throw new BaseException("同一奖项名次不能重复确认");
             }
@@ -572,6 +586,61 @@ public class AwardServiceImpl implements AwardService {
         return awardResultMapper.selectCount(new LambdaQueryWrapper<AwardResult>()
                 .eq(AwardResult::getCompetitionId, competitionId)
                 .eq(AwardResult::getStatus, AwardResultStatus.PUBLISHED.name())) > 0;
+    }
+
+    private boolean hasConfirmedAwards(Long competitionId) {
+        return awardResultMapper.selectCount(new LambdaQueryWrapper<AwardResult>()
+                .eq(AwardResult::getCompetitionId, competitionId)
+                .eq(AwardResult::getStatus, AwardResultStatus.CONFIRMED.name())) > 0;
+    }
+
+    private boolean hasConfirmedAwardsForRound(Long competitionId, Long roundId) {
+        return awardResultMapper.selectCount(new LambdaQueryWrapper<AwardResult>()
+                .eq(AwardResult::getCompetitionId, competitionId)
+                .eq(AwardResult::getSourceRoundId, roundId)
+                .eq(AwardResult::getStatus, AwardResultStatus.CONFIRMED.name())) > 0;
+    }
+
+    private boolean matchesConfirmedAwards(List<AwardResult> persistedResults, List<AwardConfirmItemRequest> requestItems) {
+        List<AwardResult> confirmedResults = persistedResults.stream()
+                .filter(result -> AwardResultStatus.CONFIRMED.name().equals(result.getStatus()))
+                .toList();
+        if (confirmedResults.size() != persistedResults.size() || confirmedResults.size() != requestItems.size()) {
+            return false;
+        }
+        Map<String, String> confirmedBySlot = confirmedResults.stream()
+                .collect(Collectors.toMap(this::awardSlotKey, this::awardSignature, (left, right) -> left, LinkedHashMap::new));
+        Map<String, String> requestBySlot = requestItems.stream()
+                .collect(Collectors.toMap(this::awardSlotKey, this::awardSignature, (left, right) -> left, LinkedHashMap::new));
+        return confirmedBySlot.equals(requestBySlot);
+    }
+
+    private String awardSlotKey(AwardResult result) {
+        return result.getAwardType() + ":" + (AwardType.CHAMPION.name().equals(result.getAwardType()) ? CATEGORY_ALL_KEY : result.getCategoryId()) + ":" + result.getRankNo();
+    }
+
+    private String awardSlotKey(AwardConfirmItemRequest item) {
+        return item.getAwardType() + ":" + (AwardType.CHAMPION.name().equals(item.getAwardType()) ? CATEGORY_ALL_KEY : item.getCategoryId()) + ":" + item.getRankNo();
+    }
+
+    private String awardSignature(AwardResult result) {
+        return String.join("|",
+                String.valueOf(result.getBeerEntryId()),
+                String.valueOf(result.getAwardRuleId()),
+                result.getAwardName(),
+                String.valueOf(result.getSourceRoundId()),
+                String.valueOf(result.getSourceRoundTableId()),
+                String.valueOf(result.getSourceResultId()));
+    }
+
+    private String awardSignature(AwardConfirmItemRequest item) {
+        return String.join("|",
+                String.valueOf(item.getBeerEntryId()),
+                String.valueOf(item.getAwardRuleId()),
+                item.getAwardName().trim(),
+                String.valueOf(item.getSourceRoundId()),
+                String.valueOf(item.getSourceRoundTableId()),
+                String.valueOf(item.getSourceResultId()));
     }
 
     private List<AwardRule> listRules(Long competitionId) {

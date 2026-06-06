@@ -198,7 +198,7 @@
                     {{ library.label }}
                   </option>
                 </select>
-                <button class="tool-button" type="button" @click="router.push('/admin/style-libraries')">
+                <button class="tool-button" type="button" @click="openSelectedStyleLibrary">
                   查看风格库
                 </button>
               </div>
@@ -207,11 +207,22 @@
               <div class="style-distribution-head">
                 <strong>分类分布</strong>
               </div>
-              <div class="style-distribution-list">
+              <div
+                ref="styleDistributionListRef"
+                :class="['style-distribution-list', { 'has-more': styleDistributionHasOverflow }]"
+              >
                 <span v-for="category in styleCategorySummary" :key="category.name">
                   <b>{{ category.name }}</b>
                   <small>{{ category.count }} 个风格</small>
                 </span>
+                <button
+                  v-if="styleDistributionHasOverflow"
+                  class="style-distribution-more"
+                  type="button"
+                  @click="openSelectedStyleLibrary"
+                >
+                  ...更多
+                </button>
                 <p v-if="styleCategorySummary.length === 0" class="empty-line">当前风格库还没有可用分类。</p>
               </div>
             </div>
@@ -640,14 +651,15 @@
           <div class="two-column results-layout">
             <article class="panel-card">
               <div class="panel-heading">
-                <h2>正式奖项</h2>
                 <span>{{ awardDrafts.length }} 项</span>
               </div>
               <div class="publish-actions">
-                <button class="tool-button" type="button" :disabled="!terminalRoundLocked" :title="terminalRoundLocked ? '' : '请先锁定决赛轮'" @click="generateAwardsAction">
+                <button class="tool-button" type="button" :disabled="!canGenerateAwards" :title="generateAwardsDisabledReason" @click="generateAwardsAction">
                   {{ awardDrafts.length ? '重新生成奖项' : '生成奖项' }}
                 </button>
-                <button class="tool-button primary" type="button" :disabled="!canConfirmAwards" @click="confirmAwardsAction">确认奖项</button>
+                <button class="tool-button primary" type="button" :disabled="!canConfirmAwards" :title="confirmAwardsDisabledReason" @click="confirmAwardsAction">
+                  {{ awardsConfirmed ? '奖项已确认' : '确认奖项' }}
+                </button>
               </div>
               <div class="award-list">
                 <article
@@ -665,6 +677,7 @@
                     filterable
                     teleported
                     popper-class="award-select-popper"
+                    :disabled="!canEditAwardSelection(award)"
                   >
                     <el-option
                       v-for="entry in awardEntryOptions(award)"
@@ -733,6 +746,7 @@
                     filterable
                     teleported
                     popper-class="award-select-popper"
+                    :disabled="!canEditAwardSelection(award)"
                   >
                     <el-option
                       v-for="entry in awardEntryOptions(award)"
@@ -987,7 +1001,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -1113,6 +1127,9 @@ const entryAutoAssignForm = reactive({
 })
 const selectedStyleLibraryVersion = ref('')
 const styleLibraryOptions = ref(normalizeStyleLibraries(fallbackStyleLibraries))
+const styleDistributionListRef = ref(null)
+const styleDistributionHasOverflow = ref(false)
+let styleDistributionResizeObserver = null
 
 const tabs = [
   { key: 'overview', label: '概览', icon: DataAnalysis },
@@ -1421,13 +1438,41 @@ const roundRestructureText = computed(() => rounds.value.map((round) => `${round
 const awardDrafts = computed(() => competition.value?.awardResults || [])
 const championAwards = computed(() => awardDrafts.value.filter((award) => award.awardType === 'CHAMPION'))
 const medalAwards = computed(() => awardDrafts.value.filter((award) => award.awardType !== 'CHAMPION'))
-const canConfirmAwards = computed(() => awardDrafts.value.length > 0 && awardDrafts.value.every((award) => award.beerEntryId))
 const terminalRoundLocked = computed(() => rounds.value.some((round) => isTerminalRound(round) && round.status === 'LOCKED'))
+const resultsPublished = computed(() => Boolean(competition.value?.resultSetup?.published) || ['PUBLISHED', 'ARCHIVED'].includes(competition.value?.status))
+const hasConfirmedAwardResults = computed(() => awardDrafts.value.some((award) => isAwardConfirmedOrPublished(award)))
+const awardsConfirmed = computed(() => awardDrafts.value.length > 0 && awardDrafts.value.every((award) => isAwardConfirmedOrPublished(award)))
+const hasEditableAwardResults = computed(() => awardDrafts.value.some((award) => canEditAwardSelection(award)))
+const canGenerateAwards = computed(() => terminalRoundLocked.value && !hasConfirmedAwardResults.value && !resultsPublished.value)
+const generateAwardsDisabledReason = computed(() => {
+  if (!terminalRoundLocked.value) return '请先锁定决赛轮'
+  if (resultsPublished.value) return '结果已发布，不能重新生成奖项'
+  if (hasConfirmedAwardResults.value) return '奖项已确认，不能重新生成'
+  return ''
+})
+const canConfirmAwards = computed(() => (
+  competition.value?.status === 'RESULT_CONFIRMING'
+  && !resultsPublished.value
+  && awardDrafts.value.length > 0
+  && awardDrafts.value.every((award) => award.beerEntryId)
+  && hasEditableAwardResults.value
+  && !hasConfirmedAwardResults.value
+))
+const confirmAwardsDisabledReason = computed(() => {
+  if (awardsConfirmed.value) return '奖项已确认，可以上传奖状或发布结果'
+  if (hasConfirmedAwardResults.value) return '奖项已确认，请先撤回确认后再调整'
+  if (resultsPublished.value) return '结果已发布，不能调整奖项'
+  if (competition.value?.status !== 'RESULT_CONFIRMING') return '请先进入结果确认阶段'
+  if (!awardDrafts.value.length) return '请先生成奖项'
+  if (!awardDrafts.value.every((award) => award.beerEntryId)) return '还有奖项未选择酒款'
+  return ''
+})
 const medalsConfirmed = computed(() => Boolean(competition.value?.resultSetup?.medalsReady) || areMedalAwardsConfirmedLocally())
 const championConfirmed = computed(() => Boolean(competition.value?.resultSetup?.championReady) || awardDrafts.value.some((award) => award.awardType === 'CHAMPION' && ['CONFIRMED', 'PUBLISHED'].includes(award.status)))
 const finalRoundLocked = computed(() => Boolean(competition.value?.resultSetup?.terminalRoundLocked) || terminalRoundLocked.value)
-const canPublishResults = computed(() => Boolean(competition.value?.resultSetup?.canPublishResults))
+const canPublishResults = computed(() => Boolean(competition.value?.resultSetup?.canPublishResults) && !resultsPublished.value)
 const publishResultsDisabledReason = computed(() => {
+  if (resultsPublished.value) return '结果已发布'
   const pending = resultChecks.value.find((item) => !item.done)
   return pending ? pending.label : ''
 })
@@ -1488,10 +1533,12 @@ onMounted(() => {
   loadStyleLibraries()
   loadDetail()
   loadJudgePool()
+  nextTick(setupStyleDistributionObserver)
   roundProgressPollTimer = window.setInterval(refreshRoundProgress, roundProgressPollIntervalMs)
 })
 onUnmounted(() => {
   if (roundProgressPollTimer) window.clearInterval(roundProgressPollTimer)
+  if (styleDistributionResizeObserver) styleDistributionResizeObserver.disconnect()
 })
 watch(() => route.params.id, loadDetail)
 watch(() => route.query.tab, (tab) => {
@@ -1517,6 +1564,15 @@ watch(entryAutoAssignStats, (stats) => {
     entryAutoAssignForm.quantity = maxQuantity
   }
 })
+watch([styleCategorySummary, activeTab], () => {
+  nextTick(() => {
+    if (!styleDistributionResizeObserver && styleDistributionListRef.value) {
+      setupStyleDistributionObserver()
+      return
+    }
+    updateStyleDistributionOverflow()
+  })
+}, { immediate: true })
 async function loadDetail() {
   loading.value = true
   try {
@@ -3286,6 +3342,14 @@ function formatAwardStatus(award) {
   return '待确认'
 }
 
+function canEditAwardSelection(award) {
+  return Boolean(award) && !resultsPublished.value && !isAwardConfirmedOrPublished(award)
+}
+
+function isAwardConfirmedOrPublished(award) {
+  return ['CONFIRMED', 'PUBLISHED'].includes(award?.status)
+}
+
 function formatAwardEntryName(award) {
   const entry = roundEntryPool.value.find((item) => item.id === award.beerEntryId)
     || competition.value?.entries?.find((item) => item.id === award.beerEntryId)
@@ -3919,6 +3983,30 @@ function openLiveDashboard() {
     path: '/admin/live-board',
     query: competition.value?.id ? { competitionId: competition.value.id } : {},
   })
+}
+
+function openSelectedStyleLibrary() {
+  const libraryValue = selectedStyleLibrary.value?.value || selectedStyleLibraryVersion.value || competition.value?.styleLibraryVersion
+  router.push({
+    path: '/admin/style-libraries',
+    query: libraryValue ? { library: libraryValue } : {},
+  })
+}
+
+function setupStyleDistributionObserver() {
+  updateStyleDistributionOverflow()
+  if (typeof ResizeObserver === 'undefined' || !styleDistributionListRef.value) return
+  styleDistributionResizeObserver = new ResizeObserver(updateStyleDistributionOverflow)
+  styleDistributionResizeObserver.observe(styleDistributionListRef.value)
+}
+
+function updateStyleDistributionOverflow() {
+  const element = styleDistributionListRef.value
+  if (!element || activeTab.value !== 'entryConfig') {
+    styleDistributionHasOverflow.value = false
+    return
+  }
+  styleDistributionHasOverflow.value = element.scrollHeight > element.clientHeight + 1
 }
 
 function goToResults() {
@@ -4982,24 +5070,64 @@ small,
 }
 
 .style-distribution-list {
+  --style-distribution-pill-height: 36px;
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  align-content: flex-start;
+  max-height: calc(var(--style-distribution-pill-height) * 2 + 8px);
+  overflow: hidden;
+}
+
+.style-distribution-list.has-more {
+  padding-right: 82px;
 }
 
 .style-distribution-list span {
   display: inline-grid;
-  grid-template-columns: auto auto;
+  grid-template-columns: minmax(0, auto) auto;
   gap: 8px;
   align-items: baseline;
+  box-sizing: border-box;
+  max-width: 100%;
+  min-height: var(--style-distribution-pill-height);
   padding: 7px 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.022);
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.style-distribution-list b {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .style-distribution-list small {
   color: var(--muted);
+}
+
+.style-distribution-more {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  min-width: 72px;
+  min-height: var(--style-distribution-pill-height);
+  padding: 0 11px;
+  color: var(--gold-soft);
+  border: 1px solid rgba(216, 169, 53, 0.32);
+  border-radius: 8px;
+  background: #121d21;
+  font-weight: 900;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.style-distribution-more:hover {
+  background: rgba(216, 169, 53, 0.11);
 }
 
 .category-editor-list {

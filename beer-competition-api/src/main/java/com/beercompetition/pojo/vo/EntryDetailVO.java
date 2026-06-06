@@ -29,6 +29,7 @@ public class EntryDetailVO {
     private LocalDate competitionDate;
     private CompetitionLogisticsVO competitionLogistics;
     private String status;
+    private Boolean published;
     private BigDecimal entryFee;
     private Integer storedFlag;
     private Boolean stored;

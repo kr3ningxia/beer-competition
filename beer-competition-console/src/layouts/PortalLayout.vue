@@ -52,6 +52,7 @@ import {
   CircleCheck,
   CoffeeCup,
   Document,
+  Medal,
   Tickets,
 } from '@element-plus/icons-vue'
 import { getPortalMe } from '@/api/auth'
@@ -68,6 +69,7 @@ const navItems = [
   { path: '/portal/home', label: '赛事首页', icon: Tickets, public: true },
   { path: '/portal/events', label: '全部赛事', icon: Document, public: true, match: ['/portal/events'] },
   { path: '/portal/my', label: '我的参赛', icon: CircleCheck, auth: true },
+  { path: '/portal/results', label: '我的结果', icon: Medal, auth: true },
 ]
 
 const visibleNavItems = computed(() => navItems.filter((item) => item.public || loggedIn.value))

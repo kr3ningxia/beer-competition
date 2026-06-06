@@ -387,7 +387,8 @@ public class EntryServiceImpl implements EntryService {
         // 1) 查询并校验当前厂商酒款
         PortalAccount account = requirePortalAccount();
         BeerEntry entry = requireOwnedEntry(entryId, account.getBreweryId());
-        if (!EntryStatus.RESULT_PUBLISHED.name().equals(entry.getStatus())) {
+        Competition competition = competitionMapper.selectById(entry.getCompetitionId());
+        if (!isResultPublished(competition, entry)) {
             throw new ResourceNotFoundException("奖状暂未开放下载");
         }
 
@@ -554,6 +555,7 @@ public class EntryServiceImpl implements EntryService {
                 .competitionDate(competition == null ? null : competition.getCompetitionDate())
                 .competitionLogistics(toEntryCompetitionLogisticsVO(competition, entry, payment))
                 .status(entry.getStatus())
+                .published(isResultPublished(competition, entry))
                 .entryFee(competition == null ? null : competition.getEntryFee())
                 .storedFlag(entry.getStoredFlag())
                 .stored(Objects.equals(entry.getStoredFlag(), 1))
@@ -594,6 +596,7 @@ public class EntryServiceImpl implements EntryService {
                 .categoryName(category == null ? null : category.getName())
                 .style(entry.getStyle())
                 .status(entry.getStatus())
+                .published(isResultPublished(competition, entry))
                 .abv(entry.getAbv())
                 .entryFee(competition == null ? null : competition.getEntryFee())
                 .storedFlag(entry.getStoredFlag())

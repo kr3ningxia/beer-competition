@@ -3,7 +3,7 @@
     <section class="toolbar brewer-card">
       <div>
         <h2 class="portal-section-title">我的酒款</h2>
-        <p>按酒款查看报名记录，并处理付款、现场标签、酒样入库和结果反馈。</p>
+        <p>按酒款查看报名记录，并处理付款、现场标签、酒样入库和结果。</p>
       </div>
       <div class="toolbar-actions">
         <el-input v-model="keyword" placeholder="搜索酒名 / 参赛编号 / 现场短编号" clearable />
@@ -118,7 +118,7 @@
           <div class="drawer-actions">
             <RouterLink :to="primaryAction(selectedEntry).to">{{ primaryAction(selectedEntry).label }}</RouterLink>
             <RouterLink to="/portal/payment">付款与标签</RouterLink>
-            <RouterLink to="/portal/results">结果反馈</RouterLink>
+            <RouterLink :to="entryResultPath(selectedEntry)">查看这款酒的结果</RouterLink>
           </div>
         </section>
       </div>
@@ -130,7 +130,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { fetchPortalEntries, fetchPortalEntryDetail } from '@/api/portal'
-import { entryPrimaryAction, entryStatusMeta } from './portalViewModels'
+import { entryPrimaryAction, entryResultPath, entryStatusMeta, isEntryResultPublished } from './portalViewModels'
 
 const keyword = ref('')
 const statusFilter = ref('')
@@ -163,17 +163,18 @@ function primaryAction(entry) {
 }
 
 function timeline(entry) {
+  const resultPublished = isEntryResultPublished(entry)
   return [
     { label: '提交资料', time: entry.submittedAt, done: true },
     { label: '付款确认', hint: entry.paymentStatus === 'PAID' ? '已确认' : '等待主办方确认付款', done: entry.paymentStatus === 'PAID' },
     { label: '标签可下载', hint: entry.canDownloadLabel ? '已生成现场标签' : '付款确认后开放下载', done: entry.canDownloadLabel },
     { label: '酒样入库', hint: isStored(entry) ? '已入库' : '等待主办方确认收样', done: isStored(entry) },
-    { label: '结果发布', hint: entry.status === 'RESULT_PUBLISHED' ? '评分反馈可查看' : '等待比赛结束', done: entry.status === 'RESULT_PUBLISHED' },
+    { label: '结果发布', hint: resultPublished ? '结果已发布' : '等待主办方发布结果', done: resultPublished },
   ]
 }
 
 function isStored(entry) {
-  return entry?.stored || entry?.status === 'STORED' || entry?.status === 'RESULT_PUBLISHED'
+  return entry?.stored || entry?.status === 'STORED' || isEntryResultPublished(entry)
 }
 
 onMounted(async () => {

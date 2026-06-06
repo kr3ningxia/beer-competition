@@ -44,6 +44,13 @@
             <span><small>结果可查</small><b>{{ summary(competition.id).result }}</b></span>
           </div>
           <div class="row-actions">
+            <RouterLink
+              v-if="summary(competition.id).result > 0"
+              class="result-action"
+              :to="competitionResultPath(competition.id)"
+            >
+              查看本场结果
+            </RouterLink>
             <RouterLink :to="`/portal/events/${competition.id}`">赛事详情</RouterLink>
             <RouterLink to="/portal/entries">查看酒款</RouterLink>
           </div>
@@ -87,9 +94,11 @@ import { RouterLink } from 'vue-router'
 import { CircleCheck, Money, Tickets } from '@element-plus/icons-vue'
 import { fetchMyParticipation } from '@/api/portal'
 import {
+  competitionResultPath,
   entryPrimaryAction,
   entryStatusMeta,
   entrySummaryForCompetition,
+  isEntryResultPublished,
   nextActionText,
   priorityEntry,
 } from './portalViewModels'
@@ -112,7 +121,7 @@ const heroCopy = computed(() => {
 const unpaidEntries = computed(() => entries.value.filter((entry) => entry.status === 'PENDING_PAYMENT'))
 const labelEntries = computed(() => entries.value.filter((entry) => entry.status === 'REGISTERED'))
 const storedEntries = computed(() => entries.value.filter((entry) => entry.status === 'STORED' || entry.status === 'RESULT_PUBLISHED'))
-const resultEntries = computed(() => entries.value.filter((entry) => entry.status === 'RESULT_PUBLISHED'))
+const resultEntries = computed(() => entries.value.filter((entry) => isEntryResultPublished(entry)))
 const myCompetitions = computed(() => competitions.value)
 
 const todoCards = computed(() => [

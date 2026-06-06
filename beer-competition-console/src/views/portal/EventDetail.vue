@@ -9,11 +9,11 @@
         <p>{{ competition.code }} · {{ competition.edition }}</p>
         <div class="hero-actions">
           <RouterLink
-            v-if="canSubmitEntry(competition)"
+            v-if="heroPrimaryAction"
             class="primary-action"
-            :to="loggedIn ? `/portal/submit?competitionId=${competition.id}` : '/portal/login'"
+            :to="heroPrimaryAction.to"
           >
-            {{ loggedIn ? '提交酒款' : '登录后报名' }}
+            {{ heroPrimaryAction.label }}
           </RouterLink>
           <RouterLink class="secondary-action" to="/portal/events">返回全部赛事</RouterLink>
         </div>
@@ -84,11 +84,18 @@
       </article>
 
       <article class="brewer-card info-card">
-        <h2 class="portal-section-title">结果反馈</h2>
+        <h2 class="portal-section-title">结果查看</h2>
         <dl>
-          <div><dt>厂商可见反馈</dt><dd>结果发布后可查看评分明细、桌长综合评语和轮次结果。</dd></div>
-          <div><dt>历史赛事</dt><dd>{{ competition.status === 'PUBLISHED' ? '该赛事已发布结果。' : '比赛结束并确认结果后开放查看。' }}</dd></div>
+          <div><dt>当前状态</dt><dd>{{ isCompetitionResultPublished(competition) ? '结果已发布' : '结果待发布' }}</dd></div>
+          <div><dt>可查看内容</dt><dd>评分、评语、奖项和奖状。</dd></div>
         </dl>
+        <RouterLink
+          v-if="resultCardAction"
+          class="card-link"
+          :to="resultCardAction.to"
+        >
+          {{ resultCardAction.label }}
+        </RouterLink>
       </article>
     </section>
 
@@ -146,13 +153,48 @@ import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { isLoggedIn } from '@/utils/auth'
 import { fetchPortalCompetitionDetail, fetchPortalEntries } from '@/api/portal'
-import { canSubmitEntry, entryPrimaryAction, entryStatusMeta, nextActionText } from './portalViewModels'
+import {
+  canSubmitEntry,
+  competitionResultPath,
+  entryPrimaryAction,
+  entryStatusMeta,
+  isCompetitionResultPublished,
+  nextActionText,
+} from './portalViewModels'
 
 const route = useRoute()
 const loggedIn = computed(() => isLoggedIn('portal'))
 const competition = ref({ categories: [], styles: [], entryFields: [] })
 const entries = ref([])
 const eventEntries = computed(() => entries.value.filter((entry) => entry.competitionId === competition.value.id))
+const hasEventEntries = computed(() => eventEntries.value.length > 0)
+const heroPrimaryAction = computed(() => {
+  if (isCompetitionResultPublished(competition.value)) {
+    return {
+      label: loggedIn.value ? '查看本场结果' : '登录查看结果',
+      to: loggedIn.value ? competitionResultPath(competition.value.id) : '/portal/login',
+    }
+  }
+  if (canSubmitEntry(competition.value)) {
+    return {
+      label: loggedIn.value ? '提交酒款' : '登录后报名',
+      to: loggedIn.value ? `/portal/submit?competitionId=${competition.value.id}` : '/portal/login',
+    }
+  }
+  return null
+})
+const resultCardAction = computed(() => {
+  if (!isCompetitionResultPublished(competition.value)) {
+    return null
+  }
+  if (!loggedIn.value) {
+    return { label: '登录查看结果', to: '/portal/login' }
+  }
+  if (!hasEventEntries.value) {
+    return null
+  }
+  return { label: '查看本场结果', to: competitionResultPath(competition.value.id) }
+})
 const logistics = computed(() => competition.value.logistics || {})
 const entryFieldSummary = computed(() => {
   const fields = competition.value.entryFields || []
@@ -313,6 +355,20 @@ function deliveryMethodText(value) {
   color: #6b4710;
   background: #fff7e6;
   border: 1px solid rgba(87, 58, 26, 0.14);
+  border-radius: 8px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.card-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  margin-top: 16px;
+  padding: 0 14px;
+  color: #2b1d10;
+  background: #e1a23d;
   border-radius: 8px;
   font-weight: 800;
   text-decoration: none;

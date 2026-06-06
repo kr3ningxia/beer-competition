@@ -1,79 +1,151 @@
 <template>
   <div class="style-library-page">
-    <section class="page-head">
-      <div>
-        <h1>风格库管理</h1>
-        <p>维护报名和评审使用的基础风格口径。</p>
-      </div>
-      <button class="tool-button primary" type="button" @click="startCreate">
-        新建风格库
-      </button>
-    </section>
+    <header class="style-page-header">
+      <h1>风格库管理</h1>
+    </header>
 
-    <section class="library-layout">
+    <main class="library-shell">
       <aside class="library-rail" aria-label="风格库列表">
-        <button
-          v-for="library in styleLibraryOptions"
-          :key="library.value"
-          :class="['library-nav-item', { active: selectedLibrary.value === library.value }]"
-          type="button"
-          @click="selectedLibraryValue = library.value"
-        >
-          <span :class="['status-dot', library.statusLabel === '启用' ? 'success' : 'muted']" />
-          <strong>{{ library.label }}</strong>
-          <small>{{ library.categoryCount }} 类 · {{ library.styleCount }} 个风格</small>
-        </button>
+        <div class="rail-head">
+          <strong>风格库 <span>{{ styleLibraryOptions.length }}</span></strong>
+          <button class="tool-button primary compact" type="button" @click="startCreate">
+            <Plus />
+            新建
+          </button>
+        </div>
+
+        <label class="search-field">
+          <Search />
+          <input v-model.trim="libraryKeyword" placeholder="搜索风格库" />
+          <button v-if="libraryKeyword" class="search-clear" type="button" aria-label="清除搜索" @click="libraryKeyword = ''">
+            <Close />
+          </button>
+        </label>
+
+        <div class="library-list">
+          <button
+            v-for="library in filteredLibraryOptions"
+            :key="library.value"
+            :class="['library-nav-item', { active: selectedLibrary.value === library.value }]"
+            type="button"
+            @click="selectedLibraryValue = library.value"
+          >
+            <strong>{{ library.label }}</strong>
+            <small>
+              <span><Files />{{ library.categoryCount }} 类</span>
+              <span><DocumentCopy />{{ library.styleCount }} 风格</span>
+            </small>
+          </button>
+          <p v-if="filteredLibraryOptions.length === 0" class="empty-line list-empty">没有匹配的风格库。</p>
+        </div>
       </aside>
 
-      <main class="style-workbench">
+      <section class="library-detail">
         <section class="library-summary">
-          <div>
-            <span :class="['status-pill', selectedLibrary.statusLabel === '启用' ? 'success' : 'muted']">{{ selectedLibrary.statusLabel }}</span>
-            <h2>{{ selectedLibrary.label }}</h2>
-            <p>{{ selectedLibrary.source }} · {{ selectedLibrary.version }} · {{ selectedLibrary.language }}</p>
+          <div class="summary-copy">
+            <div class="title-line">
+              <h2>{{ selectedLibrary.label }}</h2>
+              <span :class="['status-pill', selectedLibrary.statusLabel === '启用' ? 'success' : 'muted']">{{ selectedLibrary.statusLabel }}</span>
+            </div>
+            <div class="summary-meta">
+              <span>{{ selectedLibrary.source }} · {{ selectedLibrary.version }} · {{ selectedLibrary.language }}</span>
+              <i />
+              <span>分类 <strong>{{ selectedLibrary.categories.length }}</strong></span>
+              <span>风格 <strong>{{ normalizedPreviewItems.length }}</strong></span>
+              <i v-if="selectedLibrary.updatedAt" />
+              <span v-if="selectedLibrary.updatedAt">更新于 {{ selectedLibrary.updatedAt }}</span>
+            </div>
           </div>
-          <button type="button" @click="startEdit(selectedLibrary)">编辑</button>
+          <button class="tool-button outline" type="button" @click="startEdit(selectedLibrary)">
+            <EditPen />
+            编辑
+          </button>
         </section>
 
         <section class="style-browser">
-          <aside class="category-panel">
-            <header>
+          <aside class="category-panel" aria-label="风格分类">
+            <div class="category-head">
               <strong>分类</strong>
               <span>{{ selectedLibrary.categories.length }}</span>
-            </header>
-            <button
-              v-for="category in selectedLibrary.categories"
-              :key="category"
-              :class="{ active: previewCategory === category }"
-              type="button"
-              @click="previewCategory = category"
-            >
-              {{ category }}
-              <small>{{ countStylesInCategory(category) }}</small>
-            </button>
+            </div>
+
+            <label class="search-field small">
+              <Search />
+              <input v-model.trim="categoryKeyword" placeholder="按名称或编号筛选分类" />
+              <button v-if="categoryKeyword" class="search-clear" type="button" aria-label="清除分类筛选" @click="categoryKeyword = ''">
+                <Close />
+              </button>
+            </label>
+
+            <div class="category-list">
+              <button :class="{ active: previewCategory === '' }" type="button" @click="previewCategory = ''">
+                <span class="category-index">全部</span>
+                <span class="category-name">全部分类</span>
+                <small>{{ normalizedPreviewItems.length }}</small>
+              </button>
+              <button
+                v-for="category in filteredPreviewCategories"
+                :key="category"
+                :class="{ active: previewCategory === category }"
+                type="button"
+                @click="previewCategory = category"
+              >
+                <span class="category-index">{{ categoryNumber(category) }}</span>
+                <span class="category-name" :title="categoryName(category)">{{ displayCategoryName(category) }}</span>
+                <small>{{ countStylesInCategory(category) }}</small>
+              </button>
+              <p v-if="filteredPreviewCategories.length === 0" class="empty-line list-empty">无匹配分类。</p>
+            </div>
           </aside>
 
           <section class="style-panel">
-            <header>
+            <header class="style-toolbar">
               <label class="search-field">
-                <input v-model.trim="previewKeyword" placeholder="搜索风格、编号或分类" />
+                <Search />
+                <input v-model.trim="previewKeyword" placeholder="搜索风格名称、编号或分类" />
+                <button v-if="previewKeyword" class="search-clear" type="button" aria-label="清除风格筛选" @click="previewKeyword = ''">
+                  <Close />
+                </button>
               </label>
-              <span>{{ previewStyles.length }} 个</span>
+              <div class="style-count">
+                <span>{{ selectedCategoryText }}</span>
+                <i />
+                <strong>{{ previewStyles.length }}</strong> 个风格
+              </div>
             </header>
+
+            <div v-if="previewCategory || previewKeyword" class="filter-chips">
+              <button v-if="previewCategory" type="button" @click="previewCategory = ''">
+                {{ selectedCategoryText }}
+                <Close />
+              </button>
+              <button v-if="previewKeyword" type="button" @click="previewKeyword = ''">
+                关键词“{{ previewKeyword }}”
+                <Close />
+              </button>
+            </div>
+
             <div class="style-list">
               <article v-for="style in previewStyles" :key="styleKey(style)" class="style-row">
-                <div>
+                <div class="style-title-line">
+                  <span v-if="style.styleCode" class="style-code">{{ style.styleCode }}</span>
                   <strong>{{ style.name }}</strong>
-                  <small>{{ style.categoryName || '未归类' }}<template v-if="style.styleCode"> · {{ style.styleCode }}</template></small>
                 </div>
                 <p v-if="style.description">{{ style.description }}</p>
+                <footer>
+                  <span>{{ styleCategoryText(style) }}</span>
+                  <template v-if="style.styleCode">
+                    <i />
+                    <span>{{ style.styleCode }}</span>
+                  </template>
+                </footer>
               </article>
-              <p v-if="previewStyles.length === 0" class="empty-line">没有匹配的风格。</p>
+              <p v-if="previewStyles.length === 0" class="empty-line style-empty">未找到匹配的风格。</p>
             </div>
           </section>
         </section>
-      </main>
-    </section>
+      </section>
+    </main>
 
     <section v-if="editorOpen" class="editor-backdrop">
       <form class="editor-dialog" @submit.prevent="submitEditor">
@@ -212,14 +284,19 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { Close, DocumentCopy, EditPen, Files, Plus, Search } from '@element-plus/icons-vue'
 import { fetchStyleLibraries, saveStyleLibrary, updateStyleLibrary } from '@/api/admin'
 import { defaultStyleLibraryValue, fallbackStyleLibraries, getStyleLibrary, normalizeStyleLibraries } from './styleLibraries'
 
+const route = useRoute()
 const selectedLibraryValue = ref(defaultStyleLibraryValue)
 const styleLibraryOptions = ref(normalizeStyleLibraries(fallbackStyleLibraries))
 const selectedLibrary = computed(() => getStyleLibrary(selectedLibraryValue.value, styleLibraryOptions.value))
+const libraryKeyword = ref('')
 const previewCategory = ref('')
+const categoryKeyword = ref('')
 const previewKeyword = ref('')
 const editorOpen = ref(false)
 const editingCode = ref('')
@@ -230,6 +307,22 @@ const importText = ref('')
 const editor = reactive(createEmptyEditor())
 
 const normalizedPreviewItems = computed(() => getStyleItems(selectedLibrary.value))
+const filteredLibraryOptions = computed(() => {
+  const keyword = libraryKeyword.value.toLowerCase()
+  if (!keyword) return styleLibraryOptions.value
+  return styleLibraryOptions.value.filter((library) => {
+    const text = [library.label, library.source, library.version, library.language].filter(Boolean).join(' ').toLowerCase()
+    return text.includes(keyword)
+  })
+})
+const filteredPreviewCategories = computed(() => {
+  const keyword = categoryKeyword.value.toLowerCase()
+  if (!keyword) return selectedLibrary.value.categories
+  return selectedLibrary.value.categories.filter((category) => {
+    const text = [category, categoryNumber(category), categoryName(category), displayCategoryName(category)].filter(Boolean).join(' ').toLowerCase()
+    return text.includes(keyword)
+  })
+})
 const previewStyles = computed(() => {
   const keyword = previewKeyword.value.toLowerCase()
   return normalizedPreviewItems.value.filter((style) => {
@@ -238,6 +331,7 @@ const previewStyles = computed(() => {
     return inCategory && (!keyword || text.includes(keyword))
   })
 })
+const selectedCategoryText = computed(() => (previewCategory.value ? categoryLabel(previewCategory.value) : '全部分类'))
 const cleanEditorCategories = computed(() => editor.categories.map((category) => category.name.trim()).filter(Boolean))
 const editorStyles = computed(() => {
   const keyword = editorKeyword.value.toLowerCase()
@@ -251,22 +345,40 @@ const selectedStyle = computed(() => editor.styles.find((style) => style.localId
 
 onMounted(loadStyleLibraries)
 
-watch(selectedLibrary, (library) => {
-  if (!library.categories.includes(previewCategory.value)) {
-    previewCategory.value = library.categories[0] || ''
-  }
+watch(() => route.query.library, applyRouteLibrarySelection)
+
+watch(selectedLibrary, () => {
+  previewCategory.value = ''
+  categoryKeyword.value = ''
+  previewKeyword.value = ''
 }, { immediate: true })
 
 async function loadStyleLibraries() {
   try {
     const data = await fetchStyleLibraries()
     styleLibraryOptions.value = normalizeStyleLibraries(data)
-    if (!styleLibraryOptions.value.some((library) => library.value === selectedLibraryValue.value)) {
+    const routeLibrary = normalizeRouteLibraryValue(route.query.library)
+    if (routeLibrary && styleLibraryOptions.value.some((library) => library.value === routeLibrary)) {
+      selectedLibraryValue.value = routeLibrary
+    } else if (!styleLibraryOptions.value.some((library) => library.value === selectedLibraryValue.value)) {
       selectedLibraryValue.value = styleLibraryOptions.value[0]?.value || defaultStyleLibraryValue
     }
   } catch {
     styleLibraryOptions.value = normalizeStyleLibraries(fallbackStyleLibraries)
+    applyRouteLibrarySelection()
   }
+}
+
+function applyRouteLibrarySelection() {
+  const routeLibrary = normalizeRouteLibraryValue(route.query.library)
+  if (!routeLibrary) return
+  if (styleLibraryOptions.value.some((library) => library.value === routeLibrary)) {
+    selectedLibraryValue.value = routeLibrary
+  }
+}
+
+function normalizeRouteLibraryValue(value) {
+  return Array.isArray(value) ? value[0] : value
 }
 
 function startCreate() {
@@ -465,6 +577,38 @@ function countStylesInCategory(category) {
   return normalizedPreviewItems.value.filter((style) => style.categoryName === category).length
 }
 
+function categoryNumber(category) {
+  const match = String(category || '').match(/^(\d+)[.．、\s]+(.+)$/)
+  if (match) return match[1]
+  const index = selectedLibrary.value.categories.indexOf(category)
+  return index >= 0 ? String(index + 1) : ''
+}
+
+function categoryName(category) {
+  const match = String(category || '').match(/^(\d+)[.．、\s]+(.+)$/)
+  return match ? match[2] : category
+}
+
+function displayCategoryName(category) {
+  const name = String(categoryName(category) || '')
+  if (!isUppercaseEnglishName(name)) return name
+  return name.toLowerCase().replace(/\b[a-z]/g, (letter) => letter.toUpperCase())
+}
+
+function categoryLabel(category) {
+  const number = categoryNumber(category)
+  const name = displayCategoryName(category)
+  return number ? `${number}. ${name}` : name
+}
+
+function styleCategoryText(style) {
+  return style.categoryName ? categoryLabel(style.categoryName) : '未归类'
+}
+
+function isUppercaseEnglishName(value) {
+  return /[A-Z]/.test(value) && !/[\u4e00-\u9fa5]/.test(value) && value === value.toUpperCase()
+}
+
 function styleKey(style) {
   return [style.categoryName, style.name, style.styleCode].filter(Boolean).join('|')
 }
@@ -502,7 +646,12 @@ function createLocalId(prefix) {
   --gold-soft: #e0b84a;
   --green: #6fcf7a;
   box-sizing: border-box;
-  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 18px;
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
   padding: 26px 28px;
   color: var(--text);
   background:
@@ -558,6 +707,7 @@ textarea {
 
 .page-head,
 .library-layout {
+  width: 100%;
   max-width: 1440px;
   margin: 0 auto;
 }
@@ -616,10 +766,10 @@ small,
 
 .library-layout {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: 300px minmax(0, 1fr);
   gap: 14px;
-  margin-top: 18px;
-  align-items: start;
+  min-height: 0;
+  align-items: stretch;
 }
 
 .library-rail,
@@ -635,11 +785,13 @@ small,
 }
 
 .library-rail {
-  position: sticky;
-  top: 18px;
   display: grid;
+  align-content: start;
   gap: 8px;
+  min-height: 0;
+  overflow: auto;
   padding: 10px;
+  overscroll-behavior: contain;
 }
 
 .library-nav-item {
@@ -669,24 +821,11 @@ small,
   white-space: nowrap;
 }
 
-.status-dot {
-  grid-row: 1 / span 2;
-  align-self: start;
-  width: 8px;
-  height: 8px;
-  margin-top: 7px;
-  border-radius: 50%;
-  background: var(--muted);
-}
-
-.status-dot.success {
-  background: var(--green);
-  box-shadow: 0 0 0 4px rgba(111, 207, 122, 0.09);
-}
-
 .style-workbench {
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 14px;
+  min-height: 0;
   padding: 14px;
 }
 
@@ -727,6 +866,7 @@ small,
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
   gap: 12px;
+  min-height: 0;
 }
 
 .category-panel,
@@ -734,7 +874,17 @@ small,
   display: grid;
   align-content: start;
   gap: 8px;
+  min-height: 0;
   padding: 12px;
+}
+
+.category-panel {
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.style-panel {
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .category-panel header,
@@ -751,18 +901,24 @@ small,
   justify-content: space-between;
   gap: 10px;
   align-items: center;
-  min-height: 36px;
-  padding: 0 10px;
+  min-height: 38px;
+  padding: 7px 10px;
   color: var(--text);
+  text-align: left;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.026);
+  line-height: 1.25;
 }
 
 .category-panel button.active {
   color: var(--gold-soft);
   border-color: rgba(216, 169, 53, 0.3);
   background: rgba(216, 169, 53, 0.07);
+}
+
+.category-panel button small {
+  flex: 0 0 auto;
 }
 
 .search-field {
@@ -772,10 +928,12 @@ small,
 .style-list,
 .edit-style-list {
   display: grid;
+  align-content: start;
   gap: 8px;
-  max-height: 560px;
+  min-height: 0;
   overflow: auto;
   padding-right: 4px;
+  overscroll-behavior: contain;
 }
 
 .style-row {
@@ -802,18 +960,22 @@ small,
   position: fixed;
   inset: 0;
   z-index: 100;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 24px;
+  overflow: hidden;
   background: rgba(1, 7, 9, 0.72);
 }
 
 .editor-dialog {
   display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
   gap: 14px;
   width: min(1180px, 100%);
-  max-height: min(840px, 92vh);
-  overflow: auto;
+  max-height: calc(100vh - 48px);
+  min-height: min(760px, calc(100vh - 48px));
+  overflow: hidden;
   padding: 18px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -855,7 +1017,8 @@ small,
   display: grid;
   grid-template-columns: 250px minmax(0, 1fr) 340px;
   gap: 10px;
-  min-height: 430px;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .edit-category-panel,
@@ -865,7 +1028,14 @@ small,
   align-content: start;
   gap: 10px;
   min-width: 0;
+  min-height: 0;
+  overflow: auto;
   padding: 12px;
+  overscroll-behavior: contain;
+}
+
+.edit-style-panel {
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .edit-category-panel label {
@@ -945,6 +1115,556 @@ small,
 
 .editor-dialog footer {
   justify-content: flex-end;
+}
+
+.library-rail::-webkit-scrollbar,
+.category-panel::-webkit-scrollbar,
+.style-list::-webkit-scrollbar,
+.edit-category-panel::-webkit-scrollbar,
+.edit-style-list::-webkit-scrollbar,
+.style-detail-panel::-webkit-scrollbar {
+  width: 8px;
+}
+
+.library-rail::-webkit-scrollbar-track,
+.category-panel::-webkit-scrollbar-track,
+.style-list::-webkit-scrollbar-track,
+.edit-category-panel::-webkit-scrollbar-track,
+.edit-style-list::-webkit-scrollbar-track,
+.style-detail-panel::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.library-rail::-webkit-scrollbar-thumb,
+.category-panel::-webkit-scrollbar-thumb,
+.style-list::-webkit-scrollbar-thumb,
+.edit-category-panel::-webkit-scrollbar-thumb,
+.edit-style-list::-webkit-scrollbar-thumb,
+.style-detail-panel::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(216, 169, 53, 0.24);
+}
+
+.style-library-page {
+  --panel: #141c20;
+  --panel-soft: rgba(255, 255, 255, 0.026);
+  --panel-strong: rgba(255, 255, 255, 0.045);
+  --input-bg: #0b1114;
+  --line: rgba(219, 232, 237, 0.1);
+  --line-strong: rgba(219, 232, 237, 0.16);
+  --text: #edf4f6;
+  --muted: #8ea1aa;
+  --gold-soft: #d9aa39;
+  --green: #70d486;
+  grid-template-rows: 62px minmax(0, 1fr);
+  gap: 0;
+  padding: 0;
+  background: #0d1418;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.026) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+.style-page-header {
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--line);
+}
+
+.style-page-header h1 {
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.library-shell {
+  display: grid;
+  grid-template-columns: 258px minmax(0, 1fr);
+  min-height: 0;
+}
+
+.library-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: 0;
+  padding: 14px 10px;
+  overflow: hidden;
+  border: 0;
+  border-right: 1px solid var(--line);
+  border-radius: 0;
+  background: rgba(11, 17, 20, 0.4);
+}
+
+.rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 2px 12px;
+}
+
+.rail-head strong {
+  font-size: 14px;
+}
+
+.rail-head span {
+  margin-left: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.tool-button {
+  gap: 6px;
+  min-height: 34px;
+  border-radius: 8px;
+}
+
+.tool-button svg,
+.search-field svg,
+.library-nav-item svg,
+.filter-chips svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+}
+
+.tool-button.compact {
+  min-height: 32px;
+  padding: 0 11px;
+}
+
+.tool-button.outline {
+  color: var(--text);
+  border-color: var(--line-strong);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.search-field {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+}
+
+.search-field > svg {
+  position: absolute;
+  left: 10px;
+  z-index: 1;
+  color: var(--muted);
+}
+
+.search-field input {
+  min-height: 34px;
+  padding: 0 32px 0 32px;
+  border-radius: 8px;
+  background: rgba(8, 13, 16, 0.8);
+  font-size: 13px;
+}
+
+.search-field.small input {
+  min-height: 32px;
+}
+
+.search-clear {
+  position: absolute;
+  right: 7px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  color: var(--muted);
+  border: 0;
+  background: transparent;
+}
+
+.search-clear:hover {
+  color: var(--text);
+}
+
+.library-list {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-height: 0;
+  margin-top: 12px;
+  overflow: auto;
+  padding-right: 2px;
+  overscroll-behavior: contain;
+}
+
+.library-nav-item {
+  position: relative;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 7px;
+  min-height: 78px;
+  padding: 10px 9px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.026);
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+
+.library-nav-item:hover {
+  border-color: rgba(219, 232, 237, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.library-nav-item.active {
+  border-color: rgba(217, 170, 57, 0.5);
+  background: rgba(217, 170, 57, 0.09);
+}
+
+.library-nav-item strong {
+  grid-column: 1;
+  white-space: normal;
+  line-height: 1.3;
+}
+
+.library-nav-item small {
+  grid-column: 1;
+  display: flex;
+  gap: 12px;
+}
+
+.library-nav-item small span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.library-detail {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+}
+
+.library-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 22px 24px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.summary-copy {
+  min-width: 0;
+}
+
+.title-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.title-line h2 {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 23px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.summary-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.summary-meta strong {
+  color: var(--text);
+}
+
+.summary-meta i,
+.style-count i,
+.style-row footer i {
+  display: block;
+  width: 1px;
+  height: 13px;
+  background: var(--line);
+}
+
+.status-pill {
+  min-height: 24px;
+  border-radius: 7px;
+}
+
+.style-browser {
+  grid-template-columns: 288px minmax(0, 1fr);
+  gap: 0;
+  min-height: 0;
+}
+
+.category-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 16px 14px 12px;
+  overflow: hidden;
+  border: 0;
+  border-right: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+}
+
+.category-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.category-head span {
+  min-width: 28px;
+  padding: 2px 7px;
+  color: var(--muted);
+  text-align: center;
+  border-radius: 7px;
+  background: var(--panel-strong);
+  font-size: 12px;
+}
+
+.category-list {
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  min-height: 0;
+  margin-top: 10px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.category-list button {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 7px;
+  align-items: center;
+  min-height: 36px;
+  padding: 7px 8px;
+  color: rgba(237, 244, 246, 0.82);
+  text-align: left;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  line-height: 1.25;
+}
+
+.category-list button:hover {
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.category-list button.active {
+  color: var(--gold-soft);
+  background: rgba(217, 170, 57, 0.12);
+  font-weight: 800;
+}
+
+.category-name {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  line-height: 1.18;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.category-index {
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+  font-size: 12px;
+}
+
+.category-list button.active .category-index {
+  color: var(--gold-soft);
+}
+
+.category-list small {
+  min-width: 22px;
+  padding: 1px 6px;
+  text-align: center;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.055);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.style-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.style-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 62px;
+  padding: 13px 24px;
+  border-bottom: 1px solid var(--line);
+}
+
+.style-toolbar .search-field {
+  flex: 1 1 auto;
+}
+
+.style-count {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  max-width: 280px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.style-count span {
+  max-width: 170px;
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.style-count strong {
+  color: var(--text);
+}
+
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 24px 0;
+}
+
+.filter-chips button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 260px;
+  min-height: 28px;
+  padding: 0 8px 0 10px;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 12px;
+}
+
+.filter-chips button svg {
+  width: 13px;
+  height: 13px;
+  color: var(--muted);
+}
+
+.style-list {
+  display: grid;
+  align-content: start;
+  flex: 1 1 auto;
+  gap: 12px;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px 24px 24px;
+}
+
+.style-row {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid rgba(219, 232, 237, 0.09);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.027);
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+
+.style-row:hover {
+  border-color: rgba(217, 170, 57, 0.26);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.style-row .style-title-line {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.style-title-line strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.style-code {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 21px;
+  padding: 0 7px;
+  color: var(--gold-soft);
+  border-radius: 7px;
+  background: rgba(217, 170, 57, 0.12);
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.style-row p {
+  color: #a9bbc2;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.style-row footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding-top: 8px;
+  color: rgba(142, 161, 170, 0.88);
+  border-top: 1px solid rgba(219, 232, 237, 0.07);
+  font-size: 12px;
+}
+
+.list-empty,
+.style-empty {
+  padding: 28px 12px;
+  text-align: center;
+}
+
+.library-list::-webkit-scrollbar,
+.category-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.library-list::-webkit-scrollbar-track,
+.category-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.library-list::-webkit-scrollbar-thumb,
+.category-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
 }
 
 @media (max-width: 1180px) {
