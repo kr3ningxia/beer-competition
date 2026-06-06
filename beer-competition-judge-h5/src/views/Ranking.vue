@@ -39,7 +39,7 @@
               :disabled="!canEdit"
               @change="handleSlotSelection(slot)"
             >
-              <option :value="null" disabled hidden>待选择</option>
+              <option :value="null">{{ table?.targetMode === 'MEDALS' ? '留空' : '待选择' }}</option>
               <option v-for="entry in entries" :key="entry.id" :value="entry.id">
                 {{ displayShortCode(entry) }} · {{ entry.categoryName }} · {{ entry.style }}
               </option>
@@ -141,7 +141,11 @@ let scanLocked = false
 
 const filledCount = computed(() => slots.value.filter((slot) => slot.beerEntryId).length)
 const canEdit = computed(() => Boolean(table.value?.canSubmitRanking) && !submitting.value)
-const canSubmit = computed(() => canEdit.value && slots.value.length > 0 && filledCount.value === slots.value.length)
+const isMedalMode = computed(() => table.value?.targetMode === 'MEDALS')
+const canSubmit = computed(() => {
+  if (!canEdit.value || !slots.value.length) return false
+  return isMedalMode.value ? filledCount.value > 0 : filledCount.value === slots.value.length
+})
 const rankingStatusText = computed(() => {
   if (table.value?.status === 'LOCKED') return '已锁定'
   if (submitted.value) return '待确认'
@@ -160,9 +164,16 @@ const selectedResults = computed(() => slots.value.map((slot) => {
     shortCode: entry ? [entry.shortCode, entry.categoryName, entry.style].filter(Boolean).join(' · ') : '待选择',
   }
 }))
+const submitResults = computed(() => slots.value
+  .filter((slot) => slot.beerEntryId)
+  .map((slot) => ({
+    beerEntryId: slot.beerEntryId,
+    rankNo: slot.rank,
+    slotLabel: slot.label,
+  })))
 const rankingModeText = computed(() => {
   const count = table.value?.targetCount || slots.value.length || 0
-  if (table.value?.targetMode === 'MEDALS') return '组别决战：确认金奖、银奖、铜奖'
+  if (table.value?.targetMode === 'MEDALS') return '组别决战：确认奖项，未设置的奖项可留空'
   if (table.value?.targetMode === 'CHAMPION') return '总冠军轮：确认全场总冠军'
   return `继续筛选：选择并排序前 ${count} 款`
 })
@@ -294,11 +305,7 @@ async function confirmSubmit() {
   submitting.value = true
   try {
     await submitRanking(route.params.roundTableId, {
-      results: slots.value.map((slot) => ({
-        beerEntryId: slot.beerEntryId,
-        rankNo: slot.rank,
-        slotLabel: slot.label,
-      })),
+      results: submitResults.value,
     })
     confirmOpen.value = false
     submitted.value = true

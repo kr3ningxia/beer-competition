@@ -196,7 +196,7 @@ public class AwardServiceImpl implements AwardService {
         if (drafts.isEmpty()) {
             throw new BaseException("最终轮次没有可生成的奖项结果");
         }
-        validateMedalDraftCompleteness(drafts);
+        validateMedalDraftSlots(drafts);
         if (drafts.stream().noneMatch(result -> Objects.equals(result.getChampionFlag(), FLAG_TRUE))) {
             throw new BaseException("决赛轮没有总冠军结果");
         }
@@ -243,7 +243,7 @@ public class AwardServiceImpl implements AwardService {
             if (medalDrafts.isEmpty()) {
                 throw new BaseException("奖牌轮没有可生成的奖项结果");
             }
-            validateMedalDraftCompleteness(medalDrafts);
+            validateMedalDraftSlots(medalDrafts);
             drafts.addAll(medalDrafts);
         }
         if (targetModes.contains(RoundTargetMode.CHAMPION.name())) {
@@ -309,7 +309,7 @@ public class AwardServiceImpl implements AwardService {
         if (results.stream().anyMatch(result -> !AwardResultStatus.CONFIRMED.name().equals(result.getStatus()))) {
             throw new BaseException("所有奖项都需要确认后才能发布");
         }
-        validateMedalConfirmationCompleteness(competitionId, results.stream()
+        validateMedalConfirmationSlots(results.stream()
                 .filter(result -> AwardType.MEDAL.name().equals(result.getAwardType()))
                 .filter(result -> result.getCategoryId() != null)
                 .collect(Collectors.groupingBy(AwardResult::getCategoryId,
@@ -404,7 +404,7 @@ public class AwardServiceImpl implements AwardService {
                 .build();
     }
 
-    private void validateMedalDraftCompleteness(List<AwardResult> drafts) {
+    private void validateMedalDraftSlots(List<AwardResult> drafts) {
         Map<Long, List<AwardResult>> medalsByCategory = drafts.stream()
                 .filter(result -> AwardType.MEDAL.name().equals(result.getAwardType()))
                 .collect(Collectors.groupingBy(AwardResult::getCategoryId));
@@ -412,8 +412,8 @@ public class AwardServiceImpl implements AwardService {
             Set<Integer> ranks = entry.getValue().stream()
                     .map(AwardResult::getRankNo)
                     .collect(Collectors.toSet());
-            if (!ranks.containsAll(Set.of(1, 2, 3)) || entry.getValue().size() != 3) {
-                throw new BaseException("每个投递组别必须生成金、银、铜三个奖项");
+            if (ranks.size() != entry.getValue().size() || ranks.stream().anyMatch(rank -> rank == null || rank < 1 || rank > 3)) {
+                throw new BaseException("组别奖项只能使用金、银、铜槽位，且同一槽位不能重复");
             }
         }
     }
@@ -505,6 +505,9 @@ public class AwardServiceImpl implements AwardService {
             if (item.getRankNo() == null || item.getRankNo() <= 0) {
                 throw new BaseException("奖项名次必须大于 0");
             }
+            if (type == AwardType.MEDAL && item.getRankNo() > 3) {
+                throw new BaseException("组别奖项只能使用金、银、铜槽位");
+            }
             if (type == AwardType.MEDAL && item.getCategoryId() != null && !item.getCategoryId().equals(entry.getCategoryId())) {
                 throw new BaseException("组别奖项酒款与组别不匹配：" + entry.getUuid());
             }
@@ -526,7 +529,7 @@ public class AwardServiceImpl implements AwardService {
         if (championCount != 1) {
             throw new BaseException("必须确认且只能确认 1 个总冠军");
         }
-        validateMedalConfirmationCompleteness(competitionId, medalRanksByCategory);
+        validateMedalConfirmationSlots(medalRanksByCategory);
     }
 
     private AwardResult toConfirmedResult(Long competitionId, AwardConfirmItemRequest item, Long adminId, LocalDateTime now) {
@@ -559,27 +562,12 @@ public class AwardServiceImpl implements AwardService {
         }
     }
 
-    private void validateMedalConfirmationCompleteness(Long competitionId, Map<Long, Set<Integer>> medalRanksByCategory) {
-        Set<Long> categoryIds = loadAwardableCategoryIds(competitionId);
-        if (categoryIds.isEmpty()) {
-            throw new BaseException("没有可确认奖项的投递组别");
-        }
-        for (Long categoryId : categoryIds) {
-            Set<Integer> ranks = medalRanksByCategory.getOrDefault(categoryId, Set.of());
-            if (!ranks.containsAll(Set.of(1, 2, 3)) || ranks.size() != 3) {
-                throw new BaseException("每个投递组别必须确认金、银、铜三个奖项");
+    private void validateMedalConfirmationSlots(Map<Long, Set<Integer>> medalRanksByCategory) {
+        for (Set<Integer> ranks : medalRanksByCategory.values()) {
+            if (ranks.stream().anyMatch(rank -> rank == null || rank < 1 || rank > 3)) {
+                throw new BaseException("组别奖项只能使用金、银、铜槽位");
             }
         }
-    }
-
-    private Set<Long> loadAwardableCategoryIds(Long competitionId) {
-        return beerEntryMapper.selectList(new LambdaQueryWrapper<BeerEntry>()
-                        .eq(BeerEntry::getCompetitionId, competitionId)
-                        .ne(BeerEntry::getStatus, EntryStatus.CANCELED.name()))
-                .stream()
-                .map(BeerEntry::getCategoryId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
     }
 
     private boolean hasPublishedAwards(Long competitionId) {

@@ -2030,32 +2030,12 @@ public class CompetitionServiceImpl implements CompetitionService {
     }
 
     private boolean areMedalAwardsReady(Long competitionId, List<AwardResultVO> awardResults) {
-        Set<Long> categoryIds = loadAwardableCategoryIds(competitionId);
-        if (categoryIds.isEmpty()) {
-            return false;
-        }
-        Map<Long, Set<Integer>> confirmedRanksByCategory = awardResults.stream()
+        return awardResults.stream()
                 .filter(result -> AwardType.MEDAL.name().equals(result.getAwardType()))
                 .filter(result -> result.getCategoryId() != null)
                 .filter(result -> AwardResultStatus.CONFIRMED.name().equals(result.getStatus())
                         || AwardResultStatus.PUBLISHED.name().equals(result.getStatus()))
-                .collect(Collectors.groupingBy(AwardResultVO::getCategoryId,
-                        Collectors.mapping(AwardResultVO::getRankNo, Collectors.toSet())));
-        return categoryIds.stream()
-                .allMatch(categoryId -> {
-                    Set<Integer> ranks = confirmedRanksByCategory.getOrDefault(categoryId, Set.of());
-                    return ranks.containsAll(Set.of(1, 2, 3));
-                });
-    }
-
-    private Set<Long> loadAwardableCategoryIds(Long competitionId) {
-        return beerEntryMapper.selectList(new LambdaQueryWrapper<BeerEntry>()
-                        .eq(BeerEntry::getCompetitionId, competitionId)
-                        .ne(BeerEntry::getStatus, EntryStatus.CANCELED.name()))
-                .stream()
-                .map(BeerEntry::getCategoryId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
+                .anyMatch(result -> result.getRankNo() != null && result.getRankNo() >= 1 && result.getRankNo() <= 3);
     }
 
     private List<CompetitionCheckVO> buildChecks(Competition competition,

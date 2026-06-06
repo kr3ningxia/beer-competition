@@ -1235,7 +1235,7 @@ public class RoundServiceImpl implements RoundService {
             String targetMode = resolveTargetMode(round, table.getTargetMode());
             validateTargetCountForMode(table.getName(), targetMode, table.getTargetCount());
             List<String> uuids = safeList(table.getEntryUuids());
-            if (!uuids.isEmpty() && table.getTargetCount() > uuids.size()) {
+            if (!RoundTargetMode.MEDALS.name().equals(targetMode) && !uuids.isEmpty() && table.getTargetCount() > uuids.size()) {
                 throw new BaseException(table.getName() + "目标数量超过酒款数");
             }
             for (String uuid : uuids) {
@@ -1294,7 +1294,9 @@ public class RoundServiceImpl implements RoundService {
             if (entries.isEmpty()) {
                 throw new BaseException(table.getTableName() + "尚未分配酒款");
             }
-            if (table.getTargetCount() == null || table.getTargetCount() <= 0 || table.getTargetCount() > entries.size()) {
+            boolean allowEmptyMedalSlots = RoundTargetMode.MEDALS.name().equals(table.getTargetMode());
+            if (table.getTargetCount() == null || table.getTargetCount() <= 0
+                    || (!allowEmptyMedalSlots && table.getTargetCount() > entries.size())) {
                 throw new BaseException(table.getTableName() + "目标数量不合法");
             }
             validateTargetCountForMode(table.getTableName(), table.getTargetMode(), table.getTargetCount());
@@ -1344,7 +1346,13 @@ public class RoundServiceImpl implements RoundService {
     }
 
     private void validateRankingSubmit(RoundTable table, RankingSubmitRequest request) {
-        if (request.getResults().size() != table.getTargetCount()) {
+        int targetCount = table.getTargetCount() == null ? 0 : table.getTargetCount();
+        boolean allowEmptyMedalSlots = RoundTargetMode.MEDALS.name().equals(table.getTargetMode());
+        if (allowEmptyMedalSlots) {
+            if (request.getResults().size() > targetCount) {
+                throw new BaseException("奖项结果数量不能超过奖项槽位");
+            }
+        } else if (request.getResults().size() != targetCount) {
             throw new BaseException("排序结果数量必须等于目标数量");
         }
         Set<Long> tableEntryIds = roundTableEntryMapper.selectList(new LambdaQueryWrapper<RoundTableEntry>()
@@ -1364,7 +1372,7 @@ public class RoundServiceImpl implements RoundService {
             if (!ranks.add(item.getRankNo())) {
                 throw new BaseException("排序名次不能重复");
             }
-            if (item.getRankNo() < 1 || item.getRankNo() > table.getTargetCount()) {
+            if (item.getRankNo() < 1 || item.getRankNo() > targetCount) {
                 throw new BaseException("排序名次超出目标范围");
             }
         }

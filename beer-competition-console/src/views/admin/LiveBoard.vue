@@ -199,7 +199,7 @@ function buildMetrics(round, tables, progress = {}) {
     return [
       { label: '候选酒款', value: entryCount, unit: '款', tone: 'neutral' },
       { label: '评审桌', value: tables.length, unit: '桌', tone: 'neutral' },
-      { label: '排序提交', value: `${selected} / ${target}`, unit: '', tone: selected >= target && target > 0 ? 'success' : 'gold' },
+      { label: '排序提交', value: `${selected} / ${target}`, unit: '', tone: doneTables === tables.length && tables.length ? 'success' : 'gold' },
       { label: '完成桌数', value: `${doneTables} / ${tables.length}`, unit: '桌', tone: doneTables === tables.length && tables.length ? 'success' : 'warning' },
       { label: '平均耗时', value: averageReviewTime, unit: '', tone: 'neutral' },
     ]
@@ -223,10 +223,11 @@ function buildTableTile(round, table) {
   const displayName = table.name || '未命名桌'
   if (round?.type === 'RANKING') {
     const selectedCount = (table.rankings || []).filter((slot) => slot.uuid).length
-    const issueText = getTableIssue(table)
-    const done = !issueText && selectedCount >= targetCount && targetCount > 0
     const isChampion = table.targetMode === 'CHAMPION'
     const isMedals = table.targetMode === 'MEDALS'
+    const issueText = getTableIssue(table)
+    const submitted = ['SUBMITTED', 'LOCKED'].includes(table.status)
+    const done = !issueText && (isMedals ? submitted : selectedCount >= targetCount && targetCount > 0)
     const statusText = issueText ? '需关注' : done ? (isChampion ? '已提交' : '已完成') : selectedCount ? '排序中' : (isChampion ? '待提交' : '待排序')
     const targetLabel = isChampion ? '总冠军' : isMedals ? '奖项槽位' : '排序目标'
     const targetValue = isChampion ? (done ? '已选择' : '待选择') : `${targetCount} 款`

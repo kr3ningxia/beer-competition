@@ -433,7 +433,7 @@
               </button>
             </div>
           </header>
-          <div class="desk-config-row">
+          <div :class="['desk-config-row', { 'ranking-config-row': currentRound?.type === 'RANKING' }]">
             <label v-if="currentRound?.type === 'SCORE'" class="inline-scope compact-scope" @click.stop>
               <span>范围</span>
               <select
@@ -447,7 +447,21 @@
               </select>
             </label>
             <label class="inline-target compact-target" @click.stop>
-              <span>{{ getTargetCountLabel(table) }}</span>
+              <span class="target-label">
+                <span>{{ getTargetCountLabel(table) }}</span>
+                <select
+                  v-if="currentRound?.type === 'RANKING'"
+                  class="target-scope-select"
+                  :value="getTableScopeValue(table)"
+                  :disabled="currentRound?.status !== 'DRAFT'"
+                  aria-label="范围"
+                  @change="$emit('updateTableScope', table.id, $event.target.value)"
+                >
+                  <option v-for="option in tableScopeOptions" :key="option.value" :value="option.value">
+                    {{ option.label }}
+                  </option>
+                </select>
+              </span>
               <input
                 :value="table.targetCount"
                 min="1"
@@ -795,7 +809,7 @@ const roundTargetOptions = computed(() => {
       {
         value: 'MEDALS',
         label: '组别金银铜轮',
-        hint: '',
+        hint: '金奖、银奖、铜奖为可用槽位，可按评审结果留空。',
       },
       {
         value: 'CHAMPION',
@@ -813,7 +827,7 @@ const roundTargetOptions = computed(() => {
     {
       value: 'MEDALS',
       label: '组别金银铜轮',
-      hint: '',
+      hint: '金奖、银奖、铜奖为可用槽位，可按评审结果留空。',
     },
   ]
 })
@@ -1860,6 +1874,10 @@ p {
   align-items: center;
 }
 
+.ranking-config-row {
+  grid-template-columns: minmax(248px, 300px);
+}
+
 .inline-target {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 58px;
@@ -1875,7 +1893,7 @@ p {
 }
 
 .compact-target {
-  grid-template-columns: auto 46px;
+  grid-template-columns: minmax(0, 1fr) 46px;
   gap: 6px;
   min-height: 28px;
   padding: 3px 4px 3px 8px;
@@ -1916,8 +1934,20 @@ p {
   white-space: nowrap;
 }
 
+.target-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.target-label > span {
+  flex: 0 0 auto;
+}
+
 .inline-target input,
-.inline-scope select {
+.inline-scope select,
+.target-scope-select {
   width: 100%;
   box-sizing: border-box;
   min-height: 28px;
@@ -1928,6 +1958,13 @@ p {
   outline: 0;
   background: rgba(7, 14, 17, 0.72);
   font-weight: 800;
+}
+
+.target-scope-select {
+  min-width: 0;
+  flex: 1 1 104px;
+  padding-right: 18px;
+  text-overflow: ellipsis;
 }
 
 .inline-target input {
@@ -1949,6 +1986,11 @@ p {
 }
 
 .inline-scope select:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.target-scope-select:disabled {
   opacity: 1;
   cursor: default;
 }

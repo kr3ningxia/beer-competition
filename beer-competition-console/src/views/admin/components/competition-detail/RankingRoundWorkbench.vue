@@ -191,7 +191,7 @@ function targetCountLabel(table) {
 }
 
 function targetCountHint(table) {
-  if (table?.targetMode === 'MEDALS') return '固定为金奖、银奖、铜奖 3 个槽位。'
+  if (table?.targetMode === 'MEDALS') return '金奖、银奖、铜奖为可用槽位，可按评审结果留空。'
   if (table?.targetMode === 'CHAMPION') return '总冠军 1 名。'
   return '桌长需要提交并排序的晋级酒款数量。'
 }

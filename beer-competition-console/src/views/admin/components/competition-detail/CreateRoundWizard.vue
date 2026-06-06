@@ -78,6 +78,7 @@ const props = defineProps({
   targetCount: { type: Number, required: true },
   tableCount: { type: Number, required: true },
   targetOptions: { type: Array, required: true },
+  earlyDraft: Boolean,
 })
 
 defineEmits(['close', 'finish', 'update:targetMode', 'update:targetCount', 'update:tableCount'])
@@ -85,9 +86,17 @@ defineEmits(['close', 'finish', 'update:targetMode', 'update:targetCount', 'upda
 const selectedTargetOption = computed(() => props.targetOptions.find((option) => option.value === props.targetMode))
 const isChampion = computed(() => props.targetMode === 'CHAMPION')
 const dialogTitle = computed(() => (isChampion.value ? '准备决赛轮' : `准备${props.nextRoundName}排序`))
-const dialogHint = computed(() => (isChampion.value ? '安排决赛桌、桌长和参与评审。' : '先安排桌长和参与评审，上一轮结果固定后再分配酒款。'))
-const candidateLabel = computed(() => (isChampion.value ? '各组别金奖' : '当前候选'))
-const candidateHint = computed(() => (isChampion.value ? '用于决出全场总冠军' : `用于${props.nextRoundName}分桌`))
+const dialogHint = computed(() => {
+  if (isChampion.value) return '安排决赛桌、桌长和参与评审。'
+  if (props.earlyDraft) return '先安排桌次和人员，晋级酒款在本轮锁定后同步。'
+  return '先安排桌长和参与评审，上一轮结果固定后再分配酒款。'
+})
+const candidateLabel = computed(() => (isChampion.value ? '各组别金奖' : (props.earlyDraft ? '当前晋级' : '当前候选')))
+const candidateHint = computed(() => {
+  if (isChampion.value) return '用于决出全场总冠军'
+  if (props.earlyDraft) return `锁定后同步到${props.nextRoundName}`
+  return `用于${props.nextRoundName}分桌`
+})
 const finishLabel = computed(() => (isChampion.value ? '创建决赛草稿并去分桌' : '创建草稿并去分桌'))
 const isTargetCountFixed = computed(() => Boolean(selectedTargetOption.value?.fixedTargetCount))
 const targetCountLabel = computed(() => {
@@ -96,7 +105,7 @@ const targetCountLabel = computed(() => {
   return '每桌晋级数量'
 })
 const targetCountHint = computed(() => {
-  if (props.targetMode === 'MEDALS') return '固定为金奖、银奖、铜奖 3 个槽位。'
+  if (props.targetMode === 'MEDALS') return '金奖、银奖、铜奖为可用槽位，可按评审结果留空。'
   if (props.targetMode === 'CHAMPION') return '总冠军 1 名。'
   return '每张桌由桌长提交并排序的晋级酒款数量。'
 })
