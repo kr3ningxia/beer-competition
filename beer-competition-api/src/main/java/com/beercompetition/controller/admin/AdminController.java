@@ -24,6 +24,7 @@ import com.beercompetition.pojo.vo.CompetitionVO;
 import com.beercompetition.pojo.vo.CurrentUserResponse;
 import com.beercompetition.pojo.vo.FileDownloadVO;
 import com.beercompetition.pojo.vo.JudgeAccountVO;
+import com.beercompetition.pojo.vo.AdminFeedbackReviewEntryVO;
 import com.beercompetition.pojo.vo.AwardResultVO;
 import com.beercompetition.pojo.vo.AwardRuleVO;
 import com.beercompetition.pojo.vo.ResultDraftVO;
@@ -218,6 +219,11 @@ public class AdminController {
     @GetMapping("/competitions/{id}/progress")
     public Result<CompetitionDetailVO> progress(@PathVariable Long id) {
         return Result.success(competitionService.getCompetitionDetail(id));
+    }
+
+    @GetMapping("/competitions/{id}/feedback-review")
+    public Result<List<AdminFeedbackReviewEntryVO>> feedbackReview(@PathVariable Long id) {
+        return Result.success(competitionService.getFeedbackReviewEntries(id));
     }
 
     @GetMapping("/competitions/{id}/results/draft")

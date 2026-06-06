@@ -9,6 +9,7 @@ import com.beercompetition.pojo.dto.JudgeTableBatchUpdateRequest;
 import com.beercompetition.pojo.dto.ScoreConfigBatchUpdateRequest;
 import com.beercompetition.pojo.vo.CompetitionDetailVO;
 import com.beercompetition.pojo.vo.CompetitionVO;
+import com.beercompetition.pojo.vo.AdminFeedbackReviewEntryVO;
 import com.beercompetition.pojo.vo.PortalCompetitionVO;
 import com.beercompetition.pojo.vo.PortalHomeVO;
 import com.beercompetition.pojo.vo.ScoreConfigVO;
@@ -50,6 +51,8 @@ public interface CompetitionService {
     List<ScoreConfigVO> getScoreConfigs(Long competitionId);
 
     List<ScoreConfigVO> updateScoreConfigs(Long competitionId, ScoreConfigBatchUpdateRequest request);
+
+    List<AdminFeedbackReviewEntryVO> getFeedbackReviewEntries(Long competitionId);
 
     byte[] exportScoringData(Long competitionId);
 }

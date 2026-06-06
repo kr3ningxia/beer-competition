@@ -647,99 +647,182 @@
           </div>
         </section>
 
+        <section v-if="activeTab === 'feedback'" class="tab-panel feedback-review-panel">
+          <div class="feedback-review-shell">
+            <div class="feedback-filter-bar">
+              <label class="feedback-search-field">
+                <Search />
+                <input v-model.trim="feedbackFilters.keyword" placeholder="搜索匿名编号 / 短编号 / 风格" type="search" />
+              </label>
+              <label class="feedback-select-field">
+                <span>评审桌</span>
+                <select v-model="feedbackFilters.tableName">
+                  <option v-for="option in feedbackTableOptions" :key="option" :value="option">{{ option }}</option>
+                </select>
+              </label>
+              <label class="feedback-select-field">
+                <span>投递组别</span>
+                <select v-model="feedbackFilters.categoryName">
+                  <option v-for="option in feedbackCategoryOptions" :key="option" :value="option">{{ option }}</option>
+                </select>
+              </label>
+              <label class="feedback-select-field">
+                <span>评审类型</span>
+                <select v-model="feedbackFilters.judgeType">
+                  <option v-for="option in feedbackJudgeTypeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                </select>
+              </label>
+              <div class="feedback-status-segments">
+                <button
+                  v-for="option in feedbackStatusOptions"
+                  :key="option.value"
+                  type="button"
+                  :class="{ active: feedbackFilters.status === option.value }"
+                  @click="feedbackFilters.status = option.value"
+                >
+                  {{ option.label }}
+                </button>
+              </div>
+            </div>
+
+            <div class="feedback-split-layout">
+              <section class="feedback-entry-list">
+                <div class="feedback-entry-scroll">
+                  <div v-if="feedbackReviewLoading" class="feedback-empty-state">正在加载反馈数据</div>
+                  <div v-else-if="!feedbackFilteredEntries.length" class="feedback-empty-state">没有符合条件的酒款</div>
+                  <template v-else>
+                    <button
+                      v-for="entry in feedbackFilteredEntries"
+                      :key="feedbackEntryKey(entry)"
+                      type="button"
+                      :class="['feedback-entry-row', { active: feedbackEntryKey(entry) === feedbackEntryKey(selectedFeedbackEntry) }]"
+                      @click="selectedFeedbackEntryKey = feedbackEntryKey(entry)"
+                    >
+                      <span>
+                        <strong>{{ entry.entryName || entry.labelCode || entry.beerUuid }}</strong>
+                        <small>{{ [entry.shortCode, entry.tableName, entry.categoryName, entry.style].filter(Boolean).join(' · ') }}</small>
+                      </span>
+                      <em>
+                        <strong>{{ entry.consensusScore ?? '—' }}</strong>
+                        <small :class="{ pending: entry.personalSubmitted < entry.personalTotal }">{{ entry.personalSubmitted }}/{{ entry.personalTotal }}</small>
+                      </em>
+                    </button>
+                  </template>
+                </div>
+                <footer>第一轮共 {{ feedbackFilteredEntries.length }} 款（合计 {{ feedbackReviewEntries.length }} 款）</footer>
+              </section>
+
+              <section class="feedback-detail-panel">
+                <template v-if="selectedFeedbackEntry">
+                  <header class="feedback-detail-head">
+                    <strong>{{ selectedFeedbackEntry.entryName || selectedFeedbackEntry.labelCode }}</strong>
+                    <span>· {{ selectedFeedbackEntry.shortCode || selectedFeedbackEntry.labelCode }}</span>
+                    <small>{{ [selectedFeedbackEntry.roundName || '第一轮', selectedFeedbackEntry.tableName, selectedFeedbackEntry.categoryName, selectedFeedbackEntry.style].filter(Boolean).join(' · ') }}</small>
+                  </header>
+
+                  <div class="feedback-detail-body">
+                    <section class="feedback-block">
+                      <div class="feedback-block-title">
+                        <h2>桌长最终意见</h2>
+                        <span>厂商最终看到的关键反馈</span>
+                      </div>
+                      <article v-if="selectedFeedbackEntry.captainOpinion?.submitted" class="captain-opinion-card">
+                        <div class="captain-opinion-meta">
+                          <span>桌长 <strong>{{ selectedFeedbackEntry.captainOpinion.captainName || '未知桌长' }}</strong></span>
+                          <span>共识分 <strong class="score-highlight">{{ selectedFeedbackEntry.captainOpinion.consensusScore }}</strong> / {{ selectedFeedbackEntry.captainOpinion.maxConsensus || 50 }}</span>
+                          <em :class="{ advanced: selectedFeedbackEntry.captainOpinion.advanced }">{{ selectedFeedbackEntry.captainOpinion.advanced ? '已晋级' : '未晋级' }}</em>
+                          <small>提交于 {{ formatFeedbackTime(selectedFeedbackEntry.captainOpinion.submittedAt) }}</small>
+                        </div>
+                        <p>{{ selectedFeedbackEntry.captainOpinion.comments || '暂无综合评语' }}</p>
+                      </article>
+                      <article v-else class="captain-missing-card">
+                        <Warning />
+                        <span>桌长尚未提交最终意见</span>
+                      </article>
+                    </section>
+
+                    <section class="feedback-block">
+                      <div class="feedback-block-title">
+                        <h2>评委原始评分</h2>
+                        <span>{{ selectedFeedbackEntry.personalSubmitted }} / {{ selectedFeedbackEntry.personalTotal }} 已提交</span>
+                      </div>
+                      <div class="judge-score-list">
+                        <article
+                          v-for="judge in selectedFeedbackEntry.judges"
+                          :key="`${selectedFeedbackEntry.beerUuid}-${judge.judgePublicId || judge.judgeName}-${judge.role}`"
+                          :class="['judge-score-card', { missing: !judge.scored }]"
+                        >
+                          <header>
+                            <span>
+                              <strong>{{ judge.judgeName }}</strong>
+                              <small :class="{ captain: judge.role === 'CAPTAIN' }">{{ judge.roleLabel || feedbackRoleLabel(judge.role) }}</small>
+                              <em v-if="judge.anomaly" :class="['judge-anomaly', judge.anomaly]">{{ feedbackJudgeAnomalyLabel(judge.anomaly) }}</em>
+                            </span>
+                            <span v-if="judge.scored" class="judge-score-meta">
+                              <small>提交于 {{ formatFeedbackTime(judge.submittedAt) }}</small>
+                              <strong>总分 {{ judge.totalScore }} / {{ judge.maxTotal || 50 }}</strong>
+                            </span>
+                          </header>
+                          <p v-if="!judge.scored" class="judge-missing-text">该评委尚未提交个人评分。</p>
+                          <div v-else class="judge-dimension-list">
+                            <div v-for="dimension in judge.dimensions" :key="dimension.key || dimension.label" class="judge-dimension-row">
+                              <span>{{ dimension.label || dimension.key }}</span>
+                              <strong>{{ dimension.score ?? '-' }} / {{ dimension.maxScore ?? '-' }}</strong>
+                              <p v-if="dimension.note">{{ dimension.note }}</p>
+                            </div>
+                          </div>
+                        </article>
+                      </div>
+                    </section>
+
+                    <section v-if="selectedFeedbackIssues.length" class="feedback-block">
+                      <h2 class="feedback-issue-title">复核提示</h2>
+                      <ul class="feedback-issue-list">
+                        <li v-for="issue in selectedFeedbackIssues" :key="issue.message" :class="issue.severity">
+                          <Warning />
+                          <span>{{ issue.message }}</span>
+                        </li>
+                      </ul>
+                    </section>
+                  </div>
+                </template>
+                <div v-else class="feedback-empty-state">选择左侧酒款查看反馈详情</div>
+              </section>
+            </div>
+          </div>
+        </section>
+
         <section v-if="activeTab === 'results'" class="tab-panel">
-          <div class="two-column results-layout">
-            <article class="panel-card">
+          <div class="results-workbench">
+            <article class="panel-card award-table-card">
               <div class="panel-heading">
+                <h2>获奖名单</h2>
                 <span>{{ awardDrafts.length }} 项</span>
               </div>
-              <div class="publish-actions">
-                <button class="tool-button" type="button" :disabled="!canGenerateAwards" :title="generateAwardsDisabledReason" @click="generateAwardsAction">
-                  {{ awardDrafts.length ? '重新生成奖项' : '生成奖项' }}
-                </button>
-                <button class="tool-button primary" type="button" :disabled="!canConfirmAwards" :title="confirmAwardsDisabledReason" @click="confirmAwardsAction">
-                  {{ awardsConfirmed ? '奖项已确认' : '确认奖项' }}
-                </button>
+              <div v-if="awardDrafts.length && !championAwards.length" class="award-missing-banner">
+                <Warning />
+                <span>缺少全场总冠军，请锁定决赛轮后重新生成奖项。</span>
               </div>
-              <div class="award-list">
-                <article
-                  v-for="award in championAwards"
-                  :key="`${award.awardType}-${award.categoryId || 'all'}-${award.rankNo}`"
-                  class="champion-award-card"
-                >
-                  <div class="award-card-title">
-                    <span>全场总冠军</span>
-                    <strong>{{ formatAwardEntryName(award) }}</strong>
-                  </div>
-                  <el-select
-                    v-model="award.beerEntryId"
-                    class="award-select"
-                    filterable
-                    teleported
-                    popper-class="award-select-popper"
-                    :disabled="!canEditAwardSelection(award)"
-                  >
-                    <el-option
-                      v-for="entry in awardEntryOptions(award)"
-                      :key="entry.id"
-                      :label="formatAwardEntryLabel(entry)"
-                      :value="entry.id"
-                    />
-                  </el-select>
-                  <em>{{ formatAwardStatus(award) }}</em>
-                  <div class="award-certificate-row">
-                    <span>奖状 PDF</span>
-                    <strong :class="{ uploaded: award.certificateUploaded }">
-                      {{ award.certificateUploaded ? '已上传' : '未上传' }}
-                    </strong>
-                    <small v-if="award.certificateFilename">{{ award.certificateFilename }}</small>
-                    <div class="award-certificate-actions">
-                      <button
-                        v-if="award.certificateUploaded"
-                        type="button"
-                        :disabled="isCertificateActionBusy(award)"
-                        @click="previewAwardCertificate(award)"
-                      >
-                        预览
-                      </button>
-                      <button
-                        type="button"
-                        :disabled="isCertificateActionBusy(award) || !canUploadAwardCertificate(award)"
-                        :title="canUploadAwardCertificate(award) ? '' : '确认奖项后上传奖状'"
-                        @click="chooseAwardCertificate(award)"
-                      >
-                        {{ award.certificateUploaded ? '更换' : '上传' }}
-                      </button>
-                      <button
-                        v-if="award.certificateUploaded"
-                        type="button"
-                        :disabled="isCertificateActionBusy(award)"
-                        @click="deleteAwardCertificateAction(award)"
-                      >
-                        删除
-                      </button>
-                    </div>
-                  </div>
-                </article>
-                <article v-if="awardDrafts.length && !championAwards.length" class="champion-award-card champion-award-missing">
-                  <div class="award-card-title">
-                    <span>全场总冠军</span>
-                    <strong>待生成</strong>
-                  </div>
-                  <p>请先锁定决赛轮，再重新生成奖项。</p>
-                </article>
-
-                <div v-if="medalAwards.length" class="award-section-title">
-                  <span>组别奖项</span>
-                  <strong>{{ medalAwards.length }} 项</strong>
+              <div v-if="awardRows.length" class="award-result-table">
+                <div class="award-result-row table-head">
+                  <span>奖项</span>
+                  <span>组别</span>
+                  <span>获奖酒款</span>
+                  <span>来源路径</span>
+                  <span>状态</span>
+                  <span>奖状</span>
+                  <span>奖状上传</span>
                 </div>
-                <article
-                  v-for="award in medalAwards"
+                <div
+                  v-for="award in awardRows"
                   :key="`${award.awardType}-${award.categoryId || 'all'}-${award.rankNo}`"
-                  class="medal-award-card"
+                  :class="['award-result-row', { champion: award.awardType === 'CHAMPION' }]"
                 >
-                  <span>{{ award.categoryName || '未分组' }}</span>
-                  <strong>{{ award.awardName }}</strong>
+                  <div class="award-name-cell">
+                    <strong>{{ award.awardName || '奖项' }}</strong>
+                    <small v-if="award.awardType === 'CHAMPION'">全场</small>
+                  </div>
+                  <span>{{ formatAwardScope(award) }}</span>
                   <el-select
                     v-model="award.beerEntryId"
                     class="award-select"
@@ -755,45 +838,49 @@
                       :value="entry.id"
                     />
                   </el-select>
-                  <em>{{ formatAwardStatus(award) }}</em>
-                  <div class="award-certificate-row">
-                    <span>奖状 PDF</span>
+                  <span class="award-path-cell" :title="getAwardPath(award)">{{ getAwardPath(award) }}</span>
+                  <em :class="['award-status-pill', award.status]">{{ formatAwardStatus(award) }}</em>
+                  <div class="award-certificate-cell">
                     <strong :class="{ uploaded: award.certificateUploaded }">
                       {{ award.certificateUploaded ? '已上传' : '未上传' }}
                     </strong>
-                    <small v-if="award.certificateFilename">{{ award.certificateFilename }}</small>
-                    <div class="award-certificate-actions">
-                      <button
-                        v-if="award.certificateUploaded"
-                        type="button"
-                        :disabled="isCertificateActionBusy(award)"
-                        @click="previewAwardCertificate(award)"
-                      >
-                        预览
-                      </button>
-                      <button
-                        type="button"
-                        :disabled="isCertificateActionBusy(award) || !canUploadAwardCertificate(award)"
-                        :title="canUploadAwardCertificate(award) ? '' : '确认奖项后上传奖状'"
-                        @click="chooseAwardCertificate(award)"
-                      >
-                        {{ award.certificateUploaded ? '更换' : '上传' }}
-                      </button>
-                      <button
-                        v-if="award.certificateUploaded"
-                        type="button"
-                        :disabled="isCertificateActionBusy(award)"
-                        @click="deleteAwardCertificateAction(award)"
-                      >
-                        删除
-                      </button>
-                    </div>
+                    <small v-if="award.certificateFilename" :title="award.certificateFilename">{{ award.certificateFilename }}</small>
                   </div>
-                </article>
+                  <div class="award-row-actions">
+                    <button
+                      v-if="award.certificateUploaded"
+                      type="button"
+                      :disabled="isCertificateActionBusy(award)"
+                      @click="previewAwardCertificate(award)"
+                    >
+                      预览
+                    </button>
+                    <button
+                      type="button"
+                      :disabled="isCertificateActionBusy(award) || !canUploadAwardCertificate(award)"
+                      class="award-upload-icon-button"
+                      :title="canUploadAwardCertificate(award) ? (award.certificateUploaded ? '更换奖状' : '上传奖状') : '确认奖项后上传奖状'"
+                      :aria-label="award.certificateUploaded ? '更换奖状' : '上传奖状'"
+                      @click="chooseAwardCertificate(award)"
+                    >
+                      +
+                    </button>
+                    <button
+                      v-if="award.certificateUploaded"
+                      type="button"
+                      :disabled="isCertificateActionBusy(award)"
+                      @click="deleteAwardCertificateAction(award)"
+                    >
+                      删除
+                    </button>
+                  </div>
+                </div>
               </div>
+              <p v-else class="empty-line">锁定决赛轮后生成奖项。</p>
               <input ref="awardCertificateInput" class="file-input" type="file" accept="application/pdf,.pdf" @change="handleAwardCertificateSelected" />
             </article>
-            <article class="panel-card">
+
+            <article class="panel-card result-check-card">
               <div class="panel-heading">
                 <h2>发布前检查</h2>
                 <span>{{ resultChecks.filter((item) => item.done).length }} / {{ resultChecks.length }}</span>
@@ -812,20 +899,57 @@
                   <strong>{{ certificateCheck.status }}</strong>
                 </div>
               </div>
-              <div class="publish-actions">
-                <button class="tool-button" type="button" @click="downloadScoringData">导出评分数据</button>
-                <button class="tool-button primary" type="button" :disabled="!canPublishResults" :title="publishResultsDisabledReason" @click="publishResultsAction">
-                  发布结果
+              <div class="result-action-panel">
+                <h3>发布管理</h3>
+                <button
+                  v-if="showGenerateAwardsAction"
+                  class="tool-button"
+                  type="button"
+                  :disabled="!canGenerateAwards"
+                  :title="generateAwardsDisabledReason"
+                  @click="generateAwardsAction"
+                >
+                  {{ awardDrafts.length ? '重新生成获奖名单' : '生成获奖名单' }}
                 </button>
+                <button
+                  v-if="showConfirmAwardsAction"
+                  class="tool-button primary"
+                  type="button"
+                  :disabled="!canConfirmAwards"
+                  :title="confirmAwardsDisabledReason"
+                  @click="confirmAwardsAction"
+                >
+                  确认获奖名单
+                </button>
+                <button class="tool-button" type="button" @click="downloadScoringData">导出评分数据</button>
+                <button
+                  v-if="showPublishResultsAction"
+                  class="tool-button primary"
+                  type="button"
+                  :disabled="!canPublishResults"
+                  :title="publishResultsDisabledReason"
+                  @click="publishResultsAction"
+                >
+                  发布到厂商端
+                </button>
+                <p v-if="!showGenerateAwardsAction && !showConfirmAwardsAction && !showPublishResultsAction">
+                  结果已发布，当前只需要按获奖名单补充奖状。
+                </p>
               </div>
             </article>
           </div>
-          <article class="panel-card">
+
+          <article class="panel-card path-audit-card">
             <div class="panel-heading">
-              <h2>晋级路径摘要</h2>
-              <span>{{ roundRestructureText ? `${roundRestructureText} -> 奖项` : '暂无轮次路径' }}</span>
+              <div>
+                <h2>晋级路径核验</h2>
+                <span>{{ roundRestructureText ? `${roundRestructureText} -> 奖项` : '暂无轮次路径' }}</span>
+              </div>
+              <button class="path-toggle" type="button" @click="pathAuditOpen = !pathAuditOpen">
+                {{ pathAuditOpen ? '收起' : `展开 ${resultPathEntries.length} 条` }}
+              </button>
             </div>
-            <div class="path-table">
+            <div v-if="pathAuditOpen" class="path-table">
               <div class="table-head">
                 <span>匿名编号</span>
                 <span>组别</span>
@@ -1045,6 +1169,7 @@ import {
   deleteCompetition,
   downloadAwardCertificate,
   exportCompetitionScoringData,
+  fetchCompetitionFeedbackReview,
   fetchCompetitionDetail,
   fetchJudges,
   fetchStyleLibraries,
@@ -1071,7 +1196,7 @@ import TableAllocationWorkbench from './components/competition-detail/TableAlloc
 
 const route = useRoute()
 const router = useRouter()
-const detailTabKeys = new Set(['overview', 'entryConfig', 'entries', 'judges', 'rounds', 'score', 'results'])
+const detailTabKeys = new Set(['overview', 'entryConfig', 'entries', 'judges', 'rounds', 'score', 'feedback', 'results'])
 const roundProgressPollIntervalMs = 8000
 const activeTab = ref(normalizeDetailTab(route.query.tab))
 const loading = ref(false)
@@ -1084,6 +1209,17 @@ const judgeTableForm = reactive([])
 const judgeAssignmentForm = reactive([])
 const scoreConfigForm = reactive([])
 const judgePool = ref([])
+const feedbackReviewEntries = ref([])
+const feedbackReviewLoading = ref(false)
+const feedbackReviewCompetitionId = ref(null)
+const selectedFeedbackEntryKey = ref('')
+const feedbackFilters = reactive({
+  keyword: '',
+  tableName: '全部',
+  categoryName: '全部',
+  judgeType: '全部',
+  status: 'all',
+})
 const judgeKeyword = ref('')
 const judgeRoleFilter = ref('UNASSIGNED')
 const allocationMode = ref('judges')
@@ -1093,6 +1229,7 @@ const draggingItem = ref(null)
 const awardCertificateInput = ref(null)
 const certificateTargetAward = ref(null)
 const certificateActionIds = ref(new Set())
+const pathAuditOpen = ref(false)
 
 const rounds = ref([])
 const roundEntryPool = ref([])
@@ -1138,6 +1275,7 @@ const tabs = [
   { key: 'judges', label: '分桌分配', icon: Files },
   { key: 'rounds', label: '轮次编排', icon: Calendar },
   { key: 'score', label: '评分表', icon: Finished },
+  { key: 'feedback', label: '反馈复核', icon: CircleCheck },
   { key: 'results', label: '结果发布', icon: Medal },
 ]
 
@@ -1438,11 +1576,15 @@ const roundRestructureText = computed(() => rounds.value.map((round) => `${round
 const awardDrafts = computed(() => competition.value?.awardResults || [])
 const championAwards = computed(() => awardDrafts.value.filter((award) => award.awardType === 'CHAMPION'))
 const medalAwards = computed(() => awardDrafts.value.filter((award) => award.awardType !== 'CHAMPION'))
+const awardRows = computed(() => [...championAwards.value, ...medalAwards.value])
 const terminalRoundLocked = computed(() => rounds.value.some((round) => isTerminalRound(round) && round.status === 'LOCKED'))
 const resultsPublished = computed(() => Boolean(competition.value?.resultSetup?.published) || ['PUBLISHED', 'ARCHIVED'].includes(competition.value?.status))
 const hasConfirmedAwardResults = computed(() => awardDrafts.value.some((award) => isAwardConfirmedOrPublished(award)))
 const awardsConfirmed = computed(() => awardDrafts.value.length > 0 && awardDrafts.value.every((award) => isAwardConfirmedOrPublished(award)))
 const hasEditableAwardResults = computed(() => awardDrafts.value.some((award) => canEditAwardSelection(award)))
+const showGenerateAwardsAction = computed(() => !awardsConfirmed.value && !resultsPublished.value)
+const showConfirmAwardsAction = computed(() => !awardsConfirmed.value && !resultsPublished.value)
+const showPublishResultsAction = computed(() => !resultsPublished.value)
 const canGenerateAwards = computed(() => terminalRoundLocked.value && !hasConfirmedAwardResults.value && !resultsPublished.value)
 const generateAwardsDisabledReason = computed(() => {
   if (!terminalRoundLocked.value) return '请先锁定决赛轮'
@@ -1528,6 +1670,42 @@ const filteredJudgePool = computed(() => {
       || (judgeRoleFilter.value === 'UNASSIGNED' && !isAssigned(judge.publicId))
   })
 })
+const feedbackStatusOptions = [
+  { value: 'all', label: '全部' },
+  { value: 'comment_missing', label: '待评价' },
+  { value: 'awaiting_captain', label: '待汇总' },
+  { value: 'comment_short', label: '评语偏短' },
+]
+const feedbackJudgeTypeOptions = [
+  { value: '全部', label: '全部' },
+  { value: 'PROFESSIONAL', label: '专业评审' },
+  { value: 'CROSS', label: '跨界评审' },
+]
+const feedbackTableOptions = computed(() => buildFeedbackOptions(feedbackReviewEntries.value.map((entry) => entry.tableName)))
+const feedbackCategoryOptions = computed(() => buildFeedbackOptions(feedbackReviewEntries.value.map((entry) => entry.categoryName)))
+const feedbackFilteredEntries = computed(() => {
+  const keyword = feedbackFilters.keyword.trim().toLowerCase()
+  return feedbackReviewEntries.value.filter((entry) => {
+    if (feedbackFilters.tableName !== '全部' && entry.tableName !== feedbackFilters.tableName) return false
+    if (feedbackFilters.categoryName !== '全部' && entry.categoryName !== feedbackFilters.categoryName) return false
+    if (feedbackFilters.status !== 'all' && entry.status !== feedbackFilters.status) return false
+    if (feedbackFilters.judgeType !== '全部' && !(entry.judges || []).some((judge) => judge.role === feedbackFilters.judgeType)) return false
+    if (!keyword) return true
+    return [
+      entry.entryName,
+      entry.labelCode,
+      entry.shortCode,
+      entry.beerUuid,
+      entry.categoryName,
+      entry.style,
+    ].filter(Boolean).some((value) => String(value).toLowerCase().includes(keyword))
+  })
+})
+const selectedFeedbackEntry = computed(() => {
+  const selected = feedbackFilteredEntries.value.find((entry) => feedbackEntryKey(entry) === selectedFeedbackEntryKey.value)
+  return selected || feedbackFilteredEntries.value[0] || null
+})
+const selectedFeedbackIssues = computed(() => buildFeedbackIssues(selectedFeedbackEntry.value))
 
 onMounted(() => {
   loadStyleLibraries()
@@ -1548,7 +1726,11 @@ watch(() => route.query.tab, (tab) => {
 watch(activeTab, (tab) => {
   syncActiveTabQuery(tab)
   if (tab === 'rounds') refreshRoundProgress()
+  if (tab === 'feedback') loadFeedbackReview()
 }, { immediate: true })
+watch(() => competition.value?.id, () => {
+  if (activeTab.value === 'feedback') loadFeedbackReview()
+})
 watch(() => currentRound.value?.status, () => {
   if (activeTab.value === 'rounds') refreshRoundProgress()
 })
@@ -1573,6 +1755,15 @@ watch([styleCategorySummary, activeTab], () => {
     updateStyleDistributionOverflow()
   })
 }, { immediate: true })
+watch(feedbackFilteredEntries, (entries) => {
+  if (!entries.length) {
+    selectedFeedbackEntryKey.value = ''
+    return
+  }
+  if (!entries.some((entry) => feedbackEntryKey(entry) === selectedFeedbackEntryKey.value)) {
+    selectedFeedbackEntryKey.value = feedbackEntryKey(entries[0])
+  }
+})
 async function loadDetail() {
   loading.value = true
   try {
@@ -1633,6 +1824,83 @@ async function loadJudgePool() {
   } catch {
     judgePool.value = []
   }
+}
+
+async function loadFeedbackReview(force = false) {
+  const competitionId = competition.value?.id || route.params.id
+  if (!competitionId) return
+  if (!force && feedbackReviewCompetitionId.value === competitionId && feedbackReviewEntries.value.length) return
+  if (feedbackReviewLoading.value) return
+  feedbackReviewLoading.value = true
+  try {
+    const data = await fetchCompetitionFeedbackReview(competitionId)
+    feedbackReviewEntries.value = data || []
+    feedbackReviewCompetitionId.value = competitionId
+    if (!feedbackReviewEntries.value.some((entry) => feedbackEntryKey(entry) === selectedFeedbackEntryKey.value)) {
+      selectedFeedbackEntryKey.value = feedbackEntryKey(feedbackReviewEntries.value[0])
+    }
+  } catch {
+    feedbackReviewEntries.value = []
+    feedbackReviewCompetitionId.value = competitionId
+    ElMessage.error('反馈数据加载失败')
+  } finally {
+    feedbackReviewLoading.value = false
+  }
+}
+
+function buildFeedbackOptions(values) {
+  return ['全部', ...[...new Set(values.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), 'zh-CN'))]
+}
+
+function feedbackEntryKey(entry) {
+  if (!entry) return ''
+  return `${entry.roundTableId || 'table'}-${entry.beerUuid || entry.beerEntryId || ''}`
+}
+
+function feedbackRoleLabel(role) {
+  if (role === 'CAPTAIN') return '桌长个人评分'
+  return roleLabels[role] || '评审'
+}
+
+function feedbackJudgeAnomalyLabel(anomaly) {
+  const labels = {
+    not_submitted: '未提交',
+    comment_missing: '评价缺失',
+    comment_short: '评价偏短',
+  }
+  return labels[anomaly] || ''
+}
+
+function formatFeedbackTime(value) {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return new Intl.DateTimeFormat('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date)
+}
+
+function buildFeedbackIssues(entry) {
+  if (!entry) return []
+  const issues = []
+  const missing = Math.max(0, Number(entry.personalTotal || 0) - Number(entry.personalSubmitted || 0))
+  if (missing > 0) issues.push({ severity: 'blocking', message: `还有 ${missing} 位评委未提交个人评分。` })
+  if (!entry.captainOpinion?.submitted) {
+    issues.push({ severity: 'blocking', message: '桌长尚未提交最终意见，发布后厂商看不到最终反馈。' })
+  } else if (!String(entry.captainOpinion.comments || '').trim()) {
+    issues.push({ severity: 'blocking', message: '桌长综合评语为空，发布后厂商看不到最终反馈。' })
+  }
+  ;(entry.judges || []).forEach((judge) => {
+    if (judge.anomaly === 'comment_missing') {
+      issues.push({ severity: 'warning', message: `评委「${judge.judgeName}」评价内容缺失。` })
+    }
+    if (judge.anomaly === 'comment_short') {
+      issues.push({ severity: 'warning', message: `评委「${judge.judgeName}」评价内容偏短，请确认是否可接受。` })
+    }
+  })
+  return issues
 }
 
 function normalizeDetail(data) {
@@ -3338,7 +3606,7 @@ function getEntryAward(uuid) {
 
 function formatAwardStatus(award) {
   if (award.status === 'CONFIRMED') return '已确认'
-  if (award.status === 'PUBLISHED') return '已发布'
+  if (award.status === 'PUBLISHED') return '已发布至厂商端'
   return '待确认'
 }
 
@@ -3351,10 +3619,20 @@ function isAwardConfirmedOrPublished(award) {
 }
 
 function formatAwardEntryName(award) {
-  const entry = roundEntryPool.value.find((item) => item.id === award.beerEntryId)
-    || competition.value?.entries?.find((item) => item.id === award.beerEntryId)
+  const entry = resolveAwardEntry(award)
   if (!entry) return '待选择'
   return formatAwardEntryLabel(entry)
+}
+
+function resolveAwardEntry(award) {
+  return roundEntryPool.value.find((item) => item.id === award?.beerEntryId)
+    || competition.value?.entries?.find((item) => item.id === award?.beerEntryId)
+    || null
+}
+
+function formatAwardScope(award) {
+  if (award?.awardType === 'CHAMPION') return '全场总冠军'
+  return award?.categoryName || '未分组'
 }
 
 function formatAwardEntryLabel(entry) {
@@ -3388,6 +3666,11 @@ function getEntryPath(uuid) {
     }
   })
   return parts.join(' -> ') || '-'
+}
+
+function getAwardPath(award) {
+  const entry = resolveAwardEntry(award)
+  return entry ? getEntryPath(entry.uuid) : '-'
 }
 
 async function publishResultsAction() {
@@ -6648,6 +6931,764 @@ button.pyramid-placeholder-mark {
 
 .results-layout {
   align-items: start;
+}
+
+.feedback-review-panel {
+  min-height: 0;
+  height: 100%;
+  padding: 0;
+  overflow: hidden;
+}
+
+.feedback-review-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  border: 1px solid var(--line);
+  background: rgba(8, 16, 19, 0.58);
+}
+
+.feedback-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.feedback-search-field,
+.feedback-select-field {
+  display: flex;
+  align-items: center;
+}
+
+.feedback-search-field {
+  position: relative;
+  width: 290px;
+  flex: 0 0 290px;
+}
+
+.feedback-search-field svg {
+  position: absolute;
+  left: 12px;
+  color: var(--muted);
+  font-size: 16px;
+  pointer-events: none;
+}
+
+.feedback-search-field input,
+.feedback-select-field select {
+  height: 36px;
+  color: var(--text);
+  border: 1px solid rgba(219, 232, 237, 0.13);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.045);
+  outline: none;
+}
+
+.feedback-search-field input {
+  width: 100%;
+  padding: 0 12px 0 36px;
+}
+
+.feedback-search-field input::placeholder {
+  color: var(--muted);
+}
+
+.feedback-search-field input:focus,
+.feedback-select-field select:focus {
+  border-color: rgba(224, 184, 74, 0.52);
+}
+
+.feedback-select-field {
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.feedback-select-field select {
+  min-width: 82px;
+  padding: 0 28px 0 12px;
+}
+
+.feedback-select-field option {
+  color: var(--text);
+  background: #121d21;
+}
+
+.feedback-status-segments {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+  padding: 4px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.feedback-status-segments button {
+  min-height: 28px;
+  padding: 0 12px;
+  color: var(--muted);
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.feedback-status-segments button.active {
+  color: #20170c;
+  background: var(--gold-soft);
+}
+
+.feedback-split-layout {
+  display: grid;
+  grid-template-columns: 40fr 60fr;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.feedback-entry-list {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.feedback-entry-scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+}
+
+.feedback-entry-scroll::-webkit-scrollbar,
+.feedback-detail-panel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.feedback-entry-scroll::-webkit-scrollbar-thumb,
+.feedback-detail-panel::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.feedback-entry-list footer {
+  flex: 0 0 auto;
+  padding: 10px 18px;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+
+.feedback-entry-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 62px;
+  padding: 11px 18px;
+  color: var(--text);
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid rgba(219, 232, 237, 0.07);
+  background: transparent;
+}
+
+.feedback-entry-row:hover {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.feedback-entry-row.active {
+  background: rgba(224, 184, 74, 0.085);
+  box-shadow: inset 0 0 0 1px rgba(224, 184, 74, 0.36);
+}
+
+.feedback-entry-row > span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.feedback-entry-row strong,
+.feedback-entry-row small,
+.feedback-detail-head strong,
+.feedback-detail-head small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.feedback-entry-row > span strong {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.feedback-entry-row > span small,
+.feedback-entry-row em small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.feedback-entry-row em {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  flex: 0 0 auto;
+  font-style: normal;
+}
+
+.feedback-entry-row em strong {
+  color: var(--gold-soft);
+  font-size: 15px;
+}
+
+.feedback-entry-row em small.pending {
+  color: var(--red);
+  font-weight: 900;
+}
+
+.feedback-detail-panel {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.feedback-detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--line);
+}
+
+.feedback-detail-head strong {
+  font-size: 16px;
+}
+
+.feedback-detail-head span {
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.feedback-detail-head small {
+  flex: 0 0 100%;
+  color: var(--muted);
+}
+
+.feedback-detail-body {
+  display: grid;
+  gap: 20px;
+  padding: 20px 24px 28px;
+}
+
+.feedback-block {
+  display: grid;
+  gap: 10px;
+}
+
+.feedback-block-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.feedback-block h2,
+.feedback-issue-title {
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.feedback-block-title span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.captain-opinion-card {
+  padding: 16px;
+  border: 1px solid rgba(224, 184, 74, 0.24);
+  border-radius: 8px;
+  background: rgba(224, 184, 74, 0.06);
+}
+
+.captain-opinion-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 22px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.captain-opinion-meta strong {
+  color: var(--text);
+}
+
+.captain-opinion-meta .score-highlight {
+  color: var(--gold-soft);
+  font-size: 16px;
+}
+
+.captain-opinion-meta em {
+  padding: 3px 8px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.captain-opinion-meta em.advanced {
+  color: var(--green);
+  border-color: rgba(111, 207, 122, 0.22);
+  background: rgba(111, 207, 122, 0.1);
+}
+
+.captain-opinion-meta small {
+  margin-left: auto;
+  color: var(--muted);
+}
+
+.captain-opinion-card p {
+  margin-top: 12px;
+  color: var(--text);
+  line-height: 1.7;
+}
+
+.captain-missing-card,
+.feedback-issue-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border-radius: 8px;
+}
+
+.captain-missing-card {
+  align-items: center;
+  padding: 12px 14px;
+  color: #ff9a9a;
+  border: 1px solid rgba(224, 82, 82, 0.28);
+  background: rgba(224, 82, 82, 0.08);
+  font-weight: 800;
+}
+
+.judge-score-list {
+  display: grid;
+  gap: 12px;
+}
+
+.judge-score-card {
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.judge-score-card.missing {
+  border-color: rgba(224, 82, 82, 0.22);
+}
+
+.judge-score-card header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.judge-score-card header > span:first-child {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.judge-score-card header strong {
+  color: var(--text);
+}
+
+.judge-score-card header small,
+.judge-score-meta small {
+  color: var(--muted);
+}
+
+.judge-score-card header small {
+  padding: 3px 7px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.judge-score-card header small.captain {
+  color: var(--gold-soft);
+  background: rgba(224, 184, 74, 0.12);
+}
+
+.judge-anomaly {
+  color: #efbd76;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.judge-anomaly.not_submitted,
+.judge-anomaly.comment_missing {
+  color: #ff9a9a;
+}
+
+.judge-score-meta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.judge-score-meta strong {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 13px;
+}
+
+.judge-missing-text {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.judge-dimension-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.judge-dimension-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 14px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(219, 232, 237, 0.07);
+}
+
+.judge-dimension-row:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.judge-dimension-row span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.judge-dimension-row strong {
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+}
+
+.judge-dimension-row p {
+  grid-column: 1 / -1;
+  color: rgba(230, 237, 240, 0.82);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.feedback-issue-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.feedback-issue-list li {
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.feedback-issue-list li.blocking {
+  color: #ff9a9a;
+  border: 1px solid rgba(224, 82, 82, 0.25);
+  background: rgba(224, 82, 82, 0.08);
+}
+
+.feedback-issue-list li.warning {
+  color: #efbd76;
+  border: 1px solid rgba(242, 153, 74, 0.22);
+  background: rgba(242, 153, 74, 0.07);
+}
+
+.feedback-empty-state {
+  display: grid;
+  place-items: center;
+  min-height: 160px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.results-workbench {
+  display: grid;
+  grid-template-columns: minmax(780px, 1fr) minmax(320px, 380px);
+  gap: 14px;
+  align-items: start;
+}
+
+.award-table-card,
+.result-check-card {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+.award-table-card .panel-heading {
+  margin-bottom: 0;
+}
+
+.result-check-card {
+  position: sticky;
+  top: 0;
+}
+
+.award-missing-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  color: #f1bd79;
+  border: 1px solid rgba(242, 153, 74, 0.2);
+  border-radius: 8px;
+  background: rgba(242, 153, 74, 0.08);
+  font-weight: 800;
+}
+
+.award-result-table {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.award-result-row {
+  display: grid;
+  grid-template-columns: minmax(86px, 0.46fr) minmax(96px, 0.55fr) minmax(280px, 1.36fr) minmax(240px, 1.05fr) minmax(86px, 0.48fr) minmax(110px, 0.5fr) 96px;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.024);
+}
+
+.award-result-row.champion {
+  border-color: rgba(216, 169, 53, 0.32);
+  background: rgba(216, 169, 53, 0.075);
+}
+
+.award-result-row.table-head {
+  padding-top: 0;
+  padding-bottom: 0;
+  color: var(--muted);
+  border-color: transparent;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.award-name-cell,
+.award-certificate-cell {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.award-name-cell strong,
+.award-certificate-cell strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.award-name-cell strong {
+  color: var(--gold-soft);
+}
+
+.award-name-cell small,
+.award-certificate-cell small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.award-result-row > span,
+.award-path-cell {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.award-path-cell {
+  color: var(--muted);
+}
+
+.award-result-table :deep(.el-select) {
+  width: 100%;
+  min-width: 0;
+}
+
+.award-result-table :deep(.el-select__wrapper) {
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid rgba(219, 232, 237, 0.12);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow: none;
+}
+
+.award-result-table :deep(.el-select__wrapper:hover),
+.award-result-table :deep(.el-select__wrapper.is-focused) {
+  border-color: rgba(216, 169, 53, 0.36);
+  background: rgba(216, 169, 53, 0.06);
+  box-shadow: 0 0 0 2px rgba(216, 169, 53, 0.08);
+}
+
+.award-result-table :deep(.el-select__selected-item),
+.award-result-table :deep(.el-select__placeholder),
+.award-result-table :deep(.el-select__input) {
+  color: var(--text);
+}
+
+.award-result-table :deep(.el-select__placeholder.is-transparent) {
+  color: var(--muted);
+}
+
+.award-result-table :deep(.el-select__caret) {
+  color: var(--muted);
+}
+
+.award-status-pill {
+  justify-self: start;
+  padding: 5px 8px;
+  color: #f1bd79;
+  border: 1px solid rgba(242, 153, 74, 0.22);
+  border-radius: 999px;
+  background: rgba(242, 153, 74, 0.08);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.award-status-pill.CONFIRMED,
+.award-status-pill.PUBLISHED,
+.award-certificate-cell strong.uploaded {
+  color: var(--green);
+}
+
+.award-status-pill.CONFIRMED,
+.award-status-pill.PUBLISHED {
+  border-color: rgba(111, 207, 122, 0.24);
+  background: rgba(111, 207, 122, 0.08);
+}
+
+.award-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+
+.award-row-actions button,
+.path-toggle {
+  min-height: 28px;
+  padding: 0 9px;
+  color: var(--gold-soft);
+  border: 1px solid rgba(216, 169, 53, 0.22);
+  border-radius: 6px;
+  background: rgba(216, 169, 53, 0.06);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.award-row-actions .award-upload-icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  border-radius: 8px;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.award-row-actions button:disabled {
+  opacity: 0.48;
+}
+
+.result-action-panel {
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(219, 232, 237, 0.08);
+}
+
+.result-action-panel h3,
+.result-action-panel p {
+  margin: 0;
+}
+
+.result-action-panel h3 {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.result-action-panel .tool-button {
+  justify-content: center;
+  width: 100%;
+  min-height: 40px;
+}
+
+.result-action-panel p {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.path-audit-card {
+  margin-top: 14px;
+}
+
+.path-audit-card .panel-heading {
+  margin-bottom: 0;
+}
+
+.path-audit-card .panel-heading > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.path-audit-card .path-table {
+  margin-top: 12px;
 }
 
 .award-list {

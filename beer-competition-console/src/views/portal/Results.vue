@@ -4,11 +4,11 @@
       <div>
         <span class="label-chip tone-gold">结果中心</span>
         <h1>我的结果</h1>
-        <p>查看已发布酒款的评分、评语、奖项和奖状。</p>
+        <p>{{ resultHeroText }}</p>
       </div>
       <div class="result-stats">
-        <span><small>已提交</small><b>{{ results.length }}</b></span>
-        <span><small>可查看</small><b>{{ publishedEntries.length }}</b></span>
+        <span><small>参赛酒款</small><b>{{ results.length }}</b></span>
+        <span><small>已发布</small><b>{{ publishedEntries.length }}</b></span>
         <span><small>已获奖</small><b>{{ awardedEntries.length }}</b></span>
       </div>
     </section>
@@ -45,7 +45,7 @@
             >
               <span :class="['label-chip', `tone-${resultTone(entry)}`]">{{ resultStatusLabel(entry) }}</span>
               <strong>{{ entry.entryName }}</strong>
-              <small>{{ entry.categoryName || '未关联组别' }} · {{ entry.style || '未填写风格' }}</small>
+              <small>{{ entry.categoryName || '组别待确认' }} · {{ entry.style || '风格待确认' }}</small>
               <em>{{ resultBrief(entry) }}</em>
             </button>
           </section>
@@ -59,54 +59,87 @@
 
       <main class="result-detail">
         <template v-if="selectedEntry?.published">
-          <section class="overview-grid">
-            <article class="award-card">
-              <span>{{ selectedEntry.competitionName }}</span>
-              <h2>{{ awardTitle }}</h2>
-              <strong>{{ selectedEntry.entryName }}</strong>
-              <p>{{ selectedEntry.categoryName }} · {{ selectedEntry.style }}</p>
-              <p v-if="selectedEntry.categoryEntryCount">本组别共 {{ selectedEntry.categoryEntryCount }} 款参赛酒</p>
+          <section class="result-summary-card brewer-card">
+            <div class="summary-main">
+              <div class="summary-title">
+                <span :class="['label-chip', `tone-${resultTone(selectedEntry)}`]">{{ resultStatusLabel(selectedEntry) }}</span>
+                <h2>{{ selectedEntry.entryName }}</h2>
+                <p>{{ selectedEntry.competitionName || '赛事信息待确认' }}</p>
+              </div>
+
+              <dl class="entry-meta">
+                <div>
+                  <dt>参赛组别</dt>
+                  <dd>{{ selectedEntry.categoryName || '组别待确认' }}</dd>
+                </div>
+                <div>
+                  <dt>基础风格</dt>
+                  <dd>{{ selectedEntry.style || '风格待确认' }}</dd>
+                </div>
+                <div>
+                  <dt>组内规模</dt>
+                  <dd>{{ categoryEntryCountText }}</dd>
+                </div>
+              </dl>
+            </div>
+
+            <div class="summary-facts">
+              <span>
+                <small>最终结果</small>
+                <b>{{ resultOutcome }}</b>
+              </span>
+              <span>
+                <small>综合得分</small>
+                <b>{{ finalScoreText }}</b>
+              </span>
+              <span>
+                <small>证书状态</small>
+                <b>{{ certificateStatusText }}</b>
+              </span>
+            </div>
+
+            <div class="result-actions">
               <button
-                v-if="selectedEntry.certificateAvailable"
-                class="certificate-button"
+                class="primary-action"
                 type="button"
+                :disabled="!selectedEntry.certificateAvailable"
                 @click="downloadCertificate"
               >
-                下载 PDF 奖状
+                下载证书
               </button>
-            </article>
-
-            <article class="overview-card brewer-card">
-              <h2 class="portal-section-title">结果概览</h2>
-              <div class="overview-facts">
-                <span><small>共识分</small><b>{{ finalScore || '-' }}</b></span>
-                <span><small>奖项</small><b>{{ awardTitle }}</b></span>
-                <span><small>晋级状态</small><b>{{ advanceStatusLabel || '未晋级' }}</b></span>
-                <span><small>奖状</small><b>{{ selectedEntry.certificateAvailable ? '可下载' : '暂未开放' }}</b></span>
-              </div>
-            </article>
+              <RouterLink class="secondary-action" to="/portal/my">查看参赛进度</RouterLink>
+            </div>
           </section>
 
-          <section class="captain-card brewer-card">
-            <h2 class="portal-section-title">桌长总结</h2>
-            <p>{{ captainScore?.comments || '主办方暂未发布桌长总结' }}</p>
+          <section v-if="captainScore" class="captain-card brewer-card">
+            <div class="section-heading">
+              <h2 class="portal-section-title">综合评语</h2>
+              <span>{{ scoreWithMax(captainScore, true) }}</span>
+            </div>
+            <p>{{ readableComment(captainScore.comments, '暂无综合文字反馈。') }}</p>
           </section>
 
           <section class="feedback-card brewer-card">
-            <h2 class="portal-section-title">评审反馈</h2>
+            <div class="section-heading">
+              <h2 class="portal-section-title">评审反馈</h2>
+              <span>{{ judgeScores.length }} 条</span>
+            </div>
             <div v-if="judgeScores.length" class="feedback-list">
               <article v-for="score in judgeScores" :key="score.judgeLabel" class="feedback-row">
-                <div class="judge-comment">
-                  <strong>{{ score.judgeLabel }}</strong>
-                  <p>{{ score.comments || '暂无评语' }}</p>
-                </div>
-                <div class="score-grid">
-                  <span v-for="dimension in score.dimensions" :key="dimension.key || dimension.label">
-                    <small>{{ dimension.label || dimension.key }}</small>
-                    <b>{{ dimension.score ?? '-' }}</b>
-                    <em v-if="dimension.note">{{ dimension.note }}</em>
-                  </span>
-                  <span><small>总分</small><b>{{ score.totalScore ?? '-' }}</b></span>
+                <header class="feedback-head">
+                  <div>
+                    <strong>{{ judgeDisplayName(score) }}</strong>
+                    <small v-if="judgeDisplayName(score) !== scoreRoleLabel(score.judgeRoleType)">{{ scoreRoleLabel(score.judgeRoleType) }}</small>
+                  </div>
+                  <span>{{ scoreWithMax(score) }}</span>
+                </header>
+
+                <div v-if="score.dimensions?.length" class="dimension-table">
+                  <div v-for="dimension in score.dimensions" :key="dimension.key || dimension.label" class="dimension-row">
+                    <span>{{ dimension.label || dimension.key }}</span>
+                    <strong>{{ dimensionScoreText(dimension) }}</strong>
+                    <em>{{ readableComment(dimension.note, '') }}</em>
+                  </div>
                 </div>
               </article>
             </div>
@@ -114,7 +147,10 @@
           </section>
 
           <section v-if="resultDetail.roundResults.length" class="round-result-card brewer-card">
-            <h2 class="portal-section-title">晋级与奖项记录</h2>
+            <div class="section-heading">
+              <h2 class="portal-section-title">晋级与奖项记录</h2>
+              <span>{{ resultDetail.roundResults.length }} 条</span>
+            </div>
             <div class="round-result-list">
               <span v-for="(roundResult, index) in resultDetail.roundResults" :key="`${roundResult.resultType}-${roundResult.rankNo}-${index}`">
                 <small>{{ resultTypeLabel(roundResult.resultType || roundResult.awardType) }}</small>
@@ -127,14 +163,27 @@
 
         <section v-else-if="selectedEntry" class="locked-card brewer-card">
           <span :class="['label-chip', `tone-${resultTone(selectedEntry)}`]">{{ resultStatusLabel(selectedEntry) }}</span>
-          <h2>结果暂未发布</h2>
-          <p>主办方确认并发布结果后，这里会显示评分、评语和奖项信息。</p>
+          <h2>{{ selectedEntry.entryName }}</h2>
+          <p>{{ selectedEntry.lockReason || '主办方确认并发布结果后，这里会显示评分、评语和奖项信息。' }}</p>
+          <dl class="entry-meta locked-meta">
+            <div>
+              <dt>赛事</dt>
+              <dd>{{ selectedEntry.competitionName || '赛事信息待确认' }}</dd>
+            </div>
+            <div>
+              <dt>参赛组别</dt>
+              <dd>{{ selectedEntry.categoryName || '组别待确认' }}</dd>
+            </div>
+            <div>
+              <dt>基础风格</dt>
+              <dd>{{ selectedEntry.style || '风格待确认' }}</dd>
+            </div>
+          </dl>
           <div class="locked-progress">
             <span class="done">提交资料</span>
             <span :class="{ done: selectedEntry.status !== 'PENDING_PAYMENT' }">付款确认</span>
             <span :class="{ done: selectedEntry.status === 'STORED' || selectedEntry.status === 'RESULT_PUBLISHED' }">酒样入库</span>
-            <span :class="{ done: selectedEntry.status === 'RESULT_PUBLISHED' }">评审中</span>
-            <span>结果发布</span>
+            <span :class="{ done: selectedEntry.status === 'RESULT_PUBLISHED' }">结果发布</span>
           </div>
           <div class="empty-actions">
             <RouterLink to="/portal/my">返回我的参赛</RouterLink>
@@ -181,32 +230,50 @@ const resultDetail = ref({ summary: null, scores: [], roundResults: [] })
 
 const filterOptions = [
   { label: '全部', value: 'all' },
-  { label: '可查看', value: 'published' },
+  { label: '已发布', value: 'published' },
   { label: '待发布', value: 'locked' },
   { label: '已获奖', value: 'awarded' },
+  { label: '未获奖', value: 'unawarded' },
 ]
 
 const selectedEntry = computed(() => resultDetail.value.summary || results.value.find((entry) => entry.entryId === selectedId.value))
 const publishedEntries = computed(() => results.value.filter((entry) => isEntryResultPublished(entry)))
 const awardedEntries = computed(() => results.value.filter((entry) => isEntryAwarded(entry)))
+const unawardedEntries = computed(() => publishedEntries.value.filter((entry) => !isEntryAwarded(entry)))
 const captainScore = computed(() => resultDetail.value.scores.find((score) => score.finalScore) || null)
 const judgeScores = computed(() => resultDetail.value.scores.filter((score) => !score.finalScore))
 const finalScore = computed(() => captainScore.value?.consensusScore || captainScore.value?.totalScore || null)
-const awardTitle = computed(() => selectedEntry.value?.awardName || selectedEntry.value?.roundResult?.awardName || selectedEntry.value?.roundResult?.slotLabel || '结果已发布')
-const advanceStatusLabel = computed(() => {
-  if (!resultDetail.value.roundResults.length) return ''
-  const advancedTypes = new Set(['ADVANCE', 'RANK', 'MEDAL', 'CHAMPION'])
-  return resultDetail.value.roundResults.some((item) => advancedTypes.has(item.resultType)) ? '已晋级' : ''
+const finalScoreMax = computed(() => scoreMax(captainScore.value) || 50)
+const awardTitle = computed(() => selectedEntry.value?.awardName || selectedEntry.value?.roundResult?.awardName || selectedEntry.value?.roundResult?.slotLabel || '')
+const resultOutcome = computed(() => awardTitle.value || '未获奖')
+const resultHeroText = computed(() => {
+  if (!results.value.length) return '提交报名后，比赛结果会在发布后显示。'
+  return `已发布 ${publishedEntries.value.length} 款，已获奖 ${awardedEntries.value.length} 款，待发布 ${results.value.length - publishedEntries.value.length} 款。`
+})
+const categoryEntryCountText = computed(() => {
+  const count = Number(selectedEntry.value?.categoryEntryCount || 0)
+  return count ? `${count} 款参赛酒` : '待确认'
+})
+const finalScoreText = computed(() => {
+  if (finalScore.value === null || finalScore.value === undefined || finalScore.value === '') return '待确认'
+  return `${formatScore(finalScore.value)} / ${formatScore(finalScoreMax.value)}`
+})
+const certificateStatusText = computed(() => {
+  if (!isEntryAwarded(selectedEntry.value)) return '无获奖证书'
+  return selectedEntry.value?.certificateAvailable ? '可下载' : '暂未开放'
 })
 const filteredResults = computed(() => {
   const word = keyword.value.trim().toLowerCase()
   return results.value.filter((entry) => {
     const text = `${entry.entryName || ''} ${entry.competitionName || ''} ${entry.categoryName || ''} ${entry.style || ''} ${entry.entryId || ''}`.toLowerCase()
     const hitWord = !word || text.includes(word)
+    const published = isEntryResultPublished(entry)
+    const awarded = isEntryAwarded(entry)
     const hitStatus = statusFilter.value === 'all'
-      || (statusFilter.value === 'published' && isEntryResultPublished(entry))
-      || (statusFilter.value === 'locked' && !isEntryResultPublished(entry))
-      || (statusFilter.value === 'awarded' && isEntryAwarded(entry))
+      || (statusFilter.value === 'published' && published)
+      || (statusFilter.value === 'locked' && !published)
+      || (statusFilter.value === 'awarded' && awarded)
+      || (statusFilter.value === 'unawarded' && published && !awarded)
     return hitWord && hitStatus
   })
 })
@@ -217,7 +284,7 @@ const groupedResults = computed(() => {
     if (!groups.has(key)) {
       groups.set(key, {
         competitionId: entry.competitionId,
-        competitionName: entry.competitionName || '未关联赛事',
+        competitionName: entry.competitionName || '赛事信息待确认',
         entries: [],
       })
     }
@@ -269,19 +336,20 @@ function selectEntry(entryId) {
 
 function resultStatusLabel(entry) {
   if (isEntryAwarded(entry)) return '已获奖'
-  if (isEntryResultPublished(entry)) return '结果已发布'
-  if (entry.status === 'STORED') return '结果待发布'
-  return entryStatusMeta[entry.status]?.label || '结果待发布'
+  if (isEntryResultPublished(entry)) return '未获奖'
+  if (entry.status === 'STORED') return '待发布'
+  return entryStatusMeta[entry.status]?.label || '待发布'
 }
 
 function resultTone(entry) {
-  if (isEntryAwarded(entry) || isEntryResultPublished(entry)) return 'gold'
+  if (isEntryAwarded(entry)) return 'gold'
+  if (isEntryResultPublished(entry)) return 'green'
   if (entry.status === 'STORED') return 'blue'
   return entryStatusMeta[entry.status]?.tone || 'muted'
 }
 
 function resultBrief(entry) {
-  if (isEntryAwarded(entry)) return entry.awardName || entry.roundResult?.awardName || '已获奖'
+  if (isEntryAwarded(entry)) return entry.awardName || entry.roundResult?.awardName || '获奖结果已发布'
   if (isEntryResultPublished(entry)) return '评分和评语可查看'
   return entry.lockReason || '等待主办方发布结果'
 }
@@ -296,20 +364,67 @@ function resultTypeLabel(type) {
   return labels[type] || '晋级与奖项'
 }
 
+function scoreRoleLabel(role) {
+  const labels = {
+    CROSS: '跨界评审',
+    PROFESSIONAL: '专业评审',
+    CAPTAIN: '桌长',
+  }
+  return labels[role] || '评审'
+}
+
+function judgeDisplayName(score) {
+  const roleLabel = scoreRoleLabel(score.judgeRoleType)
+  if (!score.judgeLabel || /#\s*\d+/.test(score.judgeLabel) || /^评审\s*\d+$/i.test(score.judgeLabel)) return roleLabel
+  return score.judgeLabel
+}
+
+function scoreMax(score) {
+  if (!score?.dimensions?.length) return null
+  return score.dimensions.reduce((sum, dimension) => sum + Number(dimension.maxScore || 0), 0) || null
+}
+
+function scoreWithMax(score, consensus = false) {
+  const value = consensus ? (score?.consensusScore || score?.totalScore) : score?.totalScore
+  if (value === null || value === undefined || value === '') return '待确认'
+  const max = scoreMax(score)
+  return max ? `${formatScore(value)} / ${formatScore(max)}` : formatScore(value)
+}
+
+function dimensionScoreText(dimension) {
+  if (dimension?.score === null || dimension?.score === undefined || dimension?.score === '') return '-'
+  if (dimension.maxScore !== null && dimension.maxScore !== undefined && dimension.maxScore !== '') {
+    return `${formatScore(dimension.score)} / ${formatScore(dimension.maxScore)}`
+  }
+  return formatScore(dimension.score)
+}
+
+function formatScore(value) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return value
+  return Number.isInteger(number) ? String(number) : number.toFixed(1)
+}
+
+function readableComment(value, fallback) {
+  const normalized = String(value || '').trim()
+  if (!normalized) return fallback
+  return normalized
+}
+
 async function downloadCertificate() {
-  if (!selectedEntry.value?.entryId) return
+  if (!selectedEntry.value?.entryId || !selectedEntry.value?.certificateAvailable) return
   try {
     const blob = await downloadPortalResultCertificate(selectedEntry.value.entryId)
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = selectedEntry.value.certificateFilename || `${selectedEntry.value.entryName || '奖状'}.pdf`
+    link.download = selectedEntry.value.certificateFilename || `${selectedEntry.value.entryName || '证书'}.pdf`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
   } catch {
-    ElMessage.error('奖状暂未开放下载')
+    ElMessage.error('证书暂未开放下载')
   }
 }
 </script>
@@ -317,7 +432,7 @@ async function downloadCertificate() {
 <style scoped>
 .results-page {
   display: grid;
-  gap: 22px;
+  gap: 18px;
 }
 
 .result-hero {
@@ -325,18 +440,18 @@ async function downloadCertificate() {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 24px;
   align-items: end;
-  padding: 28px;
+  padding: 22px 24px;
   color: #fff6df;
   background:
-    linear-gradient(135deg, rgba(32, 23, 15, 0.96), rgba(84, 48, 17, 0.9)),
+    linear-gradient(135deg, rgba(34, 25, 17, 0.96), rgba(92, 55, 18, 0.9)),
     repeating-linear-gradient(90deg, rgba(255, 250, 240, 0.06) 0 1px, transparent 1px 16px);
   border-radius: 8px;
 }
 
 .result-hero h1 {
-  margin: 16px 0 8px;
-  font-size: 44px;
-  line-height: 1.05;
+  margin: 12px 0 6px;
+  font-size: 34px;
+  line-height: 1.1;
 }
 
 .result-hero p {
@@ -346,13 +461,13 @@ async function downloadCertificate() {
 
 .result-stats {
   display: grid;
-  grid-template-columns: repeat(3, minmax(86px, 1fr));
+  grid-template-columns: repeat(3, minmax(82px, 1fr));
   gap: 10px;
 }
 
 .result-stats span,
-.overview-facts span {
-  min-height: 72px;
+.summary-facts span {
+  min-height: 70px;
   padding: 12px;
   background: rgba(255, 250, 240, 0.12);
   border: 1px solid rgba(255, 250, 240, 0.18);
@@ -361,8 +476,8 @@ async function downloadCertificate() {
 
 .result-stats small,
 .result-stats b,
-.overview-facts small,
-.overview-facts b {
+.summary-facts small,
+.summary-facts b {
   display: block;
 }
 
@@ -371,8 +486,8 @@ async function downloadCertificate() {
 }
 
 .result-stats b {
-  margin-top: 6px;
-  font-size: 28px;
+  margin-top: 5px;
+  font-size: 27px;
 }
 
 .result-workbench {
@@ -383,7 +498,7 @@ async function downloadCertificate() {
 }
 
 .result-sidebar,
-.overview-card,
+.result-summary-card,
 .captain-card,
 .feedback-card,
 .round-result-card,
@@ -394,6 +509,8 @@ async function downloadCertificate() {
 .result-sidebar {
   position: sticky;
   top: 92px;
+  max-height: calc(100vh - 116px);
+  overflow: auto;
 }
 
 .filter-panel {
@@ -403,12 +520,13 @@ async function downloadCertificate() {
 
 .filter-tabs {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 6px;
 }
 
 .filter-tabs button {
   min-height: 34px;
+  padding: 0 8px;
   color: #6b4710;
   background: #fff7e6;
   border: 1px solid rgba(87, 58, 26, 0.12);
@@ -460,7 +578,7 @@ async function downloadCertificate() {
   padding: 14px;
   text-align: left;
   color: #2b1d10;
-  background: #fff7e6;
+  background: #fff8ec;
   border: 1px solid rgba(87, 58, 26, 0.1);
   border-radius: 8px;
 }
@@ -482,8 +600,9 @@ async function downloadCertificate() {
 .result-entry em,
 .side-empty p,
 .locked-card p,
-.feedback-row p,
-.captain-card p {
+.captain-card p,
+.judge-comment,
+.dimension-row em {
   color: #746a5f;
   line-height: 1.65;
 }
@@ -498,99 +617,146 @@ async function downloadCertificate() {
   min-width: 0;
 }
 
-.overview-grid {
+.result-summary-card {
   display: grid;
-  grid-template-columns: 340px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  gap: 20px;
+  align-items: start;
+}
+
+.summary-main {
+  display: grid;
   gap: 18px;
+  min-width: 0;
 }
 
-.award-card {
-  position: relative;
-  min-height: 340px;
-  padding: 26px;
-  overflow: hidden;
-  color: #2b1d10;
-  text-align: center;
-  background:
-    radial-gradient(circle at 50% 20%, rgba(255, 255, 255, 0.6), transparent 80px),
-    linear-gradient(180deg, #f5db83, #c88222);
-  border: 1px solid rgba(87, 58, 26, 0.18);
-  border-radius: 8px;
-  box-shadow: 0 22px 48px rgba(83, 51, 17, 0.15);
-}
-
-.award-card::before {
-  position: absolute;
-  inset: 18px;
-  border: 2px solid rgba(43, 29, 16, 0.18);
-  border-radius: 8px;
-  content: "";
-}
-
-.award-card > * {
-  position: relative;
-  z-index: 1;
-}
-
-.award-card span {
-  font-weight: 900;
-  letter-spacing: 0.08em;
-}
-
-.award-card h2 {
-  margin: 48px 0 16px;
-  overflow-wrap: anywhere;
-  font-size: 46px;
-  line-height: 1.05;
-}
-
-.award-card strong {
-  display: block;
-  overflow-wrap: anywhere;
-  font-size: 21px;
-  line-height: 1.35;
-}
-
-.award-card p {
-  color: #6b4710;
-  line-height: 1.6;
-}
-
-.certificate-button {
-  min-height: 38px;
-  margin-top: 12px;
-  padding: 0 16px;
-  color: #fff6df;
-  background: #2b1d10;
-  border: 1px solid rgba(43, 29, 16, 0.2);
-  border-radius: 8px;
-  font-weight: 900;
-}
-
-.overview-facts {
+.summary-title {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  justify-items: start;
+  gap: 8px;
 }
 
-.overview-facts span {
-  background: #fff7e6;
-  border-color: rgba(87, 58, 26, 0.1);
+.summary-title h2 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 34px;
+  line-height: 1.18;
 }
 
-.overview-facts small {
+.summary-title p {
+  margin: 0;
   color: #746a5f;
 }
 
-.overview-facts b {
-  margin-top: 8px;
+.entry-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.entry-meta div,
+.summary-facts span {
+  min-width: 0;
+  padding: 12px;
+  background: #fff7e6;
+  border: 1px solid rgba(87, 58, 26, 0.1);
+  border-radius: 8px;
+}
+
+.entry-meta dt,
+.summary-facts small {
+  margin: 0 0 7px;
+  color: #746a5f;
+  font-size: 13px;
+}
+
+.entry-meta dd {
+  margin: 0;
   overflow-wrap: anywhere;
-  font-size: 22px;
-  line-height: 1.25;
+  color: #2b1d10;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.summary-facts {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.summary-facts span {
+  min-height: 78px;
+}
+
+.summary-facts b {
+  overflow-wrap: anywhere;
+  color: #2b1d10;
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.result-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 2px;
+}
+
+.primary-action,
+.secondary-action,
+.empty-actions a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.primary-action {
+  color: #fff6df;
+  background: #2b1d10;
+  border: 1px solid rgba(43, 29, 16, 0.2);
+}
+
+.primary-action:disabled {
+  cursor: not-allowed;
+  color: #877968;
+  background: #eadbc1;
+}
+
+.secondary-action,
+.empty-actions a + a {
+  color: #6b4710;
+  background: #fff7e6;
+  border: 1px solid rgba(87, 58, 26, 0.14);
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.section-heading .portal-section-title {
+  margin: 0;
+}
+
+.section-heading > span {
+  flex: 0 0 auto;
+  color: #6b4710;
+  font-weight: 800;
 }
 
 .captain-card p {
   margin: 0;
+  overflow-wrap: anywhere;
   font-size: 17px;
 }
 
@@ -601,51 +767,88 @@ async function downloadCertificate() {
 
 .feedback-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 460px;
-  gap: 18px;
+  gap: 14px;
   padding: 18px;
-  background: #fff7e6;
+  background: #fff8ec;
   border: 1px solid rgba(87, 58, 26, 0.1);
   border-radius: 8px;
 }
 
-.judge-comment strong {
-  font-size: 17px;
+.feedback-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
 }
 
-.score-grid {
+.feedback-head div {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 8px;
+  gap: 3px;
+  min-width: 0;
 }
 
-.score-grid span {
-  display: grid;
-  place-items: center;
-  align-content: center;
-  gap: 4px;
-  min-height: 74px;
-  padding: 10px;
-  text-align: center;
+.feedback-head strong {
+  overflow-wrap: anywhere;
+  font-size: 18px;
+}
+
+.feedback-head small {
+  color: #746a5f;
+}
+
+.feedback-head > span {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  color: #2b1d10;
   background: #fffdf7;
+  border: 1px solid rgba(87, 58, 26, 0.1);
+  border-radius: 8px;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.judge-comment {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.dimension-table {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.dimension-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 12px;
+  align-items: start;
+  min-height: 70px;
+  padding: 12px;
+  background: #fffdf7;
+  border: 1px solid rgba(87, 58, 26, 0.08);
   border-radius: 8px;
 }
 
-.score-grid small {
-  color: #746a5f;
-}
-
-.score-grid b {
-  font-size: 22px;
-}
-
-.score-grid em {
-  max-width: 100%;
-  color: #746a5f;
-  font-size: 12px;
-  font-style: normal;
-  line-height: 1.45;
+.dimension-row span {
+  min-width: 0;
   overflow-wrap: anywhere;
+  color: #2b1d10;
+  font-weight: 800;
+}
+
+.dimension-row strong {
+  color: #2b1d10;
+  font-size: 18px;
+  white-space: nowrap;
+}
+
+.dimension-row em {
+  grid-column: 1 / -1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  font-style: normal;
 }
 
 .empty-feedback,
@@ -692,12 +895,17 @@ async function downloadCertificate() {
 
 .locked-card h2 {
   margin: 18px 0 10px;
+  overflow-wrap: anywhere;
   font-size: 30px;
+}
+
+.locked-meta {
+  margin-top: 20px;
 }
 
 .locked-progress {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 8px;
   margin-top: 24px;
 }
@@ -724,52 +932,53 @@ async function downloadCertificate() {
 }
 
 .empty-actions a {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 38px;
-  padding: 0 14px;
   color: #2b1d10;
   background: #e1a23d;
-  border-radius: 8px;
-  font-weight: 800;
-  text-decoration: none;
-}
-
-.empty-actions a + a {
-  color: #6b4710;
-  background: #fff7e6;
-  border: 1px solid rgba(87, 58, 26, 0.14);
 }
 
 @media (max-width: 1120px) {
   .result-workbench,
-  .overview-grid,
-  .feedback-row,
+  .result-summary-card,
   .round-result-list {
     grid-template-columns: 1fr;
   }
 
   .result-sidebar {
     position: static;
+    max-height: none;
+  }
+
+  .result-actions {
+    grid-column: auto;
   }
 }
 
 @media (max-width: 720px) {
   .result-hero,
   .result-stats,
-  .overview-facts,
-  .score-grid,
+  .entry-meta,
+  .filter-tabs,
   .locked-progress {
     grid-template-columns: 1fr;
   }
 
-  .filter-tabs {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .result-hero h1,
+  .summary-title h2 {
+    font-size: 30px;
   }
 
-  .result-hero h1 {
-    font-size: 34px;
+  .feedback-head,
+  .section-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .feedback-head > span {
+    align-self: flex-start;
+  }
+
+  .dimension-row {
+    grid-template-columns: 1fr;
   }
 }
 </style>
