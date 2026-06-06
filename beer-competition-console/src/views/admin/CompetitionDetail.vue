@@ -699,8 +699,8 @@
                       @click="selectedFeedbackEntryKey = feedbackEntryKey(entry)"
                     >
                       <span>
-                        <strong>{{ entry.entryName || entry.labelCode || entry.beerUuid }}</strong>
-                        <small>{{ [entry.shortCode, entry.tableName, entry.categoryName, entry.style].filter(Boolean).join(' · ') }}</small>
+                        <strong>{{ formatFeedbackEntryTitle(entry) }}</strong>
+                        <small>{{ [entry.tableName, entry.categoryName, entry.style].filter(Boolean).join(' · ') }}</small>
                       </span>
                       <em>
                         <strong>{{ entry.consensusScore ?? '—' }}</strong>
@@ -715,8 +715,7 @@
               <section class="feedback-detail-panel">
                 <template v-if="selectedFeedbackEntry">
                   <header class="feedback-detail-head">
-                    <strong>{{ selectedFeedbackEntry.entryName || selectedFeedbackEntry.labelCode }}</strong>
-                    <span>· {{ selectedFeedbackEntry.shortCode || selectedFeedbackEntry.labelCode }}</span>
+                    <strong>{{ formatFeedbackEntryTitle(selectedFeedbackEntry) }}</strong>
                     <small>{{ [selectedFeedbackEntry.roundName || '第一轮', selectedFeedbackEntry.tableName, selectedFeedbackEntry.categoryName, selectedFeedbackEntry.style].filter(Boolean).join(' · ') }}</small>
                   </header>
 
@@ -1275,7 +1274,7 @@ const tabs = [
   { key: 'judges', label: '分桌分配', icon: Files },
   { key: 'rounds', label: '轮次编排', icon: Calendar },
   { key: 'score', label: '评分表', icon: Finished },
-  { key: 'feedback', label: '反馈复核', icon: CircleCheck },
+  { key: 'feedback', label: '评价查看', icon: CircleCheck },
   { key: 'results', label: '结果发布', icon: Medal },
 ]
 
@@ -1855,6 +1854,13 @@ function buildFeedbackOptions(values) {
 function feedbackEntryKey(entry) {
   if (!entry) return ''
   return `${entry.roundTableId || 'table'}-${entry.beerUuid || entry.beerEntryId || ''}`
+}
+
+function formatFeedbackEntryTitle(entry) {
+  if (!entry) return ''
+  const name = entry.entryName || entry.labelCode || entry.beerUuid || '未命名酒款'
+  const code = entry.shortCode || entry.labelCode || entry.beerUuid || ''
+  return code && code !== name ? `${name} · ${code}` : name
 }
 
 function feedbackRoleLabel(role) {
@@ -7048,7 +7054,7 @@ button.pyramid-placeholder-mark {
 
 .feedback-split-layout {
   display: grid;
-  grid-template-columns: 40fr 60fr;
+  grid-template-columns: minmax(330px, 34fr) 66fr;
   min-height: 0;
   flex: 1 1 auto;
 }
@@ -7066,17 +7072,34 @@ button.pyramid-placeholder-mark {
   min-height: 0;
   flex: 1 1 auto;
   overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+
+.feedback-detail-panel {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
 }
 
 .feedback-entry-scroll::-webkit-scrollbar,
 .feedback-detail-panel::-webkit-scrollbar {
-  width: 6px;
+  width: 5px;
+}
+
+.feedback-entry-scroll::-webkit-scrollbar-track,
+.feedback-detail-panel::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .feedback-entry-scroll::-webkit-scrollbar-thumb,
 .feedback-detail-panel::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.feedback-entry-scroll::-webkit-scrollbar-thumb:hover,
+.feedback-detail-panel::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.13);
 }
 
 .feedback-entry-list footer {
@@ -7129,7 +7152,8 @@ button.pyramid-placeholder-mark {
 
 .feedback-entry-row > span strong {
   color: var(--text);
-  font-size: 14px;
+  font-size: 15px;
+  font-weight: 900;
 }
 
 .feedback-entry-row > span small,
@@ -7166,34 +7190,36 @@ button.pyramid-placeholder-mark {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 8px;
-  padding: 18px 24px;
+  gap: 10px;
+  padding: 22px 28px;
   border-bottom: 1px solid var(--line);
 }
 
 .feedback-detail-head strong {
-  font-size: 16px;
+  font-size: 20px;
 }
 
 .feedback-detail-head span {
   color: var(--muted);
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 15px;
 }
 
 .feedback-detail-head small {
   flex: 0 0 100%;
   color: var(--muted);
+  font-size: 14px;
 }
 
 .feedback-detail-body {
   display: grid;
-  gap: 20px;
-  padding: 20px 24px 28px;
+  gap: 24px;
+  padding: 24px 28px 34px;
 }
 
 .feedback-block {
   display: grid;
-  gap: 10px;
+  gap: 13px;
 }
 
 .feedback-block-title {
@@ -7206,16 +7232,16 @@ button.pyramid-placeholder-mark {
 .feedback-issue-title {
   margin: 0;
   color: var(--text);
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .feedback-block-title span {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .captain-opinion-card {
-  padding: 16px;
+  padding: 20px;
   border: 1px solid rgba(224, 184, 74, 0.24);
   border-radius: 8px;
   background: rgba(224, 184, 74, 0.06);
@@ -7227,7 +7253,7 @@ button.pyramid-placeholder-mark {
   align-items: center;
   gap: 10px 22px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .captain-opinion-meta strong {
@@ -7236,16 +7262,16 @@ button.pyramid-placeholder-mark {
 
 .captain-opinion-meta .score-highlight {
   color: var(--gold-soft);
-  font-size: 16px;
+  font-size: 20px;
 }
 
 .captain-opinion-meta em {
-  padding: 3px 8px;
+  padding: 4px 9px;
   color: var(--muted);
   border: 1px solid var(--line);
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.04);
-  font-size: 12px;
+  font-size: 13px;
   font-style: normal;
   font-weight: 800;
 }
@@ -7262,9 +7288,10 @@ button.pyramid-placeholder-mark {
 }
 
 .captain-opinion-card p {
-  margin-top: 12px;
+  margin-top: 14px;
   color: var(--text);
-  line-height: 1.7;
+  font-size: 17px;
+  line-height: 1.8;
 }
 
 .captain-missing-card,
@@ -7286,11 +7313,11 @@ button.pyramid-placeholder-mark {
 
 .judge-score-list {
   display: grid;
-  gap: 12px;
+  gap: 14px;
 }
 
 .judge-score-card {
-  padding: 15px;
+  padding: 18px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.025);
@@ -7304,20 +7331,21 @@ button.pyramid-placeholder-mark {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .judge-score-card header > span:first-child {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   min-width: 0;
   flex: 1 1 auto;
 }
 
 .judge-score-card header strong {
   color: var(--text);
+  font-size: 17px;
 }
 
 .judge-score-card header small,
@@ -7326,10 +7354,10 @@ button.pyramid-placeholder-mark {
 }
 
 .judge-score-card header small {
-  padding: 3px 7px;
+  padding: 4px 8px;
   border-radius: 5px;
   background: rgba(255, 255, 255, 0.05);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -7340,7 +7368,7 @@ button.pyramid-placeholder-mark {
 
 .judge-anomaly {
   color: #efbd76;
-  font-size: 11px;
+  font-size: 12px;
   font-style: normal;
   font-weight: 800;
 }
@@ -7353,14 +7381,14 @@ button.pyramid-placeholder-mark {
 .judge-score-meta {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .judge-score-meta strong {
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .judge-missing-text {
@@ -7371,15 +7399,15 @@ button.pyramid-placeholder-mark {
 
 .judge-dimension-list {
   display: grid;
-  gap: 8px;
-  margin-top: 12px;
+  gap: 10px;
+  margin-top: 14px;
 }
 
 .judge-dimension-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 3px 14px;
-  padding-top: 8px;
+  gap: 5px 18px;
+  padding-top: 11px;
   border-top: 1px solid rgba(219, 232, 237, 0.07);
 }
 
@@ -7390,20 +7418,20 @@ button.pyramid-placeholder-mark {
 
 .judge-dimension-row span {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .judge-dimension-row strong {
   color: var(--text);
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .judge-dimension-row p {
   grid-column: 1 / -1;
   color: rgba(230, 237, 240, 0.82);
-  font-size: 12px;
-  line-height: 1.65;
+  font-size: 14px;
+  line-height: 1.7;
 }
 
 .feedback-issue-list {
