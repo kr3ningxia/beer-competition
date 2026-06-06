@@ -81,6 +81,11 @@ public class PortalController {
         return Result.success(entryService.submitPortalEntryDelivery(id, request));
     }
 
+    @PostMapping("/entries/{id}/payment/simulate")
+    public Result<EntryDetailVO> simulatePayment(@PathVariable Long id) {
+        return Result.success(entryService.simulatePayment(id));
+    }
+
     @PostMapping("/competitions/{competitionId}/entries")
     public Result<EntryDetailVO> submitEntry(@PathVariable Long competitionId,
                                              @RequestBody @Valid PortalEntrySubmitRequest request) {

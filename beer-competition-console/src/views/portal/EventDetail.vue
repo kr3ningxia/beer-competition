@@ -77,8 +77,8 @@
       <article class="brewer-card info-card">
         <h2 class="portal-section-title">标签与入库</h2>
         <dl>
-          <div><dt>付款确认</dt><dd>提交后等待主办方确认付款，确认后报名成功。</dd></div>
-          <div><dt>标签粘贴</dt><dd>付款确认后下载现场标签，贴在酒瓶或外箱便于收样核对。</dd></div>
+          <div><dt>支付报名费</dt><dd>提交酒款后支付报名费，支付成功后报名完成。</dd></div>
+          <div><dt>标签粘贴</dt><dd>支付成功后下载现场标签，贴在酒瓶或外箱便于收样核对。</dd></div>
           <div><dt>酒样入库</dt><dd>主办方收样后会更新入库状态。</dd></div>
         </dl>
       </article>
@@ -224,7 +224,7 @@ const deliveryAddressText = computed(() => {
   if (logistics.value.logisticsVisibility === 'PUBLIC') {
     return '主办方暂未填写完整地址'
   }
-  return '付款确认后显示完整收件信息'
+  return '支付成功后显示完整收件信息'
 })
 
 onMounted(async () => {

@@ -20,6 +20,7 @@ public class ScoreRecordVO {
     private String judgeName;
     private String judgeRoleType;
     private String roleLabel;
+    private Boolean mine;
     private List<DimensionRequest> dimensions;
     private BigDecimal totalScore;
     private String comments;

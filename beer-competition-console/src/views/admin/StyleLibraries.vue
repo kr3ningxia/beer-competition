@@ -178,13 +178,6 @@
             <span>来源</span>
             <input v-model.trim="editor.source" placeholder="例如 主办方" />
           </label>
-          <label>
-            <span>状态</span>
-            <select v-model.number="editor.status">
-              <option :value="1">启用</option>
-              <option :value="0">停用</option>
-            </select>
-          </label>
         </div>
 
         <label class="stack-field">
@@ -205,66 +198,71 @@
             <p v-if="editor.categories.length === 0" class="empty-line">先添加分类。</p>
           </aside>
 
-          <section class="edit-style-panel">
-            <div class="panel-title">
-              <label class="search-field">
-                <input v-model.trim="editorKeyword" placeholder="搜索风格" />
-              </label>
-              <button type="button" @click="addStyle">添加风格</button>
-            </div>
-            <div class="edit-style-list">
-              <button
-                v-for="style in editorStyles"
-                :key="style.localId"
-                :class="{ active: selectedStyleId === style.localId }"
-                type="button"
-                @click="selectedStyleId = style.localId"
-              >
-                <span>
-                  <strong>{{ style.name || '未命名风格' }}</strong>
-                  <small>{{ style.categoryName || '未选择分类' }}<template v-if="style.styleCode"> · {{ style.styleCode }}</template></small>
-                </span>
-                <em>{{ style.status === 1 ? '启用' : '停用' }}</em>
-              </button>
-              <p v-if="editorStyles.length === 0" class="empty-line">当前分类没有风格。</p>
-            </div>
-          </section>
-
-          <aside class="style-detail-panel">
-            <template v-if="selectedStyle">
+          <section class="style-editor-main">
+            <section class="edit-style-panel">
               <div class="panel-title">
-                <strong>风格详情</strong>
-                <button type="button" @click="removeStyle(selectedStyle.localId)">删除</button>
+                <label class="search-field">
+                  <Search />
+                  <input v-model.trim="editorKeyword" placeholder="搜索风格" />
+                </label>
+                <button type="button" @click="addStyle">添加风格</button>
               </div>
-              <label>
-                <span>所属分类</span>
-                <select v-model="selectedStyle.categoryName">
-                  <option value="">选择分类</option>
-                  <option v-for="category in cleanEditorCategories" :key="category" :value="category">{{ category }}</option>
-                </select>
-              </label>
-              <label>
-                <span>风格名称</span>
-                <input v-model.trim="selectedStyle.name" placeholder="例如 American IPA" />
-              </label>
-              <label>
-                <span>编号</span>
-                <input v-model.trim="selectedStyle.styleCode" placeholder="例如 21A" />
-              </label>
-              <label>
-                <span>评审可见说明</span>
-                <textarea v-model.trim="selectedStyle.description" rows="5" placeholder="用一两句话说明评审时关注的风格口径"></textarea>
-              </label>
-              <label>
-                <span>状态</span>
-                <select v-model.number="selectedStyle.status">
-                  <option :value="1">启用</option>
-                  <option :value="0">停用</option>
-                </select>
-              </label>
-            </template>
-            <p v-else class="empty-line">选择一个风格查看详情。</p>
-          </aside>
+              <div class="edit-style-list">
+                <button
+                  v-for="style in editorStyles"
+                  :key="style.localId"
+                  :class="{ active: selectedStyleId === style.localId }"
+                  type="button"
+                  @click="selectedStyleId = style.localId"
+                >
+                  <span>
+                    <strong>{{ style.name || '未命名风格' }}</strong>
+                    <small>{{ style.categoryName || '未选择分类' }}<template v-if="style.styleCode"> · {{ style.styleCode }}</template></small>
+                  </span>
+                  <em>{{ style.status === 1 ? '启用' : '停用' }}</em>
+                </button>
+                <p v-if="editorStyles.length === 0" class="empty-line">当前分类没有风格。</p>
+              </div>
+            </section>
+
+            <aside class="style-detail-panel">
+              <template v-if="selectedStyle">
+                <div class="panel-title">
+                  <strong>风格详情</strong>
+                  <button type="button" @click="removeStyle(selectedStyle.localId)">删除</button>
+                </div>
+                <div class="style-detail-grid">
+                  <label class="detail-category">
+                    <span>所属分类</span>
+                    <select v-model="selectedStyle.categoryName">
+                      <option value="">选择分类</option>
+                      <option v-for="category in cleanEditorCategories" :key="category" :value="category">{{ category }}</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>编号</span>
+                    <input v-model.trim="selectedStyle.styleCode" placeholder="例如 21A" />
+                  </label>
+                  <label>
+                    <span>状态</span>
+                    <select v-model.number="selectedStyle.status">
+                      <option :value="1">启用</option>
+                      <option :value="0">停用</option>
+                    </select>
+                  </label>
+                  <label class="detail-name">
+                    <span>风格名称</span>
+                    <input v-model.trim="selectedStyle.name" placeholder="例如 American IPA" />
+                  </label>
+                  <label class="detail-description">
+                    <span>评审可见说明</span>
+                    <textarea v-model.trim="selectedStyle.description" rows="3" placeholder="用一两句话说明评审时关注的风格口径"></textarea>
+                  </label>
+                </div>
+              </template>
+              <p v-else class="empty-line">选择一个风格查看详情。</p>
+            </aside>
+          </section>
         </section>
 
         <details class="import-box">
@@ -971,12 +969,12 @@ small,
 .editor-dialog {
   display: grid;
   grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
-  gap: 14px;
-  width: min(1180px, 100%);
-  max-height: calc(100vh - 48px);
-  min-height: min(760px, calc(100vh - 48px));
+  gap: 12px;
+  width: min(1220px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  min-height: min(800px, calc(100vh - 32px));
   overflow: hidden;
-  padding: 18px;
+  padding: 16px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(15, 24, 28, 0.98);
@@ -1003,7 +1001,7 @@ small,
 .editor-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 9px 10px;
 }
 
 .editor-grid label,
@@ -1015,8 +1013,17 @@ small,
 
 .structured-editor {
   display: grid;
-  grid-template-columns: 250px minmax(0, 1fr) 340px;
+  grid-template-columns: 250px minmax(0, 1fr);
   gap: 10px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.style-editor-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 10px;
+  min-width: 0;
   min-height: 0;
   overflow: hidden;
 }
@@ -1036,6 +1043,30 @@ small,
 
 .edit-style-panel {
   grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.edit-style-panel .edit-style-list {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.edit-style-panel .panel-title {
+  align-items: stretch;
+}
+
+.edit-style-panel .panel-title .search-field {
+  flex: 1 1 auto;
+}
+
+.edit-style-panel .panel-title button {
+  flex: 0 0 auto;
+  min-height: 40px;
+  white-space: nowrap;
+}
+
+.style-detail-panel {
+  overflow: hidden;
 }
 
 .edit-category-panel label {
@@ -1059,6 +1090,8 @@ small,
   justify-content: space-between;
   gap: 10px;
   align-items: center;
+  width: 100%;
+  min-width: 0;
   min-height: 58px;
   padding: 9px;
   color: var(--text);
@@ -1087,10 +1120,32 @@ small,
 }
 
 .edit-style-list em {
+  flex: 0 0 auto;
   color: var(--gold-soft);
   font-style: normal;
   font-size: 12px;
   font-weight: 800;
+}
+
+.style-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(96px, 0.6fr) minmax(96px, 0.6fr);
+  gap: 9px 10px;
+  min-width: 0;
+}
+
+.style-detail-grid label {
+  min-width: 0;
+}
+
+.style-detail-grid .detail-name,
+.style-detail-grid .detail-description {
+  grid-column: 1 / -1;
+}
+
+.style-detail-panel textarea {
+  min-height: 82px;
+  resize: none;
 }
 
 .import-box {

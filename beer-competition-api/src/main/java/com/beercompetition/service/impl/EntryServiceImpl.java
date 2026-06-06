@@ -406,6 +406,35 @@ public class EntryServiceImpl implements EntryService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public EntryDetailVO simulatePayment(Long entryId) {
+        // 1) 查询并校验当前厂商酒款
+        PortalAccount account = requirePortalAccount();
+        BeerEntry entry = requireOwnedEntry(entryId, account.getBreweryId());
+        if (LABEL_ALLOWED_STATUSES.contains(entry.getStatus())) {
+            return toEntryDetailVO(entry);
+        }
+        if (!EntryStatus.PENDING_PAYMENT.name().equals(entry.getStatus())) {
+            throw new BaseException("当前酒款不能支付报名费");
+        }
+        EntryPayment payment = ensureEntryPayment(entry.getId(), entry.getCompetitionId());
+
+        // 2) 模拟支付到账并推进报名状态
+        payment.setStatus(EntryPaymentStatus.PAID.name());
+        payment.setPayMethod(EntryPayMethod.MOCK.name());
+        payment.setOutTradeNo(StringUtils.hasText(payment.getOutTradeNo()) ? payment.getOutTradeNo() : generateMockOutTradeNo());
+        payment.setPaidTime(LocalDateTime.now());
+        payment.setConfirmRemark("mock payment");
+        entryPaymentMapper.updateById(payment);
+
+        entry.setStatus(EntryStatus.REGISTERED.name());
+        beerEntryMapper.updateById(entry);
+
+        // 3) 返回更新后的酒款详情
+        return toEntryDetailVO(beerEntryMapper.selectById(entry.getId()));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public void confirmPayment(Long entryId) {
         // 1) 查询作品并校验状态
         BeerEntry entry = requireEntry(entryId);
@@ -1221,6 +1250,10 @@ public class EntryServiceImpl implements EntryService {
             uuid = "BE-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase();
         } while (beerEntryMapper.selectOne(new LambdaQueryWrapper<BeerEntry>().eq(BeerEntry::getUuid, uuid)) != null);
         return uuid;
+    }
+
+    private String generateMockOutTradeNo() {
+        return "MOCK-" + UUID.randomUUID().toString().replace("-", "").substring(0, 24).toUpperCase();
     }
 
     private String normalizeRequired(String value, String message) {

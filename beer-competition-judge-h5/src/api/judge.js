@@ -6,6 +6,7 @@ import {
   seedScores,
 } from './mockJudgeData'
 import request from './request'
+import { selectCurrentTask } from '@/utils/judgeTasks'
 
 const MOCK_USER_KEY = 'judge_mock_user'
 const MOCK_SCORES_KEY = 'judge_mock_scores'
@@ -253,7 +254,8 @@ export async function fetchCaptainBoard(roundTableId) {
   const tasks = await fetchJudgeTasks()
   const task = roundTableId
     ? tasks.find((item) => item.roundTableId === Number(roundTableId))
-    : tasks.find((item) => item.taskType === 'CAPTAIN_FINALIZE') || tasks.find((item) => item.taskType === 'RANKING_ROUND')
+    : selectCurrentTask(tasks.filter((item) => item.taskType === 'CAPTAIN_FINALIZE'))
+      || selectCurrentTask(tasks.filter((item) => item.taskType === 'RANKING_ROUND'))
   if (!task) return { competition: null, entries: [] }
   const [table, myScores] = await Promise.all([
     fetchRoundTable(task.roundTableId),

@@ -39,6 +39,8 @@ public interface EntryService {
 
     FileDownloadVO downloadPortalResultCertificate(Long entryId);
 
+    EntryDetailVO simulatePayment(Long entryId);
+
     void confirmPayment(Long entryId);
 
     void markStored(Long entryId);

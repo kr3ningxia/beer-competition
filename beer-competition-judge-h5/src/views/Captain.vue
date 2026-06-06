@@ -7,11 +7,11 @@
       <div class="captain-stats">
         <div>
           <span>已确认</span>
-          <strong>{{ finalizedCount }} / {{ boardEntries.length }}</strong>
+          <strong>{{ initialBoardLoading ? '- / -' : `${finalizedCount} / ${boardEntries.length}` }}</strong>
         </div>
         <div>
           <span>已选晋级</span>
-          <strong>{{ advancedUuids.length }} / {{ advanceTargetCount }}</strong>
+          <strong>{{ initialBoardLoading ? '- / -' : `${advancedUuids.length} / ${advanceTargetCount}` }}</strong>
         </div>
       </div>
     </section>
@@ -61,8 +61,8 @@
                 <strong>{{ displayShortCode(entry) }}</strong>
                 <small>{{ entry.categoryName }} · {{ styleDisplayName(entry) }}</small>
               </span>
-              <em :class="['pill', entry.finalized ? 'status-lock' : 'status-warn']">
-                {{ entry.finalized ? `${entry.finalScore} 分` : `${entry.submittedCount}/${entry.expectedCount} 份评分` }}
+              <em :class="['pill', boardEntryStatusClass(entry)]">
+                {{ boardEntryStatusText(entry) }}
               </em>
             </button>
             <span :class="['advance-check', { disabled: !entry.finalized }]">
@@ -203,6 +203,7 @@ const advancedUuids = ref([])
 const expandedCommentIds = ref(new Set())
 const message = ref('')
 const submittingTable = ref(false)
+const loadingBoard = ref(false)
 const form = reactive({
   consensusScore: '',
   comments: '',
@@ -212,12 +213,15 @@ const form = reactive({
 const boardEntries = computed(() => board.value?.entries || [])
 const normalScores = computed(() => tableScores.value.filter((score) => !score.finalFlag))
 const finalScore = computed(() => tableScores.value.find((score) => score.finalFlag) || null)
-const myScoreSubmitted = computed(() => Boolean(entry.value?.scored))
+const myPersonalScore = computed(() => normalScores.value.find((score) => score.mine) || null)
+const myScoreSubmitted = computed(() => Boolean(myPersonalScore.value || entry.value?.scored))
 const finalizedCount = computed(() => boardEntries.value.filter((item) => item.finalized).length)
 const unfinalizedCount = computed(() => Math.max(0, boardEntries.value.length - finalizedCount.value))
 const myPendingScoreCount = computed(() => boardEntries.value.filter((item) => !item.scored).length)
 const readyFinalizeEntries = computed(() => boardEntries.value.filter((item) => readyForFinalize(item)))
 const readyFinalizeCount = computed(() => readyFinalizeEntries.value.length)
+const pendingTableScoreCount = computed(() => boardEntries.value.reduce((sum, item) => sum + entryMissingScoreCount(item), 0))
+const initialBoardLoading = computed(() => loadingBoard.value && !board.value)
 const advanceTargetCount = computed(() => Number(board.value?.roundTable?.targetCount || 0) || '-')
 const numericAdvanceTarget = computed(() => Number(board.value?.roundTable?.targetCount || 0))
 const tableReadyForReview = computed(() => {
@@ -226,6 +230,7 @@ const tableReadyForReview = computed(() => {
   return finalizedCount.value === boardEntries.value.length && targetOk
 })
 const captainSummaryState = computed(() => {
+  if (initialBoardLoading.value) return 'loading'
   if (!boardEntries.value.length) return 'empty'
   if (tableReadyForReview.value) return 'ready-review'
   if (finalizedCount.value === boardEntries.value.length) return 'advance-check'
@@ -234,31 +239,51 @@ const captainSummaryState = computed(() => {
   return 'waiting-peer'
 })
 const captainSummaryTitle = computed(() => {
+  if (captainSummaryState.value === 'loading') return '正在载入本桌任务'
   if (captainSummaryState.value === 'ready-review') return '本桌结果可核对'
   if (captainSummaryState.value === 'advance-check') return '晋级名单待核对'
   if (captainSummaryState.value === 'ready-finalize') return '有酒款可以汇总'
   if (captainSummaryState.value === 'waiting-peer') return '等待同桌评分完成'
+  if (captainSummaryState.value === 'need-score') return '先完成你的评分'
   return '本桌汇总未完成'
 })
 const captainSummaryBadges = computed(() => {
+  if (captainSummaryState.value === 'loading') return ['同步中']
   if (!boardEntries.value.length) return ['本桌未分配酒款']
+  if (captainSummaryState.value === 'waiting-peer') {
+    return [
+      `还差 ${pendingTableScoreCount.value} 份评分`,
+      `待汇总 ${unfinalizedCount.value} 款`,
+    ]
+  }
+  if (captainSummaryState.value === 'need-score') {
+    return [
+      `待我评分 ${myPendingScoreCount.value} 款`,
+      `还差 ${pendingTableScoreCount.value} 份评分`,
+    ]
+  }
+  if (captainSummaryState.value === 'ready-finalize') {
+    return [
+      `可汇总 ${readyFinalizeCount.value} 款`,
+      `待汇总 ${unfinalizedCount.value} 款`,
+    ]
+  }
   const badges = [
-    `未汇总 ${unfinalizedCount.value} 款`,
-    `可汇总 ${readyFinalizeCount.value} 款`,
+    `待汇总 ${unfinalizedCount.value} 款`,
   ]
-  if (myPendingScoreCount.value > 0) badges.push(`待我评分 ${myPendingScoreCount.value} 款`)
   if (numericAdvanceTarget.value > 0 && finalizedCount.value === boardEntries.value.length && advancedUuids.value.length !== numericAdvanceTarget.value) {
     badges.push(`晋级需 ${numericAdvanceTarget.value} 款`)
   }
   return badges
 })
 const tableCheckText = computed(() => {
+  if (captainSummaryState.value === 'loading') return '正在同步本轮酒款和评分进度。'
   if (!boardEntries.value.length) return '请联系现场工作人员确认本轮评审桌和酒款配置。'
   if (tableReadyForReview.value) return '酒款意见和晋级名单已齐，请核对无误后提交本桌结果。'
   if (captainSummaryState.value === 'advance-check') return '酒款意见已完成，还需按本桌目标确认晋级名单。'
   if (captainSummaryState.value === 'ready-finalize') return '同桌评分已齐，可填写桌长意见。'
-  if (captainSummaryState.value === 'need-score') return '先扫码完成自己的评分；同桌评分齐全后，再填写桌长意见。'
-  return '你的评分已完成，等同桌提交后再填写桌长意见。'
+  if (captainSummaryState.value === 'need-score') return `你还有 ${myPendingScoreCount.value} 款未评分，完成后再看同桌进度。`
+  return `还差 ${pendingTableScoreCount.value} 份同桌评分，齐全后再填写桌长意见。`
 })
 const nextActionEntry = computed(() => (
   readyFinalizeEntries.value[0]
@@ -267,11 +292,12 @@ const nextActionEntry = computed(() => (
   || boardEntries.value[0]
 ))
 const captainSummaryActionLabel = computed(() => {
+  if (captainSummaryState.value === 'loading') return '请稍候'
   if (captainSummaryState.value === 'ready-review') return '核对本桌结果'
   if (captainSummaryState.value === 'advance-check') return '核对晋级名单'
   if (captainSummaryState.value === 'ready-finalize') return '处理可汇总酒款'
   if (captainSummaryState.value === 'need-score') return '去扫码评分'
-  if (captainSummaryState.value === 'waiting-peer') return '查看评分进度'
+  if (captainSummaryState.value === 'waiting-peer') return '看酒款进度'
   return '返回扫码'
 })
 const summaryActionPrimary = computed(() => (
@@ -281,9 +307,10 @@ const summaryActionPrimary = computed(() => (
   || captainSummaryState.value === 'advance-check'
 ))
 const canOpenNextAction = computed(() => (
-  captainSummaryState.value === 'need-score'
+  captainSummaryState.value !== 'loading'
+  && (captainSummaryState.value === 'need-score'
   || captainSummaryState.value === 'empty'
-  || Boolean(nextActionEntry.value?.uuid)
+  || Boolean(nextActionEntry.value?.uuid))
 ))
 const currentBoardEntry = computed(() => boardEntries.value.find((item) => item.uuid === uuid.value) || null)
 const tableSubmitted = computed(() => ['SUBMITTED', 'LOCKED'].includes(board.value?.roundTable?.status))
@@ -351,11 +378,16 @@ const finalizeHint = computed(() => {
 const finalButtonText = computed(() => (tableLocked.value ? '本桌结果已锁定' : '保存这款酒的桌长意见'))
 
 async function loadBoard() {
-  board.value = await fetchCaptainBoard()
-  advancedUuids.value = board.value.entries.filter((item) => item.advanced).map((item) => item.uuid)
-  const competitionId = board.value?.competition?.competitionId || me.value?.competitionId
-  if (competitionId && !captainConfig.value) {
-    captainConfig.value = await fetchScoreConfig('CAPTAIN', competitionId)
+  loadingBoard.value = true
+  try {
+    board.value = await fetchCaptainBoard()
+    advancedUuids.value = board.value.entries.filter((item) => item.advanced).map((item) => item.uuid)
+    const competitionId = board.value?.competition?.competitionId || me.value?.competitionId
+    if (competitionId && !captainConfig.value) {
+      captainConfig.value = await fetchScoreConfig('CAPTAIN', competitionId)
+    }
+  } finally {
+    loadingBoard.value = false
   }
 }
 
@@ -429,6 +461,25 @@ function readyForFinalize(item) {
   const expected = Number(item.expectedCount || 0)
   const submitted = Number(item.submittedCount || 0)
   return Boolean(item.scored && !item.finalized && expected > 0 && submitted >= expected)
+}
+
+function entryMissingScoreCount(item) {
+  const expected = Number(item?.expectedCount || 0)
+  const submitted = Number(item?.submittedCount || 0)
+  return expected > 0 ? Math.max(0, expected - submitted) : 0
+}
+
+function boardEntryStatusText(item) {
+  if (item.finalized) return `${item.finalScore} 分`
+  if (readyForFinalize(item)) return '可汇总'
+  const missing = entryMissingScoreCount(item)
+  return missing > 0 ? `等 ${missing} 份评分` : `${item.submittedCount}/${item.expectedCount} 份评分`
+}
+
+function boardEntryStatusClass(item) {
+  if (item.finalized) return 'status-lock'
+  if (readyForFinalize(item)) return 'status-ok'
+  return 'status-warn'
 }
 
 function fillConsensusScore(value) {

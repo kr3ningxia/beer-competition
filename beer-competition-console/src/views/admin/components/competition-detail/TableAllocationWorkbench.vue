@@ -1,5 +1,5 @@
 <template>
-  <section class="allocation-workbench">
+  <section :class="['allocation-workbench', { 'overview-workbench': allocationMode === 'overview' }]">
     <section v-if="allocationMode === 'judges'" class="allocation-grid">
       <template v-if="currentRound?.type === 'RANKING'">
       <aside class="resource-panel judge-resource-panel">
@@ -163,6 +163,7 @@
             type="button"
             :disabled="!canRunPrimaryRoundAction"
             :title="primaryActionTitle"
+            :data-disabled-reason="primaryActionTitle || null"
             @click="$emit('publishCurrentRound')"
           >
             {{ primaryRoundActionLabel }}
@@ -313,7 +314,9 @@
             v-if="!firstRoundExists"
             class="main-action"
             type="button"
-            :disabled="validationIssues.length > 0"
+            :disabled="!canRunPrimaryRoundAction"
+            :title="primaryActionTitle"
+            :data-disabled-reason="primaryActionTitle || null"
             @click="$emit('generateFirstRound')"
           >
             生成第一轮编排
@@ -517,6 +520,7 @@
             type="button"
             :disabled="!canRunPrimaryRoundAction"
             :title="primaryActionTitle"
+            :data-disabled-reason="primaryActionTitle || null"
             @click="$emit(currentRound?.isPreparationDraft && currentRound?.type !== 'RANKING' ? 'generateFirstRound' : 'publishCurrentRound')"
           >
             {{ primaryRoundActionLabel }}
@@ -1065,6 +1069,12 @@ function getOverviewTableIssues(roundTable) {
   overflow: hidden;
 }
 
+.allocation-workbench.overview-workbench {
+  height: auto;
+  max-height: none;
+  overflow: visible;
+}
+
 .allocation-grid {
   min-height: 0;
   height: 100%;
@@ -1197,6 +1207,56 @@ button:disabled {
   font-weight: 800;
 }
 
+.main-action {
+  position: relative;
+}
+
+.main-action:disabled {
+  opacity: 1;
+  color: rgba(224, 184, 74, 0.42);
+  border-color: rgba(216, 169, 53, 0.16);
+  background: rgba(216, 169, 53, 0.045);
+}
+
+.main-action:disabled[data-disabled-reason]:hover::after {
+  content: attr(data-disabled-reason);
+  position: absolute;
+  z-index: 30;
+  left: 50%;
+  bottom: calc(100% + 9px);
+  width: max-content;
+  max-width: min(320px, 72vw);
+  padding: 7px 9px;
+  color: #e6edf0;
+  border: 1px solid rgba(216, 169, 53, 0.3);
+  border-radius: 8px;
+  background: rgba(7, 14, 17, 0.98);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  transform: translateX(-50%);
+  opacity: 1;
+}
+
+.main-action:disabled[data-disabled-reason]:hover::before {
+  content: '';
+  position: absolute;
+  z-index: 31;
+  left: 50%;
+  bottom: calc(100% + 4px);
+  width: 8px;
+  height: 8px;
+  border-right: 1px solid rgba(216, 169, 53, 0.3);
+  border-bottom: 1px solid rgba(216, 169, 53, 0.3);
+  background: rgba(7, 14, 17, 0.98);
+  pointer-events: none;
+  transform: translateX(-50%) rotate(45deg);
+}
+
 .allocation-grid {
   grid-template-columns: 320px minmax(0, 1fr) 300px;
   align-items: stretch;
@@ -1213,6 +1273,10 @@ button:disabled {
   gap: 10px;
   min-height: 0;
   height: 100%;
+}
+
+.overview-workbench .overview-shell {
+  height: auto;
 }
 
 .resource-panel,
@@ -1981,6 +2045,10 @@ p {
 .overview-board {
   align-content: start;
   grid-auto-rows: max-content;
+}
+
+.overview-workbench .overview-board {
+  overflow: visible;
 }
 
 .overview-grid {

@@ -181,7 +181,7 @@
           </dl>
           <div class="locked-progress">
             <span class="done">提交资料</span>
-            <span :class="{ done: selectedEntry.status !== 'PENDING_PAYMENT' }">付款确认</span>
+            <span :class="{ done: selectedEntry.status !== 'PENDING_PAYMENT' }">支付报名费</span>
             <span :class="{ done: selectedEntry.status === 'STORED' || selectedEntry.status === 'RESULT_PUBLISHED' }">酒样入库</span>
             <span :class="{ done: selectedEntry.status === 'RESULT_PUBLISHED' }">结果发布</span>
           </div>

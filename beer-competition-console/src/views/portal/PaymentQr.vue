@@ -3,13 +3,13 @@
     <section class="page-head brewer-card">
       <div class="page-title">
         <span class="section-kicker">BREWER ENTRY DELIVERY</span>
-        <h1>完成付款并提交寄样</h1>
+        <h1>下载标签并提交寄样</h1>
         <p>{{ currentAction.description }}</p>
       </div>
       <RouterLink class="back-link" to="/portal/my">返回我的参赛</RouterLink>
       <div v-if="selectedEntry" class="flow-steps" aria-label="寄样进度">
         <span :class="{ done: selectedEntry.paymentStatus === 'PAID' || selectedEntry.canDownloadLabel, active: selectedEntry.paymentStatus !== 'PAID' }">
-          <b>1</b>付款确认
+          <b>1</b>支付报名费
         </span>
         <span :class="{ done: selectedEntry.canDownloadLabel, active: selectedEntry.paymentStatus === 'PAID' && !selectedEntry.canDownloadLabel }">
           <b>2</b>标签下载
@@ -73,8 +73,8 @@
           <div class="card-head">
             <div>
               <span class="section-kicker">PAYMENT</span>
-              <h3>先等待主办方确认付款</h3>
-              <p>确认到账后会开放标签下载和寄样信息填写。</p>
+              <h3>补缴报名费</h3>
+              <p>这款酒还未完成支付，支付成功后开放标签下载和寄样信息填写。</p>
             </div>
             <strong>{{ formatCurrency(selectedEntry.payment?.amount || selectedEntry.entryFee) }}</strong>
           </div>
@@ -88,6 +88,12 @@
               <dd>{{ entryTaskLabel(selectedEntry) }}</dd>
             </div>
           </dl>
+          <div class="payment-actions">
+            <el-button type="primary" size="large" :loading="simulatingPayment" @click="simulatePayment">
+              模拟支付成功
+            </el-button>
+            <span>后续接入微信支付后，这里会拉起微信支付。</span>
+          </div>
         </section>
 
         <section v-if="showLabelCard" class="label-card brewer-card">
@@ -98,7 +104,7 @@
               <p>{{ labelCardDescription }}</p>
             </div>
             <span :class="['task-chip', selectedEntry.canDownloadLabel ? 'tone-green' : 'tone-amber']">
-              {{ selectedEntry.canDownloadLabel ? '可下载' : '等待付款确认' }}
+              {{ selectedEntry.canDownloadLabel ? '可下载' : '待支付' }}
             </span>
           </div>
 
@@ -243,6 +249,7 @@ import {
   fetchPortalEntries,
   fetchPortalEntryDetail,
   fetchPortalEntryLabel,
+  simulatePortalEntryPayment,
   submitPortalEntryDelivery,
 } from '@/api/portal'
 import { JUDGE_H5_BASE_URL } from '@/config'
@@ -254,6 +261,7 @@ const selectedEntry = ref(null)
 const labelData = ref(null)
 const editingDelivery = ref(false)
 const savingDelivery = ref(false)
+const simulatingPayment = ref(false)
 const deliveryForm = reactive({
   deliveryMethod: 'EXPRESS',
   carrier: '',
@@ -307,7 +315,7 @@ const labelCardDescription = computed(() => {
   return '建议优先使用打印版，贴在酒瓶或外箱醒目位置，便于主办方核对和入库。'
 })
 const labelActionDescription = computed(() => {
-  if (!selectedEntry.value?.canDownloadLabel) return '如果你已经完成转账或现场付款，请等待主办方确认。'
+  if (!selectedEntry.value?.canDownloadLabel) return '支付成功后即可下载标签。'
   if (hasSubmittedDelivery.value) return '如现场需要补贴、重贴或核对编号，可重新下载或打印这一张标签。'
   return '打印后直接贴标，再回到下方填写寄样方式和快递单号。'
 })
@@ -333,7 +341,7 @@ const logisticsAddressLines = computed(() => [
 const canCopyLogisticsAddress = computed(() => logisticsAddressLines.value.length > 0)
 const logisticsAddressText = computed(() => {
   if (logisticsAddressLines.value.length) return logisticsAddressLines.value.join(' · ')
-  if (selectedLogistics.value.logisticsVisibility === 'PAYMENT_CONFIRMED') return '付款确认后显示完整收件信息。'
+  if (selectedLogistics.value.logisticsVisibility === 'PAYMENT_CONFIRMED') return '支付成功后显示完整收件信息。'
   return '主办方暂未填写完整收件信息，寄出前请先联系确认。'
 })
 const onsiteDeliveryText = computed(() => [
@@ -354,8 +362,8 @@ const currentAction = computed(() => {
 
   if (entry.paymentStatus !== 'PAID') {
     return {
-      title: '等待主办方确认付款',
-      description: '你完成转账或现场付款后，主办方确认到账，这一款酒才会开放标签下载和寄样填写。',
+      title: '支付报名费',
+      description: '核对金额并完成支付，支付成功后下载现场标签并填写寄样信息。',
     }
   }
 
@@ -387,13 +395,13 @@ const currentAction = computed(() => {
 })
 
 const deliveryCardTitle = computed(() => {
-  if (!selectedEntry.value?.canDownloadLabel) return '付款确认后可填写寄样信息'
+  if (!selectedEntry.value?.canDownloadLabel) return '支付成功后可填写寄样信息'
   if (showDeliverySummary.value) return selectedEntry.value.deliveryStatus === 'RECEIVED' ? '样品已签收' : '你已提交寄样信息'
   return hasSubmittedDelivery.value ? '修改寄样信息' : '填写寄样信息'
 })
 
 const deliveryCardDescription = computed(() => {
-  if (!selectedEntry.value?.canDownloadLabel) return '当前阶段先等待主办方确认付款，确认完成后这里会自动开放。'
+  if (!selectedEntry.value?.canDownloadLabel) return '支付成功后这里会自动开放。'
   if (showDeliverySummary.value) return selectedEntry.value.deliveryStatus === 'RECEIVED' ? '主办方已经确认收到样品，你可以在这里查看本次提交内容。' : '快递信息已提交，建议保留单号并关注签收进度。'
   return '寄出后请尽快提交快递信息，避免主办方无法及时核对来样。'
 })
@@ -482,9 +490,10 @@ function deliveryMethodText(value) {
 }
 
 function paymentMethodText(value) {
-  if (value === 'MANUAL') return '线下付款确认'
+  if (value === 'MANUAL') return '人工确认'
+  if (value === 'MOCK') return '模拟支付'
   if (value === 'WECHAT') return '微信支付'
-  return '待主办方确认'
+  return '待支付'
 }
 
 function deliveryStatusText(value) {
@@ -512,7 +521,7 @@ function entryTaskLabel(entry) {
   if (entry.deliveryStatus === 'RECEIVED' || isStored(entry)) return '已签收 / 入库'
   if (hasDeliveryProgress(entry)) return '等待主办方签收'
   if (entry.paymentStatus === 'PAID') return '待提交寄样'
-  return '待付款确认'
+  return '待支付'
 }
 
 function isStored(entry) {
@@ -597,7 +606,7 @@ async function refreshEntries(targetId = selectedEntry.value?.id) {
 
 async function saveDelivery() {
   if (!selectedEntry.value?.canDownloadLabel) {
-    ElMessage.warning('付款确认后才能填写寄样信息')
+    ElMessage.warning('支付成功后才能填写寄样信息')
     return
   }
 
@@ -615,6 +624,21 @@ async function saveDelivery() {
     await refreshEntries(selectedEntry.value.id)
   } finally {
     savingDelivery.value = false
+  }
+}
+
+async function simulatePayment() {
+  if (!selectedEntry.value || selectedEntry.value.paymentStatus === 'PAID') return
+
+  simulatingPayment.value = true
+  try {
+    selectedEntry.value = await simulatePortalEntryPayment(selectedEntry.value.id)
+    ElMessage.success('支付成功，可以下载标签并填写寄样信息')
+    await refreshEntries(selectedEntry.value.id)
+  } catch (error) {
+    ElMessage.warning(error?.message || '支付失败，请稍后重试')
+  } finally {
+    simulatingPayment.value = false
   }
 }
 
@@ -1073,6 +1097,20 @@ function triggerDownload(objectUrl, fileName) {
 
 .inline-facts {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.payment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-top: 16px;
+}
+
+.payment-actions span {
+  color: var(--subtle-ink);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .inline-facts div,

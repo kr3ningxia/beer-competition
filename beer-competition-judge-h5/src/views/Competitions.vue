@@ -94,16 +94,16 @@
       <p v-if="!isScoreRoundCaptain" class="task-hint">{{ taskSectionHint }}</p>
       <section v-if="isScoreRoundCaptain && entries.length" :class="['round-checkout', { ready: tableReadyForReview }]">
         <div>
-          <strong>{{ tableReadyForReview ? '本桌可核对结果' : '本桌结果未完成' }}</strong>
+          <strong>{{ tableCheckoutTitle }}</strong>
           <p>{{ tableCheckoutText }}</p>
         </div>
         <button
           class="button secondary checkout-button"
           type="button"
-          :disabled="!finalizedCount"
+          :disabled="!canOpenTableWorkbench"
           @click="router.push('/captain')"
         >
-          核对
+          {{ tableCheckoutActionLabel }}
         </button>
       </section>
       <div v-if="isScoreRoundCaptain && entries.length" class="captain-entry-list">
@@ -123,7 +123,7 @@
             <div class="captain-entry-meta">
               <span :class="entry.scored ? 'ok-text' : 'warn-text'">我：{{ entry.scored ? '已评' : '待评' }}</span>
               <span>同桌：{{ tableScoreProgress(entry) }}</span>
-              <span :class="entry.finalized ? 'ok-text' : ''">汇总：{{ entry.finalized ? '已确认' : readyForFinalize(entry) ? '可汇总' : '等待' }}</span>
+              <span :class="entry.finalized || readyForFinalize(entry) ? 'ok-text' : 'warn-text'">汇总：{{ entryFinalizeText(entry) }}</span>
             </div>
             <button
               v-if="captainAction(entry)"
@@ -186,6 +186,7 @@ const rankingSlots = ref([])
 const scannerOpen = ref(false)
 const manualCode = ref('')
 const scannerMessage = ref('将二维码放入取景框内')
+const loadingTasks = ref(true)
 let qrReader = null
 let scanLocked = false
 
@@ -202,6 +203,9 @@ const myScoredCount = computed(() => entries.value.filter((entry) => entry.score
 const finalizedCount = computed(() => entries.value.filter((entry) => entry.finalized).length)
 const advancedCount = computed(() => entries.value.filter((entry) => entry.advanced).length)
 const advanceTargetCount = computed(() => Number(captainBoard.value?.roundTable?.targetCount || current.value?.targetCount || 0))
+const myPendingScoreCount = computed(() => entries.value.filter((entry) => !entry.scored).length)
+const readyFinalizeCount = computed(() => entries.value.filter((entry) => readyForFinalize(entry)).length)
+const pendingTableScoreCount = computed(() => entries.value.reduce((sum, entry) => sum + entryMissingScoreCount(entry), 0))
 const rankingFilledCount = computed(() => rankingSlots.value.filter((slot) => slot.beerEntryId).length)
 const progressLabel = computed(() => (isCaptain.value ? '我的评分' : '我的进度'))
 const progressCount = computed(() => (
@@ -220,30 +224,57 @@ const tableReadyForReview = computed(() => {
   const targetOk = advanceTargetCount.value <= 0 || advancedCount.value === advanceTargetCount.value
   return finalizedCount.value === entries.value.length && targetOk
 })
+const tableCheckoutTitle = computed(() => {
+  if (!entries.value.length) return ''
+  if (tableReadyForReview.value) return '本桌可提交'
+  if (readyFinalizeCount.value > 0) return '有酒款可汇总'
+  if (myPendingScoreCount.value > 0) return '先完成你的评分'
+  if (pendingTableScoreCount.value > 0) return '等待同桌评分'
+  return '本桌结果未完成'
+})
 const tableCheckoutText = computed(() => {
   if (!entries.value.length) return ''
-  if (finalizedCount.value < entries.value.length) {
-    return `还有 ${entries.value.length - finalizedCount.value} 款未填写桌长意见，完成后再核对本桌结果。`
+  if (myPendingScoreCount.value > 0) {
+    return `你还有 ${myPendingScoreCount.value} 款未评分，完成后再看同桌进度。`
+  }
+  if (readyFinalizeCount.value > 0) {
+    return `${readyFinalizeCount.value} 款评分已齐，可填写桌长意见。`
+  }
+  if (pendingTableScoreCount.value > 0) {
+    return `还差 ${pendingTableScoreCount.value} 份同桌评分，齐全后再填写桌长意见。`
   }
   if (advanceTargetCount.value > 0 && advancedCount.value !== advanceTargetCount.value) {
     return `酒款意见已完成，还需按本桌目标确认 ${advanceTargetCount.value} 款晋级酒。`
   }
   return '酒款意见和晋级名单已齐，请核对无误后提交本桌结果。'
 })
+const tableCheckoutActionLabel = computed(() => {
+  if (tableReadyForReview.value) return '核对'
+  if (readyFinalizeCount.value > 0) return '去汇总'
+  if (myPendingScoreCount.value > 0) return '去评分'
+  return '看进度'
+})
+const canOpenTableWorkbench = computed(() => Boolean(entries.value.length))
 const emptyStateTitle = computed(() => {
+  if (loadingTasks.value) return '正在载入本桌酒款'
   if (!current.value?.roundTableId) return '当前账号还没有绑定评审桌'
   if (current.value?.taskType !== 'CAPTAIN_FINALIZE') return '当前轮次不是第一轮汇总任务'
   return '本桌还没有酒款'
 })
 const emptyStateMessage = computed(() => {
+  if (loadingTasks.value) return '正在同步本轮酒款和评分进度。'
   if (!current.value?.roundTableId) return '请现场工作人员先把你加入本轮评审桌。'
   if (current.value?.taskType !== 'CAPTAIN_FINALIZE') return '请确认后台是否已经发布第一轮评分任务。'
   return '请现场工作人员确认本轮、评审桌和酒款分配。'
 })
-const emptyStateChecks = computed(() => [
-  `评审桌：${me.value?.tableName || current.value?.tableName || '未分配'}`,
-  `当前轮次：${current.value?.flightName || '未发布'}`,
-])
+const emptyStateChecks = computed(() => (
+  loadingTasks.value
+    ? []
+    : [
+      `评审桌：${me.value?.tableName || current.value?.tableName || '未分配'}`,
+      `当前轮次：${current.value?.flightName || '未发布'}`,
+    ]
+))
 
 function openEntry(uuid) {
   if (!uuid) return
@@ -285,10 +316,25 @@ function entryStatus(entry) {
   }
   if (isCaptain.value) {
     if (!entry.scored) return { label: '待我评分', className: 'status-warn' }
+    if (readyForFinalize(entry)) return { label: '可汇总', className: 'status-ok' }
+    if (entryMissingScoreCount(entry) > 0) return { label: '等同桌', className: 'status-warn' }
     return { label: '待汇总', className: 'status-warn' }
   }
   if (entry.scored) return { label: '已评分', className: 'status-ok' }
   return { label: '待评分', className: '' }
+}
+
+function entryMissingScoreCount(entry) {
+  const expected = Number(entry.expectedCount || 0)
+  const submitted = Number(entry.submittedCount || 0)
+  return expected > 0 ? Math.max(0, expected - submitted) : 0
+}
+
+function entryFinalizeText(entry) {
+  if (entry.finalized) return '已确认'
+  if (readyForFinalize(entry)) return '可汇总'
+  const missing = entryMissingScoreCount(entry)
+  return missing > 0 ? `等 ${missing} 份` : '等待'
 }
 
 function tableScoreProgress(entry) {
@@ -307,6 +353,7 @@ function captainAction(entry) {
   if (entry.finalized) return { label: '查看意见', primary: false }
   if (!entry.scored) return null
   if (readyForFinalize(entry)) return { label: '汇总意见', primary: true }
+  if (entryMissingScoreCount(entry) > 0) return { label: '看进度', primary: false }
   return null
 }
 
@@ -385,34 +432,39 @@ onMounted(async () => {
     router.replace('/review-status')
     return
   }
+  loadingTasks.value = true
+  try {
     const competitions = await fetchCompetitions()
     current.value = selectCurrentTask(competitions)
-  captainBoard.value = null
-  rankingSlots.value = []
-  if (!current.value) {
-    entries.value = []
-    return
-  }
-  if (current.value.roundTableId) {
-    if (current.value.taskType === 'CAPTAIN_FINALIZE') {
-      const board = await fetchCaptainBoard(current.value.roundTableId)
-      captainBoard.value = board
-      entries.value = board.entries || []
+    captainBoard.value = null
+    rankingSlots.value = []
+    if (!current.value) {
+      entries.value = []
       return
     }
-    const [table, myScores] = isRankingRound.value
-      ? [await fetchRoundTable(current.value.roundTableId), []]
-      : await Promise.all([
-        fetchRoundTable(current.value.roundTableId),
-        fetchMyScores(),
-      ])
-    rankingSlots.value = table.rankings || []
-    const myScoredUuids = new Set(myScores.map((score) => score.beerUuid))
-    entries.value = (table.entries || []).map((entry) => ({
-      ...entry,
-      scored: myScoredUuids.has(entry.uuid),
-      finalized: Boolean(entry.advanced),
-    }))
+    if (current.value.roundTableId) {
+      if (current.value.taskType === 'CAPTAIN_FINALIZE') {
+        const board = await fetchCaptainBoard(current.value.roundTableId)
+        captainBoard.value = board
+        entries.value = board.entries || []
+        return
+      }
+      const [table, myScores] = isRankingRound.value
+        ? [await fetchRoundTable(current.value.roundTableId), []]
+        : await Promise.all([
+          fetchRoundTable(current.value.roundTableId),
+          fetchMyScores(),
+        ])
+      rankingSlots.value = table.rankings || []
+      const myScoredUuids = new Set(myScores.map((score) => score.beerUuid))
+      entries.value = (table.entries || []).map((entry) => ({
+        ...entry,
+        scored: myScoredUuids.has(entry.uuid),
+        finalized: Boolean(entry.advanced),
+      }))
+    }
+  } finally {
+    loadingTasks.value = false
   }
 })
 

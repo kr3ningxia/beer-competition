@@ -1,6 +1,6 @@
 export const entryStatusMeta = {
   PENDING_PAYMENT: {
-    label: '等待付款确认',
+    label: '待支付',
     tone: 'amber',
     step: '待付款',
   },
@@ -76,7 +76,7 @@ export function entryPrimaryAction(entry) {
   }
   const paymentPath = `/portal/payment?entryId=${entry.id}`
   if (entry.status === 'PENDING_PAYMENT' || entry.paymentStatus === 'UNPAID') {
-    return { label: '查看付款说明', to: paymentPath }
+    return { label: '去支付', to: paymentPath }
   }
   if (isEntryResultPublished(entry)) {
     return { label: '查看结果', to: entryResultPath(entry) }
@@ -104,8 +104,8 @@ export function entryTimeline(entry) {
   const stored = Boolean(entry?.stored) || entry?.status === 'STORED' || resultPublished
   return [
     { label: '提交资料', done: true, hint: entry?.submittedAt || '已提交' },
-    { label: '付款确认', done: paid, hint: paid ? '已确认' : '等待主办方确认付款' },
-    { label: '标签可用', done: paid, hint: paid ? '可下载并贴在酒瓶或外箱' : '付款确认后开放下载' },
+    { label: '支付报名费', done: paid, hint: paid ? '已支付' : '待支付' },
+    { label: '标签可用', done: paid, hint: paid ? '可下载并贴在酒瓶或外箱' : '支付成功后开放下载' },
     { label: '酒样入库', done: stored, hint: stored ? '已入库' : '等待主办方收样确认' },
     { label: '结果发布', done: resultPublished, hint: resultPublished ? '结果已发布' : '等待主办方发布结果' },
   ]
@@ -124,7 +124,7 @@ export function entrySummaryForCompetition(competitionId, entries) {
 
 export function nextActionText(entry) {
   if (entry.status === 'PENDING_PAYMENT' || entry.paymentStatus === 'UNPAID') {
-    return '等待付款确认'
+    return '待支付报名费'
   }
   if (entry.status === 'REGISTERED') {
     return entry.stored ? '等待评审' : '下载标签并送样'

@@ -22,7 +22,7 @@
       <div class="section-head">
         <div>
           <h2 class="portal-section-title">我的赛事进度</h2>
-          <p>按赛事查看已提交、付款确认、标签、入库和结果状态。</p>
+          <p>按赛事查看已提交、支付、标签、入库和结果状态。</p>
         </div>
         <RouterLink to="/portal/events">浏览开放赛事</RouterLink>
       </div>
@@ -38,7 +38,7 @@
           </div>
           <div class="summary-strip">
             <span><small>已提交</small><b>{{ summary(competition.id).submitted }}</b></span>
-            <span><small>待确认付款</small><b>{{ summary(competition.id).pendingPayment }}</b></span>
+            <span><small>待支付</small><b>{{ summary(competition.id).pendingPayment }}</b></span>
             <span><small>报名成功</small><b>{{ summary(competition.id).registered }}</b></span>
             <span><small>已入库</small><b>{{ summary(competition.id).stored }}</b></span>
             <span><small>结果可查</small><b>{{ summary(competition.id).result }}</b></span>
@@ -125,7 +125,7 @@ const resultEntries = computed(() => entries.value.filter((entry) => isEntryResu
 const myCompetitions = computed(() => competitions.value)
 
 const todoCards = computed(() => [
-  { label: '待确认付款', value: unpaidEntries.value.length, hint: '线下付款后等待主办方确认', icon: Money, to: '/portal/payment' },
+  { label: '待支付', value: unpaidEntries.value.length, hint: '支付后开放标签和送样信息', icon: Money, to: '/portal/payment' },
   { label: '可下载标签', value: labelEntries.value.length, hint: '贴在酒瓶或外箱，便于现场核对', icon: Tickets, to: '/portal/payment' },
   { label: '已确认入库', value: storedEntries.value.length, hint: '主办方已收到酒样', icon: CircleCheck, to: '/portal/entries' },
   { label: '结果可查看', value: resultEntries.value.length, hint: '查看奖项、评分和评语', icon: CircleCheck, to: '/portal/results' },

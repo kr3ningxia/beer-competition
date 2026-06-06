@@ -3,7 +3,7 @@
     <section class="form-card brewer-card">
       <div class="form-header">
         <h2 class="portal-section-title">提交参赛酒款</h2>
-        <p>先完成酒款资料，提交后进入付款与送样页面。</p>
+        <p>先完成酒款资料，提交后支付报名费。</p>
       </div>
 
       <section v-if="selectedCompetition" class="competition-banner">
@@ -25,6 +25,7 @@
         ref="entryFormRef"
         :model="form"
         :rules="formRules"
+        :disabled="Boolean(submittedEntry)"
         :validate-on-rule-change="false"
         label-position="top"
         class="entry-form"
@@ -155,10 +156,54 @@
           </div>
         </el-form-item>
 
-        <div class="form-actions">
-          <el-button type="primary" @click="submitEntry">提交报名</el-button>
+        <div v-if="!submittedEntry" class="form-actions">
+          <el-button type="primary" :loading="submittingEntry" @click="submitEntry">
+            提交报名并支付 {{ entryFeeLabel }}
+          </el-button>
         </div>
       </el-form>
+
+      <section v-if="submittedEntry" class="inline-payment">
+        <div class="payment-head">
+          <div>
+            <span>PAYMENT</span>
+            <h3>{{ paymentPaid ? '支付成功' : '支付报名费' }}</h3>
+            <p>{{ paymentPaid ? '这一款酒已经报名成功，可以继续下载标签并填写送样信息。' : '当前使用模拟收款，后续接入微信支付后会在这里拉起微信支付。' }}</p>
+          </div>
+          <strong>{{ formatCurrency(paymentAmount) }}</strong>
+        </div>
+
+        <dl class="payment-facts">
+          <div>
+            <dt>酒款</dt>
+            <dd>{{ submittedEntry.name }}</dd>
+          </div>
+          <div>
+            <dt>状态</dt>
+            <dd>{{ paymentPaid ? '报名成功' : '待支付' }}</dd>
+          </div>
+        </dl>
+
+        <div class="payment-actions">
+          <el-button
+            v-if="!paymentPaid"
+            type="primary"
+            size="large"
+            :loading="simulatingPayment"
+            @click="paySubmittedEntry"
+          >
+            模拟支付成功
+          </el-button>
+          <RouterLink
+            v-else
+            class="primary-link"
+            :to="`/portal/payment?entryId=${submittedEntry.id}`"
+          >
+            下载标签并填写送样信息
+          </RouterLink>
+          <el-button :disabled="simulatingPayment" @click="resetForNextEntry">继续提交另一款</el-button>
+        </div>
+      </section>
     </section>
 
     <aside v-if="selectedCompetition" class="preview-card">
@@ -194,7 +239,7 @@
             </div>
           </dl>
           <div class="foam-line" />
-          <p class="receipt-status">提交后进入付款与送样</p>
+          <p class="receipt-status">{{ submittedEntry ? (paymentPaid ? '已支付，报名成功' : '待支付报名费') : '提交后支付报名费' }}</p>
         </template>
         <p v-else class="preview-empty">填写组别、风格和 ABV 后显示核对单。</p>
       </div>
@@ -205,15 +250,22 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { fetchPortalCompetitionDetail, submitPortalEntry } from '@/api/portal'
+import { fetchPortalCompetitionDetail, simulatePortalEntryPayment, submitPortalEntry } from '@/api/portal'
 
 const route = useRoute()
-const router = useRouter()
 const entryFormRef = ref(null)
 const selectedDetail = ref(null)
+const submittedEntry = ref(null)
+const submittingEntry = ref(false)
+const simulatingPayment = ref(false)
 const queryCompetitionId = Number(route.query.competitionId || 0)
+const currencyFormatter = new Intl.NumberFormat('zh-CN', {
+  style: 'currency',
+  currency: 'CNY',
+  maximumFractionDigits: 0,
+})
 
 const form = reactive({
   name: '',
@@ -229,6 +281,9 @@ const selectedCompetition = computed(() => selectedDetail.value || null)
 const configuredFields = computed(() => normalizeEntryFields(selectedCompetition.value?.entryFields || []))
 const selectedCategoryName = computed(() => selectedCompetition.value?.categories?.find((item) => item.id === form.categoryId)?.name || '')
 const previewReady = computed(() => Boolean(selectedCategoryName.value && form.style && form.abv !== null && form.abv !== undefined))
+const paymentAmount = computed(() => submittedEntry.value?.payment?.amount ?? submittedEntry.value?.entryFee ?? selectedCompetition.value?.entryFee ?? 0)
+const paymentPaid = computed(() => submittedEntry.value?.paymentStatus === 'PAID' || submittedEntry.value?.canDownloadLabel)
+const entryFeeLabel = computed(() => formatCurrency(selectedCompetition.value?.entryFee))
 const formRules = computed(() => {
   const rules = {
     name: [{ required: true, message: '请填写酒款名称', trigger: 'blur' }],
@@ -300,6 +355,7 @@ function syncCompetitionDefaults() {
 }
 
 async function submitEntry() {
+  if (submittedEntry.value || submittingEntry.value) return
   const valid = await entryFormRef.value?.validate().catch(() => false)
   if (!valid) {
     ElMessage.warning('请先补全报名表中的必要信息')
@@ -309,6 +365,7 @@ async function submitEntry() {
     ElMessage.warning('请先从赛事详情进入报名')
     return
   }
+  submittingEntry.value = true
   try {
     const entry = await submitPortalEntry(selectedCompetition.value.id, {
       name: form.name,
@@ -318,11 +375,33 @@ async function submitEntry() {
       description: form.description,
       extraFields: form.extraFields,
     })
-    ElMessage.success('报名已提交，正在进入付款与送样')
-    router.push(`/portal/payment?entryId=${entry.id}`)
+    submittedEntry.value = entry
+    ElMessage.success('报名已提交，请完成支付')
   } catch (error) {
     ElMessage.warning(error?.message || '报名提交失败，请稍后重试')
+  } finally {
+    submittingEntry.value = false
   }
+}
+
+async function paySubmittedEntry() {
+  if (!submittedEntry.value || paymentPaid.value) return
+
+  simulatingPayment.value = true
+  try {
+    submittedEntry.value = await simulatePortalEntryPayment(submittedEntry.value.id)
+    ElMessage.success('支付成功，报名已完成')
+  } catch (error) {
+    ElMessage.warning(error?.message || '支付失败，请稍后重试')
+  } finally {
+    simulatingPayment.value = false
+  }
+}
+
+function resetForNextEntry() {
+  submittedEntry.value = null
+  syncCompetitionDefaults()
+  entryFormRef.value?.clearValidate()
 }
 
 function normalizeEntryFields(fields = []) {
@@ -373,6 +452,11 @@ function hasFieldValue(value) {
 
 function formatFieldValue(value) {
   return Array.isArray(value) ? value.join('、') : value
+}
+
+function formatCurrency(value) {
+  if (value === null || value === undefined || value === '') return '¥0'
+  return currencyFormatter.format(Number(value))
 }
 
 function styleLabel(item) {
@@ -567,6 +651,101 @@ function styleLabel(item) {
   margin-top: 14px;
 }
 
+.inline-payment {
+  margin-top: 18px;
+  padding: 18px;
+  background: linear-gradient(180deg, #fffaf0, #fff5df);
+  border: 1px solid rgba(87, 58, 26, 0.16);
+  border-radius: 8px;
+}
+
+.payment-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.payment-head span {
+  display: block;
+  color: #8b5c19;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.payment-head h3 {
+  margin: 8px 0 6px;
+  color: #2b1d10;
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.payment-head p {
+  margin: 0;
+  color: #746a5f;
+  line-height: 1.6;
+}
+
+.payment-head strong {
+  color: #8b5c19;
+  font-size: 24px;
+  white-space: nowrap;
+}
+
+.payment-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0 0;
+}
+
+.payment-facts div {
+  padding: 12px;
+  background: #fffdf7;
+  border: 1px solid rgba(87, 58, 26, 0.12);
+  border-radius: 8px;
+}
+
+.payment-facts dt,
+.payment-facts dd {
+  margin: 0;
+}
+
+.payment-facts dt {
+  color: #907c66;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.payment-facts dd {
+  margin-top: 6px;
+  color: #2b1d10;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.payment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-top: 16px;
+}
+
+.primary-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 14px;
+  color: #fffaf0;
+  background: #b9781f;
+  border-radius: 8px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
 .secondary-link {
   display: inline-flex;
   align-items: center;
@@ -679,7 +858,8 @@ function styleLabel(item) {
 @media (max-width: 680px) {
   .form-grid,
   .dynamic-field-list,
-  .form-actions {
+  .form-actions,
+  .payment-facts {
     grid-template-columns: 1fr;
   }
 
@@ -688,6 +868,10 @@ function styleLabel(item) {
   }
 
   .form-actions {
+    display: grid;
+  }
+
+  .payment-head {
     display: grid;
   }
 

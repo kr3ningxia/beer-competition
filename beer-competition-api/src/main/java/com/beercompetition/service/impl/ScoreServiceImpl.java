@@ -201,12 +201,21 @@ public class ScoreServiceImpl implements ScoreService {
     public List<ScoreRecordVO> listTableScores(String uuid) {
         // 1) 校验桌长权限并查询同桌原始评分
         BeerEntry entry = requireEntry(uuid);
-        requireScoreRoundTask(entry.getId(), JudgeRoleType.CAPTAIN.name(), true);
+        RoundTableEntry roundEntry = requireScoreRoundTask(entry.getId(), JudgeRoleType.CAPTAIN.name(), true);
+        Set<Long> tableJudgeIds = roundTableMemberMapper.selectList(new LambdaQueryWrapper<RoundTableMember>()
+                        .eq(RoundTableMember::getRoundTableId, roundEntry.getRoundTableId())
+                        .eq(RoundTableMember::getSystemTaskRequired, FLAG_TRUE))
+                .stream()
+                .map(RoundTableMember::getJudgeAccountId)
+                .collect(Collectors.toSet());
+        Long captainId = BaseContext.getCurrentId();
         return scoreRecordMapper.selectList(new LambdaQueryWrapper<ScoreRecord>()
                         .eq(ScoreRecord::getBeerEntryId, entry.getId())
+                        .eq(ScoreRecord::getCompetitionId, entry.getCompetitionId())
                         .orderByAsc(ScoreRecord::getFinalFlag)
                         .orderByAsc(ScoreRecord::getId))
                 .stream()
+                .filter(score -> isCurrentTableScore(score, tableJudgeIds, captainId))
                 .map(this::toScoreRecordVO)
                 .toList();
     }
@@ -282,46 +291,64 @@ public class ScoreServiceImpl implements ScoreService {
         }
     }
 
+    private boolean isCurrentTableScore(ScoreRecord score, Set<Long> tableJudgeIds, Long captainId) {
+        if (Integer.valueOf(FLAG_TRUE).equals(score.getFinalFlag())) {
+            return score.getJudgeAccountId().equals(captainId);
+        }
+        return tableJudgeIds.contains(score.getJudgeAccountId());
+    }
+
     private RoundTableEntry requireScoreRoundTask(Long beerEntryId, String role, boolean captainOnly) {
         List<RoundTableEntry> roundEntries = roundTableEntryMapper.selectList(new LambdaQueryWrapper<RoundTableEntry>()
                 .eq(RoundTableEntry::getBeerEntryId, beerEntryId)
-                .orderByAsc(RoundTableEntry::getId));
-        RoundTableEntry roundEntry = roundEntries.stream()
-                .filter(item -> {
-                    CompetitionRound round = competitionRoundMapper.selectById(item.getRoundId());
-                    return round != null
-                            && RoundType.SCORE.name().equals(round.getRoundType())
-                            && isScoreRoundEditable(round.getStatus(), captainOnly);
-                })
-                .findFirst()
-                .orElse(null);
-        if (roundEntry == null) {
+                .orderByDesc(RoundTableEntry::getId));
+        Long judgeId = BaseContext.getCurrentId();
+        boolean hasScoreRound = false;
+        boolean hasEditableScoreRound = false;
+        boolean hasVisibleTable = false;
+        for (RoundTableEntry roundEntry : roundEntries) {
+            CompetitionRound round = competitionRoundMapper.selectById(roundEntry.getRoundId());
+            if (round == null || !RoundType.SCORE.name().equals(round.getRoundType())) {
+                continue;
+            }
+            hasScoreRound = true;
+            if (!isScoreRoundEditable(round.getStatus(), captainOnly)) {
+                continue;
+            }
+            hasEditableScoreRound = true;
+            RoundTable table = roundTableMapper.selectById(roundEntry.getRoundTableId());
+            if (table == null || RoundStatus.LOCKED.name().equals(table.getStatus())) {
+                continue;
+            }
+            if (!isScoreTableEditable(table.getStatus(), captainOnly)) {
+                continue;
+            }
+            hasVisibleTable = true;
+            RoundTableMember member = roundTableMemberMapper.selectOne(new LambdaQueryWrapper<RoundTableMember>()
+                    .eq(RoundTableMember::getRoundTableId, table.getId())
+                    .eq(RoundTableMember::getJudgeAccountId, judgeId)
+                    .eq(RoundTableMember::getSystemTaskRequired, FLAG_TRUE));
+            if (member == null) {
+                continue;
+            }
+            if (captainOnly && !JudgeRoleType.CAPTAIN.name().equals(member.getRole())) {
+                continue;
+            }
+            if (!captainOnly && !isScoreSubmissionAllowed(member.getRole(), role)) {
+                continue;
+            }
+            return roundEntry;
+        }
+        if (!hasScoreRound || !hasEditableScoreRound) {
             throw new ForbiddenException("该酒款尚未进入当前评分轮次");
         }
-        RoundTable table = roundTableMapper.selectById(roundEntry.getRoundTableId());
-        if (table == null) {
-            throw new ForbiddenException("评审桌不存在");
-        }
-        if (RoundStatus.LOCKED.name().equals(table.getStatus())) {
-            throw new BaseException("当前轮次已锁定，不能修改评分");
-        }
-        if (!isScoreTableEditable(table.getStatus(), captainOnly)) {
+        if (!hasVisibleTable) {
             throw new ForbiddenException("当前轮次尚未发布评分任务");
         }
-        RoundTableMember member = roundTableMemberMapper.selectOne(new LambdaQueryWrapper<RoundTableMember>()
-                .eq(RoundTableMember::getRoundTableId, table.getId())
-                .eq(RoundTableMember::getJudgeAccountId, BaseContext.getCurrentId())
-                .eq(RoundTableMember::getSystemTaskRequired, 1));
-        if (member == null) {
-            throw new ForbiddenException("无权操作该酒款");
-        }
-        if (captainOnly && !JudgeRoleType.CAPTAIN.name().equals(member.getRole())) {
+        if (captainOnly) {
             throw new ForbiddenException("仅桌长可查看和提交小组最终分");
         }
-        if (!captainOnly && !isScoreSubmissionAllowed(member.getRole(), role)) {
-            throw new ForbiddenException("当前评审角色与评分类型不匹配");
-        }
-        return roundEntry;
+        throw new ForbiddenException("当前评审角色与评分类型不匹配");
     }
 
     private boolean isScoreRoundEditable(String status, boolean captainOnly) {
@@ -462,6 +489,7 @@ public class ScoreServiceImpl implements ScoreService {
                 .judgeName(judge == null ? null : judge.getName())
                 .judgeRoleType(scoreRecord.getJudgeRoleType())
                 .roleLabel(roleLabel(scoreRecord.getJudgeRoleType()))
+                .mine(scoreRecord.getJudgeAccountId().equals(BaseContext.getCurrentId()))
                 .dimensions(readDimensions(scoreRecord.getDimensionsJson()))
                 .totalScore(scoreRecord.getTotalScore())
                 .comments(scoreRecord.getComments())

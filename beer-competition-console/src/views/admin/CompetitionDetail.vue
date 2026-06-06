@@ -25,7 +25,6 @@
         </div>
         <div class="head-action-group">
           <button
-            v-if="activeTab !== 'rounds'"
             class="tool-button primary"
             type="button"
             :disabled="!stagePrimaryAction.enabled"
@@ -60,7 +59,7 @@
             :key="tab.key"
             :class="{ active: activeTab === tab.key }"
             type="button"
-            @click="activeTab = tab.key"
+            @click="handleDetailTabChange(tab.key)"
           >
             <component :is="tab.icon" />
             {{ tab.label }}
@@ -355,7 +354,7 @@
             :is-judge-active="isJudgeActive"
             :get-round-entry-assignment="getRoundEntryAssignment"
             :get-round-table-issues="getRoundTableIssues"
-            @update:allocation-mode="allocationMode = $event"
+            @update:allocation-mode="handleAllocationModeChange"
             @select-round="selectRound"
             @update:judge-keyword="judgeKeyword = $event"
             @update:judge-role-filter="judgeRoleFilter = $event"
@@ -550,7 +549,7 @@
                     <button
                       class="round-table-detail-button"
                       type="button"
-                      :disabled="currentRound?.type !== 'SCORE'"
+                      :title="currentRound?.type === 'RANKING' ? '查看排序详情' : '查看评分详情'"
                       @click.stop="openRoundTableScoreDetail(table.id)"
                     >
                       <Search />
@@ -723,7 +722,6 @@
                     <section class="feedback-block">
                       <div class="feedback-block-title">
                         <h2>桌长最终意见</h2>
-                        <span>厂商最终看到的关键反馈</span>
                       </div>
                       <article v-if="selectedFeedbackEntry.captainOpinion?.submitted" class="captain-opinion-card">
                         <div class="captain-opinion-meta">
@@ -972,6 +970,74 @@
       <button class="tool-button primary" type="button" @click="router.push('/admin/competitions')">返回台账</button>
     </section>
 
+    <Teleport to="body">
+      <div v-if="publishRegistrationConfirmOpen" class="stage-confirm-backdrop" @click.self="closePublishRegistrationConfirm">
+        <section class="stage-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="publish-registration-title">
+          <header>
+            <span class="confirm-kicker">开放报名</span>
+            <h2 id="publish-registration-title">确认发布报名？</h2>
+          </header>
+          <p class="confirm-copy">
+            发布后，厂商端将展示本场比赛并允许提交酒款。发布前请确认报名时间、投递组别和风格库已经核对完成。
+          </p>
+          <div class="confirm-summary">
+            <span>
+              <small>比赛</small>
+              <strong>{{ competition?.name || '-' }}</strong>
+            </span>
+            <span>
+              <small>报名截止</small>
+              <strong>{{ competition?.registrationDeadline ? formatDateTime(competition.registrationDeadline) : '-' }}</strong>
+            </span>
+            <span>
+              <small>开放准备</small>
+              <strong>{{ registrationReadyCount }} / {{ registrationRequiredChecks.length }}</strong>
+            </span>
+          </div>
+          <footer>
+            <button class="confirm-button ghost" type="button" :disabled="publishRegistrationLoading" @click="closePublishRegistrationConfirm">取消</button>
+            <button class="confirm-button primary" type="button" :disabled="publishRegistrationLoading" @click="confirmPublishRegistration">
+              {{ publishRegistrationLoading ? '发布中' : '确认发布' }}
+              <Right />
+            </button>
+          </footer>
+        </section>
+      </div>
+
+      <div v-if="closeRegistrationConfirmOpen" class="stage-confirm-backdrop" @click.self="closeRegistrationConfirm">
+        <section class="stage-confirm-dialog warning" role="dialog" aria-modal="true" aria-labelledby="close-registration-title">
+          <header>
+            <span class="confirm-kicker">截止报名</span>
+            <h2 id="close-registration-title">确认截止报名？</h2>
+          </header>
+          <p class="confirm-copy">
+            截止后，厂商端将停止接收新的报名提交。已报名酒款仍会保留在后台，后续可继续处理付款、入库和评审准备。
+          </p>
+          <div class="confirm-summary">
+            <span>
+              <small>比赛</small>
+              <strong>{{ competition?.name || '-' }}</strong>
+            </span>
+            <span>
+              <small>已报名</small>
+              <strong>{{ competition?.entriesSummary?.registered ?? competition?.entriesSummary?.total ?? 0 }} 款</strong>
+            </span>
+            <span>
+              <small>原截止时间</small>
+              <strong>{{ competition?.registrationDeadline ? formatDateTime(competition.registrationDeadline) : '-' }}</strong>
+            </span>
+          </div>
+          <footer>
+            <button class="confirm-button ghost" type="button" :disabled="closeRegistrationLoading" @click="closeRegistrationConfirm">取消</button>
+            <button class="confirm-button primary" type="button" :disabled="closeRegistrationLoading" @click="confirmCloseRegistration">
+              {{ closeRegistrationLoading ? '截止中' : '截止报名' }}
+              <Right />
+            </button>
+          </footer>
+        </section>
+      </div>
+    </Teleport>
+
     <CreateRoundWizard
       :open="createRoundDialogOpen"
       :next-round-name="nextRoundName"
@@ -1064,12 +1130,61 @@
       v-model="roundScoreDetailDialogOpen"
       class="round-score-detail-dialog-shell"
       width="980px"
-      :title="roundScoreDetailTable ? `${roundScoreDetailTable.name} · 评分详情` : '评分详情'"
+      :title="roundDetailDialogTitle"
       align-center
       destroy-on-close
     >
       <div v-if="roundScoreDetailTable" class="round-score-detail-dialog">
-        <section class="score-detail-summary">
+        <section v-if="isRoundScoreDetailRanking" class="score-detail-summary ranking-detail-summary">
+          <span>
+            <small>桌长</small>
+            <strong>{{ roundRankingDetailStats.captainName }}</strong>
+          </span>
+          <span>
+            <small>候选酒款</small>
+            <strong>{{ roundRankingDetailStats.candidateCount }} 款</strong>
+          </span>
+          <span>
+            <small>{{ roundRankingDetailStats.targetLabel }}</small>
+            <strong>{{ roundRankingDetailStats.filledCount }} / {{ roundRankingDetailStats.targetCount }}</strong>
+          </span>
+          <span>
+            <small>轮次状态</small>
+            <strong>{{ roundRankingDetailStats.statusText }}</strong>
+          </span>
+        </section>
+
+        <template v-if="isRoundScoreDetailRanking">
+          <section class="ranking-detail-slots">
+            <header>
+              <h3>排序结果</h3>
+              <span>{{ roundRankingDetailStats.resultStatusText }}</span>
+            </header>
+            <article
+              v-for="slot in roundRankingDetailSlots"
+              :key="slot.rank"
+              :class="{ filled: slot.uuid }"
+            >
+              <strong>{{ slot.label }}</strong>
+              <span>{{ slot.entryName }}</span>
+              <small>{{ slot.entryMeta }}</small>
+            </article>
+          </section>
+
+          <section class="ranking-detail-candidates">
+            <header>
+              <h3>本桌候选酒款</h3>
+              <span>{{ roundScoreDetailEntries.length }} 款</span>
+            </header>
+            <article v-for="entry in roundScoreDetailEntries" :key="entry.uuid">
+              <strong>{{ entry.name }}</strong>
+              <span>{{ entry.shortCode || entry.uuid }}</span>
+              <small>{{ entry.categoryName }}</small>
+            </article>
+          </section>
+        </template>
+
+        <section v-else class="score-detail-summary">
           <span>
             <small>个人评分</small>
             <strong>{{ roundScoreDetailStats.submitted }} / {{ roundScoreDetailStats.total }}</strong>
@@ -1092,7 +1207,7 @@
           </span>
         </section>
 
-        <section class="score-detail-progress-list">
+        <section v-if="!isRoundScoreDetailRanking" class="score-detail-progress-list">
           <article
             v-for="judge in roundScoreDetailJudges"
             :key="judge.judgePublicId || judge.judgeName"
@@ -1222,6 +1337,7 @@ const feedbackFilters = reactive({
 const judgeKeyword = ref('')
 const judgeRoleFilter = ref('UNASSIGNED')
 const allocationMode = ref('judges')
+const allocationDraftSaving = ref(false)
 const selectedTableLocalId = ref(null)
 const selectedRole = ref('CAPTAIN')
 const draggingItem = ref(null)
@@ -1229,6 +1345,10 @@ const awardCertificateInput = ref(null)
 const certificateTargetAward = ref(null)
 const certificateActionIds = ref(new Set())
 const pathAuditOpen = ref(false)
+const publishRegistrationConfirmOpen = ref(false)
+const publishRegistrationLoading = ref(false)
+const closeRegistrationConfirmOpen = ref(false)
+const closeRegistrationLoading = ref(false)
 
 const rounds = ref([])
 const roundEntryPool = ref([])
@@ -1362,6 +1482,11 @@ const entryLookup = computed(() => {
   const entries = [...roundEntryPool.value, ...(competition.value?.entries || [])]
   return new Map(entries.map((entry) => [entry.uuid, entry]))
 })
+const isRoundScoreDetailRanking = computed(() => currentRound.value?.type === 'RANKING')
+const roundDetailDialogTitle = computed(() => {
+  if (!roundScoreDetailTable.value) return isRoundScoreDetailRanking.value ? '排序详情' : '评分详情'
+  return `${roundScoreDetailTable.value.name} · ${isRoundScoreDetailRanking.value ? '排序详情' : '评分详情'}`
+})
 const roundScoreDetailJudges = computed(() => {
   const details = roundScoreDetailTable.value?.judgeDetails || []
   const source = details.length ? details : buildFallbackRoundScoreDetailJudges(roundScoreDetailTable.value)
@@ -1386,6 +1511,30 @@ const roundScoreDetailEntries = computed(() => (roundScoreDetailTable.value?.ent
     categoryName: entry.categoryName || entry.category || '-',
   }
 }))
+const roundRankingDetailSlots = computed(() => getRankingSlots(roundScoreDetailTable.value || {}).map((slot) => {
+  const entry = buildRoundDetailEntryDisplay(slot.uuid)
+  return {
+    ...slot,
+    entryName: entry.name,
+    entryMeta: entry.meta,
+  }
+}))
+const roundRankingDetailStats = computed(() => {
+  const table = roundScoreDetailTable.value
+  const targetCount = Number(table?.targetCount || 0)
+  const filledCount = getFilledRankingCount(table || {})
+  const captainName = getJudge(table?.captainPublicId)?.name || '未指定'
+  const statusText = roundStatusLabels[table?.status] || roundStatusLabels[currentRound.value?.status] || table?.status || currentRound.value?.status || '-'
+  return {
+    captainName,
+    candidateCount: table?.entryUuids?.length || 0,
+    filledCount,
+    targetCount,
+    targetLabel: table?.targetMode === 'CHAMPION' ? '总冠军' : (table?.targetMode === 'MEDALS' ? '奖项槽位' : '已选择'),
+    statusText,
+    resultStatusText: targetCount > 0 && filledCount >= targetCount ? '已完成' : `待选择 ${Math.max(0, targetCount - filledCount)} 款`,
+  }
+})
 const roundScoreDetailStats = computed(() => roundScoreDetailJudges.value.reduce((summary, judge) => {
   const total = Number(judge.totalCount || 0)
   const submitted = Number(judge.submittedCount || 0)
@@ -2269,6 +2418,49 @@ function selectRound(roundId) {
   selectedRoundTableId.value = round?.tables[0]?.id || ''
   selectedEntryUuids.value = []
   closeEntryAutoAssignDialog()
+}
+
+async function handleDetailTabChange(nextTab) {
+  if (nextTab === activeTab.value) return
+  if (activeTab.value === 'judges') {
+    const saved = await autoSaveAllocationDraft(allocationMode.value)
+    if (!saved) return
+  }
+  activeTab.value = nextTab
+}
+
+async function handleAllocationModeChange(nextMode) {
+  if (nextMode === allocationMode.value) return
+  const saved = await autoSaveAllocationDraft(allocationMode.value)
+  if (!saved) return
+  allocationMode.value = nextMode
+}
+
+async function autoSaveAllocationDraft(mode = allocationMode.value) {
+  if (allocationDraftSaving.value || activeTab.value !== 'judges' || !competition.value || !currentRound.value) return true
+  if (mode !== 'judges' && mode !== 'entries') return true
+  allocationDraftSaving.value = true
+  try {
+    if (mode === 'judges') {
+      if (currentRound.value.type === 'RANKING' && currentRound.value.status === 'DRAFT') {
+        await persistCurrentRoundAllocation()
+      } else if (editable.value.judgeTables) {
+        await saveJudgeDraft({ silent: true, allowIncomplete: true })
+      }
+    } else if (mode === 'entries') {
+      if (currentRound.value.isPreparationDraft) {
+        syncFirstRoundDraftTables()
+      } else {
+        await persistCurrentRoundAllocation()
+      }
+    }
+    return true
+  } catch (error) {
+    ElMessage.error('草稿自动保存失败，请稍后重试')
+    return false
+  } finally {
+    allocationDraftSaving.value = false
+  }
 }
 
 function publishRoundById(roundId) {
@@ -3361,12 +3553,15 @@ function resolveDraftRoundTableName(roundNo, index, tableCount) {
 }
 
 async function persistCurrentRoundAllocation() {
-  if (!currentRound.value || currentRound.value.isPreparationDraft || currentRound.value.status !== 'DRAFT') return
+  if (!currentRound.value || currentRound.value.isPreparationDraft || currentRound.value.status !== 'DRAFT') return true
+  const targetRoundId = currentRound.value.id
+  const preferredTableId = selectedRoundTableId.value
   const payload = buildRoundAllocationPayload(currentRound.value)
-  const detail = await saveRoundAllocation(competition.value.id, currentRound.value.id, payload)
+  const detail = await saveRoundAllocation(competition.value.id, targetRoundId, payload)
   competition.value = normalizeDetail(detail)
   resetForms()
-  applyRoundState(currentRound.value?.id)
+  applyRoundState(targetRoundId, { preferredTableId })
+  return true
 }
 
 function buildRoundAllocationPayload(round) {
@@ -3552,6 +3747,17 @@ function getRankingSlots(table) {
 
 function getFilledRankingCount(table) {
   return getRankingSlots(table).filter((slot) => slot.uuid).length
+}
+
+function buildRoundDetailEntryDisplay(uuid) {
+  if (!uuid) return { name: '待选择', meta: '尚未填入酒款' }
+  const entry = entryLookup.value.get(uuid) || {}
+  const code = entry.shortCode || uuid
+  const category = entry.categoryName || entry.category || '-'
+  return {
+    name: entry.name || '未命名酒款',
+    meta: `${code} · ${category}`,
+  }
 }
 
 function setRankingSlot(tableId, rank, uuid) {
@@ -4022,9 +4228,9 @@ function inferJudgeRoles(judge) {
 }
 
 async function saveJudgeDraft(options = {}) {
-  if (validationIssues.value.length) {
+  if (validationIssues.value.length && !options.allowIncomplete) {
     ElMessage.warning(`还有 ${validationIssues.value.length} 项评审配置需要处理`)
-    return
+    return false
   }
   const assignmentDraft = judgeAssignmentForm.map((assignment) => ({
     tableName: judgeTableForm.find((table) => table.localId === assignment.tableLocalId)?.tableName,
@@ -4046,6 +4252,7 @@ async function saveJudgeDraft(options = {}) {
   resetForms()
   applyRoundState()
   if (!options.silent) ElMessage.success('评审人员已保存')
+  return true
 }
 
 async function saveEntryConfig() {
@@ -4163,7 +4370,66 @@ function defaultMinCommentLength(role) {
 }
 
 async function handlePrimaryAction() {
-  await handleStageAction(stagePrimaryAction.value.action)
+  const action = stagePrimaryAction.value.action
+  if (action === 'publishRegistration') {
+    openPublishRegistrationConfirm()
+    return
+  }
+  if (action === 'closeRegistration') {
+    openCloseRegistrationConfirm()
+    return
+  }
+  await handleStageAction(action)
+}
+
+function openPublishRegistrationConfirm() {
+  if (!stagePrimaryAction.value.enabled || !competition.value) return
+  publishRegistrationConfirmOpen.value = true
+}
+
+function closePublishRegistrationConfirm() {
+  if (publishRegistrationLoading.value) return
+  publishRegistrationConfirmOpen.value = false
+}
+
+async function confirmPublishRegistration() {
+  if (!competition.value || publishRegistrationLoading.value) return
+  publishRegistrationLoading.value = true
+  try {
+    const detail = await openCompetitionRegistration(competition.value.id)
+    competition.value = normalizeDetail(detail)
+    resetForms()
+    applyRoundState()
+    publishRegistrationConfirmOpen.value = false
+    ElMessage.success('报名已发布')
+  } finally {
+    publishRegistrationLoading.value = false
+  }
+}
+
+function openCloseRegistrationConfirm() {
+  if (!stagePrimaryAction.value.enabled || !competition.value) return
+  closeRegistrationConfirmOpen.value = true
+}
+
+function closeRegistrationConfirm() {
+  if (closeRegistrationLoading.value) return
+  closeRegistrationConfirmOpen.value = false
+}
+
+async function confirmCloseRegistration() {
+  if (!competition.value || closeRegistrationLoading.value) return
+  closeRegistrationLoading.value = true
+  try {
+    const detail = await closeCompetitionRegistration(competition.value.id)
+    competition.value = normalizeDetail(detail)
+    resetForms()
+    applyRoundState()
+    closeRegistrationConfirmOpen.value = false
+    ElMessage.success('报名已截止')
+  } finally {
+    closeRegistrationLoading.value = false
+  }
 }
 
 async function handleDeleteCompetition() {
@@ -4194,37 +4460,11 @@ async function handleDeleteCompetition() {
 
 async function handleStageAction(action) {
   if (action === 'publishRegistration') {
-    try {
-      await ElMessageBox.confirm('发布后厂商可看到本场比赛。', '发布报名？', {
-        confirmButtonText: '发布报名',
-        cancelButtonText: '取消',
-        type: 'warning',
-      })
-      const detail = await openCompetitionRegistration(competition.value.id)
-      competition.value = normalizeDetail(detail)
-      resetForms()
-      applyRoundState()
-      ElMessage.success('报名已发布')
-    } catch {
-      // User cancelled.
-    }
+    openPublishRegistrationConfirm()
     return
   }
   if (action === 'closeRegistration') {
-    try {
-      await ElMessageBox.confirm('截止后厂商将不能继续提交报名。', '截止报名？', {
-        confirmButtonText: '截止报名',
-        cancelButtonText: '取消',
-        type: 'warning',
-      })
-      const detail = await closeCompetitionRegistration(competition.value.id)
-      competition.value = normalizeDetail(detail)
-      resetForms()
-      applyRoundState()
-      ElMessage.success('报名已截止')
-    } catch {
-      // User cancelled.
-    }
+    openCloseRegistrationConfirm()
     return
   }
   if (action === 'prepareJudging') {
@@ -4478,6 +4718,139 @@ svg {
   background: rgba(255, 132, 116, 0.08);
 }
 
+.stage-confirm-backdrop {
+  --confirm-panel: #111b1f;
+  --confirm-line: rgba(219, 232, 237, 0.13);
+  --confirm-text: #edf4f6;
+  --confirm-muted: #8ea1aa;
+  --confirm-gold: #e0b84a;
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(1, 7, 9, 0.72);
+  backdrop-filter: blur(10px);
+}
+
+.stage-confirm-dialog {
+  box-sizing: border-box;
+  display: grid;
+  gap: 16px;
+  width: min(520px, 100%);
+  padding: 20px;
+  color: var(--confirm-text);
+  border: 1px solid var(--confirm-line);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.014)),
+    var(--confirm-panel);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.48);
+}
+
+.stage-confirm-dialog.warning {
+  border-color: rgba(224, 184, 74, 0.28);
+  background:
+    linear-gradient(180deg, rgba(224, 184, 74, 0.07), rgba(255, 255, 255, 0.012)),
+    var(--confirm-panel);
+}
+
+.stage-confirm-dialog header {
+  display: grid;
+  gap: 7px;
+}
+
+.confirm-kicker {
+  color: var(--confirm-gold);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.stage-confirm-dialog h2 {
+  font-size: 22px;
+  line-height: 1.18;
+}
+
+.confirm-copy {
+  color: #bfd0d7;
+  line-height: 1.65;
+}
+
+.confirm-summary {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgba(219, 232, 237, 0.09);
+  border-radius: 8px;
+  background: rgba(7, 14, 17, 0.58);
+}
+
+.confirm-summary span {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.confirm-summary small {
+  color: var(--confirm-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.confirm-summary strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--confirm-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stage-confirm-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  align-items: center;
+}
+
+.confirm-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  color: var(--confirm-text);
+  border: 1px solid var(--confirm-line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  font-weight: 800;
+}
+
+.confirm-button.primary {
+  color: var(--confirm-gold);
+  border-color: rgba(216, 169, 53, 0.36);
+  background: rgba(216, 169, 53, 0.1);
+}
+
+.stage-confirm-dialog.warning .confirm-button.primary {
+  color: #f1c85d;
+  border-color: rgba(224, 184, 74, 0.5);
+  background: rgba(216, 169, 53, 0.14);
+}
+
+.confirm-button.ghost:hover,
+.confirm-button.primary:hover {
+  border-color: rgba(224, 184, 74, 0.45);
+  background: rgba(216, 169, 53, 0.08);
+}
+
+.confirm-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
 :global(.entry-auto-assign-dialog-shell) {
   --entry-dialog-bg: #10191d;
   --entry-dialog-panel: rgba(7, 14, 17, 0.72);
@@ -4599,6 +4972,90 @@ svg {
   overflow: hidden;
   font-size: 16px;
   line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ranking-detail-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.ranking-detail-summary strong {
+  overflow: hidden;
+  font-size: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ranking-detail-slots,
+.ranking-detail-candidates {
+  display: grid;
+  gap: 8px;
+}
+
+.ranking-detail-slots header,
+.ranking-detail-candidates header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.ranking-detail-slots h3,
+.ranking-detail-candidates h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.ranking-detail-slots header span,
+.ranking-detail-candidates header span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.ranking-detail-slots article,
+.ranking-detail-candidates article {
+  display: grid;
+  gap: 7px;
+  align-items: center;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid rgba(219, 232, 237, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.026);
+}
+
+.ranking-detail-slots article {
+  grid-template-columns: 100px minmax(0, 1fr) minmax(180px, 0.5fr);
+}
+
+.ranking-detail-candidates article {
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 0.34fr) minmax(140px, 0.4fr);
+}
+
+.ranking-detail-slots article.filled {
+  border-color: rgba(111, 207, 122, 0.22);
+  background: rgba(111, 207, 122, 0.055);
+}
+
+.ranking-detail-slots strong,
+.ranking-detail-candidates strong {
+  color: var(--text);
+  font-weight: 900;
+}
+
+.ranking-detail-slots span,
+.ranking-detail-slots small,
+.ranking-detail-candidates span,
+.ranking-detail-candidates small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

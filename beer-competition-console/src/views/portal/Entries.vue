@@ -166,8 +166,8 @@ function timeline(entry) {
   const resultPublished = isEntryResultPublished(entry)
   return [
     { label: '提交资料', time: entry.submittedAt, done: true },
-    { label: '付款确认', hint: entry.paymentStatus === 'PAID' ? '已确认' : '等待主办方确认付款', done: entry.paymentStatus === 'PAID' },
-    { label: '标签可下载', hint: entry.canDownloadLabel ? '已生成现场标签' : '付款确认后开放下载', done: entry.canDownloadLabel },
+    { label: '支付报名费', hint: entry.paymentStatus === 'PAID' ? '已支付' : '待支付', done: entry.paymentStatus === 'PAID' },
+    { label: '标签可下载', hint: entry.canDownloadLabel ? '已生成现场标签' : '支付成功后开放下载', done: entry.canDownloadLabel },
     { label: '酒样入库', hint: isStored(entry) ? '已入库' : '等待主办方确认收样', done: isStored(entry) },
     { label: '结果发布', hint: resultPublished ? '结果已发布' : '等待主办方发布结果', done: resultPublished },
   ]

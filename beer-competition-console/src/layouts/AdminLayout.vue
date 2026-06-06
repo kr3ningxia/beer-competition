@@ -25,11 +25,11 @@
       </nav>
 
       <div class="system-card">
-        <span />
-        <div>
+        <div class="system-status">
+          <span />
           <strong>系统运行正常</strong>
-          <p>版本 v2.4.1 · 连接稳定</p>
         </div>
+        <el-button class="sidebar-logout" text :icon="SwitchButton" @click="logout">退出登录</el-button>
       </div>
     </aside>
 
@@ -56,6 +56,7 @@ import {
   Download,
   House,
   Medal,
+  SwitchButton,
   User,
 } from '@element-plus/icons-vue'
 import { clearSession, getDisplayName } from '@/utils/auth'
@@ -78,7 +79,7 @@ const navItems = [
 
 function logout() {
   clearSession('admin')
-  router.push('/admin/login')
+  router.replace('/admin/login')
 }
 </script>
 
@@ -147,8 +148,7 @@ function logout() {
   height: 25px;
 }
 
-.brand h2,
-.system-card p {
+.brand h2 {
   margin: 0;
 }
 
@@ -202,20 +202,25 @@ function logout() {
 }
 
 .system-card {
-  display: flex;
+  display: grid;
   gap: 10px;
-  align-items: flex-start;
   margin-top: auto;
-  padding: 14px;
+  padding: 12px;
   border: 1px solid rgba(218, 231, 236, 0.06);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.03);
 }
 
-.system-card > span {
+.system-status {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.system-status > span {
   width: 8px;
   height: 8px;
-  margin-top: 5px;
+  flex: 0 0 auto;
   border-radius: 50%;
   background: #53c979;
 }
@@ -227,10 +232,25 @@ function logout() {
   font-weight: 600;
 }
 
-.system-card p {
-  margin-top: 5px;
-  color: #647b85;
+.sidebar-logout {
+  justify-content: flex-start;
+  width: fit-content;
+  height: 26px;
+  margin-left: 18px;
+  padding: 0 4px;
+  color: #657982;
   font-size: 12px;
+  font-weight: 600;
+}
+
+.sidebar-logout:hover,
+.sidebar-logout:focus {
+  color: #a8bac2;
+  background: transparent;
+}
+
+.sidebar-logout :deep(.el-icon) {
+  margin-right: 4px;
 }
 
 .content {
