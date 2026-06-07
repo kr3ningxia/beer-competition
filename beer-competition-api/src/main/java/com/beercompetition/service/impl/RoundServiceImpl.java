@@ -826,10 +826,8 @@ public class RoundServiceImpl implements RoundService {
         // 2) 写入排序结果和桌内酒款状态
         roundResultMapper.delete(new LambdaQueryWrapper<RoundResult>().eq(RoundResult::getRoundTableId, roundTableId));
         Set<Long> rankedEntryIds = request.getResults().stream().map(RankingResultItemRequest::getBeerEntryId).collect(Collectors.toSet());
-        Map<Integer, RankingResultItemRequest> resultByRank = request.getResults().stream()
-                .collect(Collectors.toMap(RankingResultItemRequest::getRankNo, Function.identity()));
-        for (int rank = 1; rank <= table.getTargetCount(); rank++) {
-            RankingResultItemRequest item = resultByRank.get(rank);
+        for (RankingResultItemRequest item : request.getResults()) {
+            int rank = item.getRankNo();
             roundResultMapper.insert(RoundResult.builder()
                     .competitionId(table.getCompetitionId())
                     .roundId(table.getRoundId())
@@ -1363,6 +1361,9 @@ public class RoundServiceImpl implements RoundService {
         Set<Long> resultEntryIds = new HashSet<>();
         Set<Integer> ranks = new HashSet<>();
         for (RankingResultItemRequest item : request.getResults()) {
+            if (item == null) {
+                throw new BaseException("排序结果项不能为空");
+            }
             if (!tableEntryIds.contains(item.getBeerEntryId())) {
                 throw new BaseException("排序酒款不属于当前桌");
             }
