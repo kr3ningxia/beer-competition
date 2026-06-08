@@ -14,6 +14,8 @@ public class JudgeAccountVO {
     private String maskedPhone;
     private String maskedWechat;
     private String qualification;
+    private Boolean breweryConflictFlag;
+    private String breweryConflictText;
     private Integer status;
     private String statusLabel;
     private Boolean profileRequired;

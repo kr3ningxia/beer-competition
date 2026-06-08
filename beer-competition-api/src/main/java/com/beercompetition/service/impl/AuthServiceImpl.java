@@ -167,6 +167,8 @@ public class AuthServiceImpl implements AuthService {
                     .name("")
                     .wechatEnc(null)
                     .qualification("")
+                    .breweryConflictFlag(false)
+                    .breweryConflictText(null)
                     .status(JudgeAccountStatus.PROFILE_INCOMPLETE.getCode())
                     .build();
             judgeAccountMapper.insert(account);

@@ -19,7 +19,7 @@
     <section class="toolbar">
       <label class="search-box">
         <Search />
-        <input v-model.trim="keyword" placeholder="搜索姓名、手机号后四位、资质" @input="scheduleLoadJudges" @keyup.enter="loadFirstPage" />
+        <input v-model.trim="keyword" placeholder="搜索姓名、手机号后四位、资质、回避酒厂" @input="scheduleLoadJudges" @keyup.enter="loadFirstPage" />
       </label>
       <div class="filter-tabs" aria-label="评审状态筛选">
         <button
@@ -49,6 +49,7 @@
           <span>评审</span>
           <span>联系方式</span>
           <span>资质</span>
+          <span>利益关系</span>
           <span>状态</span>
           <span>操作</span>
         </div>
@@ -66,6 +67,14 @@
               <small>{{ judge.maskedWechat || '未填写微信号' }}</small>
             </div>
             <span class="qualification">{{ judge.qualification || '未填写资质' }}</span>
+            <div class="conflict-cell">
+              <span :class="['conflict-badge', hasBreweryConflict(judge) ? 'warning' : 'clear']">
+                {{ hasBreweryConflict(judge) ? '需回避' : '无' }}
+              </span>
+              <small v-if="hasBreweryConflict(judge)" :title="judge.breweryConflictText">
+                {{ judge.breweryConflictText }}
+              </small>
+            </div>
             <span :class="['status-badge', statusTone(judge)]">
               {{ judge.statusLabel || statusLabel(judge.status) }}
             </span>
@@ -164,6 +173,17 @@
           <span>资质信息</span>
           <textarea v-model.trim="editForm.qualification"></textarea>
         </label>
+        <label>
+          <span>是否与酒厂有利益关联</span>
+          <div class="conflict-toggle">
+            <button :class="{ active: !editForm.breweryConflictFlag }" type="button" @click="setEditorBreweryConflict(false)">无</button>
+            <button :class="{ active: editForm.breweryConflictFlag }" type="button" @click="setEditorBreweryConflict(true)">有</button>
+          </div>
+        </label>
+        <label v-if="editForm.breweryConflictFlag">
+          <span>相关酒厂或品牌名称及关系说明</span>
+          <textarea v-model.trim="editForm.breweryConflictText" maxlength="500"></textarea>
+        </label>
         <footer>
           <button class="tool-button" type="button" @click="closeEditor">取消</button>
           <button class="tool-button primary" type="button" @click="saveEditor">保存</button>
@@ -217,6 +237,8 @@ const editForm = reactive({
   name: '',
   wechat: '',
   qualification: '',
+  breweryConflictFlag: false,
+  breweryConflictText: '',
   reviewRemark: '',
 })
 const phoneForm = reactive({
@@ -328,6 +350,8 @@ async function openEditor(judge) {
   editForm.name = detail.name || ''
   editForm.wechat = detail.wechat || ''
   editForm.qualification = detail.qualification || ''
+  editForm.breweryConflictFlag = Boolean(detail.breweryConflictFlag)
+  editForm.breweryConflictText = detail.breweryConflictText || ''
   editForm.reviewRemark = detail.reviewRemark || ''
   editorOpen.value = true
 }
@@ -338,10 +362,16 @@ function closeEditor() {
 }
 
 async function saveEditor() {
+  if (editForm.breweryConflictFlag && !editForm.breweryConflictText) {
+    ElMessage.warning('请填写相关酒厂或品牌名称及关系说明')
+    return
+  }
   await updateJudge(editingJudgePublicId.value, {
     name: editForm.name,
     wechat: editForm.wechat,
     qualification: editForm.qualification,
+    breweryConflictFlag: editForm.breweryConflictFlag,
+    breweryConflictText: editForm.breweryConflictFlag ? editForm.breweryConflictText : '',
     reviewRemark: editForm.reviewRemark,
   })
   ElMessage.success('评审资料已更新')
@@ -357,6 +387,15 @@ async function changeStatus(judge, status) {
 
 function getInitial(name) {
   return name?.trim()?.slice(0, 1) || '评'
+}
+
+function hasBreweryConflict(judge) {
+  return Boolean(judge?.breweryConflictFlag && judge?.breweryConflictText)
+}
+
+function setEditorBreweryConflict(value) {
+  editForm.breweryConflictFlag = value
+  if (!value) editForm.breweryConflictText = ''
 }
 
 function openPhoneEditor() {
@@ -493,6 +532,7 @@ svg {
 .table-head,
 .judge-cell small,
 .contact-cell small,
+.conflict-cell small,
 .empty-state p,
 .table-headline span {
   color: var(--muted);
@@ -667,7 +707,7 @@ svg {
 .table-head,
 .table-row {
   display: grid;
-  grid-template-columns: minmax(220px, 1.2fr) minmax(200px, 1fr) minmax(260px, 1.25fr) 96px minmax(260px, auto);
+  grid-template-columns: minmax(200px, 1.1fr) minmax(180px, 0.9fr) minmax(220px, 1.1fr) minmax(150px, 0.8fr) 86px minmax(250px, auto);
   gap: 12px;
   align-items: center;
 }
@@ -699,7 +739,8 @@ svg {
 
 .judge-cell strong,
 .contact-cell span,
-.qualification {
+.qualification,
+.conflict-cell small {
   display: block;
   min-width: 0;
   overflow: hidden;
@@ -709,7 +750,8 @@ svg {
 }
 
 .judge-cell small,
-.contact-cell small {
+.contact-cell small,
+.conflict-cell small {
   display: block;
   margin-top: 4px;
   overflow: hidden;
@@ -738,6 +780,33 @@ svg {
   padding: 7px 10px;
   font-weight: 800;
   border-radius: 8px;
+}
+
+.conflict-cell {
+  min-width: 0;
+}
+
+.conflict-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  width: fit-content;
+  padding: 0 9px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.conflict-badge.clear {
+  color: #8da1aa;
+  border: 1px solid rgba(219, 232, 237, 0.12);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.conflict-badge.warning {
+  color: #f1bd79;
+  border: 1px solid rgba(242, 153, 74, 0.24);
+  background: rgba(242, 153, 74, 0.1);
 }
 
 .status-badge.active {
@@ -832,6 +901,27 @@ svg {
   gap: 8px;
 }
 
+.conflict-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.conflict-toggle button {
+  min-height: 40px;
+  color: var(--text);
+  border: 1px solid rgba(219, 232, 237, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  font-weight: 800;
+}
+
+.conflict-toggle button.active {
+  color: var(--gold-soft);
+  border-color: rgba(216, 169, 53, 0.34);
+  background: rgba(216, 169, 53, 0.08);
+}
+
 .icon-close {
   width: 36px;
   height: 36px;
@@ -883,7 +973,7 @@ svg {
 @media (max-width: 1260px) {
   .table-head,
   .table-row {
-    grid-template-columns: minmax(220px, 1.1fr) minmax(190px, 1fr) minmax(180px, 1fr) 88px minmax(220px, auto);
+    grid-template-columns: minmax(190px, 1fr) minmax(170px, 0.9fr) minmax(180px, 1fr) minmax(130px, 0.8fr) 80px minmax(220px, auto);
   }
 }
 

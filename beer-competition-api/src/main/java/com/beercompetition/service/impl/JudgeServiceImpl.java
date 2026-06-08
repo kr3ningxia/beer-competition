@@ -114,7 +114,8 @@ public class JudgeServiceImpl implements JudgeService {
         JudgeAccount account = requireJudge(BaseContext.getCurrentId());
 
         // 2) 更新可自主管理资料，首次完善后进入待审核
-        applyProfile(account, request.getWechat(), request.getName(), request.getQualification(), account.getReviewRemark());
+        applyProfile(account, request.getWechat(), request.getName(), request.getQualification(),
+                request.getBreweryConflictFlag(), request.getBreweryConflictText(), account.getReviewRemark());
         if (JudgeAccountStatus.of(account.getStatus()) == JudgeAccountStatus.PROFILE_INCOMPLETE) {
             account.setStatus(JudgeAccountStatus.PENDING_REVIEW.getCode());
             account.setSubmittedTime(LocalDateTime.now());
@@ -132,7 +133,8 @@ public class JudgeServiceImpl implements JudgeService {
         JudgeAccount account = requireJudgeByPublicId(publicId);
 
         // 2) 后台更新非手机号资料
-        applyProfile(account, request.getWechat(), request.getName(), request.getQualification(), request.getReviewRemark());
+        applyProfile(account, request.getWechat(), request.getName(), request.getQualification(),
+                request.getBreweryConflictFlag(), request.getBreweryConflictText(), request.getReviewRemark());
         judgeAccountMapper.updateById(account);
         writeAdminLog("JUDGE_PROFILE_UPDATE", account.getPublicId(), "更新评审资料");
 
@@ -353,10 +355,16 @@ public class JudgeServiceImpl implements JudgeService {
                 .eq(JudgeAssignment::getJudgeAccountId, judgeAccountId)) > 0;
     }
 
-    private void applyProfile(JudgeAccount account, String wechat, String name, String qualification, String reviewRemark) {
+    private void applyProfile(JudgeAccount account, String wechat, String name, String qualification,
+                              Boolean breweryConflictFlag, String breweryConflictText, String reviewRemark) {
+        boolean hasBreweryConflict = Boolean.TRUE.equals(breweryConflictFlag);
         account.setWechatEnc(StringUtils.hasText(wechat) ? piiService.encrypt(wechat.trim()) : null);
         account.setName(name.trim());
         account.setQualification(qualification.trim());
+        account.setBreweryConflictFlag(hasBreweryConflict);
+        account.setBreweryConflictText(hasBreweryConflict && StringUtils.hasText(breweryConflictText)
+                ? breweryConflictText.trim()
+                : null);
         account.setReviewRemark(reviewRemark);
     }
 
@@ -381,7 +389,8 @@ public class JudgeServiceImpl implements JudgeService {
         if (StringUtils.hasText(query)) {
             wrapper.and(item -> {
                 item.like(JudgeAccount::getName, query)
-                        .or().like(JudgeAccount::getQualification, query);
+                        .or().like(JudgeAccount::getQualification, query)
+                        .or().like(JudgeAccount::getBreweryConflictText, query);
                 if (digits.length() == 11) {
                     item.or().eq(JudgeAccount::getPhoneHash, piiService.hashPhone(digits));
                 }
@@ -403,6 +412,8 @@ public class JudgeServiceImpl implements JudgeService {
                 .maskedPhone(piiService.maskPhone(phone))
                 .maskedWechat(piiService.maskWechat(wechat))
                 .qualification(judge.getQualification())
+                .breweryConflictFlag(Boolean.TRUE.equals(judge.getBreweryConflictFlag()))
+                .breweryConflictText(judge.getBreweryConflictText())
                 .status(status.getCode())
                 .statusLabel(status.getLabel())
                 .profileRequired(status == JudgeAccountStatus.PROFILE_INCOMPLETE)
@@ -422,6 +433,8 @@ public class JudgeServiceImpl implements JudgeService {
                 .maskedPhone(piiService.maskPhone(phone))
                 .maskedWechat(piiService.maskWechat(wechat))
                 .qualification(judge.getQualification())
+                .breweryConflictFlag(Boolean.TRUE.equals(judge.getBreweryConflictFlag()))
+                .breweryConflictText(judge.getBreweryConflictText())
                 .status(status.getCode())
                 .statusLabel(status.getLabel())
                 .profileRequired(status == JudgeAccountStatus.PROFILE_INCOMPLETE)

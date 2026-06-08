@@ -359,6 +359,7 @@
             :is-judge-active="isJudgeActive"
             :get-round-entry-assignment="getRoundEntryAssignment"
             :get-round-table-issues="getRoundTableIssues"
+            :get-round-table-conflict-warnings="getRoundTableConflictWarnings"
             @update:allocation-mode="handleAllocationModeChange"
             @select-round="selectRound"
             @update:judge-keyword="judgeKeyword = $event"
@@ -1831,7 +1832,7 @@ const validationIssues = computed(() => {
 const filteredJudgePool = computed(() => {
   const query = judgeKeyword.value.toLowerCase()
   return judgePool.value.filter((judge) => {
-    const matchesKeyword = !query || [judge.name, judge.maskedPhone, judge.qualification]
+    const matchesKeyword = !query || [judge.name, judge.maskedPhone, judge.qualification, judge.breweryConflictText]
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(query))
     if (!matchesKeyword) return false
@@ -3246,6 +3247,52 @@ function getRoundTableIssues(table) {
   if (table.targetMode === 'MEDALS' && table.categoryMode !== 'CATEGORY') issues.push(`${table.name}奖牌轮只能包含一个投递组别`)
   if (table.targetMode === 'CHAMPION' && Number(table.targetCount || 0) !== 1) issues.push(`${table.name}决赛轮固定为总冠军 1 名`)
   return issues
+}
+
+function getRoundTableConflictWarnings(table) {
+  const judges = getRoundTableConflictJudges(table)
+  const entries = (table?.entryUuids || [])
+    .map((uuid) => roundEntryPool.value.find((entry) => entry.uuid === uuid))
+    .filter((entry) => entry?.breweryCompanyName)
+  const warnings = []
+  judges.forEach((judge) => {
+    const keywords = splitBreweryConflictKeywords(judge.breweryConflictText)
+    entries.forEach((entry) => {
+      if (isBreweryConflictMatch(keywords, entry.breweryCompanyName)) {
+        warnings.push(`本桌可能存在回避风险：${judge.name || '未知评审'} / ${entry.breweryCompanyName}`)
+      }
+    })
+  })
+  return [...new Set(warnings)]
+}
+
+function getRoundTableConflictJudges(table) {
+  const publicIds = new Set()
+  if (table?.captainPublicId) publicIds.add(table.captainPublicId)
+  const members = table?.members || []
+  members.forEach((member) => {
+    if (member?.judgePublicId) publicIds.add(member.judgePublicId)
+  })
+  const baseTable = judgeTableForm.find((item) => item.tableName === table?.name)
+  if (baseTable) {
+    assignmentsForTable(baseTable).forEach((assignment) => publicIds.add(assignment.judgePublicId))
+  }
+  return [...publicIds]
+    .map((publicId) => getJudge(publicId))
+    .filter((judge) => judge?.breweryConflictFlag && judge?.breweryConflictText)
+}
+
+function splitBreweryConflictKeywords(text) {
+  return String(text || '')
+    .split(/[\n\r,，、;；]/)
+    .map((item) => item.trim().toLowerCase())
+    .filter((item) => item.length >= 2)
+}
+
+function isBreweryConflictMatch(keywords, breweryName) {
+  const brewery = String(breweryName || '').trim().toLowerCase()
+  if (!brewery) return false
+  return keywords.some((keyword) => keyword.includes(brewery) || brewery.includes(keyword))
 }
 
 function getRoundEntryAssignment(uuid) {

@@ -5,7 +5,7 @@
       <aside class="resource-panel judge-resource-panel">
         <label class="search-box">
           <Search />
-          <input v-model="judgeKeywordModel" placeholder="搜索姓名、手机号、资质" />
+          <input v-model="judgeKeywordModel" placeholder="搜索姓名、手机号、资质、回避" />
         </label>
         <div class="resource-list">
           <article
@@ -19,6 +19,9 @@
             <span class="avatar">{{ getJudgeInitial(judge.name) }}</span>
             <div class="resource-body">
               <strong>{{ judge.name || '未填写姓名' }}</strong>
+              <small v-if="hasJudgeBreweryConflict(judge)" class="judge-conflict-line" :data-full="formatJudgeBreweryConflict(judge)">
+                {{ formatJudgeBreweryConflict(judge) }}
+              </small>
               <small class="judge-qualification" :data-full="formatJudgeQualification(judge.qualification)">
                 {{ formatJudgeQualification(judge.qualification) }}
               </small>
@@ -75,6 +78,9 @@
                 <div>
                   <strong>{{ getJudge(table.captainPublicId)?.name || '未知评审' }}</strong>
                   <small>桌长</small>
+                  <small v-if="getJudgeBreweryConflict(table.captainPublicId)" class="judge-conflict-line" :data-full="getJudgeBreweryConflict(table.captainPublicId)">
+                    {{ getJudgeBreweryConflict(table.captainPublicId) }}
+                  </small>
                 </div>
                 <button class="icon-action" type="button" @click.stop="$emit('updateTableCaptain', table.id, '')">
                   <Delete />
@@ -102,6 +108,9 @@
                 <span class="avatar small">{{ getJudgeInitial(member.name) }}</span>
                 <div>
                   <strong>{{ member.name || getJudge(member.judgePublicId)?.name || '未知评审' }}</strong>
+                  <small v-if="getJudgeBreweryConflict(member.judgePublicId)" class="judge-conflict-line" :data-full="getJudgeBreweryConflict(member.judgePublicId)">
+                    {{ getJudgeBreweryConflict(member.judgePublicId) }}
+                  </small>
                 </div>
                 <button class="icon-action" type="button" @click.stop="$emit('removeRoundParticipant', table.id, member.judgePublicId)">
                   <Delete />
@@ -187,7 +196,7 @@
       <aside class="resource-panel judge-resource-panel">
         <label class="search-box">
           <Search />
-          <input v-model="judgeKeywordModel" placeholder="搜索姓名、手机号、资质" />
+          <input v-model="judgeKeywordModel" placeholder="搜索姓名、手机号、资质、回避" />
         </label>
         <div class="filter-row primary-filter-row">
           <button
@@ -213,6 +222,9 @@
             <span class="avatar">{{ getJudgeInitial(judge.name) }}</span>
             <div class="resource-body">
               <strong>{{ judge.name || '未填写姓名' }}</strong>
+              <small v-if="hasJudgeBreweryConflict(judge)" class="judge-conflict-line" :data-full="formatJudgeBreweryConflict(judge)">
+                {{ formatJudgeBreweryConflict(judge) }}
+              </small>
               <small class="judge-qualification" :data-full="formatJudgeQualification(judge.qualification)">
                 {{ formatJudgeQualification(judge.qualification) }}
               </small>
@@ -272,6 +284,9 @@
                 <span class="avatar small">{{ getJudgeInitial(getJudge(assignment.judgePublicId)?.name) }}</span>
                 <div>
                   <strong>{{ getJudge(assignment.judgePublicId)?.name || '未知评审' }}</strong>
+                  <small v-if="getJudgeBreweryConflict(assignment.judgePublicId)" class="judge-conflict-line" :data-full="getJudgeBreweryConflict(assignment.judgePublicId)">
+                    {{ getJudgeBreweryConflict(assignment.judgePublicId) }}
+                  </small>
                 </div>
                 <button v-if="editableJudges" class="icon-action" type="button" @click.stop="$emit('removeAssignment', assignment)">
                   <Delete />
@@ -402,7 +417,7 @@
         <article
           v-for="table in currentRoundTables"
           :key="table.id"
-          :class="['desk-card', { active: selectedRoundTableId === table.id, danger: getRoundTableIssues(table).length }]"
+          :class="['desk-card', { active: selectedRoundTableId === table.id, danger: getRoundTableIssues(table).length || getRoundTableConflictWarnings(table).length }]"
           @click="$emit('selectRoundTable', table.id)"
           @dragover.prevent
           @drop.prevent="$emit('dropEntryOnRoundTable', table.id)"
@@ -433,6 +448,14 @@
               </button>
             </div>
           </header>
+          <p
+            v-for="warning in getRoundTableConflictWarnings(table)"
+            :key="warning"
+            class="desk-warning-line"
+          >
+            <Warning />
+            <span>{{ warning }}</span>
+          </p>
           <div :class="['desk-config-row', { 'ranking-config-row': currentRound?.type === 'RANKING' }]">
             <label v-if="currentRound?.type === 'SCORE'" class="inline-scope compact-scope" @click.stop>
               <span>范围</span>
@@ -546,6 +569,10 @@
             <Warning />
             <span>{{ issue }}</span>
           </p>
+          <p v-for="warning in currentRoundConflictWarnings" :key="warning" class="warning">
+            <Warning />
+            <span>{{ warning }}</span>
+          </p>
           <p v-if="roundValidationIssues.length === 0" class="ok">
             <CircleCheck />
             <span>{{ currentRound?.isPreparationDraft ? '当前分配可以生成第一轮。' : '当前轮次可以发布。' }}</span>
@@ -643,6 +670,7 @@
                     <em :class="`role-${judge.role}`">{{ judge.roleLabel }}</em>
                     <div>
                       <strong>{{ judge.name }}</strong>
+                      <small v-if="judge.breweryConflict" class="judge-conflict-line" :data-full="judge.breweryConflict">{{ judge.breweryConflict }}</small>
                       <small class="judge-qualification" :data-full="judge.qualification">{{ judge.qualification }}</small>
                     </div>
                   </li>
@@ -723,6 +751,7 @@ const props = defineProps({
   isJudgeActive: { type: Function, required: true },
   getRoundEntryAssignment: { type: Function, required: true },
   getRoundTableIssues: { type: Function, required: true },
+  getRoundTableConflictWarnings: { type: Function, default: () => [] },
 })
 
 const emit = defineEmits([
@@ -867,13 +896,17 @@ const overviewMetrics = computed(() => {
   const assignedJudges = props.currentRound?.type === 'SCORE'
     ? props.judgeTableForm.reduce((sum, table) => sum + props.assignmentsForTable(table).length, 0)
     : props.currentRoundTables.reduce((sum, table) => sum + getRoundMembers(table).length, 0)
-  const issueCount = props.roundValidationIssues.length + props.validationIssues.length
+  const issueCount = props.roundValidationIssues.length + props.validationIssues.length + currentRoundConflictWarnings.value.length
   return {
     assignedEntries,
     assignedJudges,
     unassignedEntries: Math.max(props.currentPoolEntries.length - assignedEntries, 0),
     issueCount,
   }
+})
+const currentRoundConflictWarnings = computed(() => {
+  const warnings = props.currentRoundTables.flatMap((table) => props.getRoundTableConflictWarnings(table))
+  return [...new Set(warnings)]
 })
 
 function getRoundMembers(roundTable) {
@@ -985,6 +1018,19 @@ function formatJudgeQualification(qualification) {
   return text || '未填写资质'
 }
 
+function hasJudgeBreweryConflict(judge) {
+  return Boolean(judge?.breweryConflictFlag && String(judge?.breweryConflictText || '').trim())
+}
+
+function formatJudgeBreweryConflict(judge) {
+  const text = String(judge?.breweryConflictText || '').trim()
+  return text ? `需回避：${text}` : ''
+}
+
+function getJudgeBreweryConflict(judgePublicId) {
+  return formatJudgeBreweryConflict(props.getJudge(judgePublicId))
+}
+
 function getOverviewJudgeItems(roundTable) {
   return getTableJudgeAssignments(roundTable).map((assignment, index) => {
     const judge = props.getJudge(assignment.judgePublicId)
@@ -993,6 +1039,7 @@ function getOverviewJudgeItems(roundTable) {
       key: assignment.localId || `${assignment.judgePublicId || 'judge'}-${role}-${index}`,
       name: judge?.name || '未知评审',
       qualification: formatJudgeQualification(judge?.qualification),
+      breweryConflict: formatJudgeBreweryConflict(judge),
       initial: props.getJudgeInitial(judge?.name),
       role,
       roleLabel: getRoleLabel(role),
@@ -1052,6 +1099,7 @@ function formatCategorySummary(roundTable) {
 
 function getOverviewTableIssues(roundTable) {
   const issues = [...props.getRoundTableIssues(roundTable)]
+  issues.push(...props.getRoundTableConflictWarnings(roundTable))
   if (props.currentRound?.type === 'SCORE') {
     const judgeTable = getJudgeTable(roundTable)
     if (judgeTable) issues.push(...props.tableValidationIssues(judgeTable))
@@ -1337,6 +1385,7 @@ button:disabled {
 .role-lane header,
 .resource-card,
 .mini-card,
+.desk-warning-line,
 .check-panel p,
 .desk-header-actions {
   display: flex;
@@ -1493,6 +1542,36 @@ dt,
   color: #6fcf7a;
 }
 
+.judge-conflict-line {
+  position: relative;
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  color: #f1bd79;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desk-warning-line {
+  gap: 7px;
+  margin: 0;
+  padding: 7px 8px;
+  color: #f1bd79;
+  border: 1px solid rgba(242, 153, 74, 0.22);
+  border-radius: 8px;
+  background: rgba(242, 153, 74, 0.08);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.desk-warning-line :deep(svg) {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+}
+
 .resource-card.selected {
   border-color: rgba(216, 169, 53, 0.34);
 }
@@ -1565,7 +1644,8 @@ dt,
   white-space: nowrap;
 }
 
-.judge-qualification {
+.judge-qualification,
+.judge-conflict-line {
   position: relative;
   display: block;
   max-width: 100%;
@@ -1575,11 +1655,13 @@ dt,
   white-space: nowrap;
 }
 
-.judge-qualification:hover {
+.judge-qualification:hover,
+.judge-conflict-line:hover {
   overflow: visible;
 }
 
-.judge-qualification:hover::after {
+.judge-qualification:hover::after,
+.judge-conflict-line:hover::after {
   content: attr(data-full);
   position: absolute;
   z-index: 20;
@@ -1601,7 +1683,8 @@ dt,
   pointer-events: none;
 }
 
-.judge-qualification:hover::before {
+.judge-qualification:hover::before,
+.judge-conflict-line:hover::before {
   content: '';
   position: absolute;
   z-index: 21;

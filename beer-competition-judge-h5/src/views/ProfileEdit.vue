@@ -22,6 +22,35 @@
         资质信息
         <textarea v-model.trim="form.qualification" class="textarea" placeholder="例如 BJCP 等级、评审经验、从业背景"></textarea>
       </label>
+      <section class="field conflict-field">
+        <span>是否与酒厂有利益关联</span>
+        <div class="choice-row" role="radiogroup" aria-label="是否与酒厂有利益关联">
+          <button
+            :class="{ active: !form.breweryConflictFlag }"
+            type="button"
+            @click="setBreweryConflict(false)"
+          >
+            无
+          </button>
+          <button
+            :class="{ active: form.breweryConflictFlag }"
+            type="button"
+            @click="setBreweryConflict(true)"
+          >
+            有
+          </button>
+        </div>
+        <p class="field-help">用于现场分桌和酒款回避，仅主办方后台可见。</p>
+      </section>
+      <label v-if="form.breweryConflictFlag" class="field">
+        相关酒厂或品牌名称及关系说明
+        <textarea
+          v-model.trim="form.breweryConflictText"
+          class="textarea"
+          maxlength="500"
+          placeholder="例如：某某酒厂，本人任职；某某品牌，近期有商业合作。"
+        ></textarea>
+      </label>
       <p v-if="error" class="form-error">{{ error }}</p>
     </section>
 
@@ -46,6 +75,8 @@ const form = reactive({
   name: '',
   wechat: '',
   qualification: '',
+  breweryConflictFlag: false,
+  breweryConflictText: '',
 })
 
 onMounted(async () => {
@@ -54,6 +85,8 @@ onMounted(async () => {
   form.name = profile.value.name || ''
   form.wechat = profile.value.wechat || ''
   form.qualification = profile.value.qualification || ''
+  form.breweryConflictFlag = Boolean(profile.value.breweryConflictFlag)
+  form.breweryConflictText = profile.value.breweryConflictText || ''
 })
 
 async function save() {
@@ -62,12 +95,18 @@ async function save() {
     error.value = '请填写姓名和资质信息。'
     return
   }
+  if (form.breweryConflictFlag && !form.breweryConflictText) {
+    error.value = '请填写相关酒厂或品牌名称及关系说明。'
+    return
+  }
   saving.value = true
   try {
     const next = await updateProfile({
       name: form.name,
       wechat: form.wechat,
       qualification: form.qualification,
+      breweryConflictFlag: form.breweryConflictFlag,
+      breweryConflictText: form.breweryConflictFlag ? form.breweryConflictText : '',
     })
     if (Number(next.status) === 2) {
       router.push('/review-status')
@@ -86,6 +125,11 @@ function goBack() {
   }
   router.push('/profile')
 }
+
+function setBreweryConflict(value) {
+  form.breweryConflictFlag = value
+  if (!value) form.breweryConflictText = ''
+}
 </script>
 
 <style scoped>
@@ -99,5 +143,42 @@ function goBack() {
 .readonly {
   color: #667085;
   background: #f3f5f2;
+}
+
+.conflict-field {
+  display: grid;
+  gap: 8px;
+}
+
+.conflict-field > span {
+  color: #344054;
+}
+
+.choice-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.choice-row button {
+  min-height: 44px;
+  border: 1px solid #cbd5d1;
+  border-radius: 8px;
+  color: #344054;
+  background: #fff;
+  font-weight: 800;
+}
+
+.choice-row button.active {
+  color: #a75517;
+  border-color: rgba(167, 85, 23, 0.34);
+  background: rgba(167, 85, 23, 0.08);
+}
+
+.field-help {
+  margin: 0;
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.45;
 }
 </style>

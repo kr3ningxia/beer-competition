@@ -26,6 +26,8 @@ public class JudgeAccount {
     private String wechatEnc;
     private String name;
     private String qualification;
+    private Boolean breweryConflictFlag;
+    private String breweryConflictText;
     private Integer status;
     private LocalDateTime submittedTime;
     private LocalDateTime reviewedTime;
