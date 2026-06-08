@@ -1,0 +1,73 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Build and deploy to ECS
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build backend
+        working-directory: beer-competition-api
+        run: mvn clean package -DskipTests
+
+      - name: Install console dependencies
+        working-directory: beer-competition-console
+        run: npm ci
+
+      - name: Build console
+        working-directory: beer-competition-console
+        run: npm run build -- --base=/console/
+
+      - name: Install judge dependencies
+        working-directory: beer-competition-judge-h5
+        run: npm ci
+
+      - name: Build judge
+        working-directory: beer-competition-judge-h5
+        run: npm run build -- --base=/judge/
+
+      - name: Assemble release package
+        run: |
+          mkdir -p release/app release/www/console release/www/judge
+          cp beer-competition-api/target/beer-competition-api-0.0.1-SNAPSHOT.jar release/app/beer-api.jar
+          cp -a beer-competition-console/dist/. release/www/console/
+          cp -a beer-competition-judge-h5/dist/. release/www/judge/
+          cd release
+          zip -r ../release.zip app www
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.ECS_SSH_KEY }}" > ~/.ssh/ecs_deploy_key
+          chmod 600 ~/.ssh/ecs_deploy_key
+          ssh-keyscan -p "${{ secrets.ECS_PORT }}" "${{ secrets.ECS_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Upload release package
+        run: |
+          scp -i ~/.ssh/ecs_deploy_key -P "${{ secrets.ECS_PORT }}" release.zip \
+            "${{ secrets.ECS_USER }}@${{ secrets.ECS_HOST }}:/opt/beer-competition/uploads/release.zip"
+
+      - name: Run deploy script
+        run: |
+          ssh -i ~/.ssh/ecs_deploy_key -p "${{ secrets.ECS_PORT }}" \
+            "${{ secrets.ECS_USER }}@${{ secrets.ECS_HOST }}" \
+            "bash /opt/beer-competition/scripts/deploy.sh /opt/beer-competition/uploads/release.zip"
