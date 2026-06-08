@@ -20,6 +20,18 @@ export function fetchCompetitionFeedbackReview(id) {
   return request.get(`/api/admin/competitions/${id}/feedback-review`, { authScope: 'admin' })
 }
 
+export function fetchAdminEntries(params = {}) {
+  return request.get('/api/admin/entries', { params, authScope: 'admin' })
+}
+
+export function fetchAdminEntryDetail(entryId) {
+  return request.get(`/api/admin/entries/${entryId}`, { authScope: 'admin' })
+}
+
+export function updateAdminEntry(entryId, payload) {
+  return request.put(`/api/admin/entries/${entryId}`, payload, { authScope: 'admin' })
+}
+
 export function deleteCompetition(id) {
   return request.delete(`/api/admin/competitions/${id}`, { authScope: 'admin' })
 }
@@ -78,6 +90,10 @@ export function prepareCompetitionJudging(id) {
 
 export function fetchJudges(params = {}) {
   return request.get('/api/admin/judges', { params, authScope: 'admin' })
+}
+
+export function fetchJudgesPage(params = {}) {
+  return request.get('/api/admin/judges/page', { params, authScope: 'admin' })
 }
 
 export function fetchJudgeDetail(publicId) {
@@ -176,14 +192,14 @@ export function exportCompetitionScoringData(competitionId) {
   })
 }
 
-export function confirmEntryPayment(entryId) {
-  return request.post(`/api/admin/entries/${entryId}/confirm-payment`, {}, { authScope: 'admin' })
+export function confirmEntryPayment(entryId, payload = {}) {
+  return request.post(`/api/admin/entries/${entryId}/confirm-payment`, payload, { authScope: 'admin' })
 }
 
-export function markEntryStored(entryId) {
-  return request.post(`/api/admin/entries/${entryId}/mark-stored`, {}, { authScope: 'admin' })
+export function markEntryStored(entryId, payload = {}) {
+  return request.post(`/api/admin/entries/${entryId}/mark-stored`, payload, { authScope: 'admin' })
 }
 
-export function cancelEntry(entryId) {
-  return request.post(`/api/admin/entries/${entryId}/cancel`, {}, { authScope: 'admin' })
+export function cancelEntry(entryId, payload = {}) {
+  return request.post(`/api/admin/entries/${entryId}/cancel`, payload, { authScope: 'admin' })
 }

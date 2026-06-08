@@ -1,5 +1,6 @@
 package com.beercompetition.service;
 
+import com.beercompetition.common.result.PageResult;
 import com.beercompetition.pojo.dto.JudgeAssignmentCreateRequest;
 import com.beercompetition.pojo.dto.JudgeAssignmentBatchUpdateRequest;
 import com.beercompetition.pojo.dto.AdminJudgeStatusUpdateRequest;
@@ -14,6 +15,8 @@ import java.util.List;
 public interface JudgeService {
 
     List<JudgeAccountVO> listJudges(Integer status, String keyword);
+
+    PageResult<JudgeAccountVO> pageJudges(Integer status, String keyword, Integer page, Integer pageSize);
 
     JudgeAccountVO getJudgeDetail(String publicId);
 

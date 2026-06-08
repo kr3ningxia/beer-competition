@@ -1,8 +1,13 @@
 package com.beercompetition.service;
 
+import com.beercompetition.common.result.PageResult;
+import com.beercompetition.pojo.dto.AdminEntryStatusRequest;
+import com.beercompetition.pojo.dto.AdminEntryUpdateRequest;
 import com.beercompetition.pojo.dto.PortalEntrySubmitRequest;
 import com.beercompetition.pojo.dto.PortalEntryDeliverySubmitRequest;
 import com.beercompetition.pojo.dto.PortalProfileUpdateRequest;
+import com.beercompetition.pojo.vo.AdminEntryDetailVO;
+import com.beercompetition.pojo.vo.AdminEntryVO;
 import com.beercompetition.pojo.vo.EntryDetailVO;
 import com.beercompetition.pojo.vo.EntrySummaryVO;
 import com.beercompetition.pojo.vo.FileDownloadVO;
@@ -16,6 +21,14 @@ import com.beercompetition.pojo.vo.PortalResultSummaryVO;
 import java.util.List;
 
 public interface EntryService {
+
+    PageResult<AdminEntryVO> listAdminEntries(Long competitionId, String status, String paymentStatus,
+                                              String deliveryStatus, Long categoryId, Boolean assigned,
+                                              String keyword, Integer page, Integer pageSize);
+
+    AdminEntryDetailVO getAdminEntry(Long entryId);
+
+    AdminEntryDetailVO updateAdminEntry(Long entryId, AdminEntryUpdateRequest request);
 
     List<EntrySummaryVO> listPortalEntries();
 
@@ -43,9 +56,15 @@ public interface EntryService {
 
     void confirmPayment(Long entryId);
 
+    void confirmPayment(Long entryId, AdminEntryStatusRequest request);
+
     void markStored(Long entryId);
 
+    void markStored(Long entryId, AdminEntryStatusRequest request);
+
     void cancelEntry(Long entryId);
+
+    void cancelEntry(Long entryId, AdminEntryStatusRequest request);
 
     JudgeEntryVO getJudgeEntry(String uuid);
 

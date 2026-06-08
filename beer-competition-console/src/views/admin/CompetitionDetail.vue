@@ -276,8 +276,14 @@
           </div>
           <article class="panel-card">
             <div class="panel-heading">
-              <h2>参赛酒款</h2>
-              <span>短编号、付款、入库和轮次轨迹</span>
+              <div>
+                <h2>参赛酒款</h2>
+                <span>短编号、准备状态和轮次轨迹</span>
+              </div>
+              <button class="tool-button" type="button" @click="openAdminEntries">
+                打开酒款管理
+                <Right />
+              </button>
             </div>
             <div class="data-table entries-table">
               <div class="table-head">
@@ -307,9 +313,8 @@
                   <em>{{ getEntryPathText(entry.uuid) }}</em>
                 </div>
                 <div class="entry-actions">
-                  <button class="mini-action" type="button" :disabled="!entry.canConfirmPayment" @click="confirmEntryPaymentAction(entry)">确认付款</button>
+                  <button class="mini-action" type="button" @click="openAdminEntry(entry)">查看</button>
                   <button class="mini-action" type="button" :disabled="!entry.canMarkStored" @click="markEntryStoredAction(entry)">确认入库</button>
-                  <button class="mini-action danger" type="button" :disabled="!entry.canCancel" @click="cancelEntryAction(entry)">取消</button>
                 </div>
               </div>
             </div>
@@ -1278,11 +1283,9 @@ import {
   statusMeta,
 } from './competitionStore'
 import {
-  cancelEntry,
   closeCompetitionRegistration,
   completeFirstRound,
   confirmCompetitionAwards,
-  confirmEntryPayment,
   createFirstRound,
   createNextRound,
   deleteAwardCertificate,
@@ -4057,31 +4060,18 @@ async function confirmAwardsAction() {
   ElMessage.success('奖项已确认')
 }
 
-async function confirmEntryPaymentAction(entry) {
-  await confirmEntryPayment(entry.id)
-  await loadDetail()
-  ElMessage.success(`${entry.name || entry.uuid} 已确认付款`)
+function openAdminEntries() {
+  router.push({ path: '/admin/entries', query: { competitionId: competition.value.id } })
+}
+
+function openAdminEntry(entry) {
+  router.push({ path: '/admin/entries', query: { competitionId: competition.value.id, entryId: entry.id } })
 }
 
 async function markEntryStoredAction(entry) {
   await markEntryStored(entry.id)
   await loadDetail()
   ElMessage.success(`${entry.name || entry.uuid} 已确认入库`)
-}
-
-async function cancelEntryAction(entry) {
-  try {
-    await ElMessageBox.confirm(`确认取消「${entry.name || entry.uuid}」的报名吗？`, '取消报名', {
-      confirmButtonText: '确认取消',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
-    await cancelEntry(entry.id)
-    await loadDetail()
-    ElMessage.success(`${entry.name || entry.uuid} 已取消报名`)
-  } catch {
-    // User cancelled.
-  }
 }
 
 function addEntryField() {

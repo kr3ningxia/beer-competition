@@ -1,9 +1,11 @@
 package com.beercompetition.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
+import com.beercompetition.common.result.PageResult;
 import com.beercompetition.common.util.PiiService;
 import com.beercompetition.mapper.AdminOperationLogMapper;
 import com.beercompetition.mapper.CompetitionMapper;
@@ -57,33 +59,31 @@ public class JudgeServiceImpl implements JudgeService {
 
     @Override
     public List<JudgeAccountVO> listJudges(Integer status, String keyword) {
-        // 1) 参数规范化与状态过滤
-        String query = StringUtils.hasText(keyword) ? keyword.trim() : null;
-        String digits = query == null ? "" : query.replaceAll("\\D", "");
-        LambdaQueryWrapper<JudgeAccount> wrapper = new LambdaQueryWrapper<JudgeAccount>()
-                .ne(JudgeAccount::getStatus, JudgeAccountStatus.PROFILE_INCOMPLETE.getCode());
-        if (status != null) {
-            JudgeAccountStatus.of(status);
-            wrapper.eq(JudgeAccount::getStatus, status);
-        }
-        if (StringUtils.hasText(query)) {
-            wrapper.and(item -> {
-                item.like(JudgeAccount::getName, query)
-                        .or().like(JudgeAccount::getQualification, query);
-                if (digits.length() == 11) {
-                    item.or().eq(JudgeAccount::getPhoneHash, piiService.hashPhone(digits));
-                }
-                if (digits.length() == 4) {
-                    item.or().eq(JudgeAccount::getPhoneLast4, digits);
-                }
-            });
-        }
+        // 1) 构造查询条件
+        LambdaQueryWrapper<JudgeAccount> wrapper = buildJudgeQuery(status, keyword);
 
-        // 2) 查询并组装脱敏评审池
+        // 2) 查询并组装全量脱敏评审池
         return judgeAccountMapper.selectList(wrapper.orderByDesc(JudgeAccount::getId))
                 .stream()
                 .map(this::toJudgeListVO)
                 .toList();
+    }
+
+    @Override
+    public PageResult<JudgeAccountVO> pageJudges(Integer status, String keyword, Integer page, Integer pageSize) {
+        // 1) 参数规范化与查询条件
+        int currentPage = Math.max(page == null ? 1 : page, 1);
+        int currentPageSize = Math.min(Math.max(pageSize == null ? 20 : pageSize, 1), 100);
+        LambdaQueryWrapper<JudgeAccount> wrapper = buildJudgeQuery(status, keyword).orderByDesc(JudgeAccount::getId);
+
+        // 2) 分页查询并组装列表
+        Page<JudgeAccount> result = judgeAccountMapper.selectPage(new Page<>(currentPage, currentPageSize), wrapper);
+        List<JudgeAccountVO> records = result.getRecords().stream()
+                .map(this::toJudgeListVO)
+                .toList();
+
+        // 3) 返回分页结果
+        return new PageResult<>(result.getTotal(), records);
     }
 
     @Override
@@ -367,6 +367,30 @@ public class JudgeServiceImpl implements JudgeService {
         if (currentStatus == JudgeAccountStatus.PROFILE_INCOMPLETE && nextStatus == JudgeAccountStatus.ACTIVE) {
             throw new BaseException("资料未完善的评审不能直接启用");
         }
+    }
+
+    private LambdaQueryWrapper<JudgeAccount> buildJudgeQuery(Integer status, String keyword) {
+        String query = StringUtils.hasText(keyword) ? keyword.trim() : null;
+        String digits = query == null ? "" : query.replaceAll("\\D", "");
+        LambdaQueryWrapper<JudgeAccount> wrapper = new LambdaQueryWrapper<JudgeAccount>()
+                .ne(JudgeAccount::getStatus, JudgeAccountStatus.PROFILE_INCOMPLETE.getCode());
+        if (status != null) {
+            JudgeAccountStatus.of(status);
+            wrapper.eq(JudgeAccount::getStatus, status);
+        }
+        if (StringUtils.hasText(query)) {
+            wrapper.and(item -> {
+                item.like(JudgeAccount::getName, query)
+                        .or().like(JudgeAccount::getQualification, query);
+                if (digits.length() == 11) {
+                    item.or().eq(JudgeAccount::getPhoneHash, piiService.hashPhone(digits));
+                }
+                if (digits.length() == 4) {
+                    item.or().eq(JudgeAccount::getPhoneLast4, digits);
+                }
+            });
+        }
+        return wrapper;
     }
 
     private JudgeAccountVO toJudgeListVO(JudgeAccount judge) {

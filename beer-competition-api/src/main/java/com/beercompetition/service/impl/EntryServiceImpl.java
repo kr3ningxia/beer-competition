@@ -5,6 +5,8 @@ import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ForbiddenException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
+import com.beercompetition.common.result.PageResult;
+import com.beercompetition.mapper.AdminOperationLogMapper;
 import com.beercompetition.mapper.BeerEntryExtraFieldMapper;
 import com.beercompetition.mapper.BeerEntryMapper;
 import com.beercompetition.mapper.AwardResultMapper;
@@ -24,6 +26,8 @@ import com.beercompetition.mapper.RoundTableEntryMapper;
 import com.beercompetition.mapper.RoundTableMapper;
 import com.beercompetition.mapper.RoundTableMemberMapper;
 import com.beercompetition.mapper.ScoreRecordMapper;
+import com.beercompetition.pojo.dto.AdminEntryStatusRequest;
+import com.beercompetition.pojo.dto.AdminEntryUpdateRequest;
 import com.beercompetition.pojo.dto.PortalEntryDeliverySubmitRequest;
 import com.beercompetition.pojo.dto.PortalEntrySubmitRequest;
 import com.beercompetition.pojo.dto.PortalProfileUpdateRequest;
@@ -40,6 +44,7 @@ import com.beercompetition.pojo.enums.JudgeTaskType;
 import com.beercompetition.pojo.enums.LogisticsVisibility;
 import com.beercompetition.pojo.enums.RoundStatus;
 import com.beercompetition.pojo.enums.RoundType;
+import com.beercompetition.pojo.po.AdminOperationLog;
 import com.beercompetition.pojo.po.BeerEntry;
 import com.beercompetition.pojo.po.AwardResult;
 import com.beercompetition.pojo.po.BeerEntryExtraField;
@@ -60,6 +65,10 @@ import com.beercompetition.pojo.po.RoundTable;
 import com.beercompetition.pojo.po.RoundTableEntry;
 import com.beercompetition.pojo.po.RoundTableMember;
 import com.beercompetition.pojo.po.ScoreRecord;
+import com.beercompetition.pojo.vo.AdminEntryDetailVO;
+import com.beercompetition.pojo.vo.AdminEntryLogVO;
+import com.beercompetition.pojo.vo.AdminEntryTraceVO;
+import com.beercompetition.pojo.vo.AdminEntryVO;
 import com.beercompetition.pojo.vo.EntryDeliveryVO;
 import com.beercompetition.pojo.vo.EntryDetailVO;
 import com.beercompetition.pojo.vo.EntryExtraFieldVO;
@@ -92,6 +101,7 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -112,7 +122,9 @@ public class EntryServiceImpl implements EntryService {
     );
     private static final Set<String> OPTION_FIELD_TYPES = Set.of("select", "multi_select");
     private static final String CONTENT_TYPE_PDF = "application/pdf";
+    private static final String TARGET_ENTRY = "BEER_ENTRY";
 
+    private final AdminOperationLogMapper adminOperationLogMapper;
     private final PortalAccountMapper portalAccountMapper;
     private final AwardResultMapper awardResultMapper;
     private final BeerEntryMapper beerEntryMapper;
@@ -136,6 +148,98 @@ public class EntryServiceImpl implements EntryService {
     private final EntryScanLabelService entryScanLabelService;
     private final ObjectMapper objectMapper;
     private final FileStorageService fileStorageService;
+
+    @Override
+    public PageResult<AdminEntryVO> listAdminEntries(Long competitionId, String status, String paymentStatus,
+                                                     String deliveryStatus, Long categoryId, Boolean assigned,
+                                                     String keyword, Integer page, Integer pageSize) {
+        // 1) 参数规范化与基础查询
+        int currentPage = Math.max(page == null ? 1 : page, 1);
+        int currentPageSize = Math.min(Math.max(pageSize == null ? 30 : pageSize, 1), 100);
+        String normalizedKeyword = normalizeNullable(keyword);
+        List<BeerEntry> entries = beerEntryMapper.selectList(new LambdaQueryWrapper<BeerEntry>()
+                .eq(competitionId != null, BeerEntry::getCompetitionId, competitionId)
+                .eq(StringUtils.hasText(status), BeerEntry::getStatus, status)
+                .eq(categoryId != null, BeerEntry::getCategoryId, categoryId)
+                .orderByDesc(BeerEntry::getId));
+
+        // 2) 组装运营列表并执行复合筛选
+        List<AdminEntryVO> filtered = entries.stream()
+                .map(this::toAdminEntryVO)
+                .filter(item -> !StringUtils.hasText(paymentStatus) || paymentStatus.equals(item.getPaymentStatus()))
+                .filter(item -> !StringUtils.hasText(deliveryStatus) || deliveryStatus.equals(item.getDeliveryStatus()))
+                .filter(item -> assigned == null || assigned.equals(Boolean.TRUE.equals(item.getAssigned())))
+                .filter(item -> !StringUtils.hasText(normalizedKeyword) || matchesEntryKeyword(item, normalizedKeyword))
+                .toList();
+
+        // 3) 内存分页并返回
+        int fromIndex = Math.min((currentPage - 1) * currentPageSize, filtered.size());
+        int toIndex = Math.min(fromIndex + currentPageSize, filtered.size());
+        return new PageResult<>(filtered.size(), filtered.subList(fromIndex, toIndex));
+    }
+
+    @Override
+    public AdminEntryDetailVO getAdminEntry(Long entryId) {
+        // 1) 查询酒款主体
+        BeerEntry entry = requireEntry(entryId);
+
+        // 2) 组装后台详情
+        return toAdminEntryDetailVO(entry);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public AdminEntryDetailVO updateAdminEntry(Long entryId, AdminEntryUpdateRequest request) {
+        // 1) 查询上下文与前置校验
+        BeerEntry entry = requireEntry(entryId);
+        Competition competition = competitionMapper.selectById(entry.getCompetitionId());
+        if (EntryStatus.RESULT_PUBLISHED.name().equals(entry.getStatus()) || isResultPublished(competition, entry)) {
+            throw new BaseException("结果已发布，不能直接修改报名信息");
+        }
+        CompetitionCategory category = requireCompetitionCategory(entry.getCompetitionId(), request.getCategoryId());
+        requireCompetitionStyle(entry.getCompetitionId(), request.getStyle());
+        List<EntryFieldConfig> fieldConfigs = listEntryFieldConfigs(entry.getCompetitionId());
+        Map<String, String> normalizedExtraFields = normalizeExtraFields(fieldConfigs, request.getExtraFields());
+        String reason = normalizeRequired(request.getReason(), "请填写修改原因");
+
+        // 2) 收集变更并更新主记录
+        List<Map<String, String>> changes = new ArrayList<>();
+        addChange(changes, "酒名", entry.getName(), normalizeRequired(request.getName(), "酒款名称不能为空"));
+        addChange(changes, "投递组别", resolveCategoryName(entry.getCategoryId()), category.getName());
+        addChange(changes, "基础风格", entry.getStyle(), normalizeRequired(request.getStyle(), "基础风格不能为空"));
+        addChange(changes, "ABV", entry.getAbv() == null ? null : entry.getAbv().stripTrailingZeros().toPlainString(),
+                request.getAbv() == null ? null : request.getAbv().stripTrailingZeros().toPlainString());
+        addChange(changes, "酒款简介", entry.getDescription(), normalizeRequired(request.getDescription(), "酒款简介不能为空"));
+        addExtraFieldChanges(changes, entry.getId(), fieldConfigs, normalizedExtraFields);
+
+        entry.setName(normalizeRequired(request.getName(), "酒款名称不能为空"));
+        entry.setCategoryId(category.getId());
+        entry.setStyle(normalizeRequired(request.getStyle(), "基础风格不能为空"));
+        entry.setAbv(request.getAbv());
+        entry.setDescription(normalizeRequired(request.getDescription(), "酒款简介不能为空"));
+        entry.setExtraFieldsJson(writeJson(normalizedExtraFields));
+        beerEntryMapper.updateById(entry);
+
+        // 3) 重写补充字段并记录审计
+        beerEntryExtraFieldMapper.delete(new LambdaQueryWrapper<BeerEntryExtraField>()
+                .eq(BeerEntryExtraField::getBeerEntryId, entry.getId()));
+        for (EntryFieldConfig fieldConfig : fieldConfigs) {
+            String value = normalizedExtraFields.get(fieldConfig.getFieldKey());
+            if (!StringUtils.hasText(value)) {
+                continue;
+            }
+            beerEntryExtraFieldMapper.insert(BeerEntryExtraField.builder()
+                    .beerEntryId(entry.getId())
+                    .fieldKey(fieldConfig.getFieldKey())
+                    .fieldLabel(fieldConfig.getFieldLabel())
+                    .fieldValue(value)
+                    .build());
+        }
+        writeEntryLog("ENTRY_UPDATE", entry.getUuid(), buildEntryLogSummary(reason, changes));
+
+        // 4) 返回最新详情
+        return toAdminEntryDetailVO(beerEntryMapper.selectById(entry.getId()));
+    }
 
     @Override
     public List<EntrySummaryVO> listPortalEntries() {
@@ -436,6 +540,12 @@ public class EntryServiceImpl implements EntryService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void confirmPayment(Long entryId) {
+        confirmPayment(entryId, null);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void confirmPayment(Long entryId, AdminEntryStatusRequest request) {
         // 1) 查询作品并校验状态
         BeerEntry entry = requireEntry(entryId);
         if (!EntryStatus.PENDING_PAYMENT.name().equals(entry.getStatus())) {
@@ -448,14 +558,22 @@ public class EntryServiceImpl implements EntryService {
         payment.setPayMethod(resolvePayMethod(payment.getPayMethod()));
         payment.setPaidTime(LocalDateTime.now());
         payment.setConfirmedByAdminId(BaseContext.getCurrentId());
+        payment.setConfirmRemark(normalizeStatusReason(request));
         entryPaymentMapper.updateById(payment);
         entry.setStatus(EntryStatus.REGISTERED.name());
         beerEntryMapper.updateById(entry);
+        writeEntryLog("ENTRY_CONFIRM_PAYMENT", entry.getUuid(), buildStatusLogSummary("确认付款", normalizeStatusReason(request)));
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void markStored(Long entryId) {
+        markStored(entryId, null);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void markStored(Long entryId, AdminEntryStatusRequest request) {
         // 1) 查询作品并校验状态
         BeerEntry entry = requireEntry(entryId);
         if (!EntryStatus.REGISTERED.name().equals(entry.getStatus())) {
@@ -467,6 +585,7 @@ public class EntryServiceImpl implements EntryService {
         delivery.setDeliveryStatus(EntryDeliveryStatus.RECEIVED.name());
         delivery.setReceivedTime(LocalDateTime.now());
         delivery.setReceivedByAdminId(BaseContext.getCurrentId());
+        delivery.setReceiveRemark(normalizeStatusReason(request));
         if (delivery.getSubmittedTime() == null) {
             delivery.setSubmittedTime(LocalDateTime.now());
         }
@@ -474,11 +593,18 @@ public class EntryServiceImpl implements EntryService {
         entry.setStoredFlag(1);
         entry.setStatus(EntryStatus.STORED.name());
         beerEntryMapper.updateById(entry);
+        writeEntryLog("ENTRY_MARK_STORED", entry.getUuid(), buildStatusLogSummary("确认入库", normalizeStatusReason(request)));
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void cancelEntry(Long entryId) {
+        cancelEntry(entryId, null);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void cancelEntry(Long entryId, AdminEntryStatusRequest request) {
         // 1) 查询作品并校验状态
         BeerEntry entry = requireEntry(entryId);
         if (!Set.of(EntryStatus.PENDING_PAYMENT.name(), EntryStatus.REGISTERED.name()).contains(entry.getStatus())) {
@@ -490,9 +616,11 @@ public class EntryServiceImpl implements EntryService {
         payment.setStatus(EntryStatus.PENDING_PAYMENT.name().equals(entry.getStatus())
                 ? EntryPaymentStatus.CANCELED.name()
                 : EntryPaymentStatus.REFUNDED.name());
+        payment.setConfirmRemark(normalizeStatusReason(request));
         entryPaymentMapper.updateById(payment);
         entry.setStatus(EntryStatus.CANCELED.name());
         beerEntryMapper.updateById(entry);
+        writeEntryLog("ENTRY_CANCEL", entry.getUuid(), buildStatusLogSummary("取消报名", normalizeStatusReason(request)));
     }
 
     @Override
@@ -557,6 +685,93 @@ public class EntryServiceImpl implements EntryService {
                 .abv(entry.getAbv())
                 .description(entry.getDescription())
                 .extraFields(listJudgeVisibleExtraFields(entry))
+                .build();
+    }
+
+    private AdminEntryVO toAdminEntryVO(BeerEntry entry) {
+        Competition competition = competitionMapper.selectById(entry.getCompetitionId());
+        Brewery brewery = breweryMapper.selectById(entry.getBreweryId());
+        CompetitionCategory category = competitionCategoryMapper.selectById(entry.getCategoryId());
+        EntryPayment payment = findEntryPayment(entry.getId());
+        EntryDelivery delivery = findEntryDelivery(entry.getId());
+        EntryScanLabel label = entryScanLabelService.requireActiveLabel(entry.getId());
+        List<AdminEntryTraceVO> traces = listAdminEntryTraces(entry.getId());
+        return AdminEntryVO.builder()
+                .id(entry.getId())
+                .uuid(entry.getUuid())
+                .labelCode(label.getLabelCode())
+                .shortCode(label.getShortCode())
+                .scanToken(label.getScanToken())
+                .competitionId(entry.getCompetitionId())
+                .competitionName(competition == null ? null : competition.getName())
+                .competitionCode(competition == null ? null : competition.getCode())
+                .name(entry.getName())
+                .breweryCompanyName(brewery == null ? null : brewery.getCompanyName())
+                .breweryContactName(brewery == null ? null : brewery.getContactName())
+                .categoryId(entry.getCategoryId())
+                .categoryName(category == null ? null : category.getName())
+                .style(entry.getStyle())
+                .abv(entry.getAbv())
+                .description(entry.getDescription())
+                .status(entry.getStatus())
+                .paymentStatus(resolvePaymentStatus(entry, payment))
+                .deliveryStatus(resolveDeliveryStatus(delivery))
+                .stored(Objects.equals(entry.getStoredFlag(), 1))
+                .assigned(hasRoundAssignment(entry.getId()))
+                .pathText(formatEntryPathText(traces))
+                .submittedAt(entry.getCreateTime())
+                .paidTime(payment == null ? null : payment.getPaidTime())
+                .deliveryReceivedAt(delivery == null ? null : delivery.getReceivedTime())
+                .lastModifiedAt(resolveEntryLastModifiedAt(entry, payment, delivery))
+                .canConfirmPayment(EntryStatus.PENDING_PAYMENT.name().equals(entry.getStatus()))
+                .canMarkStored(EntryStatus.REGISTERED.name().equals(entry.getStatus()))
+                .canCancel(Set.of(EntryStatus.PENDING_PAYMENT.name(), EntryStatus.REGISTERED.name()).contains(entry.getStatus()))
+                .canEdit(!EntryStatus.RESULT_PUBLISHED.name().equals(entry.getStatus()) && !isResultPublished(competition, entry))
+                .traces(traces)
+                .build();
+    }
+
+    private AdminEntryDetailVO toAdminEntryDetailVO(BeerEntry entry) {
+        Competition competition = competitionMapper.selectById(entry.getCompetitionId());
+        Brewery brewery = breweryMapper.selectById(entry.getBreweryId());
+        CompetitionCategory category = competitionCategoryMapper.selectById(entry.getCategoryId());
+        EntryPayment payment = findEntryPayment(entry.getId());
+        EntryDelivery delivery = findEntryDelivery(entry.getId());
+        EntryScanLabel label = entryScanLabelService.requireActiveLabel(entry.getId());
+        boolean resultPublished = isResultPublished(competition, entry);
+        return AdminEntryDetailVO.builder()
+                .id(entry.getId())
+                .uuid(entry.getUuid())
+                .labelCode(label.getLabelCode())
+                .shortCode(label.getShortCode())
+                .scanToken(label.getScanToken())
+                .competitionId(entry.getCompetitionId())
+                .competitionName(competition == null ? null : competition.getName())
+                .competitionCode(competition == null ? null : competition.getCode())
+                .name(entry.getName())
+                .breweryCompanyName(brewery == null ? null : brewery.getCompanyName())
+                .breweryContactName(brewery == null ? null : brewery.getContactName())
+                .categoryId(entry.getCategoryId())
+                .categoryName(category == null ? null : category.getName())
+                .style(entry.getStyle())
+                .abv(entry.getAbv())
+                .description(entry.getDescription())
+                .status(entry.getStatus())
+                .paymentStatus(resolvePaymentStatus(entry, payment))
+                .payment(toEntryPaymentVO(payment, competition))
+                .deliveryStatus(resolveDeliveryStatus(delivery))
+                .delivery(toEntryDeliveryVO(delivery))
+                .stored(Objects.equals(entry.getStoredFlag(), 1))
+                .assigned(hasRoundAssignment(entry.getId()))
+                .resultPublished(resultPublished)
+                .canConfirmPayment(EntryStatus.PENDING_PAYMENT.name().equals(entry.getStatus()))
+                .canMarkStored(EntryStatus.REGISTERED.name().equals(entry.getStatus()))
+                .canCancel(Set.of(EntryStatus.PENDING_PAYMENT.name(), EntryStatus.REGISTERED.name()).contains(entry.getStatus()))
+                .canEdit(!EntryStatus.RESULT_PUBLISHED.name().equals(entry.getStatus()) && !resultPublished)
+                .submittedAt(entry.getCreateTime())
+                .extraFields(listExtraFields(entry.getId()))
+                .traces(listAdminEntryTraces(entry.getId()))
+                .logs(listEntryLogs(entry.getUuid()))
                 .build();
     }
 
@@ -835,6 +1050,195 @@ public class EntryServiceImpl implements EntryService {
                 .stream()
                 .map(this::toEntryExtraFieldVO)
                 .toList();
+    }
+
+    private List<AdminEntryTraceVO> listAdminEntryTraces(Long beerEntryId) {
+        List<AdminEntryTraceVO> traces = new ArrayList<>();
+        roundTableEntryMapper.selectList(new LambdaQueryWrapper<RoundTableEntry>()
+                        .eq(RoundTableEntry::getBeerEntryId, beerEntryId)
+                        .orderByAsc(RoundTableEntry::getRoundId)
+                        .orderByAsc(RoundTableEntry::getSortOrder)
+                        .orderByAsc(RoundTableEntry::getId))
+                .forEach(item -> {
+                    CompetitionRound round = competitionRoundMapper.selectById(item.getRoundId());
+                    RoundTable table = roundTableMapper.selectById(item.getRoundTableId());
+                    traces.add(AdminEntryTraceVO.builder()
+                            .type("ROUND")
+                            .roundId(item.getRoundId())
+                            .roundName(round == null ? null : round.getRoundName())
+                            .roundTableId(item.getRoundTableId())
+                            .tableName(table == null ? null : table.getTableName())
+                            .status(item.getStatus())
+                            .build());
+                });
+        roundResultMapper.selectList(new LambdaQueryWrapper<RoundResult>()
+                        .eq(RoundResult::getBeerEntryId, beerEntryId)
+                        .orderByAsc(RoundResult::getRoundId)
+                        .orderByAsc(RoundResult::getRankNo)
+                        .orderByAsc(RoundResult::getId))
+                .forEach(item -> {
+                    CompetitionRound round = competitionRoundMapper.selectById(item.getRoundId());
+                    RoundTable table = roundTableMapper.selectById(item.getRoundTableId());
+                    traces.add(AdminEntryTraceVO.builder()
+                            .type("RESULT")
+                            .roundId(item.getRoundId())
+                            .roundName(round == null ? null : round.getRoundName())
+                            .roundTableId(item.getRoundTableId())
+                            .tableName(table == null ? null : table.getTableName())
+                            .resultType(item.getResultType())
+                            .rankNo(item.getRankNo())
+                            .slotLabel(item.getSlotLabel())
+                            .advanced(true)
+                            .build());
+                });
+        awardResultMapper.selectList(new LambdaQueryWrapper<AwardResult>()
+                        .eq(AwardResult::getBeerEntryId, beerEntryId)
+                        .orderByDesc(AwardResult::getChampionFlag)
+                        .orderByAsc(AwardResult::getRankNo)
+                        .orderByAsc(AwardResult::getId))
+                .forEach(item -> traces.add(AdminEntryTraceVO.builder()
+                        .type("AWARD")
+                        .roundId(item.getSourceRoundId())
+                        .roundTableId(item.getSourceRoundTableId())
+                        .awardName(item.getAwardName())
+                        .awardType(item.getAwardType())
+                        .rankNo(item.getRankNo())
+                        .advanced(true)
+                        .build()));
+        return traces;
+    }
+
+    private List<AdminEntryLogVO> listEntryLogs(String uuid) {
+        return adminOperationLogMapper.selectList(new LambdaQueryWrapper<AdminOperationLog>()
+                        .eq(AdminOperationLog::getTargetType, TARGET_ENTRY)
+                        .eq(AdminOperationLog::getTargetPublicId, uuid)
+                        .orderByDesc(AdminOperationLog::getId))
+                .stream()
+                .map(item -> AdminEntryLogVO.builder()
+                        .id(item.getId())
+                        .adminUserId(item.getAdminUserId())
+                        .action(item.getAction())
+                        .summary(item.getSummary())
+                        .createTime(item.getCreateTime())
+                        .build())
+                .toList();
+    }
+
+    private boolean matchesEntryKeyword(AdminEntryVO item, String keyword) {
+        String lowerKeyword = keyword.toLowerCase();
+        List<String> candidates = new ArrayList<>();
+        candidates.add(item.getName());
+        candidates.add(item.getBreweryCompanyName());
+        candidates.add(item.getCompetitionName());
+        candidates.add(item.getUuid());
+        candidates.add(item.getLabelCode());
+        candidates.add(item.getShortCode());
+        candidates.add(item.getCategoryName());
+        candidates.add(item.getStyle());
+        return candidates.stream()
+                .filter(StringUtils::hasText)
+                .map(String::toLowerCase)
+                .anyMatch(value -> value.contains(lowerKeyword));
+    }
+
+    private boolean hasRoundAssignment(Long beerEntryId) {
+        return roundTableEntryMapper.selectCount(new LambdaQueryWrapper<RoundTableEntry>()
+                .eq(RoundTableEntry::getBeerEntryId, beerEntryId)) > 0;
+    }
+
+    private String formatEntryPathText(List<AdminEntryTraceVO> traces) {
+        List<String> parts = traces.stream()
+                .filter(item -> "ROUND".equals(item.getType()))
+                .map(item -> {
+                    List<String> labels = new ArrayList<>();
+                    labels.add(item.getRoundName());
+                    labels.add(item.getTableName());
+                    return labels.stream()
+                        .filter(StringUtils::hasText)
+                        .collect(Collectors.joining(" "));
+                })
+                .filter(StringUtils::hasText)
+                .distinct()
+                .toList();
+        if (parts.isEmpty()) {
+            return "未分桌";
+        }
+        return String.join(" -> ", parts);
+    }
+
+    private LocalDateTime resolveEntryLastModifiedAt(BeerEntry entry, EntryPayment payment, EntryDelivery delivery) {
+        List<LocalDateTime> times = new ArrayList<>();
+        times.add(entry.getUpdateTime());
+        times.add(payment == null ? null : payment.getUpdateTime());
+        times.add(delivery == null ? null : delivery.getUpdateTime());
+        return times.stream()
+                .filter(Objects::nonNull)
+                .max(Comparator.naturalOrder())
+                .orElse(entry.getCreateTime());
+    }
+
+    private String resolveCategoryName(Long categoryId) {
+        if (categoryId == null) {
+            return null;
+        }
+        CompetitionCategory category = competitionCategoryMapper.selectById(categoryId);
+        return category == null ? null : category.getName();
+    }
+
+    private void addChange(List<Map<String, String>> changes, String field, String before, String after) {
+        String normalizedBefore = normalizeNullable(before);
+        String normalizedAfter = normalizeNullable(after);
+        if (Objects.equals(normalizedBefore, normalizedAfter)) {
+            return;
+        }
+        Map<String, String> change = new LinkedHashMap<>();
+        change.put("field", field);
+        change.put("before", normalizedBefore == null ? "" : normalizedBefore);
+        change.put("after", normalizedAfter == null ? "" : normalizedAfter);
+        changes.add(change);
+    }
+
+    private void addExtraFieldChanges(List<Map<String, String>> changes, Long beerEntryId,
+                                      List<EntryFieldConfig> fieldConfigs, Map<String, String> normalizedExtraFields) {
+        Map<String, String> current = beerEntryExtraFieldMapper.selectList(new LambdaQueryWrapper<BeerEntryExtraField>()
+                        .eq(BeerEntryExtraField::getBeerEntryId, beerEntryId))
+                .stream()
+                .collect(Collectors.toMap(BeerEntryExtraField::getFieldKey, BeerEntryExtraField::getFieldValue, (left, right) -> right));
+        for (EntryFieldConfig config : fieldConfigs) {
+            addChange(changes, config.getFieldLabel(), current.get(config.getFieldKey()), normalizedExtraFields.get(config.getFieldKey()));
+        }
+    }
+
+    private String buildEntryLogSummary(String reason, List<Map<String, String>> changes) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("reason", reason);
+        payload.put("changes", changes);
+        return writeObjectJson(payload, "保存修改记录失败");
+    }
+
+    private String buildStatusLogSummary(String action, String reason) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("action", action);
+        payload.put("reason", StringUtils.hasText(reason) ? reason : "");
+        return writeObjectJson(payload, "保存状态记录失败");
+    }
+
+    private String normalizeStatusReason(AdminEntryStatusRequest request) {
+        return request == null ? null : normalizeNullable(request.getReason());
+    }
+
+    private void writeEntryLog(String action, String targetPublicId, String summary) {
+        Long adminId = BaseContext.getCurrentId();
+        if (adminId == null) {
+            return;
+        }
+        adminOperationLogMapper.insert(AdminOperationLog.builder()
+                .adminUserId(adminId)
+                .action(action)
+                .targetType(TARGET_ENTRY)
+                .targetPublicId(targetPublicId)
+                .summary(summary)
+                .build());
     }
 
     private EntryPayment findEntryPayment(Long beerEntryId) {
@@ -1329,6 +1733,14 @@ public class EntryServiceImpl implements EntryService {
             return objectMapper.writeValueAsString(value);
         } catch (JsonProcessingException ex) {
             throw new BaseException("保存补充字段失败");
+        }
+    }
+
+    private String writeObjectJson(Object value, String errorMessage) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JsonProcessingException ex) {
+            throw new BaseException(errorMessage);
         }
     }
 

@@ -19,7 +19,7 @@
     <section class="toolbar">
       <label class="search-box">
         <Search />
-        <input v-model.trim="keyword" placeholder="搜索姓名、手机号后四位、资质" />
+        <input v-model.trim="keyword" placeholder="搜索姓名、手机号后四位、资质" @input="scheduleLoadJudges" @keyup.enter="loadFirstPage" />
       </label>
       <div class="filter-tabs" aria-label="评审状态筛选">
         <button
@@ -27,7 +27,7 @@
           :key="item.value"
           :class="{ active: statusFilter === item.value }"
           type="button"
-          @click="statusFilter = item.value"
+          @click="setStatusFilter(item.value)"
         >
           {{ item.label }}
         </button>
@@ -38,7 +38,7 @@
       <div class="table-headline">
         <div>
           <h2>账号明细</h2>
-          <span>{{ filteredJudges.length }} / {{ totalCount }}</span>
+          <span>{{ judges.length }} / {{ totalCount }}</span>
         </div>
         <strong v-if="loading">加载中</strong>
         <strong v-else-if="keyword || statusFilter !== 'ALL'">已筛选</strong>
@@ -53,7 +53,7 @@
           <span>操作</span>
         </div>
         <div class="table-body">
-          <div v-for="judge in filteredJudges" :key="judge.publicId" class="table-row">
+          <div v-for="judge in judges" :key="judge.publicId" class="table-row">
             <div class="judge-cell">
               <span class="avatar">{{ getInitial(judge.name) }}</span>
               <div>
@@ -106,12 +106,36 @@
               </button>
             </div>
           </div>
-          <div v-if="!loading && filteredJudges.length === 0" class="empty-state">
+          <div v-if="!loading && judges.length === 0" class="empty-state">
             <h2>没有匹配的评审</h2>
             <p>调整搜索条件或状态筛选后再查看。</p>
           </div>
         </div>
       </div>
+      <footer class="pagination-bar">
+        <span>共 {{ totalCount }} 条</span>
+        <div class="pager-buttons">
+          <button type="button" :disabled="pagination.page <= 1" @click="changePage(pagination.page - 1)">上一页</button>
+          <button
+            v-for="page in visiblePages"
+            :key="page"
+            :class="{ active: pagination.page === page }"
+            type="button"
+            @click="changePage(page)"
+          >
+            {{ page }}
+          </button>
+          <button type="button" :disabled="pagination.page >= totalPages" @click="changePage(pagination.page + 1)">下一页</button>
+        </div>
+        <label>
+          <span>每页</span>
+          <select v-model.number="pagination.pageSize" @change="changePageSize">
+            <option :value="20">20</option>
+            <option :value="50">50</option>
+            <option :value="100">100</option>
+          </select>
+        </label>
+      </footer>
     </section>
 
     <div v-if="editorOpen" class="modal-mask" @click.self="closeEditor">
@@ -176,13 +200,15 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Connection, Refresh, Right, Search } from '@element-plus/icons-vue'
-import { fetchJudgeDetail, fetchJudges, updateJudge, updateJudgePhone, updateJudgeStatus } from '@/api/admin'
+import { fetchJudgeDetail, fetchJudgesPage, updateJudge, updateJudgePhone, updateJudgeStatus } from '@/api/admin'
 
 const router = useRouter()
 const judges = ref([])
 const keyword = ref('')
 const statusFilter = ref('ALL')
 const loading = ref(false)
+const totalCount = ref(0)
+const searchTimer = ref(null)
 const editorOpen = ref(false)
 const phoneEditorOpen = ref(false)
 const editingJudgePublicId = ref(null)
@@ -205,22 +231,18 @@ const statusFilters = [
   { label: '停用', value: 'DISABLED' },
 ]
 
-const totalCount = computed(() => judges.value.length)
-const filteredJudges = computed(() => {
-  const query = keyword.value.toLowerCase()
-  return judges.value.filter((judge) => {
-    const matchesStatus =
-      statusFilter.value === 'ALL' ||
-      (statusFilter.value === 'PENDING' && Number(judge.status) === 2) ||
-      (statusFilter.value === 'ACTIVE' && isActive(judge)) ||
-      (statusFilter.value === 'DISABLED' && Number(judge.status) === 0)
-    const matchesKeyword =
-      !query ||
-      [judge.name, judge.maskedPhone, judge.qualification]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(query))
-    return matchesStatus && matchesKeyword
-  })
+const pagination = reactive({
+  page: 1,
+  pageSize: 20,
+})
+
+const totalPages = computed(() => Math.max(Math.ceil(totalCount.value / pagination.pageSize), 1))
+const visiblePages = computed(() => {
+  const pages = []
+  const start = Math.max(1, pagination.page - 2)
+  const end = Math.min(totalPages.value, start + 4)
+  for (let page = start; page <= end; page += 1) pages.push(page)
+  return pages
 })
 
 onMounted(loadJudges)
@@ -228,10 +250,54 @@ onMounted(loadJudges)
 async function loadJudges() {
   loading.value = true
   try {
-    judges.value = await fetchJudges()
+    const data = await fetchJudgesPage({
+      status: statusApiValue(statusFilter.value),
+      keyword: keyword.value || undefined,
+      page: pagination.page,
+      pageSize: pagination.pageSize,
+    })
+    judges.value = data.records || []
+    totalCount.value = data.total || 0
   } finally {
     loading.value = false
   }
+}
+
+function scheduleLoadJudges() {
+  if (searchTimer.value) window.clearTimeout(searchTimer.value)
+  searchTimer.value = window.setTimeout(() => {
+    loadFirstPage()
+  }, 320)
+}
+
+function loadFirstPage() {
+  pagination.page = 1
+  loadJudges()
+}
+
+function setStatusFilter(value) {
+  if (statusFilter.value === value) return
+  statusFilter.value = value
+  loadFirstPage()
+}
+
+function statusApiValue(value) {
+  if (value === 'PENDING') return 2
+  if (value === 'ACTIVE') return 1
+  if (value === 'DISABLED') return 0
+  return undefined
+}
+
+function changePage(page) {
+  const next = Math.min(Math.max(page, 1), totalPages.value)
+  if (next === pagination.page) return
+  pagination.page = next
+  loadJudges()
+}
+
+function changePageSize() {
+  pagination.page = 1
+  loadJudges()
 }
 
 function isActive(judge) {
@@ -512,6 +578,60 @@ svg {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.pagination-bar {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  min-height: 48px;
+  margin-top: 12px;
+  padding-top: 12px;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+}
+
+.pager-buttons {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.pagination-bar button,
+.pagination-bar select {
+  min-height: 32px;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.pagination-bar button {
+  min-width: 34px;
+  padding: 0 10px;
+}
+
+.pagination-bar button.active {
+  color: var(--gold-soft);
+  border-color: rgba(216, 169, 53, 0.34);
+  background: rgba(216, 169, 53, 0.1);
+}
+
+.pagination-bar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.pagination-bar label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.pagination-bar select {
+  padding: 0 9px;
 }
 
 .table-body {

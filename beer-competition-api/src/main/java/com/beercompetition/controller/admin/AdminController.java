@@ -1,6 +1,9 @@
 package com.beercompetition.controller.admin;
 
+import com.beercompetition.common.result.PageResult;
 import com.beercompetition.common.result.Result;
+import com.beercompetition.pojo.dto.AdminEntryStatusRequest;
+import com.beercompetition.pojo.dto.AdminEntryUpdateRequest;
 import com.beercompetition.pojo.dto.CompetitionBaseInfoUpdateRequest;
 import com.beercompetition.pojo.dto.CompetitionCreateRequest;
 import com.beercompetition.pojo.dto.CompetitionStyleLibraryUpdateRequest;
@@ -24,6 +27,8 @@ import com.beercompetition.pojo.vo.CompetitionVO;
 import com.beercompetition.pojo.vo.CurrentUserResponse;
 import com.beercompetition.pojo.vo.FileDownloadVO;
 import com.beercompetition.pojo.vo.JudgeAccountVO;
+import com.beercompetition.pojo.vo.AdminEntryDetailVO;
+import com.beercompetition.pojo.vo.AdminEntryVO;
 import com.beercompetition.pojo.vo.AdminFeedbackReviewEntryVO;
 import com.beercompetition.pojo.vo.AwardResultVO;
 import com.beercompetition.pojo.vo.AwardRuleVO;
@@ -287,21 +292,49 @@ public class AdminController {
                 .body(content);
     }
 
+    @GetMapping("/entries")
+    public Result<PageResult<AdminEntryVO>> entries(@RequestParam(required = false) Long competitionId,
+                                                    @RequestParam(required = false) String status,
+                                                    @RequestParam(required = false) String paymentStatus,
+                                                    @RequestParam(required = false) String deliveryStatus,
+                                                    @RequestParam(required = false) Long categoryId,
+                                                    @RequestParam(required = false) Boolean assigned,
+                                                    @RequestParam(required = false) String keyword,
+                                                    @RequestParam(required = false) Integer page,
+                                                    @RequestParam(required = false) Integer pageSize) {
+        return Result.success(entryService.listAdminEntries(competitionId, status, paymentStatus, deliveryStatus,
+                categoryId, assigned, keyword, page, pageSize));
+    }
+
+    @GetMapping("/entries/{id}")
+    public Result<AdminEntryDetailVO> entryDetail(@PathVariable Long id) {
+        return Result.success(entryService.getAdminEntry(id));
+    }
+
+    @PutMapping("/entries/{id}")
+    public Result<AdminEntryDetailVO> updateEntry(@PathVariable Long id,
+                                                  @RequestBody @Valid AdminEntryUpdateRequest request) {
+        return Result.success(entryService.updateAdminEntry(id, request));
+    }
+
     @PostMapping("/entries/{id}/confirm-payment")
-    public Result<String> confirmEntryPayment(@PathVariable Long id) {
-        entryService.confirmPayment(id);
+    public Result<String> confirmEntryPayment(@PathVariable Long id,
+                                              @RequestBody(required = false) @Valid AdminEntryStatusRequest request) {
+        entryService.confirmPayment(id, request);
         return Result.success("确认成功");
     }
 
     @PostMapping("/entries/{id}/mark-stored")
-    public Result<String> markEntryStored(@PathVariable Long id) {
-        entryService.markStored(id);
+    public Result<String> markEntryStored(@PathVariable Long id,
+                                          @RequestBody(required = false) @Valid AdminEntryStatusRequest request) {
+        entryService.markStored(id, request);
         return Result.success("入库成功");
     }
 
     @PostMapping("/entries/{id}/cancel")
-    public Result<String> cancelEntry(@PathVariable Long id) {
-        entryService.cancelEntry(id);
+    public Result<String> cancelEntry(@PathVariable Long id,
+                                      @RequestBody(required = false) @Valid AdminEntryStatusRequest request) {
+        entryService.cancelEntry(id, request);
         return Result.success("取消成功");
     }
 
@@ -309,6 +342,14 @@ public class AdminController {
     public Result<List<JudgeAccountVO>> judges(@RequestParam(required = false) Integer status,
                                                @RequestParam(required = false) String keyword) {
         return Result.success(judgeService.listJudges(status, keyword));
+    }
+
+    @GetMapping("/judges/page")
+    public Result<PageResult<JudgeAccountVO>> judgesPage(@RequestParam(required = false) Integer status,
+                                                         @RequestParam(required = false) String keyword,
+                                                         @RequestParam(required = false) Integer page,
+                                                         @RequestParam(required = false) Integer pageSize) {
+        return Result.success(judgeService.pageJudges(status, keyword, page, pageSize));
     }
 
     @GetMapping("/judges/{publicId}")
