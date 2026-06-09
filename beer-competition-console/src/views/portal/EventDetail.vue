@@ -1,12 +1,32 @@
 <template>
   <div class="event-detail-page">
+    <RouterLink class="back-link" to="/portal/events">&lt; 返回</RouterLink>
+
     <section class="detail-hero">
-      <div>
-        <span :class="['label-chip', competition.status === 'PUBLISHED' ? 'tone-gold' : 'tone-green']">
-          {{ competition.currentStageLabel }}
+      <div class="hero-copy">
+        <span :class="['label-chip', stageTone(competition.status)]">
+          {{ stageLabel }}
         </span>
-        <h1>{{ competition.name }}</h1>
-        <p>{{ competition.code }} · {{ competition.edition }}</p>
+        <h1>{{ competition.name || '赛事详情' }}</h1>
+        <p>{{ competition.code || '-' }} · {{ competition.edition || '-' }}</p>
+        <div class="hero-facts" aria-label="赛事关键时间和费用">
+          <span>
+            <small>比赛日期</small>
+            <b>{{ formatDate(competition.competitionDate) }}</b>
+          </span>
+          <span>
+            <small>报名截止</small>
+            <b>{{ formatDateTime(competition.registrationDeadline) }}</b>
+          </span>
+          <span>
+            <small>送样截止</small>
+            <b>{{ formatDateTime(logistics.sampleArrivalDeadline) }}</b>
+          </span>
+          <span>
+            <small>报名费</small>
+            <b>{{ feeText }}</b>
+          </span>
+        </div>
         <div class="hero-actions">
           <RouterLink
             v-if="heroPrimaryAction"
@@ -15,43 +35,59 @@
           >
             {{ heroPrimaryAction.label }}
           </RouterLink>
-          <RouterLink class="secondary-action" to="/portal/events">返回全部赛事</RouterLink>
         </div>
       </div>
-      <aside class="event-ticket">
-        <span>{{ competition.code }}</span>
-        <dl>
-          <div><dt>比赛日期</dt><dd>{{ formatDate(competition.competitionDate) }}</dd></div>
-          <div><dt>报名截止</dt><dd>{{ formatDateTime(competition.registrationDeadline) }}</dd></div>
-          <div><dt>送样截止</dt><dd>{{ formatDateTime(logistics.sampleArrivalDeadline) }}</dd></div>
-          <div><dt>报名费</dt><dd>¥{{ competition.entryFee }} / 款</dd></div>
-        </dl>
-      </aside>
     </section>
 
-    <section class="detail-grid">
-      <article class="brewer-card info-card">
-        <h2 class="portal-section-title">赛事信息</h2>
-        <dl>
-          <div><dt>赛事编号</dt><dd>{{ competition.code }}</dd></div>
-          <div><dt>届次</dt><dd>{{ competition.edition }}</dd></div>
-          <div><dt>当前阶段</dt><dd>{{ competition.currentStageLabel }}</dd></div>
-        </dl>
-      </article>
+    <section class="detail-section brewer-card">
+      <div class="section-heading">
+        <div>
+          <h2 class="portal-section-title">参赛要求</h2>
+          <p>判断这场赛事是否适合你的酒款，报名时按这些配置填写。</p>
+        </div>
+      </div>
 
-      <article class="brewer-card info-card">
-        <h2 class="portal-section-title">报名要求</h2>
-        <dl>
-          <div><dt>投递组别</dt><dd>{{ competition.categories.map((item) => item.name).join(' / ') || '暂未配置' }}</dd></div>
-          <div><dt>基础风格</dt><dd>{{ competition.styles.map((item) => item.name).join(' / ') || '暂未配置' }}</dd></div>
-          <div><dt>额外字段</dt><dd>{{ entryFieldSummary }}</dd></div>
-        </dl>
-      </article>
+      <div class="requirement-grid">
+        <article class="requirement-block">
+          <span>投递组别</span>
+          <strong>{{ categorySummary }}</strong>
+          <div class="chip-list">
+            <em v-for="category in competition.categories" :key="category.id || category.name">{{ category.name }}</em>
+          </div>
+        </article>
+
+        <article class="requirement-block">
+          <span>基础风格</span>
+          <strong>{{ styleSummary }}</strong>
+          <p>{{ styleCategorySummary }}</p>
+          <details v-if="competition.styles?.length" class="style-details">
+            <summary>查看全部基础风格</summary>
+            <div class="style-groups">
+              <section v-for="group in styleGroups" :key="group.name" class="style-group">
+                <h3>{{ group.name }}</h3>
+                <p>{{ group.items.map((item) => item.name).join(' / ') }}</p>
+              </section>
+            </div>
+          </details>
+        </article>
+
+        <article class="requirement-block">
+          <span>额外字段</span>
+          <strong>{{ entryFieldHeadline }}</strong>
+          <div v-if="entryFields.length" class="field-list">
+            <span v-for="field in entryFields" :key="field.fieldKey || field.fieldLabel">
+              <b>{{ field.fieldLabel }}</b>
+              <small>{{ field.required ? '必填' : '选填' }} · {{ field.visibleToJudges ? '评审可见' : '仅主办方可见' }}</small>
+            </span>
+          </div>
+          <p v-else>本场没有配置补充字段。</p>
+        </article>
+      </div>
     </section>
 
-    <section class="detail-grid">
-      <article class="brewer-card info-card logistics-card">
-        <h2 class="portal-section-title">酒样寄送</h2>
+    <section class="content-grid">
+      <article class="brewer-card info-panel">
+        <h2 class="portal-section-title">送样与标签</h2>
         <dl>
           <div><dt>送样方式</dt><dd>{{ deliveryMethodText(logistics.deliveryMethod) }}</dd></div>
           <div><dt>建议送达</dt><dd>{{ arrivalWindowText }}</dd></div>
@@ -60,23 +96,13 @@
           <div v-if="logistics.deliveryNote"><dt>包装说明</dt><dd>{{ logistics.deliveryNote }}</dd></div>
         </dl>
       </article>
-    </section>
 
-    <section class="detail-grid">
-      <article class="brewer-card info-card">
-        <h2 class="portal-section-title">标签与入库</h2>
+      <article class="brewer-card info-panel">
+        <h2 class="portal-section-title">结果与奖项</h2>
         <dl>
-          <div><dt>支付报名费</dt><dd>提交酒款后支付报名费，支付成功后报名完成。</dd></div>
-          <div><dt>标签粘贴</dt><dd>支付成功后下载现场标签，贴在酒瓶或外箱便于收样核对。</dd></div>
-          <div><dt>酒样入库</dt><dd>主办方收样后会更新入库状态。</dd></div>
-        </dl>
-      </article>
-
-      <article class="brewer-card info-card">
-        <h2 class="portal-section-title">结果查看</h2>
-        <dl>
-          <div><dt>当前状态</dt><dd>{{ isCompetitionResultPublished(competition) ? '结果已发布' : '结果待发布' }}</dd></div>
-          <div><dt>可查看内容</dt><dd>评分、评语、奖项和奖状。</dd></div>
+          <div><dt>结果状态</dt><dd>{{ resultStatusText }}</dd></div>
+          <div><dt>可查看内容</dt><dd>评分、评语、奖项和证书。</dd></div>
+          <div><dt>查看入口</dt><dd>{{ resultEntryText }}</dd></div>
         </dl>
         <RouterLink
           v-if="resultCardAction"
@@ -88,51 +114,63 @@
       </article>
     </section>
 
-    <section class="brewer-card my-event-card">
-      <div class="section-head">
+    <section class="detail-section brewer-card">
+      <div class="section-heading">
         <div>
-          <h2 class="portal-section-title">我的本场酒款</h2>
-          <p>{{ loggedIn ? '查看本厂牌在该赛事下的提交和处理状态。' : '登录后可查看本厂牌在该赛事下的酒款。' }}</p>
+          <h2 class="portal-section-title">参赛流程</h2>
+          <p>从提交资料到结果发布，厂商端主要关注这些节点。</p>
         </div>
-        <RouterLink
-          v-if="loggedIn && canSubmitEntry(competition)"
-          :to="`/portal/submit?competitionId=${competition.id}`"
-        >
-          继续提交
-        </RouterLink>
       </div>
+      <div class="process-strip">
+        <span v-for="(step, index) in processSteps" :key="step.title">
+          <small>{{ String(index + 1).padStart(2, '0') }}</small>
+          <b>{{ step.title }}</b>
+          <em>{{ step.text }}</em>
+        </span>
+      </div>
+    </section>
 
-      <div v-if="!loggedIn" class="empty-state">
-        <strong>登录后查看参赛记录</strong>
-        <p>你可以先阅读赛事规则，确认参赛后再登录提交酒款。</p>
-        <RouterLink class="primary-action" to="/portal/login">登录报名</RouterLink>
-      </div>
+    <section class="brewer-card participation-brief">
+      <template v-if="loggedIn && hasEventEntries">
+        <div>
+          <span class="label-chip tone-blue">你已参加本赛事</span>
+          <h2>本场参赛状态</h2>
+          <p>具体酒款、标签和送样处理请进入“我的参赛”。</p>
+        </div>
+        <div class="brief-stats">
+          <span><small>已提交</small><b>{{ eventSummary.submitted }}</b></span>
+          <span><small>待支付</small><b>{{ eventSummary.pendingPayment }}</b></span>
+          <span><small>已入库</small><b>{{ eventSummary.stored }}</b></span>
+          <span><small>结果可查</small><b>{{ eventSummary.result }}</b></span>
+        </div>
+        <div class="brief-actions">
+          <RouterLink to="/portal/my">进入我的参赛</RouterLink>
+          <RouterLink v-if="eventSummary.result > 0" :to="competitionResultPath(competition.id)">查看我的结果</RouterLink>
+        </div>
+      </template>
 
-      <div v-else-if="eventEntries.length" class="entry-list">
-        <article v-for="entry in eventEntries" :key="entry.id" class="entry-row">
-          <div>
-            <span :class="['label-chip', `tone-${entryStatusMeta[entry.status].tone}`]">
-              {{ entryStatusMeta[entry.status].label }}
-            </span>
-            <h3>{{ entry.name }}</h3>
-            <p>{{ entry.categoryName }} · {{ entry.style }} · {{ entry.abv }}</p>
-          </div>
-          <dl>
-            <div><dt>参赛编号</dt><dd>{{ entry.uuid }}</dd></div>
-            <div><dt>现场短编号</dt><dd>{{ entry.shortCode }}</dd></div>
-            <div><dt>下一步</dt><dd>{{ nextActionText(entry) }}</dd></div>
-          </dl>
-          <RouterLink :to="entryPrimaryAction(entry).to">{{ entryPrimaryAction(entry).label }}</RouterLink>
-        </article>
-      </div>
+      <template v-else-if="loggedIn">
+        <div>
+          <span class="label-chip tone-amber">尚未参加本赛事</span>
+          <h2>确认规则后再提交酒款</h2>
+          <p>先核对组别、基础风格、费用和送样要求。</p>
+        </div>
+        <div class="brief-actions">
+          <RouterLink v-if="canSubmitEntry(competition)" :to="`/portal/submit?competitionId=${competition.id}`">提交酒款</RouterLink>
+          <RouterLink to="/portal/my">查看我的参赛</RouterLink>
+        </div>
+      </template>
 
-      <div v-else class="empty-state">
-        <strong>本场赛事尚未提交酒款</strong>
-        <p>确认组别、风格和送样要求后，可以提交适合本赛事的酒款。</p>
-        <RouterLink v-if="canSubmitEntry(competition)" class="primary-action" :to="`/portal/submit?competitionId=${competition.id}`">
-          提交酒款
-        </RouterLink>
-      </div>
+      <template v-else>
+        <div>
+          <span class="label-chip tone-amber">公开赛事详情</span>
+          <h2>登录后提交和追踪参赛酒款</h2>
+          <p>未登录时可以先查看赛事规则、费用和送样要求。</p>
+        </div>
+        <div class="brief-actions">
+          <RouterLink to="/portal/login">登录报名</RouterLink>
+        </div>
+      </template>
     </section>
   </div>
 </template>
@@ -145,22 +183,54 @@ import { fetchPortalCompetitionDetail, fetchPortalEntries } from '@/api/portal'
 import {
   canSubmitEntry,
   competitionResultPath,
-  entryPrimaryAction,
-  entryStatusMeta,
+  entrySummaryForCompetition,
   isCompetitionResultPublished,
-  nextActionText,
 } from './portalViewModels'
 
 const route = useRoute()
 const loggedIn = computed(() => isLoggedIn('portal'))
 const competition = ref({ categories: [], styles: [], entryFields: [] })
 const entries = ref([])
+
+const logistics = computed(() => competition.value.logistics || {})
+const entryFields = computed(() => competition.value.entryFields || [])
 const eventEntries = computed(() => entries.value.filter((entry) => entry.competitionId === competition.value.id))
 const hasEventEntries = computed(() => eventEntries.value.length > 0)
+const eventSummary = computed(() => entrySummaryForCompetition(competition.value.id, entries.value))
+const feeText = computed(() => competition.value.entryFee === undefined || competition.value.entryFee === null ? '-' : `¥${competition.value.entryFee} / 款`)
+const stageLabel = computed(() => (isCompetitionResultPublished(competition.value) ? '结果已发布' : competition.value.currentStageLabel) || '赛事详情')
+const categorySummary = computed(() => {
+  const count = competition.value.categories?.length || 0
+  return count ? `${count} 个投递组别` : '暂未配置'
+})
+const styleSummary = computed(() => {
+  const count = competition.value.styles?.length || 0
+  return count ? `${count} 个可选基础风格` : '暂未配置'
+})
+const styleCategorySummary = computed(() => {
+  const count = styleGroups.value.length
+  if (!competition.value.styles?.length) return '主办方暂未配置基础风格库。'
+  return count ? `按 ${count} 个风格大类组织，报名时单选一个基础风格。` : '报名时单选一个基础风格。'
+})
+const entryFieldHeadline = computed(() => {
+  const count = entryFields.value.length
+  if (!count) return '无补充字段'
+  const judgeVisibleCount = entryFields.value.filter((field) => field.visibleToJudges).length
+  return `${count} 个补充字段，${judgeVisibleCount} 个评审可见`
+})
+const styleGroups = computed(() => {
+  const groups = new Map()
+  ;(competition.value.styles || []).forEach((style) => {
+    const key = style.categoryName || '未分组'
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key).push(style)
+  })
+  return Array.from(groups.entries()).map(([name, items]) => ({ name, items }))
+})
 const heroPrimaryAction = computed(() => {
   if (isCompetitionResultPublished(competition.value)) {
     return {
-      label: loggedIn.value ? '查看本场结果' : '登录查看结果',
+      label: loggedIn.value ? '查看我的结果' : '登录查看结果',
       to: loggedIn.value ? competitionResultPath(competition.value.id) : '/portal/login',
     }
   }
@@ -182,15 +252,13 @@ const resultCardAction = computed(() => {
   if (!hasEventEntries.value) {
     return null
   }
-  return { label: '查看本场结果', to: competitionResultPath(competition.value.id) }
+  return { label: '查看我的结果', to: competitionResultPath(competition.value.id) }
 })
-const logistics = computed(() => competition.value.logistics || {})
-const entryFieldSummary = computed(() => {
-  const fields = competition.value.entryFields || []
-  if (!fields.length) {
-    return '无'
-  }
-  return fields.map((field) => (typeof field === 'string' ? field : field.fieldLabel)).join(' / ')
+const resultStatusText = computed(() => (isCompetitionResultPublished(competition.value) ? '结果已发布' : '结果待发布'))
+const resultEntryText = computed(() => {
+  if (!loggedIn.value) return '登录后查看自己的评分、评语和奖项。'
+  if (!hasEventEntries.value) return '本账号尚未参加该赛事。'
+  return isCompetitionResultPublished(competition.value) ? '进入“我的结果”查看本场反馈。' : '主办方发布后可在“我的结果”查看。'
 })
 const arrivalWindowText = computed(() => {
   const start = formatDateTime(logistics.value.sampleArrivalStart)
@@ -215,6 +283,13 @@ const deliveryAddressText = computed(() => {
   }
   return '支付成功后显示完整收件信息'
 })
+const processSteps = [
+  { title: '提交资料', text: '填写酒名、组别、基础风格、ABV 和补充字段。' },
+  { title: '支付报名费', text: '支付成功后报名完成，并开放标签相关操作。' },
+  { title: '下载标签', text: '将现场标签贴在酒瓶或外箱，便于主办方核对。' },
+  { title: '送样入库', text: '按送样窗口寄送或现场交样，等待主办方确认。' },
+  { title: '查看结果', text: '结果发布后查看评分、评语、奖项和证书。' },
+]
 
 onMounted(async () => {
   competition.value = await fetchPortalCompetitionDetail(route.params.id)
@@ -222,6 +297,13 @@ onMounted(async () => {
     entries.value = await fetchPortalEntries()
   }
 })
+
+function stageTone(status) {
+  if (status === 'PUBLISHED' || status === 'ARCHIVED') return 'tone-gold'
+  if (status === 'REGISTRATION_OPEN') return 'tone-green'
+  if (status === 'JUDGING') return 'tone-blue'
+  return 'tone-amber'
+}
 
 function formatDate(value) {
   return value || '-'
@@ -241,15 +323,24 @@ function deliveryMethodText(value) {
 <style scoped>
 .event-detail-page {
   display: grid;
-  gap: 22px;
+  gap: 14px;
+}
+
+.back-link {
+  justify-self: start;
+  color: #7d705f;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.back-link:hover {
+  color: #2b1d10;
 }
 
 .detail-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
-  gap: 28px;
-  min-height: 420px;
-  padding: 34px;
+  min-height: 360px;
+  padding: 30px;
   color: #fff6df;
   background:
     linear-gradient(135deg, rgba(31, 21, 14, 0.94), rgba(86, 48, 18, 0.82)),
@@ -259,31 +350,70 @@ function deliveryMethodText(value) {
   border-radius: 8px;
 }
 
+.hero-copy {
+  align-self: end;
+}
+
 .detail-hero h1 {
-  max-width: 920px;
-  margin: 18px 0 12px;
-  font-size: 56px;
-  line-height: 1;
+  max-width: 880px;
+  margin: 18px 0 10px;
+  overflow-wrap: anywhere;
+  font-size: 48px;
+  line-height: 1.05;
 }
 
 .detail-hero p {
   max-width: 760px;
+  margin: 0;
   color: #ead9b7;
-  font-size: 17px;
-  line-height: 1.75;
+  font-size: 16px;
+  line-height: 1.7;
 }
 
-.hero-actions {
+.hero-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  max-width: 980px;
+  margin-top: 24px;
+}
+
+.hero-facts span {
+  min-height: 82px;
+  padding: 14px 16px;
+  color: #2b1d10;
+  background: linear-gradient(180deg, rgba(255, 250, 240, 0.98), rgba(246, 217, 150, 0.94));
+  border: 1px solid rgba(255, 250, 240, 0.22);
+  border-radius: 8px;
+}
+
+.hero-facts small,
+.hero-facts b {
+  display: block;
+}
+
+.hero-facts small {
+  color: #7d705f;
+}
+
+.hero-facts b {
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+  font-size: 18px;
+  line-height: 1.28;
+}
+
+.hero-actions,
+.brief-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 28px;
+  gap: 10px;
+  margin-top: 24px;
 }
 
 .primary-action,
-.secondary-action,
-.entry-row > a,
-.section-head a {
+.brief-actions a,
+.card-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -297,70 +427,188 @@ function deliveryMethodText(value) {
   white-space: nowrap;
 }
 
-.secondary-action,
-.section-head a {
-  color: #fff6df;
-  background: rgba(255, 250, 240, 0.13);
-  border: 1px solid rgba(255, 250, 240, 0.24);
+.participation-brief {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+  padding: 22px;
 }
 
-.event-ticket {
-  align-self: end;
-  padding: 24px;
-  color: #2b1d10;
-  background: linear-gradient(180deg, rgba(255, 250, 240, 0.98), rgba(246, 217, 150, 0.95));
+.participation-brief h2 {
+  margin: 12px 0 6px;
+  font-size: 26px;
+  line-height: 1.18;
+}
+
+.participation-brief p,
+.section-heading p,
+.requirement-block p,
+dt,
+.process-strip em,
+.field-list small {
+  color: #746a5f;
+  line-height: 1.65;
+}
+
+.brief-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(82px, 1fr));
+  gap: 8px;
+}
+
+.brief-stats span {
+  min-height: 72px;
+  padding: 11px;
+  background: #fff7e6;
+  border: 1px solid rgba(87, 58, 26, 0.1);
   border-radius: 8px;
 }
 
-.event-ticket > span {
-  color: #8b5c19;
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: 0.1em;
+.brief-stats small,
+.brief-stats b {
+  display: block;
 }
 
-.detail-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
+.brief-stats small {
+  color: #746a5f;
 }
 
-.info-card,
-.my-event-card {
-  padding: 24px;
+.brief-stats b {
+  margin-top: 7px;
+  font-size: 25px;
+  line-height: 1;
 }
 
-.logistics-card {
-  position: relative;
-  overflow: hidden;
+.brief-actions {
+  grid-column: 1 / -1;
+  margin-top: 0;
 }
 
-.map-link {
-  display: inline-flex;
-  align-items: center;
-  min-height: 36px;
-  margin-top: 14px;
-  padding: 0 13px;
+.brief-actions a + a {
   color: #6b4710;
   background: #fff7e6;
   border: 1px solid rgba(87, 58, 26, 0.14);
-  border-radius: 8px;
-  font-weight: 800;
-  text-decoration: none;
 }
 
-.card-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 38px;
-  margin-top: 16px;
-  padding: 0 14px;
-  color: #2b1d10;
-  background: #e1a23d;
+.detail-section,
+.info-panel {
+  padding: 24px;
+}
+
+.section-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.section-heading .portal-section-title {
+  margin: 0 0 8px;
+}
+
+.section-heading p {
+  margin: 0;
+}
+
+.requirement-grid {
+  display: grid;
+  grid-template-columns: 0.9fr 1.3fr 1fr;
+  gap: 14px;
+}
+
+.requirement-block {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-height: 180px;
+  padding: 18px;
+  background: #fff7e6;
+  border: 1px solid rgba(87, 58, 26, 0.1);
   border-radius: 8px;
+}
+
+.requirement-block > span {
+  color: #746a5f;
+  font-size: 13px;
+}
+
+.requirement-block strong {
+  overflow-wrap: anywhere;
+  color: #2b1d10;
+  font-size: 23px;
+  line-height: 1.25;
+}
+
+.chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip-list em {
+  padding: 6px 9px;
+  color: #6b4710;
+  background: #fffdf7;
+  border: 1px solid rgba(87, 58, 26, 0.1);
+  border-radius: 8px;
+  font-style: normal;
   font-weight: 800;
-  text-decoration: none;
+}
+
+.style-details {
+  margin-top: 2px;
+}
+
+.style-details summary {
+  cursor: pointer;
+  color: #8b5c19;
+  font-weight: 900;
+}
+
+.style-groups {
+  display: grid;
+  gap: 10px;
+  max-height: 360px;
+  margin-top: 12px;
+  overflow: auto;
+}
+
+.style-group {
+  padding: 12px;
+  background: #fffdf7;
+  border: 1px solid rgba(87, 58, 26, 0.08);
+  border-radius: 8px;
+}
+
+.style-group h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+
+.style-group p,
+.requirement-block p {
+  margin: 0;
+}
+
+.field-list {
+  display: grid;
+  gap: 8px;
+}
+
+.field-list span {
+  display: grid;
+  gap: 3px;
+  padding: 10px;
+  background: #fffdf7;
+  border: 1px solid rgba(87, 58, 26, 0.08);
+  border-radius: 8px;
+}
+
+.content-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
 }
 
 dl {
@@ -379,102 +627,75 @@ dd {
   margin: 0;
 }
 
-dt,
-.section-head p,
-.entry-row p,
-.empty-state p {
-  color: #746a5f;
-}
-
 dd {
   margin-top: 6px;
+  overflow-wrap: anywhere;
   font-weight: 800;
   line-height: 1.55;
 }
 
-.section-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 18px;
+.card-link {
+  margin-top: 16px;
 }
 
-.section-head a {
-  color: #6b4710;
-  background: #fff7e6;
-  border: 1px solid rgba(87, 58, 26, 0.14);
-}
-
-.entry-list {
+.process-strip {
   display: grid;
-  gap: 12px;
-  margin-top: 18px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
 }
 
-.entry-row {
+.process-strip span {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 460px auto;
-  gap: 18px;
-  align-items: center;
-  padding: 18px;
+  align-content: start;
+  gap: 8px;
+  min-height: 132px;
+  padding: 16px;
   background: #fff7e6;
   border: 1px solid rgba(87, 58, 26, 0.1);
   border-radius: 8px;
 }
 
-.entry-row h3 {
-  margin: 12px 0 6px;
-  font-size: 22px;
+.process-strip small {
+  color: #a76b18;
+  font-weight: 900;
 }
 
-.entry-row dl {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+.process-strip b {
+  color: #2b1d10;
+  font-size: 18px;
 }
 
-.entry-row dl div {
-  padding: 10px;
-  background: #fffdf7;
-  border: 0;
-  border-radius: 8px;
+.process-strip em {
+  font-style: normal;
 }
 
-.empty-state {
-  display: grid;
-  justify-items: start;
-  gap: 12px;
-  margin-top: 18px;
-  padding: 24px;
-  background: #fff7e6;
-  border: 1px dashed rgba(87, 58, 26, 0.18);
-  border-radius: 8px;
-}
-
-.empty-state strong {
-  font-size: 22px;
-}
-
-@media (max-width: 1080px) {
-  .detail-hero,
-  .detail-grid,
-  .entry-row {
+@media (max-width: 1120px) {
+  .participation-brief,
+  .requirement-grid,
+  .content-grid {
     grid-template-columns: 1fr;
+  }
+
+  .hero-facts,
+  .brief-stats,
+  .process-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 680px) {
   .detail-hero {
     min-height: auto;
-    padding: 26px;
+    padding: 24px;
   }
 
   .detail-hero h1 {
-    font-size: 38px;
+    font-size: 34px;
   }
 
-  .section-head {
-    display: grid;
-  }
-
-  .entry-row dl {
+  .hero-facts,
+  .brief-stats,
+  .process-strip {
     grid-template-columns: 1fr;
   }
 }

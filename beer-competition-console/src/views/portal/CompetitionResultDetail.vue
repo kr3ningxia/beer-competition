@@ -220,7 +220,7 @@ function formatDateTime(value) {
 .result-detail-page {
   display: grid;
   gap: 24px;
-  max-width: 852px;
+  max-width: 900px;
   margin: 0 auto;
 }
 
@@ -248,8 +248,9 @@ function formatDateTime(value) {
 .group-card {
   overflow: hidden;
   background: rgba(255, 250, 240, 0.92);
-  border: 1px solid rgba(87, 58, 26, 0.14);
-  border-radius: 21px;
+  border: 1px solid rgba(87, 58, 26, 0.12);
+  border-radius: 8px;
+  box-shadow: 0 18px 40px rgba(67, 43, 17, 0.08);
 }
 
 .summary-card {
@@ -283,23 +284,23 @@ function formatDateTime(value) {
 
 .champion-card {
   position: relative;
-  border-color: rgba(191, 129, 47, 0.55);
+  border-color: rgba(216, 144, 33, 0.46);
   border-width: 2px;
-  box-shadow: 0 1px 0 rgba(191, 129, 47, 0.18);
+  box-shadow: 0 18px 40px rgba(67, 43, 17, 0.08), 0 1px 0 rgba(216, 144, 33, 0.18);
 }
 
 .champion-card::before {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, rgba(191, 129, 47, 0.15), rgba(191, 129, 47, 0.05) 52%, transparent);
+  background: linear-gradient(135deg, rgba(216, 144, 33, 0.16), rgba(255, 246, 223, 0.72) 52%, transparent);
   pointer-events: none;
 }
 
 .gold-line {
   position: relative;
   height: 4px;
-  background: linear-gradient(90deg, #bf812f, rgba(191, 129, 47, 0.62), rgba(191, 129, 47, 0.18));
+  background: linear-gradient(90deg, #d89021, rgba(216, 144, 33, 0.62), rgba(216, 144, 33, 0.18));
 }
 
 .champion-inner {
@@ -315,9 +316,9 @@ function formatDateTime(value) {
   flex: 0 0 auto;
   width: 48px;
   height: 48px;
-  color: #bf812f;
-  background: rgba(191, 129, 47, 0.12);
-  border: 2px solid rgba(191, 129, 47, 0.45);
+  color: #8f5100;
+  background: #ffe3a6;
+  border: 1px solid rgba(87, 58, 26, 0.16);
   border-radius: 50%;
 }
 
@@ -402,9 +403,9 @@ function formatDateTime(value) {
 .filters select {
   height: 36px;
   color: #241a10;
-  background: rgba(255, 250, 240, 0.9);
-  border: 1px solid rgba(87, 58, 26, 0.14);
-  border-radius: 12px;
+  background: #fffaf0;
+  border: 1px solid rgba(87, 58, 26, 0.12);
+  border-radius: 8px;
   outline: none;
 }
 

@@ -38,12 +38,12 @@
         <p>当前暂无开放展示赛事，可以稍后再回来查看。</p>
       </div>
       <aside class="hero-card">
-        <span>{{ activeCompetition?.code || 'BEER AWARDS' }}</span>
-        <strong>{{ activeCompetition ? '精酿厂牌赛事报名' : '等待赛事开放' }}</strong>
+        <span>{{ activeCompetition ? 'ENTRY INFO' : 'BEER AWARDS' }}</span>
+        <strong>{{ activeCompetition ? '参赛关键信息' : '等待赛事开放' }}</strong>
         <dl>
-          <div><dt>投递组别</dt><dd>{{ activeCompetition?.categories?.length || 0 }} 个组别</dd></div>
-          <div><dt>基础风格</dt><dd>{{ activeCompetition?.styles?.length || 0 }} 个风格</dd></div>
-          <div><dt>我的结果</dt><dd>评分、评语、奖项</dd></div>
+          <div><dt>报名窗口</dt><dd>{{ registrationWindowText(activeCompetition) }}</dd></div>
+          <div><dt>参赛组别</dt><dd>{{ categoryNamesText(activeCompetition) }}</dd></div>
+          <div><dt>参赛费用</dt><dd>{{ entryFeeText(activeCompetition) }}</dd></div>
         </dl>
       </aside>
     </section>
@@ -190,6 +190,34 @@ function formatDate(value) {
 
 function formatDateTime(value) {
   return value ? String(value).replace('T', ' ').slice(0, 16) : '-'
+}
+
+function formatMonthDayTime(value) {
+  if (!value) return ''
+  const normalized = String(value).replace('T', ' ')
+  const match = normalized.match(/^\d{4}-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/)
+  if (!match) return formatDateTime(value)
+  const [, month, day, hour, minute] = match
+  return `${Number(month)}月${Number(day)}日 ${hour}:${minute}`
+}
+
+function registrationWindowText(competition) {
+  if (!competition) return '待公布'
+  const start = formatMonthDayTime(competition.registrationStart)
+  const deadline = formatMonthDayTime(competition.registrationDeadline)
+  if (start && deadline) return `${start} 开始，${deadline} 截止`
+  if (deadline) return `${deadline} 截止`
+  return '待公布'
+}
+
+function categoryNamesText(competition) {
+  const names = competition?.categories?.map((item) => item.name).filter(Boolean) || []
+  return names.length ? names.join(' / ') : '待公布'
+}
+
+function entryFeeText(competition) {
+  if (!competition || competition.entryFee === null || competition.entryFee === undefined) return '待公布'
+  return `¥${competition.entryFee} / 款`
 }
 </script>
 

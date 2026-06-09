@@ -4,6 +4,7 @@
       <img src="/hero-beer.png" alt="" aria-hidden="true">
       <div class="hero-shade" aria-hidden="true"></div>
       <div class="hero-copy">
+        <span class="label-chip tone-gold">赛事结果</span>
         <h1>赛事获奖结果</h1>
         <p>浏览各届赛事的完整获奖名单，了解全场总冠军与各组别金银铜奖。</p>
       </div>
@@ -178,8 +179,8 @@ function formatDateTime(value) {
 <style scoped>
 .competition-results-page {
   display: grid;
-  gap: 30px;
-  max-width: 1108px;
+  gap: 24px;
+  max-width: 1180px;
   margin: 0 auto;
 }
 
@@ -187,12 +188,13 @@ function formatDateTime(value) {
   position: relative;
   display: flex;
   align-items: flex-end;
-  min-height: 288px;
+  min-height: 300px;
   overflow: hidden;
-  padding: 56px 48px;
+  padding: 32px;
   color: #fffaf0;
-  border-radius: 22px;
+  border-radius: 8px;
   background: #170d07;
+  box-shadow: 0 24px 60px rgba(67, 43, 17, 0.14);
 }
 
 .results-hero img,
@@ -210,8 +212,8 @@ function formatDateTime(value) {
 
 .hero-shade {
   background:
-    linear-gradient(90deg, rgba(20, 11, 6, 0.96), rgba(31, 16, 8, 0.82) 52%, rgba(35, 18, 8, 0.56)),
-    rgba(24, 13, 8, 0.34);
+    linear-gradient(135deg, rgba(32, 22, 15, 0.94), rgba(91, 50, 18, 0.78)),
+    rgba(24, 13, 8, 0.26);
 }
 
 .hero-copy {
@@ -220,16 +222,16 @@ function formatDateTime(value) {
 }
 
 .hero-copy h1 {
-  margin: 0;
-  font-size: 38px;
-  line-height: 1.12;
+  margin: 18px 0 10px;
+  font-size: 48px;
+  line-height: 1.06;
   letter-spacing: 0;
 }
 
 .hero-copy p {
   margin: 14px 0 0;
-  color: rgba(255, 250, 240, 0.86);
-  line-height: 1.75;
+  color: #ead9b7;
+  line-height: 1.7;
   font-weight: 700;
 }
 
@@ -275,12 +277,12 @@ function formatDateTime(value) {
 
 .search-box input {
   width: 100%;
-  height: 38px;
+  height: 40px;
   padding: 0 12px 0 36px;
   color: #241a10;
-  background: rgba(255, 250, 240, 0.88);
-  border: 1px solid rgba(87, 58, 26, 0.14);
-  border-radius: 13px;
+  background: #fffaf0;
+  border: 1px solid rgba(87, 58, 26, 0.12);
+  border-radius: 8px;
   outline: none;
 }
 
@@ -297,8 +299,9 @@ function formatDateTime(value) {
 .competition-card {
   overflow: hidden;
   background: rgba(255, 250, 240, 0.9);
-  border: 1px solid rgba(87, 58, 26, 0.14);
-  border-radius: 21px;
+  border: 1px solid rgba(87, 58, 26, 0.12);
+  border-radius: 8px;
+  box-shadow: 0 18px 40px rgba(67, 43, 17, 0.08);
 }
 
 .competition-main {
@@ -350,9 +353,9 @@ function formatDateTime(value) {
   min-height: 42px;
   padding: 0 16px;
   color: #fffaf0;
-  background: #bf812f;
+  background: #d89021;
   border: 1px solid rgba(130, 83, 25, 0.12);
-  border-radius: 14px;
+  border-radius: 8px;
   font-weight: 800;
   text-decoration: none;
   white-space: nowrap;
@@ -396,7 +399,7 @@ function formatDateTime(value) {
   padding: 10px 12px;
   background: rgba(255, 253, 247, 0.86);
   border: 1px solid rgba(87, 58, 26, 0.12);
-  border-radius: 14px;
+  border-radius: 8px;
 }
 
 .award-preview li > div {
@@ -475,7 +478,7 @@ function formatDateTime(value) {
   .results-hero {
     min-height: 230px;
     padding: 34px 26px;
-    border-radius: 18px;
+    border-radius: 8px;
   }
 
   .hero-copy h1 {
