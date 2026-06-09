@@ -4,11 +4,11 @@
       <div class="brand-panel">
         <div class="brand-lockup">
           <span class="brand-mark">
-            <CoffeeCup />
+            <img src="/brand-icon.png" alt="" aria-hidden="true">
           </span>
           <div>
-            <p>Beer Competition Console</p>
-            <h1>主办方控制台</h1>
+            <p>啤酒事务局</p>
+            <h1>赛事后台</h1>
           </div>
         </div>
 
@@ -42,7 +42,7 @@
 
       <section class="login-card">
         <div class="card-head">
-          <span class="card-kicker">Organizer Access</span>
+          <span class="card-kicker">主办方入口</span>
           <h2>主办方后台登录</h2>
           <p>进入比赛管理、评审配置和现场看板。</p>
         </div>
@@ -81,7 +81,7 @@
 import { reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
-import { CoffeeCup, Lock, Right, User } from '@element-plus/icons-vue'
+import { Lock, Right, User } from '@element-plus/icons-vue'
 import { adminLogin } from '@/api/auth'
 import { setSession } from '@/utils/auth'
 
@@ -207,9 +207,10 @@ async function submit() {
   box-shadow: inset 0 0 18px rgba(216, 169, 53, 0.08);
 }
 
-.brand-mark svg {
-  width: 26px;
-  height: 26px;
+.brand-mark img {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
 }
 
 p,
@@ -224,7 +225,6 @@ h2 {
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0;
-  text-transform: uppercase;
 }
 
 .brand-lockup h1 {

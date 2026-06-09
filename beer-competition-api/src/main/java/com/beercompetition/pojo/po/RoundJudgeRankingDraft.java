@@ -14,26 +14,16 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@TableName("round_table")
-public class RoundTable {
+@TableName("round_judge_ranking_draft")
+public class RoundJudgeRankingDraft {
 
     @TableId(type = IdType.AUTO)
     private Long id;
     private Long competitionId;
     private Long roundId;
-    private String tableName;
-    private Long captainJudgeId;
-    private Long categoryId;
-    private String categoryMode;
-    private Integer targetCount;
-    private String targetMode;
-    private String status;
-    private Integer resultVersion;
-    private Integer confirmationOverrideFlag;
-    private String confirmationOverrideReason;
-    private Long confirmationOverrideBy;
-    private LocalDateTime confirmationOverrideTime;
-    private Integer sortOrder;
+    private Long roundTableId;
+    private Long judgeAccountId;
+    private String rankingsJson;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

@@ -3,6 +3,7 @@ package com.beercompetition.pojo.vo;
 import lombok.Builder;
 import lombok.Data;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
@@ -24,6 +25,13 @@ public class RoundTableVO {
     private Integer advancedCount;
     private Integer judgeProgress;
     private Integer captainProgress;
+    private Integer resultVersion;
+    private Integer confirmationConfirmedCount;
+    private Integer confirmationRequiredCount;
+    private Boolean confirmationReady;
+    private Boolean confirmationOverrideFlag;
+    private String confirmationOverrideReason;
+    private LocalDateTime confirmationOverrideTime;
     private List<RoundTableMemberVO> members;
     private List<RoundTableJudgeProgressVO> judgeDetails;
     private List<RoundRankingSlotVO> rankings;

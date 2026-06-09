@@ -4,6 +4,7 @@ import com.beercompetition.common.result.Result;
 import com.beercompetition.pojo.dto.JudgeProfileUpdateRequest;
 import com.beercompetition.pojo.dto.JudgeScoreSaveRequest;
 import com.beercompetition.pojo.dto.JudgeScoreUpdateRequest;
+import com.beercompetition.pojo.dto.RankingDraftSaveRequest;
 import com.beercompetition.pojo.dto.RankingSubmitRequest;
 import com.beercompetition.pojo.dto.TableScoreFinalizeRequest;
 import com.beercompetition.pojo.enums.UserRole;
@@ -14,6 +15,7 @@ import com.beercompetition.pojo.vo.JudgeEntryVO;
 import com.beercompetition.pojo.vo.JudgeAccountVO;
 import com.beercompetition.pojo.vo.JudgeRoundTableVO;
 import com.beercompetition.pojo.vo.JudgeTaskVO;
+import com.beercompetition.pojo.vo.ScoreConfirmationVO;
 import com.beercompetition.pojo.vo.ScoreRecordVO;
 import com.beercompetition.pojo.vo.ScoreConfigVO;
 import com.beercompetition.service.AuthService;
@@ -81,11 +83,28 @@ public class JudgeController {
         return Result.success("提交成功");
     }
 
+    @GetMapping("/round-tables/{roundTableId}/score-confirmation")
+    public Result<ScoreConfirmationVO> scoreConfirmation(@PathVariable Long roundTableId) {
+        return Result.success(roundService.getScoreConfirmation(roundTableId));
+    }
+
+    @PostMapping("/round-tables/{roundTableId}/score-confirmation")
+    public Result<ScoreConfirmationVO> confirmScoreRoundTable(@PathVariable Long roundTableId) {
+        return Result.success(roundService.confirmScoreRoundTable(roundTableId));
+    }
+
     @PostMapping("/round-tables/{roundTableId}/ranking")
     public Result<String> submitRanking(@PathVariable Long roundTableId,
                                         @RequestBody @Valid RankingSubmitRequest request) {
         roundService.submitRanking(roundTableId, request);
         return Result.success("提交成功");
+    }
+
+    @PostMapping("/round-tables/{roundTableId}/ranking-draft")
+    public Result<String> saveRankingDraft(@PathVariable Long roundTableId,
+                                           @RequestBody @Valid RankingDraftSaveRequest request) {
+        roundService.saveRankingDraft(roundTableId, request);
+        return Result.success("保存成功");
     }
 
     @GetMapping("/entries/{uuid}")

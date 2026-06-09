@@ -550,6 +550,7 @@
                     <span>桌长 {{ table.captainName }}</span>
                     <span>{{ table.primaryProgressLabel }} {{ table.primaryProgress }}</span>
                     <span>{{ table.secondaryProgressLabel }} {{ table.secondaryProgress }}</span>
+                    <span v-if="currentRound?.type === 'SCORE'">确认 {{ table.confirmationProgress }}</span>
                     <span>{{ table.targetLabel }} {{ table.targetDisplay }}</span>
                     <em>{{ table.statusText }}</em>
                     <button
@@ -1210,6 +1211,14 @@
             <small>选择晋级</small>
             <strong>{{ roundScoreDetailCaptainStats.advance.submitted }} / {{ roundScoreDetailCaptainStats.advance.total }}</strong>
           </span>
+          <span>
+            <small>同桌确认</small>
+            <strong>{{ roundScoreDetailConfirmationText }}</strong>
+          </span>
+          <span v-if="roundScoreDetailTable?.confirmationOverrideFlag" class="pending-judge-summary">
+            <small>现场确认</small>
+            <strong>{{ roundScoreDetailTable.confirmationOverrideReason || '已处理' }}</strong>
+          </span>
           <span class="pending-judge-summary">
             <small>未完成评分评审</small>
             <strong>{{ roundScoreDetailStats.pendingJudgeNames || '无' }}</strong>
@@ -1219,6 +1228,14 @@
             <strong>{{ roundScoreDetailEntries.length }} 款</strong>
           </span>
         </section>
+        <button
+          v-if="canOverrideRoundScoreConfirmation"
+          class="tool-button primary confirmation-override-button"
+          type="button"
+          @click="overrideRoundScoreConfirmation"
+        >
+          现场兜底确认
+        </button>
 
         <section v-if="!isRoundScoreDetailRanking" class="score-detail-progress-list">
           <article
@@ -1302,6 +1319,7 @@ import {
   lockRound,
   markEntryStored,
   openCompetitionRegistration,
+  overrideRoundTableConfirmation,
   prepareCompetitionJudging,
   publishCompetitionResults,
   publishRound,
@@ -1575,6 +1593,22 @@ const roundScoreDetailCaptainStats = computed(() => {
       remaining: Math.max(0, advanceTotal - advanceSubmitted),
     },
   }
+})
+const roundScoreDetailConfirmationText = computed(() => {
+  const table = roundScoreDetailTable.value
+  return `${Number(table?.confirmationConfirmedCount || 0)} / ${Number(table?.confirmationRequiredCount || 0)}`
+})
+const canOverrideRoundScoreConfirmation = computed(() => {
+  const table = roundScoreDetailTable.value
+  return Boolean(
+    currentRound.value?.type === 'SCORE'
+      && currentRound.value?.status === 'PUBLISHED'
+      && table
+      && table.status === 'PUBLISHED'
+      && normalizeProgress(table.captainProgress) >= 100
+      && !table.confirmationReady
+      && !table.confirmationOverrideFlag,
+  )
 })
 const filteredRoundPool = computed(() => {
   const query = roundKeyword.value.toLowerCase()
@@ -2739,6 +2773,7 @@ function buildRoundTableSummary(table) {
     primaryProgress: progress.primaryValue,
     secondaryProgressLabel: progress.secondaryLabel,
     secondaryProgress: progress.secondaryValue,
+    confirmationProgress: `${Number(table.confirmationConfirmedCount || 0)} / ${Number(table.confirmationRequiredCount || 0)}`,
     targetLabel: isRankingRound ? resolveTableTargetLabel(table) : '晋级',
     targetDisplay: isRankingRound && table.targetMode === 'CHAMPION'
       ? (filledCount ? '已选择' : '待选择')
@@ -3708,6 +3743,28 @@ async function completeFirstRoundAction() {
   resetForms()
   applyRoundState(targetRoundId)
   ElMessage.success('第一轮已完成，晋级池已生成')
+}
+
+async function overrideRoundScoreConfirmation() {
+  if (!competition.value?.id || !roundScoreDetailTable.value?.id) return
+  try {
+    const { value } = await ElMessageBox.prompt('请填写现场确认原因。', '现场兜底确认', {
+      confirmButtonText: '确认',
+      cancelButtonText: '取消',
+      inputPattern: /^(?!\s*$).{1,255}$/,
+      inputErrorMessage: '原因不能为空，且不能超过 255 字。',
+    })
+    const detail = await overrideRoundTableConfirmation(competition.value.id, roundScoreDetailTable.value.id, {
+      reason: String(value || '').trim(),
+    })
+    competition.value = normalizeDetail(detail)
+    resetForms()
+    applyRoundState(currentRound.value?.id, { preferredTableId: roundScoreDetailTable.value.id })
+    ElMessage.success('已记录现场确认')
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return
+    ElMessage.error(error?.message || '现场确认失败')
+  }
 }
 
 async function lockCurrentRound() {
@@ -4991,6 +5048,10 @@ svg {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 10px;
+}
+
+.confirmation-override-button {
+  width: 100%;
 }
 
 .score-detail-summary span {

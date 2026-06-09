@@ -632,6 +632,11 @@ CREATE TABLE `round_table`  (
   `target_count` int(0) NOT NULL DEFAULT 1,
   `target_mode` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
   `status` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+  `result_version` int(0) NOT NULL DEFAULT 0,
+  `confirmation_override_flag` tinyint(0) NOT NULL DEFAULT 0,
+  `confirmation_override_reason` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL,
+  `confirmation_override_by` bigint(0) NULL DEFAULT NULL,
+  `confirmation_override_time` datetime(0) NULL DEFAULT NULL,
   `sort_order` int(0) NOT NULL DEFAULT 0,
   `create_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0),
   `update_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) ON UPDATE CURRENT_TIMESTAMP(0),
@@ -688,6 +693,49 @@ CREATE TABLE `round_table_member`  (
 
 -- ----------------------------
 -- Records of round_table_member
+-- ----------------------------
+
+-- ----------------------------
+-- Table structure for round_table_confirmation
+-- ----------------------------
+DROP TABLE IF EXISTS `round_table_confirmation`;
+CREATE TABLE `round_table_confirmation`  (
+  `id` bigint(0) NOT NULL AUTO_INCREMENT,
+  `round_table_id` bigint(0) NOT NULL,
+  `judge_account_id` bigint(0) NOT NULL,
+  `result_version` int(0) NOT NULL,
+  `status` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL DEFAULT 'AGREED',
+  `confirmed_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0),
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE INDEX `uk_round_table_confirmation_version`(`round_table_id`, `judge_account_id`, `result_version`) USING BTREE,
+  INDEX `idx_round_table_confirmation_judge`(`judge_account_id`) USING BTREE
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '本桌结果评审确认' ROW_FORMAT = Dynamic;
+
+-- ----------------------------
+-- Records of round_table_confirmation
+-- ----------------------------
+
+-- ----------------------------
+-- Table structure for round_judge_ranking_draft
+-- ----------------------------
+DROP TABLE IF EXISTS `round_judge_ranking_draft`;
+CREATE TABLE `round_judge_ranking_draft`  (
+  `id` bigint(0) NOT NULL AUTO_INCREMENT,
+  `competition_id` bigint(0) NOT NULL,
+  `round_id` bigint(0) NOT NULL,
+  `round_table_id` bigint(0) NOT NULL,
+  `judge_account_id` bigint(0) NOT NULL,
+  `rankings_json` json NOT NULL,
+  `create_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0),
+  `update_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) ON UPDATE CURRENT_TIMESTAMP(0),
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE INDEX `uk_round_judge_ranking_draft`(`round_table_id`, `judge_account_id`) USING BTREE,
+  INDEX `idx_round_judge_ranking_draft_round`(`round_id`) USING BTREE,
+  INDEX `idx_round_judge_ranking_draft_judge`(`judge_account_id`) USING BTREE
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '排序轮个人参考排序' ROW_FORMAT = Dynamic;
+
+-- ----------------------------
+-- Records of round_judge_ranking_draft
 -- ----------------------------
 
 -- ----------------------------

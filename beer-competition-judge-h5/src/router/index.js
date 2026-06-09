@@ -12,6 +12,7 @@ const routes = [
   { path: '/q/:code', component: () => import('@/views/ScanResult.vue'), meta: { requiresAuth: true } },
   { path: '/scan-result/:uuid', component: () => import('@/views/ScanResult.vue'), meta: { requiresAuth: true } },
   { path: '/score/:uuid', component: () => import('@/views/Score.vue'), meta: { requiresAuth: true } },
+  { path: '/score-confirmation/:roundTableId', component: () => import('@/views/ScoreConfirmation.vue'), meta: { requiresAuth: true } },
   { path: '/ranking/:roundTableId', component: () => import('@/views/Ranking.vue'), meta: { requiresAuth: true } },
   { path: '/captain', component: () => import('@/views/Captain.vue'), meta: { requiresAuth: true } },
   { path: '/captain/:uuid', component: () => import('@/views/Captain.vue'), meta: { requiresAuth: true } },
@@ -39,6 +40,10 @@ router.beforeEach((to, from, next) => {
   }
 
   next()
+})
+
+router.afterEach(() => {
+  document.title = '评审端｜啤酒事务局'
 })
 
 export default router

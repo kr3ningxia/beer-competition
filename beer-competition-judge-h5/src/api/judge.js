@@ -162,6 +162,18 @@ export function submitRanking(roundTableId, payload) {
   return request.post(`/api/judge/round-tables/${roundTableId}/ranking`, payload)
 }
 
+export function saveRankingDraft(roundTableId, payload) {
+  return request.post(`/api/judge/round-tables/${roundTableId}/ranking-draft`, payload)
+}
+
+export function fetchScoreConfirmation(roundTableId) {
+  return request.get(`/api/judge/round-tables/${roundTableId}/score-confirmation`)
+}
+
+export function confirmScoreRoundTable(roundTableId) {
+  return request.post(`/api/judge/round-tables/${roundTableId}/score-confirmation`)
+}
+
 export async function fetchEntry(uuid) {
   const entry = await request.get(`/api/judge/entries/${uuid}`)
   return normalizeEntry(entry)
@@ -290,6 +302,7 @@ export async function fetchCaptainBoard(roundTableId) {
     entries: entriesWithScores,
     rankings: table.rankings || [],
     roundTable: table,
+    scoreConfirmation: table.scoreConfirmation || null,
   }
 }
 

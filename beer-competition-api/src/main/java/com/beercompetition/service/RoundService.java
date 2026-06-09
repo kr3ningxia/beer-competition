@@ -2,6 +2,8 @@ package com.beercompetition.service;
 
 import com.beercompetition.pojo.dto.FirstRoundCreateRequest;
 import com.beercompetition.pojo.dto.NextRoundCreateRequest;
+import com.beercompetition.pojo.dto.AdminConfirmationOverrideRequest;
+import com.beercompetition.pojo.dto.RankingDraftSaveRequest;
 import com.beercompetition.pojo.dto.RankingSubmitRequest;
 import com.beercompetition.pojo.dto.RoundAllocationRequest;
 import com.beercompetition.pojo.vo.CompetitionEntryVO;
@@ -9,6 +11,7 @@ import com.beercompetition.pojo.vo.CompetitionRoundVO;
 import com.beercompetition.pojo.vo.JudgeRoundTableVO;
 import com.beercompetition.pojo.vo.JudgeTaskVO;
 import com.beercompetition.pojo.vo.ResultDraftVO;
+import com.beercompetition.pojo.vo.ScoreConfirmationVO;
 
 import java.util.List;
 
@@ -44,5 +47,13 @@ public interface RoundService {
 
     void submitScoreRoundTable(Long roundTableId);
 
+    ScoreConfirmationVO getScoreConfirmation(Long roundTableId);
+
+    ScoreConfirmationVO confirmScoreRoundTable(Long roundTableId);
+
     void submitRanking(Long roundTableId, RankingSubmitRequest request);
+
+    void saveRankingDraft(Long roundTableId, RankingDraftSaveRequest request);
+
+    void overrideScoreConfirmation(Long competitionId, Long roundTableId, AdminConfirmationOverrideRequest request);
 }

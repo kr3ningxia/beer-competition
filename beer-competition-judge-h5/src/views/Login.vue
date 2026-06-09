@@ -1,7 +1,10 @@
 <template>
   <main class="login-shell">
     <section class="login-card">
-      <p class="eyebrow dark-text">啤酒大赛现场评审</p>
+      <div class="brand-lockup">
+        <img src="/brand-icon.png" alt="" aria-hidden="true">
+        <span>啤酒事务局评审端</span>
+      </div>
       <h1>评审登录</h1>
 
       <label class="field">
@@ -77,9 +80,20 @@ async function submit() {
   box-shadow: 0 22px 60px rgba(0, 0, 0, 0.28);
 }
 
-.dark-text {
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
   color: #a75517;
+  font-size: 14px;
   font-weight: 800;
+}
+
+.brand-lockup img {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
 }
 
 h1 {

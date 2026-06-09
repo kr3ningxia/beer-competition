@@ -166,7 +166,7 @@
       <section v-if="submittedEntry" class="inline-payment">
         <div class="payment-head">
           <div>
-            <span>PAYMENT</span>
+            <span>报名支付</span>
             <h3>{{ paymentPaid ? '支付成功' : '支付报名费' }}</h3>
             <p>{{ paymentPaid ? '这一款酒已经报名成功，可以继续下载标签并填写送样信息。' : '当前使用模拟收款，后续接入微信支付后会在这里拉起微信支付。' }}</p>
           </div>
@@ -208,7 +208,7 @@
 
     <aside v-if="selectedCompetition" class="preview-card">
       <div class="preview-label">
-        <span>BREWER ENTRY RECEIPT</span>
+        <span>报名核对</span>
         <h3>报名核对单</h3>
         <template v-if="previewReady">
           <div class="receipt-line" />

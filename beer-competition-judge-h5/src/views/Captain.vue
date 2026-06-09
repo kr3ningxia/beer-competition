@@ -13,6 +13,10 @@
           <span>已选晋级</span>
           <strong>{{ initialBoardLoading ? '- / -' : `${advancedUuids.length} / ${advanceTargetCount}` }}</strong>
         </div>
+        <div>
+          <span>同桌确认</span>
+          <strong>{{ initialBoardLoading ? '- / -' : confirmationProgressText }}</strong>
+        </div>
       </div>
     </section>
 
@@ -222,6 +226,11 @@ const readyFinalizeEntries = computed(() => boardEntries.value.filter((item) => 
 const readyFinalizeCount = computed(() => readyFinalizeEntries.value.length)
 const pendingTableScoreCount = computed(() => boardEntries.value.reduce((sum, item) => sum + entryMissingScoreCount(item), 0))
 const initialBoardLoading = computed(() => loadingBoard.value && !board.value)
+const scoreConfirmation = computed(() => board.value?.scoreConfirmation || board.value?.roundTable?.scoreConfirmation || null)
+const confirmationConfirmedCount = computed(() => Number(scoreConfirmation.value?.confirmedCount ?? board.value?.roundTable?.confirmationConfirmedCount ?? 0))
+const confirmationRequiredCount = computed(() => Number(scoreConfirmation.value?.requiredCount ?? board.value?.roundTable?.confirmationRequiredCount ?? 0))
+const confirmationReady = computed(() => Boolean(scoreConfirmation.value?.overrideFlag || board.value?.roundTable?.confirmationOverrideFlag || confirmationConfirmedCount.value >= confirmationRequiredCount.value))
+const confirmationProgressText = computed(() => `${confirmationConfirmedCount.value} / ${confirmationRequiredCount.value}`)
 const advanceTargetCount = computed(() => Number(board.value?.roundTable?.targetCount || 0) || '-')
 const numericAdvanceTarget = computed(() => Number(board.value?.roundTable?.targetCount || 0))
 const tableReadyForReview = computed(() => {
@@ -319,6 +328,7 @@ const canSubmitTableResult = computed(() => (
   tableReadyForReview.value
   && !tableSubmitted.value
   && Boolean(board.value?.roundTable?.canSubmitTableScore)
+  && confirmationReady.value
   && !submittingTable.value
 ))
 const tableSubmitButtonText = computed(() => {
@@ -328,6 +338,8 @@ const tableSubmitButtonText = computed(() => {
 })
 const tableSubmitHint = computed(() => {
   if (tableSubmitted.value) return '本桌结果已提交，等待主办方确认轮次。'
+  if (tableReadyForReview.value && !confirmationReady.value) return `等待同桌评审确认（${confirmationProgressText.value}）。`
+  if (tableReadyForReview.value && (scoreConfirmation.value?.overrideFlag || board.value?.roundTable?.confirmationOverrideFlag)) return '现场确认通过，可提交。'
   if (tableReadyForReview.value && !board.value?.roundTable?.canSubmitTableScore) return '当前账号不能提交本桌结果。'
   return ''
 })

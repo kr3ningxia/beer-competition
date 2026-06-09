@@ -156,6 +156,10 @@ export function lockRound(competitionId, roundId) {
   return request.post(`/api/admin/competitions/${competitionId}/rounds/${roundId}/lock`, {}, { authScope: 'admin' })
 }
 
+export function overrideRoundTableConfirmation(competitionId, roundTableId, payload) {
+  return request.post(`/api/admin/competitions/${competitionId}/round-tables/${roundTableId}/confirmation-override`, payload, { authScope: 'admin' })
+}
+
 export function publishCompetitionResults(competitionId) {
   return request.post(`/api/admin/competitions/${competitionId}/results/publish`, {}, { authScope: 'admin' })
 }

@@ -4,11 +4,11 @@
       <div class="header-inner">
         <RouterLink class="brand" to="/portal/home" aria-label="赛事首页">
           <span class="brand-mark">
-            <CoffeeCup />
+            <img src="/brand-icon.png" alt="" aria-hidden="true">
           </span>
           <span>
-            <strong>BREWER ENTRY</strong>
-            <small>精酿啤酒大赛</small>
+            <strong>啤酒事务局</strong>
+            <small>参赛平台</small>
           </span>
         </RouterLink>
 
@@ -50,7 +50,6 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
   CircleCheck,
-  CoffeeCup,
   Document,
   Medal,
   Tickets,
@@ -205,10 +204,16 @@ onUnmounted(() => {
   box-shadow: inset 0 -7px 0 rgba(74, 45, 16, 0.16);
 }
 
-.brand-mark svg,
+.brand-mark img,
 .nav-item svg {
   width: 20px;
   height: 20px;
+}
+
+.brand-mark img {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
 }
 
 .brand strong {

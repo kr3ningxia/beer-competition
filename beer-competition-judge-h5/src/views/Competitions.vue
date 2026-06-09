@@ -19,6 +19,7 @@
         <span>已排序 <strong>{{ rankingFilledCount }}/{{ rankingSlots.length }}</strong></span>
         </template>
         <span v-else>{{ progressLabel }} <strong>{{ progressCount }}</strong></span>
+        <span v-if="scoreConfirmationVisible">确认 <strong>{{ confirmationProgressText }}</strong></span>
       </div>
     </section>
 
@@ -62,6 +63,19 @@
     </template>
 
     <template v-else>
+    <section v-if="scoreConfirmationVisible" :class="['card', 'confirmation-task-card', { done: scoreConfirmation?.mineConfirmed }]">
+      <div class="split">
+        <div>
+          <h2 class="section-title compact">{{ scoreConfirmation.mineConfirmed ? '本桌结果已确认' : '本桌结果待确认' }}</h2>
+          <p class="task-hint">{{ scoreConfirmationHint }}</p>
+        </div>
+        <span :class="['pill', scoreConfirmation.mineConfirmed ? 'status-ok' : 'status-warn']">{{ confirmationProgressText }}</span>
+      </div>
+      <button class="scan-button confirmation-button" type="button" @click="router.push(`/score-confirmation/${current.roundTableId}`)">
+        {{ scoreConfirmation.mineConfirmed ? '查看本桌结果' : '去确认本桌结果' }}
+      </button>
+    </section>
+
     <section class="card action-card">
       <div class="split action-head">
         <h2 class="section-title compact">{{ isScoreRoundCaptain ? '扫码评酒' : '扫码或输入编号' }}</h2>
@@ -183,6 +197,7 @@ const current = ref(null)
 const entries = ref([])
 const captainBoard = ref(null)
 const rankingSlots = ref([])
+const scoreConfirmation = ref(null)
 const scannerOpen = ref(false)
 const manualCode = ref('')
 const scannerMessage = ref('将二维码放入取景框内')
@@ -207,6 +222,17 @@ const myPendingScoreCount = computed(() => entries.value.filter((entry) => !entr
 const readyFinalizeCount = computed(() => entries.value.filter((entry) => readyForFinalize(entry)).length)
 const pendingTableScoreCount = computed(() => entries.value.reduce((sum, entry) => sum + entryMissingScoreCount(entry), 0))
 const rankingFilledCount = computed(() => rankingSlots.value.filter((slot) => slot.beerEntryId).length)
+const scoreConfirmationVisible = computed(() => (
+  !isCaptain.value
+  && !isRankingRound.value
+  && Boolean(scoreConfirmation.value?.readyForConfirmation)
+))
+const confirmationProgressText = computed(() => `${scoreConfirmation.value?.confirmedCount || 0}/${scoreConfirmation.value?.requiredCount || 0}`)
+const scoreConfirmationHint = computed(() => (
+  scoreConfirmation.value?.mineConfirmed
+    ? '你已确认本桌结果，等待桌长最终提交。'
+    : '桌长已完成本桌结果，请核对共识分、评语和晋级名单。'
+))
 const progressLabel = computed(() => (isCaptain.value ? '我的评分' : '我的进度'))
 const progressCount = computed(() => (
   isCaptain.value
@@ -438,6 +464,7 @@ onMounted(async () => {
     current.value = selectCurrentTask(competitions)
     captainBoard.value = null
     rankingSlots.value = []
+    scoreConfirmation.value = null
     if (!current.value) {
       entries.value = []
       return
@@ -456,6 +483,7 @@ onMounted(async () => {
           fetchMyScores(),
         ])
       rankingSlots.value = table.rankings || []
+      scoreConfirmation.value = table.scoreConfirmation || null
       const myScoredUuids = new Set(myScores.map((score) => score.beerUuid))
       entries.value = (table.entries || []).map((entry) => ({
         ...entry,
@@ -553,8 +581,25 @@ onBeforeUnmount(() => {
   margin-top: 12px;
 }
 
+.confirmation-task-card {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+  border-color: #f3c04f;
+  background: #fffaf0;
+}
+
+.confirmation-task-card.done {
+  border-color: #abefc6;
+  background: #f0fdf4;
+}
+
 .ranking-button {
   background: #1f2a37;
+}
+
+.confirmation-button {
+  background: #9a5b26;
 }
 
 .empty-action {

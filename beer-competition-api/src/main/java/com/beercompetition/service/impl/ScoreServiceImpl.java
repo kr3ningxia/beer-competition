@@ -1,6 +1,7 @@
 package com.beercompetition.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ForbiddenException;
@@ -57,6 +58,7 @@ import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -236,6 +238,8 @@ public class ScoreServiceImpl implements ScoreService {
                 .eq(ScoreRecord::getBeerEntryId, entry.getId())
                 .eq(ScoreRecord::getJudgeAccountId, BaseContext.getCurrentId())
                 .eq(ScoreRecord::getFinalFlag, 1));
+        String nextDimensionsJson = writeDimensions(request.getDimensions());
+        boolean changed = finalRecord == null || finalScoreChanged(finalRecord, nextDimensionsJson, request);
         if (finalRecord == null) {
             finalRecord = ScoreRecord.builder()
                     .competitionId(entry.getCompetitionId())
@@ -246,7 +250,7 @@ public class ScoreServiceImpl implements ScoreService {
                     .finalFlag(1)
                     .build();
         }
-        finalRecord.setDimensionsJson(writeDimensions(request.getDimensions()));
+        finalRecord.setDimensionsJson(nextDimensionsJson);
         finalRecord.setTotalScore(request.getConsensusScore());
         finalRecord.setConsensusScore(request.getConsensusScore());
         finalRecord.setComments(request.getComments());
@@ -264,7 +268,42 @@ public class ScoreServiceImpl implements ScoreService {
 
         // 3) 同步第一轮晋级状态
         syncFirstRoundAdvance(roundEntry, finalRecord);
+        if (changed) {
+            bumpRoundTableResultVersion(roundEntry.getRoundTableId());
+        }
         return toScoreRecordVO(scoreRecordMapper.selectById(finalRecord.getId()));
+    }
+
+    private boolean finalScoreChanged(ScoreRecord current, String nextDimensionsJson, TableScoreFinalizeRequest request) {
+        return !Objects.equals(current.getDimensionsJson(), nextDimensionsJson)
+                || compareDecimal(current.getConsensusScore(), request.getConsensusScore()) != 0
+                || compareDecimal(current.getTotalScore(), request.getConsensusScore()) != 0
+                || !Objects.equals(String.valueOf(current.getComments() == null ? "" : current.getComments()).trim(), request.getComments().trim())
+                || !Objects.equals(Objects.equals(current.getAdvancedFlag(), FLAG_TRUE), Boolean.TRUE.equals(request.getAdvanced()));
+    }
+
+    private int compareDecimal(BigDecimal left, BigDecimal right) {
+        if (left == null && right == null) {
+            return 0;
+        }
+        if (left == null || right == null) {
+            return -1;
+        }
+        return left.compareTo(right);
+    }
+
+    private void bumpRoundTableResultVersion(Long roundTableId) {
+        RoundTable table = roundTableMapper.selectById(roundTableId);
+        if (table == null) {
+            return;
+        }
+        roundTableMapper.update(null, new LambdaUpdateWrapper<RoundTable>()
+                .eq(RoundTable::getId, roundTableId)
+                .set(RoundTable::getResultVersion, (table.getResultVersion() == null ? 0 : table.getResultVersion()) + 1)
+                .set(RoundTable::getConfirmationOverrideFlag, FLAG_FALSE)
+                .set(RoundTable::getConfirmationOverrideReason, null)
+                .set(RoundTable::getConfirmationOverrideBy, null)
+                .set(RoundTable::getConfirmationOverrideTime, null));
     }
 
     private void requireAllTableScoresSubmitted(RoundTableEntry roundEntry) {

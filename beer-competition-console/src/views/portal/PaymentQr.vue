@@ -2,7 +2,7 @@
   <div class="payment-page">
     <section class="page-head brewer-card">
       <div class="page-title">
-        <span class="section-kicker">BREWER ENTRY DELIVERY</span>
+        <span class="section-kicker">寄样办理</span>
         <h1>下载标签并提交寄样</h1>
         <p>{{ currentAction.description }}</p>
       </div>
@@ -27,7 +27,7 @@
       <aside class="entry-panel brewer-card">
         <div class="panel-head compact-head">
           <div>
-            <span class="section-kicker">MY ENTRIES</span>
+            <span class="section-kicker">我的酒款</span>
             <h2>报名酒款</h2>
           </div>
         </div>
@@ -59,7 +59,7 @@
       <main v-if="selectedEntry" class="task-panel">
         <section class="current-card brewer-card">
           <div>
-            <span class="section-kicker">CURRENT ENTRY</span>
+            <span class="section-kicker">当前酒款</span>
             <h2>{{ selectedEntry.name }}</h2>
             <p>{{ entryMetaLine(selectedEntry) }}</p>
           </div>
@@ -72,7 +72,7 @@
         <section v-if="showPaymentCard" class="payment-card brewer-card">
           <div class="card-head">
             <div>
-              <span class="section-kicker">PAYMENT</span>
+              <span class="section-kicker">报名支付</span>
               <h3>补缴报名费</h3>
               <p>这款酒还未完成支付，支付成功后开放标签下载和寄样信息填写。</p>
             </div>

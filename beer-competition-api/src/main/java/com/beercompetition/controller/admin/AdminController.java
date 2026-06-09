@@ -13,6 +13,7 @@ import com.beercompetition.pojo.dto.FirstRoundCreateRequest;
 import com.beercompetition.pojo.dto.AwardConfirmRequest;
 import com.beercompetition.pojo.dto.AdminJudgeStatusUpdateRequest;
 import com.beercompetition.pojo.dto.AdminJudgeUpdateRequest;
+import com.beercompetition.pojo.dto.AdminConfirmationOverrideRequest;
 import com.beercompetition.pojo.dto.AdminJudgePhoneUpdateRequest;
 import com.beercompetition.pojo.dto.JudgeAssignmentCreateRequest;
 import com.beercompetition.pojo.dto.JudgeAssignmentBatchUpdateRequest;
@@ -218,6 +219,14 @@ public class AdminController {
     @PostMapping("/competitions/{id}/rounds/{roundId}/lock")
     public Result<CompetitionDetailVO> lockRound(@PathVariable Long id, @PathVariable Long roundId) {
         roundService.lockRound(id, roundId);
+        return Result.success(competitionService.getCompetitionDetail(id));
+    }
+
+    @PostMapping("/competitions/{id}/round-tables/{roundTableId}/confirmation-override")
+    public Result<CompetitionDetailVO> overrideRoundTableConfirmation(@PathVariable Long id,
+                                                                      @PathVariable Long roundTableId,
+                                                                      @RequestBody @Valid AdminConfirmationOverrideRequest request) {
+        roundService.overrideScoreConfirmation(id, roundTableId, request);
         return Result.success(competitionService.getCompetitionDetail(id));
     }
 

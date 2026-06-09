@@ -3,10 +3,10 @@
     <aside class="sidebar">
       <div class="brand">
         <span class="brand-mark">
-          <CoffeeCup />
+          <img src="/brand-icon.png" alt="" aria-hidden="true">
         </span>
         <div>
-          <h2>Beer Competition Console</h2>
+          <h2>啤酒事务局赛事后台</h2>
         </div>
       </div>
 
@@ -49,7 +49,6 @@
 import { computed } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
-  CoffeeCup,
   DataBoard,
   Document,
   Files,
@@ -143,9 +142,10 @@ function logout() {
   background: rgba(216, 169, 53, 0.1);
 }
 
-.brand-mark svg {
-  width: 25px;
-  height: 25px;
+.brand-mark img {
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
 }
 
 .brand h2 {

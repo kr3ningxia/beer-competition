@@ -20,6 +20,8 @@ public class JudgeRoundTableVO {
     private String status;
     private Boolean canSubmitTableScore;
     private Boolean canSubmitRanking;
+    private ScoreConfirmationVO scoreConfirmation;
     private List<CompetitionEntryVO> entries;
     private List<RoundRankingSlotVO> rankings;
+    private List<RoundRankingSlotVO> myRankingDraft;
 }

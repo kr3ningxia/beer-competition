@@ -405,7 +405,7 @@ public class EntryServiceImpl implements EntryService {
         account.setWechat(normalizeNullable(request.getWechat()));
         portalAccountMapper.updateById(account);
 
-        brewery.setCompanyName(normalizeRequired(request.getCompanyName(), "厂牌名称不能为空"));
+        brewery.setCompanyName(normalizeRequired(request.getCompanyName(), "品牌名不能为空"));
         brewery.setContactName(normalizeRequired(request.getContactName(), "联系人不能为空"));
         brewery.setWechat(normalizeNullable(request.getWechat()));
         breweryMapper.updateById(brewery);

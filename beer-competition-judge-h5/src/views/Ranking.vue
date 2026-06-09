@@ -9,19 +9,29 @@
 
     <section class="card">
       <div class="split">
-        <h2 class="section-title compact">排序结果</h2>
-        <span :class="['pill', submitted ? 'status-ok' : '']">{{ rankingStatusText }}</span>
+        <h2 class="section-title compact">{{ canSubmitFinal ? '本桌最终排序' : '我的参考排序' }}</h2>
+        <span :class="['pill', submitted || draftSaved ? 'status-ok' : 'status-warn']">{{ rankingStatusText }}</span>
       </div>
+
       <div class="slot-list">
-        <div v-for="slot in slots" :key="slot.rank" class="slot-row">
-          <label :for="`ranking-slot-${slot.rank}`">{{ slot.label }}</label>
-          <div class="slot-control">
+        <article
+          v-for="slot in slots"
+          :key="slot.rank"
+          :data-rank="slot.rank"
+          :class="['slot-drop', { filled: slot.beerEntryId, active: activeDropRank === slot.rank, picked: pickedEntryId && !slot.beerEntryId }]"
+          @dragover.prevent="activeDropRank = slot.rank"
+          @dragleave="activeDropRank = null"
+          @drop.prevent="dropEntryOnSlot(slot)"
+          @click="assignPickedEntry(slot)"
+        >
+          <div class="slot-label">
+            <span>{{ slot.label }}</span>
             <button
               v-if="canEdit"
               class="slot-scan-button"
               type="button"
               :aria-label="`扫码指定${slot.label}`"
-              @click="openSlotScanner(slot)"
+              @click.stop="openSlotScanner(slot)"
             >
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M4 4h6v6H4V4Z" />
@@ -33,36 +43,51 @@
                 <path d="M18 18h2v2h-2v-2Z" />
               </svg>
             </button>
-            <select
-              :id="`ranking-slot-${slot.rank}`"
-              v-model="slot.beerEntryId"
-              :disabled="!canEdit"
-              @change="handleSlotSelection(slot)"
-            >
-              <option :value="null">{{ table?.targetMode === 'MEDALS' ? '留空' : '待选择' }}</option>
-              <option v-for="entry in entries" :key="entry.id" :value="entry.id">
-                {{ displayShortCode(entry) }} · {{ entry.categoryName }} · {{ entry.style }}
-              </option>
-            </select>
           </div>
-        </div>
+          <div v-if="findEntryById(slot.beerEntryId)" class="slot-entry">
+            <strong>{{ displayShortCode(findEntryById(slot.beerEntryId)) }}</strong>
+            <small>{{ entryMeta(findEntryById(slot.beerEntryId)) }}</small>
+            <button v-if="canEdit" type="button" @click.stop="clearSlot(slot)">移除</button>
+          </div>
+          <div v-else class="slot-empty">
+            <span>+</span>
+            <strong>{{ pickedEntryId ? '放到这里' : '拖入酒款' }}</strong>
+          </div>
+        </article>
       </div>
-      <button v-if="canEdit" class="button primary full ranking-submit" type="button" :disabled="!canSubmit" @click="openSubmitConfirm">
-        {{ submitted ? '重新提交排序' : '提交排序' }}
+
+      <button v-if="canSubmitFinal" class="button primary full ranking-submit" type="button" :disabled="!canSubmit" @click="openSubmitConfirm">
+        {{ submitted ? '重新提交排序' : '提交本桌排序' }}
+      </button>
+      <button v-else-if="canEdit" class="button primary full ranking-submit" type="button" :disabled="savingDraft" @click="saveDraft">
+        {{ savingDraft ? '保存中' : '保存我的参考排序' }}
       </button>
       <p v-else class="readonly-note">{{ readonlyText }}</p>
+      <p v-if="!canSubmitFinal" class="readonly-note">仅供本人参考，不作为本桌提交结果。</p>
       <p v-if="message" class="message">{{ message }}</p>
     </section>
 
     <section class="card">
       <div class="split">
-        <h2 class="section-title compact">候选任务</h2>
+        <h2 class="section-title compact">候选酒款</h2>
         <span class="pill">{{ entries.length }} 款</span>
       </div>
       <div class="entry-list">
-        <article v-for="entry in entries" :key="entry.id" class="entry-row">
+        <article
+          v-for="entry in entries"
+          :key="entry.id"
+          :class="['entry-row', { selected: pickedEntryId === entry.id, used: isEntryUsed(entry.id) }]"
+          draggable="true"
+          @dragstart="dragEntry(entry)"
+          @dragend="endDrag"
+          @pointerdown="startPointerDrag(entry, $event)"
+          @pointermove="movePointerDrag($event)"
+          @pointerup="endPointerDrag($event)"
+          @pointercancel="cancelPointerDrag"
+          @click="pickEntry(entry)"
+        >
           <strong>{{ displayShortCode(entry) }}</strong>
-          <small>{{ entry.categoryName }} · {{ entry.style }}</small>
+          <small>{{ entryMeta(entry) }}</small>
         </article>
       </div>
     </section>
@@ -120,7 +145,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Html5Qrcode } from 'html5-qrcode'
-import { fetchRoundTable, submitRanking } from '@/api/judge'
+import { fetchRoundTable, saveRankingDraft, submitRanking } from '@/api/judge'
 
 const route = useRoute()
 const router = useRouter()
@@ -134,27 +159,36 @@ const activeSlot = ref(null)
 const manualCode = ref('')
 const confirmOpen = ref(false)
 const submitting = ref(false)
+const savingDraft = ref(false)
 const submitted = ref(false)
+const draftSaved = ref(false)
 const submitError = ref('')
+const draggedEntryId = ref(null)
+const pickedEntryId = ref(null)
+const activeDropRank = ref(null)
+const pointerEntryId = ref(null)
+const pointerStart = ref(null)
 let qrReader = null
 let scanLocked = false
 
-const filledCount = computed(() => slots.value.filter((slot) => slot.beerEntryId).length)
-const canEdit = computed(() => Boolean(table.value?.canSubmitRanking) && !submitting.value)
+const canSubmitFinal = computed(() => Boolean(table.value?.canSubmitRanking))
+const canEdit = computed(() => table.value?.status !== 'LOCKED' && !submitting.value && !savingDraft.value)
 const isMedalMode = computed(() => table.value?.targetMode === 'MEDALS')
+const filledCount = computed(() => slots.value.filter((slot) => slot.beerEntryId).length)
 const canSubmit = computed(() => {
-  if (!canEdit.value || !slots.value.length) return false
+  if (!canSubmitFinal.value || !canEdit.value || !slots.value.length) return false
   return isMedalMode.value ? filledCount.value > 0 : filledCount.value === slots.value.length
 })
 const rankingStatusText = computed(() => {
   if (table.value?.status === 'LOCKED') return '已锁定'
-  if (submitted.value) return '待确认'
-  return table.value?.targetMode || 'TOP_N'
+  if (canSubmitFinal.value && submitted.value) return '待确认'
+  if (!canSubmitFinal.value && draftSaved.value) return '已保存'
+  return `${filledCount.value}/${slots.value.length}`
 })
 const readonlyText = computed(() => (
   table.value?.status === 'LOCKED'
     ? '本桌排序已锁定。'
-    : '本轮由桌长提交排序结果，你可以查看本桌候选和已提交结果。'
+    : '当前不能调整排序。'
 ))
 const selectedResults = computed(() => slots.value.map((slot) => {
   const entry = findEntryById(slot.beerEntryId)
@@ -173,26 +207,106 @@ const submitResults = computed(() => slots.value
   })))
 const rankingModeText = computed(() => {
   const count = table.value?.targetCount || slots.value.length || 0
-  if (table.value?.targetMode === 'MEDALS') return '组别决战：确认奖项，未设置的奖项可留空'
-  if (table.value?.targetMode === 'CHAMPION') return '总冠军轮：确认全场总冠军'
-  return `继续筛选：选择并排序前 ${count} 款`
+  if (canSubmitFinal.value) {
+    if (table.value?.targetMode === 'MEDALS') return '组别决战：确认奖项，未设置的奖项可留空'
+    if (table.value?.targetMode === 'CHAMPION') return '总冠军轮：确认全场总冠军'
+    return `继续筛选：选择并排序前 ${count} 款`
+  }
+  return '记录自己的排序，仅供本人参考'
 })
 
 function displayShortCode(entry) {
   return entry?.shortCode || '编号'
 }
 
+function entryMeta(entry) {
+  return [entry?.categoryName, entry?.style].filter(Boolean).join(' · ') || '-'
+}
+
 function findEntryById(id) {
   return entries.value.find((entry) => String(entry.id) === String(id)) || null
 }
 
-function handleSlotSelection(selectedSlot) {
-  if (!selectedSlot?.beerEntryId) return
-  slots.value.forEach((slot) => {
-    if (slot.rank !== selectedSlot.rank && slot.beerEntryId === selectedSlot.beerEntryId) {
-      slot.beerEntryId = null
-    }
-  })
+function isEntryUsed(entryId) {
+  return slots.value.some((slot) => String(slot.beerEntryId) === String(entryId))
+}
+
+function pickEntry(entry) {
+  if (!canEdit.value) return
+  pickedEntryId.value = pickedEntryId.value === entry.id ? null : entry.id
+}
+
+function assignPickedEntry(slot) {
+  if (!canEdit.value || !pickedEntryId.value) return
+  assignEntryToSlot(pickedEntryId.value, slot)
+  pickedEntryId.value = null
+}
+
+function dragEntry(entry) {
+  if (!canEdit.value) return
+  draggedEntryId.value = entry.id
+}
+
+function endDrag() {
+  draggedEntryId.value = null
+  activeDropRank.value = null
+}
+
+function dropEntryOnSlot(slot) {
+  if (!canEdit.value || !draggedEntryId.value) return
+  assignEntryToSlot(draggedEntryId.value, slot)
+  endDrag()
+}
+
+function startPointerDrag(entry, event) {
+  if (!canEdit.value) return
+  pointerEntryId.value = entry.id
+  pointerStart.value = { x: event.clientX, y: event.clientY }
+}
+
+function movePointerDrag(event) {
+  if (!pointerEntryId.value || !pointerStart.value) return
+  const moved = Math.abs(event.clientX - pointerStart.value.x) + Math.abs(event.clientY - pointerStart.value.y)
+  if (moved < 10) return
+  draggedEntryId.value = pointerEntryId.value
+  const target = document.elementFromPoint(event.clientX, event.clientY)?.closest?.('[data-rank]')
+  activeDropRank.value = target ? Number(target.dataset.rank) : null
+}
+
+function endPointerDrag(event) {
+  if (!draggedEntryId.value) {
+    pointerEntryId.value = null
+    pointerStart.value = null
+    return
+  }
+  const target = document.elementFromPoint(event.clientX, event.clientY)?.closest?.('[data-rank]')
+  const slot = target ? slots.value.find((item) => item.rank === Number(target.dataset.rank)) : null
+  if (slot) assignEntryToSlot(draggedEntryId.value, slot)
+  cancelPointerDrag()
+}
+
+function cancelPointerDrag() {
+  pointerEntryId.value = null
+  pointerStart.value = null
+  draggedEntryId.value = null
+  activeDropRank.value = null
+}
+
+function assignEntryToSlot(entryId, targetSlot) {
+  const sourceSlot = slots.value.find((slot) => String(slot.beerEntryId) === String(entryId))
+  const replacedEntryId = targetSlot.beerEntryId
+  if (sourceSlot && sourceSlot.rank !== targetSlot.rank) {
+    sourceSlot.beerEntryId = replacedEntryId || null
+  }
+  targetSlot.beerEntryId = entryId
+  draftSaved.value = false
+  if (canSubmitFinal.value) submitted.value = false
+}
+
+function clearSlot(slot) {
+  slot.beerEntryId = null
+  draftSaved.value = false
+  if (canSubmitFinal.value) submitted.value = false
 }
 
 async function openSlotScanner(slot) {
@@ -259,8 +373,7 @@ function assignCodeToActiveSlot(value) {
     scannerMessage.value = '这款酒不在本桌候选中。'
     return false
   }
-  slot.beerEntryId = entry.id
-  handleSlotSelection(slot)
+  assignEntryToSlot(entry.id, slot)
   message.value = `${slot.label}已选 ${entry.shortCode || '该酒款'}`
   stopSlotScanner()
   return true
@@ -318,14 +431,33 @@ async function confirmSubmit() {
   }
 }
 
+async function saveDraft() {
+  if (!canEdit.value || savingDraft.value) return
+  savingDraft.value = true
+  try {
+    await saveRankingDraft(route.params.roundTableId, {
+      results: submitResults.value,
+    })
+    draftSaved.value = true
+    message.value = '我的参考排序已保存'
+  } catch {
+    message.value = '保存失败，请稍后重试。'
+  } finally {
+    savingDraft.value = false
+  }
+}
+
 onMounted(async () => {
   table.value = await fetchRoundTable(route.params.roundTableId)
   entries.value = table.value.entries || []
-  slots.value = (table.value.rankings || []).map((slot) => ({
+  const sourceSlots = table.value.canSubmitRanking ? table.value.rankings : table.value.myRankingDraft
+  slots.value = (sourceSlots || table.value.rankings || []).map((slot) => ({
     ...slot,
     beerEntryId: slot.beerEntryId || null,
   }))
-  submitted.value = ['SUBMITTED', 'LOCKED'].includes(table.value?.status) || slots.value.some((slot) => slot.beerEntryId)
+  submitted.value = table.value.canSubmitRanking
+    && (['SUBMITTED', 'LOCKED'].includes(table.value?.status) || slots.value.some((slot) => slot.beerEntryId))
+  draftSaved.value = !table.value.canSubmitRanking && slots.value.some((slot) => slot.beerEntryId)
 })
 
 onBeforeUnmount(() => {
@@ -343,11 +475,6 @@ onBeforeUnmount(() => {
   font-weight: 750;
 }
 
-.entry-row strong,
-.entry-row small {
-  display: block;
-}
-
 .compact {
   margin-bottom: 0;
 }
@@ -359,45 +486,92 @@ onBeforeUnmount(() => {
   margin-top: 12px;
 }
 
-.slot-row {
+.slot-drop {
   display: grid;
-  gap: 7px;
-  color: #344054;
-  font-weight: 800;
-}
-
-.slot-row label {
-  font-size: 15px;
-}
-
-.slot-control {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 8px;
-  align-items: center;
-}
-
-.slot-control select {
-  width: 100%;
-  min-height: 44px;
-  border: 1px solid #d0d5dd;
+  gap: 10px;
+  min-height: 92px;
+  border: 1px dashed #d0d5dd;
   border-radius: 8px;
-  padding: 0 10px;
-  color: #18222f;
+  padding: 11px;
+  color: #344054;
+  background: #f8fafc;
+}
+
+.slot-drop.active,
+.slot-drop.picked {
+  border-color: #f3c04f;
+  background: #fffaf0;
+}
+
+.slot-drop.filled {
+  border-style: solid;
   background: #fff;
 }
 
-.slot-control select:disabled {
+.slot-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  color: #9a5b26;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.slot-empty {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 4px;
+  min-height: 48px;
+  color: #98a2b3;
+}
+
+.slot-empty span {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  color: #9a5b26;
+  background: #fff2cf;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.slot-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  align-items: center;
+}
+
+.slot-entry strong,
+.slot-entry small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.slot-entry small {
   color: #667085;
-  background: #f2f4f7;
+}
+
+.slot-entry button {
+  grid-row: span 2;
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 9px;
+  color: #9a3412;
+  background: #fff2e8;
+  font-weight: 850;
 }
 
 .slot-scan-button {
   display: inline-flex;
   justify-content: center;
   align-items: center;
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   border: 1px solid #d0d5dd;
   border-radius: 8px;
   color: #344054;
@@ -405,8 +579,8 @@ onBeforeUnmount(() => {
 }
 
 .slot-scan-button svg {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   fill: currentColor;
 }
 
@@ -432,11 +606,27 @@ onBeforeUnmount(() => {
   padding: 12px;
   color: #18222f;
   background: #fff;
+  touch-action: none;
+}
+
+.entry-row strong,
+.entry-row small {
+  display: block;
 }
 
 .entry-row small {
   margin-top: 5px;
   color: #667085;
+}
+
+.entry-row.selected {
+  border-color: #f3c04f;
+  background: #fffaf0;
+}
+
+.entry-row.used {
+  color: #667085;
+  background: #f9fafb;
 }
 
 .message {
@@ -447,10 +637,14 @@ onBeforeUnmount(() => {
   font-weight: 750;
 }
 
-.ranking-confirm-overlay {
+.ranking-confirm-overlay,
+.ranking-scanner-overlay {
   position: fixed;
   inset: 0;
   z-index: 60;
+}
+
+.ranking-confirm-overlay {
   display: flex;
   justify-content: center;
   align-items: center;
@@ -477,12 +671,6 @@ onBeforeUnmount(() => {
   color: #18222f;
   font-size: 20px;
   line-height: 1.25;
-}
-
-.ranking-confirm p {
-  color: #667085;
-  font-size: 14px;
-  line-height: 1.55;
 }
 
 .ranking-confirm .confirm-error {
@@ -534,9 +722,6 @@ onBeforeUnmount(() => {
 }
 
 .ranking-scanner-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
   display: flex;
   justify-content: center;
   align-items: stretch;
@@ -652,29 +837,6 @@ onBeforeUnmount(() => {
 
 .scanner-manual .button {
   min-width: 74px;
-}
-
-@media (min-width: 640px) {
-  .scanner-shell {
-    align-self: center;
-    height: min(100dvh, 920px);
-    border-inline: 1px solid rgba(255, 255, 255, 0.08);
-  }
-}
-
-@media (max-height: 720px) {
-  .scanner-shell {
-    gap: 10px;
-    padding: 14px;
-  }
-
-  .scanner-head h2 {
-    font-size: 21px;
-  }
-
-  .scanner-reader {
-    width: min(100%, 420px, max(220px, calc(100dvh - 190px)));
-  }
 }
 
 @media (max-width: 380px) {

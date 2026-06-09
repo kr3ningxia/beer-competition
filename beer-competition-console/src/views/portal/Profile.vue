@@ -17,7 +17,15 @@
         <h3 class="portal-section-title">联系人信息</h3>
         <el-form :model="profileForm" label-position="top">
           <el-form-item label="账号名称"><el-input v-model="profileForm.displayName" /></el-form-item>
-          <el-form-item label="厂牌名称"><el-input v-model="profileForm.companyName" /></el-form-item>
+          <el-form-item>
+            <template #label>
+              <span class="brand-name-label">
+                <span>品牌名</span>
+                <el-checkbox v-model="sameAsAccountName" @change="applySameAsAccountName">同账号名称</el-checkbox>
+              </span>
+            </template>
+            <el-input v-model="profileForm.companyName" :disabled="sameAsAccountName" />
+          </el-form-item>
           <el-form-item label="联系人"><el-input v-model="profileForm.contactName" /></el-form-item>
           <el-form-item label="手机号"><el-input v-model="profileForm.phone" disabled /></el-form-item>
           <el-form-item label="微信号"><el-input v-model="profileForm.wechat" /></el-form-item>
@@ -29,7 +37,7 @@
 </template>
 
 <script setup>
-import { onMounted, reactive } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { fetchPortalProfile, updatePortalProfile } from '@/api/portal'
 import { setDisplayName } from '@/utils/auth'
@@ -41,10 +49,21 @@ const profileForm = reactive({
   phone: '',
   wechat: '',
 })
+const sameAsAccountName = ref(false)
 
 onMounted(async () => {
   Object.assign(profileForm, await fetchPortalProfile())
+  sameAsAccountName.value = Boolean(profileForm.displayName && profileForm.companyName === profileForm.displayName)
 })
+
+watch(
+  () => profileForm.displayName,
+  () => {
+    if (sameAsAccountName.value) {
+      profileForm.companyName = profileForm.displayName
+    }
+  }
+)
 
 async function saveProfile() {
   const data = await updatePortalProfile({
@@ -56,6 +75,12 @@ async function saveProfile() {
   Object.assign(profileForm, data)
   setDisplayName('portal', data.displayName)
   ElMessage.success('已保存')
+}
+
+function applySameAsAccountName() {
+  if (sameAsAccountName.value) {
+    profileForm.companyName = profileForm.displayName
+  }
 }
 </script>
 
@@ -123,6 +148,20 @@ async function saveProfile() {
 
 .profile-card {
   padding: 24px;
+}
+
+.brand-name-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.brand-name-label :deep(.el-checkbox) {
+  height: auto;
+  margin-right: 0;
+  font-weight: 500;
 }
 
 .profile-card :deep(.el-input__wrapper),
