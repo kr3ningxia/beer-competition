@@ -32,34 +32,71 @@
           <header class="section-head">
             <h2>基础信息</h2>
           </header>
-          <div class="form-grid two">
-            <label>
+          <div class="base-info-groups">
+            <label class="wide-field">
               <span>比赛名称</span>
               <input v-model.trim="draft.name" placeholder="例如 2026 中国精酿啤酒大赛" />
             </label>
-            <label>
-              <span>届次</span>
-              <input v-model.trim="draft.edition" placeholder="例如 第三批次" />
-            </label>
-            <label>
-              <span>比赛日期</span>
-              <input v-model="draft.date" type="date" />
-            </label>
-            <label>
-              <span>报名开始时间</span>
-              <input v-model="draft.registrationStart" type="datetime-local" />
-            </label>
-            <label>
-              <span>报名截止时间</span>
-              <input v-model="draft.registrationDeadline" type="datetime-local" />
-            </label>
-            <label>
-              <span>报名费</span>
-              <div class="fee-field">
-                <input v-model.number="draft.entryFee" min="0" type="number" />
-                <span>元 / 款</span>
+
+            <section class="form-subgroup">
+              <h3>赛事属性</h3>
+              <div class="form-grid two">
+                <label>
+                  <span>比赛日期</span>
+                  <input v-model="draft.date" type="date" />
+                </label>
               </div>
-            </label>
+            </section>
+
+            <section class="form-subgroup">
+              <h3>报名时间</h3>
+              <div class="form-grid two">
+                <label>
+                  <span>报名开始时间</span>
+                  <input v-model="draft.registrationStart" type="datetime-local" />
+                </label>
+                <label>
+                  <span>报名截止时间</span>
+                  <input v-model="draft.registrationDeadline" type="datetime-local" />
+                </label>
+              </div>
+            </section>
+
+            <section class="form-subgroup">
+              <h3>费用规则</h3>
+              <div class="form-grid two">
+                <label>
+                  <span>普通报名费</span>
+                  <div class="fee-field">
+                    <input v-model.number="draft.entryFee" min="0" type="number" />
+                    <span>元 / 款</span>
+                  </div>
+                </label>
+                <label>
+                  <span>早鸟价</span>
+                  <div class="fee-field">
+                    <input v-model.number="draft.earlyBirdFee" min="0" type="number" />
+                    <span>元 / 款</span>
+                  </div>
+                </label>
+                <label>
+                  <span>早鸟截止时间</span>
+                  <input v-model="draft.earlyBirdDeadline" type="datetime-local" />
+                </label>
+              </div>
+            </section>
+
+            <section class="form-subgroup">
+              <h3>赛事展示</h3>
+              <label class="wide-field">
+                <span>赛事简介</span>
+                <textarea v-model.trim="draft.description" rows="3" maxlength="1000" placeholder="面向厂商说明本场赛事定位、适合提交的酒款或报名重点" />
+              </label>
+              <label class="wide-field">
+                <span>参赛细则链接</span>
+                <input v-model.trim="draft.rulesUrl" placeholder="例如 https://mp.weixin.qq.com/s/..." />
+              </label>
+            </section>
           </div>
         </section>
 
@@ -69,12 +106,6 @@
           </header>
           <div class="logistics-layout">
             <section class="entry-section logistics-section">
-              <div class="card-title">
-                <div>
-                  <h3>酒样接收</h3>
-                  <small>厂商付款确认后按这里的地址和要求寄样。</small>
-                </div>
-              </div>
               <div class="form-grid two">
                 <label>
                   <span>送样方式</span>
@@ -347,10 +378,6 @@
                   <dd>{{ draft.name || '-' }}</dd>
                 </div>
                 <div>
-                  <dt>届次</dt>
-                  <dd>{{ draft.edition || '-' }}</dd>
-                </div>
-                <div>
                   <dt>比赛日期</dt>
                   <dd>{{ draft.date || '-' }}</dd>
                 </div>
@@ -361,6 +388,22 @@
                 <div>
                   <dt>报名费</dt>
                   <dd>{{ draft.entryFee }} 元 / 款</dd>
+                </div>
+                <div>
+                  <dt>早鸟价</dt>
+                  <dd>{{ draft.earlyBirdFee ? `${draft.earlyBirdFee} 元 / 款` : '-' }}</dd>
+                </div>
+                <div>
+                  <dt>早鸟截止</dt>
+                  <dd>{{ formatDateTime(draft.earlyBirdDeadline) }}</dd>
+                </div>
+                <div>
+                  <dt>赛事简介</dt>
+                  <dd>{{ draft.description || '-' }}</dd>
+                </div>
+                <div>
+                  <dt>参赛细则</dt>
+                  <dd>{{ draft.rulesUrl || '-' }}</dd>
                 </div>
                 <div>
                   <dt>送样方式</dt>
@@ -429,11 +472,14 @@ const fieldTypeOptions = [
 
 const draft = reactive({
   name: '2026 新建精酿啤酒赛',
-  edition: '第一批次',
   date: '2026-08-20',
   registrationStart: '2026-06-10T10:00',
   registrationDeadline: '2026-07-30T18:00',
   entryFee: 199,
+  earlyBirdFee: 159,
+  earlyBirdDeadline: '2026-06-30T18:00',
+  description: '面向精酿厂牌的综合赛事，适合提交稳定量产款和年度新品。',
+  rulesUrl: 'https://mp.weixin.qq.com/s/iGxSnomHIXvdOyMO9xgd2Q',
   deliveryMethod: 'BOTH',
   sampleArrivalStart: '2026-08-10T10:00',
   sampleArrivalDeadline: '2026-08-15T18:00',
@@ -527,11 +573,14 @@ async function submitDraft() {
   try {
     const created = await createCompetition({
       name: draft.name,
-      edition: draft.edition,
       competitionDate: draft.date,
       registrationStart: toBackendDateTime(draft.registrationStart),
       registrationDeadline: toBackendDateTime(draft.registrationDeadline),
       entryFee: Number(draft.entryFee || 0),
+      earlyBirdFee: draft.earlyBirdFee === '' || draft.earlyBirdFee === null ? null : Number(draft.earlyBirdFee),
+      earlyBirdDeadline: toBackendDateTime(draft.earlyBirdDeadline),
+      description: draft.description,
+      rulesUrl: draft.rulesUrl || null,
       deliveryMethod: draft.deliveryMethod,
       sampleArrivalStart: toBackendDateTime(draft.sampleArrivalStart),
       sampleArrivalDeadline: toBackendDateTime(draft.sampleArrivalDeadline),
@@ -663,11 +712,14 @@ function getIncompleteEntryFields(source) {
 function toDraftSnapshot(source) {
   return {
     name: source.name,
-    edition: source.edition,
     date: source.date,
     registrationStart: source.registrationStart,
     registrationDeadline: source.registrationDeadline,
     entryFee: source.entryFee,
+    earlyBirdFee: source.earlyBirdFee,
+    earlyBirdDeadline: source.earlyBirdDeadline,
+    description: source.description,
+    rulesUrl: source.rulesUrl,
     deliveryMethod: source.deliveryMethod,
     sampleArrivalStart: source.sampleArrivalStart,
     sampleArrivalDeadline: source.sampleArrivalDeadline,
@@ -734,6 +786,10 @@ function isOptionalDeadlineAfterStart(start, deadline) {
   return new Date(deadline).getTime() > new Date(start).getTime()
 }
 
+function isValidHttpUrl(value) {
+  return /^https?:\/\//i.test(String(value || '').trim())
+}
+
 function deliveryMethodText(value) {
   if (value === 'EXPRESS') return '仅快递寄送'
   if (value === 'ONSITE') return '仅现场送样'
@@ -776,7 +832,14 @@ function buildReviewItems(source) {
   if (!source.registrationStart) missingBaseFields.push('报名开始')
   if (!source.registrationDeadline) missingBaseFields.push('报名截止')
   if (source.entryFee === '' || source.entryFee === null || Number(source.entryFee) < 0) missingBaseFields.push('报名费')
+  if (!source.description) missingBaseFields.push('赛事简介')
 
+  const earlyBirdIncomplete = Boolean(source.earlyBirdFee || source.earlyBirdFee === 0) !== Boolean(source.earlyBirdDeadline)
+  const earlyBirdInvalid = !earlyBirdIncomplete && source.earlyBirdDeadline
+    && (!isDeadlineAfterStart(source.registrationStart, source.earlyBirdDeadline)
+      || !isOptionalDeadlineAfterStart(source.earlyBirdDeadline, source.registrationDeadline)
+      || Number(source.earlyBirdFee) > Number(source.entryFee)
+      || Number(source.earlyBirdFee) < 0)
   const categoryNames = getCategoryNames(source)
   const duplicatedCategories = getDuplicateItems(categoryNames)
   const scoreErrors = source.scoreConfigs
@@ -807,6 +870,28 @@ function buildReviewItems(source) {
       detail: isDeadlineAfterStart(source.registrationStart, source.registrationDeadline)
         ? `截止 ${formatDateTime(source.registrationDeadline)}`
         : '报名截止需晚于报名开始',
+    },
+    {
+      key: 'earlyBird',
+      label: '早鸟价',
+      target: 'base-info',
+      status: !earlyBirdIncomplete && !earlyBirdInvalid ? 'done' : 'pending',
+      detail: earlyBirdIncomplete
+        ? '早鸟价和截止时间需要同时填写'
+        : earlyBirdInvalid
+          ? '早鸟价需不高于报名费，截止时间需在报名窗口内'
+          : source.earlyBirdFee ? `早鸟 ${source.earlyBirdFee} 元 / 款，截止 ${formatDateTime(source.earlyBirdDeadline)}` : '未设置早鸟价',
+    },
+    {
+      key: 'rulesUrl',
+      label: '参赛细则',
+      target: 'base-info',
+      status: !source.rulesUrl || isValidHttpUrl(source.rulesUrl) ? 'done' : 'pending',
+      detail: !source.rulesUrl
+        ? '未设置参赛细则链接'
+        : isValidHttpUrl(source.rulesUrl)
+          ? '已设置参赛细则链接'
+          : '参赛细则链接需以 http:// 或 https:// 开头',
     },
     {
       key: 'logistics',
@@ -1119,6 +1204,29 @@ h1 {
 .form-grid {
   display: grid;
   gap: 14px;
+}
+
+.base-info-groups {
+  display: grid;
+  gap: 18px;
+  max-width: 1000px;
+}
+
+.form-subgroup {
+  display: grid;
+  gap: 12px;
+  padding-top: 2px;
+}
+
+.form-subgroup + .form-subgroup {
+  padding-top: 16px;
+  border-top: 1px solid rgba(219, 232, 237, 0.08);
+}
+
+.form-subgroup h3 {
+  color: #c7d5db;
+  font-size: 13px;
+  line-height: 1.2;
 }
 
 .form-grid.two {

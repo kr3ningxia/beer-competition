@@ -15,7 +15,7 @@
     <section class="toolbar">
       <label class="search-box">
         <Search />
-        <input v-model.trim="keyword" placeholder="搜索比赛名称、编号、届次" />
+        <input v-model.trim="keyword" placeholder="搜索比赛名称、编号" />
       </label>
       <div class="filter-tabs" aria-label="比赛状态筛选">
         <button
@@ -37,7 +37,7 @@
             {{ statusMeta[competition.status]?.label || competition.status }}
           </span>
           <h2>{{ competition.name }}</h2>
-          <p>{{ competition.code || '未设置编号' }} · {{ competition.edition || '未设置届次' }}</p>
+          <p>{{ competition.code || '未设置编号' }}</p>
         </div>
         <dl>
           <div>
@@ -93,7 +93,7 @@ const filteredCompetitions = computed(() => {
     const matchesStatus = statusFilter.value === 'ALL' || competition.status === statusFilter.value
     const matchesKeyword =
       !query ||
-      [competition.name, competition.code, competition.edition]
+      [competition.name, competition.code]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(query))
     return matchesStatus && matchesKeyword

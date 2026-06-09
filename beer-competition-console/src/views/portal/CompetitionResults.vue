@@ -95,7 +95,6 @@ const filteredCompetitions = computed(() => {
     const haystack = [
       competition.name,
       competition.code,
-      competition.edition,
       ...(competition.entries || []).flatMap((entry) => [
         entry.beerName,
         entry.breweryName,

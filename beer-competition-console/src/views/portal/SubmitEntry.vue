@@ -33,7 +33,7 @@
         <section class="form-section">
           <div class="section-title-row">
             <h3>酒款信息</h3>
-            <span v-if="selectedCompetition?.entryFee">报名费 ¥{{ selectedCompetition.entryFee }} / 款</span>
+            <span v-if="selectedCompetition">{{ currentFeeText }}</span>
           </div>
           <el-form-item label="酒款名称" prop="name" class="full-field">
             <el-input v-model.trim="form.name" placeholder="例如：浅色拉格" />
@@ -145,6 +145,23 @@
             </el-checkbox>
           </div>
         </el-form-item>
+        <el-form-item v-if="hasRulesUrl" prop="rulesAccepted" class="confirm-item">
+          <div class="confirm-box">
+            <el-checkbox v-model="form.rulesAccepted">
+              <span class="rules-confirm-copy">
+                我已阅读并同意本次大赛
+                <a
+                  :href="selectedCompetition.rulesUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  @click.stop
+                >
+                  参赛细则
+                </a>
+              </span>
+            </el-checkbox>
+          </div>
+        </el-form-item>
 
         <div v-if="!submittedEntry" class="form-actions">
           <el-button type="primary" :loading="submittingEntry" @click="submitEntry">
@@ -243,6 +260,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { fetchPortalCompetitionDetail, simulatePortalEntryPayment, submitPortalEntry } from '@/api/portal'
+import { currentEntryFee, formatCompetitionFee } from './portalViewModels'
 
 const route = useRoute()
 const entryFormRef = ref(null)
@@ -264,15 +282,18 @@ const form = reactive({
   abv: null,
   extraFields: {},
   confirmed: false,
+  rulesAccepted: false,
 })
 
 const selectedCompetition = computed(() => selectedDetail.value || null)
+const hasRulesUrl = computed(() => Boolean(selectedCompetition.value?.rulesUrl))
 const configuredFields = computed(() => normalizeEntryFields(selectedCompetition.value?.entryFields || []))
 const selectedCategoryName = computed(() => selectedCompetition.value?.categories?.find((item) => item.id === form.categoryId)?.name || '')
 const previewReady = computed(() => Boolean(selectedCategoryName.value && form.style && form.abv !== null && form.abv !== undefined))
 const paymentAmount = computed(() => submittedEntry.value?.payment?.amount ?? submittedEntry.value?.entryFee ?? selectedCompetition.value?.entryFee ?? 0)
 const paymentPaid = computed(() => submittedEntry.value?.paymentStatus === 'PAID' || submittedEntry.value?.canDownloadLabel)
-const entryFeeLabel = computed(() => formatCurrency(selectedCompetition.value?.entryFee))
+const currentFeeText = computed(() => formatCompetitionFee(selectedCompetition.value))
+const entryFeeLabel = computed(() => formatCurrency(currentEntryFee(selectedCompetition.value)))
 const formRules = computed(() => {
   const rules = {
     name: [{ required: true, message: '请填写酒款名称', trigger: 'blur' }],
@@ -291,6 +312,20 @@ const formRules = computed(() => {
         trigger: 'change',
       },
     ],
+  }
+  if (hasRulesUrl.value) {
+    rules.rulesAccepted = [
+      {
+        validator: (_rule, value, callback) => {
+          if (value) {
+            callback()
+            return
+          }
+          callback(new Error('请阅读并同意本次大赛参赛细则'))
+        },
+        trigger: 'change',
+      },
+    ]
   }
 
   configuredFields.value.forEach((field) => {
@@ -330,6 +365,7 @@ function syncCompetitionDefaults() {
     form.style = ''
     form.abv = null
     form.confirmed = false
+    form.rulesAccepted = false
     form.extraFields = {}
     return
   }
@@ -337,6 +373,7 @@ function syncCompetitionDefaults() {
   form.style = ''
   form.abv = null
   form.confirmed = false
+  form.rulesAccepted = false
   form.extraFields = Object.fromEntries(configuredFields.value.map((field) => [field.fieldKey, getEmptyFieldValue(field)]))
 }
 
@@ -359,6 +396,7 @@ async function submitEntry() {
       style: form.style,
       abv: form.abv,
       extraFields: form.extraFields,
+      rulesAccepted: hasRulesUrl.value ? form.rulesAccepted : undefined,
     })
     submittedEntry.value = entry
     ElMessage.success('报名已提交，请完成支付')
@@ -627,6 +665,13 @@ function styleLabel(item) {
   background: #fff7e6;
   border: 1px dashed rgba(87, 58, 26, 0.2);
   border-radius: 8px;
+}
+
+.rules-confirm-copy a {
+  color: #8a560e;
+  font-weight: 900;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .form-actions {

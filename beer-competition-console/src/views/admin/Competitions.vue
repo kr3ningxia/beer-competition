@@ -27,7 +27,7 @@
     <section class="filter-bar">
       <label class="search-field">
         <Search />
-        <input v-model.trim="keyword" type="search" placeholder="搜索比赛名称、编号、届次" />
+        <input v-model.trim="keyword" type="search" placeholder="搜索比赛名称、编号" />
       </label>
 
       <div class="status-tabs" aria-label="比赛状态筛选">
@@ -70,7 +70,7 @@
       >
         <span class="event-cell">
           <strong>{{ competition.name }}</strong>
-          <small>{{ competition.code }} · {{ competition.edition }}</small>
+          <small>{{ competition.code }}</small>
         </span>
         <span :class="['state-badge', statusMeta[competition.status].tone]">
           {{ statusMeta[competition.status].label }}
@@ -117,7 +117,7 @@
           <button class="drawer-close" type="button" title="关闭" @click="quickVisible = false">
             <Close />
           </button>
-          <p>{{ selectedCompetition.code }} · {{ selectedCompetition.edition }}</p>
+          <p>{{ selectedCompetition.code }}</p>
           <h2>{{ selectedCompetition.name }}</h2>
           <span :class="['state-badge', statusMeta[selectedCompetition.status].tone]">
             {{ statusMeta[selectedCompetition.status].label }}
@@ -125,8 +125,10 @@
           <div class="drawer-meta">
             <span>{{ formatDate(selectedCompetition.date) }}</span>
             <span>{{ selectedCompetition.entryFee }} 元 / 款</span>
+            <span v-if="earlyBirdText(selectedCompetition)">{{ earlyBirdText(selectedCompetition) }}</span>
             <span>{{ getDateDistance(selectedCompetition.date) }}</span>
           </div>
+          <p v-if="selectedCompetition.description" class="drawer-description">{{ selectedCompetition.description }}</p>
         </header>
 
         <div class="drawer-block">
@@ -241,7 +243,6 @@ const filteredCompetitions = computed(() => {
     const matchesKeyword = !normalizedKeyword
       || item.name.toLowerCase().includes(normalizedKeyword)
       || item.code.toLowerCase().includes(normalizedKeyword)
-      || item.edition.toLowerCase().includes(normalizedKeyword)
     const matchesStatus = selectedStatus.value === 'ALL' || item.status === selectedStatus.value
     const matchesYear = selectedYear.value === 'ALL' || item.date?.startsWith(selectedYear.value)
     return matchesKeyword && matchesStatus && matchesYear
@@ -325,6 +326,15 @@ function getNextAction(competition) {
   return competition.dataIntegrityIssues.length
     ? '修正数据'
     : competition.primaryAction?.text || statusMeta[competition.status].next
+}
+
+function earlyBirdText(competition) {
+  if (competition?.earlyBirdFee === null || competition?.earlyBirdFee === undefined || !competition?.earlyBirdDeadline) return ''
+  return `早鸟 ${competition.earlyBirdFee} 元 / 款，截止 ${formatDateTime(competition.earlyBirdDeadline)}`
+}
+
+function formatDateTime(value) {
+  return value ? String(value).replace('T', ' ').slice(0, 16).replaceAll('-', '.') : '-'
 }
 </script>
 
@@ -754,6 +764,12 @@ svg {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.03);
+}
+
+.drawer-description {
+  margin-top: 14px;
+  color: var(--muted);
+  line-height: 1.6;
 }
 
 .drawer-block {

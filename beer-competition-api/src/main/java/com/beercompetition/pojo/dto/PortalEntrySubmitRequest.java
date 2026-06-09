@@ -30,5 +30,7 @@ public class PortalEntrySubmitRequest {
     @DecimalMax(value = "99.9", message = "ABV不能大于99.9")
     private BigDecimal abv;
 
+    private Boolean rulesAccepted;
+
     private Map<String, Object> extraFields = new LinkedHashMap<>();
 }

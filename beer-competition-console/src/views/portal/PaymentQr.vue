@@ -42,7 +42,7 @@
             <div class="entry-row-main">
               <div class="entry-row-top">
                 <strong>{{ entry.name }}</strong>
-                <b v-if="entry.paymentStatus !== 'PAID'">{{ formatCurrency(entry.entryFee) }}</b>
+                <b v-if="entry.paymentStatus !== 'PAID'">{{ formatCurrency(entryPayAmount(entry)) }}</b>
               </div>
               <p>{{ competitionLabel(entry) }}</p>
               <small>{{ entryTaskLabel(entry) }}</small>
@@ -76,7 +76,7 @@
               <h3>补缴报名费</h3>
               <p>这款酒还未完成支付，支付成功后开放标签下载和寄样信息填写。</p>
             </div>
-            <strong>{{ formatCurrency(selectedEntry.payment?.amount || selectedEntry.entryFee) }}</strong>
+            <strong>{{ formatCurrency(entryPayAmount(selectedEntry)) }}</strong>
           </div>
           <dl class="inline-facts">
             <div>
@@ -247,6 +247,7 @@ import {
   submitPortalEntryDelivery,
 } from '@/api/portal'
 import { JUDGE_H5_BASE_URL } from '@/config'
+import { entryPayAmount } from './portalViewModels'
 
 const route = useRoute()
 

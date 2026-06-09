@@ -1,6 +1,7 @@
 package com.beercompetition.pojo.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
@@ -18,9 +19,6 @@ public class CompetitionBaseInfoUpdateRequest {
     @NotBlank(message = "比赛编号不能为空")
     private String code;
 
-    @NotBlank(message = "届次不能为空")
-    private String edition;
-
     @NotNull(message = "比赛日期不能为空")
     private LocalDate competitionDate;
 
@@ -30,7 +28,20 @@ public class CompetitionBaseInfoUpdateRequest {
     private LocalDateTime registrationDeadline;
 
     @NotNull(message = "报名费不能为空")
+    @DecimalMin(value = "0.00", message = "报名费不能小于 0")
     private BigDecimal entryFee;
+
+    @DecimalMin(value = "0.00", message = "早鸟价不能小于 0")
+    private BigDecimal earlyBirdFee;
+
+    private LocalDateTime earlyBirdDeadline;
+
+    @NotBlank(message = "赛事简介不能为空")
+    @Size(max = 1000, message = "赛事简介不能超过 1000 个字符")
+    private String description;
+
+    @Size(max = 500, message = "参赛细则链接不能超过 500 个字符")
+    private String rulesUrl;
 
     private String deliveryMethod;
 

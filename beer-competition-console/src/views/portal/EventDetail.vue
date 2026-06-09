@@ -8,24 +8,11 @@
           {{ stageLabel }}
         </span>
         <h1>{{ competition.name || '赛事详情' }}</h1>
-        <p>{{ competition.code || '-' }} · {{ competition.edition || '-' }}</p>
+        <p>{{ competition.description || competition.code || '-' }}</p>
         <div class="hero-facts" aria-label="赛事关键时间和费用">
-          <span>
-            <small>比赛日期</small>
-            <b>{{ formatDate(competition.competitionDate) }}</b>
-          </span>
-          <span>
-            <small>报名截止</small>
-            <b>{{ formatDateTime(competition.registrationDeadline) }}</b>
-          </span>
-          <span>
-            <small>送样截止</small>
-            <b>{{ formatDateTime(logistics.sampleArrivalDeadline) }}</b>
-          </span>
-          <span>
-            <small>报名费</small>
-            <b>{{ feeText }}</b>
-          </span>
+          <span>报名截止 {{ formatMonthDayTime(competition.registrationDeadline) }}</span>
+          <span>{{ feeText }}</span>
+          <span>送样截止 {{ formatMonthDayTime(logistics.sampleArrivalDeadline) }}</span>
         </div>
         <div class="hero-actions">
           <RouterLink
@@ -42,75 +29,45 @@
     <section class="detail-section brewer-card">
       <div class="section-heading">
         <div>
-          <h2 class="portal-section-title">参赛要求</h2>
-          <p>判断这场赛事是否适合你的酒款，报名时按这些配置填写。</p>
+          <h2 class="portal-section-title">赛事简介</h2>
         </div>
+        <a
+          v-if="competition.rulesUrl"
+          class="rules-link"
+          :href="competition.rulesUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          查看参赛细则
+        </a>
       </div>
-
-      <div class="requirement-grid">
-        <article class="requirement-block">
-          <span>投递组别</span>
-          <strong>{{ categorySummary }}</strong>
-          <div class="chip-list">
-            <em v-for="category in competition.categories" :key="category.id || category.name">{{ category.name }}</em>
-          </div>
-        </article>
-
-        <article class="requirement-block">
-          <span>基础风格</span>
-          <strong>{{ styleSummary }}</strong>
-          <p>{{ styleCategorySummary }}</p>
-          <details v-if="competition.styles?.length" class="style-details">
-            <summary>查看全部基础风格</summary>
-            <div class="style-groups">
-              <section v-for="group in styleGroups" :key="group.name" class="style-group">
-                <h3>{{ group.name }}</h3>
-                <p>{{ group.items.map((item) => item.name).join(' / ') }}</p>
-              </section>
-            </div>
-          </details>
-        </article>
-
-        <article class="requirement-block">
-          <span>额外字段</span>
-          <strong>{{ entryFieldHeadline }}</strong>
-          <div v-if="entryFields.length" class="field-list">
-            <span v-for="field in entryFields" :key="field.fieldKey || field.fieldLabel">
-              <b>{{ field.fieldLabel }}</b>
-              <small>{{ field.required ? '必填' : '选填' }} · {{ field.visibleToJudges ? '评审可见' : '仅主办方可见' }}</small>
-            </span>
-          </div>
-          <p v-else>本场没有配置补充字段。</p>
-        </article>
-      </div>
+      <article class="description-panel">
+        <p>{{ fullDescription }}</p>
+      </article>
     </section>
 
     <section class="content-grid">
+      <article class="brewer-card info-panel">
+        <h2 class="portal-section-title">赛事关键信息</h2>
+        <dl class="key-info-list">
+          <div><dt>投递组别</dt><dd>{{ categoryNamesText }}</dd></div>
+          <div><dt>比赛日期</dt><dd>{{ formatDate(competition.competitionDate) }}</dd></div>
+          <div><dt>报名截止</dt><dd>{{ formatDateTime(competition.registrationDeadline) }}</dd></div>
+          <div><dt>当前应付</dt><dd>{{ feeText }}</dd></div>
+          <div><dt>送样截止</dt><dd>{{ formatDateTime(logistics.sampleArrivalDeadline) }}</dd></div>
+          <div v-if="earlyBirdDeadlineText"><dt>早鸟截止</dt><dd>{{ earlyBirdDeadlineText }}</dd></div>
+          <div v-if="showNormalFee"><dt>普通报名费</dt><dd>¥{{ competition.entryFee }} / 款</dd></div>
+        </dl>
+      </article>
+
       <article class="brewer-card info-panel">
         <h2 class="portal-section-title">送样与标签</h2>
         <dl>
           <div><dt>送样方式</dt><dd>{{ deliveryMethodText(logistics.deliveryMethod) }}</dd></div>
           <div><dt>建议送达</dt><dd>{{ arrivalWindowText }}</dd></div>
           <div><dt>酒样要求</dt><dd>{{ logistics.sampleQuantityNote || '以主办方后续通知为准' }}</dd></div>
-          <div><dt>收件信息</dt><dd>{{ deliveryAddressText }}</dd></div>
           <div v-if="logistics.deliveryNote"><dt>包装说明</dt><dd>{{ logistics.deliveryNote }}</dd></div>
         </dl>
-      </article>
-
-      <article class="brewer-card info-panel">
-        <h2 class="portal-section-title">结果与奖项</h2>
-        <dl>
-          <div><dt>结果状态</dt><dd>{{ resultStatusText }}</dd></div>
-          <div><dt>可查看内容</dt><dd>评分、评语、奖项和证书。</dd></div>
-          <div><dt>查看入口</dt><dd>{{ resultEntryText }}</dd></div>
-        </dl>
-        <RouterLink
-          v-if="resultCardAction"
-          class="card-link"
-          :to="resultCardAction.to"
-        >
-          {{ resultCardAction.label }}
-        </RouterLink>
       </article>
     </section>
 
@@ -118,7 +75,7 @@
       <div class="section-heading">
         <div>
           <h2 class="portal-section-title">参赛流程</h2>
-          <p>从提交资料到结果发布，厂商端主要关注这些节点。</p>
+          <p>从报名资料到结果发布，厂商端主要关注这些节点。</p>
         </div>
       </div>
       <div class="process-strip">
@@ -152,11 +109,11 @@
       <template v-else-if="loggedIn">
         <div>
           <span class="label-chip tone-amber">尚未参加本赛事</span>
-          <h2>确认规则后再提交酒款</h2>
+          <h2>确认规则后报名参赛</h2>
           <p>先核对组别、基础风格、费用和送样要求。</p>
         </div>
         <div class="brief-actions">
-          <RouterLink v-if="canSubmitEntry(competition)" :to="`/portal/submit?competitionId=${competition.id}`">提交酒款</RouterLink>
+          <RouterLink v-if="canSubmitEntry(competition)" :to="`/portal/submit?competitionId=${competition.id}`">报名参赛</RouterLink>
           <RouterLink to="/portal/my">查看我的参赛</RouterLink>
         </div>
       </template>
@@ -164,7 +121,7 @@
       <template v-else>
         <div>
           <span class="label-chip tone-amber">公开赛事详情</span>
-          <h2>登录后提交和追踪参赛酒款</h2>
+          <h2>登录后报名并追踪参赛酒款</h2>
           <p>未登录时可以先查看赛事规则、费用和送样要求。</p>
         </div>
         <div class="brief-actions">
@@ -184,7 +141,9 @@ import {
   canSubmitEntry,
   competitionResultPath,
   entrySummaryForCompetition,
+  formatCompetitionFee,
   isCompetitionResultPublished,
+  isEarlyBirdActive,
 } from './portalViewModels'
 
 const route = useRoute()
@@ -193,39 +152,19 @@ const competition = ref({ categories: [], styles: [], entryFields: [] })
 const entries = ref([])
 
 const logistics = computed(() => competition.value.logistics || {})
-const entryFields = computed(() => competition.value.entryFields || [])
 const eventEntries = computed(() => entries.value.filter((entry) => entry.competitionId === competition.value.id))
 const hasEventEntries = computed(() => eventEntries.value.length > 0)
 const eventSummary = computed(() => entrySummaryForCompetition(competition.value.id, entries.value))
-const feeText = computed(() => competition.value.entryFee === undefined || competition.value.entryFee === null ? '-' : `¥${competition.value.entryFee} / 款`)
+const feeText = computed(() => formatCompetitionFee(competition.value))
+const earlyBirdDeadlineText = computed(() => (isEarlyBirdActive(competition.value) ? formatDateTime(competition.value.earlyBirdDeadline) : ''))
+const showNormalFee = computed(() => isEarlyBirdActive(competition.value) && competition.value.entryFee !== undefined && competition.value.entryFee !== null)
 const stageLabel = computed(() => (isCompetitionResultPublished(competition.value) ? '结果已发布' : competition.value.currentStageLabel) || '赛事详情')
-const categorySummary = computed(() => {
-  const count = competition.value.categories?.length || 0
-  return count ? `${count} 个投递组别` : '暂未配置'
+const categoryNamesText = computed(() => {
+  const names = competition.value.categories?.map((item) => item.name).filter(Boolean) || []
+  return names.length ? names.join(' / ') : '暂未配置'
 })
-const styleSummary = computed(() => {
-  const count = competition.value.styles?.length || 0
-  return count ? `${count} 个可选基础风格` : '暂未配置'
-})
-const styleCategorySummary = computed(() => {
-  const count = styleGroups.value.length
-  if (!competition.value.styles?.length) return '主办方暂未配置基础风格库。'
-  return count ? `按 ${count} 个风格大类组织，报名时单选一个基础风格。` : '报名时单选一个基础风格。'
-})
-const entryFieldHeadline = computed(() => {
-  const count = entryFields.value.length
-  if (!count) return '无补充字段'
-  const judgeVisibleCount = entryFields.value.filter((field) => field.visibleToJudges).length
-  return `${count} 个补充字段，${judgeVisibleCount} 个评审可见`
-})
-const styleGroups = computed(() => {
-  const groups = new Map()
-  ;(competition.value.styles || []).forEach((style) => {
-    const key = style.categoryName || '未分组'
-    if (!groups.has(key)) groups.set(key, [])
-    groups.get(key).push(style)
-  })
-  return Array.from(groups.entries()).map(([name, items]) => ({ name, items }))
+const fullDescription = computed(() => {
+  return competition.value.description || '主办方暂未填写赛事简介，请以参赛细则和后续通知为准。'
 })
 const heroPrimaryAction = computed(() => {
   if (isCompetitionResultPublished(competition.value)) {
@@ -236,29 +175,11 @@ const heroPrimaryAction = computed(() => {
   }
   if (canSubmitEntry(competition.value)) {
     return {
-      label: loggedIn.value ? '提交酒款' : '登录后报名',
+      label: loggedIn.value ? '报名参赛' : '登录后报名',
       to: loggedIn.value ? `/portal/submit?competitionId=${competition.value.id}` : '/portal/login',
     }
   }
   return null
-})
-const resultCardAction = computed(() => {
-  if (!isCompetitionResultPublished(competition.value)) {
-    return null
-  }
-  if (!loggedIn.value) {
-    return { label: '登录查看结果', to: '/portal/login' }
-  }
-  if (!hasEventEntries.value) {
-    return null
-  }
-  return { label: '查看我的结果', to: competitionResultPath(competition.value.id) }
-})
-const resultStatusText = computed(() => (isCompetitionResultPublished(competition.value) ? '结果已发布' : '结果待发布'))
-const resultEntryText = computed(() => {
-  if (!loggedIn.value) return '登录后查看自己的评分、评语和奖项。'
-  if (!hasEventEntries.value) return '本账号尚未参加该赛事。'
-  return isCompetitionResultPublished(competition.value) ? '进入“我的结果”查看本场反馈。' : '主办方发布后可在“我的结果”查看。'
 })
 const arrivalWindowText = computed(() => {
   const start = formatDateTime(logistics.value.sampleArrivalStart)
@@ -266,22 +187,6 @@ const arrivalWindowText = computed(() => {
   if (start !== '-' && deadline !== '-') return `${start} 至 ${deadline}`
   if (deadline !== '-') return `${deadline} 前送达`
   return '以主办方通知为准'
-})
-const deliveryAddressText = computed(() => {
-  if (logistics.value.deliveryAddress) {
-    return [
-      logistics.value.deliveryRecipient,
-      logistics.value.deliveryPhone,
-      logistics.value.deliveryAddress,
-    ].filter(Boolean).join(' · ')
-  }
-  if (logistics.value.logisticsVisibility === 'LOGIN_REQUIRED') {
-    return '登录后在付款与寄样页查看完整收件信息'
-  }
-  if (logistics.value.logisticsVisibility === 'PUBLIC') {
-    return '主办方暂未填写完整地址'
-  }
-  return '支付成功后显示完整收件信息'
 })
 const processSteps = [
   { title: '提交资料', text: '填写酒名、组别、基础风格、ABV 和补充字段。' },
@@ -311,6 +216,15 @@ function formatDate(value) {
 
 function formatDateTime(value) {
   return value ? String(value).replace('T', ' ').slice(0, 16) : '-'
+}
+
+function formatMonthDayTime(value) {
+  if (!value) return '-'
+  const normalized = String(value).replace('T', ' ')
+  const match = normalized.match(/^\d{4}-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/)
+  if (!match) return formatDateTime(value)
+  const [, month, day, hour, minute] = match
+  return `${Number(month)}月${Number(day)}日 ${hour}:${minute}`
 }
 
 function deliveryMethodText(value) {
@@ -363,44 +277,35 @@ function deliveryMethodText(value) {
 }
 
 .detail-hero p {
+  display: -webkit-box;
   max-width: 760px;
   margin: 0;
+  overflow: hidden;
   color: #ead9b7;
   font-size: 16px;
   line-height: 1.7;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
 }
 
 .hero-facts {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
-  max-width: 980px;
   margin-top: 24px;
 }
 
 .hero-facts span {
-  min-height: 82px;
-  padding: 14px 16px;
-  color: #2b1d10;
-  background: linear-gradient(180deg, rgba(255, 250, 240, 0.98), rgba(246, 217, 150, 0.94));
+  min-height: 34px;
+  padding: 7px 12px;
+  color: #fff8e8;
+  background: rgba(255, 250, 240, 0.12);
   border: 1px solid rgba(255, 250, 240, 0.22);
   border-radius: 8px;
-}
-
-.hero-facts small,
-.hero-facts b {
-  display: block;
-}
-
-.hero-facts small {
-  color: #7d705f;
-}
-
-.hero-facts b {
-  margin-top: 8px;
-  overflow-wrap: anywhere;
-  font-size: 18px;
-  line-height: 1.28;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 18px;
+  white-space: nowrap;
 }
 
 .hero-actions,
@@ -446,7 +351,7 @@ function deliveryMethodText(value) {
 .requirement-block p,
 dt,
 .process-strip em,
-.field-list small {
+.requirement-list small {
   color: #746a5f;
   line-height: 1.65;
 }
@@ -498,6 +403,7 @@ dt,
 
 .section-heading {
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
   margin-bottom: 18px;
@@ -511,9 +417,44 @@ dt,
   margin: 0;
 }
 
+.rules-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-height: 38px;
+  padding: 0 13px;
+  color: #6b4710;
+  border: 1px solid rgba(87, 58, 26, 0.16);
+  border-radius: 8px;
+  background: #fff7e6;
+  font-size: 14px;
+  font-weight: 800;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.description-panel {
+  max-width: 920px;
+  padding: 22px 24px;
+  background:
+    linear-gradient(180deg, rgba(255, 253, 247, 0.96), rgba(255, 247, 230, 0.92));
+  border: 1px solid rgba(87, 58, 26, 0.1);
+  border-radius: 8px;
+}
+
+.description-panel p {
+  max-width: 820px;
+  margin: 0;
+  color: #4f463b;
+  font-size: 16px;
+  line-height: 1.9;
+  text-align: justify;
+}
+
 .requirement-grid {
   display: grid;
-  grid-template-columns: 0.9fr 1.3fr 1fr;
+  grid-template-columns: 0.9fr 1.6fr;
   gap: 14px;
 }
 
@@ -538,6 +479,30 @@ dt,
   color: #2b1d10;
   font-size: 23px;
   line-height: 1.25;
+}
+
+.entry-requirements {
+  gap: 14px;
+}
+
+.requirement-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.requirement-list span {
+  display: grid;
+  gap: 4px;
+  min-height: 82px;
+  padding: 12px;
+  background: #fffdf7;
+  border: 1px solid rgba(87, 58, 26, 0.08);
+  border-radius: 8px;
+}
+
+.requirement-list b {
+  color: #2b1d10;
 }
 
 .chip-list {
@@ -591,20 +556,6 @@ dt,
   margin: 0;
 }
 
-.field-list {
-  display: grid;
-  gap: 8px;
-}
-
-.field-list span {
-  display: grid;
-  gap: 3px;
-  padding: 10px;
-  background: #fffdf7;
-  border: 1px solid rgba(87, 58, 26, 0.08);
-  border-radius: 8px;
-}
-
 .content-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -615,6 +566,11 @@ dl {
   display: grid;
   gap: 12px;
   margin: 0;
+}
+
+.key-info-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
 }
 
 dl div {
@@ -676,8 +632,8 @@ dd {
     grid-template-columns: 1fr;
   }
 
-  .hero-facts,
   .brief-stats,
+  .requirement-list,
   .process-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -693,8 +649,9 @@ dd {
     font-size: 34px;
   }
 
-  .hero-facts,
   .brief-stats,
+  .key-info-list,
+  .requirement-list,
   .process-strip {
     grid-template-columns: 1fr;
   }

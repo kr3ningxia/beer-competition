@@ -273,6 +273,7 @@ public class EntryServiceImpl implements EntryService {
         // 1) 参数规范化与前置校验
         PortalAccount account = requirePortalAccount();
         Competition competition = requireOpenCompetition(competitionId);
+        requireRulesAcceptedIfConfigured(competition, request);
         CompetitionCategory category = requireCompetitionCategory(competitionId, request.getCategoryId());
         requireCompetitionStyle(competitionId, request.getStyle());
         List<EntryFieldConfig> fieldConfigs = listEntryFieldConfigs(competitionId);
@@ -297,7 +298,7 @@ public class EntryServiceImpl implements EntryService {
         // 3) 初始化支付与送样记录
         entryPaymentMapper.insert(EntryPayment.builder()
                 .beerEntryId(entry.getId())
-                .amount(competition.getEntryFee())
+                .amount(resolveEntryFee(competition, LocalDateTime.now()))
                 .status(EntryPaymentStatus.UNPAID.name())
                 .payMethod(EntryPayMethod.MANUAL.name())
                 .build());
@@ -322,6 +323,12 @@ public class EntryServiceImpl implements EntryService {
 
         // 5) 返回新作品详情
         return toEntryDetailVO(beerEntryMapper.selectById(entry.getId()));
+    }
+
+    private void requireRulesAcceptedIfConfigured(Competition competition, PortalEntrySubmitRequest request) {
+        if (StringUtils.hasText(competition.getRulesUrl()) && !Boolean.TRUE.equals(request.getRulesAccepted())) {
+            throw new BaseException("请先阅读并同意本次大赛参赛细则");
+        }
     }
 
     @Override
@@ -891,7 +898,6 @@ public class EntryServiceImpl implements EntryService {
                 .id(competition.getId())
                 .code(competition.getCode())
                 .name(competition.getName())
-                .edition(competition.getEdition())
                 .matchDate(competition.getCompetitionDate())
                 .publishedAt(resolvePublishedAt(competitionAwards))
                 .groups(new ArrayList<>(groups.values()))
@@ -1507,12 +1513,24 @@ public class EntryServiceImpl implements EntryService {
         Competition competition = competitionMapper.selectById(competitionId);
         EntryPayment created = EntryPayment.builder()
                 .beerEntryId(beerEntryId)
-                .amount(competition == null ? BigDecimal.ZERO : competition.getEntryFee())
+                .amount(resolveEntryFee(competition, LocalDateTime.now()))
                 .status(EntryPaymentStatus.UNPAID.name())
                 .payMethod(EntryPayMethod.MANUAL.name())
                 .build();
         entryPaymentMapper.insert(created);
         return created;
+    }
+
+    private BigDecimal resolveEntryFee(Competition competition, LocalDateTime now) {
+        if (competition == null) {
+            return BigDecimal.ZERO;
+        }
+        if (competition.getEarlyBirdFee() != null
+                && competition.getEarlyBirdDeadline() != null
+                && !now.isAfter(competition.getEarlyBirdDeadline())) {
+            return competition.getEarlyBirdFee();
+        }
+        return competition.getEntryFee() == null ? BigDecimal.ZERO : competition.getEntryFee();
     }
 
     private EntryDelivery ensureEntryDelivery(Long beerEntryId) {

@@ -36,7 +36,7 @@
           </span>
           <span>
             <small>报名费</small>
-            <strong>¥{{ entry.entryFee }}</strong>
+            <strong>{{ formatCurrency(entryPayAmount(entry)) }}</strong>
           </span>
           <span>
             <small>支付</small>
@@ -130,13 +130,18 @@
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { fetchPortalEntries, fetchPortalEntryDetail } from '@/api/portal'
-import { entryPrimaryAction, entryResultPath, entryStatusMeta, isEntryResultPublished } from './portalViewModels'
+import { entryPayAmount, entryPrimaryAction, entryResultPath, entryStatusMeta, isEntryResultPublished } from './portalViewModels'
 
 const keyword = ref('')
 const statusFilter = ref('')
 const drawerVisible = ref(false)
 const selectedEntry = ref(null)
 const entries = ref([])
+const currencyFormatter = new Intl.NumberFormat('zh-CN', {
+  style: 'currency',
+  currency: 'CNY',
+  maximumFractionDigits: 0,
+})
 
 const statusOptions = Object.entries(entryStatusMeta).map(([value, meta]) => ({ value, label: meta.label }))
 
@@ -175,6 +180,11 @@ function timeline(entry) {
 
 function isStored(entry) {
   return entry?.stored || entry?.status === 'STORED' || isEntryResultPublished(entry)
+}
+
+function formatCurrency(value) {
+  if (value === null || value === undefined || value === '') return '¥0'
+  return currencyFormatter.format(Number(value))
 }
 
 onMounted(async () => {

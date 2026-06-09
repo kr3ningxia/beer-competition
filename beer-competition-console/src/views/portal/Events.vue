@@ -4,7 +4,7 @@
       <div>
         <span class="label-chip tone-gold">赛事目录</span>
         <h1>选择适合你酒款的赛事</h1>
-        <p>查看报名窗口、投递组别、基础风格和结果开放状态，再进入单场赛事提交酒款。</p>
+        <p>查看报名窗口、投递组别、基础风格和结果开放状态，再进入单场赛事报名参赛。</p>
       </div>
       <RouterLink class="primary-action" to="/portal/home">返回赛事首页</RouterLink>
     </section>
@@ -14,12 +14,10 @@
         <div class="event-main">
           <span :class="['label-chip', stageTone(competition.status)]">{{ stageLabel(competition) }}</span>
           <h2>{{ competition.name }}</h2>
-          <p>{{ competition.code }} · {{ competition.edition }}</p>
+          <p>{{ competition.description || competition.code }}</p>
           <div class="fact-row">
-            <span>比赛日期 {{ formatDate(competition.competitionDate) }}</span>
-            <span>报名截止 {{ formatDateTime(competition.registrationDeadline) }}</span>
-            <span>送样截止 {{ formatDateTime(competition.logistics?.sampleArrivalDeadline) }}</span>
-            <span>报名费 ¥{{ competition.entryFee }} / 款</span>
+            <span>报名截止 {{ formatMonthDayTime(competition.registrationDeadline) }}</span>
+            <span>{{ entryFeeText(competition) }}</span>
           </div>
         </div>
 
@@ -51,7 +49,12 @@ import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { isLoggedIn } from '@/utils/auth'
 import { fetchPortalCompetitions } from '@/api/portal'
-import { canSubmitEntry, competitionAction, isCompetitionResultPublished } from './portalViewModels'
+import {
+  canSubmitEntry,
+  competitionAction,
+  formatCompetitionFee,
+  isCompetitionResultPublished,
+} from './portalViewModels'
 
 const loggedIn = computed(() => isLoggedIn('portal'))
 const competitions = ref([])
@@ -78,12 +81,21 @@ function showPrimaryAction(competition) {
   return isCompetitionResultPublished(competition) || canSubmitEntry(competition)
 }
 
-function formatDate(value) {
-  return value || '-'
-}
-
 function formatDateTime(value) {
   return value ? String(value).replace('T', ' ').slice(0, 16) : '-'
+}
+
+function formatMonthDayTime(value) {
+  if (!value) return '-'
+  const normalized = String(value).replace('T', ' ')
+  const match = normalized.match(/^\d{4}-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/)
+  if (!match) return formatDateTime(value)
+  const [, month, day, hour, minute] = match
+  return `${Number(month)}月${Number(day)}日 ${hour}:${minute}`
+}
+
+function entryFeeText(competition) {
+  return formatCompetitionFee(competition)
 }
 </script>
 
@@ -161,6 +173,21 @@ function formatDateTime(value) {
 .event-side p {
   color: #746a5f;
   line-height: 1.7;
+}
+
+.event-main p {
+  display: -webkit-box;
+  max-width: 780px;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+}
+
+.event-side p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .fact-row {

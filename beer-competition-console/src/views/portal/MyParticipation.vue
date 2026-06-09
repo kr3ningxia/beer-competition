@@ -34,7 +34,7 @@
               {{ competition.currentStageLabel }}
             </span>
             <h3>{{ competition.name }}</h3>
-            <p>{{ competition.code }} · {{ competition.edition }}</p>
+            <p>{{ competition.code }}</p>
           </div>
           <div class="summary-strip">
             <span><small>已提交</small><b>{{ summary(competition.id).submitted }}</b></span>

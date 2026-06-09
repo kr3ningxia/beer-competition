@@ -271,12 +271,15 @@ public class CompetitionServiceImpl implements CompetitionService {
         // 2) 构造草稿比赛主记录
         Competition competition = Competition.builder()
                 .name(normalizeRequired(request.getName(), "比赛名称不能为空"))
-                .edition(normalizeRequired(request.getEdition(), "届次不能为空"))
                 .competitionDate(request.getCompetitionDate())
                 .registrationStart(request.getRegistrationStart())
                 .registrationDeadline(request.getRegistrationDeadline())
                 .status(CompetitionStatus.DRAFT.name())
                 .entryFee(request.getEntryFee())
+                .earlyBirdFee(request.getEarlyBirdFee())
+                .earlyBirdDeadline(request.getEarlyBirdDeadline())
+                .description(normalizeRequired(request.getDescription(), "赛事简介不能为空"))
+                .rulesUrl(normalizeRulesUrl(request.getRulesUrl()))
                 .styleLibraryVersion(styleLibraryVersion)
                 .build();
         applyCreateLogistics(competition, request);
@@ -329,6 +332,8 @@ public class CompetitionServiceImpl implements CompetitionService {
     public CompetitionDetailVO updateBaseInfo(Long id, CompetitionBaseInfoUpdateRequest request) {
         // 1) 参数规范化与阶段权限校验
         Competition competition = getCompetitionOrThrow(id);
+        validateEarlyBirdConfig(request.getEarlyBirdFee(), request.getEarlyBirdDeadline(),
+                request.getEntryFee(), request.getRegistrationStart(), request.getRegistrationDeadline());
         assertBaseInfoEditable(competition, request);
         String nextCode = normalizeRequired(request.getCode(), "比赛编号不能为空");
         assertCompetitionCodeUnique(nextCode, id);
@@ -336,11 +341,14 @@ public class CompetitionServiceImpl implements CompetitionService {
         // 2) 应用允许修改的基础字段
         competition.setName(normalizeRequired(request.getName(), "比赛名称不能为空"));
         competition.setCode(nextCode);
-        competition.setEdition(normalizeRequired(request.getEdition(), "届次不能为空"));
         competition.setCompetitionDate(request.getCompetitionDate());
         competition.setRegistrationStart(request.getRegistrationStart());
         competition.setRegistrationDeadline(request.getRegistrationDeadline());
         competition.setEntryFee(request.getEntryFee());
+        competition.setEarlyBirdFee(request.getEarlyBirdFee());
+        competition.setEarlyBirdDeadline(request.getEarlyBirdDeadline());
+        competition.setDescription(normalizeRequired(request.getDescription(), "赛事简介不能为空"));
+        competition.setRulesUrl(normalizeRulesUrl(request.getRulesUrl()));
         applyBaseInfoLogistics(competition, request);
 
         // 3) 更新比赛主记录
@@ -1491,9 +1499,54 @@ public class CompetitionServiceImpl implements CompetitionService {
                 && !request.getRegistrationDeadline().isAfter(request.getRegistrationStart())) {
             throw new BaseException("报名截止时间必须晚于报名开始时间");
         }
+        validateEarlyBirdConfig(request.getEarlyBirdFee(), request.getEarlyBirdDeadline(),
+                request.getEntryFee(), request.getRegistrationStart(), request.getRegistrationDeadline());
+        normalizeRulesUrl(request.getRulesUrl());
         if (!StringUtils.hasText(request.getStyleLibraryVersion())) {
             throw new BaseException("基础风格库不能为空");
         }
+    }
+
+    private void validateEarlyBirdConfig(BigDecimal earlyBirdFee,
+                                         LocalDateTime earlyBirdDeadline,
+                                         BigDecimal entryFee,
+                                         LocalDateTime registrationStart,
+                                         LocalDateTime registrationDeadline) {
+        if ((earlyBirdFee == null) != (earlyBirdDeadline == null)) {
+            throw new BaseException("早鸟价和早鸟价截止时间需要同时填写");
+        }
+        if (earlyBirdFee == null) {
+            return;
+        }
+        if (entryFee == null) {
+            throw new BaseException("报名费不能为空");
+        }
+        if (earlyBirdFee.compareTo(BigDecimal.ZERO) < 0) {
+            throw new BaseException("早鸟价不能小于 0");
+        }
+        if (earlyBirdFee.compareTo(entryFee) > 0) {
+            throw new BaseException("早鸟价不能高于报名费");
+        }
+        if (registrationStart != null && !earlyBirdDeadline.isAfter(registrationStart)) {
+            throw new BaseException("早鸟价截止时间必须晚于报名开始时间");
+        }
+        if (registrationDeadline != null && earlyBirdDeadline.isAfter(registrationDeadline)) {
+            throw new BaseException("早鸟价截止时间不能晚于报名截止时间");
+        }
+    }
+
+    private String normalizeRulesUrl(String value) {
+        String normalized = normalizeNullable(value);
+        if (normalized == null) {
+            return null;
+        }
+        if (!(normalized.startsWith("http://") || normalized.startsWith("https://"))) {
+            throw new BaseException("参赛细则链接必须以 http:// 或 https:// 开头");
+        }
+        if (normalized.length() > 500) {
+            throw new BaseException("参赛细则链接不能超过 500 个字符");
+        }
+        return normalized;
     }
 
     private void insertCompetitionWithGeneratedCode(Competition competition) {
@@ -1535,12 +1588,15 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .id(competition.getId())
                 .code(competition.getCode())
                 .name(competition.getName())
-                .edition(competition.getEdition())
                 .competitionDate(competition.getCompetitionDate())
                 .registrationStart(competition.getRegistrationStart())
                 .registrationDeadline(competition.getRegistrationDeadline())
                 .status(competition.getStatus())
                 .entryFee(competition.getEntryFee())
+                .earlyBirdFee(competition.getEarlyBirdFee())
+                .earlyBirdDeadline(competition.getEarlyBirdDeadline())
+                .description(competition.getDescription())
+                .rulesUrl(competition.getRulesUrl())
                 .styleLibraryVersion(competition.getStyleLibraryVersion())
                 .logistics(toCompetitionLogisticsVO(competition))
                 .currentStageLabel(resolveStageLabel(parseStatus(competition)))
@@ -1577,12 +1633,15 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .id(competition.getId())
                 .code(competition.getCode())
                 .name(competition.getName())
-                .edition(competition.getEdition())
                 .competitionDate(competition.getCompetitionDate())
                 .registrationStart(competition.getRegistrationStart())
                 .registrationDeadline(competition.getRegistrationDeadline())
                 .status(competition.getStatus())
                 .entryFee(competition.getEntryFee())
+                .earlyBirdFee(competition.getEarlyBirdFee())
+                .earlyBirdDeadline(competition.getEarlyBirdDeadline())
+                .description(competition.getDescription())
+                .rulesUrl(competition.getRulesUrl())
                 .styleLibraryVersion(competition.getStyleLibraryVersion())
                 .logistics(toCompetitionLogisticsVO(competition))
                 .currentStageLabel(detail.getCurrentStageLabel())
@@ -1604,12 +1663,15 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .id(competition.getId())
                 .code(competition.getCode())
                 .name(competition.getName())
-                .edition(competition.getEdition())
                 .competitionDate(competition.getCompetitionDate())
                 .registrationStart(competition.getRegistrationStart())
                 .registrationDeadline(competition.getRegistrationDeadline())
                 .status(competition.getStatus())
                 .entryFee(competition.getEntryFee())
+                .earlyBirdFee(competition.getEarlyBirdFee())
+                .earlyBirdDeadline(competition.getEarlyBirdDeadline())
+                .description(competition.getDescription())
+                .rulesUrl(competition.getRulesUrl())
                 .logistics(toPublicCompetitionLogisticsVO(competition))
                 .currentStageLabel(resolveStageLabel(parseStatus(competition)))
                 .categories(listCategories(competition.getId()))
@@ -2031,7 +2093,7 @@ public class CompetitionServiceImpl implements CompetitionService {
                                                  EntrySummaryVO entriesSummary,
                                                  ResultSetupVO resultSetup) {
         List<CompetitionCheckVO> checks = new ArrayList<>();
-        checks.add(check("baseInfo", "基础信息", isBaseInfoReady(competition), "名称、日期、报名时间和报名费需要完整"));
+        checks.add(check("baseInfo", "基础信息", isBaseInfoReady(competition), "名称、日期、简介、报名时间和费用需要完整"));
         checks.add(check("categories", "投递组别", !categories.isEmpty(), "至少配置 1 个投递组别"));
         checks.add(check("styleLibrary", "基础风格库", StringUtils.hasText(competition.getStyleLibraryVersion()), "请选择基础风格库"));
         checks.add(check("entryFields", "补充字段", true, entryFields.isEmpty() ? "未配置补充字段" : "已配置补充字段"));
@@ -2264,6 +2326,8 @@ public class CompetitionServiceImpl implements CompetitionService {
         boolean judgePrep = status == CompetitionStatus.JUDGING_PREP;
         boolean judgeConfig = draft || registrationStage || judgePrep;
         scopes.put("baseInfo", draft || registrationStage);
+        scopes.put("basePrice", draft || registrationStage);
+        scopes.put("description", true);
         scopes.put("entryStructure", draft);
         scopes.put("categories", draft);
         scopes.put("styleLibrary", draft);
@@ -2282,17 +2346,46 @@ public class CompetitionServiceImpl implements CompetitionService {
             return;
         }
         if (status != CompetitionStatus.REGISTRATION_OPEN && status != CompetitionStatus.REGISTRATION_CLOSED) {
+            if (onlyDescriptionChangedOrUnchanged(competition, request)) {
+                return;
+            }
             throw new BaseException("当前阶段基础信息已锁定");
         }
         if (!Objects.equals(competition.getName(), request.getName())
                 || !Objects.equals(competition.getCode(), request.getCode())
-                || !Objects.equals(competition.getEdition(), request.getEdition())
                 || !Objects.equals(competition.getRegistrationStart(), request.getRegistrationStart())) {
-            throw new BaseException("报名已开放，仅允许修改比赛日期、报名截止时间、报名费和送样信息");
+            throw new BaseException("报名已开放，仅允许修改比赛日期、报名截止时间、费用、简介和送样信息");
         }
         if (competition.getEntryFee().compareTo(request.getEntryFee()) != 0 && hasEntries(competition.getId())) {
             throw new BaseException("已有报名酒款，报名费已锁定");
         }
+    }
+
+    private boolean onlyDescriptionChangedOrUnchanged(Competition competition, CompetitionBaseInfoUpdateRequest request) {
+        return Objects.equals(competition.getName(), request.getName())
+                && Objects.equals(competition.getCode(), request.getCode())
+                && Objects.equals(competition.getCompetitionDate(), request.getCompetitionDate())
+                && Objects.equals(competition.getRegistrationStart(), request.getRegistrationStart())
+                && Objects.equals(competition.getRegistrationDeadline(), request.getRegistrationDeadline())
+                && compareBigDecimal(competition.getEntryFee(), request.getEntryFee())
+                && compareBigDecimal(competition.getEarlyBirdFee(), request.getEarlyBirdFee())
+                && Objects.equals(competition.getEarlyBirdDeadline(), request.getEarlyBirdDeadline())
+                && Objects.equals(competition.getDeliveryMethod(), normalizeDeliveryMethod(request.getDeliveryMethod()))
+                && Objects.equals(competition.getSampleArrivalStart(), request.getSampleArrivalStart())
+                && Objects.equals(competition.getSampleArrivalDeadline(), request.getSampleArrivalDeadline())
+                && Objects.equals(competition.getSampleQuantityNote(), normalizeNullable(request.getSampleQuantityNote()))
+                && Objects.equals(competition.getDeliveryRecipient(), normalizeNullable(request.getDeliveryRecipient()))
+                && Objects.equals(competition.getDeliveryPhone(), normalizeNullable(request.getDeliveryPhone()))
+                && Objects.equals(competition.getDeliveryAddress(), normalizeNullable(request.getDeliveryAddress()))
+                && Objects.equals(competition.getDeliveryNote(), normalizeNullable(request.getDeliveryNote()))
+                && Objects.equals(competition.getLogisticsVisibility(), normalizeLogisticsVisibility(request.getLogisticsVisibility()));
+    }
+
+    private boolean compareBigDecimal(BigDecimal left, BigDecimal right) {
+        if (left == null || right == null) {
+            return left == right;
+        }
+        return left.compareTo(right) == 0;
     }
 
     private void assertEntryStructureEditable(Competition competition) {
@@ -2501,7 +2594,19 @@ public class CompetitionServiceImpl implements CompetitionService {
                 && competition.getRegistrationDeadline() != null
                 && competition.getRegistrationDeadline().isAfter(competition.getRegistrationStart())
                 && competition.getEntryFee() != null
-                && competition.getEntryFee().compareTo(BigDecimal.ZERO) >= 0;
+                && competition.getEntryFee().compareTo(BigDecimal.ZERO) >= 0
+                && StringUtils.hasText(competition.getDescription())
+                && isEarlyBirdConfigReady(competition);
+    }
+
+    private boolean isEarlyBirdConfigReady(Competition competition) {
+        try {
+            validateEarlyBirdConfig(competition.getEarlyBirdFee(), competition.getEarlyBirdDeadline(),
+                    competition.getEntryFee(), competition.getRegistrationStart(), competition.getRegistrationDeadline());
+            return true;
+        } catch (BaseException ex) {
+            return false;
+        }
     }
 
     private boolean hasEntries(Long competitionId) {

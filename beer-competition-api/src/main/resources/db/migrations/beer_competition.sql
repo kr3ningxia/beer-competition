@@ -220,12 +220,15 @@ CREATE TABLE `competition`  (
   `id` bigint(0) NOT NULL AUTO_INCREMENT,
   `code` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
   `name` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
-  `edition` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL DEFAULT '',
   `competition_date` date NOT NULL,
   `registration_start` datetime(0) NULL DEFAULT NULL,
   `registration_deadline` datetime(0) NOT NULL,
   `status` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
   `entry_fee` decimal(10, 2) NOT NULL,
+  `early_bird_fee` decimal(10, 2) NULL DEFAULT NULL,
+  `early_bird_deadline` datetime(0) NULL DEFAULT NULL,
+  `description` varchar(1000) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL,
+  `rules_url` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL,
   `style_library_version` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL DEFAULT 'BJCP_2021_CN',
   `delivery_method` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL DEFAULT 'BOTH',
   `sample_arrival_start` datetime(0) NULL DEFAULT NULL,
@@ -246,8 +249,8 @@ CREATE TABLE `competition`  (
 -- ----------------------------
 -- Records of competition
 -- ----------------------------
-INSERT INTO `competition` VALUES (1, 'BC-2026', '2026????????', '????', '2026-08-18', '2026-06-01 10:00:00', '2026-07-31 23:59:59', 'REGISTRATION_OPEN', 299.00, 'BJCP_2021_CN', 'BOTH', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'PAYMENT_CONFIRMED', 0, '2026-06-02 21:39:35', '2026-06-02 21:39:35');
-INSERT INTO `competition` VALUES (2, 'BC-20260820-WSW1C', '2026 新建精酿啤酒赛', '第一批次', '2026-08-20', '2026-06-10 10:00:00', '2026-07-30 18:00:00', 'DRAFT', 199.00, 'BJCP_2021_CN', 'BOTH', '2026-08-10 10:00:00', '2026-08-15 18:00:00', '每款 6 瓶，单瓶容量建议不低于 330ml。', '赛事收样组', NULL, NULL, '请做好防震、防漏和外箱加固；每款酒瓶身至少贴 1 张现场标签，整箱寄送时建议外箱再贴 1 张。', 'PAYMENT_CONFIRMED', 0, '2026-06-03 09:42:07', '2026-06-03 09:42:07');
+INSERT INTO `competition` VALUES (1, 'BC-2026', '2026????????', '????', '2026-08-18', '2026-06-01 10:00:00', '2026-07-31 23:59:59', 'REGISTRATION_OPEN', 299.00, 239.00, '2026-06-30 23:59:59', 'Legacy competition intro pending rewrite.', 'BJCP_2021_CN', 'BOTH', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'PAYMENT_CONFIRMED', 0, '2026-06-02 21:39:35', '2026-06-02 21:39:35');
+INSERT INTO `competition` VALUES (2, 'BC-20260820-WSW1C', '2026 新建精酿啤酒赛', '第一批次', '2026-08-20', '2026-06-10 10:00:00', '2026-07-30 18:00:00', 'DRAFT', 199.00, 159.00, '2026-06-30 18:00:00', '面向精酿厂牌的综合赛事，适合提交稳定量产款和年度新品。', 'BJCP_2021_CN', 'BOTH', '2026-08-10 10:00:00', '2026-08-15 18:00:00', '每款 6 瓶，单瓶容量建议不低于 330ml。', '赛事收样组', NULL, NULL, '请做好防震、防漏和外箱加固；每款酒瓶身至少贴 1 张现场标签，整箱寄送时建议外箱再贴 1 张。', 'PAYMENT_CONFIRMED', 0, '2026-06-03 09:42:07', '2026-06-03 09:42:07');
 
 -- ----------------------------
 -- Table structure for competition_category

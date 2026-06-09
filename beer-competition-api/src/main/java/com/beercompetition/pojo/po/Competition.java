@@ -1,5 +1,7 @@
 package com.beercompetition.pojo.po;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableLogic;
@@ -24,12 +26,18 @@ public class Competition {
     private Long id;
     private String code;
     private String name;
-    private String edition;
     private LocalDate competitionDate;
     private LocalDateTime registrationStart;
     private LocalDateTime registrationDeadline;
     private String status;
     private BigDecimal entryFee;
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private BigDecimal earlyBirdFee;
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private LocalDateTime earlyBirdDeadline;
+    private String description;
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String rulesUrl;
     private String styleLibraryVersion;
     private String deliveryMethod;
     private LocalDateTime sampleArrivalStart;

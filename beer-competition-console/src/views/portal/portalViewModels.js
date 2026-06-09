@@ -42,6 +42,31 @@ export function isEntryResultPublished(entry) {
   return Boolean(entry?.published) || entry?.status === 'RESULT_PUBLISHED'
 }
 
+export function isEarlyBirdActive(competition, now = new Date()) {
+  if (competition?.earlyBirdFee === null || competition?.earlyBirdFee === undefined || !competition?.earlyBirdDeadline) {
+    return false
+  }
+  const deadline = new Date(competition.earlyBirdDeadline)
+  return !Number.isNaN(deadline.getTime()) && now.getTime() <= deadline.getTime()
+}
+
+export function currentEntryFee(competition) {
+  if (!competition) return null
+  return isEarlyBirdActive(competition) ? competition.earlyBirdFee : competition.entryFee
+}
+
+export function entryPayAmount(entry) {
+  return entry?.payment?.amount ?? entry?.entryFee ?? 0
+}
+
+export function formatCompetitionFee(competition) {
+  if (!competition || competition.entryFee === null || competition.entryFee === undefined) return '待公布'
+  if (isEarlyBirdActive(competition)) {
+    return `早鸟价 ¥${competition.earlyBirdFee} / 款`
+  }
+  return `报名费 ¥${competition.entryFee} / 款`
+}
+
 export function isEntryAwarded(entry) {
   return isEntryResultPublished(entry) && Boolean(entry?.awardName || entry?.roundResult?.awardName || entry?.champion)
 }
@@ -67,7 +92,7 @@ export function competitionAction(competition, loggedIn = false) {
   if (!loggedIn) {
     return { label: '登录后报名', to: '/portal/login' }
   }
-  return { label: '提交酒款', to: `/portal/submit?competitionId=${competition.id}` }
+  return { label: '报名参赛', to: `/portal/submit?competitionId=${competition.id}` }
 }
 
 export function entryPrimaryAction(entry) {

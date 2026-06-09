@@ -13,12 +13,11 @@
       <div v-if="activeCompetition" class="hero-copy">
         <span class="label-chip tone-green">{{ activeCompetition.currentStageLabel }}</span>
         <h1>{{ activeCompetition.name }}</h1>
-        <p>查看报名窗口、投递组别、基础风格和报名费，确认后提交本厂牌酒款。</p>
+        <p>{{ activeCompetition.description || '查看报名窗口、投递组别、基础风格和当前应付金额，确认后报名参赛。' }}</p>
         <div class="hero-facts">
-          <span>比赛日期 {{ formatDate(activeCompetition.competitionDate) }}</span>
-          <span>报名截止 {{ formatDateTime(activeCompetition.registrationDeadline) }}</span>
-          <span>送样截止 {{ formatDateTime(activeCompetition.logistics?.sampleArrivalDeadline) }}</span>
-          <span>报名费 ¥{{ activeCompetition.entryFee }} / 款</span>
+          <span>报名截止 {{ formatMonthDayTime(activeCompetition.registrationDeadline) || '-' }}</span>
+          <span>{{ entryFeeText(activeCompetition) }}</span>
+          <span>送样截止 {{ formatMonthDayTime(activeCompetition.logistics?.sampleArrivalDeadline) || '-' }}</span>
         </div>
         <div class="hero-actions">
           <RouterLink class="primary-action" to="/portal/events">查看开放赛事</RouterLink>
@@ -28,7 +27,7 @@
             class="text-action"
             :to="loggedIn ? `/portal/submit?competitionId=${activeCompetition.id}` : '/portal/login'"
           >
-            {{ loggedIn ? '立即提交酒款' : '登录后报名' }}
+            {{ loggedIn ? '立即报名参赛' : '登录后报名' }}
           </RouterLink>
         </div>
       </div>
@@ -61,12 +60,12 @@
             {{ competition.id === activeCompetition?.id ? '重点赛事' : competition.currentStageLabel }}
           </span>
           <h3>{{ competition.name }}</h3>
-          <p>{{ competition.code }} · {{ competition.edition }}</p>
+          <p>{{ competition.description || competition.code }}</p>
           <dl>
             <div><dt>报名截止</dt><dd>{{ formatDateTime(competition.registrationDeadline) }}</dd></div>
-            <div><dt>报名费</dt><dd>¥{{ competition.entryFee }} / 款</dd></div>
+            <div><dt>当前应付</dt><dd>{{ entryFeeText(competition) }}</dd></div>
+            <div v-if="earlyBirdDeadlineText(competition)"><dt>早鸟截止</dt><dd>{{ earlyBirdDeadlineText(competition) }}</dd></div>
             <div><dt>比赛日期</dt><dd>{{ formatDate(competition.competitionDate) }}</dd></div>
-            <div><dt>送样截止</dt><dd>{{ formatDateTime(competition.logistics?.sampleArrivalDeadline) }}</dd></div>
           </dl>
           <div class="card-actions">
             <RouterLink :to="`/portal/events/${competition.id}`">查看赛事</RouterLink>
@@ -75,7 +74,7 @@
               class="card-primary"
               :to="loggedIn ? `/portal/submit?competitionId=${competition.id}` : '/portal/login'"
             >
-              {{ loggedIn ? '提交酒款' : '登录报名' }}
+              {{ loggedIn ? '报名参赛' : '登录报名' }}
             </RouterLink>
           </div>
         </article>
@@ -119,7 +118,7 @@
       <article class="brewer-card guide-card">
         <h2 class="portal-section-title">送样与标签</h2>
         <dl>
-          <div><dt>参赛编号</dt><dd>提交酒款后生成，用于厂商和主办方核对报名记录。</dd></div>
+          <div><dt>参赛编号</dt><dd>报名后生成，用于厂商和主办方核对报名记录。</dd></div>
           <div><dt>现场短编号</dt><dd>展示在标签下方，扫码失败时供现场人工输入。</dd></div>
           <div><dt>标签用途</dt><dd>支付成功后下载并贴在酒瓶或外箱，主办方收样后确认入库。</dd></div>
         </dl>
@@ -142,7 +141,7 @@ import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { isLoggedIn } from '@/utils/auth'
 import { fetchPortalEntries, fetchPortalHome, fetchPortalResults } from '@/api/portal'
-import { canSubmitEntry, isEntryResultPublished } from './portalViewModels'
+import { canSubmitEntry, formatCompetitionFee, isEarlyBirdActive, isEntryResultPublished } from './portalViewModels'
 
 const loggedIn = computed(() => isLoggedIn('portal'))
 const homeData = ref({ activeCompetition: null, openCompetitions: [], competitions: [] })
@@ -169,16 +168,16 @@ const reasons = [
 ]
 
 const flowSteps = [
-  { index: '01', title: '选择赛事', text: '查看日期、费用、投递组别和送样要求，确认适合提交的酒款。' },
-  { index: '02', title: '提交酒款', text: '填写酒名、组别、基础风格、ABV 和赛事配置的额外字段。' },
-  { index: '03', title: '支付报名费', text: '提交酒款后支付报名费，支付成功即完成报名。' },
+  { index: '01', title: '选择赛事', text: '查看日期、费用、投递组别和送样要求，确认适合报名的酒款。' },
+  { index: '02', title: '报名参赛', text: '填写酒名、组别、基础风格、ABV 和赛事配置的额外字段。' },
+  { index: '03', title: '支付报名费', text: '报名后支付报名费，支付成功即完成报名。' },
   { index: '04', title: '下载标签', text: '支付成功后下载现场标签，标签包含参赛编号和现场短编号。' },
   { index: '05', title: '送样入库', text: '按要求寄送或现场交付酒样，主办方收样后更新入库状态。' },
   { index: '06', title: '查看结果', text: '结果发布后查看评分、桌长评语和奖项。' },
 ]
 
 const faqs = [
-  { question: '报名截止后还能提交酒款吗？', answer: '报名截止后不再开放提交入口，如需调整请联系主办方确认。' },
+  { question: '报名截止后还能报名参赛吗？', answer: '报名截止后不再开放报名入口，如需调整请联系主办方确认。' },
   { question: '付款后多久可以下载标签？', answer: '支付成功后酒款状态变为报名成功，即可下载标签。' },
   { question: '酒样需要寄几瓶？', answer: '不同赛事要求可能不同，请以主办方发布的单场通知为准。' },
   { question: '结果发布后能看到什么？', answer: '可查看评分明细、桌长综合评语和奖项。' },
@@ -216,8 +215,11 @@ function categoryNamesText(competition) {
 }
 
 function entryFeeText(competition) {
-  if (!competition || competition.entryFee === null || competition.entryFee === undefined) return '待公布'
-  return `¥${competition.entryFee} / 款`
+  return formatCompetitionFee(competition)
+}
+
+function earlyBirdDeadlineText(competition) {
+  return isEarlyBirdActive(competition) ? formatDateTime(competition.earlyBirdDeadline) : ''
 }
 </script>
 
@@ -284,11 +286,15 @@ function entryFeeText(competition) {
 }
 
 .hero-copy p {
+  display: -webkit-box;
   max-width: 760px;
   margin: 0;
+  overflow: hidden;
   color: #eadabd;
   font-size: 18px;
   line-height: 1.7;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
 }
 
 .hero-facts {
@@ -299,12 +305,16 @@ function entryFeeText(competition) {
 }
 
 .hero-facts span {
-  padding: 7px 11px;
+  min-height: 34px;
+  padding: 7px 12px;
+  color: #fff8e8;
   background: rgba(255, 250, 240, 0.12);
   border: 1px solid rgba(255, 250, 240, 0.22);
   border-radius: 8px;
   font-size: 13px;
   font-weight: 800;
+  line-height: 18px;
+  white-space: nowrap;
 }
 
 .hero-actions,
@@ -436,6 +446,16 @@ function entryFeeText(competition) {
 .faq-list p,
 dt {
   color: #746a5f;
+}
+
+.event-card p {
+  display: -webkit-box;
+  max-width: 520px;
+  margin: 0;
+  overflow: hidden;
+  line-height: 1.7;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
 }
 
 dl {

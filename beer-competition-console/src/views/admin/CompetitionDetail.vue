@@ -9,10 +9,6 @@
         <div class="title-block">
           <div class="title-line">
             <h1>{{ competition.name }}</h1>
-            <template v-if="competition.edition">
-              <span class="title-divider">|</span>
-              <span class="title-edition">{{ competition.edition }}</span>
-            </template>
           </div>
           <div class="meta-line">
             <span :class="['state-badge', statusInfo.tone]">{{ statusInfo.label }}</span>
@@ -21,6 +17,7 @@
             <span>{{ currentRoundTypeLabel }}</span>
             <span>比赛日 {{ formatDate(competition.date) }}</span>
             <span>{{ competition.entryFee }} 元 / 款</span>
+            <span v-if="earlyBirdHeaderText">{{ earlyBirdHeaderText }}</span>
           </div>
         </div>
         <div class="head-action-group">
@@ -55,9 +52,11 @@
       <div class="detail-tabbar">
         <nav class="detail-tabs" aria-label="比赛详情导航">
           <button
-            v-for="tab in tabs"
+            v-for="tab in detailTabs"
             :key="tab.key"
-            :class="{ active: activeTab === tab.key }"
+            :class="{ active: activeTab === tab.key, disabled: !tab.enabled }"
+            :aria-disabled="!tab.enabled"
+            :title="tab.disabledReason || tab.label"
             type="button"
             @click="handleDetailTabChange(tab.key)"
           >
@@ -112,7 +111,7 @@
                 <p v-for="item in overviewActionItems" v-else :key="item.key" :class="item.level">
                   <component :is="item.level === 'danger' ? Warning : Clock" />
                   <span>{{ item.text }}</span>
-                  <button v-if="item.targetTab" class="link-action" type="button" @click="activeTab = item.targetTab">去处理</button>
+                  <button v-if="item.targetTab" class="link-action" type="button" @click="handleDetailTabChange(item.targetTab)">去处理</button>
                 </p>
               </div>
             </article>
@@ -150,6 +149,140 @@
                 </span>
                 <em>{{ task.statusText }}</em>
               </button>
+            </div>
+          </article>
+        </section>
+
+        <section v-if="activeTab === 'baseInfo'" class="tab-panel base-info-panel">
+          <div v-if="!editable.baseInfo" class="edit-banner locked">
+            <Lock />
+            {{ editable.description ? '当前阶段仅允许维护赛事简介，价格和报名时间已锁定。' : '当前阶段基础信息已锁定。' }}
+          </div>
+
+          <article class="panel-card base-info-card">
+            <div class="panel-heading">
+              <div>
+                <h2>基础信息</h2>
+                <span>厂商端会展示赛事简介、报名窗口和当前应付金额。</span>
+              </div>
+            </div>
+            <div class="base-info-groups">
+              <label class="wide-field">
+                <span>比赛名称</span>
+                <input v-model.trim="baseForm.name" :disabled="!editable.baseInfo" />
+              </label>
+
+              <section class="form-subgroup">
+                <h3>赛事属性</h3>
+                <div class="base-form-grid">
+                  <label>
+                    <span>比赛日期</span>
+                    <input v-model="baseForm.competitionDate" type="date" :disabled="!editable.baseInfo" />
+                  </label>
+                  <label>
+                    <span>比赛编号</span>
+                    <input v-model.trim="baseForm.code" :disabled="!editable.baseInfo" />
+                  </label>
+                </div>
+              </section>
+
+              <section class="form-subgroup">
+                <h3>报名时间</h3>
+                <div class="base-form-grid">
+                  <label>
+                    <span>报名开始时间</span>
+                    <input v-model="baseForm.registrationStart" type="datetime-local" :disabled="!editable.baseInfo" />
+                  </label>
+                  <label>
+                    <span>报名截止时间</span>
+                    <input v-model="baseForm.registrationDeadline" type="datetime-local" :disabled="!editable.baseInfo" />
+                  </label>
+                </div>
+              </section>
+
+              <section class="form-subgroup">
+                <h3>费用规则</h3>
+                <div class="base-form-grid">
+                  <label>
+                    <span>普通报名费</span>
+                    <input v-model.number="baseForm.entryFee" min="0" type="number" :disabled="!editable.basePrice" />
+                  </label>
+                  <label>
+                    <span>早鸟价</span>
+                    <input v-model.number="baseForm.earlyBirdFee" min="0" type="number" :disabled="!editable.basePrice" />
+                  </label>
+                  <label>
+                    <span>早鸟截止时间</span>
+                    <input v-model="baseForm.earlyBirdDeadline" type="datetime-local" :disabled="!editable.basePrice" />
+                  </label>
+                </div>
+              </section>
+
+              <section class="form-subgroup">
+                <h3>赛事展示</h3>
+                <label class="wide-field">
+                  <span>赛事简介</span>
+                  <textarea v-model.trim="baseForm.description" maxlength="1000" rows="4" :disabled="!editable.description" />
+                </label>
+                <label class="wide-field">
+                  <span>参赛细则链接</span>
+                  <input v-model.trim="baseForm.rulesUrl" placeholder="例如 https://mp.weixin.qq.com/s/..." :disabled="!editable.description" />
+                </label>
+              </section>
+            </div>
+          </article>
+
+          <article class="panel-card base-info-card">
+            <div class="panel-heading">
+              <div>
+                <h2>送样信息</h2>
+              </div>
+            </div>
+            <div class="base-form-grid">
+              <label>
+                <span>送样方式</span>
+                <select v-model="baseForm.deliveryMethod" :disabled="!editable.baseInfo">
+                  <option value="BOTH">快递寄送 / 现场送样</option>
+                  <option value="EXPRESS">仅快递寄送</option>
+                  <option value="ONSITE">仅现场送样</option>
+                </select>
+              </label>
+              <label>
+                <span>地址展示</span>
+                <select v-model="baseForm.logisticsVisibility" :disabled="!editable.baseInfo">
+                  <option value="PAYMENT_CONFIRMED">付款确认后显示完整地址</option>
+                  <option value="LOGIN_REQUIRED">登录后显示完整地址</option>
+                  <option value="PUBLIC">公开显示完整地址</option>
+                </select>
+              </label>
+              <label>
+                <span>送达开始</span>
+                <input v-model="baseForm.sampleArrivalStart" type="datetime-local" :disabled="!editable.baseInfo" />
+              </label>
+              <label>
+                <span>送达截止</span>
+                <input v-model="baseForm.sampleArrivalDeadline" type="datetime-local" :disabled="!editable.baseInfo" />
+              </label>
+              <label>
+                <span>收件人</span>
+                <input v-model.trim="baseForm.deliveryRecipient" :disabled="!editable.baseInfo" />
+              </label>
+              <label>
+                <span>收件联系电话</span>
+                <input v-model.trim="baseForm.deliveryPhone" :disabled="!editable.baseInfo" />
+              </label>
+              <label class="wide-field">
+                <span>收件地址</span>
+                <input v-model.trim="baseForm.deliveryAddress" :disabled="!editable.baseInfo" />
+              </label>
+              <label>
+                <span>酒样数量要求</span>
+                <input v-model.trim="baseForm.sampleQuantityNote" :disabled="!editable.baseInfo" />
+              </label>
+              <label class="wide-field">
+                <span>送样说明</span>
+                <textarea v-model.trim="baseForm.deliveryNote" rows="3" :disabled="!editable.baseInfo" />
+              </label>
             </div>
           </article>
         </section>
@@ -991,7 +1124,7 @@
             <h2 id="publish-registration-title">确认发布报名？</h2>
           </header>
           <p class="confirm-copy">
-            发布后，厂商端将展示本场比赛并允许提交酒款。发布前请确认报名时间、投递组别和风格库已经核对完成。
+            发布后，厂商端将展示本场比赛并允许报名参赛。发布前请确认报名时间、投递组别和风格库已经核对完成。
           </p>
           <div class="confirm-summary">
             <span>
@@ -1325,6 +1458,7 @@ import {
   publishRound,
   saveRoundAllocation,
   syncRoundCandidates,
+  updateCompetitionBaseInfo,
   updateCompetitionCategories,
   updateCompetitionEntryFields,
   updateCompetitionJudgeAssignments,
@@ -1339,7 +1473,7 @@ import TableAllocationWorkbench from './components/competition-detail/TableAlloc
 
 const route = useRoute()
 const router = useRouter()
-const detailTabKeys = new Set(['overview', 'entryConfig', 'entries', 'judges', 'rounds', 'score', 'feedback', 'results'])
+const detailTabKeys = new Set(['overview', 'baseInfo', 'entryConfig', 'entries', 'judges', 'rounds', 'score', 'feedback', 'results'])
 const roundProgressPollIntervalMs = 8000
 const activeTab = ref(normalizeDetailTab(route.query.tab))
 const loading = ref(false)
@@ -1347,6 +1481,27 @@ const competition = ref(null)
 let roundProgressPollTimer = null
 let roundProgressRefreshing = false
 const categoryForm = reactive([])
+const baseForm = reactive({
+  name: '',
+  code: '',
+  competitionDate: '',
+  registrationStart: '',
+  registrationDeadline: '',
+  entryFee: 0,
+  earlyBirdFee: '',
+  earlyBirdDeadline: '',
+  description: '',
+  rulesUrl: '',
+  deliveryMethod: 'BOTH',
+  sampleArrivalStart: '',
+  sampleArrivalDeadline: '',
+  sampleQuantityNote: '',
+  deliveryRecipient: '',
+  deliveryPhone: '',
+  deliveryAddress: '',
+  deliveryNote: '',
+  logisticsVisibility: 'PAYMENT_CONFIRMED',
+})
 const entryFieldForm = reactive([])
 const judgeTableForm = reactive([])
 const judgeAssignmentForm = reactive([])
@@ -1418,14 +1573,24 @@ let styleDistributionResizeObserver = null
 
 const tabs = [
   { key: 'overview', label: '概览', icon: DataAnalysis },
+  { key: 'baseInfo', label: '基础信息', icon: Setting },
   { key: 'entryConfig', label: '报名配置', icon: Setting },
+  { key: 'score', label: '评分表', icon: Finished },
   { key: 'entries', label: '参赛酒款', icon: Tickets },
   { key: 'judges', label: '分桌分配', icon: Files },
   { key: 'rounds', label: '轮次编排', icon: Calendar },
-  { key: 'score', label: '评分表', icon: Finished },
   { key: 'feedback', label: '评价查看', icon: CircleCheck },
   { key: 'results', label: '结果发布', icon: Medal },
 ]
+
+const detailTabs = computed(() => tabs.map((tab) => {
+  const disabledReason = resolveDetailTabDisabledReason(tab.key)
+  return {
+    ...tab,
+    enabled: !disabledReason,
+    disabledReason,
+  }
+}))
 
 const entryStatusLabels = {
   PENDING_PAYMENT: '待付款',
@@ -1481,9 +1646,16 @@ const styleCategorySummary = computed(() => {
   return [...counts.entries()].map(([name, count]) => ({ name, count }))
 })
 const registrationWindowInfo = computed(() => resolveRegistrationWindowInfo())
+const earlyBirdHeaderText = computed(() => {
+  if (competition.value?.earlyBirdFee === null || competition.value?.earlyBirdFee === undefined || !competition.value?.earlyBirdDeadline) return ''
+  return `早鸟 ${competition.value.earlyBirdFee} 元 / 款，截止 ${formatDateTime(competition.value.earlyBirdDeadline)}`
+})
 const stagePrimaryAction = computed(() => resolveStagePrimaryAction())
 const stageSecondaryActions = computed(() => resolveStageSecondaryActions())
 const tabSaveAction = computed(() => {
+  if (activeTab.value === 'baseInfo' && (editable.value.baseInfo || editable.value.description)) {
+    return { label: '保存基础信息', handler: saveBaseInfo }
+  }
   if (activeTab.value === 'entryConfig' && editable.value.entryStructure) {
     return { label: '保存报名配置', handler: saveEntryConfig }
   }
@@ -1927,7 +2099,9 @@ onUnmounted(() => {
 watch(() => route.params.id, loadDetail)
 watch(() => route.query.tab, (tab) => {
   const nextTab = normalizeDetailTab(tab)
-  if (nextTab !== activeTab.value) activeTab.value = nextTab
+  if (nextTab !== activeTab.value) {
+    activeTab.value = competition.value && resolveDetailTabDisabledReason(nextTab) ? 'overview' : nextTab
+  }
 })
 watch(activeTab, (tab) => {
   syncActiveTabQuery(tab)
@@ -1977,6 +2151,7 @@ async function loadDetail() {
     competition.value = normalizeDetail(data)
     resetForms()
     applyRoundState()
+    ensureActiveTabAvailable()
   } finally {
     loading.value = false
   }
@@ -1993,6 +2168,7 @@ async function refreshRoundProgress() {
     competition.value = normalizeDetail(data)
     resetForms()
     applyRoundState(preferredRoundId, { preferredTableId, keepEntrySelection: true })
+    ensureActiveTabAvailable()
   } catch {
     // 现场进度静默刷新失败时保留当前页面状态。
   } finally {
@@ -2142,6 +2318,28 @@ function normalizeDetail(data) {
 }
 
 function resetForms() {
+  const logistics = competition.value.logistics || {}
+  Object.assign(baseForm, {
+    name: competition.value.name || '',
+    code: competition.value.code || '',
+    competitionDate: toInputDate(competition.value.competitionDate || competition.value.date),
+    registrationStart: toInputDateTime(competition.value.registrationStart),
+    registrationDeadline: toInputDateTime(competition.value.registrationDeadline),
+    entryFee: competition.value.entryFee ?? 0,
+    earlyBirdFee: competition.value.earlyBirdFee ?? '',
+    earlyBirdDeadline: toInputDateTime(competition.value.earlyBirdDeadline),
+    description: competition.value.description || '',
+    rulesUrl: competition.value.rulesUrl || '',
+    deliveryMethod: logistics.deliveryMethod || 'BOTH',
+    sampleArrivalStart: toInputDateTime(logistics.sampleArrivalStart),
+    sampleArrivalDeadline: toInputDateTime(logistics.sampleArrivalDeadline),
+    sampleQuantityNote: logistics.sampleQuantityNote || '',
+    deliveryRecipient: logistics.deliveryRecipient || '',
+    deliveryPhone: logistics.deliveryPhone || '',
+    deliveryAddress: logistics.deliveryAddress || '',
+    deliveryNote: logistics.deliveryNote || '',
+    logisticsVisibility: logistics.logisticsVisibility || 'PAYMENT_CONFIRMED',
+  })
   selectedStyleLibraryVersion.value = competition.value.styleLibraryVersion || ''
   categoryForm.splice(0, categoryForm.length, ...competition.value.categories.map((item) => item.name))
   entryFieldForm.splice(0, entryFieldForm.length, ...competition.value.entryFields.map((item, index) => ({
@@ -2339,6 +2537,24 @@ function parseDateTime(value) {
   return Number.isNaN(time) ? null : time
 }
 
+function toInputDate(value) {
+  return value ? String(value).slice(0, 10) : ''
+}
+
+function toInputDateTime(value) {
+  if (!value) return ''
+  return String(value).replace(' ', 'T').slice(0, 16)
+}
+
+function toBackendDateTime(value) {
+  if (!value) return null
+  return value.length === 16 ? `${value}:00` : value
+}
+
+function isValidHttpUrl(value) {
+  return /^https?:\/\//i.test(String(value || '').trim())
+}
+
 function toChineseNumber(value) {
   const digits = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九']
   const number = Number(value)
@@ -2385,7 +2601,7 @@ function resolveStagePrimaryAction() {
 
 function resolveStageSecondaryActions() {
   const actions = [
-    { key: 'rounds', label: '进入轮次编排', handler: () => { activeTab.value = 'rounds' } },
+    { key: 'rounds', label: '进入轮次编排', handler: () => handleDetailTabChange('rounds') },
     { key: 'export', label: '导出数据', handler: () => downloadScoringData() },
   ]
   if (competition.value?.status !== 'ARCHIVED') {
@@ -2467,7 +2683,7 @@ function handleFutureTask(task) {
     return
   }
   if (task.roundId) selectRound(task.roundId)
-  activeTab.value = task.targetTab
+  handleDetailTabChange(task.targetTab)
 }
 
 function selectRound(roundId) {
@@ -2478,8 +2694,59 @@ function selectRound(roundId) {
   closeEntryAutoAssignDialog()
 }
 
+function ensureActiveTabAvailable() {
+  if (!competition.value) return
+  if (resolveDetailTabDisabledReason(activeTab.value)) {
+    activeTab.value = 'overview'
+  }
+}
+
+function resolveDetailTabDisabledReason(tabKey) {
+  if (!competition.value) return ''
+  const status = competition.value.status
+  const hasEntries = Number(competition.value.entriesSummary?.total || 0) > 0
+  const hasFeedback = feedbackReviewEntries.value.length > 0
+  const hasAwards = awardDrafts.value.length > 0
+
+  if (tabKey === 'overview' || tabKey === 'baseInfo' || tabKey === 'entryConfig' || tabKey === 'score') {
+    return ''
+  }
+  if (tabKey === 'entries') {
+    return status === 'DRAFT' ? '报名发布后才会产生参赛酒款，草稿阶段先完成报名配置。' : ''
+  }
+  if (tabKey === 'judges') {
+    if (status === 'DRAFT') return '草稿阶段先完成报名配置并发布报名，避免提前分配不存在或未确认的酒款。'
+    if (status === 'REGISTRATION_OPEN') return '报名仍在进行，分桌分配需等报名截止后再处理。'
+    return ''
+  }
+  if (tabKey === 'rounds') {
+    if (status === 'DRAFT') return '草稿阶段不能编排正式轮次，请先发布报名并完成报名截止。'
+    if (status === 'REGISTRATION_OPEN') return '报名仍在进行，轮次编排需等报名截止并完成酒款确认。'
+    if (status === 'REGISTRATION_CLOSED' && !hasEntries) return '当前还没有参赛酒款，无法编排轮次。'
+    return ''
+  }
+  if (tabKey === 'feedback') {
+    if (!['JUDGING', 'RESULT_CONFIRMING', 'PUBLISHED', 'ARCHIVED'].includes(status) && !hasFeedback) {
+      return '评审开始并产生评分反馈后才能查看评价。'
+    }
+    return ''
+  }
+  if (tabKey === 'results') {
+    if (!['RESULT_CONFIRMING', 'PUBLISHED', 'ARCHIVED'].includes(status) && !hasAwards) {
+      return '结果发布需等评审轮次锁定并进入结果确认阶段。'
+    }
+    return ''
+  }
+  return ''
+}
+
 async function handleDetailTabChange(nextTab) {
   if (nextTab === activeTab.value) return
+  const disabledReason = resolveDetailTabDisabledReason(nextTab)
+  if (disabledReason) {
+    ElMessage.info(disabledReason)
+    return
+  }
   if (activeTab.value === 'judges') {
     const saved = await autoSaveAllocationDraft(allocationMode.value)
     if (!saved) return
@@ -4360,6 +4627,65 @@ async function saveJudgeDraft(options = {}) {
   return true
 }
 
+async function saveBaseInfo() {
+  if (!baseForm.description) {
+    ElMessage.warning('请填写赛事简介')
+    return
+  }
+  if (baseForm.rulesUrl && !isValidHttpUrl(baseForm.rulesUrl)) {
+    ElMessage.warning('参赛细则链接必须以 http:// 或 https:// 开头')
+    return
+  }
+  if (!baseForm.name || !baseForm.code || !baseForm.competitionDate || !baseForm.registrationDeadline) {
+    ElMessage.warning('请补齐比赛名称、编号、比赛日期和报名截止时间')
+    return
+  }
+  const hasEarlyBirdFee = baseForm.earlyBirdFee !== '' && baseForm.earlyBirdFee !== null && baseForm.earlyBirdFee !== undefined
+  const hasEarlyBirdDeadline = Boolean(baseForm.earlyBirdDeadline)
+  if (hasEarlyBirdFee !== hasEarlyBirdDeadline) {
+    ElMessage.warning('早鸟价和早鸟价截止时间需要同时填写')
+    return
+  }
+  if (hasEarlyBirdFee) {
+    if (Number(baseForm.earlyBirdFee) > Number(baseForm.entryFee || 0)) {
+      ElMessage.warning('早鸟价不能高于报名费')
+      return
+    }
+    const start = parseDateTime(baseForm.registrationStart)
+    const earlyDeadline = parseDateTime(baseForm.earlyBirdDeadline)
+    const registrationDeadline = parseDateTime(baseForm.registrationDeadline)
+    if ((start && earlyDeadline <= start) || (registrationDeadline && earlyDeadline > registrationDeadline)) {
+      ElMessage.warning('早鸟价截止时间需在报名窗口内')
+      return
+    }
+  }
+  const detail = await updateCompetitionBaseInfo(competition.value.id, {
+    name: baseForm.name,
+    code: baseForm.code,
+    competitionDate: baseForm.competitionDate,
+    registrationStart: toBackendDateTime(baseForm.registrationStart),
+    registrationDeadline: toBackendDateTime(baseForm.registrationDeadline),
+    entryFee: Number(baseForm.entryFee || 0),
+    earlyBirdFee: hasEarlyBirdFee ? Number(baseForm.earlyBirdFee) : null,
+    earlyBirdDeadline: toBackendDateTime(baseForm.earlyBirdDeadline),
+    description: baseForm.description,
+    rulesUrl: baseForm.rulesUrl || null,
+    deliveryMethod: baseForm.deliveryMethod,
+    sampleArrivalStart: toBackendDateTime(baseForm.sampleArrivalStart),
+    sampleArrivalDeadline: toBackendDateTime(baseForm.sampleArrivalDeadline),
+    sampleQuantityNote: baseForm.sampleQuantityNote,
+    deliveryRecipient: baseForm.deliveryRecipient,
+    deliveryPhone: baseForm.deliveryPhone,
+    deliveryAddress: baseForm.deliveryAddress,
+    deliveryNote: baseForm.deliveryNote,
+    logisticsVisibility: baseForm.logisticsVisibility,
+  })
+  competition.value = normalizeDetail(detail)
+  resetForms()
+  applyRoundState()
+  ElMessage.success('基础信息已保存')
+}
+
 async function saveEntryConfig() {
   const library = getStyleLibrary(selectedStyleLibraryVersion.value, styleLibraryOptions.value)
   const categoryItems = categoryForm.filter(Boolean).map((name, index) => ({ name, sortOrder: index }))
@@ -4693,7 +5019,8 @@ p {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -4703,7 +5030,8 @@ button {
 
 button:disabled,
 input:disabled,
-select:disabled {
+select:disabled,
+textarea:disabled {
   cursor: not-allowed;
   opacity: 0.58;
 }
@@ -4756,19 +5084,6 @@ svg {
 .title-line h1 {
   font-size: 28px;
   line-height: 1.15;
-}
-
-.title-divider {
-  color: rgba(141, 161, 170, 0.55);
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.title-edition {
-  color: var(--muted);
-  font-size: 17px;
-  font-weight: 700;
-  white-space: nowrap;
 }
 
 .meta-line {
@@ -5593,6 +5908,25 @@ svg {
   background: rgba(216, 169, 53, 0.08);
 }
 
+.detail-tabs button.disabled {
+  color: #596a70;
+  cursor: not-allowed;
+  border-color: rgba(219, 232, 237, 0.055);
+  background: rgba(255, 255, 255, 0.012);
+  box-shadow: none;
+  opacity: 0.72;
+}
+
+.detail-tabs button.disabled svg {
+  color: #4f6066;
+}
+
+.detail-tabs button.disabled:hover {
+  color: #66777d;
+  border-color: rgba(219, 232, 237, 0.08);
+  background: rgba(255, 255, 255, 0.018);
+}
+
 .tab-save-actions {
   flex: 0 0 auto;
   display: flex;
@@ -6004,7 +6338,8 @@ small,
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   box-sizing: border-box;
   min-width: 0;
@@ -6019,14 +6354,73 @@ select {
 }
 
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   border-color: rgba(224, 184, 74, 0.5);
   background-color: rgba(10, 20, 24, 0.92);
   box-shadow: 0 0 0 3px rgba(216, 169, 53, 0.09);
 }
 
-input::placeholder {
+textarea {
+  min-height: 96px;
+  padding-top: 10px;
+  line-height: 1.55;
+  resize: vertical;
+}
+
+input::placeholder,
+textarea::placeholder {
   color: var(--faint);
+}
+
+.base-info-panel,
+.base-info-card {
+  display: grid;
+  gap: 14px;
+}
+
+.base-info-groups {
+  display: grid;
+  gap: 18px;
+  max-width: 1040px;
+}
+
+.form-subgroup {
+  display: grid;
+  gap: 12px;
+  padding-top: 2px;
+}
+
+.form-subgroup + .form-subgroup {
+  padding-top: 16px;
+  border-top: 1px solid rgba(219, 232, 237, 0.08);
+}
+
+.form-subgroup h3 {
+  color: #c7d5db;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.base-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(260px, 1fr));
+  gap: 14px;
+  max-width: 1040px;
+}
+
+.base-form-grid label {
+  display: grid;
+  gap: 8px;
+}
+
+.base-form-grid label > span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.base-form-grid .wide-field {
+  grid-column: 1 / -1;
 }
 
 input[type="checkbox"] {
@@ -8637,6 +9031,7 @@ button.pyramid-placeholder-mark {
   .round-table-board,
   .score-panels,
   .progress-card-grid,
+  .base-form-grid,
   .award-list {
     grid-template-columns: 1fr;
   }

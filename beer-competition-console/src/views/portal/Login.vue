@@ -3,7 +3,7 @@
     <section class="login-art">
       <span>BC-2026</span>
       <h1>参赛厂牌报名入口</h1>
-      <p>提交酒款、完成付款、下载现场标签，并在结果发布后查看评审反馈。</p>
+      <p>报名参赛、完成付款、下载现场标签，并在结果发布后查看评审反馈。</p>
       <div class="label-stack">
         <div>IPA / SOUR / STOUT / LAGER</div>
         <strong>Greater Bay Craft Beer Awards</strong>

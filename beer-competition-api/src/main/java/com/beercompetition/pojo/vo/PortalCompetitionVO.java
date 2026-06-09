@@ -15,12 +15,15 @@ public class PortalCompetitionVO {
     private Long id;
     private String code;
     private String name;
-    private String edition;
     private LocalDate competitionDate;
     private LocalDateTime registrationStart;
     private LocalDateTime registrationDeadline;
     private String status;
     private BigDecimal entryFee;
+    private BigDecimal earlyBirdFee;
+    private LocalDateTime earlyBirdDeadline;
+    private String description;
+    private String rulesUrl;
     private CompetitionLogisticsVO logistics;
     private String currentStageLabel;
     private List<CompetitionConfigNameVO> categories;

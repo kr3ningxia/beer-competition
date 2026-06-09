@@ -38,49 +38,6 @@ function writeScores(scores) {
   localStorage.setItem(MOCK_SCORES_KEY, JSON.stringify(scores))
 }
 
-function nowLabel() {
-  return new Intl.DateTimeFormat('zh-CN', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(new Date())
-}
-
-function buildComments(dimensions, fallback = '') {
-  const lines = dimensions
-    .map((item) => ({
-      label: item.label,
-      note: String(item.note || '').trim(),
-    }))
-    .filter((item) => item.note)
-    .map((item) => `${item.label}：${item.note}`)
-  return lines.length ? lines.join('\n') : fallback
-}
-
-function normalizeScore(payload, existing = {}) {
-  const user = readUser()
-  const dimensions = payload.dimensions || []
-  const totalScore = Number(
-    (payload.totalScore ?? dimensions.reduce((sum, item) => sum + Number(item.score || 0), 0)).toFixed(1),
-  )
-
-  return {
-    ...existing,
-    id: existing.id || `score-${Date.now()}`,
-    beerUuid: payload.beerUuid,
-    judgeName: user?.displayName || '现场评审',
-    judgeRoleType: payload.judgeRoleType || user?.role || 'CROSS',
-    roleLabel: getRoleLabel(payload.judgeRoleType || user?.role || 'CROSS'),
-    dimensions,
-    totalScore,
-    comments: buildComments(dimensions, payload.comments),
-    submittedAt: nowLabel(),
-    locked: false,
-    finalFlag: Boolean(payload.finalFlag),
-    advanced: Boolean(payload.advanced),
-  }
-}
-
 export function sendSmsCode(payload) {
   return request.post('/api/public/sms/send', payload)
 }
@@ -226,35 +183,13 @@ export async function fetchMyScore(uuid) {
 export async function createScore(payload) {
   const saved = await request.post('/api/judge/scores', payload)
   if (saved) return normalizeScoreRecord(saved)
-
-  const scores = readScores()
-  const user = readUser()
-  const existingIndex = scores.findIndex((item) => (
-    item.beerUuid === payload.beerUuid
-    && item.judgeName === user?.displayName
-    && !item.finalFlag
-  ))
-  const next = normalizeScore(payload, existingIndex >= 0 ? scores[existingIndex] : {})
-  if (existingIndex >= 0) {
-    scores.splice(existingIndex, 1, next)
-  } else {
-    scores.push(next)
-  }
-  writeScores(scores)
-  return next
+  throw new Error('评分提交失败：后端未返回有效评分记录')
 }
 
 export async function updateScore(id, payload) {
   const saved = await request.put(`/api/judge/scores/${id}`, payload)
   if (saved) return normalizeScoreRecord(saved)
-
-  const scores = readScores()
-  const index = scores.findIndex((item) => item.id === id)
-  if (index < 0) return createScore(payload)
-  const next = normalizeScore(payload, scores[index])
-  scores.splice(index, 1, next)
-  writeScores(scores)
-  return saved ? normalizeScoreRecord(saved) : next
+  throw new Error('评分更新失败：后端未返回有效评分记录')
 }
 
 export async function fetchTableScores(uuid) {
