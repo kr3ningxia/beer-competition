@@ -27,10 +27,6 @@ public class AdminEntryUpdateRequest {
     @DecimalMin(value = "0.0", inclusive = false, message = "ABV必须大于0")
     private BigDecimal abv;
 
-    @NotBlank(message = "酒款简介不能为空")
-    @Size(max = 500, message = "酒款简介不能超过500个字符")
-    private String description;
-
     private Map<String, Object> extraFields;
 
     @NotBlank(message = "请填写修改原因")

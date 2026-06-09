@@ -701,7 +701,7 @@ public class CompetitionServiceImpl implements CompetitionService {
                                                        Map<Long, List<AwardResult>> awardsByEntry) {
         List<List<String>> rows = new ArrayList<>();
         rows.add(List.of("匿名编号", "短编号", "酒款名称", "厂商", "联系人", "投递组别", "基础风格", "酒精度",
-                "酒款说明", "额外报名信息", "报名状态", "入库状态", "发布状态", "原始评分数", "桌长共识分",
+                "额外报名信息", "报名状态", "入库状态", "发布状态", "原始评分数", "桌长共识分",
                 "桌长综合评语", "轮次记录", "奖项结果"));
         for (BeerEntry entry : entries) {
             Brewery brewery = breweryById.get(entry.getBreweryId());
@@ -716,7 +716,6 @@ public class CompetitionServiceImpl implements CompetitionService {
                     categoryName(entry, categoryById),
                     firstText(entry.getStyle(), ""),
                     toPlain(entry.getAbv()),
-                    firstText(entry.getDescription(), ""),
                     formatExtraFields(extraFieldsByEntry.getOrDefault(entry.getId(), List.of())),
                     formatEntryStatus(entry.getStatus()),
                     Objects.equals(entry.getStoredFlag(), FLAG_TRUE) ? "已入库" : "未入库",
@@ -1628,11 +1627,6 @@ public class CompetitionServiceImpl implements CompetitionService {
         competition.setDeliveryPhone(normalizeNullable(request.getDeliveryPhone()));
         competition.setDeliveryAddress(normalizeNullable(request.getDeliveryAddress()));
         competition.setDeliveryNote(normalizeNullable(request.getDeliveryNote()));
-        competition.setVenueName(normalizeNullable(request.getVenueName()));
-        competition.setVenueAddress(normalizeNullable(request.getVenueAddress()));
-        competition.setVenueTimeNote(normalizeNullable(request.getVenueTimeNote()));
-        competition.setVenueContact(normalizeNullable(request.getVenueContact()));
-        competition.setVenueMapUrl(normalizeNullable(request.getVenueMapUrl()));
         competition.setLogisticsVisibility(normalizeLogisticsVisibility(request.getLogisticsVisibility()));
         validateLogisticsTime(competition);
     }
@@ -1646,11 +1640,6 @@ public class CompetitionServiceImpl implements CompetitionService {
         competition.setDeliveryPhone(normalizeNullable(request.getDeliveryPhone()));
         competition.setDeliveryAddress(normalizeNullable(request.getDeliveryAddress()));
         competition.setDeliveryNote(normalizeNullable(request.getDeliveryNote()));
-        competition.setVenueName(normalizeNullable(request.getVenueName()));
-        competition.setVenueAddress(normalizeNullable(request.getVenueAddress()));
-        competition.setVenueTimeNote(normalizeNullable(request.getVenueTimeNote()));
-        competition.setVenueContact(normalizeNullable(request.getVenueContact()));
-        competition.setVenueMapUrl(normalizeNullable(request.getVenueMapUrl()));
         competition.setLogisticsVisibility(normalizeLogisticsVisibility(request.getLogisticsVisibility()));
         validateLogisticsTime(competition);
     }
@@ -1665,11 +1654,6 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .deliveryPhone(competition.getDeliveryPhone())
                 .deliveryAddress(competition.getDeliveryAddress())
                 .deliveryNote(competition.getDeliveryNote())
-                .venueName(competition.getVenueName())
-                .venueAddress(competition.getVenueAddress())
-                .venueTimeNote(competition.getVenueTimeNote())
-                .venueContact(competition.getVenueContact())
-                .venueMapUrl(competition.getVenueMapUrl())
                 .logisticsVisibility(resolveLogisticsVisibility(competition.getLogisticsVisibility()))
                 .build();
     }
@@ -2304,7 +2288,7 @@ public class CompetitionServiceImpl implements CompetitionService {
                 || !Objects.equals(competition.getCode(), request.getCode())
                 || !Objects.equals(competition.getEdition(), request.getEdition())
                 || !Objects.equals(competition.getRegistrationStart(), request.getRegistrationStart())) {
-            throw new BaseException("报名已开放，仅允许修改比赛日期、报名截止时间、报名费和送样场地信息");
+            throw new BaseException("报名已开放，仅允许修改比赛日期、报名截止时间、报名费和送样信息");
         }
         if (competition.getEntryFee().compareTo(request.getEntryFee()) != 0 && hasEntries(competition.getId())) {
             throw new BaseException("已有报名酒款，报名费已锁定");

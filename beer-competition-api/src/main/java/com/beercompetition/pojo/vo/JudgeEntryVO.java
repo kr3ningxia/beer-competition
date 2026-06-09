@@ -36,6 +36,5 @@ public class JudgeEntryVO {
     private String styleCode;
     private String styleDescription;
     private BigDecimal abv;
-    private String description;
     private List<EntryExtraFieldVO> extraFields;
 }

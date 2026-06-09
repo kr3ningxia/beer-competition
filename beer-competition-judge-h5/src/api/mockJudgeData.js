@@ -51,7 +51,6 @@ export const entries = [
     categoryName: 'IPA 与淡色艾尔',
     style: 'American IPA',
     abv: '6.4%',
-    description: '酒体清亮，突出柑橘、松针与热带水果香气，收口干净，苦度中高。',
     extraFields: [
       { key: 'hop', label: '主要酒花', value: 'Citra / Mosaic / Simcoe' },
       { key: 'process', label: '特殊工艺', value: '双倍干投' },
@@ -64,7 +63,6 @@ export const entries = [
     categoryName: 'IPA 与淡色艾尔',
     style: 'Hazy IPA',
     abv: '6.8%',
-    description: '浑浊外观，香气以芒果、百香果和白葡萄为主，口感饱满，苦度柔和。',
     extraFields: [
       { key: 'hop', label: '主要酒花', value: 'Nelson Sauvin / Galaxy' },
       { key: 'process', label: '特殊工艺', value: '燕麦与小麦提升酒体' },
@@ -77,7 +75,6 @@ export const entries = [
     categoryName: '深色啤酒',
     style: 'Imperial Stout',
     abv: '9.2%',
-    description: '深棕近黑色酒体，带有咖啡、黑巧克力和烘烤麦芽香气，尾段有轻微温热感。',
     extraFields: [
       { key: 'adjunct', label: '增味原料', value: '可可豆、冷萃咖啡' },
     ],
@@ -89,7 +86,6 @@ export const entries = [
     categoryName: '酸啤与水果啤酒',
     style: 'Fruited Sour',
     abv: '4.7%',
-    description: '浅粉色酒体，酸度清爽，带覆盆子、樱桃和乳酸香气，整体平衡轻盈。',
     extraFields: [
       { key: 'fruit', label: '水果添加', value: '覆盆子、酸樱桃' },
     ],
@@ -101,7 +97,6 @@ export const entries = [
     categoryName: '拉格与小麦',
     style: 'German Pils',
     abv: '5.0%',
-    description: '金黄色清澈酒体，麦芽洁净，草本酒花香气明显，收口爽脆。',
     extraFields: [
       { key: 'process', label: '特殊工艺', value: '低温长时间熟成' },
     ],

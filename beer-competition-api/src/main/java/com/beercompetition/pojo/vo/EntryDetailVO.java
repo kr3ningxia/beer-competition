@@ -22,7 +22,6 @@ public class EntryDetailVO {
     private String name;
     private String style;
     private BigDecimal abv;
-    private String description;
     private Long categoryId;
     private String categoryName;
     private String competitionName;

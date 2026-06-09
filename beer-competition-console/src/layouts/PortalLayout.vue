@@ -1,5 +1,5 @@
 <template>
-  <div class="portal-shell">
+  <div :class="['portal-shell', { 'results-shell': isCompetitionResultsRoute }]">
     <header class="portal-header">
       <div class="header-inner">
         <RouterLink class="brand" to="/portal/home" aria-label="赛事首页">
@@ -52,6 +52,7 @@ import {
   CircleCheck,
   Document,
   Medal,
+  Trophy,
   Tickets,
 } from '@element-plus/icons-vue'
 import { getPortalMe } from '@/api/auth'
@@ -63,10 +64,12 @@ const displayName = ref(getDisplayName('portal'))
 const loggedIn = computed(() => isLoggedIn('portal'))
 const accountName = computed(() => isQuestionPlaceholder(displayName.value) ? '完善厂牌资料' : displayName.value || '完善厂牌资料')
 const accountInitial = computed(() => getAccountInitial(accountName.value))
+const isCompetitionResultsRoute = computed(() => route.path.startsWith('/portal/competition-results'))
 
 const navItems = [
   { path: '/portal/home', label: '赛事首页', icon: Tickets, public: true },
   { path: '/portal/events', label: '全部赛事', icon: Document, public: true, match: ['/portal/events'] },
+  { path: '/portal/competition-results', label: '赛事结果', icon: Trophy, public: true, match: ['/portal/competition-results'] },
   { path: '/portal/my', label: '我的参赛', icon: CircleCheck, auth: true },
   { path: '/portal/results', label: '我的结果', icon: Medal, auth: true },
 ]
@@ -330,6 +333,98 @@ onUnmounted(() => {
   min-width: 0;
   margin: 0 auto;
   padding: 28px 28px 48px;
+}
+
+.results-shell {
+  background: #f6f0e3;
+}
+
+.results-shell .portal-header {
+  background: rgba(246, 240, 227, 0.94);
+}
+
+.results-shell .header-inner {
+  max-width: 1108px;
+  min-height: 66px;
+  padding: 8px 0;
+}
+
+.results-shell .brand-mark {
+  width: 42px;
+  height: 42px;
+  background: rgba(255, 253, 247, 0.72);
+  border-color: rgba(87, 58, 26, 0.1);
+  border-radius: 50%;
+  box-shadow: 0 8px 22px rgba(67, 43, 17, 0.06);
+}
+
+.results-shell .brand-mark img {
+  opacity: 0.28;
+  filter: grayscale(1) sepia(0.2);
+}
+
+.results-shell .brand strong {
+  font-size: 14px;
+  letter-spacing: 0;
+}
+
+.results-shell .nav-list {
+  gap: 26px;
+}
+
+.results-shell .nav-item {
+  gap: 0;
+  min-height: 36px;
+  padding: 0 2px;
+  border-radius: 0;
+  font-weight: 800;
+}
+
+.results-shell .nav-item svg {
+  display: none;
+}
+
+.results-shell .nav-item:hover,
+.results-shell .nav-item.active {
+  background: transparent;
+  border-color: transparent;
+}
+
+.results-shell .nav-item.active span {
+  color: #2b1d10;
+}
+
+.results-shell .account-actions {
+  min-height: 42px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.results-shell .account-pill {
+  min-height: 40px;
+  padding: 0 22px 0 8px;
+  background: rgba(255, 253, 247, 0.78);
+  border: 1px solid rgba(87, 58, 26, 0.1);
+  box-shadow: 0 8px 20px rgba(67, 43, 17, 0.06);
+}
+
+.results-shell .avatar {
+  color: rgba(36, 26, 16, 0.35);
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.results-shell .login-link {
+  min-height: 40px;
+  padding: 0 18px;
+  background: #d89528;
+  border-radius: 999px;
+}
+
+.results-shell .page-frame {
+  max-width: none;
+  padding: 34px 28px 48px;
 }
 
 :deep(.portal-section-title) {

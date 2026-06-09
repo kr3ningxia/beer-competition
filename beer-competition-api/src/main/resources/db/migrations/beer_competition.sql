@@ -76,7 +76,6 @@ CREATE TABLE `beer_entry`  (
   `name` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
   `style` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
   `abv` decimal(4, 1) NOT NULL,
-  `description` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
   `extra_fields_json` json NULL,
   `status` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
   `stored_flag` tinyint(0) NOT NULL DEFAULT 0,
@@ -89,7 +88,7 @@ CREATE TABLE `beer_entry`  (
 -- ----------------------------
 -- Records of beer_entry
 -- ----------------------------
-INSERT INTO `beer_entry` VALUES (1, 'BC-2026-IPA-0001', 1, 1, 1, '????IPA', 'Double IPA', 7.5, '????????????????????', '{\"specialIngredients\": \"????\"}', 'REGISTERED', 1, '2026-06-02 21:39:35', '2026-06-02 21:39:35');
+INSERT INTO `beer_entry` VALUES (1, 'BC-2026-IPA-0001', 1, 1, 1, '????IPA', 'Double IPA', 7.5, '{\"specialIngredients\": \"????\"}', 'REGISTERED', 1, '2026-06-02 21:39:35', '2026-06-02 21:39:35');
 
 -- ----------------------------
 -- Table structure for entry_scan_label
@@ -236,11 +235,6 @@ CREATE TABLE `competition`  (
   `delivery_phone` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL,
   `delivery_address` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL,
   `delivery_note` varchar(1000) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL,
-  `venue_name` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL,
-  `venue_address` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL,
-  `venue_time_note` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL,
-  `venue_contact` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL,
-  `venue_map_url` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL,
   `logistics_visibility` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL DEFAULT 'PAYMENT_CONFIRMED',
   `deleted_flag` tinyint(0) NOT NULL DEFAULT 0,
   `create_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0),
@@ -252,8 +246,8 @@ CREATE TABLE `competition`  (
 -- ----------------------------
 -- Records of competition
 -- ----------------------------
-INSERT INTO `competition` VALUES (1, 'BC-2026', '2026????????', '????', '2026-08-18', '2026-06-01 10:00:00', '2026-07-31 23:59:59', 'REGISTRATION_OPEN', 299.00, 'BJCP_2021_CN', 'BOTH', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'PAYMENT_CONFIRMED', 0, '2026-06-02 21:39:35', '2026-06-02 21:39:35');
-INSERT INTO `competition` VALUES (2, 'BC-20260820-WSW1C', '2026 新建精酿啤酒赛', '第一批次', '2026-08-20', '2026-06-10 10:00:00', '2026-07-30 18:00:00', 'DRAFT', 199.00, 'BJCP_2021_CN', 'BOTH', '2026-08-10 10:00:00', '2026-08-15 18:00:00', '每款 6 瓶，单瓶容量建议不低于 330ml。', '赛事收样组', NULL, NULL, '请做好防震、防漏和外箱加固；每款酒瓶身至少贴 1 张现场标签，整箱寄送时建议外箱再贴 1 张。', NULL, NULL, NULL, NULL, NULL, 'PAYMENT_CONFIRMED', 0, '2026-06-03 09:42:07', '2026-06-03 09:42:07');
+INSERT INTO `competition` VALUES (1, 'BC-2026', '2026????????', '????', '2026-08-18', '2026-06-01 10:00:00', '2026-07-31 23:59:59', 'REGISTRATION_OPEN', 299.00, 'BJCP_2021_CN', 'BOTH', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'PAYMENT_CONFIRMED', 0, '2026-06-02 21:39:35', '2026-06-02 21:39:35');
+INSERT INTO `competition` VALUES (2, 'BC-20260820-WSW1C', '2026 新建精酿啤酒赛', '第一批次', '2026-08-20', '2026-06-10 10:00:00', '2026-07-30 18:00:00', 'DRAFT', 199.00, 'BJCP_2021_CN', 'BOTH', '2026-08-10 10:00:00', '2026-08-15 18:00:00', '每款 6 瓶，单瓶容量建议不低于 330ml。', '赛事收样组', NULL, NULL, '请做好防震、防漏和外箱加固；每款酒瓶身至少贴 1 张现场标签，整箱寄送时建议外箱再贴 1 张。', 'PAYMENT_CONFIRMED', 0, '2026-06-03 09:42:07', '2026-06-03 09:42:07');
 
 -- ----------------------------
 -- Table structure for competition_category

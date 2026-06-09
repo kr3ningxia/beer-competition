@@ -17,10 +17,5 @@ public class CompetitionLogisticsVO {
     private String deliveryPhone;
     private String deliveryAddress;
     private String deliveryNote;
-    private String venueName;
-    private String venueAddress;
-    private String venueTimeNote;
-    private String venueContact;
-    private String venueMapUrl;
     private String logisticsVisibility;
 }

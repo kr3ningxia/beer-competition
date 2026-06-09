@@ -38,16 +38,6 @@
           <el-form-item label="酒款名称" prop="name" class="full-field">
             <el-input v-model.trim="form.name" placeholder="例如：浅色拉格" />
           </el-form-item>
-          <el-form-item label="酒款简介" prop="description" class="full-field">
-            <el-input
-              v-model.trim="form.description"
-              type="textarea"
-              :rows="4"
-              maxlength="500"
-              show-word-limit
-              placeholder="填写评审可见的酒款简介，例如原料特点、风味重点和工艺亮点。"
-            />
-          </el-form-item>
         </section>
 
         <section class="form-section">
@@ -272,7 +262,6 @@ const form = reactive({
   categoryId: null,
   style: '',
   abv: null,
-  description: '',
   extraFields: {},
   confirmed: false,
 })
@@ -290,7 +279,6 @@ const formRules = computed(() => {
     categoryId: [{ required: true, message: '请选择投递组别', trigger: 'change' }],
     style: [{ required: true, message: '请选择基础风格', trigger: 'change' }],
     abv: [{ required: true, message: '请填写 ABV', trigger: 'change' }],
-    description: [{ required: true, message: '请填写酒款简介', trigger: 'blur' }],
     confirmed: [
       {
         validator: (_rule, value, callback) => {
@@ -341,7 +329,6 @@ function syncCompetitionDefaults() {
     form.categoryId = null
     form.style = ''
     form.abv = null
-    form.description = ''
     form.confirmed = false
     form.extraFields = {}
     return
@@ -349,7 +336,6 @@ function syncCompetitionDefaults() {
   form.categoryId = null
   form.style = ''
   form.abv = null
-  form.description = ''
   form.confirmed = false
   form.extraFields = Object.fromEntries(configuredFields.value.map((field) => [field.fieldKey, getEmptyFieldValue(field)]))
 }
@@ -372,7 +358,6 @@ async function submitEntry() {
       categoryId: form.categoryId,
       style: form.style,
       abv: form.abv,
-      description: form.description,
       extraFields: form.extraFields,
     })
     submittedEntry.value = entry

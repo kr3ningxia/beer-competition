@@ -55,11 +55,6 @@
         </div>
       </section>
 
-      <section v-if="entry.description" class="card scan-card">
-        <h2 class="scan-section-title">酒款简介</h2>
-        <p class="description-text">{{ entry.description }}</p>
-      </section>
-
       <section v-if="entry.extraFields?.length" class="card scan-card">
         <h2 class="scan-section-title">补充信息</h2>
         <div class="extra-list">
@@ -399,13 +394,6 @@ dd {
   stroke-linejoin: round;
 }
 
-.description-text {
-  margin: 0;
-  color: #4b5563;
-  font-size: 19px;
-  line-height: 1.75;
-}
-
 .extra-list {
   display: grid;
   gap: 10px;
@@ -554,10 +542,6 @@ dd {
   }
 
   .style-category-row strong {
-    font-size: 16px;
-  }
-
-  .description-text {
     font-size: 16px;
   }
 

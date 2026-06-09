@@ -27,7 +27,6 @@ public class BeerEntry {
     private String name;
     private String style;
     private BigDecimal abv;
-    private String description;
     private String extraFieldsJson;
     private String status;
     private Integer storedFlag;

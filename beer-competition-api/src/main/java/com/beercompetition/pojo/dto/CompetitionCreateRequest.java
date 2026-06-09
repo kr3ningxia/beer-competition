@@ -59,21 +59,6 @@ public class CompetitionCreateRequest {
     @Size(max = 1000, message = "送样说明不能超过 1000 个字符")
     private String deliveryNote;
 
-    @Size(max = 128, message = "场地名称不能超过 128 个字符")
-    private String venueName;
-
-    @Size(max = 500, message = "场地地址不能超过 500 个字符")
-    private String venueAddress;
-
-    @Size(max = 255, message = "现场时间说明不能超过 255 个字符")
-    private String venueTimeNote;
-
-    @Size(max = 128, message = "现场联系人不能超过 128 个字符")
-    private String venueContact;
-
-    @Size(max = 500, message = "地图链接不能超过 500 个字符")
-    private String venueMapUrl;
-
     private String logisticsVisibility;
 
     @Valid

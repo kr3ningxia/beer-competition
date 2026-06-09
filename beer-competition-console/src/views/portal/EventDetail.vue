@@ -60,17 +60,6 @@
           <div v-if="logistics.deliveryNote"><dt>包装说明</dt><dd>{{ logistics.deliveryNote }}</dd></div>
         </dl>
       </article>
-
-      <article class="brewer-card info-card logistics-card">
-        <h2 class="portal-section-title">比赛场地</h2>
-        <dl>
-          <div><dt>场地名称</dt><dd>{{ logistics.venueName || '待主办方确认' }}</dd></div>
-          <div><dt>场地地址</dt><dd>{{ logistics.venueAddress || '待主办方确认' }}</dd></div>
-          <div><dt>现场时间</dt><dd>{{ logistics.venueTimeNote || formatDate(competition.competitionDate) }}</dd></div>
-          <div><dt>现场联系</dt><dd>{{ logistics.venueContact || '以赛事通知为准' }}</dd></div>
-        </dl>
-        <a v-if="logistics.venueMapUrl" class="map-link" :href="logistics.venueMapUrl" target="_blank" rel="noreferrer">打开地图</a>
-      </article>
     </section>
 
     <section class="detail-grid">

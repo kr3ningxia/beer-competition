@@ -20,7 +20,6 @@ public class CompetitionEntryVO {
     private Long categoryId;
     private String categoryName;
     private String style;
-    private String description;
     private String styleCategoryName;
     private String styleCode;
     private String styleDescription;

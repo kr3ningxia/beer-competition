@@ -10,6 +10,7 @@ import com.beercompetition.pojo.vo.EntryDetailVO;
 import com.beercompetition.pojo.vo.EntrySummaryVO;
 import com.beercompetition.pojo.vo.FileDownloadVO;
 import com.beercompetition.pojo.vo.PortalCompetitionVO;
+import com.beercompetition.pojo.vo.PortalCompetitionResultVO;
 import com.beercompetition.pojo.vo.PortalEntryLabelVO;
 import com.beercompetition.pojo.vo.PortalHomeVO;
 import com.beercompetition.pojo.vo.PortalMyParticipationVO;
@@ -58,6 +59,16 @@ public class PortalController {
     @GetMapping("/public/competitions/{id}")
     public Result<PortalCompetitionVO> publicCompetitionDetail(@PathVariable Long id) {
         return Result.success(competitionService.getPortalCompetitionDetail(id));
+    }
+
+    @GetMapping("/public/results")
+    public Result<List<PortalCompetitionResultVO>> publicResults() {
+        return Result.success(entryService.listPublishedCompetitionResults());
+    }
+
+    @GetMapping("/public/results/{competitionId}")
+    public Result<PortalCompetitionResultVO> publicResultDetail(@PathVariable Long competitionId) {
+        return Result.success(entryService.getPublishedCompetitionResult(competitionId));
     }
 
     @GetMapping("/me")

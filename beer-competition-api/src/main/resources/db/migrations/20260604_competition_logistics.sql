@@ -7,9 +7,4 @@ ALTER TABLE `competition`
   ADD COLUMN `delivery_phone` varchar(64) NULL DEFAULT NULL COMMENT '收件联系电话' AFTER `delivery_recipient`,
   ADD COLUMN `delivery_address` varchar(500) NULL DEFAULT NULL COMMENT '收件地址' AFTER `delivery_phone`,
   ADD COLUMN `delivery_note` varchar(1000) NULL DEFAULT NULL COMMENT '送样说明' AFTER `delivery_address`,
-  ADD COLUMN `venue_name` varchar(128) NULL DEFAULT NULL COMMENT '比赛场地名称' AFTER `delivery_note`,
-  ADD COLUMN `venue_address` varchar(500) NULL DEFAULT NULL COMMENT '比赛场地地址' AFTER `venue_name`,
-  ADD COLUMN `venue_time_note` varchar(255) NULL DEFAULT NULL COMMENT '现场时间说明' AFTER `venue_address`,
-  ADD COLUMN `venue_contact` varchar(128) NULL DEFAULT NULL COMMENT '现场联系人' AFTER `venue_time_note`,
-  ADD COLUMN `venue_map_url` varchar(500) NULL DEFAULT NULL COMMENT '地图链接' AFTER `venue_contact`,
-  ADD COLUMN `logistics_visibility` varchar(32) NOT NULL DEFAULT 'PAYMENT_CONFIRMED' COMMENT '物流信息展示规则：PUBLIC/LOGIN_REQUIRED/PAYMENT_CONFIRMED' AFTER `venue_map_url`;
+  ADD COLUMN `logistics_visibility` varchar(32) NOT NULL DEFAULT 'PAYMENT_CONFIRMED' COMMENT '物流信息展示规则：PUBLIC/LOGIN_REQUIRED/PAYMENT_CONFIRMED' AFTER `delivery_note`;

@@ -26,7 +26,6 @@ public class AdminEntryDetailVO {
     private String categoryName;
     private String style;
     private BigDecimal abv;
-    private String description;
     private String status;
     private String paymentStatus;
     private EntryPaymentVO payment;

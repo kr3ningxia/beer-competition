@@ -12,6 +12,14 @@ export function fetchPortalCompetitionDetail(id) {
   return request.get(`/api/portal/public/competitions/${id}`)
 }
 
+export function fetchPortalCompetitionResults() {
+  return request.get('/api/portal/public/results')
+}
+
+export function fetchPortalCompetitionResultDetail(id) {
+  return request.get(`/api/portal/public/results/${id}`)
+}
+
 export function fetchMyParticipation() {
   return request.get('/api/portal/my', { authScope: 'portal' })
 }

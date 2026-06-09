@@ -205,10 +205,6 @@
                 <input v-model.trim="editForm.abv" :disabled="!detail.canEdit" inputmode="decimal" />
               </label>
             </div>
-            <label class="stack-field">
-              <span>酒款简介</span>
-              <textarea v-model.trim="editForm.description" :disabled="!detail.canEdit"></textarea>
-            </label>
             <section class="extra-fields">
               <label v-for="field in editForm.extraFields" :key="field.key">
                 <span>{{ field.label }}</span>
@@ -327,7 +323,6 @@ const editForm = reactive({
   categoryId: '',
   style: '',
   abv: '',
-  description: '',
   reason: '',
   extraFields: [],
 })
@@ -483,7 +478,6 @@ function syncEditForm() {
     categoryId: detail.value?.categoryId ? String(detail.value.categoryId) : '',
     style: detail.value?.style || '',
     abv: detail.value?.abv == null ? '' : String(detail.value.abv),
-    description: detail.value?.description || '',
     reason: '',
     extraFields: (detail.value?.extraFields || []).map((item) => ({ ...item })),
   })
@@ -516,7 +510,6 @@ async function saveProfile() {
       categoryId: Number(editForm.categoryId),
       style: editForm.style,
       abv: Number(editForm.abv),
-      description: editForm.description,
       extraFields,
       reason: editForm.reason,
     })

@@ -229,12 +229,6 @@
           <p>{{ logisticsAddressText }}</p>
           <el-button v-if="canCopyLogisticsAddress" @click="copyLogisticsAddress">复制收件信息</el-button>
         </section>
-
-        <section v-if="selectedLogistics.venueName || selectedLogistics.venueAddress" class="address-block">
-          <span class="section-kicker">ONSITE</span>
-          <h3>现场送样</h3>
-          <p>{{ onsiteDeliveryText }}</p>
-        </section>
       </aside>
     </section>
   </div>
@@ -344,13 +338,6 @@ const logisticsAddressText = computed(() => {
   if (selectedLogistics.value.logisticsVisibility === 'PAYMENT_CONFIRMED') return '支付成功后显示完整收件信息。'
   return '主办方暂未填写完整收件信息，寄出前请先联系确认。'
 })
-const onsiteDeliveryText = computed(() => [
-  selectedLogistics.value.venueName,
-  selectedLogistics.value.venueAddress,
-  selectedLogistics.value.venueTimeNote,
-  selectedLogistics.value.venueContact,
-].filter(Boolean).join(' · '))
-
 const currentAction = computed(() => {
   const entry = selectedEntry.value
   if (!entry) {

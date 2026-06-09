@@ -77,10 +77,13 @@ import com.beercompetition.pojo.vo.EntrySummaryVO;
 import com.beercompetition.pojo.vo.FileDownloadVO;
 import com.beercompetition.pojo.vo.CompetitionLogisticsVO;
 import com.beercompetition.pojo.vo.JudgeEntryVO;
+import com.beercompetition.pojo.vo.PortalAwardEntryVO;
+import com.beercompetition.pojo.vo.PortalCompetitionResultVO;
 import com.beercompetition.pojo.vo.PortalCompetitionVO;
 import com.beercompetition.pojo.vo.PortalEntryLabelVO;
 import com.beercompetition.pojo.vo.PortalMyParticipationVO;
 import com.beercompetition.pojo.vo.PortalProfileVO;
+import com.beercompetition.pojo.vo.PortalResultGroupVO;
 import com.beercompetition.pojo.vo.PortalResultDetailVO;
 import com.beercompetition.pojo.vo.PortalResultSummaryVO;
 import com.beercompetition.pojo.vo.PortalRoundResultVO;
@@ -109,6 +112,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -209,14 +213,12 @@ public class EntryServiceImpl implements EntryService {
         addChange(changes, "基础风格", entry.getStyle(), normalizeRequired(request.getStyle(), "基础风格不能为空"));
         addChange(changes, "ABV", entry.getAbv() == null ? null : entry.getAbv().stripTrailingZeros().toPlainString(),
                 request.getAbv() == null ? null : request.getAbv().stripTrailingZeros().toPlainString());
-        addChange(changes, "酒款简介", entry.getDescription(), normalizeRequired(request.getDescription(), "酒款简介不能为空"));
         addExtraFieldChanges(changes, entry.getId(), fieldConfigs, normalizedExtraFields);
 
         entry.setName(normalizeRequired(request.getName(), "酒款名称不能为空"));
         entry.setCategoryId(category.getId());
         entry.setStyle(normalizeRequired(request.getStyle(), "基础风格不能为空"));
         entry.setAbv(request.getAbv());
-        entry.setDescription(normalizeRequired(request.getDescription(), "酒款简介不能为空"));
         entry.setExtraFieldsJson(writeJson(normalizedExtraFields));
         beerEntryMapper.updateById(entry);
 
@@ -285,7 +287,6 @@ public class EntryServiceImpl implements EntryService {
                 .name(normalizeRequired(request.getName(), "酒款名称不能为空"))
                 .style(normalizeRequired(request.getStyle(), "基础风格不能为空"))
                 .abv(request.getAbv())
-                .description(normalizeRequired(request.getDescription(), "酒款简介不能为空"))
                 .extraFieldsJson(writeJson(normalizedExtraFields))
                 .status(EntryStatus.PENDING_PAYMENT.name())
                 .storedFlag(0)
@@ -435,6 +436,46 @@ public class EntryServiceImpl implements EntryService {
                 .entries(entries)
                 .competitions(competitions)
                 .build();
+    }
+
+    @Override
+    public List<PortalCompetitionResultVO> listPublishedCompetitionResults() {
+        // 1) 查询已发布奖项
+        List<AwardResult> awards = listPublishedAwards(null);
+        if (awards.isEmpty()) {
+            return List.of();
+        }
+
+        // 2) 批量读取关联赛事、酒款、厂牌和组别
+        PublishedResultContext context = buildPublishedResultContext(awards);
+
+        // 3) 按赛事组装公开获奖结果
+        return awards.stream()
+                .map(AwardResult::getCompetitionId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .map(competitionId -> buildCompetitionResult(competitionId, awards, context))
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    @Override
+    public PortalCompetitionResultVO getPublishedCompetitionResult(Long competitionId) {
+        // 1) 查询指定赛事的已发布奖项
+        List<AwardResult> awards = listPublishedAwards(competitionId);
+        if (awards.isEmpty()) {
+            throw new ResourceNotFoundException("暂无已发布赛事结果");
+        }
+
+        // 2) 批量读取关联赛事、酒款、厂牌和组别
+        PublishedResultContext context = buildPublishedResultContext(awards);
+
+        // 3) 组装并返回公开获奖结果
+        PortalCompetitionResultVO result = buildCompetitionResult(competitionId, awards, context);
+        if (result == null) {
+            throw new ResourceNotFoundException("暂无已发布赛事结果");
+        }
+        return result;
     }
 
     @Override
@@ -683,7 +724,6 @@ public class EntryServiceImpl implements EntryService {
                 .styleCode(style == null ? null : style.getStyleCode())
                 .styleDescription(style == null ? null : style.getDescription())
                 .abv(entry.getAbv())
-                .description(entry.getDescription())
                 .extraFields(listJudgeVisibleExtraFields(entry))
                 .build();
     }
@@ -712,7 +752,6 @@ public class EntryServiceImpl implements EntryService {
                 .categoryName(category == null ? null : category.getName())
                 .style(entry.getStyle())
                 .abv(entry.getAbv())
-                .description(entry.getDescription())
                 .status(entry.getStatus())
                 .paymentStatus(resolvePaymentStatus(entry, payment))
                 .deliveryStatus(resolveDeliveryStatus(delivery))
@@ -755,7 +794,6 @@ public class EntryServiceImpl implements EntryService {
                 .categoryName(category == null ? null : category.getName())
                 .style(entry.getStyle())
                 .abv(entry.getAbv())
-                .description(entry.getDescription())
                 .status(entry.getStatus())
                 .paymentStatus(resolvePaymentStatus(entry, payment))
                 .payment(toEntryPaymentVO(payment, competition))
@@ -775,6 +813,123 @@ public class EntryServiceImpl implements EntryService {
                 .build();
     }
 
+    private List<AwardResult> listPublishedAwards(Long competitionId) {
+        return awardResultMapper.selectList(new LambdaQueryWrapper<AwardResult>()
+                .eq(competitionId != null, AwardResult::getCompetitionId, competitionId)
+                .eq(AwardResult::getStatus, AwardResultStatus.PUBLISHED.name())
+                .orderByDesc(AwardResult::getPublishedTime)
+                .orderByDesc(AwardResult::getCompetitionId)
+                .orderByDesc(AwardResult::getChampionFlag)
+                .orderByAsc(AwardResult::getCategoryId)
+                .orderByAsc(AwardResult::getRankNo)
+                .orderByAsc(AwardResult::getId));
+    }
+
+    private PublishedResultContext buildPublishedResultContext(List<AwardResult> awards) {
+        Set<Long> competitionIds = awards.stream()
+                .map(AwardResult::getCompetitionId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        Set<Long> beerEntryIds = awards.stream()
+                .map(AwardResult::getBeerEntryId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        Map<Long, Competition> competitionById = competitionIds.isEmpty()
+                ? Map.of()
+                : competitionMapper.selectBatchIds(competitionIds).stream()
+                        .collect(Collectors.toMap(Competition::getId, Function.identity(), (left, right) -> left));
+        Map<Long, BeerEntry> entryById = beerEntryIds.isEmpty()
+                ? Map.of()
+                : beerEntryMapper.selectBatchIds(beerEntryIds).stream()
+                        .collect(Collectors.toMap(BeerEntry::getId, Function.identity(), (left, right) -> left));
+        Set<Long> breweryIds = entryById.values().stream()
+                .map(BeerEntry::getBreweryId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        Set<Long> categoryIds = entryById.values().stream()
+                .map(BeerEntry::getCategoryId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        Map<Long, Brewery> breweryById = breweryIds.isEmpty()
+                ? Map.of()
+                : breweryMapper.selectBatchIds(breweryIds).stream()
+                        .collect(Collectors.toMap(Brewery::getId, Function.identity(), (left, right) -> left));
+        Map<Long, CompetitionCategory> categoryById = categoryIds.isEmpty()
+                ? Map.of()
+                : competitionCategoryMapper.selectBatchIds(categoryIds).stream()
+                        .collect(Collectors.toMap(CompetitionCategory::getId, Function.identity(), (left, right) -> left));
+        return new PublishedResultContext(competitionById, entryById, breweryById, categoryById);
+    }
+
+    private PortalCompetitionResultVO buildCompetitionResult(Long competitionId, List<AwardResult> allAwards,
+                                                            PublishedResultContext context) {
+        Competition competition = context.competitionById().get(competitionId);
+        if (competition == null) {
+            return null;
+        }
+        List<AwardResult> competitionAwards = allAwards.stream()
+                .filter(award -> Objects.equals(award.getCompetitionId(), competitionId))
+                .toList();
+        List<PortalAwardEntryVO> entries = competitionAwards.stream()
+                .map(award -> toPortalAwardEntryVO(award, context))
+                .filter(Objects::nonNull)
+                .toList();
+        if (entries.isEmpty()) {
+            return null;
+        }
+        Map<Long, PortalResultGroupVO> groups = new LinkedHashMap<>();
+        entries.forEach(entry -> {
+            if (entry.getGroupId() != null) {
+                groups.putIfAbsent(entry.getGroupId(), PortalResultGroupVO.builder()
+                        .id(entry.getGroupId())
+                        .name(firstText(entry.getGroupName(), "未分组"))
+                        .build());
+            }
+        });
+        return PortalCompetitionResultVO.builder()
+                .id(competition.getId())
+                .code(competition.getCode())
+                .name(competition.getName())
+                .edition(competition.getEdition())
+                .matchDate(competition.getCompetitionDate())
+                .publishedAt(resolvePublishedAt(competitionAwards))
+                .groups(new ArrayList<>(groups.values()))
+                .entries(entries)
+                .build();
+    }
+
+    private PortalAwardEntryVO toPortalAwardEntryVO(AwardResult award, PublishedResultContext context) {
+        BeerEntry entry = context.entryById().get(award.getBeerEntryId());
+        if (entry == null) {
+            return null;
+        }
+        Brewery brewery = context.breweryById().get(entry.getBreweryId());
+        CompetitionCategory category = context.categoryById().get(entry.getCategoryId());
+        return PortalAwardEntryVO.builder()
+                .id(entry.getId())
+                .awardResultId(award.getId())
+                .awardType(award.getAwardType())
+                .awardName(award.getAwardName())
+                .rankNo(award.getRankNo())
+                .champion(Objects.equals(award.getChampionFlag(), 1))
+                .beerEntryId(entry.getId())
+                .beerName(entry.getName())
+                .breweryName(brewery == null ? null : brewery.getCompanyName())
+                .groupId(entry.getCategoryId())
+                .groupName(category == null ? null : category.getName())
+                .style(entry.getStyle())
+                .build();
+    }
+
+    private LocalDateTime resolvePublishedAt(List<AwardResult> awards) {
+        return awards.stream()
+                .map(AwardResult::getPublishedTime)
+                .filter(Objects::nonNull)
+                .max(Comparator.naturalOrder())
+                .orElse(null);
+    }
+
     private EntryDetailVO toEntryDetailVO(BeerEntry entry) {
         Competition competition = competitionMapper.selectById(entry.getCompetitionId());
         CompetitionCategory category = competitionCategoryMapper.selectById(entry.getCategoryId());
@@ -792,7 +947,6 @@ public class EntryServiceImpl implements EntryService {
                 .name(entry.getName())
                 .style(entry.getStyle())
                 .abv(entry.getAbv())
-                .description(entry.getDescription())
                 .categoryId(entry.getCategoryId())
                 .categoryName(category == null ? null : category.getName())
                 .competitionName(competition == null ? null : competition.getName())
@@ -869,11 +1023,6 @@ public class EntryServiceImpl implements EntryService {
                 .deliveryPhone(competition.getDeliveryPhone())
                 .deliveryAddress(competition.getDeliveryAddress())
                 .deliveryNote(competition.getDeliveryNote())
-                .venueName(competition.getVenueName())
-                .venueAddress(competition.getVenueAddress())
-                .venueTimeNote(competition.getVenueTimeNote())
-                .venueContact(competition.getVenueContact())
-                .venueMapUrl(competition.getVenueMapUrl())
                 .logisticsVisibility(competition.getLogisticsVisibility())
                 .build();
         if (canViewFullLogistics(logistics, entry, payment)) {
@@ -1713,6 +1862,10 @@ public class EntryServiceImpl implements EntryService {
         return value == null ? null : String.valueOf(value);
     }
 
+    private String firstText(String value, String fallback) {
+        return StringUtils.hasText(value) ? value : fallback;
+    }
+
     private List<String> readOptions(String json) {
         if (!StringUtils.hasText(json)) {
             return List.of();
@@ -1742,6 +1895,14 @@ public class EntryServiceImpl implements EntryService {
         } catch (JsonProcessingException ex) {
             throw new BaseException(errorMessage);
         }
+    }
+
+    private record PublishedResultContext(
+            Map<Long, Competition> competitionById,
+            Map<Long, BeerEntry> entryById,
+            Map<Long, Brewery> breweryById,
+            Map<Long, CompetitionCategory> categoryById
+    ) {
     }
 
     private record JudgeScanContext(

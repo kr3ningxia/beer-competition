@@ -39,11 +39,6 @@ public class Competition {
     private String deliveryPhone;
     private String deliveryAddress;
     private String deliveryNote;
-    private String venueName;
-    private String venueAddress;
-    private String venueTimeNote;
-    private String venueContact;
-    private String venueMapUrl;
     private String logisticsVisibility;
     @TableLogic(value = "0", delval = "1")
     private Integer deletedFlag;

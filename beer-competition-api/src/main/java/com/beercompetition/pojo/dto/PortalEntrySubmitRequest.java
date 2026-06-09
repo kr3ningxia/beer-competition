@@ -30,9 +30,5 @@ public class PortalEntrySubmitRequest {
     @DecimalMax(value = "99.9", message = "ABV不能大于99.9")
     private BigDecimal abv;
 
-    @NotBlank(message = "酒款简介不能为空")
-    @Size(max = 500, message = "酒款简介不能超过500个字符")
-    private String description;
-
     private Map<String, Object> extraFields = new LinkedHashMap<>();
 }

@@ -1214,7 +1214,6 @@ public class RoundServiceImpl implements RoundService {
                 .categoryId(entry.getCategoryId())
                 .categoryName(categoryNameById.getOrDefault(entry.getCategoryId(), "-"))
                 .style(entry.getStyle())
-                .description(entry.getDescription())
                 .styleCategoryName(style == null ? null : style.getCategoryName())
                 .styleCode(style == null ? null : style.getStyleCode())
                 .styleDescription(style == null ? null : style.getDescription())

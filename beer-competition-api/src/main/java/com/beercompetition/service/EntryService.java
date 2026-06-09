@@ -13,6 +13,7 @@ import com.beercompetition.pojo.vo.EntrySummaryVO;
 import com.beercompetition.pojo.vo.FileDownloadVO;
 import com.beercompetition.pojo.vo.JudgeEntryVO;
 import com.beercompetition.pojo.vo.PortalEntryLabelVO;
+import com.beercompetition.pojo.vo.PortalCompetitionResultVO;
 import com.beercompetition.pojo.vo.PortalMyParticipationVO;
 import com.beercompetition.pojo.vo.PortalProfileVO;
 import com.beercompetition.pojo.vo.PortalResultDetailVO;
@@ -45,6 +46,10 @@ public interface EntryService {
     PortalProfileVO updatePortalProfile(PortalProfileUpdateRequest request);
 
     PortalMyParticipationVO getPortalMyParticipation();
+
+    List<PortalCompetitionResultVO> listPublishedCompetitionResults();
+
+    PortalCompetitionResultVO getPublishedCompetitionResult(Long competitionId);
 
     List<PortalResultSummaryVO> listPortalResults();
 

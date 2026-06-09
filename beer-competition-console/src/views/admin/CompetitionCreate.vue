@@ -21,7 +21,7 @@
 
     <nav class="anchor-bar" aria-label="新建比赛分区导航">
       <button :class="{ active: activeSection === 'base-info', issue: sectionIssueMap['base-info'] }" type="button" @click="scrollToSection('base-info')">基础信息</button>
-      <button :class="{ active: activeSection === 'logistics-info', issue: sectionIssueMap['logistics-info'] }" type="button" @click="scrollToSection('logistics-info')">送样场地</button>
+      <button :class="{ active: activeSection === 'logistics-info', issue: sectionIssueMap['logistics-info'] }" type="button" @click="scrollToSection('logistics-info')">送样信息</button>
       <button :class="{ active: activeSection === 'entry-config', issue: sectionIssueMap['entry-config'] }" type="button" @click="scrollToSection('entry-config')">报名表</button>
       <button :class="{ active: activeSection === 'score-config', issue: sectionIssueMap['score-config'] }" type="button" @click="scrollToSection('score-config')">评分表</button>
       <button :class="{ active: activeSection === 'review-draft' }" type="button" @click="scrollToSection('review-draft')">确认</button>
@@ -65,7 +65,7 @@
 
         <section id="logistics-info" class="form-section">
           <header class="section-head">
-            <h2>送样与场地</h2>
+            <h2>送样信息</h2>
           </header>
           <div class="logistics-layout">
             <section class="entry-section logistics-section">
@@ -109,11 +109,11 @@
                   </el-select>
                 </label>
                 <label>
-                  <span>建议送达开始</span>
+                  <span>送达开始</span>
                   <input v-model="draft.sampleArrivalStart" type="datetime-local" />
                 </label>
                 <label>
-                  <span>建议送达截止</span>
+                  <span>送达截止</span>
                   <input v-model="draft.sampleArrivalDeadline" type="datetime-local" />
                 </label>
                 <label>
@@ -138,37 +138,6 @@
                 </label>
               </div>
             </section>
-
-            <section class="entry-section logistics-section">
-              <div class="card-title">
-                <div>
-                  <h3>比赛场地</h3>
-                  <small>用于厂商了解现场交样、观赛或后续活动地点。</small>
-                </div>
-              </div>
-              <div class="form-grid two">
-                <label>
-                  <span>场地名称</span>
-                  <input v-model.trim="draft.venueName" placeholder="例如 深圳蛇口价值工厂" />
-                </label>
-                <label>
-                  <span>现场联系人</span>
-                  <input v-model.trim="draft.venueContact" placeholder="例如 现场执行组" />
-                </label>
-                <label class="wide-field">
-                  <span>场地地址</span>
-                  <input v-model.trim="draft.venueAddress" placeholder="比赛或现场交样地点" />
-                </label>
-                <label>
-                  <span>现场时间说明</span>
-                  <input v-model.trim="draft.venueTimeNote" placeholder="例如 8 月 20 日 09:00-18:00" />
-                </label>
-                <label class="wide-field">
-                  <span>地图链接</span>
-                  <input v-model.trim="draft.venueMapUrl" placeholder="高德、百度或腾讯地图链接" />
-                </label>
-              </div>
-            </section>
           </div>
         </section>
 
@@ -183,7 +152,6 @@
               <span>投递组别</span>
               <span>基础风格</span>
               <span>ABV</span>
-              <span>酒款简介</span>
             </div>
           </div>
           <section class="entry-section library-section">
@@ -403,10 +371,6 @@
                   <dd>{{ formatDateTime(draft.sampleArrivalDeadline) }}</dd>
                 </div>
                 <div>
-                  <dt>比赛场地</dt>
-                  <dd>{{ draft.venueName || draft.venueAddress || '-' }}</dd>
-                </div>
-                <div>
                   <dt>投递组别</dt>
                   <dd>{{ categorySummary }}</dd>
                 </div>
@@ -478,11 +442,6 @@ const draft = reactive({
   deliveryPhone: '',
   deliveryAddress: '',
   deliveryNote: '请做好防震、防漏和外箱加固；每款酒瓶身至少贴 1 张现场标签，整箱寄送时建议外箱再贴 1 张。',
-  venueName: '',
-  venueAddress: '',
-  venueTimeNote: '',
-  venueContact: '',
-  venueMapUrl: '',
   logisticsVisibility: 'PAYMENT_CONFIRMED',
   categories: [
     { id: 'cat-1', name: '浅色拉格' },
@@ -581,11 +540,6 @@ async function submitDraft() {
       deliveryPhone: draft.deliveryPhone,
       deliveryAddress: draft.deliveryAddress,
       deliveryNote: draft.deliveryNote,
-      venueName: draft.venueName,
-      venueAddress: draft.venueAddress,
-      venueTimeNote: draft.venueTimeNote,
-      venueContact: draft.venueContact,
-      venueMapUrl: draft.venueMapUrl,
       logisticsVisibility: draft.logisticsVisibility,
       styleLibraryVersion: draft.styleLibraryVersion,
       categories: draft.categories
@@ -722,11 +676,6 @@ function toDraftSnapshot(source) {
     deliveryPhone: source.deliveryPhone,
     deliveryAddress: source.deliveryAddress,
     deliveryNote: source.deliveryNote,
-    venueName: source.venueName,
-    venueAddress: source.venueAddress,
-    venueTimeNote: source.venueTimeNote,
-    venueContact: source.venueContact,
-    venueMapUrl: source.venueMapUrl,
     logisticsVisibility: source.logisticsVisibility,
     categories: source.categories.map((category) => ({ name: category.name })),
     styleLibraryVersion: source.styleLibraryVersion,
@@ -840,7 +789,6 @@ function buildReviewItems(source) {
   const logisticsSummary = [
     source.sampleArrivalDeadline ? `送达截止 ${formatDateTime(source.sampleArrivalDeadline)}` : '',
     source.deliveryAddress ? '已填收件地址' : '',
-    source.venueName || source.venueAddress ? '已填比赛场地' : '',
   ].filter(Boolean)
 
   return [
@@ -862,7 +810,7 @@ function buildReviewItems(source) {
     },
     {
       key: 'logistics',
-      label: '送样场地',
+      label: '送样信息',
       target: 'logistics-info',
       status: isOptionalDeadlineAfterStart(source.sampleArrivalStart, source.sampleArrivalDeadline) ? 'done' : 'pending',
       detail: isOptionalDeadlineAfterStart(source.sampleArrivalStart, source.sampleArrivalDeadline)

@@ -232,7 +232,6 @@ export const entries = [
     submittedAt: '2026-05-12 14:22',
     paidAt: '2026-05-12 14:36',
     storedAt: '2026-05-26 10:18',
-    description: '酒体清爽干净，使用 Columbus、Centennial 与 Simcoe 干投，突出松脂、葡萄柚皮和轻微草本香气。',
     extraFields: [
       { label: '特殊工艺', value: '低温长时间发酵，二次干投 12g/L' },
       { label: '增味原料', value: '无' },
@@ -257,7 +256,6 @@ export const entries = [
     submittedAt: '2026-05-14 11:08',
     paidAt: '2026-05-14 11:20',
     storedAt: '2026-05-27 16:44',
-    description: '轻盐感酸啤，加入广东荔枝汁与少量玫瑰花水，香气明亮，酸度柔和。',
     extraFields: [
       { label: '特殊工艺', value: '乳酸菌 kettle sour，冷端加入果汁' },
       { label: '增味原料', value: '荔枝汁、玫瑰花水、海盐' },
@@ -287,7 +285,6 @@ export const entries = [
     submittedAt: '2026-05-18 20:10',
     paidAt: '2026-05-18 20:16',
     storedAt: null,
-    description: '高酒精度世涛，烘烤麦芽、黑巧克力与咖啡风味明显，酒体厚实。',
     extraFields: [
       { label: '特殊工艺', value: '加入可可碎熟成 21 天' },
       { label: '增味原料', value: '厄瓜多尔可可碎、马达加斯加香草荚' },
@@ -312,7 +309,6 @@ export const entries = [
     submittedAt: '2026-05-21 09:35',
     paidAt: null,
     storedAt: null,
-    description: '淡色拉格，麦芽香干净柔和，苦度低，突出饼干、蜂蜜和细腻收口。',
     extraFields: [
       { label: '特殊工艺', value: '低温 lagering 45 天' },
       { label: '增味原料', value: '无' },
