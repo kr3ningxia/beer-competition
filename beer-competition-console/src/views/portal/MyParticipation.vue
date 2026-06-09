@@ -6,53 +6,46 @@
         <h1>{{ breweryProfile.breweryName || '完善厂牌资料' }}</h1>
         <p>{{ heroCopy }}</p>
       </div>
-      <RouterLink class="hero-action" :to="heroAction.to">{{ heroAction.label }}</RouterLink>
-    </section>
-
-    <section class="todo-grid">
-      <RouterLink v-for="item in todoCards" :key="item.label" :to="item.to" class="todo-card">
-        <component :is="item.icon" />
-        <span>{{ item.label }}</span>
-        <strong>{{ item.value }}</strong>
-        <p>{{ item.hint }}</p>
+      <RouterLink class="hero-reminder" :to="heroReminder.to">
+        {{ heroReminder.label }}
       </RouterLink>
+      <RouterLink class="hero-action" :to="heroAction.to">{{ heroAction.label }}</RouterLink>
     </section>
 
     <section class="brewer-card progress-panel">
       <div class="section-head">
         <div>
           <h2 class="portal-section-title">我的赛事进度</h2>
-          <p>按赛事查看已提交、支付、标签、入库和结果状态。</p>
         </div>
         <RouterLink to="/portal/events">浏览开放赛事</RouterLink>
       </div>
 
       <div class="competition-progress">
         <article v-for="competition in myCompetitions" :key="competition.id" class="progress-row">
-          <div>
+          <div class="progress-main">
             <span :class="['label-chip', competition.status === 'PUBLISHED' ? 'tone-gold' : 'tone-green']">
               {{ competition.currentStageLabel }}
             </span>
             <h3>{{ competition.name }}</h3>
-            <p>{{ competition.code }}</p>
           </div>
-          <div class="summary-strip">
-            <span><small>已提交</small><b>{{ summary(competition.id).submitted }}</b></span>
-            <span><small>待支付</small><b>{{ summary(competition.id).pendingPayment }}</b></span>
-            <span><small>报名成功</small><b>{{ summary(competition.id).registered }}</b></span>
-            <span><small>已入库</small><b>{{ summary(competition.id).stored }}</b></span>
-            <span><small>结果可查</small><b>{{ summary(competition.id).result }}</b></span>
+          <div class="progress-status">
+            <p>{{ competitionProgressText(competition) }}</p>
+            <div class="progress-chips" aria-label="赛事进度摘要">
+              <span v-for="chip in progressChips(competition)" :key="chip.label">
+                <small>{{ chip.label }}</small>
+                <b>{{ chip.value }}</b>
+              </span>
+            </div>
           </div>
           <div class="row-actions">
             <RouterLink
-              v-if="summary(competition.id).result > 0"
-              class="result-action"
-              :to="competitionResultPath(competition.id)"
+              v-for="action in competitionActions(competition)"
+              :key="action.label"
+              :class="{ 'is-primary': action.primary }"
+              :to="action.to"
             >
-              查看本场结果
+              {{ action.label }}
             </RouterLink>
-            <RouterLink :to="`/portal/events/${competition.id}`">赛事详情</RouterLink>
-            <RouterLink to="/portal/entries">查看酒款</RouterLink>
           </div>
         </article>
       </div>
@@ -62,25 +55,26 @@
       <div class="section-head">
         <div>
           <h2 class="portal-section-title">最近酒款</h2>
-          <p>只展示参赛处理中需要核对的信息。</p>
         </div>
         <RouterLink to="/portal/entries">全部酒款</RouterLink>
       </div>
 
       <div class="entry-table">
         <article v-for="entry in entries.slice(0, 4)" :key="entry.id" class="entry-row">
-          <div>
+          <div class="entry-main">
             <span :class="['label-chip', `tone-${entryStatusMeta[entry.status].tone}`]">
               {{ entryStatusMeta[entry.status].label }}
             </span>
             <h3>{{ entry.name }}</h3>
             <p>{{ competitionName(entry.competitionId) }}</p>
           </div>
-          <dl>
-            <div><dt>参赛编号</dt><dd>{{ entry.uuid }}</dd></div>
-            <div><dt>现场短编号</dt><dd>{{ entry.shortCode }}</dd></div>
-            <div><dt>下一步</dt><dd>{{ nextActionText(entry) }}</dd></div>
-          </dl>
+          <div class="entry-status">
+            <p>{{ entryStatusText(entry) }}</p>
+            <span v-if="showShortCode(entry)" class="short-code">
+              <small>现场编号</small>
+              <b>{{ entry.shortCode || '待生成' }}</b>
+            </span>
+          </div>
           <RouterLink :to="entryPrimaryAction(entry).to">{{ entryPrimaryAction(entry).label }}</RouterLink>
         </article>
       </div>
@@ -91,7 +85,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { CircleCheck, Money, Tickets } from '@element-plus/icons-vue'
 import { fetchMyParticipation } from '@/api/portal'
 import {
   competitionResultPath,
@@ -112,27 +105,120 @@ const breweryProfile = computed(() => ({
 const highestPriorityEntry = computed(() => priorityEntry(entries.value))
 const heroAction = computed(() => entryPrimaryAction(highestPriorityEntry.value))
 const heroCopy = computed(() => {
-  if (!highestPriorityEntry.value) {
-    return '目前没有待处理的参赛事项，可以浏览开放报名赛事。'
+  if (unpaidEntries.value.length > 0) {
+    return `有 ${unpaidEntries.value.length} 款酒需要支付报名费。`
   }
-  return `${highestPriorityEntry.value.name} 当前需要你${nextActionText(highestPriorityEntry.value)}。`
+  if (labelEntries.value.length > 0) {
+    return `有 ${labelEntries.value.length} 款酒需要下载标签并完成送样。`
+  }
+  if (resultEntries.value.length > 0) {
+    return `有 ${resultEntries.value.length} 款酒的结果已经发布。`
+  }
+  return '目前没有待处理的参赛事项，可以浏览开放报名赛事。'
 })
 
 const unpaidEntries = computed(() => entries.value.filter((entry) => entry.status === 'PENDING_PAYMENT'))
 const labelEntries = computed(() => entries.value.filter((entry) => entry.status === 'REGISTERED'))
-const storedEntries = computed(() => entries.value.filter((entry) => entry.status === 'STORED' || entry.status === 'RESULT_PUBLISHED'))
 const resultEntries = computed(() => entries.value.filter((entry) => isEntryResultPublished(entry)))
 const myCompetitions = computed(() => competitions.value)
 
-const todoCards = computed(() => [
-  { label: '待支付', value: unpaidEntries.value.length, hint: '支付后开放标签和送样信息', icon: Money, to: '/portal/payment' },
-  { label: '可下载标签', value: labelEntries.value.length, hint: '贴在酒瓶或外箱，便于现场核对', icon: Tickets, to: '/portal/payment' },
-  { label: '已确认入库', value: storedEntries.value.length, hint: '主办方已收到酒样', icon: CircleCheck, to: '/portal/entries' },
-  { label: '结果可查看', value: resultEntries.value.length, hint: '查看奖项、评分和评语', icon: CircleCheck, to: '/portal/results' },
-])
+const heroReminder = computed(() => {
+  if (unpaidEntries.value.length > 0) {
+    return { label: `${unpaidEntries.value.length} 款待支付`, to: '/portal/payment' }
+  }
+  if (labelEntries.value.length > 0) {
+    return { label: `${labelEntries.value.length} 款需下载标签`, to: '/portal/payment' }
+  }
+  if (resultEntries.value.length > 0) {
+    return { label: `${resultEntries.value.length} 款结果可看`, to: '/portal/results' }
+  }
+  return { label: '暂无待处理', to: '/portal/entries' }
+})
 
 function summary(competitionId) {
   return entrySummaryForCompetition(competitionId, entries.value)
+}
+
+function competitionProgressText(competition) {
+  const item = summary(competition.id)
+  if (!item.submitted) return '本场暂无酒款记录。'
+  if (item.pendingPayment > 0) {
+    return '还有酒款待支付，处理后才能下载标签和填写送样信息。'
+  }
+  if (item.registered > 0) {
+    return '请下载现场标签，并按赛事要求完成送样。'
+  }
+  if (item.result > 0) {
+    return '结果已发布，可以查看本场评分、评语和奖项。'
+  }
+  if (item.stored > 0) {
+    return '酒样已入库，等待主办方发布评审结果。'
+  }
+  return '报名记录已提交，请继续关注支付、标签和送样状态。'
+}
+
+function progressChips(competition) {
+  const item = summary(competition.id)
+  const chips = [
+    { label: '已提交', value: `${item.submitted} 款` },
+  ]
+  if (item.pendingPayment > 0) {
+    chips.push({ label: '待支付', value: `${item.pendingPayment} 款` })
+  } else if (item.registered > 0) {
+    chips.push({ label: '需处理', value: `${item.registered} 款` })
+  } else if (item.stored > 0) {
+    chips.push({ label: '已入库', value: `${item.stored} 款` })
+  }
+  chips.push(item.result > 0
+    ? { label: '结果可查', value: `${item.result} 款` }
+    : { label: '结果状态', value: '待发布' })
+  return chips
+}
+
+function competitionActions(competition) {
+  const item = summary(competition.id)
+  if (item.pendingPayment > 0) {
+    return [
+      { label: '去支付', to: '/portal/payment', primary: true },
+      { label: '赛事详情', to: `/portal/events/${competition.id}` },
+    ]
+  }
+  if (item.registered > 0) {
+    return [
+      { label: '下载标签', to: '/portal/payment', primary: true },
+      { label: '查看酒款', to: '/portal/entries' },
+    ]
+  }
+  if (item.result > 0) {
+    return [
+      { label: '查看结果', to: competitionResultPath(competition.id), primary: true },
+      { label: '赛事详情', to: `/portal/events/${competition.id}` },
+    ]
+  }
+  return [
+    { label: '查看酒款', to: '/portal/entries', primary: true },
+    { label: '赛事详情', to: `/portal/events/${competition.id}` },
+  ]
+}
+
+function entryStatusText(entry) {
+  if (entry.status === 'PENDING_PAYMENT' || entry.paymentStatus === 'UNPAID') {
+    return '待支付报名费，支付后才能下载标签和填写送样信息。'
+  }
+  if (entry.status === 'REGISTERED') {
+    return entry.stored ? '主办方已收到酒样，等待评审结果。' : '请下载现场标签，并按赛事要求完成送样。'
+  }
+  if (isEntryResultPublished(entry)) {
+    return '结果已发布，可以查看评分、评语和奖项。'
+  }
+  if (entry.status === 'STORED') {
+    return '酒样已入库，等待主办方发布评审结果。'
+  }
+  return nextActionText(entry)
+}
+
+function showShortCode(entry) {
+  return entry.status === 'REGISTERED' && !entry.stored && !isEntryResultPublished(entry)
 }
 
 function competitionName(competitionId) {
@@ -154,6 +240,7 @@ onMounted(async () => {
 }
 
 .my-hero {
+  position: relative;
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
@@ -184,6 +271,7 @@ onMounted(async () => {
 }
 
 .hero-action,
+.hero-reminder,
 .row-actions a,
 .entry-row > a {
   display: inline-flex;
@@ -199,46 +287,18 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
-.todo-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.todo-card {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 10px;
-  min-height: 130px;
-  padding: 18px;
-  color: #2b1d10;
-  text-decoration: none;
-  background: #fff7e6;
-  border: 1px solid rgba(87, 58, 26, 0.12);
-  border-radius: 8px;
-}
-
-.todo-card svg {
-  width: 24px;
-  height: 24px;
-  color: #a76b18;
-}
-
-.todo-card span,
-.todo-card p {
-  color: #746a5f;
-}
-
-.todo-card strong {
-  grid-column: 1 / -1;
-  font-size: 38px;
-  line-height: 1;
-}
-
-.todo-card p {
-  grid-column: 1 / -1;
-  margin: 0;
-  line-height: 1.55;
+.hero-reminder {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  min-height: 32px;
+  padding: 0 12px;
+  color: #fff8e8;
+  background: rgba(255, 250, 240, 0.12);
+  border: 1px solid rgba(255, 250, 240, 0.22);
+  border-radius: 999px;
+  font-size: 13px;
+  backdrop-filter: blur(8px);
 }
 
 .progress-panel,
@@ -272,8 +332,8 @@ onMounted(async () => {
 
 .progress-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 560px auto;
-  gap: 18px;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(340px, 1.2fr) auto;
+  gap: 20px;
   align-items: center;
   padding: 18px;
   background: #fff7e6;
@@ -287,50 +347,81 @@ onMounted(async () => {
   font-size: 22px;
 }
 
+.progress-main {
+  min-width: 0;
+}
+
+.progress-status,
+.entry-main,
+.entry-status {
+  min-width: 0;
+}
+
 .progress-row p,
-.entry-row p,
-dt {
+.entry-row p {
   color: #746a5f;
 }
 
-.summary-strip {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+.progress-row p,
+.entry-status p {
+  margin: 0;
+  line-height: 1.65;
+}
+
+.progress-chips {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+  margin-top: 14px;
 }
 
-.summary-strip span {
-  min-height: 70px;
-  padding: 10px;
+.progress-chips span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 4px 10px;
+  color: #5b4a35;
   background: #fffdf7;
-  border-radius: 8px;
+  border: 1px solid rgba(87, 58, 26, 0.08);
+  border-radius: 999px;
 }
 
-.summary-strip small,
-.summary-strip b {
-  display: block;
+.progress-chips small {
+  color: #827563;
+  font-size: 12px;
 }
 
-.summary-strip b {
-  margin-top: 6px;
-  font-size: 24px;
+.progress-chips b {
+  color: #2b1d10;
+  font-size: 13px;
 }
 
 .row-actions {
-  display: grid;
-  gap: 8px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 220px;
 }
 
-.row-actions a + a {
+.row-actions a {
   color: #6b4710;
   background: #fffaf0;
   border: 1px solid rgba(87, 58, 26, 0.14);
 }
 
+.row-actions a.is-primary {
+  color: #2b1d10;
+  background: #e1a23d;
+  border-color: transparent;
+}
+
 .entry-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 520px auto;
-  gap: 18px;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(320px, 1.1fr) auto;
+  gap: 20px;
   align-items: center;
   padding: 18px;
   background: #fff7e6;
@@ -338,43 +429,43 @@ dt {
   border-radius: 8px;
 }
 
-dl {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin: 0;
-}
-
-dl div {
-  padding: 10px;
+.short-code {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  min-height: 30px;
+  margin-top: 12px;
+  padding: 4px 10px;
+  color: #5b4a35;
   background: #fffdf7;
-  border-radius: 8px;
+  border: 1px solid rgba(87, 58, 26, 0.08);
+  border-radius: 999px;
 }
 
-dt,
-dd {
-  margin: 0;
+.short-code small {
+  color: #827563;
+  font-size: 12px;
 }
 
-dd {
-  margin-top: 6px;
-  font-weight: 800;
-  line-height: 1.4;
+.short-code b {
+  color: #2b1d10;
+  font-size: 13px;
 }
 
 @media (max-width: 1180px) {
-  .todo-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .progress-row,
   .entry-row {
     grid-template-columns: 1fr;
   }
 
-  .summary-strip,
-  dl {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .progress-status {
+    padding-top: 2px;
+  }
+
+  .row-actions {
+    justify-content: flex-start;
+    min-width: 0;
   }
 }
 
@@ -388,10 +479,9 @@ dd {
     font-size: 36px;
   }
 
-  .todo-grid,
-  .summary-strip,
-  dl {
-    grid-template-columns: 1fr;
+  .hero-reminder {
+    position: static;
+    width: fit-content;
   }
 }
 </style>

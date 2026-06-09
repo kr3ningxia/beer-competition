@@ -25,9 +25,9 @@
           <RouterLink
             v-if="canSubmitEntry(activeCompetition)"
             class="text-action"
-            :to="loggedIn ? `/portal/submit?competitionId=${activeCompetition.id}` : '/portal/login'"
+            :to="`/portal/events/${activeCompetition.id}`"
           >
-            {{ loggedIn ? '立即报名参赛' : '登录后报名' }}
+            查看详情
           </RouterLink>
         </div>
       </div>
@@ -38,7 +38,7 @@
       </div>
       <aside class="hero-card">
         <span>{{ activeCompetition ? 'ENTRY INFO' : 'BEER AWARDS' }}</span>
-        <strong>{{ activeCompetition ? '参赛关键信息' : '等待赛事开放' }}</strong>
+        <strong>{{ activeCompetition ? '赛事信息' : '等待赛事开放' }}</strong>
         <dl>
           <div><dt>报名窗口</dt><dd>{{ registrationWindowText(activeCompetition) }}</dd></div>
           <div><dt>参赛组别</dt><dd>{{ categoryNamesText(activeCompetition) }}</dd></div>
@@ -65,7 +65,6 @@
             <div><dt>报名截止</dt><dd>{{ formatDateTime(competition.registrationDeadline) }}</dd></div>
             <div><dt>当前应付</dt><dd>{{ entryFeeText(competition) }}</dd></div>
             <div v-if="earlyBirdDeadlineText(competition)"><dt>早鸟截止</dt><dd>{{ earlyBirdDeadlineText(competition) }}</dd></div>
-            <div><dt>比赛日期</dt><dd>{{ formatDate(competition.competitionDate) }}</dd></div>
           </dl>
           <div class="card-actions">
             <RouterLink :to="`/portal/events/${competition.id}`">查看赛事</RouterLink>
@@ -182,10 +181,6 @@ const faqs = [
   { question: '酒样需要寄几瓶？', answer: '不同赛事要求可能不同，请以主办方发布的单场通知为准。' },
   { question: '结果发布后能看到什么？', answer: '可查看评分明细、桌长综合评语和奖项。' },
 ]
-
-function formatDate(value) {
-  return value || '-'
-}
 
 function formatDateTime(value) {
   return value ? String(value).replace('T', ' ').slice(0, 16) : '-'
@@ -416,11 +411,11 @@ function earlyBirdDeadlineText(competition) {
 
 .event-card {
   display: grid;
-  grid-template-columns: minmax(260px, 0.74fr) minmax(360px, 1.26fr);
-  column-gap: 36px;
+  grid-template-columns: minmax(360px, 1fr) minmax(280px, 0.42fr);
+  column-gap: 34px;
   row-gap: 14px;
   align-items: start;
-  padding: 22px;
+  padding: 22px 24px;
 }
 
 .event-card .label-chip,
@@ -450,7 +445,7 @@ dt {
 
 .event-card p {
   display: -webkit-box;
-  max-width: 520px;
+  max-width: 680px;
   margin: 0;
   overflow: hidden;
   line-height: 1.7;
@@ -467,13 +462,14 @@ dl {
 .event-card dl {
   grid-column: 2;
   grid-row: 1 / span 4;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px 18px;
+  grid-template-columns: 1fr;
+  align-self: center;
+  gap: 13px;
   margin: 0;
 }
 
 dl div {
-  padding-bottom: 12px;
+  padding-bottom: 11px;
   border-bottom: 1px dashed rgba(87, 58, 26, 0.18);
 }
 
