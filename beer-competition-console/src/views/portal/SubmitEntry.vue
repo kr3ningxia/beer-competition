@@ -164,8 +164,9 @@
         </el-form-item>
 
         <div v-if="!submittedEntry" class="form-actions">
-          <el-button type="primary" :loading="submittingEntry" @click="submitEntry">
-            提交报名并支付 {{ entryFeeLabel }}
+          <p>{{ submitHint }}</p>
+          <el-button class="submit-cta" type="primary" :loading="submittingEntry" @click="submitEntry">
+            {{ submitButtonLabel }}
           </el-button>
         </div>
       </el-form>
@@ -215,8 +216,15 @@
 
     <aside v-if="selectedCompetition" class="preview-card">
       <div class="preview-label">
-        <span>报名核对</span>
-        <h3>报名核对单</h3>
+        <span>报名确认</span>
+        <h3>报名确认</h3>
+        <section :class="['fee-panel', { 'is-early': earlyBirdActive }]">
+          <small>{{ earlyBirdActive ? '现在报名可享' : '当前报名费' }}</small>
+          <strong>{{ currentFeeText }}</strong>
+          <p v-if="earlyBirdActive && earlyBirdDeadlineText">{{ earlyBirdDeadlineText }} 前有效</p>
+          <p v-else>提交后进入支付，支付成功即完成报名。</p>
+          <em v-if="earlyBirdActive && normalFeeText">普通价 {{ normalFeeText }}</em>
+        </section>
         <template v-if="previewReady">
           <div class="receipt-line" />
           <dl>
@@ -246,7 +254,7 @@
             </div>
           </dl>
           <div class="foam-line" />
-          <p class="receipt-status">{{ submittedEntry ? (paymentPaid ? '已支付，报名成功' : '待支付报名费') : '提交后支付报名费' }}</p>
+          <p class="receipt-status">{{ submittedEntry ? (paymentPaid ? '已支付，报名成功' : '待支付报名费') : '提交后进入支付' }}</p>
         </template>
         <p v-else class="preview-empty">填写组别、风格和 ABV 后显示核对单。</p>
       </div>
@@ -260,7 +268,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { fetchPortalCompetitionDetail, simulatePortalEntryPayment, submitPortalEntry } from '@/api/portal'
-import { currentEntryFee, formatCompetitionFee } from './portalViewModels'
+import { currentEntryFee, formatCompetitionFee, isEarlyBirdActive } from './portalViewModels'
 
 const route = useRoute()
 const entryFormRef = ref(null)
@@ -294,6 +302,27 @@ const paymentAmount = computed(() => submittedEntry.value?.payment?.amount ?? su
 const paymentPaid = computed(() => submittedEntry.value?.paymentStatus === 'PAID' || submittedEntry.value?.canDownloadLabel)
 const currentFeeText = computed(() => formatCompetitionFee(selectedCompetition.value))
 const entryFeeLabel = computed(() => formatCurrency(currentEntryFee(selectedCompetition.value)))
+const earlyBirdActive = computed(() => isEarlyBirdActive(selectedCompetition.value))
+const earlyBirdDeadlineText = computed(() => formatMonthDayTime(selectedCompetition.value?.earlyBirdDeadline))
+const normalFeeText = computed(() => {
+  if (!earlyBirdActive.value) return ''
+  const normalFee = selectedCompetition.value?.entryFee
+  if (normalFee === null || normalFee === undefined) return ''
+  if (Number(normalFee) === Number(currentEntryFee(selectedCompetition.value))) return ''
+  return `${formatCurrency(normalFee)} / 款`
+})
+const submitHint = computed(() => {
+  if (earlyBirdActive.value) {
+    return `当前可享早鸟价，${earlyBirdDeadlineText.value ? `${earlyBirdDeadlineText.value} 前` : '现在'}提交后进入支付。`
+  }
+  return '提交后进入支付，支付成功即完成报名。'
+})
+const submitButtonLabel = computed(() => {
+  if (earlyBirdActive.value) {
+    return `锁定早鸟价并提交报名 ${entryFeeLabel.value}`
+  }
+  return `提交报名并支付 ${entryFeeLabel.value}`
+})
 const formRules = computed(() => {
   const rules = {
     name: [{ required: true, message: '请填写酒款名称', trigger: 'blur' }],
@@ -480,6 +509,15 @@ function formatFieldValue(value) {
 function formatCurrency(value) {
   if (value === null || value === undefined || value === '') return '¥0'
   return currencyFormatter.format(Number(value))
+}
+
+function formatMonthDayTime(value) {
+  if (!value) return ''
+  const normalized = String(value).replace('T', ' ')
+  const match = normalized.match(/^\d{4}-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/)
+  if (!match) return normalized.slice(0, 16)
+  const [, month, day, hour, minute] = match
+  return `${Number(month)}月${Number(day)}日 ${hour}:${minute}`
 }
 
 function styleLabel(item) {
@@ -676,9 +714,37 @@ function styleLabel(item) {
 
 .form-actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
-  gap: 12px;
-  margin-top: 14px;
+  gap: 18px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(87, 58, 26, 0.1);
+}
+
+.form-actions p {
+  max-width: 360px;
+  margin: 0;
+  color: #746a5f;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.submit-cta {
+  min-width: 260px;
+  min-height: 50px;
+  padding: 0 24px;
+  border: 0;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #d99a30, #a86514);
+  box-shadow: 0 12px 24px rgba(141, 88, 18, 0.2);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.submit-cta:hover {
+  background: linear-gradient(180deg, #e1a23d, #b9781f);
 }
 
 .inline-payment {
@@ -824,6 +890,55 @@ function styleLabel(item) {
   line-height: 1.15;
 }
 
+.fee-panel {
+  margin-top: 18px;
+  padding: 14px;
+  background: rgba(255, 253, 247, 0.72);
+  border: 1px solid rgba(87, 58, 26, 0.12);
+  border-radius: 8px;
+}
+
+.fee-panel small,
+.fee-panel strong,
+.fee-panel em {
+  display: block;
+}
+
+.fee-panel small {
+  color: #8b5c19;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.fee-panel strong {
+  margin-top: 6px;
+  color: #2b1d10;
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.fee-panel p {
+  margin: 9px 0 0;
+  color: #6b4710;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.fee-panel em {
+  margin-top: 8px;
+  color: #806f5b;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.fee-panel.is-early {
+  background:
+    linear-gradient(180deg, rgba(255, 248, 226, 0.94), rgba(248, 220, 139, 0.84));
+  border-color: rgba(155, 99, 23, 0.24);
+}
+
 .preview-label p,
 .preview-empty {
   color: #675b4a;
@@ -899,6 +1014,12 @@ function styleLabel(item) {
 
   .form-actions {
     display: grid;
+    justify-content: stretch;
+  }
+
+  .submit-cta {
+    width: 100%;
+    min-width: 0;
   }
 
   .payment-head {
