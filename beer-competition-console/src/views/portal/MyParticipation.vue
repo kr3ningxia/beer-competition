@@ -91,6 +91,10 @@ import {
   entryPrimaryAction,
   entryStatusMeta,
   entrySummaryForCompetition,
+  hasEntryDeliveryProgress,
+  isEntryDeliveryActionPending,
+  isEntryPaymentPending,
+  isEntryStored,
   isEntryResultPublished,
   nextActionText,
   priorityEntry,
@@ -111,14 +115,18 @@ const heroCopy = computed(() => {
   if (labelEntries.value.length > 0) {
     return `有 ${labelEntries.value.length} 款酒需要下载标签并完成送样。`
   }
+  if (waitingDeliveryEntries.value.length > 0) {
+    return `有 ${waitingDeliveryEntries.value.length} 款酒等待主办方确认收样。`
+  }
   if (resultEntries.value.length > 0) {
     return `有 ${resultEntries.value.length} 款酒的结果已经发布。`
   }
   return '目前没有待处理的参赛事项，可以浏览开放报名赛事。'
 })
 
-const unpaidEntries = computed(() => entries.value.filter((entry) => entry.status === 'PENDING_PAYMENT'))
-const labelEntries = computed(() => entries.value.filter((entry) => entry.status === 'REGISTERED'))
+const unpaidEntries = computed(() => entries.value.filter((entry) => isEntryPaymentPending(entry)))
+const labelEntries = computed(() => entries.value.filter((entry) => isEntryDeliveryActionPending(entry)))
+const waitingDeliveryEntries = computed(() => entries.value.filter((entry) => entry.status === 'REGISTERED' && hasEntryDeliveryProgress(entry) && !isEntryStored(entry)))
 const resultEntries = computed(() => entries.value.filter((entry) => isEntryResultPublished(entry)))
 const myCompetitions = computed(() => competitions.value)
 
@@ -128,6 +136,9 @@ const heroReminder = computed(() => {
   }
   if (labelEntries.value.length > 0) {
     return { label: `${labelEntries.value.length} 款需下载标签`, to: '/portal/payment' }
+  }
+  if (waitingDeliveryEntries.value.length > 0) {
+    return { label: `${waitingDeliveryEntries.value.length} 款等待确认`, to: '/portal/payment' }
   }
   if (resultEntries.value.length > 0) {
     return { label: `${resultEntries.value.length} 款结果可看`, to: '/portal/results' }
@@ -145,8 +156,11 @@ function competitionProgressText(competition) {
   if (item.pendingPayment > 0) {
     return '还有酒款待支付，处理后才能下载标签和填写送样信息。'
   }
-  if (item.registered > 0) {
+  if (item.deliveryActionPending > 0) {
     return '请下载现场标签，并按赛事要求完成送样。'
+  }
+  if (item.deliverySubmitted > 0 || item.registered > 0) {
+    return '寄样信息已提交，等待主办方确认收样。'
   }
   if (item.result > 0) {
     return '结果已发布，可以查看本场评分、评语和奖项。'
@@ -164,8 +178,10 @@ function progressChips(competition) {
   ]
   if (item.pendingPayment > 0) {
     chips.push({ label: '待支付', value: `${item.pendingPayment} 款` })
-  } else if (item.registered > 0) {
-    chips.push({ label: '需处理', value: `${item.registered} 款` })
+  } else if (item.deliveryActionPending > 0) {
+    chips.push({ label: '需处理', value: `${item.deliveryActionPending} 款` })
+  } else if (item.deliverySubmitted > 0 || item.registered > 0) {
+    chips.push({ label: '待确认', value: `${item.deliverySubmitted || item.registered} 款` })
   } else if (item.stored > 0) {
     chips.push({ label: '已入库', value: `${item.stored} 款` })
   }
@@ -183,9 +199,15 @@ function competitionActions(competition) {
       { label: '赛事详情', to: `/portal/events/${competition.id}` },
     ]
   }
-  if (item.registered > 0) {
+  if (item.deliveryActionPending > 0) {
     return [
       { label: '下载标签', to: '/portal/payment', primary: true },
+      { label: '查看酒款', to: '/portal/entries' },
+    ]
+  }
+  if (item.deliverySubmitted > 0 || item.registered > 0) {
+    return [
+      { label: '查看寄样进度', to: '/portal/payment', primary: true },
       { label: '查看酒款', to: '/portal/entries' },
     ]
   }
@@ -202,11 +224,14 @@ function competitionActions(competition) {
 }
 
 function entryStatusText(entry) {
-  if (entry.status === 'PENDING_PAYMENT' || entry.paymentStatus === 'UNPAID') {
+  if (isEntryPaymentPending(entry)) {
     return '待支付报名费，支付后才能下载标签和填写送样信息。'
   }
+  if (isEntryDeliveryActionPending(entry)) {
+    return '请下载现场标签，并按赛事要求完成送样。'
+  }
   if (entry.status === 'REGISTERED') {
-    return entry.stored ? '主办方已收到酒样，等待评审结果。' : '请下载现场标签，并按赛事要求完成送样。'
+    return hasEntryDeliveryProgress(entry) ? '寄样信息已提交，等待主办方确认收样。' : '请下载现场标签，并按赛事要求完成送样。'
   }
   if (isEntryResultPublished(entry)) {
     return '结果已发布，可以查看评分、评语和奖项。'
@@ -218,7 +243,7 @@ function entryStatusText(entry) {
 }
 
 function showShortCode(entry) {
-  return entry.status === 'REGISTERED' && !entry.stored && !isEntryResultPublished(entry)
+  return entry.status === 'REGISTERED' && !isEntryStored(entry) && !isEntryResultPublished(entry)
 }
 
 function competitionName(competitionId) {

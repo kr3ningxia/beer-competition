@@ -32,7 +32,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -116,6 +118,11 @@ public class PortalController {
     @PutMapping("/profile")
     public Result<PortalProfileVO> updateProfile(@RequestBody @Valid PortalProfileUpdateRequest request) {
         return Result.success(entryService.updatePortalProfile(request));
+    }
+
+    @PostMapping(value = "/profile/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Result<PortalProfileVO> uploadProfileAvatar(@RequestParam("file") MultipartFile file) {
+        return Result.success(entryService.uploadPortalAvatar(file));
     }
 
     @GetMapping("/my")

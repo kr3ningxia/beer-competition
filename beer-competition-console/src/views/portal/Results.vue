@@ -60,55 +60,55 @@
       <main class="result-detail">
         <template v-if="selectedEntry?.published">
           <section class="result-summary-card brewer-card">
-            <div class="summary-main">
+            <div class="result-overview-head">
               <div class="summary-title">
                 <span :class="['label-chip', `tone-${resultTone(selectedEntry)}`]">{{ resultStatusLabel(selectedEntry) }}</span>
                 <h2>{{ selectedEntry.entryName }}</h2>
                 <p>{{ selectedEntry.competitionName || '赛事信息待确认' }}</p>
               </div>
 
-              <dl class="entry-meta">
-                <div>
-                  <dt>参赛组别</dt>
-                  <dd>{{ selectedEntry.categoryName || '组别待确认' }}</dd>
-                </div>
-                <div>
-                  <dt>基础风格</dt>
-                  <dd>{{ selectedEntry.style || '风格待确认' }}</dd>
-                </div>
-                <div>
-                  <dt>组内规模</dt>
-                  <dd>{{ categoryEntryCountText }}</dd>
-                </div>
-              </dl>
+              <div class="result-actions">
+                <button
+                  class="primary-action"
+                  type="button"
+                  :disabled="!selectedEntry.certificateAvailable"
+                  @click="downloadCertificate"
+                >
+                  下载证书
+                </button>
+                <RouterLink class="secondary-action" to="/portal/my">查看参赛进度</RouterLink>
+              </div>
             </div>
 
-            <div class="summary-facts">
-              <span>
+            <div class="result-outcome-grid">
+              <section class="outcome-card">
                 <small>最终结果</small>
-                <b>{{ resultOutcome }}</b>
-              </span>
-              <span>
+                <strong>{{ resultOutcome }}</strong>
+              </section>
+              <section>
                 <small>综合得分</small>
-                <b>{{ finalScoreText }}</b>
-              </span>
-              <span>
+                <strong>{{ finalScoreText }}</strong>
+              </section>
+              <section>
                 <small>证书状态</small>
-                <b>{{ certificateStatusText }}</b>
-              </span>
+                <strong>{{ certificateStatusText }}</strong>
+              </section>
             </div>
 
-            <div class="result-actions">
-              <button
-                class="primary-action"
-                type="button"
-                :disabled="!selectedEntry.certificateAvailable"
-                @click="downloadCertificate"
-              >
-                下载证书
-              </button>
-              <RouterLink class="secondary-action" to="/portal/my">查看参赛进度</RouterLink>
-            </div>
+            <dl class="entry-meta">
+              <div>
+                <dt>参赛组别</dt>
+                <dd>{{ selectedEntry.categoryName || '组别待确认' }}</dd>
+              </div>
+              <div>
+                <dt>基础风格</dt>
+                <dd>{{ selectedEntry.style || '风格待确认' }}</dd>
+              </div>
+              <div>
+                <dt>组内规模</dt>
+                <dd>{{ categoryEntryCountText }}</dd>
+              </div>
+            </dl>
           </section>
 
           <section v-if="captainScore" class="captain-card brewer-card">
@@ -233,13 +233,11 @@ const filterOptions = [
   { label: '已发布', value: 'published' },
   { label: '待发布', value: 'locked' },
   { label: '已获奖', value: 'awarded' },
-  { label: '未获奖', value: 'unawarded' },
 ]
 
 const selectedEntry = computed(() => resultDetail.value.summary || results.value.find((entry) => entry.entryId === selectedId.value))
 const publishedEntries = computed(() => results.value.filter((entry) => isEntryResultPublished(entry)))
 const awardedEntries = computed(() => results.value.filter((entry) => isEntryAwarded(entry)))
-const unawardedEntries = computed(() => publishedEntries.value.filter((entry) => !isEntryAwarded(entry)))
 const captainScore = computed(() => resultDetail.value.scores.find((score) => score.finalScore) || null)
 const judgeScores = computed(() => resultDetail.value.scores.filter((score) => !score.finalScore))
 const finalScore = computed(() => captainScore.value?.consensusScore || captainScore.value?.totalScore || null)
@@ -273,7 +271,6 @@ const filteredResults = computed(() => {
       || (statusFilter.value === 'published' && published)
       || (statusFilter.value === 'locked' && !published)
       || (statusFilter.value === 'awarded' && awarded)
-      || (statusFilter.value === 'unawarded' && published && !awarded)
     return hitWord && hitStatus
   })
 })
@@ -465,8 +462,7 @@ async function downloadCertificate() {
   gap: 10px;
 }
 
-.result-stats span,
-.summary-facts span {
+.result-stats span {
   min-height: 70px;
   padding: 12px;
   background: rgba(255, 250, 240, 0.12);
@@ -475,9 +471,7 @@ async function downloadCertificate() {
 }
 
 .result-stats small,
-.result-stats b,
-.summary-facts small,
-.summary-facts b {
+.result-stats b {
   display: block;
 }
 
@@ -511,6 +505,26 @@ async function downloadCertificate() {
   top: 92px;
   max-height: calc(100vh - 116px);
   overflow: auto;
+  scrollbar-color: rgba(87, 58, 26, 0.24) rgba(255, 250, 240, 0.5);
+  scrollbar-width: thin;
+}
+
+.result-sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.result-sidebar::-webkit-scrollbar-track {
+  background: rgba(255, 250, 240, 0.5);
+  border-radius: 999px;
+}
+
+.result-sidebar::-webkit-scrollbar-thumb {
+  background: rgba(87, 58, 26, 0.24);
+  border-radius: 999px;
+}
+
+.result-sidebar::-webkit-scrollbar-thumb:hover {
+  background: rgba(87, 58, 26, 0.34);
 }
 
 .filter-panel {
@@ -520,7 +534,7 @@ async function downloadCertificate() {
 
 .filter-tabs {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
 }
 
@@ -619,15 +633,7 @@ async function downloadCertificate() {
 
 .result-summary-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
-  gap: 20px;
-  align-items: start;
-}
-
-.summary-main {
-  display: grid;
   gap: 18px;
-  min-width: 0;
 }
 
 .summary-title {
@@ -648,6 +654,57 @@ async function downloadCertificate() {
   color: #746a5f;
 }
 
+.result-overview-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: start;
+}
+
+.result-outcome-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.25fr) repeat(2, minmax(170px, 0.75fr));
+  gap: 12px;
+}
+
+.result-outcome-grid section {
+  min-width: 0;
+  min-height: 112px;
+  padding: 18px;
+  background: #fff7e6;
+  border: 1px solid rgba(87, 58, 26, 0.1);
+  border-radius: 8px;
+}
+
+.result-outcome-grid .outcome-card {
+  background:
+    linear-gradient(180deg, rgba(255, 248, 226, 0.96), rgba(246, 217, 150, 0.78));
+  border-color: rgba(155, 99, 23, 0.22);
+}
+
+.result-outcome-grid small,
+.result-outcome-grid strong {
+  display: block;
+}
+
+.result-outcome-grid small {
+  color: #746a5f;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.result-outcome-grid strong {
+  margin-top: 10px;
+  overflow-wrap: anywhere;
+  color: #2b1d10;
+  font-size: 30px;
+  line-height: 1.18;
+}
+
+.result-outcome-grid section:not(.outcome-card) strong {
+  font-size: 24px;
+}
+
 .entry-meta {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -656,16 +713,15 @@ async function downloadCertificate() {
 }
 
 .entry-meta div,
-.summary-facts span {
+.locked-meta div {
   min-width: 0;
   padding: 12px;
-  background: #fff7e6;
+  background: #fffdf7;
   border: 1px solid rgba(87, 58, 26, 0.1);
   border-radius: 8px;
 }
 
-.entry-meta dt,
-.summary-facts small {
+.entry-meta dt {
   margin: 0 0 7px;
   color: #746a5f;
   font-size: 13px;
@@ -679,29 +735,12 @@ async function downloadCertificate() {
   line-height: 1.4;
 }
 
-.summary-facts {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
-}
-
-.summary-facts span {
-  min-height: 78px;
-}
-
-.summary-facts b {
-  overflow-wrap: anywhere;
-  color: #2b1d10;
-  font-size: 24px;
-  line-height: 1.2;
-}
-
 .result-actions {
-  grid-column: 1 / -1;
   display: flex;
+  justify-content: flex-end;
   flex-wrap: wrap;
   gap: 10px;
-  padding-top: 2px;
+  min-width: 270px;
 }
 
 .primary-action,
@@ -938,7 +977,8 @@ async function downloadCertificate() {
 
 @media (max-width: 1120px) {
   .result-workbench,
-  .result-summary-card,
+  .result-overview-head,
+  .result-outcome-grid,
   .round-result-list {
     grid-template-columns: 1fr;
   }
@@ -949,7 +989,8 @@ async function downloadCertificate() {
   }
 
   .result-actions {
-    grid-column: auto;
+    justify-content: flex-start;
+    min-width: 0;
   }
 }
 

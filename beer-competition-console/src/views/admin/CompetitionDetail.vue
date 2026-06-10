@@ -440,10 +440,7 @@
                   <small>{{ entry.style }}</small>
                 </div>
                 <div class="entry-followup">
-                  <span class="entry-state-pill">{{ entryStatusLabels[entry.status] || entry.status }}</span>
-                  <span>{{ paymentStatusText(entry.paymentStatus) }}</span>
-                  <span>{{ deliveryStatusText(entry.deliveryStatus) }}</span>
-                  <em>{{ getEntryPathText(entry.uuid) }}</em>
+                  <span :class="['entry-state-pill', entryLatestProgress(entry).tone]">{{ entryLatestProgress(entry).label }}</span>
                 </div>
                 <div class="entry-actions">
                   <button class="mini-action" type="button" @click="openAdminEntry(entry)">查看</button>
@@ -862,6 +859,15 @@
                     <section class="feedback-block">
                       <div class="feedback-block-title">
                         <h2>桌长最终意见</h2>
+                        <button
+                          v-if="selectedFeedbackEntry.captainOpinion?.editable"
+                          class="feedback-edit-button"
+                          type="button"
+                          @click="openFeedbackCommentEditor('captain', selectedFeedbackEntry)"
+                        >
+                          <EditPen />
+                          <span>编辑</span>
+                        </button>
                       </div>
                       <article v-if="selectedFeedbackEntry.captainOpinion?.submitted" class="captain-opinion-card">
                         <div class="captain-opinion-meta">
@@ -898,6 +904,15 @@
                             <span v-if="judge.scored" class="judge-score-meta">
                               <small>提交于 {{ formatFeedbackTime(judge.submittedAt) }}</small>
                               <strong>总分 {{ judge.totalScore }} / {{ judge.maxTotal || 50 }}</strong>
+                              <button
+                                v-if="judge.editable"
+                                class="feedback-edit-button compact"
+                                type="button"
+                                @click="openFeedbackCommentEditor('judge', selectedFeedbackEntry, judge)"
+                              >
+                                <EditPen />
+                                <span>编辑</span>
+                              </button>
                             </span>
                           </header>
                           <p v-if="!judge.scored" class="judge-missing-text">该评委尚未提交个人评分。</p>
@@ -1398,6 +1413,59 @@
         </section>
       </div>
     </el-dialog>
+
+    <el-dialog
+      v-model="feedbackEditor.visible"
+      :close-on-click-modal="false"
+      class="feedback-editor-dialog"
+      width="760px"
+      destroy-on-close
+    >
+      <template #header>
+        <div class="feedback-editor-title">
+          <strong>{{ feedbackEditorTitle }}</strong>
+          <small>{{ feedbackEditorSubtitle }}</small>
+        </div>
+      </template>
+
+      <div class="feedback-editor">
+        <div class="feedback-editor-context">
+          <span>{{ feedbackEditor.entryTitle || '-' }}</span>
+          <span>{{ feedbackEditor.entryMeta || '-' }}</span>
+          <span v-if="feedbackEditor.targetLabel">{{ feedbackEditor.targetLabel }}</span>
+        </div>
+
+        <label v-if="feedbackEditor.type === 'captain'" class="feedback-editor-field">
+          <span>综合评语</span>
+          <textarea v-model="feedbackEditor.comments" rows="8" maxlength="1000" />
+        </label>
+
+        <div v-else class="feedback-editor-dimensions">
+          <article v-for="dimension in feedbackEditor.dimensions" :key="dimension.key || dimension.label" class="feedback-editor-dimension">
+            <div>
+              <strong>{{ dimension.label || dimension.key }}</strong>
+              <small>{{ dimension.score ?? '-' }} / {{ dimension.maxScore ?? '-' }}</small>
+            </div>
+            <textarea v-model="dimension.note" rows="3" maxlength="500" />
+          </article>
+        </div>
+
+        <label class="feedback-editor-field">
+          <span>修改原因</span>
+          <input v-model.trim="feedbackEditor.reason" maxlength="120" />
+        </label>
+
+        <div class="feedback-editor-footer">
+          <span :class="{ warning: feedbackEditorEffectiveLength === 0 }">有效字数 {{ feedbackEditorEffectiveLength }}</span>
+          <div>
+            <button class="tool-button" type="button" :disabled="feedbackEditor.saving" @click="closeFeedbackCommentEditor">取消</button>
+            <button class="tool-button primary" type="button" :disabled="!canSubmitFeedbackEditor" @click="submitFeedbackCommentEdit">
+              {{ feedbackEditor.saving ? '保存中' : '保存' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -1413,6 +1481,7 @@ import {
   Clock,
   DataAnalysis,
   Delete,
+  EditPen,
   Files,
   Finished,
   Lock,
@@ -1458,6 +1527,7 @@ import {
   publishRound,
   saveRoundAllocation,
   syncRoundCandidates,
+  updateCompetitionFeedbackComment,
   updateCompetitionBaseInfo,
   updateCompetitionCategories,
   updateCompetitionEntryFields,
@@ -1517,6 +1587,19 @@ const feedbackFilters = reactive({
   categoryName: '全部',
   judgeType: '全部',
   status: 'all',
+})
+const feedbackEditor = reactive({
+  visible: false,
+  saving: false,
+  type: '',
+  scoreRecordId: null,
+  expectedUpdatedAt: '',
+  entryTitle: '',
+  entryMeta: '',
+  targetLabel: '',
+  comments: '',
+  reason: '',
+  dimensions: [],
 })
 const judgeKeyword = ref('')
 const judgeRoleFilter = ref('UNASSIGNED')
@@ -2084,6 +2167,23 @@ const selectedFeedbackEntry = computed(() => {
   return selected || feedbackFilteredEntries.value[0] || null
 })
 const selectedFeedbackIssues = computed(() => buildFeedbackIssues(selectedFeedbackEntry.value))
+const feedbackEditorTitle = computed(() => (feedbackEditor.type === 'captain' ? '编辑桌长综合评语' : '编辑评委评语'))
+const feedbackEditorSubtitle = computed(() => {
+  if (feedbackEditor.type === 'captain') return '只修改文字，不调整共识分和晋级状态'
+  return '只修改维度备注，不调整评分'
+})
+const feedbackEditorEffectiveText = computed(() => {
+  if (feedbackEditor.type === 'captain') return feedbackEditor.comments
+  return feedbackEditor.dimensions.map((item) => item.note || '').join('')
+})
+const feedbackEditorEffectiveLength = computed(() => countEffectiveChars(feedbackEditorEffectiveText.value))
+const canSubmitFeedbackEditor = computed(() => (
+  feedbackEditor.visible
+  && !feedbackEditor.saving
+  && feedbackEditor.scoreRecordId
+  && feedbackEditorEffectiveLength.value > 0
+  && String(feedbackEditor.reason || '').trim().length > 0
+))
 
 onMounted(() => {
   loadStyleLibraries()
@@ -2269,6 +2369,105 @@ function formatFeedbackTime(value) {
     minute: '2-digit',
     hour12: false,
   }).format(date)
+}
+
+function countEffectiveChars(text) {
+  return String(text || '').replace(/\s+/g, '').length
+}
+
+function resetFeedbackEditor() {
+  feedbackEditor.visible = false
+  feedbackEditor.saving = false
+  feedbackEditor.type = ''
+  feedbackEditor.scoreRecordId = null
+  feedbackEditor.expectedUpdatedAt = ''
+  feedbackEditor.entryTitle = ''
+  feedbackEditor.entryMeta = ''
+  feedbackEditor.targetLabel = ''
+  feedbackEditor.comments = ''
+  feedbackEditor.reason = ''
+  feedbackEditor.dimensions = []
+}
+
+function openFeedbackCommentEditor(type, entry, judge = null) {
+  if (!entry) return
+  resetFeedbackEditor()
+  feedbackEditor.visible = true
+  feedbackEditor.type = type
+  feedbackEditor.entryTitle = formatFeedbackEntryTitle(entry)
+  feedbackEditor.entryMeta = [entry.roundName || '第一轮', entry.tableName, entry.categoryName, entry.style].filter(Boolean).join(' · ')
+  if (type === 'captain') {
+    const opinion = entry.captainOpinion || {}
+    if (!opinion.scoreRecordId) {
+      ElMessage.warning('桌长尚未提交最终意见')
+      resetFeedbackEditor()
+      return
+    }
+    feedbackEditor.scoreRecordId = opinion.scoreRecordId
+    feedbackEditor.expectedUpdatedAt = opinion.updatedAt || opinion.submittedAt || ''
+    feedbackEditor.targetLabel = `桌长 ${opinion.captainName || '未知桌长'}`
+    feedbackEditor.comments = opinion.comments || ''
+    return
+  }
+  if (!judge?.scoreRecordId) {
+    ElMessage.warning('该评委尚未提交评分')
+    resetFeedbackEditor()
+    return
+  }
+  feedbackEditor.scoreRecordId = judge.scoreRecordId
+  feedbackEditor.expectedUpdatedAt = judge.updatedAt || judge.submittedAt || ''
+  feedbackEditor.targetLabel = `${judge.judgeName || '未知评委'} · ${judge.roleLabel || feedbackRoleLabel(judge.role)}`
+  feedbackEditor.dimensions = (judge.dimensions || []).map((dimension) => ({
+    key: dimension.key,
+    label: dimension.label,
+    score: dimension.score,
+    maxScore: dimension.maxScore,
+    note: dimension.note || '',
+  }))
+  feedbackEditor.comments = buildFeedbackEditorComments()
+}
+
+function closeFeedbackCommentEditor() {
+  if (feedbackEditor.saving) return
+  resetFeedbackEditor()
+}
+
+function buildFeedbackEditorComments() {
+  if (feedbackEditor.type === 'captain') return String(feedbackEditor.comments || '').trim()
+  return feedbackEditor.dimensions
+    .map((dimension) => ({
+      label: dimension.label || dimension.key,
+      note: String(dimension.note || '').trim(),
+    }))
+    .filter((dimension) => dimension.note)
+    .map((dimension) => `${dimension.label}：${dimension.note}`)
+    .join('\n')
+}
+
+async function submitFeedbackCommentEdit() {
+  if (!canSubmitFeedbackEditor.value) return
+  const competitionId = competition.value?.id || route.params.id
+  if (!competitionId) return
+  feedbackEditor.saving = true
+  const payload = {
+    comments: buildFeedbackEditorComments(),
+    reason: feedbackEditor.reason,
+    expectedUpdatedAt: feedbackEditor.expectedUpdatedAt || null,
+  }
+  if (feedbackEditor.type === 'judge') {
+    payload.dimensionNotes = feedbackEditor.dimensions.map((dimension) => ({
+      key: dimension.key,
+      note: String(dimension.note || '').trim(),
+    }))
+  }
+  try {
+    await updateCompetitionFeedbackComment(competitionId, feedbackEditor.scoreRecordId, payload)
+    ElMessage.success('评价已保存')
+    resetFeedbackEditor()
+    await loadFeedbackReview(true)
+  } catch {
+    feedbackEditor.saving = false
+  }
 }
 
 function buildFeedbackIssues(entry) {
@@ -2469,19 +2668,31 @@ function syncFirstRoundDraftTables() {
   }
 }
 
-function paymentStatusText(status) {
-  return status === 'PAID' ? '已付款' : '待付款'
-}
-
-function deliveryStatusText(status) {
-  if (status === 'RECEIVED') return '已入库'
-  if (status === 'SUBMITTED') return '已提交送样'
-  return '待送样'
+function entryLatestProgress(entry) {
+  if (!entry) return { label: '-', tone: 'muted' }
+  if (entry.status === 'CANCELED') return { label: entryStatusLabels.CANCELED, tone: 'muted' }
+  if (entry.status === 'RESULT_PUBLISHED' || resultsPublished.value) return { label: entryStatusLabels.RESULT_PUBLISHED, tone: 'success' }
+  const award = getEntryAward(entry.uuid)
+  if (award) return { label: award, tone: 'success' }
+  const path = getLatestEntryPathText(entry.uuid)
+  if (path !== '-') return { label: path, tone: 'active' }
+  if (entry.deliveryStatus === 'RECEIVED' || entry.status === 'STORED' || entry.stored) return { label: '已入库', tone: 'active' }
+  if (entry.deliveryStatus === 'SUBMITTED') return { label: '已提交送样', tone: 'active' }
+  if (entry.paymentStatus === 'PAID' || entry.status === 'REGISTERED') return { label: '已付款', tone: 'active' }
+  if (entry.status === 'PENDING_PAYMENT' || entry.paymentStatus === 'UNPAID') return { label: '待付款', tone: 'warning' }
+  return { label: entryStatusLabels[entry.status] || entry.status || '-', tone: 'muted' }
 }
 
 function getEntryPathText(uuid) {
   const path = getEntryPath(uuid)
   return path === '-' ? '未分配' : path
+}
+
+function getLatestEntryPathText(uuid) {
+  const path = getEntryPath(uuid)
+  if (path === '-') return '-'
+  const parts = path.split(' -> ').map((item) => item.trim()).filter(Boolean)
+  return parts.at(-1) || path
 }
 
 async function loadStyleLibraries() {
@@ -6549,6 +6760,30 @@ input[type="checkbox"] {
   background: rgba(216, 169, 53, 0.08);
 }
 
+.entry-state-pill.active {
+  color: #bfe6f2;
+  border-color: rgba(103, 159, 184, 0.28);
+  background: rgba(103, 159, 184, 0.12);
+}
+
+.entry-state-pill.success {
+  color: #a8efb7;
+  border-color: rgba(82, 211, 123, 0.24);
+  background: rgba(82, 211, 123, 0.12);
+}
+
+.entry-state-pill.warning {
+  color: #ffdc73;
+  border-color: rgba(216, 169, 53, 0.28);
+  background: rgba(216, 169, 53, 0.1);
+}
+
+.entry-state-pill.muted {
+  color: var(--muted);
+  border-color: rgba(219, 232, 237, 0.1);
+  background: rgba(255, 255, 255, 0.026);
+}
+
 .entry-actions {
   align-self: center;
   grid-template-columns: repeat(3, minmax(82px, 1fr));
@@ -8200,6 +8435,37 @@ button.pyramid-placeholder-mark {
   font-size: 13px;
 }
 
+.feedback-edit-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  margin-left: auto;
+  padding: 0 10px;
+  color: var(--gold-soft);
+  border: 1px solid rgba(224, 184, 74, 0.28);
+  border-radius: 6px;
+  background: rgba(224, 184, 74, 0.08);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.feedback-edit-button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.feedback-edit-button.compact {
+  min-height: 26px;
+  margin-left: 0;
+  padding: 0 8px;
+}
+
+.feedback-edit-button:hover {
+  border-color: rgba(224, 184, 74, 0.54);
+  background: rgba(224, 184, 74, 0.14);
+}
+
 .captain-opinion-card {
   padding: 20px;
   border: 1px solid rgba(224, 184, 74, 0.24);
@@ -8340,6 +8606,8 @@ button.pyramid-placeholder-mark {
 
 .judge-score-meta {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
   gap: 16px;
   color: var(--muted);
@@ -8392,6 +8660,161 @@ button.pyramid-placeholder-mark {
   color: rgba(230, 237, 240, 0.82);
   font-size: 14px;
   line-height: 1.7;
+}
+
+:global(.feedback-editor-dialog.el-dialog) {
+  border: 1px solid rgba(219, 232, 237, 0.12);
+  background: #10191d;
+}
+
+:global(.feedback-editor-dialog .el-dialog__header) {
+  padding: 18px 22px 12px;
+  border-bottom: 1px solid rgba(219, 232, 237, 0.1);
+}
+
+:global(.feedback-editor-dialog .el-dialog__body) {
+  padding: 0;
+}
+
+.feedback-editor-title {
+  display: grid;
+  gap: 4px;
+}
+
+.feedback-editor-title strong {
+  color: var(--text);
+  font-size: 18px;
+}
+
+.feedback-editor-title small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.feedback-editor {
+  display: grid;
+  gap: 16px;
+  padding: 18px 22px 20px;
+}
+
+.feedback-editor-context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.feedback-editor-context span {
+  min-height: 28px;
+  padding: 6px 10px;
+  color: var(--muted);
+  border: 1px solid rgba(219, 232, 237, 0.1);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.035);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.feedback-editor-field,
+.feedback-editor-dimensions {
+  display: grid;
+  gap: 9px;
+}
+
+.feedback-editor-field > span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.feedback-editor-field textarea,
+.feedback-editor-field input,
+.feedback-editor-dimension textarea {
+  width: 100%;
+  color: var(--text);
+  border: 1px solid rgba(219, 232, 237, 0.14);
+  border-radius: 7px;
+  background: rgba(3, 10, 13, 0.58);
+  outline: none;
+}
+
+.feedback-editor-field textarea,
+.feedback-editor-dimension textarea {
+  resize: vertical;
+  min-height: 96px;
+  padding: 11px 12px;
+  line-height: 1.7;
+}
+
+.feedback-editor-field input {
+  height: 40px;
+  padding: 0 12px;
+}
+
+.feedback-editor-field textarea:focus,
+.feedback-editor-field input:focus,
+.feedback-editor-dimension textarea:focus {
+  border-color: rgba(224, 184, 74, 0.48);
+}
+
+.feedback-editor-dimensions {
+  max-height: min(48vh, 440px);
+  padding-right: 4px;
+  overflow: auto;
+}
+
+.feedback-editor-dimension {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgba(219, 232, 237, 0.09);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.feedback-editor-dimension > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.feedback-editor-dimension strong {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.feedback-editor-dimension small {
+  color: var(--gold-soft);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 13px;
+}
+
+.feedback-editor-dimension textarea {
+  min-height: 78px;
+}
+
+.feedback-editor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding-top: 2px;
+}
+
+.feedback-editor-footer > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.feedback-editor-footer > span.warning {
+  color: #ff9a9a;
+  font-weight: 900;
+}
+
+.feedback-editor-footer > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .feedback-issue-list {

@@ -1,7 +1,7 @@
 package com.beercompetition.storage;
 
 import com.beercompetition.properties.StorageProperties;
-import org.springframework.context.annotation.Primary;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -11,7 +11,7 @@ import java.nio.file.StandardOpenOption;
 import java.util.UUID;
 
 @Service
-@Primary
+@ConditionalOnProperty(prefix = "app.storage", name = "provider", havingValue = "local", matchIfMissing = true)
 public class LocalFileStorageService implements FileStorageService {
 
     private final Path baseDir;

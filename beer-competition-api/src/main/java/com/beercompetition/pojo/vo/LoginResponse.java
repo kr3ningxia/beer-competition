@@ -13,4 +13,6 @@ public class LoginResponse {
     private String displayName;
     private Integer status;
     private Boolean profileRequired;
+    private Boolean profileComplete;
+    private Boolean newAccount;
 }

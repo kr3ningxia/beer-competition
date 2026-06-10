@@ -26,6 +26,7 @@ import com.beercompetition.mapper.RoundTableEntryMapper;
 import com.beercompetition.mapper.RoundTableMapper;
 import com.beercompetition.mapper.RoundTableMemberMapper;
 import com.beercompetition.mapper.ScoreRecordMapper;
+import com.beercompetition.properties.StorageProperties;
 import com.beercompetition.pojo.dto.AdminEntryStatusRequest;
 import com.beercompetition.pojo.dto.AdminEntryUpdateRequest;
 import com.beercompetition.pojo.dto.PortalEntryDeliverySubmitRequest;
@@ -100,14 +101,18 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.math.BigDecimal;
+import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -125,8 +130,11 @@ public class EntryServiceImpl implements EntryService {
             EntryStatus.RESULT_PUBLISHED.name()
     );
     private static final Set<String> OPTION_FIELD_TYPES = Set.of("select", "multi_select");
+    private static final Set<String> AVATAR_CONTENT_TYPES = Set.of("image/jpeg", "image/png", "image/webp");
     private static final String CONTENT_TYPE_PDF = "application/pdf";
     private static final String TARGET_ENTRY = "BEER_ENTRY";
+    private static final String BUSINESS_TYPE_BREWERY_AVATAR = "BREWERY_AVATAR";
+    private static final long MAX_AVATAR_SIZE = 5L * 1024L * 1024L;
 
     private final AdminOperationLogMapper adminOperationLogMapper;
     private final PortalAccountMapper portalAccountMapper;
@@ -152,6 +160,7 @@ public class EntryServiceImpl implements EntryService {
     private final EntryScanLabelService entryScanLabelService;
     private final ObjectMapper objectMapper;
     private final FileStorageService fileStorageService;
+    private final StorageProperties storageProperties;
 
     @Override
     public PageResult<AdminEntryVO> listAdminEntries(Long competitionId, String status, String paymentStatus,
@@ -419,6 +428,41 @@ public class EntryServiceImpl implements EntryService {
         breweryMapper.updateById(brewery);
 
         // 3) 返回更新后的资料
+        return toPortalProfileVO(portalAccountMapper.selectById(account.getId()), breweryMapper.selectById(brewery.getId()));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public PortalProfileVO uploadPortalAvatar(MultipartFile file) {
+        // 1) 查询账号与厂牌资料
+        PortalAccount account = requirePortalAccount();
+        Brewery brewery = breweryMapper.selectById(account.getBreweryId());
+        if (brewery == null) {
+            throw new ResourceNotFoundException("厂牌不存在");
+        }
+
+        // 2) 校验并上传头像
+        validateAvatarFile(file);
+        String filename = sanitizeUploadFilename(file.getOriginalFilename(), "avatar.png");
+        byte[] bytes = readUploadBytes(file, "读取头像文件失败");
+        String storagePath = fileStorageService.upload(BUSINESS_TYPE_BREWERY_AVATAR, filename, bytes);
+        String publicUrl = resolveUploadPublicUrl(storagePath);
+        FileAsset asset = FileAsset.builder()
+                .businessType(BUSINESS_TYPE_BREWERY_AVATAR)
+                .storageProvider(storageProperties.getProvider())
+                .fileName(filename)
+                .storagePath(storagePath)
+                .publicUrl(publicUrl)
+                .createTime(LocalDateTime.now())
+                .build();
+        fileAssetMapper.insert(asset);
+
+        // 3) 绑定头像到厂牌资料
+        brewery.setAvatarAssetId(asset.getId());
+        brewery.setAvatarUrl(publicUrl);
+        breweryMapper.updateById(brewery);
+
+        // 4) 返回更新后的资料
         return toPortalProfileVO(portalAccountMapper.selectById(account.getId()), breweryMapper.selectById(brewery.getId()));
     }
 
@@ -1633,7 +1677,52 @@ public class EntryServiceImpl implements EntryService {
                 .contactName(brewery == null ? null : brewery.getContactName())
                 .phone(account.getPhone())
                 .wechat(StringUtils.hasText(account.getWechat()) ? account.getWechat() : brewery == null ? null : brewery.getWechat())
+                .avatarUrl(brewery == null ? null : brewery.getAvatarUrl())
                 .build();
+    }
+
+    private void validateAvatarFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new BaseException("请选择头像图片");
+        }
+        if (file.getSize() > MAX_AVATAR_SIZE) {
+            throw new BaseException("头像图片不能超过 5MB");
+        }
+        String filename = sanitizeUploadFilename(file.getOriginalFilename(), "avatar.png").toLowerCase(Locale.ROOT);
+        String contentType = file.getContentType();
+        boolean allowedExtension = filename.endsWith(".jpg")
+                || filename.endsWith(".jpeg")
+                || filename.endsWith(".png")
+                || filename.endsWith(".webp");
+        boolean allowedContentType = contentType != null && AVATAR_CONTENT_TYPES.contains(contentType.toLowerCase(Locale.ROOT));
+        if (!allowedExtension || !allowedContentType) {
+            throw new BaseException("头像仅支持 JPG、PNG、WebP 图片");
+        }
+    }
+
+    private byte[] readUploadBytes(MultipartFile file, String errorMessage) {
+        try {
+            return file.getBytes();
+        } catch (IOException ex) {
+            throw new BaseException(errorMessage);
+        }
+    }
+
+    private String sanitizeUploadFilename(String originalFilename, String defaultFilename) {
+        String filename = StringUtils.hasText(originalFilename) ? originalFilename.trim() : defaultFilename;
+        filename = filename.replace("\\", "/");
+        int index = filename.lastIndexOf('/');
+        return index >= 0 ? filename.substring(index + 1) : filename;
+    }
+
+    private String resolveUploadPublicUrl(String storagePath) {
+        if (!"local".equalsIgnoreCase(storageProperties.getProvider())) {
+            return storagePath;
+        }
+        Path baseDir = Path.of(storageProperties.getLocalBaseDir()).toAbsolutePath().normalize();
+        Path storedFile = Path.of(storagePath).toAbsolutePath().normalize();
+        String relativePath = baseDir.relativize(storedFile).toString().replace("\\", "/");
+        return "/uploads/" + relativePath;
     }
 
     private CompetitionStyleConfig findStyleSnapshot(BeerEntry entry) {

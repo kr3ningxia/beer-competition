@@ -14,4 +14,5 @@ public class PortalProfileVO {
     private String contactName;
     private String phone;
     private String wechat;
+    private String avatarUrl;
 }

@@ -23,6 +23,8 @@ public class Brewery {
     private String contactName;
     private String phone;
     private String wechat;
+    private Long avatarAssetId;
+    private String avatarUrl;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

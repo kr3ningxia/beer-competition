@@ -557,7 +557,8 @@ public class CompetitionServiceImpl implements CompetitionService {
     @Override
     public List<AdminFeedbackReviewEntryVO> getFeedbackReviewEntries(Long competitionId) {
         // 1) 校验比赛并定位第一轮评分制轮次
-        getCompetitionOrThrow(competitionId);
+        Competition competition = getCompetitionOrThrow(competitionId);
+        boolean feedbackEditable = isFeedbackCommentEditable(competition);
         CompetitionRound firstScoreRound = competitionRoundMapper.selectOne(new LambdaQueryWrapper<CompetitionRound>()
                 .eq(CompetitionRound::getCompetitionId, competitionId)
                 .eq(CompetitionRound::getRoundNo, 1)
@@ -607,7 +608,7 @@ public class CompetitionServiceImpl implements CompetitionService {
         return roundEntries.stream()
                 .map(roundEntry -> buildFeedbackReviewEntry(firstScoreRound, roundEntry, tableById, entryById,
                         labelByEntryId, categoryNameById, membersByTable, judgeById, personalScoreByJudgeEntry,
-                        finalScoreByEntry, minCommentLengthByRole))
+                        finalScoreByEntry, minCommentLengthByRole, feedbackEditable))
                 .filter(Objects::nonNull)
                 .toList();
     }
@@ -917,7 +918,8 @@ public class CompetitionServiceImpl implements CompetitionService {
                                                                 Map<Long, JudgeAccount> judgeById,
                                                                 Map<String, ScoreRecord> personalScoreByJudgeEntry,
                                                                 Map<Long, ScoreRecord> finalScoreByEntry,
-                                                                Map<String, Integer> minCommentLengthByRole) {
+                                                                Map<String, Integer> minCommentLengthByRole,
+                                                                boolean feedbackEditable) {
         RoundTable table = tableById.get(roundEntry.getRoundTableId());
         BeerEntry entry = entryById.get(roundEntry.getBeerEntryId());
         if (table == null || entry == null) {
@@ -929,7 +931,7 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .toList();
         ScoreRecord finalScore = finalScoreByEntry.get(entry.getId());
         List<AdminFeedbackJudgeScoreVO> judges = reviewMembers.stream()
-                .map(member -> buildFeedbackJudgeScore(member, entry, judgeById, personalScoreByJudgeEntry, minCommentLengthByRole))
+                .map(member -> buildFeedbackJudgeScore(member, entry, judgeById, personalScoreByJudgeEntry, minCommentLengthByRole, feedbackEditable))
                 .toList();
         EntryScanLabel label = labelByEntryId.get(entry.getId());
         int personalSubmitted = (int) judges.stream().filter(item -> Boolean.TRUE.equals(item.getScored())).count();
@@ -951,7 +953,7 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .consensusScore(finalScore == null ? null : firstScore(finalScore.getConsensusScore(), finalScore.getTotalScore()))
                 .advanced(finalScore != null && Objects.equals(finalScore.getAdvancedFlag(), FLAG_TRUE))
                 .status(resolveFeedbackStatus(finalScore, judges, minCommentLengthByRole))
-                .captainOpinion(buildCaptainOpinion(table, finalScore, judgeById, minCommentLengthByRole))
+                .captainOpinion(buildCaptainOpinion(table, finalScore, judgeById, minCommentLengthByRole, feedbackEditable))
                 .judges(judges)
                 .build();
     }
@@ -960,20 +962,24 @@ public class CompetitionServiceImpl implements CompetitionService {
                                                               BeerEntry entry,
                                                               Map<Long, JudgeAccount> judgeById,
                                                               Map<String, ScoreRecord> personalScoreByJudgeEntry,
-                                                              Map<String, Integer> minCommentLengthByRole) {
+                                                              Map<String, Integer> minCommentLengthByRole,
+                                                              boolean feedbackEditable) {
         JudgeAccount judge = judgeById.get(member.getJudgeAccountId());
         ScoreRecord score = personalScoreByJudgeEntry.get(scoreKey(member.getJudgeAccountId(), entry.getId()));
         List<DimensionRequest> dimensions = score == null ? List.of() : readDimensions(score.getDimensionsJson());
         String role = member.getRole();
         return AdminFeedbackJudgeScoreVO.builder()
+                .scoreRecordId(score == null ? null : score.getId())
                 .judgePublicId(judge == null ? "" : judge.getPublicId())
                 .judgeName(judge == null ? "未知评审" : judge.getName())
                 .role(role)
                 .roleLabel(feedbackRoleLabel(role))
                 .scored(score != null)
+                .editable(score != null && feedbackEditable)
                 .totalScore(score == null ? null : score.getTotalScore())
                 .maxTotal(dimensions.isEmpty() ? SCORE_FORM_TOTAL : getScoreTotal(dimensions))
                 .submittedAt(score == null ? null : firstTime(score.getUpdateTime(), score.getCreateTime()))
+                .updatedAt(score == null ? null : firstTime(score.getUpdateTime(), score.getCreateTime()))
                 .dimensions(dimensions)
                 .comments(score == null ? "" : score.getComments())
                 .anomaly(score == null ? JUDGE_ANOMALY_NOT_SUBMITTED : resolveCommentAnomaly(score, role, minCommentLengthByRole))
@@ -983,11 +989,14 @@ public class CompetitionServiceImpl implements CompetitionService {
     private AdminFeedbackCaptainOpinionVO buildCaptainOpinion(RoundTable table,
                                                               ScoreRecord finalScore,
                                                               Map<Long, JudgeAccount> judgeById,
-                                                              Map<String, Integer> minCommentLengthByRole) {
+                                                              Map<String, Integer> minCommentLengthByRole,
+                                                              boolean feedbackEditable) {
         JudgeAccount captain = judgeById.get(table.getCaptainJudgeId());
         if (finalScore == null) {
             return AdminFeedbackCaptainOpinionVO.builder()
+                    .scoreRecordId(null)
                     .submitted(false)
+                    .editable(false)
                     .captainName(captain == null ? "未知桌长" : captain.getName())
                     .maxConsensus(SCORE_FORM_TOTAL)
                     .advanced(false)
@@ -995,14 +1004,22 @@ public class CompetitionServiceImpl implements CompetitionService {
         }
         List<DimensionRequest> dimensions = readDimensions(finalScore.getDimensionsJson());
         return AdminFeedbackCaptainOpinionVO.builder()
+                .scoreRecordId(finalScore.getId())
                 .submitted(true)
+                .editable(feedbackEditable)
                 .captainName(captain == null ? "未知桌长" : captain.getName())
                 .consensusScore(firstScore(finalScore.getConsensusScore(), finalScore.getTotalScore()))
                 .maxConsensus(dimensions.isEmpty() ? SCORE_FORM_TOTAL : getScoreTotal(dimensions))
                 .advanced(Objects.equals(finalScore.getAdvancedFlag(), FLAG_TRUE))
                 .comments(finalScore.getComments())
                 .submittedAt(firstTime(finalScore.getUpdateTime(), finalScore.getCreateTime()))
+                .updatedAt(firstTime(finalScore.getUpdateTime(), finalScore.getCreateTime()))
                 .build();
+    }
+
+    private boolean isFeedbackCommentEditable(Competition competition) {
+        return !CompetitionStatus.PUBLISHED.name().equals(competition.getStatus())
+                && !CompetitionStatus.ARCHIVED.name().equals(competition.getStatus());
     }
 
     private String resolveFeedbackStatus(ScoreRecord finalScore,

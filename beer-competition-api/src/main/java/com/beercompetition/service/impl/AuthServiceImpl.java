@@ -51,6 +51,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
 
+    private static final String PORTAL_PROFILE_PLACEHOLDER_PREFIX = "待完善";
+
     private final AdminUserMapper adminUserMapper;
     private final PortalAccountMapper portalAccountMapper;
     private final BreweryMapper breweryMapper;
@@ -114,17 +116,24 @@ public class AuthServiceImpl implements AuthService {
         String phone = piiService.normalizePhone(request.getPhone());
 
         // 2) 查询或自动创建厂商账号
+        boolean newAccount = false;
         PortalAccount account = portalAccountMapper.selectOne(new LambdaQueryWrapper<PortalAccount>()
                 .eq(PortalAccount::getPhone, phone));
         if (account == null) {
             account = createPortalAccount(phone);
+            newAccount = true;
         }
         if (account.getStatus() == null || account.getStatus() != 1) {
             throw new BaseException("厂商账号已禁用");
         }
 
         // 3) 组装并返回登录态
-        return buildLoginResponse(account.getId(), account.getDisplayName(), UserRole.PORTAL, jwtProperties.getPortalTtl());
+        boolean profileComplete = isPortalProfileComplete(account);
+        LoginResponse response = buildLoginResponse(account.getId(), account.getDisplayName(), UserRole.PORTAL, jwtProperties.getPortalTtl());
+        response.setNewAccount(newAccount);
+        response.setProfileComplete(profileComplete);
+        response.setProfileRequired(!profileComplete);
+        return response;
     }
 
     @Override
@@ -208,11 +217,14 @@ public class AuthServiceImpl implements AuthService {
                 if (account == null) {
                     throw new ResourceNotFoundException("厂商账号不存在");
                 }
+                boolean profileComplete = isPortalProfileComplete(account);
                 yield CurrentUserResponse.builder()
                         .userId(account.getId())
                         .role(role.name())
                         .displayName(account.getDisplayName())
                         .phone(account.getPhone())
+                        .profileComplete(profileComplete)
+                        .profileRequired(!profileComplete)
                         .build();
             }
             case JUDGE -> {
@@ -294,10 +306,10 @@ public class AuthServiceImpl implements AuthService {
 
     private PortalAccount createPortalAccount(String phone) {
         String suffix = phone.length() <= 4 ? phone : phone.substring(phone.length() - 4);
-        String initialName = "待完善厂牌" + suffix;
+        String initialName = PORTAL_PROFILE_PLACEHOLDER_PREFIX + "厂牌" + suffix;
         Brewery brewery = Brewery.builder()
                 .companyName(initialName)
-                .contactName("待完善")
+                .contactName(PORTAL_PROFILE_PLACEHOLDER_PREFIX)
                 .phone(phone)
                 .wechat(null)
                 .build();
@@ -312,6 +324,20 @@ public class AuthServiceImpl implements AuthService {
                 .build();
         portalAccountMapper.insert(account);
         return portalAccountMapper.selectById(account.getId());
+    }
+
+    private boolean isPortalProfileComplete(PortalAccount account) {
+        if (account == null || isPortalPlaceholderValue(account.getDisplayName())) {
+            return false;
+        }
+        Brewery brewery = account.getBreweryId() == null ? null : breweryMapper.selectById(account.getBreweryId());
+        return brewery != null
+                && !isPortalPlaceholderValue(brewery.getCompanyName())
+                && !isPortalPlaceholderValue(brewery.getContactName());
+    }
+
+    private boolean isPortalPlaceholderValue(String value) {
+        return !StringUtils.hasText(value) || value.trim().startsWith(PORTAL_PROFILE_PLACEHOLDER_PREFIX);
     }
 
     private LoginResponse buildJudgeLoginResponse(JudgeAccount account) {

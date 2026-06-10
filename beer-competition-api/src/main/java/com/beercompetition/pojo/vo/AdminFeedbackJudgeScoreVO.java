@@ -12,14 +12,17 @@ import java.util.List;
 @Builder
 public class AdminFeedbackJudgeScoreVO {
 
+    private Long scoreRecordId;
     private String judgePublicId;
     private String judgeName;
     private String role;
     private String roleLabel;
     private Boolean scored;
+    private Boolean editable;
     private BigDecimal totalScore;
     private BigDecimal maxTotal;
     private LocalDateTime submittedAt;
+    private LocalDateTime updatedAt;
     private List<DimensionRequest> dimensions;
     private String comments;
     private String anomaly;

@@ -10,11 +10,14 @@ import java.time.LocalDateTime;
 @Builder
 public class AdminFeedbackCaptainOpinionVO {
 
+    private Long scoreRecordId;
     private Boolean submitted;
+    private Boolean editable;
     private String captainName;
     private BigDecimal consensusScore;
     private BigDecimal maxConsensus;
     private Boolean advanced;
     private String comments;
     private LocalDateTime submittedAt;
+    private LocalDateTime updatedAt;
 }

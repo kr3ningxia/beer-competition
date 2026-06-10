@@ -2,6 +2,7 @@ package com.beercompetition.controller.admin;
 
 import com.beercompetition.common.result.PageResult;
 import com.beercompetition.common.result.Result;
+import com.beercompetition.pojo.dto.AdminFeedbackCommentUpdateRequest;
 import com.beercompetition.pojo.dto.AdminEntryStatusRequest;
 import com.beercompetition.pojo.dto.AdminEntryUpdateRequest;
 import com.beercompetition.pojo.dto.CompetitionBaseInfoUpdateRequest;
@@ -37,6 +38,7 @@ import com.beercompetition.pojo.vo.ResultDraftVO;
 import com.beercompetition.pojo.vo.ScoreConfigVO;
 import com.beercompetition.pojo.vo.StyleLibraryVO;
 import com.beercompetition.service.AuthService;
+import com.beercompetition.service.AdminFeedbackService;
 import com.beercompetition.service.AwardService;
 import com.beercompetition.service.CompetitionService;
 import com.beercompetition.service.EntryService;
@@ -70,6 +72,7 @@ import java.util.List;
 public class AdminController {
 
     private final AuthService authService;
+    private final AdminFeedbackService adminFeedbackService;
     private final CompetitionService competitionService;
     private final EntryService entryService;
     private final JudgeService judgeService;
@@ -238,6 +241,14 @@ public class AdminController {
     @GetMapping("/competitions/{id}/feedback-review")
     public Result<List<AdminFeedbackReviewEntryVO>> feedbackReview(@PathVariable Long id) {
         return Result.success(competitionService.getFeedbackReviewEntries(id));
+    }
+
+    @PatchMapping("/competitions/{id}/feedback-review/score-records/{scoreRecordId}/comments")
+    public Result<String> updateFeedbackComment(@PathVariable Long id,
+                                                @PathVariable Long scoreRecordId,
+                                                @RequestBody @Valid AdminFeedbackCommentUpdateRequest request) {
+        adminFeedbackService.updateScoreRecordComments(id, scoreRecordId, request);
+        return Result.success("保存成功");
     }
 
     @GetMapping("/competitions/{id}/results/draft")

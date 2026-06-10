@@ -18,6 +18,7 @@ import com.beercompetition.pojo.vo.PortalMyParticipationVO;
 import com.beercompetition.pojo.vo.PortalProfileVO;
 import com.beercompetition.pojo.vo.PortalResultDetailVO;
 import com.beercompetition.pojo.vo.PortalResultSummaryVO;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -44,6 +45,8 @@ public interface EntryService {
     PortalProfileVO getPortalProfile();
 
     PortalProfileVO updatePortalProfile(PortalProfileUpdateRequest request);
+
+    PortalProfileVO uploadPortalAvatar(MultipartFile file);
 
     PortalMyParticipationVO getPortalMyParticipation();
 

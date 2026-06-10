@@ -42,6 +42,30 @@ export function isEntryResultPublished(entry) {
   return Boolean(entry?.published) || entry?.status === 'RESULT_PUBLISHED'
 }
 
+export function isEntryStored(entry) {
+  return Boolean(entry?.stored) || entry?.storedFlag === 1 || entry?.status === 'STORED' || isEntryResultPublished(entry)
+}
+
+export function hasEntryDeliveryProgress(entry) {
+  if (!entry) return false
+  return ['SUBMITTED', 'RECEIVED'].includes(entry.deliveryStatus)
+    || Boolean(entry.deliverySubmittedAt || entry.delivery?.submittedTime || entry.trackingNo || entry.deliveryMethod)
+}
+
+export function isEntryPaymentPending(entry) {
+  return entry?.status === 'PENDING_PAYMENT' || entry?.paymentStatus === 'UNPAID'
+}
+
+export function isEntryDeliveryActionPending(entry) {
+  return entry?.status === 'REGISTERED'
+    && !isEntryStored(entry)
+    && !hasEntryDeliveryProgress(entry)
+}
+
+export function isEntryVendorActionPending(entry) {
+  return isEntryPaymentPending(entry) || isEntryDeliveryActionPending(entry)
+}
+
 export function isEarlyBirdActive(competition, now = new Date()) {
   if (competition?.earlyBirdFee === null || competition?.earlyBirdFee === undefined || !competition?.earlyBirdDeadline) {
     return false
@@ -100,14 +124,17 @@ export function entryPrimaryAction(entry) {
     return { label: '浏览开放赛事', to: '/portal/events' }
   }
   const paymentPath = `/portal/payment?entryId=${entry.id}`
-  if (entry.status === 'PENDING_PAYMENT' || entry.paymentStatus === 'UNPAID') {
+  if (isEntryPaymentPending(entry)) {
     return { label: '去支付', to: paymentPath }
   }
   if (isEntryResultPublished(entry)) {
     return { label: '查看结果', to: entryResultPath(entry) }
   }
-  if (entry.status === 'REGISTERED') {
+  if (isEntryDeliveryActionPending(entry)) {
     return { label: '下载现场标签', to: paymentPath }
+  }
+  if (entry.status === 'REGISTERED') {
+    return { label: '查看寄样进度', to: paymentPath }
   }
   if (entry.status === 'STORED') {
     return { label: '查看参赛进度', to: '/portal/entries' }
@@ -116,17 +143,18 @@ export function entryPrimaryAction(entry) {
 }
 
 export function priorityEntry(entries) {
-  return entries.find((entry) => entry.status === 'PENDING_PAYMENT')
-    || entries.find((entry) => entry.status === 'REGISTERED')
+  return entries.find((entry) => isEntryPaymentPending(entry))
+    || entries.find((entry) => isEntryDeliveryActionPending(entry))
     || entries.find((entry) => isEntryResultPublished(entry))
     || entries.find((entry) => entry.status === 'STORED')
+    || entries.find((entry) => entry.status === 'REGISTERED')
     || null
 }
 
 export function entryTimeline(entry) {
   const paid = entry?.paymentStatus === 'PAID' || entry?.canDownloadLabel
   const resultPublished = isEntryResultPublished(entry)
-  const stored = Boolean(entry?.stored) || entry?.status === 'STORED' || resultPublished
+  const stored = isEntryStored(entry)
   return [
     { label: '提交资料', done: true, hint: entry?.submittedAt || '已提交' },
     { label: '支付报名费', done: paid, hint: paid ? '已支付' : '待支付' },
@@ -140,19 +168,24 @@ export function entrySummaryForCompetition(competitionId, entries) {
   const scoped = entries.filter((entry) => entry.competitionId === competitionId)
   return {
     submitted: scoped.length,
-    pendingPayment: scoped.filter((entry) => entry.status === 'PENDING_PAYMENT').length,
+    pendingPayment: scoped.filter((entry) => isEntryPaymentPending(entry)).length,
+    deliveryActionPending: scoped.filter((entry) => isEntryDeliveryActionPending(entry)).length,
+    deliverySubmitted: scoped.filter((entry) => entry.status === 'REGISTERED' && !isEntryStored(entry) && hasEntryDeliveryProgress(entry)).length,
     registered: scoped.filter((entry) => entry.status === 'REGISTERED').length,
-    stored: scoped.filter((entry) => entry.status === 'STORED' || isEntryResultPublished(entry)).length,
+    stored: scoped.filter((entry) => isEntryStored(entry)).length,
     result: scoped.filter((entry) => isEntryResultPublished(entry)).length,
   }
 }
 
 export function nextActionText(entry) {
-  if (entry.status === 'PENDING_PAYMENT' || entry.paymentStatus === 'UNPAID') {
+  if (isEntryPaymentPending(entry)) {
     return '待支付报名费'
   }
+  if (isEntryDeliveryActionPending(entry)) {
+    return '下载标签并送样'
+  }
   if (entry.status === 'REGISTERED') {
-    return entry.stored ? '等待评审' : '下载标签并送样'
+    return hasEntryDeliveryProgress(entry) ? '等待主办方确认收样' : '下载标签并送样'
   }
   if (isEntryResultPublished(entry)) {
     return '查看结果'

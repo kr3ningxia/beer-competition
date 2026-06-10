@@ -84,7 +84,7 @@ function isNavActive(item) {
 
 function logout() {
   clearSession('portal')
-  router.push('/portal/home')
+  router.replace('/portal/home')
 }
 
 function syncDisplayNameFromStorage() {

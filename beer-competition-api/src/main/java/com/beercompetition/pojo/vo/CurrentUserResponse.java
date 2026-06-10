@@ -16,6 +16,7 @@ public class CurrentUserResponse {
     private Integer status;
     private String statusLabel;
     private Boolean profileRequired;
+    private Boolean profileComplete;
     private Boolean canScore;
     private Long currentCompetitionId;
     private String currentCompetition;

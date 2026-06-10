@@ -1,3 +1,5 @@
+import { ref } from 'vue'
+
 const TOKEN_KEYS = {
   admin: 'admin_token',
   portal: 'portal_token',
@@ -9,6 +11,7 @@ const USERNAME_KEYS = {
 }
 
 const SESSION_EVENT = 'beer-competition-session-updated'
+const sessionRevision = ref(0)
 
 export function getToken(scope) {
   return localStorage.getItem(TOKEN_KEYS[scope])
@@ -21,7 +24,7 @@ export function setSession(scope, token, displayName) {
 
 export function setDisplayName(scope, displayName) {
   localStorage.setItem(USERNAME_KEYS[scope], displayName || '')
-  window.dispatchEvent(new CustomEvent(SESSION_EVENT, { detail: { scope } }))
+  notifySessionUpdated(scope)
 }
 
 export function createLocalSessionToken(scope, displayName) {
@@ -43,16 +46,13 @@ export function createLocalSessionToken(scope, displayName) {
 export function clearSession(scope) {
   localStorage.removeItem(TOKEN_KEYS[scope])
   localStorage.removeItem(USERNAME_KEYS[scope])
-  window.dispatchEvent(new CustomEvent(SESSION_EVENT, { detail: { scope } }))
+  notifySessionUpdated(scope)
 }
 
 export function isLoggedIn(scope) {
+  sessionRevision.value
   const token = getToken(scope)
-  if (!token || !isTokenUsable(token, scope)) {
-    clearSession(scope)
-    return false
-  }
-  return true
+  return Boolean(token && isTokenUsable(token, scope))
 }
 
 export function getDisplayName(scope) {
@@ -92,4 +92,9 @@ function encodeBase64Url(value) {
     return String.fromCharCode(Number.parseInt(hex, 16))
   })
   return btoa(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+function notifySessionUpdated(scope) {
+  sessionRevision.value += 1
+  window.dispatchEvent(new CustomEvent(SESSION_EVENT, { detail: { scope } }))
 }

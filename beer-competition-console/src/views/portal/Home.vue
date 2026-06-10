@@ -140,7 +140,7 @@ import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { isLoggedIn } from '@/utils/auth'
 import { fetchPortalEntries, fetchPortalHome, fetchPortalResults } from '@/api/portal'
-import { canSubmitEntry, formatCompetitionFee, isEarlyBirdActive, isEntryResultPublished } from './portalViewModels'
+import { canSubmitEntry, formatCompetitionFee, isEarlyBirdActive, isEntryResultPublished, isEntryVendorActionPending } from './portalViewModels'
 
 const loggedIn = computed(() => isLoggedIn('portal'))
 const homeData = ref({ activeCompetition: null, openCompetitions: [], competitions: [] })
@@ -148,7 +148,7 @@ const entries = ref([])
 const results = ref([])
 const activeCompetition = computed(() => homeData.value.activeCompetition)
 const openCompetitions = computed(() => homeData.value.openCompetitions || [])
-const pendingCount = computed(() => entries.value.filter((entry) => entry.status === 'PENDING_PAYMENT' || entry.status === 'REGISTERED').length)
+const pendingCount = computed(() => entries.value.filter((entry) => isEntryVendorActionPending(entry)).length)
 const publishedResultCount = computed(() => results.value.filter((entry) => isEntryResultPublished(entry)).length)
 
 onMounted(async () => {

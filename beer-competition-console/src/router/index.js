@@ -74,7 +74,7 @@ router.beforeEach((to, from, next) => {
   if (to.meta.requiresAuth) {
     const scope = to.meta.scope
     if (!isLoggedIn(scope)) {
-      next(scope === 'admin' ? '/admin/login' : '/portal/login')
+      next(scope === 'admin' ? '/admin/login' : { path: '/portal/login', query: { redirect: to.fullPath } })
       return
     }
   }

@@ -202,6 +202,8 @@ CREATE TABLE `brewery`  (
   `contact_name` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
   `phone` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
   `wechat` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL,
+  `avatar_asset_id` bigint(0) NULL DEFAULT NULL,
+  `avatar_url` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL,
   `create_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0),
   `update_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) ON UPDATE CURRENT_TIMESTAMP(0),
   PRIMARY KEY (`id`) USING BTREE
@@ -210,7 +212,7 @@ CREATE TABLE `brewery`  (
 -- ----------------------------
 -- Records of brewery
 -- ----------------------------
-INSERT INTO `brewery` VALUES (1, '????', '??', '13800000001', 'brewery-zhangsan', '2026-06-02 21:39:35', '2026-06-02 21:39:35');
+INSERT INTO `brewery` VALUES (1, '????', '??', '13800000001', 'brewery-zhangsan', NULL, NULL, '2026-06-02 21:39:35', '2026-06-02 21:39:35');
 
 -- ----------------------------
 -- Table structure for competition

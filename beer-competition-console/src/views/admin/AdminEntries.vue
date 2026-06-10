@@ -75,14 +75,6 @@
       </label>
     </section>
 
-    <section class="metric-strip">
-      <article v-for="item in metrics" :key="item.label">
-        <small>{{ item.label }}</small>
-        <strong>{{ item.value }}</strong>
-        <span>{{ item.hint }}</span>
-      </article>
-    </section>
-
     <section class="table-card">
       <div class="table-title">
         <h2>酒款明细</h2>
@@ -342,15 +334,6 @@ const drawerTabs = [
   { key: 'trace', label: '分桌轨迹' },
   { key: 'logs', label: '修改记录' },
 ]
-
-const metrics = computed(() => [
-  { label: '全部', value: total.value, hint: '当前筛选范围' },
-  { label: '待付款', value: entries.value.filter((item) => item.paymentStatus === 'UNPAID').length, hint: '本页需跟进' },
-  { label: '待入库', value: entries.value.filter((item) => item.status === 'REGISTERED').length, hint: '可确认到场' },
-  { label: '资料待核对', value: entries.value.filter((item) => item.assigned && item.canEdit).length, hint: '已分桌仍可修正' },
-  { label: '已分桌', value: entries.value.filter((item) => item.assigned).length, hint: '本页轨迹' },
-  { label: '已取消', value: entries.value.filter((item) => item.status === 'CANCELED').length, hint: '不进分桌池' },
-])
 
 const totalPages = computed(() => Math.max(Math.ceil(total.value / filters.pageSize), 1))
 const visiblePages = computed(() => {
@@ -634,7 +617,6 @@ function formatTime(value) {
 
 .page-head,
 .filter-panel,
-.metric-strip,
 .table-card {
   width: 100%;
   max-width: none;
@@ -762,41 +744,11 @@ button:disabled {
   padding-left: 36px;
 }
 
-.metric-strip {
-  flex: 0 0 auto;
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.metric-strip article,
 .table-card,
 .entry-drawer {
   border: 1px solid rgba(218, 232, 237, 0.1);
   border-radius: 8px;
   background: rgba(18, 29, 34, 0.9);
-}
-
-.metric-strip article {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: end;
-  gap: 3px 10px;
-  min-height: 72px;
-  padding: 10px 12px;
-}
-
-.metric-strip small,
-.metric-strip span {
-  color: #8ea4ad;
-}
-
-.metric-strip strong {
-  grid-row: 1 / span 2;
-  grid-column: 2;
-  font-size: 24px;
-  line-height: 1;
 }
 
 .table-card {
@@ -1159,8 +1111,5 @@ button:disabled {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .metric-strip {
-    grid-template-columns: repeat(3, 1fr);
-  }
 }
 </style>

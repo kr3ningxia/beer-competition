@@ -70,3 +70,9 @@ export function downloadPortalResultCertificate(entryId) {
 export function updatePortalProfile(data) {
   return request.put('/api/portal/profile', data, { authScope: 'portal' })
 }
+
+export function uploadPortalAvatar(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post('/api/portal/profile/avatar', formData, { authScope: 'portal' })
+}
