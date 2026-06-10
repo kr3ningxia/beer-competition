@@ -13,6 +13,7 @@ const routes = [
   { path: '/scan-result/:uuid', component: () => import('@/views/ScanResult.vue'), meta: { requiresAuth: true } },
   { path: '/score/:uuid', component: () => import('@/views/Score.vue'), meta: { requiresAuth: true } },
   { path: '/score-confirmation/:roundTableId', component: () => import('@/views/ScoreConfirmation.vue'), meta: { requiresAuth: true } },
+  { path: '/ranking-confirmation/:roundTableId', component: () => import('@/views/RankingConfirmation.vue'), meta: { requiresAuth: true } },
   { path: '/ranking/:roundTableId', component: () => import('@/views/Ranking.vue'), meta: { requiresAuth: true } },
   { path: '/captain', component: () => import('@/views/Captain.vue'), meta: { requiresAuth: true } },
   { path: '/captain/:uuid', component: () => import('@/views/Captain.vue'), meta: { requiresAuth: true } },

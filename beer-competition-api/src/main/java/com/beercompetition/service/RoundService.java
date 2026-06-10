@@ -10,6 +10,7 @@ import com.beercompetition.pojo.vo.CompetitionEntryVO;
 import com.beercompetition.pojo.vo.CompetitionRoundVO;
 import com.beercompetition.pojo.vo.JudgeRoundTableVO;
 import com.beercompetition.pojo.vo.JudgeTaskVO;
+import com.beercompetition.pojo.vo.RankingConfirmationVO;
 import com.beercompetition.pojo.vo.ResultDraftVO;
 import com.beercompetition.pojo.vo.ScoreConfirmationVO;
 
@@ -52,6 +53,12 @@ public interface RoundService {
     ScoreConfirmationVO confirmScoreRoundTable(Long roundTableId);
 
     void submitRanking(Long roundTableId, RankingSubmitRequest request);
+
+    RankingConfirmationVO getRankingConfirmation(Long roundTableId);
+
+    RankingConfirmationVO confirmRankingRoundTable(Long roundTableId);
+
+    void finalizeRanking(Long roundTableId);
 
     void saveRankingDraft(Long roundTableId, RankingDraftSaveRequest request);
 

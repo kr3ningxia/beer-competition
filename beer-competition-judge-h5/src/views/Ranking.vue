@@ -84,14 +84,20 @@
         </article>
       </div>
 
-      <button v-if="canSubmitFinal" class="button primary full ranking-submit" type="button" :disabled="!canSubmit" @click="openSubmitConfirm">
-        {{ submitted ? '重新提交排序' : '提交本桌排序' }}
+      <p v-if="submitBlockedMessage" class="submit-blocked-note">{{ submitBlockedMessage }}</p>
+      <button
+        v-if="canSubmitFinal"
+        :class="['button', 'primary', 'full', 'ranking-submit', { disabled: !canSubmit }]"
+        type="button"
+        :aria-disabled="!canSubmit"
+        @click="openSubmitConfirm"
+      >
+        {{ submitButtonText }}
       </button>
       <button v-else-if="canEdit" class="button primary full ranking-submit" type="button" :disabled="savingDraft" @click="saveDraft">
         {{ savingDraft ? '保存中' : '保存我的参考排序' }}
       </button>
       <p v-else class="readonly-note">{{ readonlyText }}</p>
-      <p v-if="!canSubmitFinal" class="readonly-note">仅供本人参考，不作为本桌提交结果。</p>
       <p v-if="message" class="message">{{ message }}</p>
     </section>
 
@@ -122,7 +128,7 @@
 
     <section v-if="confirmOpen" class="ranking-confirm-overlay" role="dialog" aria-modal="true">
       <div class="ranking-confirm">
-        <h2>{{ submitted ? '重新提交本桌排序' : '提交本桌排序' }}</h2>
+        <h2>{{ confirmTitle }}</h2>
         <div class="confirm-result-list">
           <div v-for="item in selectedResults" :key="item.rank">
             <span>{{ item.label }}</span>
@@ -178,7 +184,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Html5Qrcode } from 'html5-qrcode'
-import { fetchRoundTable, saveRankingDraft, submitRanking } from '@/api/judge'
+import { fetchRoundTable, finalizeRanking, saveRankingDraft, submitRanking } from '@/api/judge'
 
 const route = useRoute()
 const router = useRouter()
@@ -186,6 +192,7 @@ const table = ref(null)
 const entries = ref([])
 const slots = ref([])
 const message = ref('')
+const submitBlockedMessage = ref('')
 const scannerOpen = ref(false)
 const scannerMessage = ref('将二维码放入取景框内')
 const activeSlot = ref(null)
@@ -195,6 +202,7 @@ const submitting = ref(false)
 const savingDraft = ref(false)
 const submitted = ref(false)
 const draftSaved = ref(false)
+const hasLocalChanges = ref(false)
 const submitError = ref('')
 const draggedEntryId = ref(null)
 const activeDropRank = ref(null)
@@ -210,14 +218,43 @@ const canSubmitFinal = computed(() => Boolean(table.value?.canSubmitRanking))
 const canEdit = computed(() => table.value?.status !== 'LOCKED' && !submitting.value && !savingDraft.value)
 const isMedalMode = computed(() => table.value?.targetMode === 'MEDALS')
 const isDraggingEntry = computed(() => Boolean(draggedEntryId.value || pointerDragging.value))
+const rankingConfirmation = computed(() => table.value?.rankingConfirmation || null)
+const readyForFinalSubmit = computed(() => Boolean(rankingConfirmation.value?.readyForFinalSubmit))
 const filledCount = computed(() => slots.value.filter((slot) => slot.beerEntryId).length)
+const canFinalizeRanking = computed(() => (
+  readyForFinalSubmit.value
+  && !hasLocalChanges.value
+  && !['SUBMITTED', 'LOCKED'].includes(table.value?.status)
+))
 const canSubmit = computed(() => {
   if (!canSubmitFinal.value || !canEdit.value || !slots.value.length) return false
+  if (waitingForConfirmations.value) return false
+  if (table.value?.status === 'SUBMITTED' && !hasLocalChanges.value) return false
   return isMedalMode.value ? filledCount.value > 0 : filledCount.value === slots.value.length
+})
+const waitingForConfirmations = computed(() => (
+  canSubmitFinal.value
+  && submitted.value
+  && !readyForFinalSubmit.value
+  && !hasLocalChanges.value
+  && Number(rankingConfirmation.value?.requiredCount || 0) > 0
+))
+const submitBlockedReason = computed(() => {
+  if (waitingForConfirmations.value) {
+    return `同桌确认未完成，当前 ${rankingConfirmation.value?.confirmedCount || 0}/${rankingConfirmation.value?.requiredCount || 0}。`
+  }
+  if (!canEdit.value) return readonlyText.value
+  if (table.value?.status === 'SUBMITTED' && !hasLocalChanges.value) return '排序已提交，如需调整请先修改本桌排序。'
+  if (!slots.value.length) return '当前没有可提交的排序槽位。'
+  if (isMedalMode.value && filledCount.value <= 0) return '请先选择至少一款酒。'
+  if (!isMedalMode.value && filledCount.value < slots.value.length) return '请先补齐本桌排序。'
+  return ''
 })
 const rankingStatusText = computed(() => {
   if (table.value?.status === 'LOCKED') return '已锁定'
-  if (canSubmitFinal.value && submitted.value) return '待确认'
+  if (table.value?.status === 'SUBMITTED') return '已提交'
+  if (canSubmitFinal.value && readyForFinalSubmit.value) return '可提交'
+  if (canSubmitFinal.value && submitted.value) return `待确认 ${rankingConfirmation.value?.confirmedCount || 0}/${rankingConfirmation.value?.requiredCount || 0}`
   if (!canSubmitFinal.value && draftSaved.value) return '已保存'
   return `${filledCount.value}/${slots.value.length}`
 })
@@ -250,6 +287,15 @@ const rankingModeText = computed(() => {
   }
   return '记录自己的排序，仅供本人参考'
 })
+const submitButtonText = computed(() => {
+  if (canFinalizeRanking.value) return '最终提交本桌排序'
+  if (waitingForConfirmations.value) return '最终提交本桌排序'
+  if (table.value?.status === 'SUBMITTED' && !hasLocalChanges.value) return '修改后可重新提交确认'
+  return submitted.value ? '重新提交同桌确认' : '提交同桌确认'
+})
+const confirmTitle = computed(() => (
+  canFinalizeRanking.value ? '最终提交本桌排序' : '提交同桌确认'
+))
 
 function displayShortCode(entry) {
   return entry?.shortCode || '编号'
@@ -359,6 +405,7 @@ function selectSlotEntry(slot, value) {
 }
 
 function assignEntryToSlot(entryId, targetSlot) {
+  submitBlockedMessage.value = ''
   const sourceSlot = slots.value.find((slot) => String(slot.beerEntryId) === String(entryId))
   const replacedEntryId = targetSlot.beerEntryId
   if (sourceSlot && sourceSlot.rank !== targetSlot.rank) {
@@ -366,13 +413,22 @@ function assignEntryToSlot(entryId, targetSlot) {
   }
   targetSlot.beerEntryId = entryId
   draftSaved.value = false
-  if (canSubmitFinal.value) submitted.value = false
+  hasLocalChanges.value = true
+  if (canSubmitFinal.value) {
+    submitted.value = false
+    table.value = { ...table.value, status: 'IN_PROGRESS', rankingConfirmation: { ...rankingConfirmation.value, readyForFinalSubmit: false } }
+  }
 }
 
 function clearSlot(slot) {
+  submitBlockedMessage.value = ''
   slot.beerEntryId = null
   draftSaved.value = false
-  if (canSubmitFinal.value) submitted.value = false
+  hasLocalChanges.value = true
+  if (canSubmitFinal.value) {
+    submitted.value = false
+    table.value = { ...table.value, status: 'IN_PROGRESS', rankingConfirmation: { ...rankingConfirmation.value, readyForFinalSubmit: false } }
+  }
 }
 
 async function openSlotScanner(slot) {
@@ -474,7 +530,11 @@ function normalizeScanCode(value) {
 }
 
 function openSubmitConfirm() {
-  if (!canSubmit.value) return
+  if (!canSubmit.value) {
+    submitBlockedMessage.value = submitBlockedReason.value
+    return
+  }
+  submitBlockedMessage.value = ''
   submitError.value = ''
   confirmOpen.value = true
 }
@@ -483,13 +543,18 @@ async function confirmSubmit() {
   if (!canSubmit.value || submitting.value) return
   submitting.value = true
   try {
-    await submitRanking(route.params.roundTableId, {
-      results: submitResults.value,
-    })
+    if (canFinalizeRanking.value) {
+      await finalizeRanking(route.params.roundTableId)
+      message.value = '本桌排序已提交'
+    } else {
+      await submitRanking(route.params.roundTableId, {
+        results: submitResults.value,
+      })
+      message.value = '排序已提交，等待同桌评审确认'
+    }
     confirmOpen.value = false
     submitted.value = true
-    table.value = { ...table.value, status: 'SUBMITTED' }
-    message.value = '排序已提交，等待主办方确认'
+    await loadTable()
   } catch {
     submitError.value = '提交失败，请稍后重试或联系现场工作人员。'
   } finally {
@@ -513,17 +578,25 @@ async function saveDraft() {
   }
 }
 
-onMounted(async () => {
+async function loadTable() {
   table.value = await fetchRoundTable(route.params.roundTableId)
+  submitBlockedMessage.value = ''
   entries.value = table.value.entries || []
-  const sourceSlots = table.value.canSubmitRanking ? table.value.rankings : table.value.myRankingDraft
+  const sourceSlots = table.value.canSubmitRanking || table.value?.status === 'LOCKED'
+    ? table.value.rankings
+    : table.value.myRankingDraft
   slots.value = (sourceSlots || table.value.rankings || []).map((slot) => ({
     ...slot,
     beerEntryId: slot.beerEntryId || null,
   }))
+  hasLocalChanges.value = false
   submitted.value = table.value.canSubmitRanking
     && (['SUBMITTED', 'LOCKED'].includes(table.value?.status) || slots.value.some((slot) => slot.beerEntryId))
   draftSaved.value = !table.value.canSubmitRanking && slots.value.some((slot) => slot.beerEntryId)
+}
+
+onMounted(async () => {
+  await loadTable()
 })
 
 onBeforeUnmount(() => {
@@ -719,6 +792,24 @@ onBeforeUnmount(() => {
 
 .ranking-submit {
   margin-top: 16px;
+}
+
+.ranking-submit.disabled {
+  color: #98a2b3;
+  background: #e4e7ec;
+  box-shadow: none;
+}
+
+.submit-blocked-note {
+  margin: 14px 0 -4px;
+  border: 1px solid #fedf89;
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #93370d;
+  background: #fffaeb;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 750;
 }
 
 .ranking-mode,

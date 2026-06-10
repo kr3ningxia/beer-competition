@@ -21,6 +21,7 @@ public class JudgeRoundTableVO {
     private Boolean canSubmitTableScore;
     private Boolean canSubmitRanking;
     private ScoreConfirmationVO scoreConfirmation;
+    private RankingConfirmationVO rankingConfirmation;
     private List<CompetitionEntryVO> entries;
     private List<RoundRankingSlotVO> rankings;
     private List<RoundRankingSlotVO> myRankingDraft;

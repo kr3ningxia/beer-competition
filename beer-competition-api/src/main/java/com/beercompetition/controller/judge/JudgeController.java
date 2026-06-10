@@ -15,6 +15,7 @@ import com.beercompetition.pojo.vo.JudgeEntryVO;
 import com.beercompetition.pojo.vo.JudgeAccountVO;
 import com.beercompetition.pojo.vo.JudgeRoundTableVO;
 import com.beercompetition.pojo.vo.JudgeTaskVO;
+import com.beercompetition.pojo.vo.RankingConfirmationVO;
 import com.beercompetition.pojo.vo.ScoreConfirmationVO;
 import com.beercompetition.pojo.vo.ScoreRecordVO;
 import com.beercompetition.pojo.vo.ScoreConfigVO;
@@ -97,6 +98,22 @@ public class JudgeController {
     public Result<String> submitRanking(@PathVariable Long roundTableId,
                                         @RequestBody @Valid RankingSubmitRequest request) {
         roundService.submitRanking(roundTableId, request);
+        return Result.success("提交成功");
+    }
+
+    @GetMapping("/round-tables/{roundTableId}/ranking-confirmation")
+    public Result<RankingConfirmationVO> rankingConfirmation(@PathVariable Long roundTableId) {
+        return Result.success(roundService.getRankingConfirmation(roundTableId));
+    }
+
+    @PostMapping("/round-tables/{roundTableId}/ranking-confirmation")
+    public Result<RankingConfirmationVO> confirmRankingRoundTable(@PathVariable Long roundTableId) {
+        return Result.success(roundService.confirmRankingRoundTable(roundTableId));
+    }
+
+    @PostMapping("/round-tables/{roundTableId}/ranking-final-submit")
+    public Result<String> finalizeRanking(@PathVariable Long roundTableId) {
+        roundService.finalizeRanking(roundTableId);
         return Result.success("提交成功");
     }
 

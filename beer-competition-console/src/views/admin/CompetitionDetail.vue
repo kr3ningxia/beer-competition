@@ -1277,6 +1277,101 @@
           </footer>
         </section>
       </div>
+
+      <div v-if="roundLockConfirmOpen" class="stage-confirm-backdrop" @click.self="closeRoundLockConfirm">
+        <section class="stage-confirm-dialog warning" role="dialog" aria-modal="true" aria-labelledby="round-lock-confirm-title">
+          <header>
+            <span class="confirm-kicker">轮次锁定</span>
+            <h2 id="round-lock-confirm-title">{{ roundLockConfirmTitle }}</h2>
+          </header>
+          <p class="confirm-copy">
+            {{ roundLockConfirmCopy }}
+          </p>
+          <div class="confirm-summary">
+            <span>
+              <small>当前轮次</small>
+              <strong>{{ currentRound?.name || '-' }}</strong>
+            </span>
+            <span>
+              <small>轮次类型</small>
+              <strong>{{ currentRoundIsTerminal ? '决赛轮' : (currentRound?.type === 'SCORE' ? '评分轮' : '排序轮') }}</strong>
+            </span>
+            <span>
+              <small>桌数/酒款</small>
+              <strong>{{ currentRoundTables.length }} 桌 / {{ currentRoundEntryCount }} 款</strong>
+            </span>
+          </div>
+          <footer>
+            <button class="confirm-button ghost" type="button" :disabled="roundLockLoading" @click="closeRoundLockConfirm">取消</button>
+            <button class="confirm-button primary" type="button" :disabled="roundLockLoading" @click="confirmLockCurrentRound">
+              {{ roundLockLoading ? '锁定中' : '确认锁定' }}
+              <Right />
+            </button>
+          </footer>
+        </section>
+      </div>
+
+      <div v-if="firstRoundCompleteConfirmOpen" class="stage-confirm-backdrop" @click.self="closeFirstRoundCompleteConfirm">
+        <section class="stage-confirm-dialog warning" role="dialog" aria-modal="true" aria-labelledby="first-round-complete-title">
+          <header>
+            <span class="confirm-kicker">第一轮锁定</span>
+            <h2 id="first-round-complete-title">确认第一轮完成？</h2>
+          </header>
+          <p class="confirm-copy">
+            确认后将锁定第一轮，并生成晋级酒款。请确认所有评分和桌长汇总已经核对无误。
+          </p>
+          <div class="confirm-summary">
+            <span>
+              <small>当前轮次</small>
+              <strong>{{ currentRound?.name || '第一轮' }}</strong>
+            </span>
+            <span>
+              <small>晋级酒款</small>
+              <strong>{{ firstRoundCompletionStatus.advancedCount }} 款</strong>
+            </span>
+            <span>
+              <small>桌数/酒款</small>
+              <strong>{{ currentRoundTables.length }} 桌 / {{ currentRoundEntryCount }} 款</strong>
+            </span>
+          </div>
+          <footer>
+            <button class="confirm-button ghost" type="button" :disabled="firstRoundCompleteLoading" @click="closeFirstRoundCompleteConfirm">再核对</button>
+            <button class="confirm-button primary" type="button" :disabled="firstRoundCompleteLoading" @click="confirmCompleteFirstRound">
+              {{ firstRoundCompleteLoading ? '锁定中' : '确认完成' }}
+              <Right />
+            </button>
+          </footer>
+        </section>
+      </div>
+
+      <div v-if="businessConfirm.open" class="stage-confirm-backdrop" @click.self="closeBusinessConfirm">
+        <section :class="['stage-confirm-dialog', businessConfirm.tone]" role="dialog" aria-modal="true" aria-labelledby="business-confirm-title">
+          <header>
+            <span class="confirm-kicker">{{ businessConfirm.kicker }}</span>
+            <h2 id="business-confirm-title">{{ businessConfirm.title }}</h2>
+          </header>
+          <p class="confirm-copy">{{ businessConfirm.copy }}</p>
+          <div class="confirm-summary">
+            <span v-for="item in businessConfirm.summary" :key="item.label">
+              <small>{{ item.label }}</small>
+              <strong>{{ item.value }}</strong>
+            </span>
+          </div>
+          <label v-if="businessConfirm.reasonLabel" class="confirm-reason">
+            <span>{{ businessConfirm.reasonLabel }}</span>
+            <textarea v-model.trim="businessConfirm.reason" :placeholder="businessConfirm.reasonPlaceholder" maxlength="255"></textarea>
+          </label>
+          <footer>
+            <button class="confirm-button ghost" type="button" :disabled="businessConfirm.loading" @click="closeBusinessConfirm">
+              {{ businessConfirm.cancelText }}
+            </button>
+            <button class="confirm-button primary" type="button" :disabled="businessConfirm.loading || businessConfirmReasonInvalid" @click="confirmBusinessAction">
+              {{ businessConfirm.loading ? businessConfirm.loadingText : businessConfirm.confirmText }}
+              <Right />
+            </button>
+          </footer>
+        </section>
+      </div>
     </Teleport>
 
     <CreateRoundWizard
@@ -1700,6 +1795,28 @@ const roundPublishConfirmOpen = ref(false)
 const roundPublishLoading = ref(false)
 const roundPublishBlockedDialogOpen = ref(false)
 const roundPublishBlockedMessage = ref('')
+const roundLockConfirmOpen = ref(false)
+const roundLockLoading = ref(false)
+const firstRoundCompleteConfirmOpen = ref(false)
+const firstRoundCompleteLoading = ref(false)
+const businessConfirm = reactive({
+  open: false,
+  loading: false,
+  action: '',
+  kicker: '',
+  title: '',
+  copy: '',
+  summary: [],
+  confirmText: '确认',
+  cancelText: '取消',
+  loadingText: '处理中',
+  tone: 'warning',
+  reasonLabel: '',
+  reasonPlaceholder: '',
+  reason: '',
+  payload: null,
+})
+const businessConfirmReasonInvalid = computed(() => Boolean(businessConfirm.reasonLabel && !businessConfirm.reason.trim()))
 
 const rounds = ref([])
 const roundEntryPool = ref([])
@@ -2005,6 +2122,20 @@ const currentRoundTargetModeOptions = computed(() => {
   ]
 })
 const currentRoundPublishTarget = computed(() => (currentRound.value?.type === 'RANKING' ? '桌长和参与评审' : '评审'))
+const roundLockConfirmTitle = computed(() => {
+  if (!currentRound.value) return '确认锁定当前轮次？'
+  if (currentRoundIsTerminal.value) return '确认锁定决赛轮？'
+  return `确认锁定${currentRound.value.name || '当前轮次'}？`
+})
+const roundLockConfirmCopy = computed(() => {
+  if (currentRoundIsTerminal.value) {
+    return '锁定后，总冠军排序将固定，后续进入奖项确认和结果发布。请确认决赛桌提交内容已经核对无误。'
+  }
+  if (currentRound.value?.type === 'SCORE') {
+    return '锁定后，本轮评分、桌长汇总和晋级结果将固定。请确认所有评审桌结果已经核对无误。'
+  }
+  return '锁定后，本轮排序结果将固定，并作为后续轮次或奖项确认依据。请确认桌长提交内容已经核对无误。'
+})
 const firstRoundCompletionStatus = computed(() => buildFirstRoundCompletionStatus())
 const roundReadinessTitle = computed(() => {
   if (!currentRound.value) return '还没有轮次'
@@ -4510,77 +4641,110 @@ async function completeFirstRoundAction() {
     ElMessage.warning(completionStatus.hint)
     return
   }
+  firstRoundCompleteConfirmOpen.value = true
+}
+
+function closeFirstRoundCompleteConfirm() {
+  if (firstRoundCompleteLoading.value) return
+  firstRoundCompleteConfirmOpen.value = false
+}
+
+async function confirmCompleteFirstRound() {
+  if (!currentRound.value) return
   const targetRoundId = currentRound.value.id
+  firstRoundCompleteLoading.value = true
   try {
-    await ElMessageBox.confirm(
-      `确认后将锁定第一轮，并生成 ${completionStatus.advancedCount} 款晋级酒。`,
-      '确认第一轮完成？',
-      {
-        confirmButtonText: '确认完成',
-        cancelButtonText: '再核对',
-        type: 'warning',
-      },
-    )
-  } catch {
-    return
+    const detail = await completeFirstRound(competition.value.id, targetRoundId)
+    competition.value = normalizeDetail(detail)
+    resetForms()
+    applyRoundState(targetRoundId)
+    firstRoundCompleteConfirmOpen.value = false
+    ElMessage.success('第一轮已完成，晋级池已生成')
+  } finally {
+    firstRoundCompleteLoading.value = false
   }
-  const detail = await completeFirstRound(competition.value.id, targetRoundId)
-  competition.value = normalizeDetail(detail)
-  resetForms()
-  applyRoundState(targetRoundId)
-  ElMessage.success('第一轮已完成，晋级池已生成')
 }
 
 async function overrideRoundScoreConfirmation() {
   if (!competition.value?.id || !roundScoreDetailTable.value?.id) return
-  try {
-    const { value } = await ElMessageBox.prompt('请填写现场确认原因。', '现场兜底确认', {
-      confirmButtonText: '确认',
-      cancelButtonText: '取消',
-      inputPattern: /^(?!\s*$).{1,255}$/,
-      inputErrorMessage: '原因不能为空，且不能超过 255 字。',
-    })
-    const detail = await overrideRoundTableConfirmation(competition.value.id, roundScoreDetailTable.value.id, {
-      reason: String(value || '').trim(),
-    })
-    competition.value = normalizeDetail(detail)
-    resetForms()
-    applyRoundState(currentRound.value?.id, { preferredTableId: roundScoreDetailTable.value.id })
-    ElMessage.success('已记录现场确认')
-  } catch (error) {
-    if (error === 'cancel' || error === 'close') return
-    ElMessage.error(error?.message || '现场确认失败')
-  }
+  openBusinessConfirm({
+    action: 'overrideRoundConfirmation',
+    kicker: '现场兜底确认',
+    title: '确认跳过同桌确认？',
+    copy: '该操作会记录为现场兜底确认，用于评委离场、设备异常等无法完成线上确认的情况。请填写原因，便于赛后追溯。',
+    summary: [
+      { label: '评审桌', value: roundScoreDetailTable.value.name || '-' },
+      { label: '当前轮次', value: currentRound.value?.name || '-' },
+      { label: '确认进度', value: roundScoreDetailConfirmationText.value },
+    ],
+    reasonLabel: '现场确认原因',
+    reasonPlaceholder: '例如：参与评审设备异常，现场已纸面确认。',
+    confirmText: '记录现场确认',
+    loadingText: '记录中',
+  })
+}
+
+async function runOverrideRoundScoreConfirmation() {
+  const detail = await overrideRoundTableConfirmation(competition.value.id, roundScoreDetailTable.value.id, {
+    reason: businessConfirm.reason.trim(),
+  })
+  competition.value = normalizeDetail(detail)
+  resetForms()
+  applyRoundState(currentRound.value?.id, { preferredTableId: roundScoreDetailTable.value.id })
+  ElMessage.success('已记录现场确认')
 }
 
 async function lockCurrentRound() {
+  if (!currentRound.value || currentRound.value.status !== 'SUBMITTED') return
+  roundLockConfirmOpen.value = true
+}
+
+function closeRoundLockConfirm() {
+  if (roundLockLoading.value) return
+  roundLockConfirmOpen.value = false
+}
+
+async function confirmLockCurrentRound() {
   if (!currentRound.value) return
   const targetRoundId = currentRound.value.id
   const terminal = currentRoundIsTerminal.value
-  const detail = await lockRound(competition.value.id, targetRoundId)
-  competition.value = normalizeDetail(detail)
-  resetForms()
-  applyRoundState(targetRoundId)
-  if (terminal) {
-    activeTab.value = 'results'
-    ElMessage.success('决赛轮已锁定，请确认奖项')
-    return
+  roundLockLoading.value = true
+  try {
+    const detail = await lockRound(competition.value.id, targetRoundId)
+    competition.value = normalizeDetail(detail)
+    resetForms()
+    applyRoundState(targetRoundId)
+    roundLockConfirmOpen.value = false
+    if (terminal) {
+      activeTab.value = 'results'
+      ElMessage.success('决赛轮已锁定，请确认奖项')
+      return
+    }
+    ElMessage.success('当前轮次已锁定')
+  } finally {
+    roundLockLoading.value = false
   }
-  ElMessage.success('当前轮次已锁定')
 }
 
 async function deleteCurrentDraftRound() {
   if (!currentRound.value || currentRound.value.type !== 'RANKING' || currentRound.value.status !== 'DRAFT') return
+  openBusinessConfirm({
+    action: 'deleteDraftRound',
+    kicker: '草稿轮删除',
+    title: `确认删除${currentRound.value.name || '草稿轮'}？`,
+    copy: '删除后，该轮的桌次、人员和酒款分配都会移除，需要重新创建本轮编排。',
+    summary: [
+      { label: '当前轮次', value: currentRound.value.name || '-' },
+      { label: '桌数/酒款', value: `${currentRoundTables.value.length} 桌 / ${currentRoundEntryCount.value} 款` },
+      { label: '轮次状态', value: currentRoundStatusText.value },
+    ],
+    confirmText: '删除草稿轮',
+    loadingText: '删除中',
+  })
+}
+
+async function runDeleteCurrentDraftRound() {
   const targetRoundId = currentRound.value.id
-  try {
-    await ElMessageBox.confirm('删除后需要重新创建本轮编排。', '删除草稿轮', {
-      confirmButtonText: '删除草稿轮',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
-  } catch {
-    return
-  }
   const detail = await deleteDraftRound(competition.value.id, targetRoundId)
   competition.value = normalizeDetail(detail)
   resetForms()
@@ -4789,7 +4953,83 @@ function getAwardPath(award) {
   return entry ? getEntryPath(entry.uuid) : '-'
 }
 
+function openBusinessConfirm(config) {
+  Object.assign(businessConfirm, {
+    open: true,
+    loading: false,
+    action: '',
+    kicker: '',
+    title: '',
+    copy: '',
+    summary: [],
+    confirmText: '确认',
+    cancelText: '取消',
+    loadingText: '处理中',
+    tone: 'warning',
+    reasonLabel: '',
+    reasonPlaceholder: '',
+    reason: '',
+    payload: null,
+    ...config,
+  })
+}
+
+function closeBusinessConfirm() {
+  if (businessConfirm.loading) return
+  businessConfirm.open = false
+}
+
+function competitionSummaryItems(extra = []) {
+  return [
+    { label: '比赛', value: competition.value?.name || '-' },
+    { label: '当前阶段', value: statusInfo.value?.label || competition.value?.status || '-' },
+    ...extra,
+  ]
+}
+
+function awardSummaryItems(extra = []) {
+  return [
+    { label: '奖项草稿', value: `${awardDrafts.value.length} 项` },
+    { label: '组别奖项', value: `${medalAwards.value.length} 项` },
+    { label: '总冠军', value: championAwards.value.some((award) => award.beerEntryId) ? '已选择' : '待选择' },
+    ...extra,
+  ]
+}
+
+async function confirmBusinessAction() {
+  if (!businessConfirm.action || businessConfirmReasonInvalid.value) return
+  businessConfirm.loading = true
+  try {
+    if (businessConfirm.action === 'publishResults') await runPublishResults()
+    if (businessConfirm.action === 'generateAwards') await runGenerateAwards()
+    if (businessConfirm.action === 'confirmAwards') await runConfirmAwards()
+    if (businessConfirm.action === 'deleteCompetition') await runDeleteCompetition()
+    if (businessConfirm.action === 'deleteDraftRound') await runDeleteCurrentDraftRound()
+    if (businessConfirm.action === 'overrideRoundConfirmation') await runOverrideRoundScoreConfirmation()
+    if (businessConfirm.action === 'replaceCertificate') runChooseAwardCertificate(businessConfirm.payload?.award)
+    if (businessConfirm.action === 'deleteCertificate') await runDeleteAwardCertificate(businessConfirm.payload?.award)
+    businessConfirm.open = false
+  } finally {
+    businessConfirm.loading = false
+  }
+}
+
 async function publishResultsAction() {
+  openBusinessConfirm({
+    action: 'publishResults',
+    kicker: '结果发布',
+    title: '确认发布到厂商端？',
+    copy: '发布后，厂商端和公开结果页将展示获奖名单、奖项信息和已上传奖状。请确认奖项结果已经核对完成。',
+    summary: competitionSummaryItems([
+      { label: '奖项确认', value: `${resultChecks.value.filter((item) => item.done).length} / ${resultChecks.value.length}` },
+      { label: '奖状 PDF', value: `${certificateUploadedCount.value} / ${certificateTotalCount.value}` },
+    ]),
+    confirmText: '发布结果',
+    loadingText: '发布中',
+  })
+}
+
+async function runPublishResults() {
   const detail = await publishCompetitionResults(competition.value.id)
   competition.value = normalizeDetail(detail)
   resetForms()
@@ -4813,16 +5053,26 @@ async function chooseAwardCertificate(award) {
     return
   }
   if (award.status === 'PUBLISHED' && award.certificateUploaded) {
-    try {
-      await ElMessageBox.confirm('更换后，厂商端可见奖状会同步变化。', '更换奖状？', {
-        confirmButtonText: '更换奖状',
-        cancelButtonText: '取消',
-        type: 'warning',
-      })
-    } catch {
-      return
-    }
+    openBusinessConfirm({
+      action: 'replaceCertificate',
+      kicker: '奖状变更',
+      title: '确认更换已发布奖状？',
+      copy: '更换后，厂商端下载到的奖状会同步变化。请确认新文件已经核对无误。',
+      summary: awardSummaryItems([
+        { label: '奖项', value: award.awardName || formatAwardScope(award) },
+        { label: '当前文件', value: award.certificateFilename || '已上传' },
+      ]),
+      confirmText: '更换奖状',
+      loadingText: '处理中',
+      payload: { award },
+    })
+    return
   }
+  runChooseAwardCertificate(award)
+}
+
+function runChooseAwardCertificate(award) {
+  if (!award) return
   certificateTargetAward.value = award
   if (awardCertificateInput.value) {
     awardCertificateInput.value.value = ''
@@ -4870,15 +5120,23 @@ async function deleteAwardCertificateAction(award) {
   const message = award.status === 'PUBLISHED'
     ? '删除后，厂商端将不能下载这份奖状。'
     : '删除后，这个奖项将回到未上传奖状状态。'
-  try {
-    await ElMessageBox.confirm(message, '删除奖状？', {
-      confirmButtonText: '删除奖状',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
-  } catch {
-    return
-  }
+  openBusinessConfirm({
+    action: 'deleteCertificate',
+    kicker: '奖状删除',
+    title: '确认删除奖状？',
+    copy: message,
+    summary: awardSummaryItems([
+      { label: '奖项', value: award.awardName || formatAwardScope(award) },
+      { label: '文件', value: award.certificateFilename || '已上传' },
+    ]),
+    confirmText: '删除奖状',
+    loadingText: '删除中',
+    payload: { award },
+  })
+}
+
+async function runDeleteAwardCertificate(award) {
+  if (!award?.id) return
   setCertificateActionBusy(award.id, true)
   try {
     await deleteAwardCertificate(competition.value.id, award.id)
@@ -4925,6 +5183,23 @@ function downloadBlob(blob, fileName) {
 }
 
 async function generateAwardsAction() {
+  openBusinessConfirm({
+    action: 'generateAwards',
+    kicker: '奖项生成',
+    title: awardDrafts.value.length ? '确认重新生成获奖名单？' : '确认生成获奖名单？',
+    copy: awardDrafts.value.length
+      ? '系统会按已锁定的轮次结果重新生成奖项草稿，当前未确认的选择可能会被覆盖。生成后仍可在确认前调整。'
+      : '系统会按已锁定的轮次结果生成奖项草稿，生成后可在确认获奖名单前继续核对和调整。',
+    summary: competitionSummaryItems([
+      { label: '决赛轮', value: finalRoundLocked.value ? '已锁定' : '未锁定' },
+      { label: '现有草稿', value: `${awardDrafts.value.length} 项` },
+    ]),
+    confirmText: awardDrafts.value.length ? '重新生成' : '生成名单',
+    loadingText: '生成中',
+  })
+}
+
+async function runGenerateAwards() {
   await generateCompetitionAwards(competition.value.id)
   await loadDetail()
   activeTab.value = 'results'
@@ -4932,6 +5207,20 @@ async function generateAwardsAction() {
 }
 
 async function confirmAwardsAction() {
+  openBusinessConfirm({
+    action: 'confirmAwards',
+    kicker: '奖项确认',
+    title: '确认获奖名单？',
+    copy: '确认后，获奖名单将进入正式结果流程，并用于奖状上传和最终发布。请确认总冠军和组别奖项已经核对无误。',
+    summary: awardSummaryItems([
+      { label: '可确认奖项', value: `${confirmableAwardDrafts.value.length} 项` },
+    ]),
+    confirmText: '确认获奖名单',
+    loadingText: '确认中',
+  })
+}
+
+async function runConfirmAwards() {
   const awards = confirmableAwardDrafts.value.map((award) => ({
     id: award.id,
     categoryId: award.categoryId,
@@ -5417,22 +5706,25 @@ async function handleDeleteCompetition() {
   const message = draft
     ? `如果「${competition.value.name}」尚未产生报名或轮次数据，将从管理台账中删除；如果已有业务数据，将改为归档并保留记录。`
     : `归档后，「${competition.value.name}」将退出厂商端和常用管理列表，报名、评分、轮次与结果记录会保留用于追溯。`
-  try {
-    await ElMessageBox.confirm(
-      message,
-      title,
-      {
-        confirmButtonText: confirmText,
-        cancelButtonText: '取消',
-        type: 'warning',
-      },
-    )
-    await deleteCompetition(competition.value.id)
-    ElMessage.success(draft ? '草稿比赛已处理' : '比赛已归档')
-    router.replace('/admin/competitions')
-  } catch {
-    // 用户取消或请求失败时保持当前页面不变。
-  }
+  openBusinessConfirm({
+    action: 'deleteCompetition',
+    kicker: draft ? '草稿处理' : '比赛归档',
+    title,
+    copy: message,
+    summary: competitionSummaryItems([
+      { label: '报名酒款', value: `${competition.value.entriesSummary?.total ?? competition.value.entries?.length ?? 0} 款` },
+      { label: '轮次', value: `${rounds.value.length} 轮` },
+    ]),
+    confirmText,
+    loadingText: draft ? '处理中' : '归档中',
+  })
+}
+
+async function runDeleteCompetition() {
+  const draft = competition.value.status === 'DRAFT'
+  await deleteCompetition(competition.value.id)
+  ElMessage.success(draft ? '草稿比赛已处理' : '比赛已归档')
+  router.replace('/admin/competitions')
 }
 
 async function handleStageAction(action) {
@@ -5823,6 +6115,30 @@ svg {
   color: var(--confirm-text);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.confirm-reason {
+  display: grid;
+  gap: 8px;
+}
+
+.confirm-reason span {
+  color: var(--confirm-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.confirm-reason textarea {
+  width: 100%;
+  min-height: 86px;
+  resize: vertical;
+  padding: 10px 12px;
+  color: var(--confirm-text);
+  border: 1px solid var(--confirm-line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  font: inherit;
+  line-height: 1.5;
 }
 
 .stage-confirm-dialog footer {

@@ -119,6 +119,18 @@ export function submitRanking(roundTableId, payload) {
   return request.post(`/api/judge/round-tables/${roundTableId}/ranking`, payload)
 }
 
+export function fetchRankingConfirmation(roundTableId) {
+  return request.get(`/api/judge/round-tables/${roundTableId}/ranking-confirmation`)
+}
+
+export function confirmRankingRoundTable(roundTableId) {
+  return request.post(`/api/judge/round-tables/${roundTableId}/ranking-confirmation`)
+}
+
+export function finalizeRanking(roundTableId) {
+  return request.post(`/api/judge/round-tables/${roundTableId}/ranking-final-submit`)
+}
+
 export function saveRankingDraft(roundTableId, payload) {
   return request.post(`/api/judge/round-tables/${roundTableId}/ranking-draft`, payload)
 }

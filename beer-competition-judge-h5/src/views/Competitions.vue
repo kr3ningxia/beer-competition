@@ -32,7 +32,7 @@
         </template>
         <template v-else-if="isRankingRound">
         <span>候选 <strong>{{ entries.length }}款</strong></span>
-        <span>已排序 <strong>{{ rankingFilledCount }}/{{ rankingSlots.length }}</strong></span>
+        <span v-if="showRankingFilledProgress">已排序 <strong>{{ rankingFilledCount }}/{{ rankingSlots.length }}</strong></span>
         </template>
         <span v-else>{{ progressLabel }} <strong>{{ progressCount }}</strong></span>
         <span v-if="scoreConfirmationVisible"><strong>{{ scoreConfirmationProgressLabel }}</strong></span>
@@ -46,13 +46,26 @@
     </section>
 
     <template v-else-if="isRankingRound">
+    <section v-if="rankingConfirmationVisible" :class="['card', 'confirmation-task-card', { done: rankingConfirmation?.mineConfirmed }]">
+      <div class="split">
+        <div>
+          <h2 class="section-title compact">{{ rankingConfirmation.mineConfirmed ? '本桌排序已确认' : '本桌排序待确认' }}</h2>
+          <p class="task-hint">{{ rankingConfirmationHint }}</p>
+        </div>
+        <span :class="['pill', rankingConfirmation.mineConfirmed ? 'status-ok' : 'status-warn']">{{ rankingConfirmationProgressText }}</span>
+      </div>
+      <button class="scan-button confirmation-button" type="button" @click="router.push(`/ranking-confirmation/${current.roundTableId}`)">
+        {{ rankingConfirmation.mineConfirmed ? '查看本桌排序' : '去确认本桌排序' }}
+      </button>
+    </section>
+
     <section class="card ranking-action-card">
       <div class="split">
         <div>
-          <h2 class="section-title compact">{{ canSubmitRanking ? '排序工作台' : '本桌排序任务' }}</h2>
-          <p class="task-hint">{{ rankingTaskHint }}</p>
+          <h2 class="section-title compact">{{ canSubmitRanking ? '本桌排序' : '本桌排序任务' }}</h2>
+          <p v-if="rankingTaskHint" class="task-hint">{{ rankingTaskHint }}</p>
         </div>
-        <span class="pill status-warn">{{ rankingFilledCount }}/{{ rankingSlots.length }}</span>
+        <span v-if="showRankingFilledProgress" class="pill status-warn">{{ rankingFilledCount }}/{{ rankingSlots.length }}</span>
       </div>
       <button class="scan-button ranking-button" type="button" @click="router.push(`/ranking/${current.roundTableId}`)">
         {{ canSubmitRanking ? '进入选择排序' : '查看本桌候选' }}
@@ -212,8 +225,10 @@ const me = ref(null)
 const current = ref(null)
 const entries = ref([])
 const captainBoard = ref(null)
+const currentRoundTable = ref(null)
 const rankingSlots = ref([])
 const scoreConfirmation = ref(null)
+const rankingConfirmation = ref(null)
 const scannerOpen = ref(false)
 const manualCode = ref('')
 const scannerMessage = ref('将二维码放入取景框内')
@@ -226,10 +241,18 @@ let syncingTasks = false
 const isCaptain = computed(() => me.value?.role === 'CAPTAIN')
 const isScoreRoundCaptain = computed(() => isCaptain.value && current.value?.taskType === 'CAPTAIN_FINALIZE')
 const isRankingRound = computed(() => isRankingTaskType(current.value?.taskType))
-const canSubmitRanking = computed(() => current.value?.taskType === 'RANKING_ROUND')
+const canSubmitRanking = computed(() => (
+  current.value?.taskType === 'RANKING_ROUND'
+  && currentRoundTable.value?.canSubmitRanking !== false
+))
+const currentRoundNo = computed(() => parseRoundNo(current.value?.roundName || current.value?.flightName))
+const showRankingFilledProgress = computed(() => (
+  canSubmitRanking.value
+  || currentRoundNo.value <= 1
+))
 const rankingTaskHint = computed(() => (
   canSubmitRanking.value
-    ? '提交后等待主办方确认，确认锁定前可继续调整。'
+    ? ''
     : '你可以查看本桌候选，排序由桌长提交。'
 ))
 const myScoredCount = computed(() => entries.value.filter((entry) => entry.scored).length)
@@ -245,9 +268,20 @@ const scoreConfirmationVisible = computed(() => (
   && !isRankingRound.value
   && Boolean(scoreConfirmation.value?.readyForConfirmation)
 ))
+const rankingConfirmationVisible = computed(() => (
+  !isCaptain.value
+  && isRankingRound.value
+  && Boolean(rankingConfirmation.value?.readyForConfirmation)
+))
 const confirmationProgressText = computed(() => `${scoreConfirmation.value?.confirmedCount || 0}/${scoreConfirmation.value?.requiredCount || 0}`)
+const rankingConfirmationProgressText = computed(() => `${rankingConfirmation.value?.confirmedCount || 0}/${rankingConfirmation.value?.requiredCount || 0}`)
 const scoreConfirmationProgressLabel = computed(() => (
   scoreConfirmation.value?.mineConfirmed ? '已确认结果' : '待确认结果'
+))
+const rankingConfirmationHint = computed(() => (
+  rankingConfirmation.value?.mineConfirmed
+    ? '你已确认本桌排序，等待桌长最终提交。'
+    : '请核对本桌排序，确认后桌长才能最终提交。'
 ))
 const scoreConfirmationHint = computed(() => (
   scoreConfirmation.value?.mineConfirmed
@@ -326,6 +360,26 @@ const emptyStateChecks = computed(() => (
 function openEntry(uuid) {
   if (!uuid) return
   router.push(`/scan-result/${uuid.toUpperCase()}`)
+}
+
+function parseRoundNo(value) {
+  const text = String(value || '').trim()
+  const numeric = text.match(/\d+/)
+  if (numeric) return Number(numeric[0])
+  const chineseNumbers = {
+    一: 1,
+    二: 2,
+    三: 3,
+    四: 4,
+    五: 5,
+    六: 6,
+    七: 7,
+    八: 8,
+    九: 9,
+    十: 10,
+  }
+  const chinese = text.match(/第?\s*([一二三四五六七八九十])\s*轮/)
+  return chineseNumbers[chinese?.[1]] || 1
 }
 
 function openCaptainAction(entry) {
@@ -482,8 +536,10 @@ async function syncTaskDashboard(options = {}) {
     const competitions = await fetchCompetitions()
     current.value = selectCurrentTask(competitions)
     captainBoard.value = null
+    currentRoundTable.value = null
     rankingSlots.value = []
     scoreConfirmation.value = null
+    rankingConfirmation.value = null
     if (!current.value || !current.value.roundTableId) {
       entries.value = []
       return
@@ -500,8 +556,10 @@ async function syncTaskDashboard(options = {}) {
         fetchRoundTable(current.value.roundTableId),
         fetchMyScores(),
       ])
+    currentRoundTable.value = table
     rankingSlots.value = table.rankings || []
     scoreConfirmation.value = table.scoreConfirmation || null
+    rankingConfirmation.value = table.rankingConfirmation || null
     const myScoredUuids = new Set(myScores.map((score) => score.beerUuid))
     entries.value = (table.entries || []).map((entry) => ({
       ...entry,

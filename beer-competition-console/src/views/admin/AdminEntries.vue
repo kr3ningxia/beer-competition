@@ -332,6 +332,32 @@
         </template>
       </aside>
     </div>
+
+    <div v-if="entryConfirm.open" class="stage-confirm-backdrop" @click.self="closeEntryConfirm">
+      <section class="stage-confirm-dialog warning" role="dialog" aria-modal="true" aria-labelledby="entry-confirm-title">
+        <header>
+          <span class="confirm-kicker">{{ entryConfirm.kicker }}</span>
+          <h2 id="entry-confirm-title">{{ entryConfirm.title }}</h2>
+        </header>
+        <p class="confirm-copy">{{ entryConfirm.copy }}</p>
+        <div class="confirm-summary">
+          <span v-for="item in entryConfirm.summary" :key="item.label">
+            <small>{{ item.label }}</small>
+            <strong>{{ item.value }}</strong>
+          </span>
+        </div>
+        <label v-if="entryConfirm.reasonLabel" class="confirm-reason">
+          <span>{{ entryConfirm.reasonLabel }}</span>
+          <textarea v-model.trim="entryConfirm.reason" :placeholder="entryConfirm.reasonPlaceholder" maxlength="255"></textarea>
+        </label>
+        <footer>
+          <button class="confirm-button ghost" type="button" :disabled="entryConfirm.loading" @click="closeEntryConfirm">取消</button>
+          <button class="confirm-button primary" type="button" :disabled="entryConfirm.loading || entryConfirmReasonInvalid" @click="confirmEntryAction">
+            {{ entryConfirm.loading ? entryConfirm.loadingText : entryConfirm.confirmText }}
+          </button>
+        </footer>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -371,6 +397,22 @@ const detail = ref(null)
 const activeTab = ref('profile')
 const saving = ref(false)
 const statusReason = ref('')
+const entryConfirm = reactive({
+  open: false,
+  loading: false,
+  action: '',
+  kicker: '',
+  title: '',
+  copy: '',
+  summary: [],
+  confirmText: '确认',
+  loadingText: '处理中',
+  reasonLabel: '',
+  reasonPlaceholder: '',
+  reasonRequired: false,
+  reason: '',
+  payload: null,
+})
 
 const filters = reactive({
   competitionId: '',
@@ -434,6 +476,7 @@ const adminLabelRecord = computed(() => ({
   style: detail.value?.style || '',
   abv: detail.value?.abv ?? '',
 }))
+const entryConfirmReasonInvalid = computed(() => Boolean(entryConfirm.reasonRequired && !entryConfirm.reason.trim()))
 const adminLabelSvg = computed(() => buildAdminLabelSvg(adminLabelRecord.value))
 const deliveryInfoItems = computed(() => {
   const current = detail.value
@@ -664,6 +707,52 @@ async function openRefundDetail(entry) {
   await openDetail(entry.id, 'refund')
 }
 
+function entrySummaryItems(current = detail.value, extra = []) {
+  return [
+    { label: '酒款', value: current?.name || current?.shortCode || current?.uuid || '-' },
+    { label: '厂商', value: current?.breweryCompanyName || '-' },
+    { label: '当前状态', value: `${entryStatusLabel(current?.status)} / ${deliveryLabel(current?.deliveryStatus)}` },
+    ...extra,
+  ]
+}
+
+function openEntryConfirm(config) {
+  Object.assign(entryConfirm, {
+    open: true,
+    loading: false,
+    action: '',
+    kicker: '',
+    title: '',
+    copy: '',
+    summary: [],
+    confirmText: '确认',
+    loadingText: '处理中',
+    reasonLabel: '',
+    reasonPlaceholder: '',
+    reasonRequired: false,
+    reason: statusReason.value || '',
+    payload: null,
+    ...config,
+  })
+}
+
+function closeEntryConfirm() {
+  if (entryConfirm.loading) return
+  entryConfirm.open = false
+}
+
+async function confirmEntryAction() {
+  if (!entryConfirm.action || entryConfirmReasonInvalid.value) return
+  entryConfirm.loading = true
+  try {
+    if (entryConfirm.action === 'status') await executeDetailStatusAction(entryConfirm.payload?.type, entryConfirm.reason)
+    if (entryConfirm.action === 'refund') await executeRefundAction(entryConfirm.payload?.type, entryConfirm.reason)
+    entryConfirm.open = false
+  } finally {
+    entryConfirm.loading = false
+  }
+}
+
 async function runDetailStatusAction(type) {
   const current = detail.value
   if (!current) return
@@ -672,28 +761,49 @@ async function runDetailStatusAction(type) {
     return
   }
   if (type === 'cancel') {
-    try {
-      await ElMessageBox.confirm(`确认取消「${current.name || current.uuid}」的报名吗？`, '取消报名', {
-        confirmButtonText: '确认取消',
-        cancelButtonText: '取消',
-        type: 'warning',
-      })
-    } catch {
-      return
-    }
+    openEntryConfirm({
+      action: 'status',
+      kicker: '报名处理',
+      title: '确认取消报名？',
+      copy: '取消后，该酒款会退出后续分桌、评审和结果流程；已产生的记录仍会保留用于追溯。',
+      summary: entrySummaryItems(current, [
+        { label: '付款', value: paymentLabel(current.paymentStatus) },
+        { label: '分桌', value: current.assigned ? '已分桌' : '未分桌' },
+      ]),
+      confirmText: '确认取消',
+      loadingText: '取消中',
+      reasonLabel: '处理原因',
+      reasonPlaceholder: '可填写取消报名的现场说明。',
+      payload: { type },
+    })
+    return
   }
   if (type === 'unmarkStored') {
-    try {
-      await ElMessageBox.confirm(`撤销后「${current.name || current.uuid}」将回到已寄出状态，需要重新确认入库。`, '撤销入库', {
-        confirmButtonText: '撤销入库',
-        cancelButtonText: '取消',
-        type: 'warning',
-      })
-    } catch {
-      return
-    }
+    openEntryConfirm({
+      action: 'status',
+      kicker: '入库撤销',
+      title: '确认撤销入库？',
+      copy: '撤销后，该酒款将回到已寄出状态，需要重新确认入库后才能继续现场流程。',
+      summary: entrySummaryItems(current, [
+        { label: '入库', value: deliveryLabel(current.deliveryStatus) },
+        { label: '短编号', value: current.shortCode || '-' },
+      ]),
+      confirmText: '撤销入库',
+      loadingText: '撤销中',
+      reasonLabel: '撤销原因',
+      reasonPlaceholder: '请填写撤销入库原因。',
+      reasonRequired: true,
+      payload: { type },
+    })
+    return
   }
-  const payload = { reason: statusReason.value }
+  await executeDetailStatusAction(type, statusReason.value)
+}
+
+async function executeDetailStatusAction(type, reason = statusReason.value) {
+  const current = detail.value
+  if (!current) return
+  const payload = { reason }
   if (type === 'payment') await confirmEntryPayment(current.id, payload)
   if (type === 'stored') await markEntryStored(current.id, payload)
   if (type === 'unmarkStored') await unmarkEntryStored(current.id, payload)
@@ -709,17 +819,33 @@ async function runRefundAction(type) {
   const refundId = current?.refund?.id
   if (!current || !refundId) return
   if (type === 'approve' || type === 'retry') {
-    try {
-      await ElMessageBox.confirm('确认后该酒款将取消报名并退出后续流程。', type === 'retry' ? '重试退款' : '确认退款', {
-        confirmButtonText: type === 'retry' ? '重试退款' : '确认退款',
-        cancelButtonText: '取消',
-        type: 'warning',
-      })
-    } catch {
-      return
-    }
+    openEntryConfirm({
+      action: 'refund',
+      kicker: '退款处理',
+      title: type === 'retry' ? '确认重试退款？' : '确认退款？',
+      copy: type === 'retry'
+        ? '系统会重新发起退款处理。退款成功后，该酒款将取消报名并退出后续流程。'
+        : '确认后将进入退款处理流程；退款成功后，该酒款将取消报名并退出后续流程。',
+      summary: entrySummaryItems(current, [
+        { label: '退款状态', value: refundStatusText(current.refundStatus) },
+        { label: '退款金额', value: formatMoney(current.refund?.amount || current.payment?.amount) },
+      ]),
+      confirmText: type === 'retry' ? '重试退款' : '确认退款',
+      loadingText: type === 'retry' ? '重试中' : '确认中',
+      reasonLabel: '处理原因',
+      reasonPlaceholder: '可填写退款处理说明。',
+      payload: { type },
+    })
+    return
   }
-  const payload = { reason: statusReason.value }
+  await executeRefundAction(type, statusReason.value)
+}
+
+async function executeRefundAction(type, reason = statusReason.value) {
+  const current = detail.value
+  const refundId = current?.refund?.id
+  if (!current || !refundId) return
+  const payload = { reason }
   if (type === 'approve') await approveEntryRefund(refundId, payload)
   if (type === 'reject') await rejectEntryRefund(refundId, payload)
   if (type === 'retry') await retryEntryRefund(refundId, payload)
@@ -1060,6 +1186,135 @@ button:disabled {
   color: #ffd4cf;
   border-color: rgba(255, 122, 107, 0.42);
   background: rgba(255, 122, 107, 0.16);
+}
+
+.stage-confirm-backdrop {
+  --confirm-panel: #111b1f;
+  --confirm-line: rgba(219, 232, 237, 0.13);
+  --confirm-text: #edf4f6;
+  --confirm-muted: #8ea1aa;
+  --confirm-gold: #e0b84a;
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(1, 7, 9, 0.72);
+  backdrop-filter: blur(10px);
+}
+
+.stage-confirm-dialog {
+  box-sizing: border-box;
+  display: grid;
+  gap: 16px;
+  width: min(520px, 100%);
+  padding: 20px;
+  color: var(--confirm-text);
+  border: 1px solid rgba(224, 184, 74, 0.28);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(224, 184, 74, 0.07), rgba(255, 255, 255, 0.012)),
+    var(--confirm-panel);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.48);
+}
+
+.stage-confirm-dialog header {
+  display: grid;
+  gap: 7px;
+}
+
+.confirm-kicker {
+  color: var(--confirm-gold);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.stage-confirm-dialog h2 {
+  font-size: 22px;
+  line-height: 1.18;
+}
+
+.confirm-copy {
+  color: #bfd0d7;
+  line-height: 1.65;
+}
+
+.confirm-summary {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgba(219, 232, 237, 0.09);
+  border-radius: 8px;
+  background: rgba(7, 14, 17, 0.58);
+}
+
+.confirm-summary span {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.confirm-summary small,
+.confirm-reason span {
+  color: var(--confirm-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.confirm-summary strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--confirm-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.confirm-reason {
+  display: grid;
+  gap: 8px;
+}
+
+.confirm-reason textarea {
+  width: 100%;
+  min-height: 86px;
+  resize: vertical;
+  padding: 10px 12px;
+  color: var(--confirm-text);
+  border: 1px solid var(--confirm-line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  font: inherit;
+  line-height: 1.5;
+}
+
+.stage-confirm-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  align-items: center;
+}
+
+.confirm-button {
+  min-height: 40px;
+  padding: 0 14px;
+  color: var(--confirm-text);
+  border: 1px solid var(--confirm-line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  font-weight: 800;
+}
+
+.confirm-button.primary {
+  color: #141107;
+  border-color: rgba(224, 184, 74, 0.4);
+  background: linear-gradient(135deg, #f2cf67, #d6a52f);
+}
+
+.confirm-button.ghost:hover,
+.confirm-button.primary:hover {
+  transform: translateY(-1px);
 }
 
 .filter-panel {
