@@ -14,6 +14,7 @@ import com.beercompetition.mapper.CompetitionScoreConfigMapper;
 import com.beercompetition.mapper.CompetitionStyleConfigMapper;
 import com.beercompetition.mapper.EntryDeliveryMapper;
 import com.beercompetition.mapper.EntryPaymentMapper;
+import com.beercompetition.mapper.EntryRefundMapper;
 import com.beercompetition.mapper.JudgeAccountMapper;
 import com.beercompetition.mapper.JudgeAssignmentMapper;
 import com.beercompetition.mapper.JudgeTableMapper;
@@ -53,6 +54,7 @@ import com.beercompetition.pojo.po.CompetitionScoreConfig;
 import com.beercompetition.pojo.po.CompetitionStyleConfig;
 import com.beercompetition.pojo.po.EntryDelivery;
 import com.beercompetition.pojo.po.EntryPayment;
+import com.beercompetition.pojo.po.EntryRefund;
 import com.beercompetition.pojo.po.EntryScanLabel;
 import com.beercompetition.pojo.po.JudgeAccount;
 import com.beercompetition.pojo.po.JudgeAssignment;
@@ -122,6 +124,7 @@ public class RoundServiceImpl implements RoundService {
     private final BreweryMapper breweryMapper;
     private final EntryPaymentMapper entryPaymentMapper;
     private final EntryDeliveryMapper entryDeliveryMapper;
+    private final EntryRefundMapper entryRefundMapper;
     private final JudgeTableMapper judgeTableMapper;
     private final JudgeAssignmentMapper judgeAssignmentMapper;
     private final JudgeAccountMapper judgeAccountMapper;
@@ -182,11 +185,12 @@ public class RoundServiceImpl implements RoundService {
         Map<Long, Brewery> breweryById = loadBreweries(entries.stream().map(BeerEntry::getBreweryId).collect(Collectors.toSet()));
         Map<Long, EntryPayment> paymentByEntryId = loadPayments(entries.stream().map(BeerEntry::getId).collect(Collectors.toSet()));
         Map<Long, EntryDelivery> deliveryByEntryId = loadDeliveries(entries.stream().map(BeerEntry::getId).collect(Collectors.toSet()));
+        Map<Long, EntryRefund> refundByEntryId = loadLatestRefunds(entries.stream().map(BeerEntry::getId).collect(Collectors.toSet()));
         Map<Long, EntryScanLabel> labelByEntryId = entryScanLabelService.listActiveLabels(entries.stream().map(BeerEntry::getId).toList());
         return entries.stream()
                 .map(entry -> toEntryVO(entry, categoryNameById, styleByName, latestResultByEntry.get(entry.getId()), tableById,
                         breweryById.get(entry.getBreweryId()), paymentByEntryId.get(entry.getId()), deliveryByEntryId.get(entry.getId()),
-                        labelByEntryId.get(entry.getId())))
+                        refundByEntryId.get(entry.getId()), labelByEntryId.get(entry.getId())))
                 .toList();
     }
 
@@ -779,6 +783,7 @@ public class RoundServiceImpl implements RoundService {
                                 null,
                                 null,
                                 null,
+                                null,
                                 labelByEntryId.get(item.getBeerEntryId())))
                         .toList())
                 .rankings(buildRankings(table, results, entryById))
@@ -1194,6 +1199,7 @@ public class RoundServiceImpl implements RoundService {
                                          Brewery brewery,
                                          EntryPayment payment,
                                          EntryDelivery delivery,
+                                         EntryRefund refund,
                                          EntryScanLabel label) {
         if (entry == null) {
             return CompetitionEntryVO.builder().build();
@@ -1220,6 +1226,10 @@ public class RoundServiceImpl implements RoundService {
                 .status(entry.getStatus())
                 .paymentStatus(payment == null ? EntryPaymentStatus.UNPAID.name() : payment.getStatus())
                 .paidTime(payment == null ? null : payment.getPaidTime())
+                .refundStatus(refund == null ? null : refund.getStatus())
+                .refundReason(refund == null ? null : refund.getReason())
+                .refundRequestedAt(refund == null ? null : refund.getRequestedTime())
+                .refundProcessedAt(refund == null ? null : refund.getProcessedTime())
                 .deliveryMethod(delivery == null ? null : delivery.getDeliveryMethod())
                 .deliveryStatus(delivery == null ? null : delivery.getDeliveryStatus())
                 .carrier(delivery == null ? null : delivery.getCarrier())
@@ -1305,6 +1315,18 @@ public class RoundServiceImpl implements RoundService {
                         .in(EntryDelivery::getBeerEntryId, entryIds))
                 .stream()
                 .collect(Collectors.toMap(EntryDelivery::getBeerEntryId, Function.identity(), (left, right) -> left));
+    }
+
+    private Map<Long, EntryRefund> loadLatestRefunds(Set<Long> entryIds) {
+        if (entryIds == null || entryIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, EntryRefund> refundByEntryId = new LinkedHashMap<>();
+        entryRefundMapper.selectList(new LambdaQueryWrapper<EntryRefund>()
+                        .in(EntryRefund::getBeerEntryId, entryIds)
+                        .orderByDesc(EntryRefund::getId))
+                .forEach(refund -> refundByEntryId.putIfAbsent(refund.getBeerEntryId(), refund));
+        return refundByEntryId;
     }
 
     private Map<String, CompetitionStyleConfig> listStyleSnapshot(Long competitionId) {

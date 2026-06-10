@@ -2,6 +2,7 @@ package com.beercompetition.controller.portal;
 
 import com.beercompetition.common.result.Result;
 import com.beercompetition.pojo.dto.PortalEntryDeliverySubmitRequest;
+import com.beercompetition.pojo.dto.PortalEntryRefundRequest;
 import com.beercompetition.pojo.dto.PortalEntrySubmitRequest;
 import com.beercompetition.pojo.dto.PortalProfileUpdateRequest;
 import com.beercompetition.pojo.enums.UserRole;
@@ -97,6 +98,12 @@ public class PortalController {
     @PostMapping("/entries/{id}/payment/simulate")
     public Result<EntryDetailVO> simulatePayment(@PathVariable Long id) {
         return Result.success(entryService.simulatePayment(id));
+    }
+
+    @PostMapping("/entries/{id}/refund")
+    public Result<EntryDetailVO> requestRefund(@PathVariable Long id,
+                                               @RequestBody @Valid PortalEntryRefundRequest request) {
+        return Result.success(entryService.requestPortalEntryRefund(id, request));
     }
 
     @PostMapping("/competitions/{competitionId}/entries")

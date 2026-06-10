@@ -174,6 +174,7 @@ async function handleAvatarChange(uploadFile) {
   try {
     const data = await uploadPortalAvatar(file)
     Object.assign(profileForm, data)
+    setDisplayName('portal', data.displayName)
     ElMessage.success('头像已更新')
   } finally {
     uploadingAvatar.value = false

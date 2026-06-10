@@ -30,7 +30,10 @@
             to="/portal/profile"
             aria-label="进入厂牌资料"
           >
-            <span class="avatar">{{ accountInitial }}</span>
+            <span class="avatar">
+              <img v-if="accountAvatarPreviewUrl" :src="accountAvatarPreviewUrl" alt="厂牌头像">
+              <span v-else>{{ accountInitial }}</span>
+            </span>
             <span>{{ accountName }}</span>
           </RouterLink>
           <el-button class="logout-button" text @click="logout">退出</el-button>
@@ -56,14 +59,18 @@ import {
   Tickets,
 } from '@element-plus/icons-vue'
 import { getPortalMe } from '@/api/auth'
+import { fetchPortalProfile } from '@/api/portal'
+import { BASE_URL } from '@/config'
 import { clearSession, getDisplayName, isLoggedIn, setDisplayName } from '@/utils/auth'
 
 const router = useRouter()
 const route = useRoute()
 const displayName = ref(getDisplayName('portal'))
+const accountAvatarUrl = ref('')
 const loggedIn = computed(() => isLoggedIn('portal'))
 const accountName = computed(() => isQuestionPlaceholder(displayName.value) ? '完善厂牌资料' : displayName.value || '完善厂牌资料')
 const accountInitial = computed(() => getAccountInitial(accountName.value))
+const accountAvatarPreviewUrl = computed(() => resolveAvatarUrl(accountAvatarUrl.value))
 
 const navItems = [
   { path: '/portal/home', label: '赛事首页', icon: Tickets, public: true },
@@ -91,8 +98,25 @@ function syncDisplayNameFromStorage() {
   displayName.value = getDisplayName('portal')
 }
 
+async function refreshPortalProfile() {
+  if (!loggedIn.value) {
+    accountAvatarUrl.value = ''
+    return
+  }
+  try {
+    const profile = await fetchPortalProfile()
+    accountAvatarUrl.value = profile?.avatarUrl || ''
+    if (profile?.displayName && profile.displayName !== getDisplayName('portal')) {
+      setDisplayName('portal', profile.displayName)
+    }
+  } catch {
+    accountAvatarUrl.value = ''
+  }
+}
+
 async function refreshCurrentUser() {
   if (!loggedIn.value) {
+    accountAvatarUrl.value = ''
     return
   }
   try {
@@ -108,12 +132,14 @@ async function refreshCurrentUser() {
 function handleSessionUpdate(event) {
   if (!event.detail?.scope || event.detail.scope === 'portal') {
     syncDisplayNameFromStorage()
+    refreshPortalProfile()
   }
 }
 
 function handleStorageUpdate(event) {
   if (event.key === 'portal_display_name' || event.key === 'portal_token') {
     syncDisplayNameFromStorage()
+    refreshPortalProfile()
   }
 }
 
@@ -130,10 +156,22 @@ function getAccountInitial(value) {
   return (ascii ? ascii[0] : Array.from(normalized)[0]).toUpperCase()
 }
 
+function resolveAvatarUrl(value) {
+  if (!value) return ''
+  if (/^https?:\/\//i.test(value) || value.startsWith('data:')) {
+    return value
+  }
+  if (value.startsWith('/')) {
+    return `${BASE_URL}${value}`
+  }
+  return value
+}
+
 onMounted(() => {
   window.addEventListener('beer-competition-session-updated', handleSessionUpdate)
   window.addEventListener('storage', handleStorageUpdate)
   refreshCurrentUser()
+  refreshPortalProfile()
 })
 
 onUnmounted(() => {
@@ -318,6 +356,7 @@ onUnmounted(() => {
 .avatar {
   display: grid;
   place-items: center;
+  overflow: hidden;
   width: 32px;
   height: 32px;
   color: #fff6df;
@@ -325,6 +364,12 @@ onUnmounted(() => {
   border-radius: 50%;
   font-size: 12px;
   font-weight: 800;
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .page-frame {

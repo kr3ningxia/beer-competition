@@ -218,45 +218,39 @@
       <div class="preview-label">
         <span>报名确认</span>
         <h3>报名确认</h3>
-        <section :class="['fee-panel', { 'is-early': earlyBirdActive }]">
-          <small>{{ earlyBirdActive ? '现在报名可享' : '当前报名费' }}</small>
-          <strong>{{ currentFeeText }}</strong>
-          <p v-if="earlyBirdActive && earlyBirdDeadlineText">{{ earlyBirdDeadlineText }} 前有效</p>
-          <p v-else>提交后进入支付，支付成功即完成报名。</p>
-          <em v-if="earlyBirdActive && normalFeeText">普通价 {{ normalFeeText }}</em>
-        </section>
-        <template v-if="previewReady">
-          <div class="receipt-line" />
-          <dl>
-            <div>
-              <dt>赛事</dt>
-              <dd>{{ selectedCompetition.name }}</dd>
-            </div>
-            <div>
-              <dt>酒款</dt>
-              <dd>{{ form.name || '-' }}</dd>
-            </div>
-            <div>
-              <dt>组别</dt>
-              <dd>{{ selectedCategoryName }}</dd>
-            </div>
-            <div>
-              <dt>基础风格</dt>
-              <dd>{{ form.style }}</dd>
-            </div>
-            <div>
-              <dt>ABV</dt>
-              <dd>{{ form.abv }}%</dd>
-            </div>
-            <div v-for="field in configuredFields" :key="field.fieldKey">
-              <dt>{{ field.fieldLabel }}</dt>
-              <dd>{{ formatFieldValue(form.extraFields[field.fieldKey]) || '-' }}</dd>
-            </div>
-          </dl>
-          <div class="foam-line" />
-          <p class="receipt-status">{{ submittedEntry ? (paymentPaid ? '已支付，报名成功' : '待支付报名费') : '提交后进入支付' }}</p>
-        </template>
-        <p v-else class="preview-empty">填写组别、风格和 ABV 后显示核对单。</p>
+        <div class="receipt-line" />
+        <dl>
+          <div>
+            <dt>赛事</dt>
+            <dd>{{ selectedCompetition.name }}</dd>
+          </div>
+          <div v-if="form.name">
+            <dt>酒款</dt>
+            <dd>{{ form.name }}</dd>
+          </div>
+          <div v-if="selectedCategoryName">
+            <dt>组别</dt>
+            <dd>{{ selectedCategoryName }}</dd>
+          </div>
+          <div v-if="form.style">
+            <dt>基础风格</dt>
+            <dd>{{ form.style }}</dd>
+          </div>
+          <div v-if="form.abv !== null && form.abv !== undefined">
+            <dt>ABV</dt>
+            <dd>{{ form.abv }}%</dd>
+          </div>
+          <div
+            v-for="field in configuredFields"
+            v-show="hasFieldValue(form.extraFields[field.fieldKey])"
+            :key="field.fieldKey"
+          >
+            <dt>{{ field.fieldLabel }}</dt>
+            <dd>{{ formatFieldValue(form.extraFields[field.fieldKey]) }}</dd>
+          </div>
+        </dl>
+        <div class="foam-line" />
+        <p class="receipt-status">{{ submittedEntry ? (paymentPaid ? '已支付，报名成功' : '待支付报名费') : '提交后进入支付' }}</p>
       </div>
 
     </aside>
@@ -297,20 +291,12 @@ const selectedCompetition = computed(() => selectedDetail.value || null)
 const hasRulesUrl = computed(() => Boolean(selectedCompetition.value?.rulesUrl))
 const configuredFields = computed(() => normalizeEntryFields(selectedCompetition.value?.entryFields || []))
 const selectedCategoryName = computed(() => selectedCompetition.value?.categories?.find((item) => item.id === form.categoryId)?.name || '')
-const previewReady = computed(() => Boolean(selectedCategoryName.value && form.style && form.abv !== null && form.abv !== undefined))
 const paymentAmount = computed(() => submittedEntry.value?.payment?.amount ?? submittedEntry.value?.entryFee ?? selectedCompetition.value?.entryFee ?? 0)
 const paymentPaid = computed(() => submittedEntry.value?.paymentStatus === 'PAID' || submittedEntry.value?.canDownloadLabel)
 const currentFeeText = computed(() => formatCompetitionFee(selectedCompetition.value))
 const entryFeeLabel = computed(() => formatCurrency(currentEntryFee(selectedCompetition.value)))
 const earlyBirdActive = computed(() => isEarlyBirdActive(selectedCompetition.value))
 const earlyBirdDeadlineText = computed(() => formatMonthDayTime(selectedCompetition.value?.earlyBirdDeadline))
-const normalFeeText = computed(() => {
-  if (!earlyBirdActive.value) return ''
-  const normalFee = selectedCompetition.value?.entryFee
-  if (normalFee === null || normalFee === undefined) return ''
-  if (Number(normalFee) === Number(currentEntryFee(selectedCompetition.value))) return ''
-  return `${formatCurrency(normalFee)} / 款`
-})
 const submitHint = computed(() => {
   if (earlyBirdActive.value) {
     return `当前可享早鸟价，${earlyBirdDeadlineText.value ? `${earlyBirdDeadlineText.value} 前` : '现在'}提交后进入支付。`
@@ -890,63 +876,9 @@ function styleLabel(item) {
   line-height: 1.15;
 }
 
-.fee-panel {
-  margin-top: 18px;
-  padding: 14px;
-  background: rgba(255, 253, 247, 0.72);
-  border: 1px solid rgba(87, 58, 26, 0.12);
-  border-radius: 8px;
-}
-
-.fee-panel small,
-.fee-panel strong,
-.fee-panel em {
-  display: block;
-}
-
-.fee-panel small {
-  color: #8b5c19;
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.fee-panel strong {
-  margin-top: 6px;
-  color: #2b1d10;
-  font-size: 22px;
-  line-height: 1.2;
-}
-
-.fee-panel p {
-  margin: 9px 0 0;
-  color: #6b4710;
-  font-size: 13px;
-  font-weight: 800;
-  line-height: 1.5;
-}
-
-.fee-panel em {
-  margin-top: 8px;
-  color: #806f5b;
-  font-size: 12px;
-  font-style: normal;
-  font-weight: 800;
-}
-
-.fee-panel.is-early {
-  background:
-    linear-gradient(180deg, rgba(255, 248, 226, 0.94), rgba(248, 220, 139, 0.84));
-  border-color: rgba(155, 99, 23, 0.24);
-}
-
-.preview-label p,
-.preview-empty {
+.preview-label p {
   color: #675b4a;
   line-height: 1.7;
-}
-
-.preview-empty {
-  margin-top: 28px;
 }
 
 .receipt-line {

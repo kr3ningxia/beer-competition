@@ -65,8 +65,45 @@
           </div>
           <div class="current-side">
             <span :class="['task-chip', taskTone(selectedEntry)]">{{ entryTaskLabel(selectedEntry) }}</span>
-            <el-button @click="refreshEntries(selectedEntry.id)">刷新状态</el-button>
+            <el-dropdown trigger="click" @command="handleMoreCommand">
+              <el-button class="more-button" size="small" plain>
+                更多
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="refresh">刷新状态</el-dropdown-item>
+                  <el-dropdown-item v-if="selectedEntry.canRequestRefund" command="refund">申请退款</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
+        </section>
+
+        <section v-if="showRefundCard" class="refund-card brewer-card">
+          <div class="card-head">
+            <div>
+              <span class="section-kicker">REFUND</span>
+              <h3>{{ refundCardTitle }}</h3>
+              <p>{{ refundCardDescription }}</p>
+            </div>
+            <span :class="['task-chip', refundTone(selectedEntry.refundStatus)]">
+              {{ refundStatusText(selectedEntry.refundStatus) }}
+            </span>
+          </div>
+          <dl class="inline-facts">
+            <div>
+              <dt>退款金额</dt>
+              <dd>{{ formatCurrency(selectedEntry.refund?.amount || entryPayAmount(selectedEntry)) }}</dd>
+            </div>
+            <div v-if="selectedEntry.refundReason">
+              <dt>退款原因</dt>
+              <dd>{{ selectedEntry.refundReason }}</dd>
+            </div>
+            <div v-if="selectedEntry.refundRequestedAt">
+              <dt>申请时间</dt>
+              <dd>{{ formatDateTime(selectedEntry.refundRequestedAt) }}</dd>
+            </div>
+          </dl>
         </section>
 
         <section v-if="showPaymentCard" class="payment-card brewer-card">
@@ -101,7 +138,6 @@
             <div>
               <span class="section-kicker">LABEL</span>
               <h3>{{ labelCardTitle }}</h3>
-              <p>{{ labelCardDescription }}</p>
             </div>
             <span :class="['task-chip', selectedEntry.canDownloadLabel ? 'tone-green' : 'tone-amber']">
               {{ selectedEntry.canDownloadLabel ? '可下载' : '待支付' }}
@@ -119,7 +155,6 @@
               打印标签 / 保存 PDF
             </el-button>
           </div>
-          <p class="label-tip">瓶身至少贴 1 张；整箱寄送时，建议外箱再贴 1 张。</p>
         </section>
 
         <section v-if="showDeliveryCard" class="delivery-card brewer-card">
@@ -158,7 +193,10 @@
           <el-form v-else label-position="top" class="delivery-form">
             <div class="delivery-grid">
               <el-form-item label="送样方式">
-                <el-radio-group v-model="deliveryForm.deliveryMethod">
+                <div v-if="fixedDeliveryMethod" class="fixed-delivery-method">
+                  {{ deliveryMethodText(fixedDeliveryMethod) }}
+                </div>
+                <el-radio-group v-else v-model="deliveryForm.deliveryMethod">
                   <el-radio-button label="EXPRESS" :disabled="selectedLogistics.deliveryMethod === 'ONSITE'">快递寄送</el-radio-button>
                   <el-radio-button label="ONSITE" :disabled="selectedLogistics.deliveryMethod === 'EXPRESS'">现场送样</el-radio-button>
                 </el-radio-group>
@@ -179,7 +217,7 @@
                   :rows="4"
                   maxlength="500"
                   show-word-limit
-                  placeholder="例如：本次寄送 2 箱，每箱 6 瓶；或约定在比赛前一天下午现场送样。"
+                  placeholder="例如：本次寄送 2 箱，每箱 6 瓶；如有分箱、温控或破损风险说明，也可以写在这里。"
                 />
               </el-form-item>
             </div>
@@ -243,11 +281,12 @@ import {
   fetchPortalEntries,
   fetchPortalEntryDetail,
   fetchPortalEntryLabel,
+  requestPortalEntryRefund,
   simulatePortalEntryPayment,
   submitPortalEntryDelivery,
 } from '@/api/portal'
 import { JUDGE_H5_BASE_URL } from '@/config'
-import { entryPayAmount } from './portalViewModels'
+import { entryPayAmount, isEntryRefundActive, isEntryRefunded } from './portalViewModels'
 
 const route = useRoute()
 
@@ -274,9 +313,18 @@ const payableEntries = computed(() => {
   return [...entries.value].sort((a, b) => entrySortWeight(a) - entrySortWeight(b) || b.id - a.id)
 })
 const selectedLogistics = computed(() => selectedEntry.value?.competitionLogistics || {})
+const fixedDeliveryMethod = computed(() => {
+  if (selectedLogistics.value.deliveryMethod === 'EXPRESS') return 'EXPRESS'
+  if (selectedLogistics.value.deliveryMethod === 'ONSITE') return 'ONSITE'
+  return ''
+})
 
 const hasSubmittedDelivery = computed(() => hasDeliveryProgress(selectedEntry.value))
-const showPaymentCard = computed(() => selectedEntry.value?.paymentStatus !== 'PAID')
+const showRefundCard = computed(() => Boolean(selectedEntry.value?.refundStatus))
+const showPaymentCard = computed(() => {
+  const entry = selectedEntry.value
+  return Boolean(entry) && entry.paymentStatus !== 'PAID' && !isEntryRefunded(entry) && !isEntryRefundActive(entry)
+})
 const showLabelCard = computed(() => Boolean(selectedEntry.value?.canDownloadLabel))
 const showPreparationCards = computed(() => {
   if (!selectedEntry.value?.canDownloadLabel) return false
@@ -304,10 +352,6 @@ const labelSvg = computed(() => buildLabelSvg(labelRecord.value))
 const labelCardTitle = computed(() => {
   if (hasSubmittedDelivery.value) return '需要时可补打现场标签'
   return '寄样前请先贴好标签'
-})
-const labelCardDescription = computed(() => {
-  if (hasSubmittedDelivery.value) return '标签会一直保留，后续补贴瓶身、外箱或现场核对时都可以重新下载。'
-  return '建议优先使用打印版，贴在酒瓶或外箱醒目位置，便于主办方核对和入库。'
 })
 const labelActionDescription = computed(() => {
   if (!selectedEntry.value?.canDownloadLabel) return '支付成功后即可下载标签。'
@@ -345,6 +389,20 @@ const currentAction = computed(() => {
     return {
       title: '请选择酒款',
       description: '左侧列表会显示每款酒当前的付款与寄样进度。',
+    }
+  }
+
+  if (isEntryRefundActive(entry)) {
+    return {
+      title: '退款申请已提交',
+      description: '主办方确认后，报名费将按原支付方式退回。',
+    }
+  }
+
+  if (isEntryRefunded(entry)) {
+    return {
+      title: '退款已完成',
+      description: '这款酒已退出本场比赛，标签和寄样操作已停止使用。',
     }
   }
 
@@ -498,6 +556,9 @@ function deliveryTone(value) {
 
 function taskTone(entry) {
   if (!entry) return 'tone-amber'
+  if (isEntryRefunded(entry)) return 'tone-green'
+  if (isEntryRefundActive(entry)) return 'tone-blue'
+  if (entry.refundStatus === 'FAILED' || entry.refundStatus === 'REJECTED') return 'tone-amber'
   if (entry.deliveryStatus === 'RECEIVED' || isStored(entry)) return 'tone-green'
   if (hasDeliveryProgress(entry)) return 'tone-blue'
   if (entry.paymentStatus === 'PAID') return 'tone-brown'
@@ -506,6 +567,10 @@ function taskTone(entry) {
 
 function entryTaskLabel(entry) {
   if (!entry) return '待处理'
+  if (isEntryRefunded(entry)) return '已退款'
+  if (isEntryRefundActive(entry)) return '退款处理中'
+  if (entry.refundStatus === 'FAILED') return '退款失败'
+  if (entry.refundStatus === 'REJECTED') return '退款已驳回'
   if (entry.deliveryStatus === 'RECEIVED' || isStored(entry)) return '已签收 / 入库'
   if (hasDeliveryProgress(entry)) return '等待主办方签收'
   if (entry.paymentStatus === 'PAID') return '待提交寄样'
@@ -521,8 +586,39 @@ function hasDeliveryProgress(entry) {
   return ['SUBMITTED', 'RECEIVED'].includes(entry.deliveryStatus) || Boolean(entry.deliverySubmittedAt || entry.trackingNo || entry.deliveryMethod)
 }
 
+const refundCardTitle = computed(() => {
+  if (isEntryRefunded(selectedEntry.value)) return '退款已完成'
+  if (selectedEntry.value?.refundStatus === 'REJECTED') return '退款申请已驳回'
+  if (selectedEntry.value?.refundStatus === 'FAILED') return '退款暂未成功'
+  return '退款申请已提交'
+})
+
+const refundCardDescription = computed(() => {
+  if (isEntryRefunded(selectedEntry.value)) return '报名费已完成退款，这款酒不会继续进入本场比赛流程。'
+  if (selectedEntry.value?.refundStatus === 'REJECTED') return '主办方未通过本次退款申请，标签和寄样操作已恢复。'
+  if (selectedEntry.value?.refundStatus === 'FAILED') return '退款处理失败，请等待主办方重新处理或联系确认。'
+  return '主办方确认后，报名费将按原支付方式退回。'
+})
+
+function refundStatusText(status) {
+  return {
+    REQUESTED: '待处理',
+    APPROVED: '处理中',
+    PROCESSING: '处理中',
+    SUCCESS: '已退款',
+    FAILED: '退款失败',
+    REJECTED: '已驳回',
+  }[status] || status || '-'
+}
+
+function refundTone(status) {
+  if (status === 'SUCCESS') return 'tone-green'
+  if (['REQUESTED', 'APPROVED', 'PROCESSING'].includes(status)) return 'tone-blue'
+  return 'tone-amber'
+}
+
 function syncDeliveryForm(entry) {
-  deliveryForm.deliveryMethod = entry?.deliveryMethod || defaultDeliveryMethod()
+  deliveryForm.deliveryMethod = fixedDeliveryMethod.value || entry?.deliveryMethod || defaultDeliveryMethod()
   deliveryForm.carrier = entry?.carrier || ''
   deliveryForm.trackingNo = entry?.trackingNo || ''
   deliveryForm.deliveryNote = entry?.deliveryNote || ''
@@ -552,7 +648,7 @@ function entryDeliverySnapshot(entry) {
 }
 
 function defaultDeliveryMethod() {
-  return selectedLogistics.value.deliveryMethod === 'ONSITE' ? 'ONSITE' : 'EXPRESS'
+  return fixedDeliveryMethod.value || 'EXPRESS'
 }
 
 async function selectEntry(entry, options = {}) {
@@ -592,6 +688,15 @@ async function refreshEntries(targetId = selectedEntry.value?.id) {
   }
 }
 
+function handleMoreCommand(command) {
+  if (command === 'refresh') {
+    refreshEntries(selectedEntry.value?.id)
+  }
+  if (command === 'refund') {
+    submitRefundRequest()
+  }
+}
+
 async function saveDelivery() {
   if (!selectedEntry.value?.canDownloadLabel) {
     ElMessage.warning('支付成功后才能填写寄样信息')
@@ -612,6 +717,31 @@ async function saveDelivery() {
     await refreshEntries(selectedEntry.value.id)
   } finally {
     savingDelivery.value = false
+  }
+}
+
+async function submitRefundRequest() {
+  if (!selectedEntry.value?.canRequestRefund) return
+  try {
+    const { value } = await ElMessageBox.prompt(
+      '退款成功后，这款酒将退出本场比赛，现场标签和寄样操作会停止使用。',
+      '申请退款',
+      {
+        confirmButtonText: '提交退款申请',
+        cancelButtonText: '取消',
+        inputPlaceholder: '请填写退款原因',
+        inputPattern: /.+/,
+        inputErrorMessage: '请填写退款原因',
+        type: 'warning',
+      },
+    )
+    selectedEntry.value = await requestPortalEntryRefund(selectedEntry.value.id, { reason: value.trim() })
+    labelData.value = null
+    ElMessage.success('退款申请已提交')
+    await refreshEntries(selectedEntry.value.id)
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return
+    ElMessage.warning(error?.message || '退款申请提交失败')
   }
 }
 
@@ -667,7 +797,7 @@ function buildLabelSvg(label) {
   const qrSize = 176
   const cellSize = qrSize / matrix.size
   const offsetX = 42
-  const offsetY = 88
+  const offsetY = 78
 
   for (let row = 0; row < matrix.size; row += 1) {
     for (let col = 0; col < matrix.size; col += 1) {
@@ -680,19 +810,17 @@ function buildLabelSvg(label) {
   const style = escapeXml(label.style || 'Style Pending')
   const abv = label.abv !== '' && label.abv !== null && label.abv !== undefined ? `${label.abv}%` : 'ABV Pending'
   const code = escapeXml(label.shortCode || 'PENDING')
-  const labelCode = escapeXml(label.labelCode || label.uuid || '等待开放标签')
 
   return `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 360" role="img" aria-label="现场评审标签">
       <rect width="260" height="360" rx="24" fill="#fff8ec"/>
       <rect x="14" y="14" width="232" height="332" rx="18" fill="#fffdf9" stroke="#d4bf9f"/>
       <text x="130" y="44" text-anchor="middle" font-size="12" font-weight="700" letter-spacing="1.4" fill="#8c6330">现场评审标签</text>
-      <text x="130" y="66" text-anchor="middle" font-size="22" font-weight="800" fill="#24170f">${labelCode}</text>
-      <rect x="28" y="74" width="204" height="204" rx="18" fill="#f7ecd8" stroke="#3a2818" stroke-width="10"/>
+      <rect x="28" y="64" width="204" height="204" rx="18" fill="#f7ecd8" stroke="#3a2818" stroke-width="10"/>
       ${cells.join('')}
-      <text x="130" y="302" text-anchor="middle" font-size="12" font-weight="700" fill="#8c6330">现场短编号</text>
-      <text x="130" y="326" text-anchor="middle" font-size="24" font-weight="900" fill="#24170f">${code}</text>
-      <text x="130" y="344" text-anchor="middle" font-size="13" fill="#665647">${category} · ${style} · ${abv}</text>
+      <text x="130" y="292" text-anchor="middle" font-size="12" font-weight="700" fill="#8c6330">现场短编号</text>
+      <text x="130" y="318" text-anchor="middle" font-size="28" font-weight="900" fill="#24170f">${code}</text>
+      <text x="130" y="340" text-anchor="middle" font-size="13" fill="#665647">${category} · ${style} · ${abv}</text>
     </svg>
   `
 }
@@ -850,6 +978,7 @@ function triggerDownload(objectUrl, fileName) {
 .page-head,
 .entry-panel,
 .current-card,
+.refund-card,
 .payment-card,
 .label-card,
 .delivery-card,
@@ -1063,7 +1192,12 @@ function triggerDownload(objectUrl, fileName) {
   justify-items: end;
 }
 
+.more-button {
+  min-width: 56px;
+}
+
 .payment-card,
+.refund-card,
 .label-card,
 .delivery-card {
   background: linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(255, 248, 236, 0.98));
@@ -1159,6 +1293,18 @@ dd {
 .label-actions {
   justify-content: center;
   margin-top: 14px;
+}
+
+.fixed-delivery-method {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 12px;
+  color: #5b3710;
+  font-weight: 800;
+  border: 1px solid rgba(185, 120, 31, 0.18);
+  border-radius: 8px;
+  background: #fff7e6;
 }
 
 .label-tip {

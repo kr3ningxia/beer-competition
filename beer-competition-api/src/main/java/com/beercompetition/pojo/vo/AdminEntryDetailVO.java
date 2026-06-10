@@ -29,6 +29,11 @@ public class AdminEntryDetailVO {
     private String status;
     private String paymentStatus;
     private EntryPaymentVO payment;
+    private EntryRefundVO refund;
+    private String refundStatus;
+    private String refundReason;
+    private LocalDateTime refundRequestedAt;
+    private LocalDateTime refundProcessedAt;
     private String deliveryStatus;
     private EntryDeliveryVO delivery;
     private Boolean stored;
@@ -36,7 +41,10 @@ public class AdminEntryDetailVO {
     private Boolean resultPublished;
     private Boolean canConfirmPayment;
     private Boolean canMarkStored;
+    private Boolean canUnmarkStored;
     private Boolean canCancel;
+    private Boolean canApproveRefund;
+    private Boolean canRejectRefund;
     private Boolean canEdit;
     private LocalDateTime submittedAt;
     private List<EntryExtraFieldVO> extraFields;

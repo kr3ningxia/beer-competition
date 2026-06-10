@@ -12,7 +12,9 @@ import com.beercompetition.mapper.CompetitionCategoryMapper;
 import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.CompetitionScoreConfigMapper;
 import com.beercompetition.mapper.CompetitionStyleConfigMapper;
+import com.beercompetition.mapper.EntryDeliveryMapper;
 import com.beercompetition.mapper.EntryFieldConfigMapper;
+import com.beercompetition.mapper.EntryRefundMapper;
 import com.beercompetition.mapper.JudgeAccountMapper;
 import com.beercompetition.mapper.JudgeAssignmentMapper;
 import com.beercompetition.mapper.JudgeTableMapper;
@@ -52,8 +54,10 @@ import com.beercompetition.pojo.po.CompetitionCategory;
 import com.beercompetition.pojo.po.CompetitionRound;
 import com.beercompetition.pojo.po.CompetitionScoreConfig;
 import com.beercompetition.pojo.po.CompetitionStyleConfig;
+import com.beercompetition.pojo.po.EntryDelivery;
 import com.beercompetition.pojo.po.EntryScanLabel;
 import com.beercompetition.pojo.po.EntryFieldConfig;
+import com.beercompetition.pojo.po.EntryRefund;
 import com.beercompetition.pojo.po.JudgeAccount;
 import com.beercompetition.pojo.po.JudgeAssignment;
 import com.beercompetition.pojo.po.JudgeTable;
@@ -185,6 +189,8 @@ public class CompetitionServiceImpl implements CompetitionService {
     private final RoundResultMapper roundResultMapper;
     private final RoundTableEntryMapper roundTableEntryMapper;
     private final RoundTableMemberMapper roundTableMemberMapper;
+    private final EntryDeliveryMapper entryDeliveryMapper;
+    private final EntryRefundMapper entryRefundMapper;
     private final StyleLibraryService styleLibraryService;
     private final EntryScanLabelService entryScanLabelService;
     private final RoundService roundService;
@@ -1942,10 +1948,18 @@ public class CompetitionServiceImpl implements CompetitionService {
         Map<Long, EntryScanLabel> labelByEntryId = entryScanLabelService.listActiveLabels(entries.stream()
                 .map(BeerEntry::getId)
                 .toList());
+        Map<Long, EntryRefund> refundByEntryId = loadLatestRefunds(entries.stream()
+                .map(BeerEntry::getId)
+                .collect(Collectors.toSet()));
+        Map<Long, EntryDelivery> deliveryByEntryId = loadEntryDeliveries(entries.stream()
+                .map(BeerEntry::getId)
+                .collect(Collectors.toSet()));
         return entries.stream()
                 .map(entry -> {
                     CompetitionConfigNameVO style = styleByName.get(entry.getStyle());
                     EntryScanLabel label = labelByEntryId.get(entry.getId());
+                    EntryRefund refund = refundByEntryId.get(entry.getId());
+                    EntryDelivery delivery = deliveryByEntryId.get(entry.getId());
                     return CompetitionEntryVO.builder()
                             .id(entry.getId())
                             .uuid(entry.getUuid())
@@ -1958,10 +1972,41 @@ public class CompetitionServiceImpl implements CompetitionService {
                             .styleCode(style == null ? null : style.getStyleCode())
                             .styleDescription(style == null ? null : style.getDescription())
                             .status(entry.getStatus())
+                            .refundStatus(refund == null ? null : refund.getStatus())
+                            .refundReason(refund == null ? null : refund.getReason())
+                            .refundRequestedAt(refund == null ? null : refund.getRequestedTime())
+                            .refundProcessedAt(refund == null ? null : refund.getProcessedTime())
+                            .deliveryMethod(delivery == null ? null : delivery.getDeliveryMethod())
+                            .deliveryStatus(delivery == null ? null : delivery.getDeliveryStatus())
+                            .carrier(delivery == null ? null : delivery.getCarrier())
+                            .trackingNo(delivery == null ? null : delivery.getTrackingNo())
+                            .deliverySubmittedAt(delivery == null ? null : delivery.getSubmittedTime())
                             .stored(Objects.equals(entry.getStoredFlag(), 1))
                             .build();
                 })
                 .toList();
+    }
+
+    private Map<Long, EntryDelivery> loadEntryDeliveries(Set<Long> entryIds) {
+        if (entryIds == null || entryIds.isEmpty()) {
+            return Map.of();
+        }
+        return entryDeliveryMapper.selectList(new LambdaQueryWrapper<EntryDelivery>()
+                        .in(EntryDelivery::getBeerEntryId, entryIds))
+                .stream()
+                .collect(Collectors.toMap(EntryDelivery::getBeerEntryId, Function.identity(), (left, right) -> left));
+    }
+
+    private Map<Long, EntryRefund> loadLatestRefunds(Set<Long> entryIds) {
+        if (entryIds == null || entryIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, EntryRefund> refundByEntryId = new LinkedHashMap<>();
+        entryRefundMapper.selectList(new LambdaQueryWrapper<EntryRefund>()
+                        .in(EntryRefund::getBeerEntryId, entryIds)
+                        .orderByDesc(EntryRefund::getId))
+                .forEach(refund -> refundByEntryId.putIfAbsent(refund.getBeerEntryId(), refund));
+        return refundByEntryId;
     }
 
     private ProgressSummaryVO buildProgressSummary(Long competitionId, EntrySummaryVO entriesSummary) {

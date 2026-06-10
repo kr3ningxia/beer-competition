@@ -102,6 +102,7 @@
         </div>
         <div class="brief-actions">
           <RouterLink to="/portal/my">进入我的参赛</RouterLink>
+          <RouterLink v-if="canSubmitEntry(competition)" :to="`/portal/submit?competitionId=${competition.id}`">再报一款酒</RouterLink>
           <RouterLink v-if="eventSummary.result > 0" :to="competitionResultPath(competition.id)">查看我的结果</RouterLink>
         </div>
       </template>

@@ -63,7 +63,7 @@ import { clearSession, getDisplayName } from '@/utils/auth'
 const router = useRouter()
 const route = useRoute()
 const displayName = getDisplayName('admin')
-const isDashboard = computed(() => ['/admin/dashboard', '/admin/judges', '/admin/entries', '/admin/style-libraries'].includes(route.path) || route.path.startsWith('/admin/competitions'))
+const isDashboard = computed(() => ['/admin/dashboard', '/admin/judges', '/admin/entries', '/admin/style-libraries', '/admin/exports'].includes(route.path) || route.path.startsWith('/admin/competitions'))
 
 const navItems = [
   { path: '/admin/dashboard', label: '首页', icon: House },
@@ -73,7 +73,7 @@ const navItems = [
   { path: '/admin/entries', label: '酒款管理', icon: Document },
   { path: '/admin/style-libraries', label: '风格库管理', icon: Files },
   { path: null, label: '结果发布', icon: Medal, disabledReason: '请进入比赛详情发布结果' },
-  { path: null, label: '数据导出', icon: Download, disabledReason: '请进入比赛详情导出数据' },
+  { path: '/admin/exports', label: '数据导出', icon: Download },
 ]
 
 function logout() {

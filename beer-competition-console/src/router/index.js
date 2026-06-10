@@ -50,6 +50,7 @@ const routes = [
       { path: 'entries', component: () => import('@/views/admin/AdminEntries.vue') },
       { path: 'judges', component: () => import('@/views/admin/Judges.vue') },
       { path: 'style-libraries', component: () => import('@/views/admin/StyleLibraries.vue') },
+      { path: 'exports', component: () => import('@/views/admin/AdminExports.vue') },
       { path: 'assignments', redirect: '/admin/competitions' },
       { path: 'score-config', redirect: '/admin/competitions' },
     ],

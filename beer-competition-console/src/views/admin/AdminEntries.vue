@@ -22,7 +22,7 @@
         <span>关键词</span>
         <div>
           <Search />
-          <input v-model.trim="filters.keyword" placeholder="搜索酒款、厂牌、短编号" @keyup.enter="applyFilters" />
+          <input v-model.trim="filters.keyword" placeholder="搜索酒款、厂牌、短编号、运单号" @keyup.enter="applyFilters" />
         </div>
       </label>
       <label class="field">
@@ -61,8 +61,20 @@
         <select v-model="filters.deliveryStatus" @change="applyFilters">
           <option value="">全部入库</option>
           <option value="NOT_SUBMITTED">未提交</option>
-          <option value="SUBMITTED">已提交</option>
+          <option value="SUBMITTED">已寄出</option>
           <option value="RECEIVED">已入库</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>退款</span>
+        <select v-model="filters.refundStatus" @change="applyFilters">
+          <option value="">全部退款</option>
+          <option value="REQUESTED">待处理</option>
+          <option value="APPROVED">处理中</option>
+          <option value="PROCESSING">处理中</option>
+          <option value="SUCCESS">已退款</option>
+          <option value="REJECTED">已驳回</option>
+          <option value="FAILED">退款失败</option>
         </select>
       </label>
       <label class="field">
@@ -80,20 +92,19 @@
         <h2>酒款明细</h2>
         <span>{{ entries.length }} / {{ total }} 款</span>
       </div>
-      <div class="entries-table">
+      <div :class="['entries-table', { compact: entries.length < filters.pageSize }]">
         <div class="table-head">
           <span>酒款</span>
           <span>比赛</span>
           <span>编号</span>
           <span>组别 / 风格</span>
-          <span>付款</span>
+          <span>付款/退款</span>
           <span>入库</span>
-          <span>分桌轨迹</span>
           <span>最近修改</span>
           <span>操作</span>
         </div>
         <div class="table-body">
-          <div v-for="entry in entries" :key="entry.id" class="table-row">
+          <div v-for="entry in entries" :key="entry.id" :class="['table-row', { refunded: isRefundedEntry(entry), 'refund-priority': hasRefundPriority(entry) }]">
             <div class="entry-cell">
               <strong>{{ entry.name || '未命名酒款' }}</strong>
               <small>{{ entry.breweryCompanyName || '未关联厂牌' }}</small>
@@ -110,14 +121,25 @@
               <strong>{{ entry.categoryName || '-' }}</strong>
               <small>{{ entry.style || '-' }}</small>
             </div>
-            <span :class="['state-pill', paymentTone(entry.paymentStatus)]">{{ paymentLabel(entry.paymentStatus) }}</span>
+            <div class="payment-refund-cell">
+              <span :class="['state-pill', paymentRefundTone(entry)]">{{ paymentRefundLabel(entry) }}</span>
+              <small v-if="paymentRefundMeta(entry)">{{ paymentRefundMeta(entry) }}</small>
+            </div>
             <span :class="['state-pill', deliveryTone(entry.deliveryStatus)]">{{ deliveryLabel(entry.deliveryStatus) }}</span>
-            <span class="path-cell">{{ entry.pathText || '未分桌' }}</span>
             <span class="time-cell">{{ formatTime(entry.lastModifiedAt || entry.submittedAt) }}</span>
             <div class="row-actions">
-              <button type="button" @click="openDetail(entry.id, 'profile')">查看</button>
-              <button type="button" :disabled="!entry.canEdit" @click="openDetail(entry.id, 'profile', true)">编辑资料</button>
-              <button type="button" @click="openDetail(entry.id, 'status')">状态处理</button>
+              <template v-if="hasRefundPriority(entry)">
+                <button class="danger priority-action" type="button" @click="openRefundDetail(entry)">退款处理</button>
+                <button type="button" @click="openDetail(entry.id, 'profile')">查看</button>
+              </template>
+              <template v-else-if="isRefundedEntry(entry)">
+                <button type="button" @click="openDetail(entry.id, 'profile')">查看</button>
+              </template>
+              <template v-else>
+                <button type="button" @click="openDetail(entry.id, 'profile')">查看</button>
+                <button type="button" :disabled="!entry.canEdit" @click="openDetail(entry.id, 'profile', true)">编辑资料</button>
+                <button type="button" @click="openDetail(entry.id, 'status')">状态处理</button>
+              </template>
             </div>
           </div>
           <div v-if="!loading && !entries.length" class="empty-state">
@@ -177,6 +199,19 @@
               <strong>{{ detail.resultPublished ? '结果已发布' : '酒款已分桌' }}</strong>
               <span>{{ detail.resultPublished ? '当前报名信息只读。' : '修改组别或评审可见信息后，需要核对分桌和现场展示。' }}</span>
             </div>
+            <section class="delivery-summary">
+              <div class="section-title">
+                <strong>寄样信息</strong>
+                <span :class="['state-pill', deliveryTone(detail.deliveryStatus)]">{{ deliveryLabel(detail.deliveryStatus) }}</span>
+              </div>
+              <dl v-if="deliveryInfoItems.length">
+                <div v-for="item in deliveryInfoItems" :key="item.label">
+                  <dt>{{ item.label }}</dt>
+                  <dd>{{ item.value }}</dd>
+                </div>
+              </dl>
+              <p v-else class="empty-line">厂商尚未提交寄样信息。</p>
+            </section>
             <div class="form-grid">
               <label>
                 <span>酒名</span>
@@ -226,6 +261,10 @@
                 <small>入库</small>
                 <strong>{{ deliveryLabel(detail.deliveryStatus) }}</strong>
               </article>
+              <article>
+                <small>退款</small>
+                <strong>{{ refundStatusText(detail.refundStatus) }}</strong>
+              </article>
             </div>
             <label class="stack-field">
               <span>处理原因</span>
@@ -234,15 +273,44 @@
             <div class="status-actions">
               <button type="button" :disabled="!detail.canConfirmPayment" @click="runDetailStatusAction('payment')">确认付款</button>
               <button type="button" :disabled="!detail.canMarkStored" @click="runDetailStatusAction('stored')">确认入库</button>
+              <button v-if="detail.stored || detail.deliveryStatus === 'RECEIVED'" class="danger" type="button" :disabled="!detail.canUnmarkStored" @click="runDetailStatusAction('unmarkStored')">撤销入库</button>
               <button class="danger" type="button" :disabled="!detail.canCancel" @click="runDetailStatusAction('cancel')">取消报名</button>
             </div>
           </section>
 
+          <section v-if="activeTab === 'refund'" class="drawer-panel refund-panel">
+            <div :class="['refund-box', { urgent: hasRefundPriority(detail) }]">
+              <strong>退款申请</strong>
+              <p>{{ detail.refundReason || detail.refund?.reason || '未填写退款原因' }}</p>
+              <dl>
+                <div><dt>退款状态</dt><dd>{{ refundStatusText(detail.refundStatus) }}</dd></div>
+                <div><dt>金额</dt><dd>{{ formatMoney(detail.refund?.amount || detail.payment?.amount) }}</dd></div>
+                <div><dt>申请时间</dt><dd>{{ formatTime(detail.refundRequestedAt || detail.refund?.requestedTime) }}</dd></div>
+                <div><dt>处理时间</dt><dd>{{ formatTime(detail.refundProcessedAt || detail.refund?.processedTime) }}</dd></div>
+              </dl>
+            </div>
+            <label class="stack-field">
+              <span>处理原因</span>
+              <textarea v-model.trim="statusReason" placeholder="可填写退款处理说明"></textarea>
+            </label>
+            <div class="status-actions">
+              <button type="button" :disabled="!detail.canApproveRefund" @click="runRefundAction('approve')">确认退款</button>
+              <button type="button" :disabled="!detail.canRejectRefund" @click="runRefundAction('reject')">驳回退款</button>
+              <button type="button" :disabled="detail.refundStatus !== 'FAILED'" @click="runRefundAction('retry')">重试退款</button>
+            </div>
+          </section>
+
           <section v-if="activeTab === 'label'" class="drawer-panel label-panel">
-            <article><small>匿名编码</small><strong>{{ detail.uuid }}</strong></article>
-            <article><small>短编号</small><strong>{{ detail.shortCode || '-' }}</strong></article>
-            <article><small>标签编码</small><strong>{{ detail.labelCode || '-' }}</strong></article>
-            <article><small>扫码令牌</small><strong>{{ detail.scanToken || '-' }}</strong></article>
+            <div class="label-preview-card">
+              <div class="admin-label-preview" v-html="adminLabelSvg" />
+              <button class="tool-button primary" type="button" @click="downloadAdminLabelPng">下载 PNG</button>
+            </div>
+            <div class="label-meta-grid">
+              <article><small>现场短编号</small><strong>{{ detail.shortCode || '-' }}</strong></article>
+              <article><small>匿名编码</small><strong>{{ detail.uuid }}</strong></article>
+              <article><small>投递组别</small><strong>{{ detail.categoryName || '-' }}</strong></article>
+              <article><small>基础风格</small><strong>{{ detail.style || '-' }}</strong></article>
+            </div>
           </section>
 
           <section v-if="activeTab === 'trace'" class="drawer-panel trace-panel">
@@ -272,7 +340,9 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, RefreshLeft, Search } from '@element-plus/icons-vue'
+import QRCode from 'qrcode'
 import {
+  approveEntryRefund,
   cancelEntry,
   confirmEntryPayment,
   fetchAdminEntries,
@@ -280,8 +350,12 @@ import {
   fetchCompetitionDetail,
   fetchCompetitions,
   markEntryStored,
+  rejectEntryRefund,
+  retryEntryRefund,
+  unmarkEntryStored,
   updateAdminEntry,
 } from '@/api/admin'
+import { JUDGE_H5_BASE_URL } from '@/config'
 
 const route = useRoute()
 const router = useRouter()
@@ -303,6 +377,7 @@ const filters = reactive({
   status: '',
   paymentStatus: '',
   deliveryStatus: '',
+  refundStatus: '',
   categoryId: '',
   assigned: '',
   keyword: '',
@@ -327,14 +402,6 @@ const entryStatusOptions = [
   { value: 'RESULT_PUBLISHED', label: '结果已出' },
 ]
 
-const drawerTabs = [
-  { key: 'profile', label: '报名信息' },
-  { key: 'status', label: '状态处理' },
-  { key: 'label', label: '二维码' },
-  { key: 'trace', label: '分桌轨迹' },
-  { key: 'logs', label: '修改记录' },
-]
-
 const totalPages = computed(() => Math.max(Math.ceil(total.value / filters.pageSize), 1))
 const visiblePages = computed(() => {
   const pages = []
@@ -343,9 +410,71 @@ const visiblePages = computed(() => {
   for (let page = start; page <= end; page += 1) pages.push(page)
   return pages
 })
+const drawerTabs = computed(() => {
+  const tabs = [
+    { key: 'profile', label: '报名信息' },
+    { key: 'status', label: '状态处理' },
+  ]
+  if (detail.value?.refundStatus) {
+    tabs.push({ key: 'refund', label: '退款处理' })
+  }
+  tabs.push(
+    { key: 'label', label: '二维码' },
+    { key: 'trace', label: '分桌轨迹' },
+    { key: 'logs', label: '修改记录' },
+  )
+  return tabs
+})
+const adminLabelRecord = computed(() => ({
+  uuid: detail.value?.uuid || '',
+  labelCode: detail.value?.labelCode || '',
+  shortCode: detail.value?.shortCode || '',
+  scanToken: detail.value?.scanToken || '',
+  categoryName: detail.value?.categoryName || '',
+  style: detail.value?.style || '',
+  abv: detail.value?.abv ?? '',
+}))
+const adminLabelSvg = computed(() => buildAdminLabelSvg(adminLabelRecord.value))
+const deliveryInfoItems = computed(() => {
+  const current = detail.value
+  if (!current) return []
+  const delivery = current.delivery || {}
+  return [
+    {
+      label: '送样方式',
+      value: deliveryMethodLabel(delivery.deliveryMethod || current.deliveryMethod),
+    },
+    {
+      label: '快递公司',
+      value: delivery.carrier || current.carrier,
+    },
+    {
+      label: '快递单号',
+      value: delivery.trackingNo || current.trackingNo,
+    },
+    {
+      label: '提交时间',
+      value: formatTime(delivery.submittedTime || current.deliverySubmittedAt),
+    },
+    {
+      label: '签收时间',
+      value: formatTime(delivery.receivedTime || current.deliveryReceivedAt),
+    },
+    {
+      label: '送样备注',
+      value: delivery.deliveryNote || current.deliveryNote,
+    },
+  ].filter((item) => item.value && item.value !== '-')
+})
 
 watch(() => route.query.entryId, (entryId) => {
-  if (entryId) openDetail(Number(entryId), 'profile')
+  if (!entryId) return
+  const tab = normalizeDetailTab(route.query.entryTab)
+  if (detailOpen.value && detail.value?.id === Number(entryId)) {
+    activeTab.value = tab
+    return
+  }
+  openDetail(Number(entryId), tab)
 })
 
 onMounted(async () => {
@@ -353,7 +482,7 @@ onMounted(async () => {
   applyQuery()
   if (filters.competitionId) await loadCategoryOptions(filters.competitionId)
   await loadEntries()
-  if (route.query.entryId) await openDetail(Number(route.query.entryId), 'profile')
+  if (route.query.entryId) await openDetail(Number(route.query.entryId), normalizeDetailTab(route.query.entryTab))
 })
 
 async function loadCompetitions() {
@@ -398,7 +527,7 @@ function changePageSize() {
 }
 
 function resetFilters() {
-  Object.assign(filters, { competitionId: '', status: '', paymentStatus: '', deliveryStatus: '', categoryId: '', assigned: '', keyword: '', page: 1, pageSize: 20 })
+  Object.assign(filters, { competitionId: '', status: '', paymentStatus: '', deliveryStatus: '', refundStatus: '', categoryId: '', assigned: '', keyword: '', page: 1, pageSize: 20 })
   categoryOptions.value = []
   router.replace('/admin/entries')
   loadEntries()
@@ -414,6 +543,7 @@ async function loadEntries() {
       status: filters.status || undefined,
       paymentStatus: filters.paymentStatus || undefined,
       deliveryStatus: filters.deliveryStatus || undefined,
+      refundStatus: filters.refundStatus || undefined,
       categoryId: filters.categoryId || undefined,
       assigned: filters.assigned === '' ? undefined : filters.assigned === 'true',
       keyword: filters.keyword || undefined,
@@ -436,10 +566,22 @@ async function openDetail(entryId, tab = 'profile', edit = false) {
     syncEditForm()
     statusReason.value = ''
     if (edit) activeTab.value = 'profile'
-    router.replace({ path: '/admin/entries', query: { ...route.query, competitionId: filters.competitionId || detail.value.competitionId, entryId } })
+    router.replace({
+      path: '/admin/entries',
+      query: {
+        ...route.query,
+        competitionId: filters.competitionId || detail.value.competitionId,
+        entryId,
+        entryTab: activeTab.value,
+      },
+    })
   } finally {
     detailLoading.value = false
   }
+}
+
+function normalizeDetailTab(tab) {
+  return ['profile', 'status', 'refund', 'label', 'trace', 'logs'].includes(tab) ? tab : 'profile'
 }
 
 async function loadDetailCategories(competitionId) {
@@ -452,6 +594,7 @@ function closeDetail() {
   detail.value = null
   const query = { ...route.query }
   delete query.entryId
+  delete query.entryTab
   router.replace({ path: '/admin/entries', query })
 }
 
@@ -509,9 +652,25 @@ async function runStatusAction(entry, type) {
   await runDetailStatusAction(type)
 }
 
+function hasRefundPriority(entry) {
+  return ['REQUESTED', 'FAILED'].includes(entry?.refundStatus)
+}
+
+function isRefundedEntry(entry) {
+  return entry?.refundStatus === 'SUCCESS' || entry?.paymentStatus === 'REFUNDED'
+}
+
+async function openRefundDetail(entry) {
+  await openDetail(entry.id, 'refund')
+}
+
 async function runDetailStatusAction(type) {
   const current = detail.value
   if (!current) return
+  if (type === 'unmarkStored' && !statusReason.value.trim()) {
+    ElMessage.warning('请填写撤销入库原因')
+    return
+  }
   if (type === 'cancel') {
     try {
       await ElMessageBox.confirm(`确认取消「${current.name || current.uuid}」的报名吗？`, '取消报名', {
@@ -523,9 +682,21 @@ async function runDetailStatusAction(type) {
       return
     }
   }
+  if (type === 'unmarkStored') {
+    try {
+      await ElMessageBox.confirm(`撤销后「${current.name || current.uuid}」将回到已寄出状态，需要重新确认入库。`, '撤销入库', {
+        confirmButtonText: '撤销入库',
+        cancelButtonText: '取消',
+        type: 'warning',
+      })
+    } catch {
+      return
+    }
+  }
   const payload = { reason: statusReason.value }
   if (type === 'payment') await confirmEntryPayment(current.id, payload)
   if (type === 'stored') await markEntryStored(current.id, payload)
+  if (type === 'unmarkStored') await unmarkEntryStored(current.id, payload)
   if (type === 'cancel') await cancelEntry(current.id, payload)
   detail.value = await fetchAdminEntryDetail(current.id)
   syncEditForm()
@@ -533,8 +704,40 @@ async function runDetailStatusAction(type) {
   ElMessage.success(statusActionLabel(type))
 }
 
+async function runRefundAction(type) {
+  const current = detail.value
+  const refundId = current?.refund?.id
+  if (!current || !refundId) return
+  if (type === 'approve' || type === 'retry') {
+    try {
+      await ElMessageBox.confirm('确认后该酒款将取消报名并退出后续流程。', type === 'retry' ? '重试退款' : '确认退款', {
+        confirmButtonText: type === 'retry' ? '重试退款' : '确认退款',
+        cancelButtonText: '取消',
+        type: 'warning',
+      })
+    } catch {
+      return
+    }
+  }
+  const payload = { reason: statusReason.value }
+  if (type === 'approve') await approveEntryRefund(refundId, payload)
+  if (type === 'reject') await rejectEntryRefund(refundId, payload)
+  if (type === 'retry') await retryEntryRefund(refundId, payload)
+  detail.value = await fetchAdminEntryDetail(current.id)
+  syncEditForm()
+  await loadEntries()
+  ElMessage.success(refundActionLabel(type))
+}
+
+function refundActionLabel(type) {
+  return type === 'approve' ? '退款已确认' : type === 'reject' ? '退款已驳回' : '退款已重试'
+}
+
 function statusActionLabel(type) {
-  return type === 'payment' ? '付款已确认' : type === 'stored' ? '入库已确认' : '报名已取消'
+  if (type === 'payment') return '付款已确认'
+  if (type === 'stored') return '入库已确认'
+  if (type === 'unmarkStored') return '入库已撤销'
+  return '报名已取消'
 }
 
 function entryStatusLabel(value) {
@@ -545,12 +748,61 @@ function paymentLabel(value) {
   return { UNPAID: '待付款', PAID: '已付款', REFUNDED: '已退款', CANCELED: '已取消' }[value] || value || '-'
 }
 
+function refundStatusText(value) {
+  return {
+    REQUESTED: '待处理',
+    APPROVED: '处理中',
+    PROCESSING: '处理中',
+    SUCCESS: '已退款',
+    FAILED: '退款失败',
+    REJECTED: '已驳回',
+  }[value] || '无退款'
+}
+
+function paymentRefundLabel(entry) {
+  if (!entry?.refundStatus) return paymentLabel(entry?.paymentStatus)
+  return {
+    REQUESTED: '待退款审核',
+    APPROVED: '退款处理中',
+    PROCESSING: '退款处理中',
+    SUCCESS: '已退款',
+    FAILED: '退款失败',
+    REJECTED: '退款已驳回',
+  }[entry.refundStatus] || refundStatusText(entry.refundStatus)
+}
+
+function paymentRefundMeta(entry) {
+  if (!entry?.refundStatus) return ''
+  if (entry.refundStatus === 'REQUESTED') return '等待处理'
+  if (['APPROVED', 'PROCESSING'].includes(entry.refundStatus)) return '原路退回中'
+  if (entry.refundStatus === 'SUCCESS') return '报名已取消'
+  if (entry.refundStatus === 'FAILED') return '需要重试'
+  if (entry.refundStatus === 'REJECTED') return '付款仍有效'
+  return ''
+}
+
 function deliveryLabel(value) {
-  return { NOT_SUBMITTED: '未提交', SUBMITTED: '已提交', RECEIVED: '已入库' }[value] || value || '-'
+  return { NOT_SUBMITTED: '未提交', SUBMITTED: '已寄出', RECEIVED: '已入库' }[value] || value || '-'
+}
+
+function deliveryMethodLabel(value) {
+  return { EXPRESS: '快递寄送', ONSITE: '现场送样' }[value] || ''
 }
 
 function paymentTone(value) {
-  return value === 'PAID' ? 'success' : value === 'UNPAID' ? 'warning' : 'muted'
+  return value === 'PAID' ? 'success' : value === 'UNPAID' ? 'warning' : value === 'REFUNDED' ? 'success' : 'muted'
+}
+
+function refundTone(value) {
+  if (value === 'SUCCESS') return 'success'
+  if (['REQUESTED', 'APPROVED', 'PROCESSING'].includes(value)) return 'warning'
+  if (value === 'FAILED') return 'danger'
+  return 'muted'
+}
+
+function paymentRefundTone(entry) {
+  if (!entry?.refundStatus) return paymentTone(entry?.paymentStatus)
+  return refundTone(entry.refundStatus)
 }
 
 function deliveryTone(value) {
@@ -574,6 +826,7 @@ function actionLabel(action) {
     ENTRY_UPDATE: '编辑报名信息',
     ENTRY_CONFIRM_PAYMENT: '确认付款',
     ENTRY_MARK_STORED: '确认入库',
+    ENTRY_UNMARK_STORED: '撤销入库',
     ENTRY_CANCEL: '取消报名',
   }[action] || action
 }
@@ -595,6 +848,108 @@ function formatLogSummary(summary) {
 function formatTime(value) {
   if (!value) return '-'
   return String(value).replace('T', ' ').slice(0, 16)
+}
+
+function formatMoney(value) {
+  if (value === null || value === undefined || value === '') return '-'
+  return `¥${Number(value).toFixed(2)}`
+}
+
+function buildAdminLabelSvg(label) {
+  const qr = QRCode.create(adminScanUrl(label), { errorCorrectionLevel: 'M', margin: 0 })
+  const matrix = qr.modules
+  const cells = []
+  const qrSize = 176
+  const cellSize = qrSize / matrix.size
+  const offsetX = 42
+  const offsetY = 78
+
+  for (let row = 0; row < matrix.size; row += 1) {
+    for (let col = 0; col < matrix.size; col += 1) {
+      if (!matrix.data[row * matrix.size + col]) continue
+      cells.push(`<rect x="${formatSvgNumber(offsetX + col * cellSize)}" y="${formatSvgNumber(offsetY + row * cellSize)}" width="${formatSvgNumber(cellSize)}" height="${formatSvgNumber(cellSize)}" fill="#2e2014" />`)
+    }
+  }
+
+  const category = escapeXml(label.categoryName || '待确认组别')
+  const style = escapeXml(label.style || 'Style Pending')
+  const abv = label.abv !== '' && label.abv !== null && label.abv !== undefined ? `${label.abv}%` : 'ABV Pending'
+  const code = escapeXml(label.shortCode || 'PENDING')
+
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 360" role="img" aria-label="现场评审标签">
+      <rect width="260" height="360" rx="24" fill="#fff8ec"/>
+      <rect x="14" y="14" width="232" height="332" rx="18" fill="#fffdf9" stroke="#d4bf9f"/>
+      <text x="130" y="44" text-anchor="middle" font-size="12" font-weight="700" letter-spacing="1.4" fill="#8c6330">现场评审标签</text>
+      <rect x="28" y="64" width="204" height="204" rx="18" fill="#f7ecd8" stroke="#3a2818" stroke-width="10"/>
+      ${cells.join('')}
+      <text x="130" y="292" text-anchor="middle" font-size="12" font-weight="700" fill="#8c6330">现场短编号</text>
+      <text x="130" y="318" text-anchor="middle" font-size="28" font-weight="900" fill="#24170f">${code}</text>
+      <text x="130" y="340" text-anchor="middle" font-size="13" fill="#665647">${category} · ${style} · ${abv}</text>
+    </svg>
+  `
+}
+
+function adminScanUrl(label) {
+  const token = encodeURIComponent(label.scanToken || label.shortCode || label.labelCode || label.uuid || '')
+  return `${JUDGE_H5_BASE_URL.replace(/\/$/, '')}/q/${token}`
+}
+
+function formatSvgNumber(value) {
+  return Number(value.toFixed(3))
+}
+
+function escapeXml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;')
+}
+
+async function downloadAdminLabelPng() {
+  if (!detail.value) return
+
+  try {
+    const svgBlob = new Blob([adminLabelSvg.value], { type: 'image/svg+xml;charset=utf-8' })
+    const svgUrl = URL.createObjectURL(svgBlob)
+    const image = new Image()
+
+    await new Promise((resolve, reject) => {
+      image.onload = resolve
+      image.onerror = reject
+      image.src = svgUrl
+    })
+
+    const canvas = document.createElement('canvas')
+    canvas.width = 1040
+    canvas.height = 1440
+    const context = canvas.getContext('2d')
+    context.fillStyle = '#fff8ec'
+    context.fillRect(0, 0, canvas.width, canvas.height)
+    context.drawImage(image, 0, 0, canvas.width, canvas.height)
+
+    const pngBlob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'))
+    URL.revokeObjectURL(svgUrl)
+
+    if (!pngBlob) throw new Error('标签图片生成失败')
+
+    triggerDownload(URL.createObjectURL(pngBlob), `${detail.value.shortCode || 'entry-label'}.png`)
+    ElMessage.success('标签 PNG 已开始下载')
+  } catch {
+    ElMessage.error('标签下载失败，请稍后重试')
+  }
+}
+
+function triggerDownload(objectUrl, fileName) {
+  const link = document.createElement('a')
+  link.href = objectUrl
+  link.download = fileName
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(objectUrl)
 }
 </script>
 
@@ -648,6 +1003,7 @@ function formatTime(value) {
 .row-actions,
 .status-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   align-items: center;
 }
@@ -657,17 +1013,27 @@ function formatTime(value) {
 .status-actions button,
 .entry-drawer header button {
   display: inline-flex;
+  flex: 0 0 auto;
   gap: 6px;
   align-items: center;
   justify-content: center;
   min-height: 36px;
+  min-width: max-content;
   padding: 0 13px;
   color: #d5e2e7;
   font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
   border: 1px solid rgba(218, 232, 237, 0.12);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.04);
   cursor: pointer;
+}
+
+.tool-button svg {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
 }
 
 .tool-button.primary,
@@ -690,10 +1056,16 @@ button:disabled {
   background: rgba(255, 122, 107, 0.08);
 }
 
+.row-actions button.priority-action {
+  color: #ffd4cf;
+  border-color: rgba(255, 122, 107, 0.42);
+  background: rgba(255, 122, 107, 0.16);
+}
+
 .filter-panel {
   flex: 0 0 auto;
   display: grid;
-  grid-template-columns: minmax(260px, 1.4fr) repeat(6, minmax(130px, 1fr));
+  grid-template-columns: minmax(260px, 1.4fr) repeat(7, minmax(130px, 1fr));
   gap: 12px;
   margin-top: 18px;
   padding: 16px;
@@ -782,13 +1154,17 @@ button:disabled {
   scrollbar-gutter: stable;
 }
 
+.entries-table.compact {
+  flex: 0 0 auto;
+}
+
 .table-head,
 .table-row {
   display: grid;
-  grid-template-columns: minmax(190px, 1.25fr) minmax(190px, 1fr) minmax(140px, 0.8fr) minmax(170px, 1fr) 84px 84px minmax(180px, 1fr) 120px 230px;
+  grid-template-columns: minmax(220px, 1.4fr) minmax(220px, 1.15fr) minmax(150px, 0.85fr) minmax(200px, 1fr) 120px 84px 130px 230px;
   gap: 12px;
   align-items: center;
-  min-width: 1320px;
+  min-width: 1240px;
 }
 
 .table-head {
@@ -807,16 +1183,36 @@ button:disabled {
   background: rgba(255, 255, 255, 0.035);
 }
 
+.table-row.refund-priority {
+  border-color: rgba(255, 122, 107, 0.24);
+  background: rgba(255, 122, 107, 0.055);
+}
+
+.table-row.refunded {
+  opacity: 0.52;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.table-row.refunded .row-actions {
+  opacity: 1;
+}
+
 .table-body {
   display: grid;
   flex: 1 1 auto;
+  align-content: start;
   gap: 8px;
-  min-width: 1320px;
+  min-width: 1240px;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding-right: 4px;
   scrollbar-gutter: stable;
+}
+
+.entries-table.compact .table-body {
+  flex: 0 0 auto;
+  overflow-y: visible;
 }
 
 .entries-table::-webkit-scrollbar,
@@ -842,7 +1238,8 @@ button:disabled {
 
 .entry-cell,
 .soft-cell,
-.code-cell {
+.code-cell,
+.payment-refund-cell {
   display: grid;
   gap: 4px;
   min-width: 0;
@@ -859,8 +1256,8 @@ button:disabled {
 .entry-cell small,
 .soft-cell small,
 .code-cell small,
-.time-cell,
-.path-cell {
+.payment-refund-cell small,
+.time-cell {
   overflow: hidden;
   color: #8ea4ad;
   font-size: 12px;
@@ -893,9 +1290,14 @@ button:disabled {
   background: rgba(255, 255, 255, 0.06);
 }
 
+.state-pill.danger {
+  color: #ffaaa0;
+  background: rgba(255, 122, 107, 0.12);
+}
+
 .row-actions {
   flex-wrap: nowrap;
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 .row-actions button {
@@ -1041,10 +1443,97 @@ button:disabled {
   color: #d5c99a;
 }
 
+.section-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.section-title strong {
+  font-size: 15px;
+}
+
+.delivery-summary {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(218, 232, 237, 0.09);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.delivery-summary dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+  margin: 0;
+}
+
+.delivery-summary div {
+  min-width: 0;
+}
+
+.delivery-summary dt {
+  color: #8ea4ad;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.delivery-summary dd {
+  min-width: 0;
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+  color: #eaf3f6;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.refund-box {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  color: #eaf3f6;
+  border: 1px solid rgba(216, 169, 53, 0.24);
+  border-radius: 8px;
+  background: rgba(216, 169, 53, 0.08);
+}
+
+.refund-box.urgent {
+  border-color: rgba(255, 122, 107, 0.38);
+  background: rgba(255, 122, 107, 0.1);
+}
+
+.refund-box p {
+  margin: 0;
+  color: #d5c99a;
+}
+
+.refund-box dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.refund-box div {
+  display: grid;
+  gap: 4px;
+}
+
+.refund-box dt {
+  color: #8ea4ad;
+  font-size: 12px;
+}
+
+.refund-box dd {
+  margin: 0;
+  font-weight: 800;
+}
+
 .form-grid,
 .extra-fields,
-.status-grid,
-.label-panel {
+.status-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 12px;
@@ -1072,7 +1561,7 @@ button:disabled {
 }
 
 .status-grid article,
-.label-panel article,
+.label-meta-grid article,
 .trace-row,
 .log-row {
   padding: 13px;
@@ -1082,7 +1571,7 @@ button:disabled {
 }
 
 .status-grid small,
-.label-panel small,
+.label-meta-grid small,
 .trace-row span,
 .log-row small,
 .log-row p {
@@ -1090,11 +1579,47 @@ button:disabled {
 }
 
 .status-grid strong,
-.label-panel strong,
+.label-meta-grid strong,
 .trace-row strong,
 .log-row strong {
   display: block;
   margin-top: 4px;
+}
+
+.label-panel {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.label-preview-card {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(216, 169, 53, 0.18);
+  border-radius: 8px;
+  background: rgba(216, 169, 53, 0.07);
+}
+
+.admin-label-preview {
+  width: min(260px, 100%);
+  padding: 10px;
+  border-radius: 10px;
+  background: #fff8ec;
+}
+
+.admin-label-preview :deep(svg) {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.label-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .trace-panel,

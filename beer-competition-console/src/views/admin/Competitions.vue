@@ -192,7 +192,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
 import {
   CircleCheck,
   Clock,
@@ -315,7 +314,8 @@ function getConfigHint(competition) {
 }
 
 function exportLedger() {
-  ElMessage.info('请进入比赛详情导出评分数据')
+  const query = focusCompetition.value?.id ? { competitionId: focusCompetition.value.id } : {}
+  router.push({ path: '/admin/exports', query })
 }
 
 function getReadyCount(competition) {

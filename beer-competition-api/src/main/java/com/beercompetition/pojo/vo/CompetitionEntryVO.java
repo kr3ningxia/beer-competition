@@ -26,6 +26,10 @@ public class CompetitionEntryVO {
     private String status;
     private String paymentStatus;
     private LocalDateTime paidTime;
+    private String refundStatus;
+    private String refundReason;
+    private LocalDateTime refundRequestedAt;
+    private LocalDateTime refundProcessedAt;
     private String deliveryMethod;
     private String deliveryStatus;
     private String carrier;

@@ -75,3 +75,5 @@ app:
     access-key-id: ${APP_ALIOSS_ACCESS_KEY_ID:}
     access-key-secret: ${APP_ALIOSS_ACCESS_KEY_SECRET:}
     bucket-name: ${APP_ALIOSS_BUCKET_NAME:}
+  export:
+    judge-h5-base-url: ${APP_JUDGE_H5_BASE_URL:http://localhost:5174}

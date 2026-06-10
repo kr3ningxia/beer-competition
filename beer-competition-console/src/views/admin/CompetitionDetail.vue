@@ -423,10 +423,15 @@
                 <span>参赛酒款</span>
                 <span>编号</span>
                 <span>风格</span>
+                <span>运单号</span>
                 <span>进度</span>
                 <span>操作</span>
               </div>
-              <div v-for="entry in roundEntryPool" :key="entry.uuid" class="table-row">
+              <div
+                v-for="entry in roundEntryPool"
+                :key="entry.uuid"
+                :class="['table-row', { refunded: isRefundedEntry(entry), 'refund-priority': hasRefundPriority(entry) }]"
+              >
                 <div class="entry-main">
                   <strong>{{ entry.name || '-' }}</strong>
                   <small>{{ entry.breweryCompanyName || '未关联厂牌' }}</small>
@@ -439,12 +444,16 @@
                   <strong>{{ entry.categoryName }}</strong>
                   <small>{{ entry.style }}</small>
                 </div>
+                <div class="entry-tracking-cell">
+                  <strong>{{ entry.trackingNo || '-' }}</strong>
+                  <small>{{ entry.carrier || '未填写快递公司' }}</small>
+                </div>
                 <div class="entry-followup">
                   <span :class="['entry-state-pill', entryLatestProgress(entry).tone]">{{ entryLatestProgress(entry).label }}</span>
                 </div>
                 <div class="entry-actions">
                   <button class="mini-action" type="button" @click="openAdminEntry(entry)">查看</button>
-                  <button class="mini-action" type="button" :disabled="!entry.canMarkStored" @click="markEntryStoredAction(entry)">确认入库</button>
+                  <button v-if="!isRefundedEntry(entry)" class="mini-action" type="button" :disabled="!entry.canMarkStored" @click="markEntryStoredAction(entry)">确认入库</button>
                 </div>
               </div>
             </div>
@@ -2579,25 +2588,32 @@ function resetForms() {
 }
 
 function applyRoundState(preferredRoundId = activeRoundId.value, options = {}) {
-  roundEntryPool.value = (competition.value?.entryPool || competition.value?.entries || []).map((entry) => ({
-    ...entry,
-    categoryId: entry.categoryId ?? null,
-    name: entry.name || '',
-    breweryCompanyName: entry.breweryCompanyName || '',
-    shortCode: entry.shortCode || '-',
-    categoryName: entry.categoryName || entry.category || '-',
-    style: entry.style || '未填写',
-    paymentStatus: entry.paymentStatus || 'UNPAID',
-    deliveryStatus: entry.deliveryStatus || 'NOT_SUBMITTED',
-    trackingNo: entry.trackingNo || '',
-    canConfirmPayment: Boolean(entry.canConfirmPayment),
-    canMarkStored: Boolean(entry.canMarkStored),
-    canCancel: Boolean(entry.canCancel),
-    stored: Boolean(entry.stored),
-    advanced: Boolean(entry.advanced),
-    sourceTable: entry.sourceTable || '',
-    sourceResult: entry.sourceResult || '',
-  }))
+  roundEntryPool.value = (competition.value?.entryPool || competition.value?.entries || [])
+    .map((entry) => ({
+      ...entry,
+      categoryId: entry.categoryId ?? null,
+      name: entry.name || '',
+      breweryCompanyName: entry.breweryCompanyName || '',
+      shortCode: entry.shortCode || '-',
+      categoryName: entry.categoryName || entry.category || '-',
+      style: entry.style || '未填写',
+      paymentStatus: entry.paymentStatus || 'UNPAID',
+      refundStatus: entry.refundStatus || '',
+      refundReason: entry.refundReason || '',
+      refundRequestedAt: entry.refundRequestedAt || '',
+      refundProcessedAt: entry.refundProcessedAt || '',
+      deliveryStatus: entry.deliveryStatus || 'NOT_SUBMITTED',
+      carrier: entry.carrier || '',
+      trackingNo: entry.trackingNo || '',
+      canConfirmPayment: Boolean(entry.canConfirmPayment),
+      canMarkStored: Boolean(entry.canMarkStored),
+      canCancel: Boolean(entry.canCancel),
+      stored: Boolean(entry.stored),
+      advanced: Boolean(entry.advanced),
+      sourceTable: entry.sourceTable || '',
+      sourceResult: entry.sourceResult || '',
+    }))
+    .sort(compareEntryDisplayPriority)
   rounds.value = (competition.value?.rounds || []).map((round) => ({
     ...round,
     tables: (round.tables || []).map((table) => ({
@@ -2670,6 +2686,8 @@ function syncFirstRoundDraftTables() {
 
 function entryLatestProgress(entry) {
   if (!entry) return { label: '-', tone: 'muted' }
+  const refundProgress = entryRefundProgress(entry)
+  if (refundProgress) return refundProgress
   if (entry.status === 'CANCELED') return { label: entryStatusLabels.CANCELED, tone: 'muted' }
   if (entry.status === 'RESULT_PUBLISHED' || resultsPublished.value) return { label: entryStatusLabels.RESULT_PUBLISHED, tone: 'success' }
   const award = getEntryAward(entry.uuid)
@@ -2681,6 +2699,40 @@ function entryLatestProgress(entry) {
   if (entry.paymentStatus === 'PAID' || entry.status === 'REGISTERED') return { label: '已付款', tone: 'active' }
   if (entry.status === 'PENDING_PAYMENT' || entry.paymentStatus === 'UNPAID') return { label: '待付款', tone: 'warning' }
   return { label: entryStatusLabels[entry.status] || entry.status || '-', tone: 'muted' }
+}
+
+function entryRefundProgress(entry) {
+  const status = entry?.refundStatus
+  if (!status) return null
+  const progress = {
+    REQUESTED: { label: '待退款审核', tone: 'warning' },
+    APPROVED: { label: '退款处理中', tone: 'warning' },
+    PROCESSING: { label: '退款处理中', tone: 'warning' },
+    SUCCESS: { label: '已退款', tone: 'muted' },
+    FAILED: { label: '退款失败', tone: 'warning' },
+    REJECTED: { label: '退款已驳回', tone: 'muted' },
+  }
+  return progress[status] || { label: status, tone: 'muted' }
+}
+
+function hasRefundPriority(entry) {
+  return ['REQUESTED', 'FAILED'].includes(entry?.refundStatus)
+}
+
+function isRefundedEntry(entry) {
+  return entry?.refundStatus === 'SUCCESS' || entry?.paymentStatus === 'REFUNDED'
+}
+
+function compareEntryDisplayPriority(left, right) {
+  const priorityDelta = entryDisplayPriority(left) - entryDisplayPriority(right)
+  if (priorityDelta !== 0) return priorityDelta
+  return Number(right?.id || 0) - Number(left?.id || 0)
+}
+
+function entryDisplayPriority(entry) {
+  if (hasRefundPriority(entry)) return 0
+  if (isRefundedEntry(entry)) return 2
+  return 1
 }
 
 function getEntryPathText(uuid) {
@@ -4651,6 +4703,20 @@ function openAdminEntry(entry) {
 }
 
 async function markEntryStoredAction(entry) {
+  if (isRefundedEntry(entry)) return
+  try {
+    await ElMessageBox.confirm(
+      `确认「${entry.name || entry.shortCode || entry.uuid}」已经到场并完成入库吗？确认后该酒款将进入后续分桌和评审准备流程。`,
+      '确认酒款入库？',
+      {
+        confirmButtonText: '确认入库',
+        cancelButtonText: '再核对',
+        type: 'warning',
+      },
+    )
+  } catch {
+    return
+  }
   await markEntryStored(entry.id)
   await loadDetail()
   ElMessage.success(`${entry.name || entry.uuid} 已确认入库`)
@@ -6680,7 +6746,7 @@ input[type="checkbox"] {
 
 .entries-table .table-head,
 .entries-table .table-row {
-  grid-template-columns: minmax(260px, 1.2fr) minmax(168px, 0.72fr) minmax(170px, 0.78fr) minmax(420px, 1.45fr) minmax(282px, auto);
+  grid-template-columns: minmax(250px, 1.12fr) minmax(150px, 0.66fr) minmax(160px, 0.72fr) minmax(190px, 0.82fr) minmax(150px, 0.64fr) minmax(282px, auto);
   gap: 14px;
 }
 
@@ -6693,10 +6759,21 @@ input[type="checkbox"] {
   padding: 10px 12px;
 }
 
+.entries-table .table-row.refund-priority {
+  border-color: rgba(255, 122, 107, 0.24);
+  background: rgba(255, 122, 107, 0.055);
+}
+
+.entries-table .table-row.refunded {
+  opacity: 0.52;
+  background: rgba(255, 255, 255, 0.02);
+}
+
 .entry-main,
 .entry-meta,
 .entry-code-cell,
 .entry-style-cell,
+.entry-tracking-cell,
 .entry-actions {
   display: grid;
   gap: 4px;
@@ -6705,7 +6782,8 @@ input[type="checkbox"] {
 
 .entry-main strong,
 .entry-code-cell strong,
-.entry-style-cell strong {
+.entry-style-cell strong,
+.entry-tracking-cell strong {
   min-width: 0;
   overflow-wrap: anywhere;
   color: var(--text);
@@ -6715,7 +6793,8 @@ input[type="checkbox"] {
 .entry-main small,
 .entry-meta small,
 .entry-code-cell small,
-.entry-style-cell small {
+.entry-style-cell small,
+.entry-tracking-cell small {
   color: var(--muted);
   font-size: 12px;
   overflow-wrap: anywhere;

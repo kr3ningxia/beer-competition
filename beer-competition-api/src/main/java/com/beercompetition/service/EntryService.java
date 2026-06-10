@@ -5,6 +5,7 @@ import com.beercompetition.pojo.dto.AdminEntryStatusRequest;
 import com.beercompetition.pojo.dto.AdminEntryUpdateRequest;
 import com.beercompetition.pojo.dto.PortalEntrySubmitRequest;
 import com.beercompetition.pojo.dto.PortalEntryDeliverySubmitRequest;
+import com.beercompetition.pojo.dto.PortalEntryRefundRequest;
 import com.beercompetition.pojo.dto.PortalProfileUpdateRequest;
 import com.beercompetition.pojo.vo.AdminEntryDetailVO;
 import com.beercompetition.pojo.vo.AdminEntryVO;
@@ -26,7 +27,7 @@ public interface EntryService {
 
     PageResult<AdminEntryVO> listAdminEntries(Long competitionId, String status, String paymentStatus,
                                               String deliveryStatus, Long categoryId, Boolean assigned,
-                                              String keyword, Integer page, Integer pageSize);
+                                              String refundStatus, String keyword, Integer page, Integer pageSize);
 
     AdminEntryDetailVO getAdminEntry(Long entryId);
 
@@ -39,6 +40,8 @@ public interface EntryService {
     EntryDetailVO submitPortalEntry(Long competitionId, PortalEntrySubmitRequest request);
 
     EntryDetailVO submitPortalEntryDelivery(Long entryId, PortalEntryDeliverySubmitRequest request);
+
+    EntryDetailVO requestPortalEntryRefund(Long entryId, PortalEntryRefundRequest request);
 
     PortalEntryLabelVO getPortalEntryLabel(Long entryId);
 
@@ -70,9 +73,19 @@ public interface EntryService {
 
     void markStored(Long entryId, AdminEntryStatusRequest request);
 
+    void unmarkStored(Long entryId, AdminEntryStatusRequest request);
+
     void cancelEntry(Long entryId);
 
     void cancelEntry(Long entryId, AdminEntryStatusRequest request);
+
+    PageResult<AdminEntryVO> listAdminRefunds(String status, Integer page, Integer pageSize);
+
+    void approveRefund(Long refundId, AdminEntryStatusRequest request);
+
+    void rejectRefund(Long refundId, AdminEntryStatusRequest request);
+
+    void retryRefund(Long refundId, AdminEntryStatusRequest request);
 
     JudgeEntryVO getJudgeEntry(String uuid);
 

@@ -28,7 +28,13 @@ public class AdminEntryVO {
     private BigDecimal abv;
     private String status;
     private String paymentStatus;
+    private String refundStatus;
+    private String refundReason;
+    private LocalDateTime refundRequestedAt;
+    private LocalDateTime refundProcessedAt;
     private String deliveryStatus;
+    private String carrier;
+    private String trackingNo;
     private Boolean stored;
     private Boolean assigned;
     private String pathText;
@@ -38,7 +44,10 @@ public class AdminEntryVO {
     private LocalDateTime lastModifiedAt;
     private Boolean canConfirmPayment;
     private Boolean canMarkStored;
+    private Boolean canUnmarkStored;
     private Boolean canCancel;
+    private Boolean canApproveRefund;
+    private Boolean canRejectRefund;
     private Boolean canEdit;
     private List<AdminEntryTraceVO> traces;
 }

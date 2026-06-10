@@ -6,11 +6,17 @@
         <p>按酒款查看报名记录，并处理付款、现场标签、酒样入库和结果。</p>
       </div>
       <div class="toolbar-actions">
-        <el-input v-model="keyword" placeholder="搜索酒名 / 参赛编号 / 现场短编号" clearable />
+        <el-input v-model="keyword" placeholder="搜索酒名 / 现场短编号" clearable />
         <el-select v-model="statusFilter" placeholder="状态" clearable>
           <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
       </div>
+    </section>
+
+    <section v-if="activeCompetitionFilter" class="filter-context brewer-card">
+      <span>当前查看</span>
+      <strong>{{ activeCompetitionFilter.name }}</strong>
+      <button type="button" @click="clearCompetitionFilter">查看全部酒款</button>
     </section>
 
     <section class="entry-grid">
@@ -40,16 +46,32 @@
           </span>
           <span>
             <small>支付</small>
-            <strong>{{ entry.paymentStatus === 'PAID' ? '已付款' : '待付款' }}</strong>
+            <strong>{{ paymentStatusText(entry) }}</strong>
           </span>
         </div>
         <div class="uuid-band">
-          <span>参赛编号 {{ entry.uuid }}</span>
+          <span v-if="entry.shortCode">现场短编号 {{ entry.shortCode }}</span>
+          <span v-else>现场短编号待生成</span>
           <el-button size="small" text @click.stop="selectEntry(entry)">详情</el-button>
         </div>
         <div class="card-actions" @click.stop>
-          <RouterLink :to="primaryAction(entry).to">{{ primaryAction(entry).label }}</RouterLink>
-          <RouterLink :to="`/portal/events/${entry.competitionId}`">赛事详情</RouterLink>
+          <RouterLink v-if="cardPrimaryAction(entry).to" :to="cardPrimaryAction(entry).to">
+            {{ cardPrimaryAction(entry).label }}
+          </RouterLink>
+          <button v-else class="primary-card-action" type="button" @click="selectEntry(entry)">
+            {{ cardPrimaryAction(entry).label }}
+          </button>
+          <el-dropdown trigger="click" @command="(command) => handleMoreCommand(command, entry)">
+            <button class="more-action" type="button">更多</button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="detail">查看酒款资料</el-dropdown-item>
+                <el-dropdown-item command="event">赛事详情</el-dropdown-item>
+                <el-dropdown-item v-if="canSubmitCompetitionEntry(entry)" command="submit">再报一款酒</el-dropdown-item>
+                <el-dropdown-item command="refund">{{ refundMenuLabel(entry) }}</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </div>
       </article>
     </section>
@@ -61,14 +83,22 @@
             {{ entryStatusMeta[selectedEntry.status].label }}
           </span>
           <h2>{{ selectedEntry.name }}</h2>
-          <p>参赛编号 {{ selectedEntry.uuid }} · 现场短编号 {{ selectedEntry.shortCode }}</p>
+          <p>现场短编号 {{ selectedEntry.shortCode || '待生成' }}</p>
         </div>
 
         <section class="drawer-section">
           <h3>关联赛事</h3>
           <div class="linked-event">
             <strong>{{ competitionName(selectedEntry.competitionId) }}</strong>
-            <RouterLink :to="`/portal/events/${selectedEntry.competitionId}`">进入赛事详情</RouterLink>
+            <div class="linked-event-actions">
+              <RouterLink :to="`/portal/events/${selectedEntry.competitionId}`">进入赛事详情</RouterLink>
+              <RouterLink
+                v-if="canSubmitCompetitionEntry(selectedEntry)"
+                :to="`/portal/submit?competitionId=${selectedEntry.competitionId}`"
+              >
+                再报一款酒
+              </RouterLink>
+            </div>
           </div>
         </section>
 
@@ -80,7 +110,8 @@
             <div><dt>ABV</dt><dd>{{ selectedEntry.abv }}%</dd></div>
             <div><dt>现场短编号</dt><dd>{{ selectedEntry.shortCode }}</dd></div>
             <div><dt>提交时间</dt><dd>{{ selectedEntry.submittedAt }}</dd></div>
-            <div><dt>付款状态</dt><dd>{{ selectedEntry.paymentStatus === 'PAID' ? '已确认' : '待确认' }}</dd></div>
+            <div><dt>付款状态</dt><dd>{{ paymentStatusText(selectedEntry) }}</dd></div>
+            <div v-if="selectedEntry.refundStatus"><dt>退款状态</dt><dd>{{ refundStatusText(selectedEntry.refundStatus) }}</dd></div>
             <div><dt>入库状态</dt><dd>{{ isStored(selectedEntry) ? '已入库' : '待入库' }}</dd></div>
           </dl>
         </section>
@@ -88,7 +119,7 @@
         <section class="drawer-section">
           <h3>评审可见信息预览</h3>
           <div class="anonymous-preview">
-            <strong>参赛编号 {{ selectedEntry.uuid }}</strong>
+            <strong>{{ selectedEntry.categoryName }} · {{ selectedEntry.style }}</strong>
             <p>{{ selectedEntry.categoryName }} · {{ selectedEntry.style }} · {{ selectedEntry.abv }}</p>
             <ul>
               <li v-for="field in selectedEntry.extraFields || []" :key="field.label">
@@ -116,9 +147,21 @@
         <section class="drawer-section">
           <h3>下一步操作</h3>
           <div class="drawer-actions">
-            <RouterLink :to="primaryAction(selectedEntry).to">{{ primaryAction(selectedEntry).label }}</RouterLink>
-            <RouterLink to="/portal/payment">付款与标签</RouterLink>
-            <RouterLink :to="entryResultPath(selectedEntry)">查看这款酒的结果</RouterLink>
+            <RouterLink v-if="cardPrimaryAction(selectedEntry).to" :to="cardPrimaryAction(selectedEntry).to">
+              {{ cardPrimaryAction(selectedEntry).label }}
+            </RouterLink>
+            <button v-else class="primary-card-action" type="button" @click="selectEntry(selectedEntry)">
+              {{ cardPrimaryAction(selectedEntry).label }}
+            </button>
+            <button v-if="selectedEntry.canRequestRefund" type="button" @click="submitRefundRequest(selectedEntry)">申请退款</button>
+            <RouterLink :to="`/portal/events/${selectedEntry.competitionId}`">赛事详情</RouterLink>
+            <RouterLink
+              v-if="canSubmitCompetitionEntry(selectedEntry)"
+              :to="`/portal/submit?competitionId=${selectedEntry.competitionId}`"
+            >
+              再报一款酒
+            </RouterLink>
+            <RouterLink v-if="isEntryResultPublished(selectedEntry)" :to="entryResultPath(selectedEntry)">查看这款酒的结果</RouterLink>
           </div>
         </section>
       </div>
@@ -127,16 +170,20 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
-import { fetchPortalEntries, fetchPortalEntryDetail } from '@/api/portal'
-import { entryPayAmount, entryPrimaryAction, entryResultPath, entryStatusMeta, isEntryResultPublished } from './portalViewModels'
+import { computed, onMounted, ref, watch } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { fetchPortalCompetitions, fetchPortalEntries, fetchPortalEntryDetail, requestPortalEntryRefund } from '@/api/portal'
+import { canSubmitEntry, entryPayAmount, entryPrimaryAction, entryResultPath, entryStatusMeta, isEntryRefundActive, isEntryRefunded, isEntryResultPublished } from './portalViewModels'
 
+const router = useRouter()
+const route = useRoute()
 const keyword = ref('')
 const statusFilter = ref('')
 const drawerVisible = ref(false)
 const selectedEntry = ref(null)
 const entries = ref([])
+const competitions = ref([])
 const currencyFormatter = new Intl.NumberFormat('zh-CN', {
   style: 'currency',
   currency: 'CNY',
@@ -144,19 +191,70 @@ const currencyFormatter = new Intl.NumberFormat('zh-CN', {
 })
 
 const statusOptions = Object.entries(entryStatusMeta).map(([value, meta]) => ({ value, label: meta.label }))
+const competitionMap = computed(() => new Map(competitions.value.map((competition) => [competition.id, competition])))
+const routeCompetitionId = computed(() => route.query.competitionId ? Number(route.query.competitionId) : null)
+const routeEntryId = computed(() => route.query.entryId ? Number(route.query.entryId) : null)
+const activeCompetitionFilter = computed(() => {
+  if (!routeCompetitionId.value) return null
+  const competition = competitionMap.value.get(routeCompetitionId.value)
+  if (competition) return competition
+  const entry = entries.value.find((item) => item.competitionId === routeCompetitionId.value)
+  return entry ? { id: entry.competitionId, name: entry.competitionName } : null
+})
 
 const filteredEntries = computed(() => {
   const word = keyword.value.trim().toLowerCase()
   return entries.value.filter((entry) => {
+    const hitCompetition = !routeCompetitionId.value || entry.competitionId === routeCompetitionId.value
     const hitStatus = !statusFilter.value || entry.status === statusFilter.value
     const hitWord = !word || `${entry.name} ${entry.uuid} ${entry.shortCode}`.toLowerCase().includes(word)
-    return hitStatus && hitWord
+    return hitCompetition && hitStatus && hitWord
   })
 })
 
 async function selectEntry(entry) {
+  ensureEntryQuery(entry)
   selectedEntry.value = await fetchPortalEntryDetail(entry.id)
   drawerVisible.value = true
+}
+
+async function openEntryFromQuery() {
+  if (!routeEntryId.value || !entries.value.length) return
+  if (selectedEntry.value?.id === routeEntryId.value && drawerVisible.value) return
+  const matched = entries.value.find((entry) => entry.id === routeEntryId.value)
+  if (!matched) return
+  if (!routeCompetitionId.value) {
+    router.replace({
+      path: '/portal/entries',
+      query: { ...route.query, competitionId: matched.competitionId, entryId: matched.id },
+    })
+  }
+  selectedEntry.value = await fetchPortalEntryDetail(matched.id)
+  drawerVisible.value = true
+}
+
+function ensureEntryQuery(entry) {
+  const nextQuery = {
+    ...route.query,
+    competitionId: route.query.competitionId || entry.competitionId,
+    entryId: entry.id,
+  }
+  router.replace({ path: '/portal/entries', query: nextQuery })
+}
+
+function clearEntryQuery() {
+  if (!route.query.entryId) return
+  const query = { ...route.query }
+  delete query.entryId
+  router.replace({ path: '/portal/entries', query })
+}
+
+function clearCompetitionFilter() {
+  keyword.value = ''
+  statusFilter.value = ''
+  selectedEntry.value = null
+  drawerVisible.value = false
+  router.replace('/portal/entries')
 }
 
 function competitionName(competitionId) {
@@ -167,15 +265,60 @@ function primaryAction(entry) {
   return entryPrimaryAction(entry)
 }
 
+function cardPrimaryAction(entry) {
+  const action = primaryAction(entry)
+  if (!entry || action.to === '/portal/entries' || ['查看参赛进度', '查看酒款资料'].includes(action.label)) {
+    return { label: '查看酒款资料', to: '' }
+  }
+  return action
+}
+
+function canSubmitCompetitionEntry(entry) {
+  return canSubmitEntry(competitionMap.value.get(entry?.competitionId))
+}
+
+function handleMoreCommand(command, entry) {
+  if (command === 'detail') {
+    selectEntry(entry)
+    return
+  }
+  if (command === 'event') {
+    router.push(`/portal/events/${entry.competitionId}`)
+    return
+  }
+  if (command === 'submit') {
+    router.push(`/portal/submit?competitionId=${entry.competitionId}`)
+    return
+  }
+  if (command === 'refund') {
+    submitRefundRequest(entry)
+  }
+}
+
+function refundMenuLabel(entry) {
+  if (isEntryRefundActive(entry)) return '查看退款进度'
+  if (isEntryRefunded(entry)) return '已退款'
+  return '申请退款'
+}
+
 function timeline(entry) {
   const resultPublished = isEntryResultPublished(entry)
-  return [
+  const items = [
     { label: '提交资料', time: entry.submittedAt, done: true },
     { label: '支付报名费', hint: entry.paymentStatus === 'PAID' ? '已支付' : '待支付', done: entry.paymentStatus === 'PAID' },
     { label: '标签可下载', hint: entry.canDownloadLabel ? '已生成现场标签' : '支付成功后开放下载', done: entry.canDownloadLabel },
     { label: '酒样入库', hint: isStored(entry) ? '已入库' : '等待主办方确认收样', done: isStored(entry) },
     { label: '结果发布', hint: resultPublished ? '结果已发布' : '等待主办方发布结果', done: resultPublished },
   ]
+  if (entry.refundStatus) {
+    items.splice(2, 0, {
+      label: isEntryRefunded(entry) ? '退款完成' : '退款申请',
+      hint: isEntryRefunded(entry) ? '报名已取消' : '等待主办方处理',
+      time: entry.refundProcessedAt || entry.refundRequestedAt,
+      done: isEntryRefunded(entry),
+    })
+  }
+  return items
 }
 
 function isStored(entry) {
@@ -187,8 +330,83 @@ function formatCurrency(value) {
   return currencyFormatter.format(Number(value))
 }
 
+function paymentStatusText(entry) {
+  if (isEntryRefundActive(entry)) return '退款处理中'
+  if (isEntryRefunded(entry)) return '已退款'
+  if (entry?.refundStatus === 'FAILED') return '退款失败'
+  if (entry?.refundStatus === 'REJECTED') return '退款已驳回'
+  if (entry?.paymentStatus === 'PAID') return '已付款'
+  if (entry?.paymentStatus === 'CANCELED') return '已取消'
+  return '待付款'
+}
+
+function refundStatusText(status) {
+  return {
+    REQUESTED: '待主办方处理',
+    APPROVED: '退款处理中',
+    PROCESSING: '退款处理中',
+    SUCCESS: '已退款',
+    FAILED: '退款失败',
+    REJECTED: '已驳回',
+  }[status] || status || '-'
+}
+
+async function submitRefundRequest(entry) {
+  if (isEntryRefundActive(entry)) {
+    router.push(`/portal/payment?entryId=${entry.id}`)
+    return
+  }
+  if (!entry?.canRequestRefund) {
+    ElMessage.warning(refundUnavailableText(entry))
+    return
+  }
+  try {
+    const { value } = await ElMessageBox.prompt(
+      '退款成功后，这款酒将退出本场比赛，现场标签和寄样操作会停止使用。',
+      '申请退款',
+      {
+        confirmButtonText: '提交退款申请',
+        cancelButtonText: '取消',
+        inputPlaceholder: '请填写退款原因',
+        inputPattern: /.+/,
+        inputErrorMessage: '请填写退款原因',
+        type: 'warning',
+      },
+    )
+    const detail = await requestPortalEntryRefund(entry.id, { reason: value.trim() })
+    ElMessage.success('退款申请已提交')
+    entries.value = await fetchPortalEntries()
+    if (selectedEntry.value?.id === entry.id) selectedEntry.value = detail
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return
+    ElMessage.warning(error?.message || '退款申请提交失败')
+  }
+}
+
+function refundUnavailableText(entry) {
+  if (isEntryRefunded(entry)) return '这款酒已完成退款'
+  if (entry?.paymentStatus !== 'PAID') return '报名费支付完成后才能申请退款'
+  if (isStored(entry)) return '酒样已入库，不能申请退款'
+  if (entry?.status === 'CANCELED') return '报名已取消，不能申请退款'
+  return '当前状态不能申请退款'
+}
+
 onMounted(async () => {
-  entries.value = await fetchPortalEntries()
+  const [entryData, competitionData] = await Promise.all([
+    fetchPortalEntries(),
+    fetchPortalCompetitions(),
+  ])
+  entries.value = entryData
+  competitions.value = competitionData
+  await openEntryFromQuery()
+})
+
+watch(routeEntryId, () => {
+  openEntryFromQuery()
+})
+
+watch(drawerVisible, (visible) => {
+  if (!visible) clearEntryQuery()
 })
 </script>
 
@@ -215,6 +433,36 @@ onMounted(async () => {
   grid-template-columns: 260px 150px;
   gap: 12px;
   align-items: center;
+}
+
+.filter-context {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+}
+
+.filter-context span {
+  color: #746a5f;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.filter-context strong {
+  color: #2b1d10;
+  font-size: 16px;
+}
+
+.filter-context button {
+  margin-left: auto;
+  min-height: 32px;
+  padding: 0 12px;
+  color: #6b4710;
+  background: #fff7e6;
+  border: 1px solid rgba(87, 58, 26, 0.14);
+  border-radius: 8px;
+  font-weight: 800;
+  cursor: pointer;
 }
 
 .entry-grid {
@@ -326,6 +574,8 @@ onMounted(async () => {
 }
 
 .card-actions a,
+.card-actions button,
+.drawer-actions button,
 .drawer-actions a,
 .linked-event a {
   display: inline-flex;
@@ -335,12 +585,29 @@ onMounted(async () => {
   padding: 0 12px;
   color: #2b1d10;
   background: #e1a23d;
+  border: 0;
   border-radius: 8px;
   font-weight: 800;
   text-decoration: none;
+  cursor: pointer;
+}
+
+.card-actions .primary-card-action,
+.drawer-actions .primary-card-action {
+  color: #2b1d10;
+  background: #e1a23d;
+  border: 0;
+}
+
+.card-actions .more-action {
+  color: #6b4710;
+  background: #fff7e6;
+  border: 1px solid rgba(87, 58, 26, 0.14);
 }
 
 .card-actions a + a,
+.card-actions button,
+.drawer-actions button,
 .drawer-actions a + a,
 .linked-event a {
   color: #6b4710;
@@ -403,6 +670,13 @@ dl {
 
 .linked-event strong {
   line-height: 1.4;
+}
+
+.linked-event-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 dl div {

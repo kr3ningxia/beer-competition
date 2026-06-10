@@ -38,6 +38,7 @@ import com.beercompetition.pojo.vo.ResultDraftVO;
 import com.beercompetition.pojo.vo.ScoreConfigVO;
 import com.beercompetition.pojo.vo.StyleLibraryVO;
 import com.beercompetition.service.AuthService;
+import com.beercompetition.service.AdminExportService;
 import com.beercompetition.service.AdminFeedbackService;
 import com.beercompetition.service.AwardService;
 import com.beercompetition.service.CompetitionService;
@@ -72,6 +73,7 @@ import java.util.List;
 public class AdminController {
 
     private final AuthService authService;
+    private final AdminExportService adminExportService;
     private final AdminFeedbackService adminFeedbackService;
     private final CompetitionService competitionService;
     private final EntryService entryService;
@@ -306,10 +308,42 @@ public class AdminController {
     @GetMapping("/competitions/{id}/exports/scoring")
     public ResponseEntity<byte[]> exportScoringData(@PathVariable Long id) {
         byte[] content = competitionService.exportScoringData(id);
+        adminExportService.logScoringExport(id);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"scoring-data.xlsx\"")
                 .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 .body(content);
+    }
+
+    @GetMapping("/competitions/{id}/exports/entries")
+    public ResponseEntity<byte[]> exportEntries(@PathVariable Long id,
+                                                @RequestParam(required = false) Long categoryId,
+                                                @RequestParam(required = false) String entryStatus,
+                                                @RequestParam(required = false) String paymentStatus,
+                                                @RequestParam(required = false) String deliveryStatus,
+                                                @RequestParam(required = false) String keyword) {
+        return fileResponse(adminExportService.exportEntries(id, categoryId, entryStatus, paymentStatus, deliveryStatus, keyword));
+    }
+
+    @GetMapping("/competitions/{id}/exports/delivery")
+    public ResponseEntity<byte[]> exportDelivery(@PathVariable Long id,
+                                                 @RequestParam(required = false) Long categoryId,
+                                                 @RequestParam(required = false) String entryStatus,
+                                                 @RequestParam(required = false) String paymentStatus,
+                                                 @RequestParam(required = false) String deliveryStatus,
+                                                 @RequestParam(required = false) String keyword) {
+        return fileResponse(adminExportService.exportDelivery(id, categoryId, entryStatus, paymentStatus, deliveryStatus, keyword));
+    }
+
+    @GetMapping("/competitions/{id}/exports/labels")
+    public ResponseEntity<byte[]> exportLabels(@PathVariable Long id,
+                                               @RequestParam(required = false) Long categoryId,
+                                               @RequestParam(required = false) String entryStatus,
+                                               @RequestParam(required = false) String paymentStatus,
+                                               @RequestParam(required = false) String deliveryStatus,
+                                               @RequestParam(required = false) String keyword,
+                                               @RequestParam(required = false) Integer copies) {
+        return fileResponse(adminExportService.exportLabels(id, categoryId, entryStatus, paymentStatus, deliveryStatus, keyword, copies));
     }
 
     @GetMapping("/entries")
@@ -319,11 +353,19 @@ public class AdminController {
                                                     @RequestParam(required = false) String deliveryStatus,
                                                     @RequestParam(required = false) Long categoryId,
                                                     @RequestParam(required = false) Boolean assigned,
+                                                    @RequestParam(required = false) String refundStatus,
                                                     @RequestParam(required = false) String keyword,
                                                     @RequestParam(required = false) Integer page,
                                                     @RequestParam(required = false) Integer pageSize) {
         return Result.success(entryService.listAdminEntries(competitionId, status, paymentStatus, deliveryStatus,
-                categoryId, assigned, keyword, page, pageSize));
+                categoryId, assigned, refundStatus, keyword, page, pageSize));
+    }
+
+    @GetMapping("/refunds")
+    public Result<PageResult<AdminEntryVO>> refunds(@RequestParam(required = false) String status,
+                                                    @RequestParam(required = false) Integer page,
+                                                    @RequestParam(required = false) Integer pageSize) {
+        return Result.success(entryService.listAdminRefunds(status, page, pageSize));
     }
 
     @GetMapping("/entries/{id}")
@@ -351,11 +393,39 @@ public class AdminController {
         return Result.success("入库成功");
     }
 
+    @PostMapping("/entries/{id}/unmark-stored")
+    public Result<String> unmarkEntryStored(@PathVariable Long id,
+                                            @RequestBody(required = false) @Valid AdminEntryStatusRequest request) {
+        entryService.unmarkStored(id, request);
+        return Result.success("撤销成功");
+    }
+
     @PostMapping("/entries/{id}/cancel")
     public Result<String> cancelEntry(@PathVariable Long id,
                                       @RequestBody(required = false) @Valid AdminEntryStatusRequest request) {
         entryService.cancelEntry(id, request);
         return Result.success("取消成功");
+    }
+
+    @PostMapping("/refunds/{id}/approve")
+    public Result<String> approveRefund(@PathVariable Long id,
+                                        @RequestBody(required = false) @Valid AdminEntryStatusRequest request) {
+        entryService.approveRefund(id, request);
+        return Result.success("退款成功");
+    }
+
+    @PostMapping("/refunds/{id}/reject")
+    public Result<String> rejectRefund(@PathVariable Long id,
+                                       @RequestBody(required = false) @Valid AdminEntryStatusRequest request) {
+        entryService.rejectRefund(id, request);
+        return Result.success("已驳回退款");
+    }
+
+    @PostMapping("/refunds/{id}/retry")
+    public Result<String> retryRefund(@PathVariable Long id,
+                                      @RequestBody(required = false) @Valid AdminEntryStatusRequest request) {
+        entryService.retryRefund(id, request);
+        return Result.success("退款重试成功");
     }
 
     @GetMapping("/judges")

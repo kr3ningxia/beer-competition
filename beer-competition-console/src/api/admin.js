@@ -200,6 +200,30 @@ export function exportCompetitionScoringData(competitionId) {
   })
 }
 
+export function exportCompetitionEntries(competitionId, params = {}) {
+  return request.get(`/api/admin/competitions/${competitionId}/exports/entries`, {
+    params,
+    authScope: 'admin',
+    responseType: 'blob',
+  })
+}
+
+export function exportCompetitionDelivery(competitionId, params = {}) {
+  return request.get(`/api/admin/competitions/${competitionId}/exports/delivery`, {
+    params,
+    authScope: 'admin',
+    responseType: 'blob',
+  })
+}
+
+export function exportCompetitionLabels(competitionId, params = {}) {
+  return request.get(`/api/admin/competitions/${competitionId}/exports/labels`, {
+    params,
+    authScope: 'admin',
+    responseType: 'blob',
+  })
+}
+
 export function confirmEntryPayment(entryId, payload = {}) {
   return request.post(`/api/admin/entries/${entryId}/confirm-payment`, payload, { authScope: 'admin' })
 }
@@ -208,6 +232,22 @@ export function markEntryStored(entryId, payload = {}) {
   return request.post(`/api/admin/entries/${entryId}/mark-stored`, payload, { authScope: 'admin' })
 }
 
+export function unmarkEntryStored(entryId, payload = {}) {
+  return request.post(`/api/admin/entries/${entryId}/unmark-stored`, payload, { authScope: 'admin' })
+}
+
 export function cancelEntry(entryId, payload = {}) {
   return request.post(`/api/admin/entries/${entryId}/cancel`, payload, { authScope: 'admin' })
+}
+
+export function approveEntryRefund(refundId, payload = {}) {
+  return request.post(`/api/admin/refunds/${refundId}/approve`, payload, { authScope: 'admin' })
+}
+
+export function rejectEntryRefund(refundId, payload = {}) {
+  return request.post(`/api/admin/refunds/${refundId}/reject`, payload, { authScope: 'admin' })
+}
+
+export function retryEntryRefund(refundId, payload = {}) {
+  return request.post(`/api/admin/refunds/${refundId}/retry`, payload, { authScope: 'admin' })
 }

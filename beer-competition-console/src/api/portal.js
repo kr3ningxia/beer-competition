@@ -44,6 +44,10 @@ export function simulatePortalEntryPayment(entryId) {
   return request.post(`/api/portal/entries/${entryId}/payment/simulate`, {}, { authScope: 'portal' })
 }
 
+export function requestPortalEntryRefund(entryId, data) {
+  return request.post(`/api/portal/entries/${entryId}/refund`, data, { authScope: 'portal' })
+}
+
 export function fetchPortalEntryLabel(id) {
   return request.get(`/api/portal/entries/${id}/label`, { authScope: 'portal' })
 }

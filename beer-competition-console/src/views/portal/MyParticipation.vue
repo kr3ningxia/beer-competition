@@ -75,7 +75,7 @@
               <b>{{ entry.shortCode || '待生成' }}</b>
             </span>
           </div>
-          <RouterLink :to="entryPrimaryAction(entry).to">{{ entryPrimaryAction(entry).label }}</RouterLink>
+          <RouterLink :to="recentEntryAction(entry).to">{{ recentEntryAction(entry).label }}</RouterLink>
         </article>
       </div>
     </section>
@@ -88,6 +88,7 @@ import { RouterLink } from 'vue-router'
 import { fetchMyParticipation } from '@/api/portal'
 import {
   competitionResultPath,
+  canSubmitEntry,
   entryPrimaryAction,
   entryStatusMeta,
   entrySummaryForCompetition,
@@ -113,7 +114,7 @@ const heroCopy = computed(() => {
     return `有 ${unpaidEntries.value.length} 款酒需要支付报名费。`
   }
   if (labelEntries.value.length > 0) {
-    return `有 ${labelEntries.value.length} 款酒需要下载标签并完成送样。`
+    return `有 ${labelEntries.value.length} 款酒需要办理寄样。`
   }
   if (waitingDeliveryEntries.value.length > 0) {
     return `有 ${waitingDeliveryEntries.value.length} 款酒等待主办方确认收样。`
@@ -135,7 +136,7 @@ const heroReminder = computed(() => {
     return { label: `${unpaidEntries.value.length} 款待支付`, to: '/portal/payment' }
   }
   if (labelEntries.value.length > 0) {
-    return { label: `${labelEntries.value.length} 款需下载标签`, to: '/portal/payment' }
+    return { label: `${labelEntries.value.length} 款待办理寄样`, to: '/portal/payment' }
   }
   if (waitingDeliveryEntries.value.length > 0) {
     return { label: `${waitingDeliveryEntries.value.length} 款等待确认`, to: '/portal/payment' }
@@ -154,10 +155,10 @@ function competitionProgressText(competition) {
   const item = summary(competition.id)
   if (!item.submitted) return '本场暂无酒款记录。'
   if (item.pendingPayment > 0) {
-    return '还有酒款待支付，处理后才能下载标签和填写送样信息。'
+    return '还有酒款待支付，处理后才能办理寄样。'
   }
   if (item.deliveryActionPending > 0) {
-    return '请下载现场标签，并按赛事要求完成送样。'
+    return '请办理寄样，并按赛事要求贴好现场标签。'
   }
   if (item.deliverySubmitted > 0 || item.registered > 0) {
     return '寄样信息已提交，等待主办方确认收样。'
@@ -193,45 +194,62 @@ function progressChips(competition) {
 
 function competitionActions(competition) {
   const item = summary(competition.id)
+  const extraActions = canSubmitEntry(competition)
+    ? [{ label: '再报一款酒', to: `/portal/submit?competitionId=${competition.id}` }]
+    : []
+  const entriesPath = `/portal/entries?competitionId=${competition.id}`
   if (item.pendingPayment > 0) {
     return [
       { label: '去支付', to: '/portal/payment', primary: true },
       { label: '赛事详情', to: `/portal/events/${competition.id}` },
+      ...extraActions,
     ]
   }
   if (item.deliveryActionPending > 0) {
     return [
-      { label: '下载标签', to: '/portal/payment', primary: true },
-      { label: '查看酒款', to: '/portal/entries' },
+      { label: '办理寄样', to: '/portal/payment', primary: true },
+      { label: '查看酒款', to: entriesPath },
+      ...extraActions,
     ]
   }
   if (item.deliverySubmitted > 0 || item.registered > 0) {
     return [
       { label: '查看寄样进度', to: '/portal/payment', primary: true },
-      { label: '查看酒款', to: '/portal/entries' },
+      { label: '查看酒款', to: entriesPath },
+      ...extraActions,
     ]
   }
   if (item.result > 0) {
     return [
       { label: '查看结果', to: competitionResultPath(competition.id), primary: true },
       { label: '赛事详情', to: `/portal/events/${competition.id}` },
+      ...extraActions,
     ]
   }
   return [
-    { label: '查看酒款', to: '/portal/entries', primary: true },
+    { label: '查看酒款', to: entriesPath, primary: true },
     { label: '赛事详情', to: `/portal/events/${competition.id}` },
+    ...extraActions,
   ]
+}
+
+function recentEntryAction(entry) {
+  const action = entryPrimaryAction(entry)
+  if (action.to === '/portal/entries' || action.label === '查看参赛进度' || action.label === '查看酒款资料') {
+    return { label: action.label === '查看参赛进度' ? '查看参赛进度' : '查看酒款资料', to: `/portal/entries?competitionId=${entry.competitionId}&entryId=${entry.id}` }
+  }
+  return action
 }
 
 function entryStatusText(entry) {
   if (isEntryPaymentPending(entry)) {
-    return '待支付报名费，支付后才能下载标签和填写送样信息。'
+    return '待支付报名费，支付后才能办理寄样。'
   }
   if (isEntryDeliveryActionPending(entry)) {
-    return '请下载现场标签，并按赛事要求完成送样。'
+    return '请办理寄样，并按赛事要求贴好现场标签。'
   }
   if (entry.status === 'REGISTERED') {
-    return hasEntryDeliveryProgress(entry) ? '寄样信息已提交，等待主办方确认收样。' : '请下载现场标签，并按赛事要求完成送样。'
+    return hasEntryDeliveryProgress(entry) ? '寄样信息已提交，等待主办方确认收样。' : '请办理寄样，并按赛事要求贴好现场标签。'
   }
   if (isEntryResultPublished(entry)) {
     return '结果已发布，可以查看评分、评语和奖项。'

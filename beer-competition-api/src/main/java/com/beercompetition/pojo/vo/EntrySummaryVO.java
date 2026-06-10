@@ -30,6 +30,12 @@ public class EntrySummaryVO {
     private Integer storedFlag;
     private String paymentStatus;
     private EntryPaymentVO payment;
+    private EntryRefundVO refund;
+    private String refundStatus;
+    private String refundReason;
+    private LocalDateTime refundRequestedAt;
+    private LocalDateTime refundProcessedAt;
+    private Boolean canRequestRefund;
     private EntryDeliveryVO delivery;
     private String deliveryMethod;
     private String deliveryStatus;

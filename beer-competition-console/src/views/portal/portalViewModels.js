@@ -52,12 +52,23 @@ export function hasEntryDeliveryProgress(entry) {
     || Boolean(entry.deliverySubmittedAt || entry.delivery?.submittedTime || entry.trackingNo || entry.deliveryMethod)
 }
 
+export function isEntryRefundActive(entry) {
+  return ['REQUESTED', 'APPROVED', 'PROCESSING'].includes(entry?.refundStatus)
+}
+
+export function isEntryRefunded(entry) {
+  return entry?.paymentStatus === 'REFUNDED' || entry?.refundStatus === 'SUCCESS'
+}
+
 export function isEntryPaymentPending(entry) {
-  return entry?.status === 'PENDING_PAYMENT' || entry?.paymentStatus === 'UNPAID'
+  return !isEntryRefundActive(entry)
+    && !isEntryRefunded(entry)
+    && (entry?.status === 'PENDING_PAYMENT' || entry?.paymentStatus === 'UNPAID')
 }
 
 export function isEntryDeliveryActionPending(entry) {
   return entry?.status === 'REGISTERED'
+    && !isEntryRefundActive(entry)
     && !isEntryStored(entry)
     && !hasEntryDeliveryProgress(entry)
 }
@@ -124,6 +135,12 @@ export function entryPrimaryAction(entry) {
     return { label: '浏览开放赛事', to: '/portal/events' }
   }
   const paymentPath = `/portal/payment?entryId=${entry.id}`
+  if (isEntryRefundActive(entry)) {
+    return { label: '查看退款进度', to: paymentPath }
+  }
+  if (isEntryRefunded(entry)) {
+    return { label: '查看酒款资料', to: '/portal/entries' }
+  }
   if (isEntryPaymentPending(entry)) {
     return { label: '去支付', to: paymentPath }
   }
@@ -131,7 +148,7 @@ export function entryPrimaryAction(entry) {
     return { label: '查看结果', to: entryResultPath(entry) }
   }
   if (isEntryDeliveryActionPending(entry)) {
-    return { label: '下载现场标签', to: paymentPath }
+    return { label: '办理寄样', to: paymentPath }
   }
   if (entry.status === 'REGISTERED') {
     return { label: '查看寄样进度', to: paymentPath }
@@ -155,13 +172,21 @@ export function entryTimeline(entry) {
   const paid = entry?.paymentStatus === 'PAID' || entry?.canDownloadLabel
   const resultPublished = isEntryResultPublished(entry)
   const stored = isEntryStored(entry)
-  return [
+  const items = [
     { label: '提交资料', done: true, hint: entry?.submittedAt || '已提交' },
     { label: '支付报名费', done: paid, hint: paid ? '已支付' : '待支付' },
     { label: '标签可用', done: paid, hint: paid ? '可下载并贴在酒瓶或外箱' : '支付成功后开放下载' },
     { label: '酒样入库', done: stored, hint: stored ? '已入库' : '等待主办方收样确认' },
     { label: '结果发布', done: resultPublished, hint: resultPublished ? '结果已发布' : '等待主办方发布结果' },
   ]
+  if (entry?.refundStatus) {
+    items.splice(2, 0, {
+      label: isEntryRefunded(entry) ? '退款完成' : '退款申请',
+      done: isEntryRefunded(entry),
+      hint: isEntryRefunded(entry) ? '报名费已退款，报名已取消' : '退款申请已提交，等待主办方处理',
+    })
+  }
+  return items
 }
 
 export function entrySummaryForCompetition(competitionId, entries) {
@@ -178,14 +203,20 @@ export function entrySummaryForCompetition(competitionId, entries) {
 }
 
 export function nextActionText(entry) {
+  if (isEntryRefundActive(entry)) {
+    return '退款处理中'
+  }
+  if (isEntryRefunded(entry)) {
+    return '已退款'
+  }
   if (isEntryPaymentPending(entry)) {
     return '待支付报名费'
   }
   if (isEntryDeliveryActionPending(entry)) {
-    return '下载标签并送样'
+    return '办理寄样'
   }
   if (entry.status === 'REGISTERED') {
-    return hasEntryDeliveryProgress(entry) ? '等待主办方确认收样' : '下载标签并送样'
+    return hasEntryDeliveryProgress(entry) ? '等待主办方确认收样' : '办理寄样'
   }
   if (isEntryResultPublished(entry)) {
     return '查看结果'
