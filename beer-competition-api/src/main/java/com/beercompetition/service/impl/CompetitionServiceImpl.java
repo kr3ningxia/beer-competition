@@ -1,6 +1,7 @@
 package com.beercompetition.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.mapper.BeerEntryMapper;
@@ -202,18 +203,31 @@ public class CompetitionServiceImpl implements CompetitionService {
 
     @Override
     public List<CompetitionVO> listCompetitions() {
-        // 1) 查询比赛主数据
+        // 1) 兜底关闭已到期报名，确保后台列表状态准确
+        closeExpiredRegistrations(LocalDateTime.now());
+
+        // 2) 查询比赛主数据
         List<Competition> competitions = competitionMapper.selectList(new LambdaQueryWrapper<Competition>()
                 .orderByDesc(Competition::getCompetitionDate)
                 .orderByDesc(Competition::getId));
 
-        // 2) 聚合每场比赛的配置检查与统计摘要
+        // 3) 聚合每场比赛的配置检查与统计摘要
         return competitions.stream()
                 .map(competition -> {
                     CompetitionDetailVO detail = buildDetail(competition);
                     return toCompetitionVO(competition, detail);
                 })
                 .toList();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int closeExpiredRegistrations() {
+        // 1) 使用单一时间点判定本次到期范围
+        LocalDateTime now = LocalDateTime.now();
+
+        // 2) 批量关闭已到报名截止时间的报名中赛事
+        return closeExpiredRegistrations(now);
     }
 
     @Override
@@ -239,7 +253,10 @@ public class CompetitionServiceImpl implements CompetitionService {
 
     @Override
     public List<PortalCompetitionVO> listPortalCompetitions() {
-        // 1) 查询非草稿、非归档赛事
+        // 1) 兜底关闭已到期报名，确保厂商端展示状态准确
+        closeExpiredRegistrations(LocalDateTime.now());
+
+        // 2) 查询非草稿、非归档赛事
         return competitionMapper.selectList(new LambdaQueryWrapper<Competition>()
                         .ne(Competition::getStatus, CompetitionStatus.DRAFT.name())
                         .ne(Competition::getStatus, CompetitionStatus.ARCHIVED.name())
@@ -252,14 +269,17 @@ public class CompetitionServiceImpl implements CompetitionService {
 
     @Override
     public PortalCompetitionVO getPortalCompetitionDetail(Long id) {
-        // 1) 查询赛事并校验公开范围
+        // 1) 兜底关闭已到期报名，确保厂商端详情状态准确
+        closeExpiredRegistrations(LocalDateTime.now());
+
+        // 2) 查询赛事并校验公开范围
         Competition competition = getCompetitionOrThrow(id);
         CompetitionStatus status = parseStatus(competition);
         if (status == CompetitionStatus.DRAFT || status == CompetitionStatus.ARCHIVED) {
             throw new ResourceNotFoundException("赛事不存在");
         }
 
-        // 2) 返回厂商端赛事配置
+        // 3) 返回厂商端赛事配置
         return toPortalCompetitionVO(competition);
     }
 
@@ -304,10 +324,13 @@ public class CompetitionServiceImpl implements CompetitionService {
 
     @Override
     public CompetitionDetailVO getCompetitionDetail(Long id) {
-        // 1) 查询比赛主数据
+        // 1) 兜底关闭已到期报名，确保详情页状态准确
+        closeExpiredRegistrations(LocalDateTime.now());
+
+        // 2) 查询比赛主数据
         Competition competition = getCompetitionOrThrow(id);
 
-        // 2) 查询并聚合关联配置
+        // 3) 查询并聚合关联配置
         return buildDetail(competition);
     }
 
@@ -2277,7 +2300,7 @@ public class CompetitionServiceImpl implements CompetitionService {
                     .enabled(true)
                     .build();
             case REGISTRATION_CLOSED -> CompetitionPrimaryActionVO.builder()
-                    .text("进入评审准备")
+                    .text("完成收样核对，进入评审准备")
                     .targetTab("judges")
                     .enabled(true)
                     .build();
@@ -2638,6 +2661,18 @@ public class CompetitionServiceImpl implements CompetitionService {
             throw new ResourceNotFoundException("比赛不存在");
         }
         return competition;
+    }
+
+    private int closeExpiredRegistrations(LocalDateTime now) {
+        if (now == null) {
+            return 0;
+        }
+        return competitionMapper.update(null, new LambdaUpdateWrapper<Competition>()
+                .set(Competition::getStatus, CompetitionStatus.REGISTRATION_CLOSED.name())
+                .eq(Competition::getStatus, CompetitionStatus.REGISTRATION_OPEN.name())
+                .eq(Competition::getDeletedFlag, FLAG_FALSE)
+                .isNotNull(Competition::getRegistrationDeadline)
+                .le(Competition::getRegistrationDeadline, now));
     }
 
     private CompetitionStatus parseStatus(Competition competition) {

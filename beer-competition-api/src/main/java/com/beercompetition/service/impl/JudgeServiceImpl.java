@@ -231,14 +231,15 @@ public class JudgeServiceImpl implements JudgeService {
                 .eq(JudgeTable::getCompetitionId, competitionId));
         Map<Long, JudgeTable> tableMap = tables.stream().collect(Collectors.toMap(JudgeTable::getId, item -> item));
 
-        // 2) 校验评审、桌次、单场唯一与每桌桌长
+        // 2) 校验评审、桌次、单场唯一与桌长唯一
+        List<JudgeAssignmentItemRequest> items = request.getItems() == null ? List.of() : request.getItems();
         Set<String> assignedJudgePublicIds = new HashSet<>();
-        Map<String, JudgeAccount> judgeMap = request.getItems().stream()
+        Map<String, JudgeAccount> judgeMap = items.stream()
                 .map(JudgeAssignmentItemRequest::getJudgePublicId)
                 .distinct()
                 .map(this::requireJudgeByPublicId)
                 .collect(Collectors.toMap(JudgeAccount::getPublicId, item -> item));
-        for (JudgeAssignmentItemRequest item : request.getItems()) {
+        for (JudgeAssignmentItemRequest item : items) {
             if (!tableMap.containsKey(item.getTableId())) {
                 throw new BaseException("评审桌不存在或不属于当前比赛");
             }
@@ -251,19 +252,19 @@ public class JudgeServiceImpl implements JudgeService {
             }
         }
         for (JudgeTable table : tables) {
-            long captainCount = request.getItems().stream()
+            long captainCount = items.stream()
                     .filter(item -> table.getId().equals(item.getTableId()))
                     .filter(item -> item.getRole() == JudgeRoleType.CAPTAIN)
                     .count();
-            if (captainCount != 1) {
-                throw new BaseException(table.getTableName() + "必须有且只有 1 名桌长");
+            if (captainCount > 1) {
+                throw new BaseException(table.getTableName() + "只能有 1 名桌长");
             }
         }
 
         // 3) 整体替换本场比赛评审编排
         judgeAssignmentMapper.delete(new LambdaQueryWrapper<JudgeAssignment>()
                 .eq(JudgeAssignment::getCompetitionId, competitionId));
-        for (JudgeAssignmentItemRequest item : request.getItems()) {
+        for (JudgeAssignmentItemRequest item : items) {
             JudgeAccount judge = judgeMap.get(item.getJudgePublicId());
             judgeAssignmentMapper.insert(JudgeAssignment.builder()
                     .competitionId(competitionId)
@@ -272,7 +273,7 @@ public class JudgeServiceImpl implements JudgeService {
                     .role(item.getRole().name())
                     .build());
         }
-        writeAdminLog("JUDGE_ASSIGNMENT_UPDATE", "COMP-" + competitionId, "整体保存评审编排，人数 " + request.getItems().size());
+        writeAdminLog("JUDGE_ASSIGNMENT_UPDATE", "COMP-" + competitionId, "整体保存评审编排，人数 " + items.size());
     }
 
     @Override

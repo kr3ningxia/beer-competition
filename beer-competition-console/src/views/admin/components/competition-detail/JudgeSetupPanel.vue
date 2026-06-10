@@ -4,10 +4,10 @@
       <div>
         <small>第一轮评审人员</small>
         <h2>先安排每张基础桌的评审</h2>
-        <p>完成后生成第一轮编排，再去分配酒款。</p>
+        <p>完成后继续分配第一轮酒款，发布前都可以调整。</p>
       </div>
       <button class="primary-action" type="button" :disabled="validationIssues.length > 0" @click="$emit('generateFirstRound')">
-        生成第一轮编排
+        保存并安排酒款
       </button>
     </header>
 
@@ -86,7 +86,7 @@
           </header>
 
           <p :class="tableValidationIssues(table).length ? 'warning' : 'ok'">
-            {{ tableValidationIssues(table)[0] || '本桌可生成第一轮任务' }}
+            {{ tableValidationIssues(table)[0] || '本桌人员已就绪' }}
           </p>
 
           <section class="role-grid">
@@ -138,7 +138,7 @@
           </p>
           <p v-if="validationIssues.length === 0" class="ok">
             <CircleCheck />
-            <span>可以生成第一轮编排。</span>
+            <span>可以继续分配第一轮酒款。</span>
           </p>
         </div>
       </aside>

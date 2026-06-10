@@ -1,7 +1,7 @@
 <template>
   <section :class="['allocation-workbench', { 'overview-workbench': allocationMode === 'overview' }]">
     <section v-if="allocationMode === 'judges'" class="allocation-grid">
-      <template v-if="currentRound?.type === 'RANKING'">
+      <template v-if="usesRoundJudgeEditor">
       <aside class="resource-panel judge-resource-panel">
         <label class="search-box">
           <Search />
@@ -28,7 +28,7 @@
               <em v-if="getRoundJudgeAssignmentSummary(judge.publicId)">{{ getRoundJudgeAssignmentSummary(judge.publicId) }}</em>
             </div>
             <div class="resource-card-actions">
-              <button type="button" :disabled="!isJudgeActive(judge) || !selectedRoundTableId || currentRound?.status !== 'DRAFT'" @click="addJudgeToRankingTarget(judge.publicId)">
+              <button type="button" :disabled="!isJudgeActive(judge) || !selectedRoundTableId || currentRound?.status !== 'DRAFT'" @click="addJudgeToRankingTarget(judge)">
                 加入
               </button>
             </div>
@@ -62,7 +62,7 @@
               </button>
             </div>
           </header>
-          <section class="role-grid ranking-role-grid">
+          <section :class="['role-grid', 'ranking-role-grid', { 'score-role-grid': currentRound?.type === 'SCORE' }]">
             <div
               :class="['role-lane', { active: isSelectedRankingRole(table.id, 'CAPTAIN') }]"
               @click.stop="selectRankingRole(table.id, 'CAPTAIN')"
@@ -91,6 +91,41 @@
               </p>
             </div>
             <div
+              v-if="currentRound?.type === 'SCORE'"
+              v-for="role in scoreRoundMemberRoles"
+              :key="role.value"
+              :class="['role-lane', { active: isSelectedRankingRole(table.id, role.value) }]"
+              @click.stop="selectRankingRole(table.id, role.value)"
+              @dragover.prevent
+              @drop.prevent="dropRankingJudge(table.id, role.value)"
+            >
+              <header>
+                <strong>{{ role.label }}</strong>
+                <span>{{ getScoreRoleMembers(table, role.value).length }} 人</span>
+              </header>
+              <article
+                v-for="member in getScoreRoleMembers(table, role.value)"
+                :key="member.judgePublicId"
+                class="mini-card"
+              >
+                <span class="avatar small">{{ getJudgeInitial(member.name) }}</span>
+                <div>
+                  <strong>{{ member.name || getJudge(member.judgePublicId)?.name || '未知评审' }}</strong>
+                  <small>{{ member.roleLabel || formatRoundMemberRole(member.role) }}</small>
+                  <small v-if="getJudgeBreweryConflict(member.judgePublicId)" class="judge-conflict-line" :data-full="getJudgeBreweryConflict(member.judgePublicId)">
+                    {{ getJudgeBreweryConflict(member.judgePublicId) }}
+                  </small>
+                </div>
+                <button class="icon-action" type="button" @click.stop="$emit('removeRoundParticipant', table.id, member.judgePublicId)">
+                  <Delete />
+                </button>
+              </article>
+              <p v-if="getScoreRoleMembers(table, role.value).length === 0" class="role-empty">
+                从左侧拖入，或选中这里后点击“加入”。
+              </p>
+            </div>
+            <div
+              v-else
               :class="['role-lane', { active: isSelectedRankingRole(table.id, 'PARTICIPANT') }]"
               @click.stop="selectRankingRole(table.id, 'PARTICIPANT')"
               @dragover.prevent
@@ -108,6 +143,7 @@
                 <span class="avatar small">{{ getJudgeInitial(member.name) }}</span>
                 <div>
                   <strong>{{ member.name || getJudge(member.judgePublicId)?.name || '未知评审' }}</strong>
+                  <small>参与评审</small>
                   <small v-if="getJudgeBreweryConflict(member.judgePublicId)" class="judge-conflict-line" :data-full="getJudgeBreweryConflict(member.judgePublicId)">
                     {{ getJudgeBreweryConflict(member.judgePublicId) }}
                   </small>
@@ -164,7 +200,7 @@
         </section>
         <section class="control-section">
           <strong>操作</strong>
-          <button v-if="currentRound?.type === 'RANKING' && currentRound?.status === 'DRAFT'" class="add-desk" type="button" @click="$emit('addRoundTable')">
+          <button v-if="currentRound?.status === 'DRAFT'" class="add-desk" type="button" @click="$emit('addRoundTable')">
             新增桌
           </button>
           <button
@@ -184,9 +220,13 @@
             <Warning />
             <span>{{ issue }}</span>
           </p>
-          <p v-if="roundValidationIssues.length === 0" class="ok">
+          <p v-if="roundValidationIssues.length === 0 && publishDisabledReason" class="warning">
+            <Warning />
+            <span>{{ publishDisabledReason }}</span>
+          </p>
+          <p v-if="roundValidationIssues.length === 0 && !publishDisabledReason" class="ok">
             <CircleCheck />
-            <span>排序轮可以发布。</span>
+            <span>{{ currentRound?.type === 'SCORE' ? '第一轮可以发布。' : '排序轮可以发布。' }}</span>
           </p>
         </section>
       </aside>
@@ -325,21 +365,6 @@
         </section>
         <section class="control-section">
           <strong>操作</strong>
-          <button
-            v-if="!firstRoundExists"
-            class="main-action"
-            type="button"
-            :disabled="!canRunPrimaryRoundAction"
-            :title="primaryActionTitle"
-            :data-disabled-reason="primaryActionTitle || null"
-            @click="$emit('generateFirstRound')"
-          >
-            生成第一轮编排
-          </button>
-          <p v-else class="ok">
-            <CircleCheck />
-            <span>第一轮编排已生成。</span>
-          </p>
           <button v-if="editableJudges" class="add-desk" type="button" @click="$emit('addJudgeTable')">新增基础桌</button>
           <button v-if="editableJudges" type="button" @click="$emit('saveJudgeDraft')">保存评审人员</button>
         </section>
@@ -351,7 +376,7 @@
         </p>
         <p v-if="validationIssues.length === 0 && !firstRoundExists" class="ok">
           <CircleCheck />
-          <span>可以生成第一轮编排。</span>
+          <span>可以继续分配第一轮酒款。</span>
         </p>
         <p v-if="validationIssues.length === 0 && firstRoundExists" class="ok">
           <CircleCheck />
@@ -495,8 +520,24 @@
             </label>
           </div>
           <div class="entry-list">
-            <article v-for="uuid in table.entryUuids" :key="uuid">
-              <span>{{ formatEntryBrief(uuid) }}</span>
+            <article
+              v-for="uuid in table.entryUuids"
+              :key="uuid"
+              class="assigned-entry-card"
+            >
+              <span class="assigned-entry-name">{{ formatEntryBrief(uuid) }}</span>
+              <div class="entry-hover-card" role="tooltip">
+                <header>
+                  <strong>{{ formatEntryName(getEntry(uuid)) }}</strong>
+                  <em>{{ getEntry(uuid)?.shortCode || uuid }}</em>
+                </header>
+                <dl>
+                  <template v-for="item in getEntryHoverRows(uuid)" :key="item.label">
+                    <dt>{{ item.label }}</dt>
+                    <dd>{{ item.value }}</dd>
+                  </template>
+                </dl>
+              </div>
               <button type="button" @click.stop="$emit('removeEntryFromRoundTable', table.id, uuid)">移除</button>
             </article>
             <p v-if="!table.entryUuids.length">从左侧加入酒款。</p>
@@ -558,7 +599,7 @@
             :disabled="!canRunPrimaryRoundAction"
             :title="primaryActionTitle"
             :data-disabled-reason="primaryActionTitle || null"
-            @click="$emit(currentRound?.isPreparationDraft && currentRound?.type !== 'RANKING' ? 'generateFirstRound' : 'publishCurrentRound')"
+            @click="$emit('publishCurrentRound')"
           >
             {{ primaryRoundActionLabel }}
           </button>
@@ -573,9 +614,13 @@
             <Warning />
             <span>{{ warning }}</span>
           </p>
-          <p v-if="roundValidationIssues.length === 0" class="ok">
+          <p v-if="roundValidationIssues.length === 0 && publishDisabledReason && !currentRound?.isPreparationDraft" class="warning">
+            <Warning />
+            <span>{{ publishDisabledReason }}</span>
+          </p>
+          <p v-if="roundValidationIssues.length === 0 && (!publishDisabledReason || currentRound?.isPreparationDraft)" class="ok">
             <CircleCheck />
-            <span>{{ currentRound?.isPreparationDraft ? '当前分配可以生成第一轮。' : '当前轮次可以发布。' }}</span>
+            <span>{{ currentRound?.isPreparationDraft ? '当前分配会在发布时保存为第一轮。' : '当前轮次可以发布。' }}</span>
           </p>
         </section>
       </aside>
@@ -604,9 +649,9 @@
             <span>问题</span>
             <strong>{{ overviewMetrics.issueCount }}</strong>
           </article>
-          <article :class="canPublish ? 'ok' : 'warning'">
+          <article :class="overviewStatusClass">
             <span>状态</span>
-            <strong>{{ canPublish ? '可发布' : '需处理' }}</strong>
+            <strong>{{ overviewStatusText }}</strong>
           </article>
         </section>
 
@@ -743,6 +788,7 @@ const props = defineProps({
   roundKeyword: { type: String, default: '' },
   selectedEntryUuids: { type: Array, default: () => [] },
   roundValidationIssues: { type: Array, required: true },
+  publishDisabledReason: { type: String, default: '' },
   canPublish: Boolean,
   getJudge: { type: Function, required: true },
   getJudgeInitial: { type: Function, required: true },
@@ -805,28 +851,38 @@ const roundKeywordModel = computed({
 })
 
 const selectedRankingRole = ref(null)
+const scoreRoundMemberRoles = [
+  { value: 'PROFESSIONAL', label: '专业评审' },
+  { value: 'CROSS', label: '跨界评审' },
+]
 const firstRoundExists = computed(() => props.rounds.some((round) => round.roundNo === 1))
+const usesRoundJudgeEditor = computed(() => props.currentRound?.type === 'RANKING'
+  || (props.currentRound?.type === 'SCORE' && !props.currentRound?.isPreparationDraft))
 const displayRounds = computed(() => {
   if (props.currentRound?.isPreparationDraft && !firstRoundExists.value) return [props.currentRound]
   return props.rounds
 })
 const canRunPrimaryRoundAction = computed(() => {
-  if (props.currentRound?.isPreparationDraft && props.currentRound?.type !== 'RANKING') {
-    return props.validationIssues.length === 0 && props.roundValidationIssues.length === 0
-  }
   return props.canPublish
 })
 const primaryRoundActionLabel = computed(() => {
-  if (props.currentRound?.isPreparationDraft && props.currentRound?.type !== 'RANKING') return '生成第一轮编排'
   return props.currentRound?.type === 'SCORE' ? '发布给评审' : '发布给桌长和参与评审'
 })
 const primaryActionDisabledReason = computed(() => {
   if (canRunPrimaryRoundAction.value) return ''
   return props.roundValidationIssues[0]
     || props.validationIssues[0]
+    || props.publishDisabledReason
     || '请先处理发布前检查'
 })
 const primaryActionTitle = computed(() => (canRunPrimaryRoundAction.value ? '' : primaryActionDisabledReason.value))
+const overviewStatusText = computed(() => {
+  if (props.canPublish) return '可发布'
+  if (props.currentRound?.isPreparationDraft && props.roundValidationIssues.length === 0 && props.validationIssues.length === 0) return '预排草稿'
+  if (props.publishDisabledReason && props.roundValidationIssues.length === 0 && props.validationIssues.length === 0) return '预排草稿'
+  return '需处理'
+})
+const overviewStatusClass = computed(() => (props.canPublish ? 'ok' : 'warning'))
 const roundTargetOptions = computed(() => {
   if (currentRoundTargetMode.value === 'CHAMPION' || canUseChampionTarget.value) {
     return [
@@ -927,12 +983,17 @@ function isSelectedRankingRole(tableId, role) {
   return props.selectedRoundTableId === tableId && selectedRankingRole.value === role
 }
 
-function addJudgeToRankingTarget(judgePublicId) {
+function addJudgeToRankingTarget(judge) {
+  const judgePublicId = typeof judge === 'string' ? judge : judge?.publicId
   if (selectedRankingRole.value === 'CAPTAIN') {
     emit('setRoundCaptain', judgePublicId)
     return
   }
-  emit('addRoundParticipant', judgePublicId)
+  if (props.currentRound?.type === 'SCORE' && ['PROFESSIONAL', 'CROSS'].includes(selectedRankingRole.value)) {
+    emit('addRoundParticipant', judgePublicId, selectedRankingRole.value)
+    return
+  }
+  emit('addRoundParticipant', judgePublicId, resolveRoundMemberRole(judge))
 }
 
 function dropRankingJudge(tableId, role) {
@@ -942,6 +1003,11 @@ function dropRankingJudge(tableId, role) {
 
 function getRankingParticipants(roundTable) {
   return getRoundMembers(roundTable).filter((member) => member.role !== 'CAPTAIN')
+}
+
+function getScoreRoleMembers(roundTable, role) {
+  return getRoundMembers(roundTable)
+    .filter((member) => member.role !== 'CAPTAIN' && normalizeRoundScoreMemberRole(member.role) === role)
 }
 
 function isRoundJudgeAssigned(judgePublicId) {
@@ -958,7 +1024,33 @@ function getRoundJudgeAssignmentSummary(judgePublicId) {
   ))
   if (!table) return ''
   if (table.captainPublicId === judgePublicId) return `${table.name} · 桌长`
-  return `${table.name} · 参与评审`
+  const member = getRoundMembers(table).find((item) => item.judgePublicId === judgePublicId)
+  return `${table.name} · ${props.currentRound?.type === 'SCORE' ? formatRoundMemberRole(member?.role) : '参与评审'}`
+}
+
+function resolveRoundMemberRole(judge) {
+  if (props.currentRound?.type !== 'SCORE') return 'PROFESSIONAL'
+  if (props.judgeRoleFilter === 'CROSS') return 'CROSS'
+  if (props.judgeRoleFilter === 'PROFESSIONAL') return 'PROFESSIONAL'
+  const roles = inferJudgeRoles(judge || {})
+  return roles.includes('CROSS') && !roles.includes('PROFESSIONAL') ? 'CROSS' : 'PROFESSIONAL'
+}
+
+function inferJudgeRoles(judge) {
+  const qualification = `${judge?.qualification || ''}${judge?.name || ''}`.toLowerCase()
+  const roles = []
+  if (qualification.includes('专业') || qualification.includes('酿酒') || qualification.includes('bjcp') || qualification.includes('judge')) roles.push('PROFESSIONAL')
+  if (qualification.includes('跨界') || qualification.includes('媒体') || qualification.includes('餐饮') || qualification.includes('大众')) roles.push('CROSS')
+  return roles.length ? roles : ['PROFESSIONAL']
+}
+
+function formatRoundMemberRole(role) {
+  if (role === 'CROSS') return '跨界评审'
+  return '专业评审'
+}
+
+function normalizeRoundScoreMemberRole(role) {
+  return role === 'CROSS' ? 'CROSS' : 'PROFESSIONAL'
 }
 
 function getEntry(uuid) {
@@ -974,6 +1066,34 @@ function formatEntryBrief(uuid) {
   const name = formatEntryName(entry)
   const shortCode = entry?.shortCode
   return shortCode ? `${name} ·${shortCode}` : name
+}
+
+function getEntryHoverRows(uuid) {
+  const entry = getEntry(uuid)
+  if (!entry) {
+    return [
+      { label: '编号', value: uuid },
+      { label: '状态', value: '未找到酒款信息' },
+    ]
+  }
+  return [
+    { label: '组别', value: entry.categoryName || '未归类' },
+    { label: '风格', value: entry.style || '未填写风格' },
+    { label: '厂牌', value: entry.breweryCompanyName || '未关联厂牌' },
+    { label: '状态', value: formatEntryState(entry) },
+    { label: '来源', value: entry.sourceTable || '本轮分配' },
+  ]
+}
+
+function formatEntryState(entry) {
+  if (entry?.status === 'CANCELED') return '已取消'
+  if (entry?.refundStatus === 'SUCCESS' || entry?.paymentStatus === 'REFUNDED') return '已退款'
+  if (entry?.stored || entry?.status === 'STORED') return '已入库'
+  if (entry?.deliveryStatus === 'RECEIVED') return '已收样'
+  if (entry?.deliveryStatus === 'SUBMITTED') return '已提交送样'
+  if (entry?.paymentStatus === 'PAID' || entry?.status === 'REGISTERED') return '已付款'
+  if (entry?.status === 'PENDING_PAYMENT' || entry?.paymentStatus === 'UNPAID') return '待付款'
+  return entry?.status || '-'
 }
 
 function getTargetCountLabel(table) {
@@ -2084,12 +2204,130 @@ p {
 }
 
 .entry-list article {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
   min-height: 34px;
   padding: 5px 8px;
+  overflow: visible;
+}
+
+.assigned-entry-card {
+  isolation: isolate;
+}
+
+.assigned-entry-card:hover,
+.assigned-entry-card:focus-within {
+  z-index: 40;
+  border-color: rgba(216, 169, 53, 0.32);
+  background: rgba(216, 169, 53, 0.055);
+}
+
+.assigned-entry-name {
+  min-width: 0;
+}
+
+.entry-hover-card {
+  position: absolute;
+  z-index: 45;
+  top: calc(100% + 8px);
+  left: -1px;
+  display: grid;
+  gap: 8px;
+  width: min(320px, 72vw);
+  padding: 10px;
+  color: #e6edf0;
+  border: 1px solid rgba(216, 169, 53, 0.34);
+  border-radius: 8px;
+  background: rgba(7, 14, 17, 0.98);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.44);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.entry-list article:nth-child(2n) .entry-hover-card {
+  right: -1px;
+  left: auto;
+}
+
+.entry-hover-card::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: 18px;
+  width: 8px;
+  height: 8px;
+  border-top: 1px solid rgba(216, 169, 53, 0.34);
+  border-left: 1px solid rgba(216, 169, 53, 0.34);
+  background: rgba(7, 14, 17, 0.98);
+  transform: rotate(45deg);
+}
+
+.entry-list article:nth-child(2n) .entry-hover-card::before {
+  right: 36px;
+  left: auto;
+}
+
+.assigned-entry-card:hover .entry-hover-card,
+.assigned-entry-card:focus-within .entry-hover-card {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.entry-hover-card header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+}
+
+.entry-hover-card header strong {
+  color: #f4f8f9;
+  font-size: 14px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.entry-hover-card header em {
+  min-height: 22px;
+  padding: 0 7px;
+  color: #e0b84a;
+  border: 1px solid rgba(216, 169, 53, 0.26);
+  border-radius: 999px;
+  background: rgba(216, 169, 53, 0.08);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 850;
+  line-height: 22px;
+  white-space: nowrap;
+}
+
+.entry-hover-card dl {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 6px 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(219, 232, 237, 0.09);
+}
+
+.entry-hover-card dt {
+  color: #8da1aa;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.entry-hover-card dd {
+  min-width: 0;
+  color: #d8e4e8;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .entry-list p {

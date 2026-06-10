@@ -20,6 +20,8 @@ public interface CompetitionService {
 
     List<CompetitionVO> listCompetitions();
 
+    int closeExpiredRegistrations();
+
     PortalHomeVO getPortalHome();
 
     List<PortalCompetitionVO> listPortalCompetitions();

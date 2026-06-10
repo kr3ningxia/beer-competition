@@ -3,6 +3,7 @@ package com.beercompetition.pojo.dto;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.Valid;
 import lombok.Data;
 
 import java.util.List;
@@ -29,6 +30,9 @@ public class RoundTableAllocationRequest {
     private Integer sortOrder;
 
     private List<String> participantPublicIds;
+
+    @Valid
+    private List<RoundTableMemberAllocationRequest> members;
 
     private List<String> entryUuids;
 }

@@ -245,7 +245,8 @@ CREATE TABLE `competition`  (
   `create_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0),
   `update_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) ON UPDATE CURRENT_TIMESTAMP(0),
   PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE INDEX `uk_competition_code`(`code`) USING BTREE
+  UNIQUE INDEX `uk_competition_code`(`code`) USING BTREE,
+  INDEX `idx_competition_status_registration_deadline`(`status`, `registration_deadline`) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 2 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '??' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
