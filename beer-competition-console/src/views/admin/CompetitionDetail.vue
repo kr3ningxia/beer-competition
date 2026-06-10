@@ -16,15 +16,21 @@
           </div>
         </div>
         <div class="head-action-group">
-          <button
-            class="tool-button primary"
-            type="button"
-            :disabled="!stagePrimaryAction.enabled"
-            @click="handlePrimaryAction"
+          <span
+            class="disabled-action-tip"
+            :data-disabled-reason="stagePrimaryActionDisabledReason || null"
+            :title="stagePrimaryActionDisabledReason"
           >
-            {{ stagePrimaryAction.text }}
-            <Right />
-          </button>
+            <button
+              class="tool-button primary"
+              type="button"
+              :disabled="!stagePrimaryAction.enabled"
+              @click="handlePrimaryAction"
+            >
+              {{ stagePrimaryAction.text }}
+              <Right />
+            </button>
+          </span>
           <details class="more-actions">
             <summary>更多</summary>
             <div class="more-actions-menu">
@@ -1742,6 +1748,9 @@ const styleCategorySummary = computed(() => {
 const registrationWindowInfo = computed(() => resolveRegistrationWindowInfo())
 const headerMetaItems = computed(() => buildHeaderMetaItems())
 const stagePrimaryAction = computed(() => resolveStagePrimaryAction())
+const stagePrimaryActionDisabledReason = computed(() => (
+  stagePrimaryAction.value.enabled ? '' : stagePrimaryAction.value.disabledReason || '当前阶段不能执行该操作'
+))
 const stageSecondaryActions = computed(() => resolveStageSecondaryActions())
 const tabSaveAction = computed(() => {
   if (activeTab.value === 'baseInfo' && (editable.value.baseInfo || editable.value.description)) {
@@ -2941,6 +2950,7 @@ function resolveStagePrimaryAction() {
     return {
       text: currentRound.value.type === 'RANKING' ? '发布给桌长和参与评审' : '发布当前轮次',
       enabled: canPublishCurrentRound.value,
+      disabledReason: roundPublishActionTitle.value,
       action: 'publishCurrentRound',
     }
   }
@@ -3904,10 +3914,6 @@ function getRoundTableIssues(table) {
   const issues = []
   const targetLabel = resolveTableTargetLabel(table)
   if (!table.captainPublicId) issues.push(`${table.name}缺少桌长`)
-  if (currentRound.value?.type === 'SCORE') {
-    if (!getTableScoreRoleMemberPublicIds(table, 'PROFESSIONAL').length) issues.push(`${table.name}缺少专业评审`)
-    if (!getTableScoreRoleMemberPublicIds(table, 'CROSS').length) issues.push(`${table.name}缺少跨界评审`)
-  }
   if (!table.entryUuids.length) issues.push(`${table.name}尚未分配酒款`)
   if (!Number(table.targetCount || 0)) issues.push(`${table.name}${targetLabel}不能为空`)
   if (table.targetMode !== 'MEDALS' && Number(table.targetCount || 0) > table.entryUuids.length) issues.push(`${table.name}${targetLabel}超过候选酒款数`)
@@ -4145,13 +4151,6 @@ function setRoundCaptainForSelectedTable(judgePublicId) {
 function getTableParticipantPublicIds(table) {
   return (table?.members || [])
     .filter((member) => member.role !== 'CAPTAIN')
-    .map((member) => member.judgePublicId)
-    .filter((publicId) => publicId && publicId !== table?.captainPublicId)
-}
-
-function getTableScoreRoleMemberPublicIds(table, role) {
-  return (table?.members || [])
-    .filter((member) => member.role !== 'CAPTAIN' && normalizeScoreJudgeRole(member.role) === role)
     .map((member) => member.judgePublicId)
     .filter((publicId) => publicId && publicId !== table?.captainPublicId)
 }
@@ -5593,6 +5592,48 @@ svg {
   color: #ffb4aa;
   border-color: rgba(255, 132, 116, 0.35);
   background: rgba(255, 132, 116, 0.08);
+}
+
+.disabled-action-tip {
+  position: relative;
+  display: inline-flex;
+}
+
+.disabled-action-tip[data-disabled-reason]:hover::after {
+  content: attr(data-disabled-reason);
+  position: absolute;
+  z-index: 80;
+  right: 0;
+  bottom: calc(100% + 9px);
+  width: max-content;
+  max-width: min(340px, 72vw);
+  padding: 8px 10px;
+  color: var(--text);
+  border: 1px solid rgba(216, 169, 53, 0.32);
+  border-radius: 8px;
+  background: rgba(7, 14, 17, 0.98);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.38);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.5;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+
+.disabled-action-tip[data-disabled-reason]:hover::before {
+  content: '';
+  position: absolute;
+  z-index: 81;
+  right: 18px;
+  bottom: calc(100% + 4px);
+  width: 8px;
+  height: 8px;
+  border-right: 1px solid rgba(216, 169, 53, 0.32);
+  border-bottom: 1px solid rgba(216, 169, 53, 0.32);
+  background: rgba(7, 14, 17, 0.98);
+  transform: rotate(45deg);
+  pointer-events: none;
 }
 
 .stage-confirm-backdrop {
@@ -7769,8 +7810,8 @@ button.pyramid-placeholder-mark {
 
 .round-table-row {
   display: grid;
-  grid-template-columns: minmax(72px, 0.55fr) minmax(62px, 0.4fr) minmax(140px, 0.95fr) minmax(118px, 0.8fr) minmax(118px, 0.8fr) minmax(96px, 0.7fr) minmax(110px, 0.75fr) 88px;
-  gap: 10px;
+  grid-template-columns: minmax(56px, 0.5fr) minmax(48px, 0.36fr) minmax(122px, 0.95fr) minmax(104px, 0.78fr) minmax(112px, 0.82fr) minmax(78px, 0.58fr) minmax(84px, 0.62fr) minmax(58px, 0.46fr) 82px;
+  gap: 8px;
   align-items: center;
   min-height: 52px;
   padding: 9px 10px;
@@ -7819,7 +7860,8 @@ button.pyramid-placeholder-mark {
   justify-content: center;
   align-items: center;
   gap: 5px;
-  min-width: 72px;
+  justify-self: end;
+  min-width: 76px;
   min-height: 34px;
   color: var(--text);
   border: 1px solid rgba(255, 255, 255, 0.1);

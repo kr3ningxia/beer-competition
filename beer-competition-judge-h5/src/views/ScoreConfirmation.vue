@@ -1,7 +1,10 @@
 <template>
   <main class="app-shell confirmation-shell">
     <section class="top-panel confirmation-top">
-      <button class="back-link" type="button" @click="$router.push('/competitions')">返回任务</button>
+      <button class="back-link" type="button" @click="$router.push('/competitions')">
+        <span class="back-icon" aria-hidden="true"></span>
+        返回任务
+      </button>
       <p class="eyebrow">本桌结果核对</p>
       <h1 class="page-title">{{ confirmation?.tableName || '评审桌' }}</h1>
       <div class="confirmation-progress">
@@ -104,12 +107,27 @@ onMounted(async () => {
 
 <style scoped>
 .back-link {
-  border: 0;
+  justify-self: start;
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
   margin: 0 0 14px;
-  padding: 0;
-  color: rgba(255, 255, 255, 0.74);
-  background: transparent;
+  padding: 7px 11px;
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 13px;
   font-weight: 750;
+  line-height: 1;
+}
+
+.back-icon {
+  width: 8px;
+  height: 8px;
+  border: solid currentColor;
+  border-width: 0 0 2px 2px;
+  transform: rotate(45deg);
 }
 
 .confirmation-top {

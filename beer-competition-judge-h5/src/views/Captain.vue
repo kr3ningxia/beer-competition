@@ -163,10 +163,10 @@
           />
         </label>
         <label :class="['advance-line', 'final-advance', { active: form.advanced }]">
-          <input v-model="form.advanced" type="checkbox" :disabled="tableLocked" />
+          <input :checked="form.advanced" type="checkbox" :disabled="tableLocked" @change="handleAdvanceToggle" />
           <span>加入晋级名单</span>
         </label>
-        <p class="caption">本桌需晋级 {{ advanceTargetCount }} 款，当前已选 {{ advancedUuids.length }} 款。</p>
+        <p class="caption">本桌需晋级 {{ advanceTargetCount }} 款，当前已选 {{ previewAdvancedCount }} 款。</p>
         <button class="button primary full" type="button" :disabled="!canFinalize" @click="submitFinal">
           {{ finalButtonText }}
         </button>
@@ -174,6 +174,14 @@
         <p v-if="message" class="message">{{ message }}</p>
       </section>
     </template>
+
+    <section v-if="advanceLimitDialogOpen" class="advance-limit-overlay" role="dialog" aria-modal="true" aria-labelledby="advance-limit-title">
+      <div class="advance-limit-dialog">
+        <h2 id="advance-limit-title">晋级名额已满</h2>
+        <p>本桌需晋级 {{ advanceTargetCount }} 款，当前已选 {{ advancedUuids.length }} 款。请先取消其他酒款的晋级，再加入这款。</p>
+        <button class="button primary full" type="button" @click="advanceLimitDialogOpen = false">知道了</button>
+      </div>
+    </section>
 
     <JudgeBottomNav :role="me?.role || 'CAPTAIN'" />
   </main>
@@ -208,6 +216,7 @@ const expandedCommentIds = ref(new Set())
 const message = ref('')
 const submittingTable = ref(false)
 const loadingBoard = ref(false)
+const advanceLimitDialogOpen = ref(false)
 const form = reactive({
   consensusScore: '',
   comments: '',
@@ -233,6 +242,19 @@ const confirmationReady = computed(() => Boolean(scoreConfirmation.value?.overri
 const confirmationProgressText = computed(() => `${confirmationConfirmedCount.value} / ${confirmationRequiredCount.value}`)
 const advanceTargetCount = computed(() => Number(board.value?.roundTable?.targetCount || 0) || '-')
 const numericAdvanceTarget = computed(() => Number(board.value?.roundTable?.targetCount || 0))
+const currentEntryAlreadyAdvanced = computed(() => advancedUuids.value.includes(uuid.value))
+const advanceLimitReached = computed(() => (
+  numericAdvanceTarget.value > 0
+  && advancedUuids.value.length >= numericAdvanceTarget.value
+  && !currentEntryAlreadyAdvanced.value
+))
+const previewAdvancedCount = computed(() => {
+  if (!uuid.value) return advancedUuids.value.length
+  const selected = new Set(advancedUuids.value)
+  if (form.advanced) selected.add(uuid.value)
+  else selected.delete(uuid.value)
+  return selected.size
+})
 const tableReadyForReview = computed(() => {
   if (!boardEntries.value.length) return false
   const targetOk = numericAdvanceTarget.value <= 0 || advancedUuids.value.length === numericAdvanceTarget.value
@@ -346,8 +368,7 @@ const tableSubmitHint = computed(() => {
 const currentSubmittedCount = computed(() => Number(currentBoardEntry.value?.submittedCount || normalScores.value.length || 0))
 const currentExpectedCount = computed(() => Number(currentBoardEntry.value?.expectedCount || 0))
 const tableScoresReady = computed(() => (
-  currentExpectedCount.value > 0
-  && currentSubmittedCount.value >= currentExpectedCount.value
+  currentSubmittedCount.value >= currentExpectedCount.value
 ))
 const scoreStats = computed(() => {
   if (!normalScores.value.length) return null
@@ -472,7 +493,7 @@ function openNextAction() {
 function readyForFinalize(item) {
   const expected = Number(item.expectedCount || 0)
   const submitted = Number(item.submittedCount || 0)
-  return Boolean(item.scored && !item.finalized && expected > 0 && submitted >= expected)
+  return Boolean(item.scored && !item.finalized && submitted >= expected)
 }
 
 function entryMissingScoreCount(item) {
@@ -484,8 +505,9 @@ function entryMissingScoreCount(item) {
 function boardEntryStatusText(item) {
   if (item.finalized) return `${item.finalScore} 分`
   if (readyForFinalize(item)) return '可汇总'
+  if (!item.scored) return '待本人评分'
   const missing = entryMissingScoreCount(item)
-  return missing > 0 ? `等 ${missing} 份评分` : `${item.submittedCount}/${item.expectedCount} 份评分`
+  return missing > 0 ? '待同桌评分' : '待汇总'
 }
 
 function boardEntryStatusClass(item) {
@@ -496,6 +518,16 @@ function boardEntryStatusClass(item) {
 
 function fillConsensusScore(value) {
   form.consensusScore = Math.round(Number(value || 0))
+}
+
+function handleAdvanceToggle(event) {
+  const checked = Boolean(event.target.checked)
+  if (checked && advanceLimitReached.value) {
+    event.target.checked = false
+    advanceLimitDialogOpen.value = true
+    return
+  }
+  form.advanced = checked
 }
 
 function isCommentExpanded(scoreId) {
@@ -985,6 +1017,37 @@ onMounted(async () => {
   width: 18px;
   height: 18px;
   accent-color: #a75517;
+}
+
+.advance-limit-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.advance-limit-dialog {
+  width: min(320px, 100%);
+  border-radius: 14px;
+  padding: 18px;
+  background: #fff;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25);
+}
+
+.advance-limit-dialog h2 {
+  margin: 0 0 8px;
+  color: #101828;
+  font-size: 18px;
+}
+
+.advance-limit-dialog p {
+  margin: 0 0 16px;
+  color: #475467;
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .submit-hint {

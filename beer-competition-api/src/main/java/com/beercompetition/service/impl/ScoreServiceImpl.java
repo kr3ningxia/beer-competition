@@ -206,7 +206,8 @@ public class ScoreServiceImpl implements ScoreService {
         RoundTableEntry roundEntry = requireScoreRoundTask(entry.getId(), JudgeRoleType.CAPTAIN.name(), true);
         Set<Long> tableJudgeIds = roundTableMemberMapper.selectList(new LambdaQueryWrapper<RoundTableMember>()
                         .eq(RoundTableMember::getRoundTableId, roundEntry.getRoundTableId())
-                        .eq(RoundTableMember::getSystemTaskRequired, FLAG_TRUE))
+                        .eq(RoundTableMember::getSystemTaskRequired, FLAG_TRUE)
+                        .ne(RoundTableMember::getRole, JudgeRoleType.CAPTAIN.name()))
                 .stream()
                 .map(RoundTableMember::getJudgeAccountId)
                 .collect(Collectors.toSet());
@@ -231,6 +232,7 @@ public class ScoreServiceImpl implements ScoreService {
         applyCaptainScoreConfig(entry.getCompetitionId(), request.getDimensions(), request.getConsensusScore(), request.getComments());
         JudgeAssignment captainAssignment = requireCaptainAssignment(entry.getCompetitionId());
         RoundTableEntry roundEntry = requireScoreRoundTask(entry.getId(), JudgeRoleType.CAPTAIN.name(), true);
+        requireCaptainPersonalScoreSubmitted(roundEntry, BaseContext.getCurrentId());
         requireAllTableScoresSubmitted(roundEntry);
 
         // 2) 新增或更新桌长共识结果
@@ -309,9 +311,10 @@ public class ScoreServiceImpl implements ScoreService {
     private void requireAllTableScoresSubmitted(RoundTableEntry roundEntry) {
         List<RoundTableMember> requiredMembers = roundTableMemberMapper.selectList(new LambdaQueryWrapper<RoundTableMember>()
                 .eq(RoundTableMember::getRoundTableId, roundEntry.getRoundTableId())
-                .eq(RoundTableMember::getSystemTaskRequired, FLAG_TRUE));
+                .eq(RoundTableMember::getSystemTaskRequired, FLAG_TRUE)
+                .ne(RoundTableMember::getRole, JudgeRoleType.CAPTAIN.name()));
         if (requiredMembers.isEmpty()) {
-            throw new BaseException("本桌未配置评审，暂不能提交桌长意见");
+            return;
         }
 
         Set<Long> requiredJudgeIds = requiredMembers.stream()
@@ -327,6 +330,16 @@ public class ScoreServiceImpl implements ScoreService {
                 .count();
         if (submittedCount < requiredJudgeIds.size()) {
             throw new BaseException("同桌评分未完成，暂不能提交桌长意见");
+        }
+    }
+
+    private void requireCaptainPersonalScoreSubmitted(RoundTableEntry roundEntry, Long captainId) {
+        Long submitted = scoreRecordMapper.selectCount(new LambdaQueryWrapper<ScoreRecord>()
+                .eq(ScoreRecord::getBeerEntryId, roundEntry.getBeerEntryId())
+                .eq(ScoreRecord::getJudgeAccountId, captainId)
+                .eq(ScoreRecord::getFinalFlag, FLAG_FALSE));
+        if (submitted <= 0) {
+            throw new BaseException("请先完成你的评分，再提交桌长意见");
         }
     }
 

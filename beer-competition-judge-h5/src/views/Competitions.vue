@@ -6,7 +6,23 @@
           <h1 class="page-title compact-title">{{ current?.name || '啤酒大赛' }}</h1>
           <p class="review-context">{{ me?.tableName || current?.tableName || '未分桌' }} · {{ current?.flightName || '未发布轮次' }}</p>
         </div>
-        <span class="role-badge">{{ current?.roleLabel || me?.roleLabel }}</span>
+        <div class="review-actions">
+          <span class="role-badge">{{ current?.roleLabel || me?.roleLabel }}</span>
+          <button
+            class="refresh-status-button"
+            type="button"
+            :disabled="refreshingTasks"
+            @click="refreshTaskStatus"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M20 11a8 8 0 0 0-14.2-5" />
+              <path d="M5 4v5h5" />
+              <path d="M4 13a8 8 0 0 0 14.2 5" />
+              <path d="M19 20v-5h-5" />
+            </svg>
+            {{ refreshingTasks ? '同步中' : '刷新状态' }}
+          </button>
+        </div>
       </div>
       <div :class="['progress-strip', { 'captain-progress': isScoreRoundCaptain }]">
         <template v-if="isScoreRoundCaptain">
@@ -19,7 +35,7 @@
         <span>已排序 <strong>{{ rankingFilledCount }}/{{ rankingSlots.length }}</strong></span>
         </template>
         <span v-else>{{ progressLabel }} <strong>{{ progressCount }}</strong></span>
-        <span v-if="scoreConfirmationVisible">确认 <strong>{{ confirmationProgressText }}</strong></span>
+        <span v-if="scoreConfirmationVisible"><strong>{{ scoreConfirmationProgressLabel }}</strong></span>
       </div>
     </section>
 
@@ -202,8 +218,10 @@ const scannerOpen = ref(false)
 const manualCode = ref('')
 const scannerMessage = ref('将二维码放入取景框内')
 const loadingTasks = ref(true)
+const refreshingTasks = ref(false)
 let qrReader = null
 let scanLocked = false
+let syncingTasks = false
 
 const isCaptain = computed(() => me.value?.role === 'CAPTAIN')
 const isScoreRoundCaptain = computed(() => isCaptain.value && current.value?.taskType === 'CAPTAIN_FINALIZE')
@@ -228,6 +246,9 @@ const scoreConfirmationVisible = computed(() => (
   && Boolean(scoreConfirmation.value?.readyForConfirmation)
 ))
 const confirmationProgressText = computed(() => `${scoreConfirmation.value?.confirmedCount || 0}/${scoreConfirmation.value?.requiredCount || 0}`)
+const scoreConfirmationProgressLabel = computed(() => (
+  scoreConfirmation.value?.mineConfirmed ? '已确认结果' : '待确认结果'
+))
 const scoreConfirmationHint = computed(() => (
   scoreConfirmation.value?.mineConfirmed
     ? '你已确认本桌结果，等待桌长最终提交。'
@@ -357,10 +378,11 @@ function entryMissingScoreCount(entry) {
 }
 
 function entryFinalizeText(entry) {
-  if (entry.finalized) return '已确认'
+  if (entry.finalized) return '已汇总'
   if (readyForFinalize(entry)) return '可汇总'
+  if (!entry.scored) return '待本人评分'
   const missing = entryMissingScoreCount(entry)
-  return missing > 0 ? `等 ${missing} 份` : '等待'
+  return missing > 0 ? '待同桌评分' : '待汇总'
 }
 
 function tableScoreProgress(entry) {
@@ -372,7 +394,7 @@ function tableScoreProgress(entry) {
 function readyForFinalize(entry) {
   const expected = Number(entry.expectedCount || 0)
   const submitted = Number(entry.submittedCount || 0)
-  return Boolean(entry.scored && !entry.finalized && expected > 0 && submitted >= expected)
+  return Boolean(entry.scored && !entry.finalized && submitted >= expected)
 }
 
 function captainAction(entry) {
@@ -448,6 +470,64 @@ function normalizeScanCode(value) {
   return text.toUpperCase()
 }
 
+async function syncTaskDashboard(options = {}) {
+  if (syncingTasks) return
+  syncingTasks = true
+  if (options.initial) {
+    loadingTasks.value = true
+  } else {
+    refreshingTasks.value = true
+  }
+  try {
+    const competitions = await fetchCompetitions()
+    current.value = selectCurrentTask(competitions)
+    captainBoard.value = null
+    rankingSlots.value = []
+    scoreConfirmation.value = null
+    if (!current.value || !current.value.roundTableId) {
+      entries.value = []
+      return
+    }
+    if (current.value.taskType === 'CAPTAIN_FINALIZE') {
+      const board = await fetchCaptainBoard(current.value.roundTableId)
+      captainBoard.value = board
+      entries.value = board.entries || []
+      return
+    }
+    const [table, myScores] = isRankingRound.value
+      ? [await fetchRoundTable(current.value.roundTableId), []]
+      : await Promise.all([
+        fetchRoundTable(current.value.roundTableId),
+        fetchMyScores(),
+      ])
+    rankingSlots.value = table.rankings || []
+    scoreConfirmation.value = table.scoreConfirmation || null
+    const myScoredUuids = new Set(myScores.map((score) => score.beerUuid))
+    entries.value = (table.entries || []).map((entry) => ({
+      ...entry,
+      scored: myScoredUuids.has(entry.uuid),
+      finalized: Boolean(entry.advanced),
+    }))
+  } finally {
+    if (options.initial) {
+      loadingTasks.value = false
+    } else {
+      refreshingTasks.value = false
+    }
+    syncingTasks = false
+  }
+}
+
+function refreshTaskStatus() {
+  return syncTaskDashboard()
+}
+
+function refreshWhenPageVisible() {
+  if (document.visibilityState === 'visible') {
+    refreshTaskStatus()
+  }
+}
+
 onMounted(async () => {
   me.value = await fetchMe()
   if (me.value?.profileRequired) {
@@ -458,46 +538,13 @@ onMounted(async () => {
     router.replace('/review-status')
     return
   }
-  loadingTasks.value = true
-  try {
-    const competitions = await fetchCompetitions()
-    current.value = selectCurrentTask(competitions)
-    captainBoard.value = null
-    rankingSlots.value = []
-    scoreConfirmation.value = null
-    if (!current.value) {
-      entries.value = []
-      return
-    }
-    if (current.value.roundTableId) {
-      if (current.value.taskType === 'CAPTAIN_FINALIZE') {
-        const board = await fetchCaptainBoard(current.value.roundTableId)
-        captainBoard.value = board
-        entries.value = board.entries || []
-        return
-      }
-      const [table, myScores] = isRankingRound.value
-        ? [await fetchRoundTable(current.value.roundTableId), []]
-        : await Promise.all([
-          fetchRoundTable(current.value.roundTableId),
-          fetchMyScores(),
-        ])
-      rankingSlots.value = table.rankings || []
-      scoreConfirmation.value = table.scoreConfirmation || null
-      const myScoredUuids = new Set(myScores.map((score) => score.beerUuid))
-      entries.value = (table.entries || []).map((entry) => ({
-        ...entry,
-        scored: myScoredUuids.has(entry.uuid),
-        finalized: Boolean(entry.advanced),
-      }))
-    }
-  } finally {
-    loadingTasks.value = false
-  }
+  await syncTaskDashboard({ initial: true })
+  document.addEventListener('visibilitychange', refreshWhenPageVisible)
 })
 
 onBeforeUnmount(() => {
   stopScanner()
+  document.removeEventListener('visibilitychange', refreshWhenPageVisible)
 })
 
 </script>
@@ -516,6 +563,14 @@ onBeforeUnmount(() => {
 
 .review-title-block {
   min-width: 0;
+}
+
+.review-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 7px;
+  align-items: flex-end;
 }
 
 .compact-title {
@@ -543,6 +598,32 @@ onBeforeUnmount(() => {
   font-size: 12px;
   font-weight: 800;
   white-space: nowrap;
+}
+
+.refresh-status-button {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  min-height: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  padding: 4px 9px;
+  color: rgba(255, 255, 255, 0.86);
+  background: rgba(255, 255, 255, 0.075);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.refresh-status-button svg {
+  width: 13px;
+  height: 13px;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .progress-strip {

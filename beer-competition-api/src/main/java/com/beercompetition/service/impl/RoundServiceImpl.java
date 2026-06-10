@@ -883,7 +883,8 @@ public class RoundServiceImpl implements RoundService {
     private Integer resolveExpectedJudgeCount(Long roundTableId) {
         return Math.toIntExact(roundTableMemberMapper.selectCount(new LambdaQueryWrapper<RoundTableMember>()
                 .eq(RoundTableMember::getRoundTableId, roundTableId)
-                .eq(RoundTableMember::getSystemTaskRequired, FLAG_TRUE)));
+                .eq(RoundTableMember::getSystemTaskRequired, FLAG_TRUE)
+                .ne(RoundTableMember::getRole, JudgeRoleType.CAPTAIN.name())));
     }
 
     @Override
@@ -1489,14 +1490,6 @@ public class RoundServiceImpl implements RoundService {
             if (!captainJudgeIds.add(table.getCaptainJudgeId())) {
                 throw new BaseException("同一轮同一桌长只能负责一张桌");
             }
-            if (RoundType.SCORE.name().equals(round.getRoundType())) {
-                if (countScoreRoundMembersByRole(table.getId(), JudgeRoleType.PROFESSIONAL.name()) <= 0) {
-                    throw new BaseException(table.getTableName() + "缺少专业评审");
-                }
-                if (countScoreRoundMembersByRole(table.getId(), JudgeRoleType.CROSS.name()) <= 0) {
-                    throw new BaseException(table.getTableName() + "缺少跨界评审");
-                }
-            }
             List<RoundTableEntry> entries = roundTableEntryMapper.selectList(new LambdaQueryWrapper<RoundTableEntry>()
                     .eq(RoundTableEntry::getRoundTableId, table.getId()));
             if (entries.isEmpty()) {
@@ -1531,13 +1524,6 @@ public class RoundServiceImpl implements RoundService {
         if (!assignedEntryIds.equals(candidateEntryIds)) {
             throw new BaseException("晋级酒款已变化，请重新载入后核对分桌");
         }
-    }
-
-    private long countScoreRoundMembersByRole(Long tableId, String role) {
-        return roundTableMemberMapper.selectCount(new LambdaQueryWrapper<RoundTableMember>()
-                .eq(RoundTableMember::getRoundTableId, tableId)
-                .eq(RoundTableMember::getSystemTaskRequired, FLAG_TRUE)
-                .eq(RoundTableMember::getRole, role));
     }
 
     private void validateTargetCountForMode(String tableName, String targetMode, Integer targetCount) {
