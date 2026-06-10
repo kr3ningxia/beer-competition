@@ -16,46 +16,71 @@
         <span :class="['pill', submitted || draftSaved ? 'status-ok' : 'status-warn']">{{ rankingStatusText }}</span>
       </div>
 
-      <div class="slot-list">
+      <div :class="['slot-list', { dragging: isDraggingEntry }]">
         <article
           v-for="slot in slots"
           :key="slot.rank"
           :data-rank="slot.rank"
-          :class="['slot-drop', { filled: slot.beerEntryId, active: activeDropRank === slot.rank, picked: pickedEntryId && !slot.beerEntryId }]"
+          :class="['slot-drop', { filled: slot.beerEntryId, active: activeDropRank === slot.rank, dragging: isDraggingEntry }]"
           @dragover.prevent="activeDropRank = slot.rank"
           @dragleave="activeDropRank = null"
-          @drop.prevent="dropEntryOnSlot(slot)"
-          @click="assignPickedEntry(slot)"
+          @drop.prevent="dropEntryOnSlot(slot, $event)"
         >
           <div class="slot-label">
-            <span>{{ slot.label }}</span>
-            <button
-              v-if="canEdit"
-              class="slot-scan-button"
-              type="button"
-              :aria-label="`扫码指定${slot.label}`"
-              @click.stop="openSlotScanner(slot)"
+            <span>{{ displaySlotLabel(slot) }}</span>
+            <div class="slot-actions">
+              <button
+                v-if="canEdit && !isDraggingEntry && findEntryById(slot.beerEntryId)"
+                class="slot-clear-button"
+                type="button"
+                @click.stop="clearSlot(slot)"
+              >
+                清空
+              </button>
+              <button
+                v-if="canEdit"
+                class="slot-scan-button"
+                type="button"
+                :aria-label="`扫码指定${displaySlotLabel(slot)}`"
+                @click.stop="openSlotScanner(slot)"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 4h6v6H4V4Z" />
+                  <path d="M14 4h6v6h-6V4Z" />
+                  <path d="M4 14h6v6H4v-6Z" />
+                  <path d="M14 14h2v2h-2v-2Z" />
+                  <path d="M18 14h2v2h-2v-2Z" />
+                  <path d="M14 18h2v2h-2v-2Z" />
+                  <path d="M18 18h2v2h-2v-2Z" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          <template v-if="isDraggingEntry">
+            <div v-if="findEntryById(slot.beerEntryId)" class="slot-entry">
+              <strong>{{ displayShortCode(findEntryById(slot.beerEntryId)) }}</strong>
+              <small>{{ entryMeta(findEntryById(slot.beerEntryId)) }}</small>
+              <button v-if="canEdit" type="button" @click.stop="clearSlot(slot)">移除</button>
+            </div>
+            <div v-else class="slot-empty">
+              <span>+</span>
+              <strong>拖入酒款</strong>
+            </div>
+          </template>
+          <template v-else>
+            <select
+              class="slot-select"
+              :value="slot.beerEntryId || ''"
+              :disabled="!canEdit"
+              :aria-label="`${displaySlotLabel(slot)}选择酒款`"
+              @change="selectSlotEntry(slot, $event.target.value)"
             >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M4 4h6v6H4V4Z" />
-                <path d="M14 4h6v6h-6V4Z" />
-                <path d="M4 14h6v6H4v-6Z" />
-                <path d="M14 14h2v2h-2v-2Z" />
-                <path d="M18 14h2v2h-2v-2Z" />
-                <path d="M14 18h2v2h-2v-2Z" />
-                <path d="M18 18h2v2h-2v-2Z" />
-              </svg>
-            </button>
-          </div>
-          <div v-if="findEntryById(slot.beerEntryId)" class="slot-entry">
-            <strong>{{ displayShortCode(findEntryById(slot.beerEntryId)) }}</strong>
-            <small>{{ entryMeta(findEntryById(slot.beerEntryId)) }}</small>
-            <button v-if="canEdit" type="button" @click.stop="clearSlot(slot)">移除</button>
-          </div>
-          <div v-else class="slot-empty">
-            <span>+</span>
-            <strong>{{ pickedEntryId ? '放到这里' : '拖入酒款' }}</strong>
-          </div>
+              <option value="">选择酒款</option>
+              <option v-for="entry in entries" :key="entry.id" :value="entry.id">
+                {{ displayEntryOption(entry) }}
+              </option>
+            </select>
+          </template>
         </article>
       </div>
 
@@ -79,15 +104,15 @@
         <article
           v-for="entry in entries"
           :key="entry.id"
-          :class="['entry-row', { selected: pickedEntryId === entry.id, used: isEntryUsed(entry.id) }]"
+          :class="['entry-row', { dragging: draggedEntryId === entry.id, used: isEntryUsed(entry.id) }]"
           draggable="true"
-          @dragstart="dragEntry(entry)"
+          @dragstart="dragEntry(entry, $event)"
           @dragend="endDrag"
           @pointerdown="startPointerDrag(entry, $event)"
           @pointermove="movePointerDrag($event)"
           @pointerup="endPointerDrag($event)"
           @pointercancel="cancelPointerDrag"
-          @click="pickEntry(entry)"
+          @click="handleEntryClick"
         >
           <strong>{{ displayShortCode(entry) }}</strong>
           <small>{{ entryMeta(entry) }}</small>
@@ -122,7 +147,7 @@
           <button class="scanner-close" type="button" @click="stopSlotScanner">取消</button>
           <div>
             <p class="eyebrow">扫码指定</p>
-            <h2>{{ activeSlot?.label || '排序槽位' }}</h2>
+            <h2>{{ activeSlot ? displaySlotLabel(activeSlot) : '排序槽位' }}</h2>
           </div>
         </div>
         <div class="scanner-panel">
@@ -141,6 +166,11 @@
         </div>
       </div>
     </section>
+
+    <div v-if="dragGhost" class="drag-ghost" :style="{ left: `${dragGhost.x}px`, top: `${dragGhost.y}px` }">
+      <strong>{{ displayShortCode(dragGhost.entry) }}</strong>
+      <small>{{ entryMeta(dragGhost.entry) }}</small>
+    </div>
   </main>
 </template>
 
@@ -167,16 +197,19 @@ const submitted = ref(false)
 const draftSaved = ref(false)
 const submitError = ref('')
 const draggedEntryId = ref(null)
-const pickedEntryId = ref(null)
 const activeDropRank = ref(null)
 const pointerEntryId = ref(null)
 const pointerStart = ref(null)
+const pointerDragging = ref(false)
+const dragGhost = ref(null)
+const suppressEntryClick = ref(false)
 let qrReader = null
 let scanLocked = false
 
 const canSubmitFinal = computed(() => Boolean(table.value?.canSubmitRanking))
 const canEdit = computed(() => table.value?.status !== 'LOCKED' && !submitting.value && !savingDraft.value)
 const isMedalMode = computed(() => table.value?.targetMode === 'MEDALS')
+const isDraggingEntry = computed(() => Boolean(draggedEntryId.value || pointerDragging.value))
 const filledCount = computed(() => slots.value.filter((slot) => slot.beerEntryId).length)
 const canSubmit = computed(() => {
   if (!canSubmitFinal.value || !canEdit.value || !slots.value.length) return false
@@ -197,7 +230,7 @@ const selectedResults = computed(() => slots.value.map((slot) => {
   const entry = findEntryById(slot.beerEntryId)
   return {
     rank: slot.rank,
-    label: slot.label,
+    label: displaySlotLabel(slot),
     shortCode: entry ? [entry.shortCode, entry.categoryName, entry.style].filter(Boolean).join(' · ') : '待选择',
   }
 }))
@@ -222,6 +255,15 @@ function displayShortCode(entry) {
   return entry?.shortCode || '编号'
 }
 
+function displaySlotLabel(slot) {
+  if (!isMedalMode.value) return slot?.label || `第 ${slot?.rank || ''} 名`
+  return ['第一名', '第二名', '第三名'][Number(slot?.rank) - 1] || slot?.label || '名次'
+}
+
+function displayEntryOption(entry) {
+  return [displayShortCode(entry), entry?.categoryName, entry?.style].filter(Boolean).join(' · ')
+}
+
 function entryMeta(entry) {
   return [entry?.categoryName, entry?.style].filter(Boolean).join(' · ') || '-'
 }
@@ -234,20 +276,20 @@ function isEntryUsed(entryId) {
   return slots.value.some((slot) => String(slot.beerEntryId) === String(entryId))
 }
 
-function pickEntry(entry) {
-  if (!canEdit.value) return
-  pickedEntryId.value = pickedEntryId.value === entry.id ? null : entry.id
+function handleEntryClick(event) {
+  if (!suppressEntryClick.value) return
+  event.preventDefault()
+  event.stopPropagation()
+  suppressEntryClick.value = false
 }
 
-function assignPickedEntry(slot) {
-  if (!canEdit.value || !pickedEntryId.value) return
-  assignEntryToSlot(pickedEntryId.value, slot)
-  pickedEntryId.value = null
-}
-
-function dragEntry(entry) {
+function dragEntry(entry, event) {
   if (!canEdit.value) return
   draggedEntryId.value = entry.id
+  if (event?.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', String(entry.id))
+  }
 }
 
 function endDrag() {
@@ -255,44 +297,65 @@ function endDrag() {
   activeDropRank.value = null
 }
 
-function dropEntryOnSlot(slot) {
-  if (!canEdit.value || !draggedEntryId.value) return
-  assignEntryToSlot(draggedEntryId.value, slot)
+function dropEntryOnSlot(slot, event) {
+  const droppedEntryId = draggedEntryId.value || event?.dataTransfer?.getData('text/plain')
+  if (!canEdit.value || !droppedEntryId) return
+  assignEntryToSlot(droppedEntryId, slot)
   endDrag()
 }
 
 function startPointerDrag(entry, event) {
-  if (!canEdit.value) return
+  if (!canEdit.value || event.pointerType === 'mouse') return
   pointerEntryId.value = entry.id
   pointerStart.value = { x: event.clientX, y: event.clientY }
+  event.currentTarget?.setPointerCapture?.(event.pointerId)
 }
 
 function movePointerDrag(event) {
   if (!pointerEntryId.value || !pointerStart.value) return
   const moved = Math.abs(event.clientX - pointerStart.value.x) + Math.abs(event.clientY - pointerStart.value.y)
   if (moved < 10) return
+  event.preventDefault()
+  pointerDragging.value = true
   draggedEntryId.value = pointerEntryId.value
-  const target = document.elementFromPoint(event.clientX, event.clientY)?.closest?.('[data-rank]')
-  activeDropRank.value = target ? Number(target.dataset.rank) : null
+  suppressEntryClick.value = true
+  const entry = findEntryById(pointerEntryId.value)
+  dragGhost.value = entry ? { entry, x: event.clientX, y: event.clientY } : null
+  activeDropRank.value = findSlotByPoint(event.clientX, event.clientY)?.rank || null
 }
 
 function endPointerDrag(event) {
-  if (!draggedEntryId.value) {
-    pointerEntryId.value = null
-    pointerStart.value = null
-    return
+  if (pointerDragging.value && draggedEntryId.value) {
+    const slot = findSlotByPoint(event.clientX, event.clientY)
+    if (slot) assignEntryToSlot(draggedEntryId.value, slot)
   }
-  const target = document.elementFromPoint(event.clientX, event.clientY)?.closest?.('[data-rank]')
-  const slot = target ? slots.value.find((item) => item.rank === Number(target.dataset.rank)) : null
-  if (slot) assignEntryToSlot(draggedEntryId.value, slot)
+  event.currentTarget?.releasePointerCapture?.(event.pointerId)
   cancelPointerDrag()
 }
 
 function cancelPointerDrag() {
   pointerEntryId.value = null
   pointerStart.value = null
+  pointerDragging.value = false
   draggedEntryId.value = null
   activeDropRank.value = null
+  dragGhost.value = null
+}
+
+function findSlotByPoint(x, y) {
+  const target = document.elementFromPoint(x, y)?.closest?.('[data-rank]')
+  return target ? slots.value.find((item) => item.rank === Number(target.dataset.rank)) : null
+}
+
+function selectSlotEntry(slot, value) {
+  if (!canEdit.value) return
+  if (!value) {
+    clearSlot(slot)
+    return
+  }
+  const entry = findEntryById(value)
+  if (!entry) return
+  assignEntryToSlot(entry.id, slot)
 }
 
 function assignEntryToSlot(entryId, targetSlot) {
@@ -377,7 +440,7 @@ function assignCodeToActiveSlot(value) {
     return false
   }
   assignEntryToSlot(entry.id, slot)
-  message.value = `${slot.label}已选 ${entry.shortCode || '该酒款'}`
+  message.value = `${displaySlotLabel(slot)}已选 ${entry.shortCode || '该酒款'}`
   stopSlotScanner()
   return true
 }
@@ -506,19 +569,26 @@ onBeforeUnmount(() => {
 
 .slot-drop {
   display: grid;
-  gap: 10px;
-  min-height: 92px;
-  border: 1px dashed #d0d5dd;
+  gap: 9px;
+  min-height: 78px;
+  border: 1px solid #e4e7ec;
   border-radius: 8px;
-  padding: 11px;
+  padding: 12px;
   color: #344054;
+  background: #fff;
+  transition: border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.slot-drop.dragging {
+  min-height: 104px;
+  border-style: dashed;
   background: #f8fafc;
 }
 
-.slot-drop.active,
-.slot-drop.picked {
+.slot-drop.active {
   border-color: #f3c04f;
   background: #fffaf0;
+  box-shadow: 0 0 0 3px rgba(243, 192, 79, 0.18);
 }
 
 .slot-drop.filled {
@@ -534,6 +604,12 @@ onBeforeUnmount(() => {
   color: #9a5b26;
   font-size: 14px;
   font-weight: 900;
+}
+
+.slot-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .slot-empty {
@@ -584,6 +660,45 @@ onBeforeUnmount(() => {
   font-weight: 850;
 }
 
+.slot-select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  padding: 0 38px 0 11px;
+  color: #18222f;
+  background:
+    linear-gradient(45deg, transparent 50%, #667085 50%) calc(100% - 19px) 18px / 6px 6px no-repeat,
+    linear-gradient(135deg, #667085 50%, transparent 50%) calc(100% - 14px) 18px / 6px 6px no-repeat,
+    #fff;
+  font-size: 15px;
+  font-weight: 750;
+  line-height: 1.2;
+  appearance: none;
+}
+
+.slot-select:focus {
+  border-color: #d89a35;
+  outline: 3px solid rgba(216, 154, 53, 0.18);
+}
+
+.slot-select:disabled {
+  color: #98a2b3;
+  background-color: #f9fafb;
+}
+
+.slot-clear-button {
+  border: 0;
+  border-radius: 999px;
+  min-height: 28px;
+  padding: 0 9px;
+  color: #9a3412;
+  background: #fff2e8;
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1;
+}
+
 .slot-scan-button {
   display: inline-flex;
   justify-content: center;
@@ -625,6 +740,8 @@ onBeforeUnmount(() => {
   color: #18222f;
   background: #fff;
   touch-action: none;
+  user-select: none;
+  transition: border-color 0.18s ease, background-color 0.18s ease, transform 0.18s ease;
 }
 
 .entry-row strong,
@@ -637,14 +754,42 @@ onBeforeUnmount(() => {
   color: #667085;
 }
 
-.entry-row.selected {
+.entry-row.dragging {
   border-color: #f3c04f;
   background: #fffaf0;
+  transform: scale(0.99);
 }
 
 .entry-row.used {
   color: #667085;
   background: #f9fafb;
+}
+
+.drag-ghost {
+  position: fixed;
+  z-index: 80;
+  width: min(280px, calc(100vw - 40px));
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  border: 1px solid #f3c04f;
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #18222f;
+  background: #fffaf0;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.18);
+}
+
+.drag-ghost strong,
+.drag-ghost small {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.drag-ghost small {
+  margin-top: 4px;
+  color: #667085;
+  font-size: 12px;
 }
 
 .message {

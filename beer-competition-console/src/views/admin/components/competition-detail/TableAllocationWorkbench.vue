@@ -204,11 +204,9 @@
             新增桌
           </button>
           <button
-            class="main-action"
+            :class="['main-action', { blocked: !canRunPrimaryRoundAction }]"
             type="button"
-            :disabled="!canRunPrimaryRoundAction"
-            :title="primaryActionTitle"
-            :data-disabled-reason="primaryActionTitle || null"
+            :aria-disabled="!canRunPrimaryRoundAction"
             @click="$emit('publishCurrentRound')"
           >
             {{ primaryRoundActionLabel }}
@@ -594,11 +592,9 @@
           </button>
           <button
             v-if="currentRound"
-            class="main-action"
+            :class="['main-action', { blocked: !canRunPrimaryRoundAction }]"
             type="button"
-            :disabled="!canRunPrimaryRoundAction"
-            :title="primaryActionTitle"
-            :data-disabled-reason="primaryActionTitle || null"
+            :aria-disabled="!canRunPrimaryRoundAction"
             @click="$emit('publishCurrentRound')"
           >
             {{ primaryRoundActionLabel }}
@@ -868,14 +864,6 @@ const canRunPrimaryRoundAction = computed(() => {
 const primaryRoundActionLabel = computed(() => {
   return props.currentRound?.type === 'SCORE' ? '发布给评审' : '发布给桌长和参与评审'
 })
-const primaryActionDisabledReason = computed(() => {
-  if (canRunPrimaryRoundAction.value) return ''
-  return props.roundValidationIssues[0]
-    || props.validationIssues[0]
-    || props.publishDisabledReason
-    || '请先处理发布前检查'
-})
-const primaryActionTitle = computed(() => (canRunPrimaryRoundAction.value ? '' : primaryActionDisabledReason.value))
 const overviewStatusText = computed(() => {
   if (props.canPublish) return '可发布'
   if (props.currentRound?.isPreparationDraft && props.roundValidationIssues.length === 0 && props.validationIssues.length === 0) return '预排草稿'
@@ -1393,50 +1381,11 @@ button:disabled {
   position: relative;
 }
 
-.main-action:disabled {
+.main-action.blocked {
   opacity: 1;
   color: rgba(224, 184, 74, 0.42);
   border-color: rgba(216, 169, 53, 0.16);
   background: rgba(216, 169, 53, 0.045);
-}
-
-.main-action:disabled[data-disabled-reason]:hover::after {
-  content: attr(data-disabled-reason);
-  position: absolute;
-  z-index: 30;
-  left: 50%;
-  bottom: calc(100% + 9px);
-  width: max-content;
-  max-width: min(320px, 72vw);
-  padding: 7px 9px;
-  color: #e6edf0;
-  border: 1px solid rgba(216, 169, 53, 0.3);
-  border-radius: 8px;
-  background: rgba(7, 14, 17, 0.98);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.5;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  pointer-events: none;
-  transform: translateX(-50%);
-  opacity: 1;
-}
-
-.main-action:disabled[data-disabled-reason]:hover::before {
-  content: '';
-  position: absolute;
-  z-index: 31;
-  left: 50%;
-  bottom: calc(100% + 4px);
-  width: 8px;
-  height: 8px;
-  border-right: 1px solid rgba(216, 169, 53, 0.3);
-  border-bottom: 1px solid rgba(216, 169, 53, 0.3);
-  background: rgba(7, 14, 17, 0.98);
-  pointer-events: none;
-  transform: translateX(-50%) rotate(45deg);
 }
 
 .allocation-grid {

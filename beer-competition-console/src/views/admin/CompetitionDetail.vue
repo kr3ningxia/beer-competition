@@ -636,10 +636,9 @@
                   </button>
                   <button
                     v-else-if="currentRound?.status === 'DRAFT'"
-                    class="tool-button primary"
+                    :class="['tool-button', 'primary', { blocked: !canPublishCurrentRound }]"
                     type="button"
-                    :disabled="!canPublishCurrentRound"
-                    :title="roundPublishActionTitle"
+                    :aria-disabled="!canPublishCurrentRound"
                     @click="publishCurrentRound"
                   >
                     {{ currentRound?.type === 'SCORE' ? '发布给评审' : '发布给桌长和参与评审' }}
@@ -1214,6 +1213,70 @@
           </footer>
         </section>
       </div>
+
+      <div v-if="roundPublishConfirmOpen" class="stage-confirm-backdrop" @click.self="closeRoundPublishConfirm">
+        <section class="stage-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="round-publish-confirm-title">
+          <header>
+            <span class="confirm-kicker">轮次发布</span>
+            <h2 id="round-publish-confirm-title">确认发布当前轮次？</h2>
+          </header>
+          <p class="confirm-copy">
+            发布后，{{ currentRoundPublishTarget }}会在对应端看到本轮任务。发布前请确认桌次、人员和酒款都已经核对完成。
+          </p>
+          <div class="confirm-summary">
+            <span>
+              <small>当前轮次</small>
+              <strong>{{ currentRound?.name || '-' }}</strong>
+            </span>
+            <span>
+              <small>发布对象</small>
+              <strong>{{ currentRoundPublishTarget }}</strong>
+            </span>
+            <span>
+              <small>桌数/酒款</small>
+              <strong>{{ currentRoundTables.length }} 桌 / {{ currentRoundEntryCount }} 款</strong>
+            </span>
+          </div>
+          <footer>
+            <button class="confirm-button ghost" type="button" :disabled="roundPublishLoading" @click="closeRoundPublishConfirm">取消</button>
+            <button class="confirm-button primary" type="button" :disabled="roundPublishLoading" @click="confirmPublishCurrentRound">
+              {{ roundPublishLoading ? '发布中' : '确认发布' }}
+              <Right />
+            </button>
+          </footer>
+        </section>
+      </div>
+
+      <div v-if="roundPublishBlockedDialogOpen" class="stage-confirm-backdrop" @click.self="closeRoundPublishBlockedDialog">
+        <section class="stage-confirm-dialog warning" role="dialog" aria-modal="true" aria-labelledby="round-publish-blocked-title">
+          <header>
+            <span class="confirm-kicker">发布检查</span>
+            <h2 id="round-publish-blocked-title">暂不能发布当前轮次</h2>
+          </header>
+          <p class="confirm-copy">
+            {{ roundPublishBlockedMessage }}
+          </p>
+          <div class="confirm-summary">
+            <span>
+              <small>当前轮次</small>
+              <strong>{{ currentRound?.name || '-' }}</strong>
+            </span>
+            <span>
+              <small>发布对象</small>
+              <strong>{{ currentRoundPublishTarget }}</strong>
+            </span>
+            <span>
+              <small>处理项</small>
+              <strong>{{ roundPublishBlockedMessage }}</strong>
+            </span>
+          </div>
+          <footer>
+            <button class="confirm-button primary" type="button" @click="closeRoundPublishBlockedDialog">
+              我知道了
+            </button>
+          </footer>
+        </section>
+      </div>
     </Teleport>
 
     <CreateRoundWizard
@@ -1633,6 +1696,10 @@ const publishRegistrationConfirmOpen = ref(false)
 const publishRegistrationLoading = ref(false)
 const closeRegistrationConfirmOpen = ref(false)
 const closeRegistrationLoading = ref(false)
+const roundPublishConfirmOpen = ref(false)
+const roundPublishLoading = ref(false)
+const roundPublishBlockedDialogOpen = ref(false)
+const roundPublishBlockedMessage = ref('')
 
 const rounds = ref([])
 const roundEntryPool = ref([])
@@ -4355,36 +4422,63 @@ function getTableRoundMemberPayload(table) {
     .filter((member) => member.judgePublicId && member.judgePublicId !== table?.captainPublicId)
 }
 
-async function publishCurrentRound() {
+function publishCurrentRound() {
   if (!currentRound.value) return
-  if (currentRound.value.isPreparationDraft) {
-    if (roundPublishDisabledReason.value) {
-      ElMessage.warning(roundPublishDisabledReason.value)
-      return
-    }
-    if (validationIssues.value.length) {
-      ElMessage.warning(validationIssues.value[0])
-      return
-    }
-    if (roundValidationIssues.value.length) {
-      ElMessage.warning(roundValidationIssues.value[0])
-      return
-    }
-    const createdRound = await ensureFirstRoundDraft({ silent: true, preferredMode: allocationMode.value })
-    if (!createdRound) return
-  }
-  if (roundPublishDisabledReason.value) {
-    ElMessage.warning(roundPublishDisabledReason.value)
+  const blockedReason = resolveRoundPublishBlockedReason()
+  if (blockedReason) {
+    openRoundPublishBlockedDialog(blockedReason)
     return
   }
-  if (roundValidationIssues.value.length) return
-  const targetRoundId = currentRound.value.id
-  if (currentRound.value.status === 'DRAFT') await persistCurrentRoundAllocation()
-  const detail = await publishRound(competition.value.id, targetRoundId)
-  competition.value = normalizeDetail(detail)
-  resetForms()
-  applyRoundState(targetRoundId)
-  ElMessage.success(currentRound.value.type === 'SCORE' ? '当前轮次已发布到评审端' : '排序任务已发布给桌长和参与评审')
+  roundPublishConfirmOpen.value = true
+}
+
+function resolveRoundPublishBlockedReason() {
+  if (!currentRound.value) return ''
+  if (currentRound.value.isPreparationDraft) {
+    return roundPublishDisabledReason.value
+      || validationIssues.value[0]
+      || roundValidationIssues.value[0]
+      || ''
+  }
+  return roundPublishDisabledReason.value
+    || roundValidationIssues.value[0]
+    || ''
+}
+
+async function confirmPublishCurrentRound() {
+  if (!currentRound.value || roundPublishLoading.value) return
+  roundPublishLoading.value = true
+  try {
+    if (currentRound.value.isPreparationDraft) {
+      const createdRound = await ensureFirstRoundDraft({ silent: true, preferredMode: allocationMode.value })
+      if (!createdRound) return
+    }
+    const targetRoundId = currentRound.value.id
+    if (currentRound.value.status === 'DRAFT') await persistCurrentRoundAllocation()
+    const detail = await publishRound(competition.value.id, targetRoundId)
+    competition.value = normalizeDetail(detail)
+    resetForms()
+    applyRoundState(targetRoundId)
+    roundPublishConfirmOpen.value = false
+    ElMessage.success(currentRound.value.type === 'SCORE' ? '当前轮次已发布到评审端' : '排序任务已发布给桌长和参与评审')
+  } finally {
+    roundPublishLoading.value = false
+  }
+}
+
+function closeRoundPublishConfirm() {
+  if (roundPublishLoading.value) return
+  roundPublishConfirmOpen.value = false
+}
+
+function openRoundPublishBlockedDialog(message) {
+  roundPublishBlockedMessage.value = message || '请先处理发布前检查'
+  roundPublishBlockedDialogOpen.value = true
+}
+
+function closeRoundPublishBlockedDialog() {
+  roundPublishBlockedDialogOpen.value = false
+  roundPublishBlockedMessage.value = ''
 }
 
 async function syncCurrentRoundCandidates() {
@@ -5586,6 +5680,12 @@ svg {
   color: var(--gold-soft);
   border-color: rgba(216, 169, 53, 0.32);
   background: rgba(216, 169, 53, 0.08);
+}
+
+.tool-button.blocked {
+  color: rgba(224, 184, 74, 0.42);
+  border-color: rgba(216, 169, 53, 0.16);
+  background: rgba(216, 169, 53, 0.045);
 }
 
 .tool-button.danger {
