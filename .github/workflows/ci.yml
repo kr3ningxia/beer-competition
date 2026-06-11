@@ -13,6 +13,26 @@ jobs:
   build:
     name: Build release package
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: 0d000721
+          MYSQL_DATABASE: beer_competition
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -p0d000721"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      APP_DB_HOST: 127.0.0.1
+      APP_DB_PORT: 3306
+      APP_DB_NAME: beer_competition
+      APP_DB_USERNAME: root
+      APP_DB_PASSWORD: 0d000721
+      APP_SMS_MOCK_ENABLED: true
 
     steps:
       - name: Checkout
@@ -30,9 +50,19 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Initialize test database
+        run: |
+          if ! command -v mysql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y mysql-client
+          fi
+          mysql -h 127.0.0.1 -P 3306 -uroot -p"$APP_DB_PASSWORD" \
+            --default-character-set=utf8mb4 "$APP_DB_NAME" \
+            < beer-competition-api/src/main/resources/db/migrations/beer_competition_full.sql
+
       - name: Build backend
         working-directory: beer-competition-api
-        run: mvn clean package -DskipTests
+        run: mvn clean package
 
       - name: Install console dependencies
         working-directory: beer-competition-console

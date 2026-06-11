@@ -691,8 +691,8 @@ public class AwardServiceImpl implements AwardService {
                         .thenComparing(result -> result.getRankNo() == null ? Integer.MAX_VALUE : result.getRankNo()))
                 .map(result -> {
                     BeerEntry entry = entryById.get(result.getBeerEntryId());
-                    CompetitionRound round = roundById.get(result.getSourceRoundId());
-                    RoundTable table = tableById.get(result.getSourceRoundTableId());
+                    CompetitionRound round = result.getSourceRoundId() == null ? null : roundById.get(result.getSourceRoundId());
+                    RoundTable table = result.getSourceRoundTableId() == null ? null : tableById.get(result.getSourceRoundTableId());
                     return AwardResultVO.builder()
                             .id(result.getId())
                             .competitionId(result.getCompetitionId())
