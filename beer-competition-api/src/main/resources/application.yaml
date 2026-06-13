@@ -77,3 +77,11 @@ app:
     bucket-name: ${APP_ALIOSS_BUCKET_NAME:}
   export:
     judge-h5-base-url: ${APP_JUDGE_H5_BASE_URL:http://localhost:5174}
+  wechat-pay:
+    mode: ${APP_WECHAT_PAY_MODE:MOCK}
+    app-id: ${APP_WECHAT_PAY_APP_ID:}
+    mch-id: ${APP_WECHAT_PAY_MCH_ID:}
+    merchant-serial-no: ${APP_WECHAT_PAY_MERCHANT_SERIAL_NO:}
+    api-v3-key: ${APP_WECHAT_PAY_API_V3_KEY:}
+    private-key-path: ${APP_WECHAT_PAY_PRIVATE_KEY_PATH:}
+    notify-base-url: ${APP_WECHAT_PAY_NOTIFY_BASE_URL:}

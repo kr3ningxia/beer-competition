@@ -15,29 +15,25 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@TableName("entry_refund")
-public class EntryRefund {
+@TableName("bank_transfer_payment")
+public class BankTransferPayment {
 
     @TableId(type = IdType.AUTO)
     private Long id;
-    private Long beerEntryId;
-    private Long entryPaymentId;
-    private String refundNo;
+    private String transferNo;
+    private Long breweryId;
+    private Long portalAccountId;
+    private Long competitionId;
     private BigDecimal amount;
+    private String payerName;
+    private LocalDateTime transferTime;
+    private String remark;
+    private Long voucherAssetId;
     private String status;
-    private String reason;
-    private Long requestedByPortalId;
-    private LocalDateTime requestedTime;
-    private Long processedByAdminId;
+    private Long adminId;
+    private String adminNote;
+    private LocalDateTime submittedTime;
     private LocalDateTime processedTime;
-    private LocalDateTime successTime;
-    private String failReason;
-    private String wechatRefundId;
-    private String wechatRefundStatus;
-    private String outRefundNo;
-    private String notifyRawJson;
-    private String refundNotifyRawJson;
-    private LocalDateTime lastQueryTime;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

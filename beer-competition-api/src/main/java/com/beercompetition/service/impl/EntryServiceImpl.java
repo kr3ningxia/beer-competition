@@ -28,6 +28,7 @@ import com.beercompetition.mapper.RoundTableMapper;
 import com.beercompetition.mapper.RoundTableMemberMapper;
 import com.beercompetition.mapper.ScoreRecordMapper;
 import com.beercompetition.properties.StorageProperties;
+import com.beercompetition.properties.WechatPayProperties;
 import com.beercompetition.pojo.dto.AdminEntryStatusRequest;
 import com.beercompetition.pojo.dto.AdminEntryUpdateRequest;
 import com.beercompetition.pojo.dto.PortalEntryDeliverySubmitRequest;
@@ -98,6 +99,7 @@ import com.beercompetition.pojo.vo.PortalScoreRecordVO;
 import com.beercompetition.service.CompetitionService;
 import com.beercompetition.service.EntryService;
 import com.beercompetition.service.EntryScanLabelService;
+import com.beercompetition.service.WechatPaymentService;
 import com.beercompetition.storage.FileStorageService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -169,9 +171,11 @@ public class EntryServiceImpl implements EntryService {
     private final ScoreRecordMapper scoreRecordMapper;
     private final CompetitionService competitionService;
     private final EntryScanLabelService entryScanLabelService;
+    private final WechatPaymentService wechatPaymentService;
     private final ObjectMapper objectMapper;
     private final FileStorageService fileStorageService;
     private final StorageProperties storageProperties;
+    private final WechatPayProperties wechatPayProperties;
 
     @Override
     public PageResult<AdminEntryVO> listAdminEntries(Long competitionId, String status, String paymentStatus,
@@ -186,7 +190,7 @@ public class EntryServiceImpl implements EntryService {
                 .eq(StringUtils.hasText(status), BeerEntry::getStatus, status)
                 .eq(categoryId != null, BeerEntry::getCategoryId, categoryId)
                 .orderByDesc(BeerEntry::getId));
-
+        
         // 2) 组装运营列表并执行复合筛选
         List<AdminEntryVO> filtered = entries.stream()
                 .map(this::toAdminEntryVO)
@@ -667,6 +671,9 @@ public class EntryServiceImpl implements EntryService {
     @Transactional(rollbackFor = Exception.class)
     public EntryDetailVO simulatePayment(Long entryId) {
         // 1) 查询并校验当前厂商酒款
+        if (wechatPayProperties.isWechatMode()) {
+            throw new BaseException("当前已启用微信支付，请扫码完成报名费支付");
+        }
         PortalAccount account = requirePortalAccount();
         BeerEntry entry = requireOwnedEntry(entryId, account.getBreweryId());
         if (LABEL_ALLOWED_STATUSES.contains(entry.getStatus())) {
@@ -676,6 +683,9 @@ public class EntryServiceImpl implements EntryService {
             throw new BaseException("当前酒款不能支付报名费");
         }
         EntryPayment payment = ensureEntryPayment(entry.getId(), entry.getCompetitionId());
+        if (EntryPaymentStatus.PENDING_CONFIRM.name().equals(payment.getStatus())) {
+            throw new BaseException("银行转账信息已提交，请等待主办方核对到账");
+        }
 
         // 2) 模拟支付到账并推进报名状态
         payment.setStatus(EntryPaymentStatus.PAID.name());
@@ -707,6 +717,9 @@ public class EntryServiceImpl implements EntryService {
             throw new BaseException("只有待付款确认的酒款可以确认付款");
         }
         EntryPayment payment = ensureEntryPayment(entry.getId(), entry.getCompetitionId());
+        if (EntryPaymentStatus.PENDING_CONFIRM.name().equals(payment.getStatus())) {
+            throw new BaseException("银行转账记录请在转账确认页面处理");
+        }
 
         // 2) 更新支付记录和报名状态
         payment.setStatus(EntryPaymentStatus.PAID.name());
@@ -798,6 +811,9 @@ public class EntryServiceImpl implements EntryService {
         if (EntryPaymentStatus.PAID.name().equals(payment.getStatus())) {
             throw new BaseException("已付款报名请通过退款申请处理");
         }
+        if (EntryPaymentStatus.PENDING_CONFIRM.name().equals(payment.getStatus())) {
+            throw new BaseException("银行转账确认中，请先处理转账记录");
+        }
 
         // 2) 更新支付记录并标记取消
         payment.setStatus(EntryPaymentStatus.CANCELED.name());
@@ -830,33 +846,9 @@ public class EntryServiceImpl implements EntryService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public void approveRefund(Long refundId, AdminEntryStatusRequest request) {
-        // 1) 查询退款申请并校验状态
-        EntryRefund refund = requireRefund(refundId);
-        if (!EntryRefundStatus.REQUESTED.name().equals(refund.getStatus())
-                && !EntryRefundStatus.FAILED.name().equals(refund.getStatus())) {
-            throw new BaseException("当前退款状态不能确认退款");
-        }
-        BeerEntry entry = requireEntry(refund.getBeerEntryId());
-        EntryPayment payment = ensureEntryPayment(entry.getId(), entry.getCompetitionId());
-
-        // 2) 模拟退款成功并取消报名
-        LocalDateTime now = LocalDateTime.now();
-        refund.setStatus(EntryRefundStatus.SUCCESS.name());
-        refund.setProcessedByAdminId(BaseContext.getCurrentId());
-        refund.setProcessedTime(now);
-        refund.setSuccessTime(now);
-        refund.setFailReason(null);
-        entryRefundMapper.updateById(refund);
-
-        payment.setStatus(EntryPaymentStatus.REFUNDED.name());
-        payment.setConfirmRemark(normalizeStatusReason(request));
-        entryPaymentMapper.updateById(payment);
-
-        entry.setStatus(EntryStatus.CANCELED.name());
-        beerEntryMapper.updateById(entry);
-        writeEntryLog("ENTRY_REFUND_APPROVE", entry.getUuid(), buildStatusLogSummary("确认退款", normalizeStatusReason(request)));
+        // 1) 委托微信支付服务受理退款并根据返回结果推进状态
+        wechatPaymentService.approveRefund(refundId, normalizeStatusReason(request), BaseContext.getCurrentId());
     }
 
     @Override
@@ -879,16 +871,9 @@ public class EntryServiceImpl implements EntryService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public void retryRefund(Long refundId, AdminEntryStatusRequest request) {
-        // 1) 查询失败退款并复用模拟成功流程
-        EntryRefund refund = requireRefund(refundId);
-        if (!EntryRefundStatus.FAILED.name().equals(refund.getStatus())) {
-            throw new BaseException("只有退款失败记录可以重试");
-        }
-
-        // 2) 测试阶段重试等同于后台确认退款
-        approveRefund(refundId, request);
+        // 1) 委托微信支付服务重试失败退款
+        wechatPaymentService.retryRefund(refundId, normalizeStatusReason(request), BaseContext.getCurrentId());
     }
 
     @Override
@@ -998,10 +983,10 @@ public class EntryServiceImpl implements EntryService {
                 .paidTime(payment == null ? null : payment.getPaidTime())
                 .deliveryReceivedAt(delivery == null ? null : delivery.getReceivedTime())
                 .lastModifiedAt(resolveEntryLastModifiedAt(entry, payment, delivery, refund))
-                .canConfirmPayment(EntryStatus.PENDING_PAYMENT.name().equals(entry.getStatus()))
+                .canConfirmPayment(canConfirmPayment(entry, payment))
                 .canMarkStored(EntryStatus.REGISTERED.name().equals(entry.getStatus()) && !isActiveRefund(refund))
                 .canUnmarkStored(canUnmarkStored(entry, competition, refund))
-                .canCancel(EntryStatus.PENDING_PAYMENT.name().equals(entry.getStatus()))
+                .canCancel(canCancelEntry(entry, payment))
                 .canApproveRefund(canApproveRefund(refund))
                 .canRejectRefund(canRejectRefund(refund))
                 .canEdit(!EntryStatus.RESULT_PUBLISHED.name().equals(entry.getStatus()) && !resultPublished)
@@ -1048,10 +1033,10 @@ public class EntryServiceImpl implements EntryService {
                 .stored(Objects.equals(entry.getStoredFlag(), 1))
                 .assigned(assigned)
                 .resultPublished(resultPublished)
-                .canConfirmPayment(EntryStatus.PENDING_PAYMENT.name().equals(entry.getStatus()))
+                .canConfirmPayment(canConfirmPayment(entry, payment))
                 .canMarkStored(EntryStatus.REGISTERED.name().equals(entry.getStatus()) && !isActiveRefund(refund))
                 .canUnmarkStored(canUnmarkStored(entry, competition, refund))
-                .canCancel(EntryStatus.PENDING_PAYMENT.name().equals(entry.getStatus()))
+                .canCancel(canCancelEntry(entry, payment))
                 .canApproveRefund(canApproveRefund(refund))
                 .canRejectRefund(canRejectRefund(refund))
                 .canEdit(!EntryStatus.RESULT_PUBLISHED.name().equals(entry.getStatus()) && !resultPublished)
@@ -1997,6 +1982,12 @@ public class EntryServiceImpl implements EntryService {
                 .amount(payment == null ? competition == null ? null : competition.getEntryFee() : payment.getAmount())
                 .outTradeNo(payment == null ? null : payment.getOutTradeNo())
                 .wechatTransactionId(payment == null ? null : payment.getWechatTransactionId())
+                .bankTransferId(payment == null ? null : payment.getBankTransferId())
+                .codeUrl(payment == null ? null : payment.getCodeUrl())
+                .expireTime(payment == null ? null : payment.getExpireTime())
+                .paidAmount(payment == null ? null : payment.getPaidAmount())
+                .wechatTradeState(payment == null ? null : payment.getWechatTradeState())
+                .wechatTradeStateDesc(payment == null ? null : payment.getWechatTradeStateDesc())
                 .paidTime(payment == null ? null : payment.getPaidTime())
                 .build();
     }
@@ -2020,6 +2011,7 @@ public class EntryServiceImpl implements EntryService {
                 .successTime(refund.getSuccessTime())
                 .failReason(refund.getFailReason())
                 .wechatRefundId(refund.getWechatRefundId())
+                .wechatRefundStatus(refund.getWechatRefundStatus())
                 .outRefundNo(refund.getOutRefundNo())
                 .build();
     }
@@ -2263,6 +2255,20 @@ public class EntryServiceImpl implements EntryService {
         return LABEL_ALLOWED_STATUSES.contains(entry.getStatus())
                 ? EntryPaymentStatus.PAID.name()
                 : EntryPaymentStatus.UNPAID.name();
+    }
+
+    private boolean canConfirmPayment(BeerEntry entry, EntryPayment payment) {
+        if (!EntryStatus.PENDING_PAYMENT.name().equals(entry.getStatus())) {
+            return false;
+        }
+        return payment == null || EntryPaymentStatus.UNPAID.name().equals(payment.getStatus());
+    }
+
+    private boolean canCancelEntry(BeerEntry entry, EntryPayment payment) {
+        if (!EntryStatus.PENDING_PAYMENT.name().equals(entry.getStatus())) {
+            return false;
+        }
+        return payment == null || !EntryPaymentStatus.PENDING_CONFIRM.name().equals(payment.getStatus());
     }
 
     private String resolveDeliveryStatus(EntryDelivery delivery) {

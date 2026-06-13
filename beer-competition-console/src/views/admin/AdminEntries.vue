@@ -51,6 +51,7 @@
         <select v-model="filters.paymentStatus" @change="applyFilters">
           <option value="">全部付款</option>
           <option value="UNPAID">待付款</option>
+          <option value="PENDING_CONFIRM">等待转账确认</option>
           <option value="PAID">已付款</option>
           <option value="REFUNDED">已退款</option>
           <option value="CANCELED">已取消</option>
@@ -871,7 +872,7 @@ function entryStatusLabel(value) {
 }
 
 function paymentLabel(value) {
-  return { UNPAID: '待付款', PAID: '已付款', REFUNDED: '已退款', CANCELED: '已取消' }[value] || value || '-'
+  return { UNPAID: '待付款', PENDING_CONFIRM: '等待转账确认', PAID: '已付款', REFUNDED: '已退款', CANCELED: '已取消' }[value] || value || '-'
 }
 
 function refundStatusText(value) {
@@ -916,6 +917,7 @@ function deliveryMethodLabel(value) {
 }
 
 function paymentTone(value) {
+  if (value === 'PENDING_CONFIRM') return 'warning'
   return value === 'PAID' ? 'success' : value === 'UNPAID' ? 'warning' : value === 'REFUNDED' ? 'success' : 'muted'
 }
 
@@ -951,6 +953,8 @@ function actionLabel(action) {
   return {
     ENTRY_UPDATE: '编辑报名信息',
     ENTRY_CONFIRM_PAYMENT: '确认付款',
+    ENTRY_BANK_TRANSFER_CONFIRM: '确认银行转账',
+    ENTRY_BANK_TRANSFER_REJECT: '驳回银行转账',
     ENTRY_MARK_STORED: '确认入库',
     ENTRY_UNMARK_STORED: '撤销入库',
     ENTRY_CANCEL: '取消报名',

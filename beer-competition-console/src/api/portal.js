@@ -44,6 +44,36 @@ export function simulatePortalEntryPayment(entryId) {
   return request.post(`/api/portal/entries/${entryId}/payment/simulate`, {}, { authScope: 'portal' })
 }
 
+export function createPortalEntryWechatNativePayment(entryId) {
+  return request.post(`/api/portal/entries/${entryId}/payment/wechat/native`, {}, { authScope: 'portal' })
+}
+
+export function fetchPortalEntryPaymentStatus(entryId) {
+  return request.get(`/api/portal/entries/${entryId}/payment/status`, { authScope: 'portal' })
+}
+
+export function fetchPortalBankTransferAccount() {
+  return request.get('/api/portal/payment/bank-transfer/account', { authScope: 'portal' })
+}
+
+export function uploadPortalBankTransferVoucher(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post('/api/portal/payment/bank-transfer/voucher', formData, { authScope: 'portal' })
+}
+
+export function submitPortalBankTransfer(data) {
+  return request.post('/api/portal/payment/bank-transfer', data, { authScope: 'portal' })
+}
+
+export function fetchPortalBankTransfer(id) {
+  return request.get(`/api/portal/payment/bank-transfer/${id}`, { authScope: 'portal' })
+}
+
+export function cancelPortalBankTransfer(id) {
+  return request.post(`/api/portal/payment/bank-transfer/${id}/cancel`, {}, { authScope: 'portal' })
+}
+
 export function requestPortalEntryRefund(entryId, data) {
   return request.post(`/api/portal/entries/${entryId}/refund`, data, { authScope: 'portal' })
 }

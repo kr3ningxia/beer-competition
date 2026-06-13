@@ -3,5 +3,6 @@ package com.beercompetition.pojo.enums;
 public enum EntryPayMethod {
     MANUAL,
     MOCK,
-    WECHAT
+    WECHAT,
+    BANK_TRANSFER
 }

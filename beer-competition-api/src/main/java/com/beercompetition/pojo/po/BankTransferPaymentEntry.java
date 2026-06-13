@@ -8,23 +8,21 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@TableName("file_asset")
-public class FileAsset {
+@TableName("bank_transfer_payment_entry")
+public class BankTransferPaymentEntry {
 
     @TableId(type = IdType.AUTO)
     private Long id;
-    private String businessType;
-    private String ownerType;
-    private Long ownerId;
-    private String storageProvider;
-    private String fileName;
-    private String storagePath;
-    private String publicUrl;
+    private Long bankTransferPaymentId;
+    private Long beerEntryId;
+    private Long entryPaymentId;
+    private BigDecimal amount;
     private LocalDateTime createTime;
 }

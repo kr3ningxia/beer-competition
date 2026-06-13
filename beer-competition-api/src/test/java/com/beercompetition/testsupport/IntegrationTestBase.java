@@ -52,6 +52,29 @@ public abstract class IntegrationTestBase {
 
     protected void cleanupByPrefix(String prefix) {
         jdbcTemplate.update("""
+                DELETE btpe FROM bank_transfer_payment_entry btpe
+                JOIN beer_entry be ON be.id = btpe.beer_entry_id
+                WHERE be.uuid LIKE ?
+                """, prefix + "%");
+        jdbcTemplate.update("""
+                DELETE btp FROM bank_transfer_payment btp
+                JOIN competition c ON c.id = btp.competition_id
+                WHERE c.code LIKE ?
+                """, prefix + "%");
+        jdbcTemplate.update("""
+                DELETE fa FROM file_asset fa
+                JOIN portal_account pa ON pa.id = fa.owner_id
+                WHERE fa.business_type = 'BANK_TRANSFER_VOUCHER'
+                  AND fa.owner_type = 'PORTAL_ACCOUNT'
+                  AND pa.display_name LIKE ?
+                """, prefix + "%");
+        jdbcTemplate.update("""
+                DELETE wpn FROM wechat_pay_notify wpn
+                JOIN entry_payment ep ON ep.out_trade_no = wpn.out_trade_no
+                JOIN beer_entry be ON be.id = ep.beer_entry_id
+                WHERE be.uuid LIKE ?
+                """, prefix + "%");
+        jdbcTemplate.update("""
                 DELETE rtc FROM round_table_confirmation rtc
                 JOIN round_table rt ON rt.id = rtc.round_table_id
                 JOIN competition c ON c.id = rt.competition_id

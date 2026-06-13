@@ -3,6 +3,7 @@ package com.beercompetition.controller.admin;
 import com.beercompetition.common.result.PageResult;
 import com.beercompetition.common.result.Result;
 import com.beercompetition.pojo.dto.AdminFeedbackCommentUpdateRequest;
+import com.beercompetition.pojo.dto.AdminBankTransferProcessRequest;
 import com.beercompetition.pojo.dto.AdminEntryStatusRequest;
 import com.beercompetition.pojo.dto.AdminEntryUpdateRequest;
 import com.beercompetition.pojo.dto.CompetitionBaseInfoUpdateRequest;
@@ -25,6 +26,7 @@ import com.beercompetition.pojo.dto.ScoreConfigBatchUpdateRequest;
 import com.beercompetition.pojo.dto.StyleLibraryUpsertRequest;
 import com.beercompetition.pojo.enums.UserRole;
 import com.beercompetition.pojo.vo.CompetitionDetailVO;
+import com.beercompetition.pojo.vo.BankTransferVO;
 import com.beercompetition.pojo.vo.CompetitionVO;
 import com.beercompetition.pojo.vo.CurrentUserResponse;
 import com.beercompetition.pojo.vo.FileDownloadVO;
@@ -41,6 +43,7 @@ import com.beercompetition.service.AuthService;
 import com.beercompetition.service.AdminExportService;
 import com.beercompetition.service.AdminFeedbackService;
 import com.beercompetition.service.AwardService;
+import com.beercompetition.service.BankTransferPaymentService;
 import com.beercompetition.service.CompetitionService;
 import com.beercompetition.service.EntryService;
 import com.beercompetition.service.JudgeService;
@@ -76,6 +79,7 @@ public class AdminController {
     private final AdminExportService adminExportService;
     private final AdminFeedbackService adminFeedbackService;
     private final CompetitionService competitionService;
+    private final BankTransferPaymentService bankTransferPaymentService;
     private final EntryService entryService;
     private final JudgeService judgeService;
     private final StyleLibraryService styleLibraryService;
@@ -366,6 +370,37 @@ public class AdminController {
                                                     @RequestParam(required = false) Integer page,
                                                     @RequestParam(required = false) Integer pageSize) {
         return Result.success(entryService.listAdminRefunds(status, page, pageSize));
+    }
+
+    @GetMapping("/bank-transfers")
+    public Result<PageResult<BankTransferVO>> bankTransfers(@RequestParam(required = false) String status,
+                                                            @RequestParam(required = false) Long competitionId,
+                                                            @RequestParam(required = false) String keyword,
+                                                            @RequestParam(required = false) Integer page,
+                                                            @RequestParam(required = false) Integer pageSize) {
+        return Result.success(bankTransferPaymentService.listAdminTransfers(status, competitionId, keyword, page, pageSize));
+    }
+
+    @GetMapping("/bank-transfers/{id}")
+    public Result<BankTransferVO> bankTransferDetail(@PathVariable Long id) {
+        return Result.success(bankTransferPaymentService.getAdminTransfer(id));
+    }
+
+    @GetMapping("/bank-transfers/{id}/voucher")
+    public ResponseEntity<byte[]> downloadBankTransferVoucher(@PathVariable Long id) {
+        return fileResponse(bankTransferPaymentService.downloadVoucher(id));
+    }
+
+    @PostMapping("/bank-transfers/{id}/confirm")
+    public Result<BankTransferVO> confirmBankTransfer(@PathVariable Long id,
+                                                      @RequestBody(required = false) @Valid AdminBankTransferProcessRequest request) {
+        return Result.success(bankTransferPaymentService.confirmTransfer(id, request));
+    }
+
+    @PostMapping("/bank-transfers/{id}/reject")
+    public Result<BankTransferVO> rejectBankTransfer(@PathVariable Long id,
+                                                     @RequestBody(required = false) @Valid AdminBankTransferProcessRequest request) {
+        return Result.success(bankTransferPaymentService.rejectTransfer(id, request));
     }
 
     @GetMapping("/entries/{id}")

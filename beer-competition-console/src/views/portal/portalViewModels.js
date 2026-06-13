@@ -63,7 +63,7 @@ export function isEntryRefunded(entry) {
 export function isEntryPaymentPending(entry) {
   return !isEntryRefundActive(entry)
     && !isEntryRefunded(entry)
-    && (entry?.status === 'PENDING_PAYMENT' || entry?.paymentStatus === 'UNPAID')
+    && (entry?.status === 'PENDING_PAYMENT' || ['UNPAID', 'PENDING_CONFIRM'].includes(entry?.paymentStatus))
 }
 
 export function isEntryDeliveryActionPending(entry) {
@@ -142,6 +142,9 @@ export function entryPrimaryAction(entry) {
     return { label: '查看酒款资料', to: '/portal/entries' }
   }
   if (isEntryPaymentPending(entry)) {
+    if (entry.paymentStatus === 'PENDING_CONFIRM') {
+      return { label: '查看转账进度', to: paymentPath }
+    }
     return { label: '去支付', to: paymentPath }
   }
   if (isEntryResultPublished(entry)) {
@@ -170,11 +173,12 @@ export function priorityEntry(entries) {
 
 export function entryTimeline(entry) {
   const paid = entry?.paymentStatus === 'PAID' || entry?.canDownloadLabel
+  const pendingConfirm = entry?.paymentStatus === 'PENDING_CONFIRM'
   const resultPublished = isEntryResultPublished(entry)
   const stored = isEntryStored(entry)
   const items = [
     { label: '提交资料', done: true, hint: entry?.submittedAt || '已提交' },
-    { label: '支付报名费', done: paid, hint: paid ? '已支付' : '待支付' },
+    { label: '支付报名费', done: paid, hint: paid ? '已支付' : pendingConfirm ? '等待转账确认' : '待支付' },
     { label: '标签可用', done: paid, hint: paid ? '可下载并贴在酒瓶或外箱' : '支付成功后开放下载' },
     { label: '酒样入库', done: stored, hint: stored ? '已入库' : '等待主办方收样确认' },
     { label: '结果发布', done: resultPublished, hint: resultPublished ? '结果已发布' : '等待主办方发布结果' },
@@ -210,6 +214,7 @@ export function nextActionText(entry) {
     return '已退款'
   }
   if (isEntryPaymentPending(entry)) {
+    if (entry.paymentStatus === 'PENDING_CONFIRM') return '等待转账确认'
     return '待支付报名费'
   }
   if (isEntryDeliveryActionPending(entry)) {

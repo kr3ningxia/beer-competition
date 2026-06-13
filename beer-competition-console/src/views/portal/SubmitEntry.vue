@@ -176,7 +176,7 @@
           <div>
             <span>报名支付</span>
             <h3>{{ paymentPaid ? '支付成功' : '支付报名费' }}</h3>
-            <p>{{ paymentPaid ? '这一款酒已经报名成功，可以继续下载标签并填写送样信息。' : '当前使用模拟收款，后续接入微信支付后会在这里拉起微信支付。' }}</p>
+            <p>{{ paymentPaid ? '这一款酒已经报名成功，可以继续下载标签并填写送样信息。' : '请完成报名费支付，支付成功后即可下载标签并填写寄样信息。' }}</p>
           </div>
           <strong>{{ formatCurrency(paymentAmount) }}</strong>
         </div>
@@ -193,15 +193,41 @@
         </dl>
 
         <div class="payment-actions">
+          <div v-if="paymentOrder?.mode === 'WECHAT' && !paymentPaid" class="wechat-pay-box">
+            <img v-if="paymentQrDataUrl" :src="paymentQrDataUrl" alt="微信支付二维码" />
+            <div>
+              <strong>微信扫码支付</strong>
+              <span>{{ paymentExpireText }}</span>
+            </div>
+          </div>
           <el-button
-            v-if="!paymentPaid"
+            v-if="!paymentPaid && paymentOrder?.mode === 'MOCK'"
             type="primary"
             size="large"
             :loading="simulatingPayment"
             @click="paySubmittedEntry"
           >
-            模拟支付成功
+            测试支付成功
           </el-button>
+          <el-button
+            v-else-if="!paymentPaid"
+            type="primary"
+            size="large"
+            :loading="creatingPayment"
+            @click="startSubmittedEntryPayment"
+          >
+            {{ paymentOrder?.mode === 'WECHAT' ? '刷新付款码' : '获取付款码' }}
+          </el-button>
+          <el-button v-if="!paymentPaid" :loading="checkingPayment" @click="checkSubmittedEntryPayment">
+            刷新状态
+          </el-button>
+          <RouterLink
+            v-if="!paymentPaid"
+            class="secondary-link"
+            :to="`/portal/payment?entryId=${submittedEntry.id}&payMode=bank`"
+          >
+            使用银行转账
+          </RouterLink>
           <RouterLink
             v-else
             class="primary-link"
@@ -258,10 +284,18 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { fetchPortalCompetitionDetail, simulatePortalEntryPayment, submitPortalEntry } from '@/api/portal'
+import QRCode from 'qrcode'
+import {
+  createPortalEntryWechatNativePayment,
+  fetchPortalCompetitionDetail,
+  fetchPortalEntryDetail,
+  fetchPortalEntryPaymentStatus,
+  simulatePortalEntryPayment,
+  submitPortalEntry,
+} from '@/api/portal'
 import { currentEntryFee, formatCompetitionFee, isEarlyBirdActive } from './portalViewModels'
 
 const route = useRoute()
@@ -270,6 +304,12 @@ const selectedDetail = ref(null)
 const submittedEntry = ref(null)
 const submittingEntry = ref(false)
 const simulatingPayment = ref(false)
+const creatingPayment = ref(false)
+const checkingPayment = ref(false)
+const paymentOrder = ref(null)
+const paymentQrDataUrl = ref('')
+let paymentPollingTimer = null
+let paymentPollingCount = 0
 const queryCompetitionId = Number(route.query.competitionId || 0)
 const currencyFormatter = new Intl.NumberFormat('zh-CN', {
   style: 'currency',
@@ -293,6 +333,10 @@ const configuredFields = computed(() => normalizeEntryFields(selectedCompetition
 const selectedCategoryName = computed(() => selectedCompetition.value?.categories?.find((item) => item.id === form.categoryId)?.name || '')
 const paymentAmount = computed(() => submittedEntry.value?.payment?.amount ?? submittedEntry.value?.entryFee ?? selectedCompetition.value?.entryFee ?? 0)
 const paymentPaid = computed(() => submittedEntry.value?.paymentStatus === 'PAID' || submittedEntry.value?.canDownloadLabel)
+const paymentExpireText = computed(() => {
+  if (!paymentOrder.value?.expireTime) return '请在页面提示时间内完成支付。'
+  return `${formatDateTime(paymentOrder.value.expireTime)} 前完成支付。`
+})
 const currentFeeText = computed(() => formatCompetitionFee(selectedCompetition.value))
 const entryFeeLabel = computed(() => formatCurrency(currentEntryFee(selectedCompetition.value)))
 const earlyBirdActive = computed(() => isEarlyBirdActive(selectedCompetition.value))
@@ -374,6 +418,10 @@ onMounted(async () => {
   syncCompetitionDefaults()
 })
 
+onBeforeUnmount(() => {
+  stopPaymentPolling()
+})
+
 function syncCompetitionDefaults() {
   if (!selectedCompetition.value) {
     form.categoryId = null
@@ -414,6 +462,7 @@ async function submitEntry() {
       rulesAccepted: hasRulesUrl.value ? form.rulesAccepted : undefined,
     })
     submittedEntry.value = entry
+    await startSubmittedEntryPayment({ silent: true })
     ElMessage.success('报名已提交，请完成支付')
   } catch (error) {
     ElMessage.warning(error?.message || '报名提交失败，请稍后重试')
@@ -436,8 +485,72 @@ async function paySubmittedEntry() {
   }
 }
 
+async function startSubmittedEntryPayment(options = {}) {
+  if (!submittedEntry.value || paymentPaid.value) return
+
+  creatingPayment.value = true
+  try {
+    paymentOrder.value = await createPortalEntryWechatNativePayment(submittedEntry.value.id)
+    if (paymentOrder.value?.mode === 'WECHAT' && paymentOrder.value.codeUrl) {
+      paymentQrDataUrl.value = await QRCode.toDataURL(paymentOrder.value.codeUrl, {
+        errorCorrectionLevel: 'M',
+        margin: 1,
+        width: 220,
+      })
+      startPaymentPolling()
+    }
+  } catch (error) {
+    if (!options.silent) {
+      ElMessage.warning(error?.message || '付款码获取失败，请稍后重试')
+    }
+  } finally {
+    creatingPayment.value = false
+  }
+}
+
+async function checkSubmittedEntryPayment() {
+  if (!submittedEntry.value) return
+
+  checkingPayment.value = true
+  try {
+    const status = await fetchPortalEntryPaymentStatus(submittedEntry.value.id)
+    if (status.paymentStatus === 'PAID' || status.canDownloadLabel) {
+      submittedEntry.value = await fetchPortalEntryDetail(submittedEntry.value.id)
+      stopPaymentPolling()
+      ElMessage.success('支付成功，报名已完成')
+    }
+  } catch (error) {
+    ElMessage.warning(error?.message || '支付状态刷新失败')
+  } finally {
+    checkingPayment.value = false
+  }
+}
+
+function startPaymentPolling() {
+  stopPaymentPolling()
+  paymentPollingCount = 0
+  paymentPollingTimer = window.setInterval(async () => {
+    paymentPollingCount += 1
+    if (paymentPollingCount > 40) {
+      stopPaymentPolling()
+      return
+    }
+    await checkSubmittedEntryPayment()
+  }, 3000)
+}
+
+function stopPaymentPolling() {
+  if (paymentPollingTimer) {
+    window.clearInterval(paymentPollingTimer)
+    paymentPollingTimer = null
+  }
+}
+
 function resetForNextEntry() {
   submittedEntry.value = null
+  paymentOrder.value = null
+  paymentQrDataUrl.value = ''
+  stopPaymentPolling()
   syncCompetitionDefaults()
   entryFormRef.value?.clearValidate()
 }
@@ -495,6 +608,17 @@ function formatFieldValue(value) {
 function formatCurrency(value) {
   if (value === null || value === undefined || value === '') return '¥0'
   return currencyFormatter.format(Number(value))
+}
+
+function formatDateTime(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value).replace('T', ' ').slice(0, 16)
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hour = String(date.getHours()).padStart(2, '0')
+  const minute = String(date.getMinutes()).padStart(2, '0')
+  return `${date.getFullYear()}-${month}-${day} ${hour}:${minute}`
 }
 
 function formatMonthDayTime(value) {
@@ -813,6 +937,43 @@ function styleLabel(item) {
   gap: 10px;
   align-items: center;
   margin-top: 16px;
+}
+
+.wechat-pay-box {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1 1 260px;
+  min-width: 0;
+  padding: 12px;
+  background: #f7f1e7;
+  border: 1px solid rgba(103, 72, 39, 0.13);
+  border-radius: 8px;
+}
+
+.wechat-pay-box img {
+  width: 112px;
+  height: 112px;
+  flex: 0 0 112px;
+  background: #fff;
+  border-radius: 6px;
+}
+
+.wechat-pay-box div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.wechat-pay-box strong {
+  color: #2b1d10;
+  font-size: 16px;
+}
+
+.wechat-pay-box span {
+  color: #6f5a44;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .primary-link {

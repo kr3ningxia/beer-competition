@@ -8,35 +8,27 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@TableName("entry_payment")
-public class EntryPayment {
+@TableName("wechat_pay_notify")
+public class WechatPayNotify {
 
     @TableId(type = IdType.AUTO)
     private Long id;
-    private Long beerEntryId;
-    private BigDecimal amount;
-    private String status;
-    private String payMethod;
+    private String notifyId;
+    private String eventType;
+    private String businessType;
     private String outTradeNo;
+    private String outRefundNo;
     private String wechatTransactionId;
-    private Long bankTransferId;
-    private String codeUrl;
-    private LocalDateTime expireTime;
-    private BigDecimal paidAmount;
-    private String wechatTradeState;
-    private String wechatTradeStateDesc;
-    private String notifyRawJson;
-    private LocalDateTime lastQueryTime;
-    private LocalDateTime paidTime;
-    private Long confirmedByAdminId;
-    private String confirmRemark;
+    private String wechatRefundId;
+    private String rawJson;
+    private Integer processedFlag;
+    private String processMessage;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

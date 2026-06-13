@@ -1,14 +1,19 @@
 package com.beercompetition.controller.portal;
 
 import com.beercompetition.common.result.Result;
+import com.beercompetition.pojo.dto.PortalBankTransferSubmitRequest;
 import com.beercompetition.pojo.dto.PortalEntryDeliverySubmitRequest;
 import com.beercompetition.pojo.dto.PortalEntryRefundRequest;
 import com.beercompetition.pojo.dto.PortalEntrySubmitRequest;
 import com.beercompetition.pojo.dto.PortalProfileUpdateRequest;
 import com.beercompetition.pojo.enums.UserRole;
 import com.beercompetition.pojo.vo.CurrentUserResponse;
+import com.beercompetition.pojo.vo.BankTransferAccountVO;
+import com.beercompetition.pojo.vo.BankTransferVO;
+import com.beercompetition.pojo.vo.BankTransferVoucherVO;
 import com.beercompetition.pojo.vo.EntryDetailVO;
 import com.beercompetition.pojo.vo.EntrySummaryVO;
+import com.beercompetition.pojo.vo.EntryPaymentStatusVO;
 import com.beercompetition.pojo.vo.FileDownloadVO;
 import com.beercompetition.pojo.vo.PortalCompetitionVO;
 import com.beercompetition.pojo.vo.PortalCompetitionResultVO;
@@ -18,9 +23,12 @@ import com.beercompetition.pojo.vo.PortalMyParticipationVO;
 import com.beercompetition.pojo.vo.PortalProfileVO;
 import com.beercompetition.pojo.vo.PortalResultDetailVO;
 import com.beercompetition.pojo.vo.PortalResultSummaryVO;
+import com.beercompetition.pojo.vo.WechatNativePayVO;
 import com.beercompetition.service.AuthService;
+import com.beercompetition.service.BankTransferPaymentService;
 import com.beercompetition.service.CompetitionService;
 import com.beercompetition.service.EntryService;
+import com.beercompetition.service.WechatPaymentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ContentDisposition;
@@ -46,8 +54,10 @@ import java.util.List;
 public class PortalController {
 
     private final AuthService authService;
+    private final BankTransferPaymentService bankTransferPaymentService;
     private final CompetitionService competitionService;
     private final EntryService entryService;
+    private final WechatPaymentService wechatPaymentService;
 
     @GetMapping("/public/home")
     public Result<PortalHomeVO> home() {
@@ -98,6 +108,41 @@ public class PortalController {
     @PostMapping("/entries/{id}/payment/simulate")
     public Result<EntryDetailVO> simulatePayment(@PathVariable Long id) {
         return Result.success(entryService.simulatePayment(id));
+    }
+
+    @PostMapping("/entries/{id}/payment/wechat/native")
+    public Result<WechatNativePayVO> createWechatNativePayment(@PathVariable Long id) {
+        return Result.success(wechatPaymentService.createNativePayment(id));
+    }
+
+    @GetMapping("/entries/{id}/payment/status")
+    public Result<EntryPaymentStatusVO> entryPaymentStatus(@PathVariable Long id) {
+        return Result.success(wechatPaymentService.getPortalPaymentStatus(id));
+    }
+
+    @GetMapping("/payment/bank-transfer/account")
+    public Result<BankTransferAccountVO> bankTransferAccount() {
+        return Result.success(bankTransferPaymentService.getAccount());
+    }
+
+    @PostMapping(value = "/payment/bank-transfer/voucher", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Result<BankTransferVoucherVO> uploadBankTransferVoucher(@RequestParam("file") MultipartFile file) {
+        return Result.success(bankTransferPaymentService.uploadVoucher(file));
+    }
+
+    @PostMapping("/payment/bank-transfer")
+    public Result<BankTransferVO> submitBankTransfer(@RequestBody @Valid PortalBankTransferSubmitRequest request) {
+        return Result.success(bankTransferPaymentService.submitPortalTransfer(request));
+    }
+
+    @GetMapping("/payment/bank-transfer/{id}")
+    public Result<BankTransferVO> bankTransferDetail(@PathVariable Long id) {
+        return Result.success(bankTransferPaymentService.getPortalTransfer(id));
+    }
+
+    @PostMapping("/payment/bank-transfer/{id}/cancel")
+    public Result<BankTransferVO> cancelBankTransfer(@PathVariable Long id) {
+        return Result.success(bankTransferPaymentService.cancelPortalTransfer(id));
     }
 
     @PostMapping("/entries/{id}/refund")

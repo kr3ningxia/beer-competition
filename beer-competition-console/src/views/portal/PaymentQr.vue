@@ -125,12 +125,121 @@
               <dd>{{ entryTaskLabel(selectedEntry) }}</dd>
             </div>
           </dl>
-          <div class="payment-actions">
-            <el-button type="primary" size="large" :loading="simulatingPayment" @click="simulatePayment">
-              模拟支付成功
+          <div v-if="showBankPending" class="bank-pending-box">
+            <div>
+              <strong>转账信息已提交</strong>
+              <span>主办方核对到账后，这款酒会自动开放标签下载和寄样信息填写。</span>
+            </div>
+            <el-button
+              v-if="selectedEntry.payment?.bankTransferId"
+              :loading="cancelingBankTransfer"
+              @click="cancelSelectedBankTransfer"
+            >
+              取消转账提交
             </el-button>
-            <span>后续接入微信支付后，这里会拉起微信支付。</span>
           </div>
+
+          <template v-else>
+            <div class="pay-mode-tabs" aria-label="选择付款方式">
+              <button :class="{ active: payMode === 'WECHAT' }" type="button" @click="switchPayMode('WECHAT')">微信支付</button>
+              <button :class="{ active: payMode === 'BANK_TRANSFER' }" type="button" @click="switchPayMode('BANK_TRANSFER')">银行转账</button>
+            </div>
+
+            <div v-if="payMode === 'WECHAT'" class="payment-actions">
+              <div v-if="paymentOrder?.mode === 'WECHAT'" class="wechat-pay-box">
+                <img v-if="paymentQrDataUrl" :src="paymentQrDataUrl" alt="微信支付二维码" />
+                <div>
+                  <strong>微信扫码支付</strong>
+                  <span>{{ paymentExpireText }}</span>
+                </div>
+              </div>
+              <el-button
+                v-if="paymentOrder?.mode === 'MOCK'"
+                type="primary"
+                size="large"
+                :loading="simulatingPayment"
+                @click="simulatePayment"
+              >
+                测试支付成功
+              </el-button>
+              <el-button v-else type="primary" size="large" :loading="creatingPayment" @click="startNativePayment">
+                {{ paymentOrder?.mode === 'WECHAT' ? '刷新付款码' : '获取付款码' }}
+              </el-button>
+              <el-button :loading="checkingPayment" @click="checkPaymentStatus">刷新状态</el-button>
+            </div>
+
+            <div v-else class="bank-transfer-panel">
+              <section v-if="bankAccount" class="bank-account-box">
+                <div><dt>账户名</dt><dd>{{ bankAccount.accountName }}</dd></div>
+                <div><dt>开户行</dt><dd>{{ bankAccount.bankName }}</dd></div>
+                <div><dt>账号</dt><dd>{{ bankAccount.accountNo }}</dd></div>
+                <div><dt>备注</dt><dd>{{ bankAccount.remarkTip }}</dd></div>
+              </section>
+              <div class="bank-copy-row">
+                <el-button @click="copyBankAccount">复制账户信息</el-button>
+                <span>开发票或付款问题请联系小秘书微信 {{ bankAccount?.serviceWechat || 'beerxms' }}</span>
+              </div>
+
+              <section class="bank-entry-picker">
+                <strong>本次转账酒款</strong>
+                <el-checkbox-group v-model="bankTransferForm.entryIds">
+                  <el-checkbox
+                    v-for="entry in bankTransferCandidates"
+                    :key="entry.id"
+                    :label="entry.id"
+                  >
+                    {{ entry.name }} · {{ formatCurrency(entryPayAmount(entry)) }}
+                  </el-checkbox>
+                </el-checkbox-group>
+              </section>
+
+              <el-form label-position="top" class="bank-transfer-form">
+                <div class="bank-form-grid">
+                  <el-form-item label="应付金额">
+                    <div class="fixed-amount">{{ formatCurrency(bankTransferAmount) }}</div>
+                  </el-form-item>
+                  <el-form-item label="付款户名">
+                    <el-input v-model.trim="bankTransferForm.payerName" placeholder="可填写公司账户名或付款人" />
+                  </el-form-item>
+                  <el-form-item label="转账时间">
+                    <el-date-picker
+                      v-model="bankTransferForm.transferTime"
+                      type="datetime"
+                      value-format="YYYY-MM-DDTHH:mm:ss"
+                      placeholder="选择转账时间"
+                    />
+                  </el-form-item>
+                  <el-form-item label="转账备注">
+                    <el-input v-model.trim="bankTransferForm.remark" placeholder="请填写转账时的备注" />
+                  </el-form-item>
+                </div>
+                <div class="voucher-row">
+                  <input
+                    ref="bankVoucherInputRef"
+                    class="hidden-file"
+                    type="file"
+                    accept=".jpg,.jpeg,.png,.webp,.pdf"
+                    @change="uploadBankVoucher"
+                  />
+                  <el-button :loading="uploadingBankVoucher" @click="bankVoucherInputRef?.click()">
+                    {{ bankTransferForm.voucherFileName ? '重新上传凭证' : '上传转账凭证' }}
+                  </el-button>
+                  <span>{{ bankTransferForm.voucherFileName || '支持图片或 PDF，单个文件不超过 10MB。' }}</span>
+                </div>
+                <div class="payment-actions">
+                  <el-button
+                    type="primary"
+                    size="large"
+                    :disabled="!bankTransferAmount"
+                    :loading="submittingBankTransfer"
+                    @click="submitSelectedBankTransfer"
+                  >
+                    提交转账信息
+                  </el-button>
+                </div>
+              </el-form>
+            </div>
+          </template>
         </section>
 
         <section v-if="showLabelCard" class="label-card brewer-card">
@@ -278,12 +387,18 @@ import { RouterLink, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import QRCode from 'qrcode'
 import {
+  cancelPortalBankTransfer,
+  createPortalEntryWechatNativePayment,
+  fetchPortalBankTransferAccount,
+  fetchPortalEntryPaymentStatus,
   fetchPortalEntries,
   fetchPortalEntryDetail,
   fetchPortalEntryLabel,
   requestPortalEntryRefund,
   simulatePortalEntryPayment,
+  submitPortalBankTransfer,
   submitPortalEntryDelivery,
+  uploadPortalBankTransferVoucher,
 } from '@/api/portal'
 import { JUDGE_H5_BASE_URL } from '@/config'
 import { entryPayAmount, isEntryRefundActive, isEntryRefunded } from './portalViewModels'
@@ -296,11 +411,31 @@ const labelData = ref(null)
 const editingDelivery = ref(false)
 const savingDelivery = ref(false)
 const simulatingPayment = ref(false)
+const creatingPayment = ref(false)
+const checkingPayment = ref(false)
+const paymentOrder = ref(null)
+const paymentQrDataUrl = ref('')
+const payMode = ref('WECHAT')
+const bankAccount = ref(null)
+const bankVoucherInputRef = ref(null)
+const uploadingBankVoucher = ref(false)
+const submittingBankTransfer = ref(false)
+const cancelingBankTransfer = ref(false)
+let paymentPollingTimer = null
+let paymentPollingCount = 0
 const deliveryForm = reactive({
   deliveryMethod: 'EXPRESS',
   carrier: '',
   trackingNo: '',
   deliveryNote: '',
+})
+const bankTransferForm = reactive({
+  entryIds: [],
+  payerName: '',
+  transferTime: '',
+  remark: '',
+  voucherAssetId: null,
+  voucherFileName: '',
 })
 
 const currencyFormatter = new Intl.NumberFormat('zh-CN', {
@@ -324,6 +459,26 @@ const showRefundCard = computed(() => Boolean(selectedEntry.value?.refundStatus)
 const showPaymentCard = computed(() => {
   const entry = selectedEntry.value
   return Boolean(entry) && entry.paymentStatus !== 'PAID' && !isEntryRefunded(entry) && !isEntryRefundActive(entry)
+})
+const showBankPending = computed(() => selectedEntry.value?.paymentStatus === 'PENDING_CONFIRM')
+const paymentExpireText = computed(() => {
+  if (!paymentOrder.value?.expireTime) return '请在页面提示时间内完成支付。'
+  return `${formatDateTime(paymentOrder.value.expireTime)} 前完成支付。`
+})
+const bankTransferCandidates = computed(() => {
+  const entry = selectedEntry.value
+  if (!entry) return []
+  return entries.value.filter((item) => {
+    return item.competitionId === entry.competitionId
+      && item.paymentStatus === 'UNPAID'
+      && !isEntryRefunded(item)
+      && !isEntryRefundActive(item)
+  })
+})
+const bankTransferAmount = computed(() => {
+  return bankTransferCandidates.value
+    .filter((entry) => bankTransferForm.entryIds.includes(entry.id))
+    .reduce((total, entry) => total + Number(entryPayAmount(entry) || 0), 0)
 })
 const showLabelCard = computed(() => Boolean(selectedEntry.value?.canDownloadLabel))
 const showPreparationCards = computed(() => {
@@ -407,6 +562,12 @@ const currentAction = computed(() => {
   }
 
   if (entry.paymentStatus !== 'PAID') {
+    if (entry.paymentStatus === 'PENDING_CONFIRM') {
+      return {
+        title: '等待转账确认',
+        description: '转账信息已提交，主办方核对到账后会开放标签下载和寄样信息填写。',
+      }
+    }
     return {
       title: '支付报名费',
       description: '核对金额并完成支付，支付成功后下载现场标签并填写寄样信息。',
@@ -492,6 +653,10 @@ const isDirty = computed(() => {
 onMounted(async () => {
   window.addEventListener('beforeunload', handleBeforeUnload)
   entries.value = await fetchPortalEntries()
+  if (String(route.query.payMode || '').toLowerCase() === 'bank') {
+    payMode.value = 'BANK_TRANSFER'
+    await ensureBankAccount()
+  }
   const entryId = Number(route.query.entryId || 0)
   const target = entries.value.find((entry) => entry.id === entryId) || payableEntries.value[0] || null
   await selectEntry(target, { skipConfirm: true })
@@ -499,6 +664,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
+  stopPaymentPolling()
 })
 
 function handleBeforeUnload(event) {
@@ -539,6 +705,7 @@ function paymentMethodText(value) {
   if (value === 'MANUAL') return '人工确认'
   if (value === 'MOCK') return '模拟支付'
   if (value === 'WECHAT') return '微信支付'
+  if (value === 'BANK_TRANSFER') return '银行转账'
   return '待支付'
 }
 
@@ -571,6 +738,7 @@ function entryTaskLabel(entry) {
   if (isEntryRefundActive(entry)) return '退款处理中'
   if (entry.refundStatus === 'FAILED') return '退款失败'
   if (entry.refundStatus === 'REJECTED') return '退款已驳回'
+  if (entry.paymentStatus === 'PENDING_CONFIRM') return '等待转账确认'
   if (entry.deliveryStatus === 'RECEIVED' || isStored(entry)) return '已签收 / 入库'
   if (hasDeliveryProgress(entry)) return '等待主办方签收'
   if (entry.paymentStatus === 'PAID') return '待提交寄样'
@@ -673,9 +841,15 @@ async function selectEntry(entry, options = {}) {
 
   selectedEntry.value = await fetchPortalEntryDetail(entry.id)
   labelData.value = null
+  paymentOrder.value = null
+  paymentQrDataUrl.value = ''
+  stopPaymentPolling()
   syncDeliveryForm(selectedEntry.value)
+  syncBankTransferForm()
   if (selectedEntry.value?.canDownloadLabel) {
     labelData.value = await fetchPortalEntryLabel(entry.id)
+  } else if (showPaymentCard.value && !showBankPending.value && payMode.value === 'WECHAT') {
+    await startNativePayment({ silent: true })
   }
 }
 
@@ -758,6 +932,177 @@ async function simulatePayment() {
   } finally {
     simulatingPayment.value = false
   }
+}
+
+async function startNativePayment(options = {}) {
+  if (!selectedEntry.value || selectedEntry.value.paymentStatus === 'PAID') return
+
+  creatingPayment.value = true
+  try {
+    paymentOrder.value = await createPortalEntryWechatNativePayment(selectedEntry.value.id)
+    if (paymentOrder.value?.mode === 'WECHAT' && paymentOrder.value.codeUrl) {
+      paymentQrDataUrl.value = await QRCode.toDataURL(paymentOrder.value.codeUrl, {
+        errorCorrectionLevel: 'M',
+        margin: 1,
+        width: 220,
+      })
+      startPaymentPolling()
+    }
+  } catch (error) {
+    if (!options.silent) {
+      ElMessage.warning(error?.message || '付款码获取失败，请稍后重试')
+    }
+  } finally {
+    creatingPayment.value = false
+  }
+}
+
+async function checkPaymentStatus() {
+  if (!selectedEntry.value) return
+
+  checkingPayment.value = true
+  try {
+    const status = await fetchPortalEntryPaymentStatus(selectedEntry.value.id)
+    if (status.paymentStatus === 'PAID' || status.canDownloadLabel) {
+      ElMessage.success('支付成功，可以下载标签并填写寄样信息')
+      stopPaymentPolling()
+      await refreshEntries(selectedEntry.value.id)
+    }
+  } catch (error) {
+    ElMessage.warning(error?.message || '支付状态刷新失败')
+  } finally {
+    checkingPayment.value = false
+  }
+}
+
+function startPaymentPolling() {
+  stopPaymentPolling()
+  paymentPollingCount = 0
+  paymentPollingTimer = window.setInterval(async () => {
+    paymentPollingCount += 1
+    if (paymentPollingCount > 40) {
+      stopPaymentPolling()
+      return
+    }
+    await checkPaymentStatus()
+  }, 3000)
+}
+
+function stopPaymentPolling() {
+  if (paymentPollingTimer) {
+    window.clearInterval(paymentPollingTimer)
+    paymentPollingTimer = null
+  }
+}
+
+async function switchPayMode(mode) {
+  payMode.value = mode
+  if (mode === 'BANK_TRANSFER') {
+    stopPaymentPolling()
+    await ensureBankAccount()
+    syncBankTransferForm()
+    return
+  }
+  if (showPaymentCard.value && !showBankPending.value) {
+    await startNativePayment({ silent: true })
+  }
+}
+
+async function ensureBankAccount() {
+  if (bankAccount.value) return
+  bankAccount.value = await fetchPortalBankTransferAccount()
+}
+
+function syncBankTransferForm() {
+  if (!selectedEntry.value || showBankPending.value) {
+    bankTransferForm.entryIds = []
+    return
+  }
+  const candidateIds = bankTransferCandidates.value.map((entry) => entry.id)
+  bankTransferForm.entryIds = candidateIds.includes(selectedEntry.value.id) ? [selectedEntry.value.id] : []
+  bankTransferForm.payerName = ''
+  bankTransferForm.transferTime = ''
+  bankTransferForm.remark = selectedEntry.value?.breweryCompanyName || ''
+  bankTransferForm.voucherAssetId = null
+  bankTransferForm.voucherFileName = ''
+}
+
+async function uploadBankVoucher(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+  uploadingBankVoucher.value = true
+  try {
+    const result = await uploadPortalBankTransferVoucher(file)
+    bankTransferForm.voucherAssetId = result.fileAssetId
+    bankTransferForm.voucherFileName = result.fileName
+    ElMessage.success('转账凭证已上传')
+  } catch (error) {
+    ElMessage.warning(error?.message || '凭证上传失败')
+  } finally {
+    uploadingBankVoucher.value = false
+  }
+}
+
+async function submitSelectedBankTransfer() {
+  if (!bankTransferForm.entryIds.length) {
+    ElMessage.warning('请选择本次转账包含的酒款')
+    return
+  }
+  if (!bankTransferForm.transferTime) {
+    ElMessage.warning('请选择转账时间')
+    return
+  }
+  if (!bankTransferForm.remark) {
+    ElMessage.warning('请填写转账备注')
+    return
+  }
+  submittingBankTransfer.value = true
+  try {
+    await submitPortalBankTransfer({
+      entryIds: bankTransferForm.entryIds,
+      amount: Number(bankTransferAmount.value.toFixed(2)),
+      payerName: bankTransferForm.payerName || undefined,
+      transferTime: bankTransferForm.transferTime,
+      remark: bankTransferForm.remark,
+      voucherAssetId: bankTransferForm.voucherAssetId || undefined,
+    })
+    ElMessage.success('转账信息已提交，等待主办方核对到账')
+    await refreshEntries(selectedEntry.value?.id)
+  } catch (error) {
+    ElMessage.warning(error?.message || '转账信息提交失败')
+  } finally {
+    submittingBankTransfer.value = false
+  }
+}
+
+async function cancelSelectedBankTransfer() {
+  const transferId = selectedEntry.value?.payment?.bankTransferId
+  if (!transferId) return
+  cancelingBankTransfer.value = true
+  try {
+    await cancelPortalBankTransfer(transferId)
+    ElMessage.success('转账提交已取消')
+    await refreshEntries(selectedEntry.value.id)
+  } catch (error) {
+    ElMessage.warning(error?.message || '取消失败')
+  } finally {
+    cancelingBankTransfer.value = false
+  }
+}
+
+async function copyBankAccount() {
+  await ensureBankAccount()
+  const account = bankAccount.value
+  const text = [
+    `账户名：${account.accountName}`,
+    `开户行：${account.bankName}`,
+    `账号：${account.accountNo}`,
+    account.remarkTip,
+    `小秘书微信：${account.serviceWechat}`,
+  ].join('\n')
+  await navigator.clipboard.writeText(text)
+  ElMessage.success('银行账户信息已复制')
 }
 
 async function copyLogisticsAddress() {
@@ -1229,10 +1574,177 @@ function triggerDownload(objectUrl, fileName) {
   margin-top: 16px;
 }
 
+.pay-mode-tabs {
+  display: inline-flex;
+  gap: 6px;
+  margin-top: 16px;
+  padding: 4px;
+  background: #f2e6d2;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.pay-mode-tabs button {
+  min-height: 34px;
+  padding: 0 14px;
+  color: var(--subtle-ink);
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.pay-mode-tabs button.active {
+  color: #fffaf0;
+  background: var(--accent);
+}
+
 .payment-actions span {
   color: var(--subtle-ink);
   font-size: 13px;
   line-height: 1.5;
+}
+
+.wechat-pay-box {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1 1 260px;
+  min-width: 0;
+  padding: 12px;
+  background: #f7f1e7;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.wechat-pay-box img {
+  width: 112px;
+  height: 112px;
+  flex: 0 0 112px;
+  background: #fff;
+  border-radius: 6px;
+}
+
+.wechat-pay-box div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.wechat-pay-box strong {
+  color: var(--ink);
+  font-size: 16px;
+}
+
+.bank-pending-box,
+.bank-transfer-panel {
+  margin-top: 16px;
+}
+
+.bank-pending-box {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+  background: #fff7e6;
+  border: 1px solid rgba(185, 120, 31, 0.22);
+  border-radius: 8px;
+}
+
+.bank-pending-box div {
+  display: grid;
+  gap: 5px;
+}
+
+.bank-pending-box strong,
+.bank-entry-picker strong {
+  color: var(--ink);
+}
+
+.bank-pending-box span,
+.bank-copy-row span,
+.voucher-row span {
+  color: var(--subtle-ink);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.bank-transfer-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.bank-account-box {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.bank-account-box div {
+  min-width: 0;
+  padding: 12px;
+  background: #fffaf1;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.bank-account-box dd {
+  overflow-wrap: anywhere;
+}
+
+.bank-copy-row,
+.voucher-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.bank-entry-picker {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  background: #fffdf8;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.bank-entry-picker :deep(.el-checkbox-group) {
+  display: grid;
+  gap: 8px;
+}
+
+.bank-transfer-form {
+  display: grid;
+  gap: 12px;
+}
+
+.bank-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+}
+
+.bank-form-grid :deep(.el-date-editor) {
+  width: 100%;
+}
+
+.fixed-amount {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 12px;
+  color: var(--accent-deep);
+  background: #fff7e6;
+  border: 1px solid rgba(185, 120, 31, 0.18);
+  border-radius: 8px;
+  font-weight: 900;
+}
+
+.hidden-file {
+  display: none;
 }
 
 .inline-facts div,
@@ -1415,6 +1927,8 @@ dd {
   .inline-facts,
   .summary-list,
   .delivery-grid,
+  .bank-account-box,
+  .bank-form-grid,
   .flow-steps {
     grid-template-columns: 1fr;
   }

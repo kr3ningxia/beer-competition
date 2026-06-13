@@ -48,6 +48,7 @@ const routes = [
       { path: 'competitions/new', component: () => import('@/views/admin/CompetitionCreate.vue') },
       { path: 'competitions/:id', component: () => import('@/views/admin/CompetitionDetail.vue') },
       { path: 'entries', component: () => import('@/views/admin/AdminEntries.vue') },
+      { path: 'bank-transfers', component: () => import('@/views/admin/AdminBankTransfers.vue') },
       { path: 'judges', component: () => import('@/views/admin/Judges.vue') },
       { path: 'style-libraries', component: () => import('@/views/admin/StyleLibraries.vue') },
       { path: 'exports', component: () => import('@/views/admin/AdminExports.vue') },

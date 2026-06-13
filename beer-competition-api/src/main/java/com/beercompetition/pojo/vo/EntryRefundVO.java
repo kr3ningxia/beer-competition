@@ -24,5 +24,6 @@ public class EntryRefundVO {
     private LocalDateTime successTime;
     private String failReason;
     private String wechatRefundId;
+    private String wechatRefundStatus;
     private String outRefundNo;
 }

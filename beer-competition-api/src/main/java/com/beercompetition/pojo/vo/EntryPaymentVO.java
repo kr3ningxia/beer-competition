@@ -15,5 +15,11 @@ public class EntryPaymentVO {
     private BigDecimal amount;
     private String outTradeNo;
     private String wechatTransactionId;
+    private Long bankTransferId;
+    private String codeUrl;
+    private LocalDateTime expireTime;
+    private BigDecimal paidAmount;
+    private String wechatTradeState;
+    private String wechatTradeStateDesc;
     private LocalDateTime paidTime;
 }

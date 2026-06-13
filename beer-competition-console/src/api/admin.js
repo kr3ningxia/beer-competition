@@ -28,6 +28,29 @@ export function fetchAdminEntries(params = {}) {
   return request.get('/api/admin/entries', { params, authScope: 'admin' })
 }
 
+export function fetchAdminBankTransfers(params = {}) {
+  return request.get('/api/admin/bank-transfers', { params, authScope: 'admin' })
+}
+
+export function fetchAdminBankTransferDetail(id) {
+  return request.get(`/api/admin/bank-transfers/${id}`, { authScope: 'admin' })
+}
+
+export function confirmAdminBankTransfer(id, payload = {}) {
+  return request.post(`/api/admin/bank-transfers/${id}/confirm`, payload, { authScope: 'admin' })
+}
+
+export function rejectAdminBankTransfer(id, payload = {}) {
+  return request.post(`/api/admin/bank-transfers/${id}/reject`, payload, { authScope: 'admin' })
+}
+
+export function downloadAdminBankTransferVoucher(id) {
+  return request.get(`/api/admin/bank-transfers/${id}/voucher`, {
+    authScope: 'admin',
+    responseType: 'blob',
+  })
+}
+
 export function fetchAdminEntryDetail(entryId) {
   return request.get(`/api/admin/entries/${entryId}`, { authScope: 'admin' })
 }
