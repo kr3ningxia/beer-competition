@@ -228,12 +228,14 @@ const statusOptions = [
   { label: '评审中', value: 'JUDGING' },
   { label: '结果确认', value: 'RESULT_CONFIRMING' },
   { label: '已发布', value: 'PUBLISHED' },
+  { label: '已归档', value: 'ARCHIVED' },
 ]
 
 const focusCompetition = computed(() => {
-  return competitions.value.find((item) => item.status === 'JUDGING_PREP')
-    || competitions.value.find((item) => item.status === 'REGISTRATION_OPEN')
-    || competitions.value[0]
+  const activeCompetitions = competitions.value.filter((item) => item.status !== 'ARCHIVED')
+  return activeCompetitions.find((item) => item.status === 'JUDGING_PREP')
+    || activeCompetitions.find((item) => item.status === 'REGISTRATION_OPEN')
+    || activeCompetitions[0]
 })
 
 const filteredCompetitions = computed(() => {
@@ -242,7 +244,9 @@ const filteredCompetitions = computed(() => {
     const matchesKeyword = !normalizedKeyword
       || item.name.toLowerCase().includes(normalizedKeyword)
       || item.code.toLowerCase().includes(normalizedKeyword)
-    const matchesStatus = selectedStatus.value === 'ALL' || item.status === selectedStatus.value
+    const matchesStatus = selectedStatus.value === 'ALL'
+      ? item.status !== 'ARCHIVED'
+      : item.status === selectedStatus.value
     const matchesYear = selectedYear.value === 'ALL' || item.date?.startsWith(selectedYear.value)
     return matchesKeyword && matchesStatus && matchesYear
   })
@@ -253,7 +257,7 @@ onMounted(loadCompetitions)
 async function loadCompetitions() {
   loading.value = true
   try {
-    const data = await fetchCompetitions()
+    const data = await fetchCompetitions({ includeArchived: true })
     competitions.value = data.map(normalizeCompetition)
   } finally {
     loading.value = false

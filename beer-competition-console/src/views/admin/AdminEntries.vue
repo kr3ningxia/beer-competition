@@ -236,7 +236,7 @@
             <section class="extra-fields">
               <label v-for="field in editForm.extraFields" :key="field.key">
                 <span>{{ field.label }}</span>
-                <input v-model.trim="field.value" :disabled="!detail.canEdit" />
+                <input v-model.trim="field.value" :disabled="!detail.canEdit" maxlength="255" />
               </label>
             </section>
             <label class="stack-field">
@@ -530,11 +530,13 @@ onMounted(async () => {
 })
 
 async function loadCompetitions() {
-  competitions.value = await fetchCompetitions()
+  competitions.value = await fetchCompetitions({ includeArchived: false })
 }
 
 function applyQuery() {
-  if (route.query.competitionId) filters.competitionId = String(route.query.competitionId)
+  if (route.query.competitionId && competitions.value.some((item) => String(item.id) === String(route.query.competitionId))) {
+    filters.competitionId = String(route.query.competitionId)
+  }
   if (route.query.keyword) filters.keyword = String(route.query.keyword)
 }
 

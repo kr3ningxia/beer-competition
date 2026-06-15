@@ -146,6 +146,7 @@ public class EntryServiceImpl implements EntryService {
     private static final String CONTENT_TYPE_PDF = "application/pdf";
     private static final String TARGET_ENTRY = "BEER_ENTRY";
     private static final String BUSINESS_TYPE_BREWERY_AVATAR = "BREWERY_AVATAR";
+    private static final int EXTRA_FIELD_VALUE_MAX_LENGTH = 255;
     private static final long MAX_AVATAR_SIZE = 5L * 1024L * 1024L;
 
     private final AdminOperationLogMapper adminOperationLogMapper;
@@ -572,6 +573,7 @@ public class EntryServiceImpl implements EntryService {
                 .map(AwardResult::getCompetitionId)
                 .filter(Objects::nonNull)
                 .distinct()
+                .filter(competitionId -> !isCompetitionArchived(competitionId))
                 .map(competitionId -> buildCompetitionResult(competitionId, awards, context))
                 .filter(Objects::nonNull)
                 .toList();
@@ -582,6 +584,9 @@ public class EntryServiceImpl implements EntryService {
         // 1) 查询指定赛事的已发布奖项
         List<AwardResult> awards = listPublishedAwards(competitionId);
         if (awards.isEmpty()) {
+            throw new ResourceNotFoundException("暂无已发布赛事结果");
+        }
+        if (isCompetitionArchived(competitionId)) {
             throw new ResourceNotFoundException("暂无已发布赛事结果");
         }
 
@@ -606,6 +611,7 @@ public class EntryServiceImpl implements EntryService {
                         .eq(BeerEntry::getBreweryId, account.getBreweryId())
                         .orderByDesc(BeerEntry::getId))
                 .stream()
+                .filter(entry -> !isCompetitionArchived(entry.getCompetitionId()))
                 .map(this::toResultSummaryVO)
                 .toList();
     }
@@ -615,6 +621,7 @@ public class EntryServiceImpl implements EntryService {
         // 1) 查询并校验作品归属
         PortalAccount account = requirePortalAccount();
         BeerEntry entry = requireOwnedEntry(entryId, account.getBreweryId());
+        assertCompetitionNotArchived(entry.getCompetitionId());
         PortalResultSummaryVO summary = toResultSummaryVO(entry);
 
         // 2) 未发布时只返回锁定摘要
@@ -884,6 +891,7 @@ public class EntryServiceImpl implements EntryService {
         if (entry == null) {
             throw new ResourceNotFoundException("酒款不存在");
         }
+        assertCompetitionNotArchived(entry.getCompetitionId());
         JudgeScanContext context = requireActiveJudgeRoundEntry(entry);
         EntryScanLabel label = entryScanLabelService.requireActiveLabel(entry.getId());
 
@@ -896,6 +904,7 @@ public class EntryServiceImpl implements EntryService {
         // 1) 解析二维码令牌、现场短编号或匿名标签编码
         EntryScanLabel label = entryScanLabelService.resolveActiveLabel(code);
         BeerEntry entry = requireEntry(label.getBeerEntryId());
+        assertCompetitionNotArchived(entry.getCompetitionId());
         JudgeScanContext context = requireActiveJudgeRoundEntry(entry);
 
         // 2) 组装评审可见匿名信息
@@ -1824,6 +1833,9 @@ public class EntryServiceImpl implements EntryService {
             if (Objects.equals(config.getRequiredFlag(), 1) && !StringUtils.hasText(value)) {
                 throw new BaseException("请填写" + config.getFieldLabel());
             }
+            if (value != null && value.length() > EXTRA_FIELD_VALUE_MAX_LENGTH) {
+                throw new BaseException(config.getFieldLabel() + "不能超过" + EXTRA_FIELD_VALUE_MAX_LENGTH + "个字符");
+            }
             if (StringUtils.hasText(value)) {
                 normalized.put(config.getFieldKey(), value);
             }
@@ -2243,6 +2255,17 @@ public class EntryServiceImpl implements EntryService {
     private boolean isResultPublished(Competition competition, BeerEntry entry) {
         return EntryStatus.RESULT_PUBLISHED.name().equals(entry.getStatus())
                 || (competition != null && CompetitionStatus.PUBLISHED.name().equals(competition.getStatus()));
+    }
+
+    private boolean isCompetitionArchived(Long competitionId) {
+        Competition competition = competitionMapper.selectById(competitionId);
+        return competition != null && CompetitionStatus.ARCHIVED.name().equals(competition.getStatus());
+    }
+
+    private void assertCompetitionNotArchived(Long competitionId) {
+        if (isCompetitionArchived(competitionId)) {
+            throw new ResourceNotFoundException("赛事不存在");
+        }
     }
 
     private String resolvePaymentStatus(BeerEntry entry, EntryPayment payment) {

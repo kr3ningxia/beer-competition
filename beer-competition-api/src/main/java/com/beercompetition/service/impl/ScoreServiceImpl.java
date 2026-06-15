@@ -8,6 +8,7 @@ import com.beercompetition.common.exception.ForbiddenException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.mapper.BeerEntryMapper;
 import com.beercompetition.mapper.CompetitionCategoryMapper;
+import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.CompetitionRoundMapper;
 import com.beercompetition.mapper.CompetitionScoreConfigMapper;
 import com.beercompetition.mapper.EntryScanLabelMapper;
@@ -24,12 +25,14 @@ import com.beercompetition.pojo.dto.JudgeScoreUpdateRequest;
 import com.beercompetition.pojo.dto.TableScoreFinalizeRequest;
 import com.beercompetition.pojo.enums.JudgeAccountStatus;
 import com.beercompetition.pojo.enums.JudgeRoleType;
+import com.beercompetition.pojo.enums.CompetitionStatus;
 import com.beercompetition.pojo.enums.EntryScanLabelStatus;
 import com.beercompetition.pojo.enums.RoundEntryStatus;
 import com.beercompetition.pojo.enums.RoundResultType;
 import com.beercompetition.pojo.enums.RoundStatus;
 import com.beercompetition.pojo.enums.RoundType;
 import com.beercompetition.pojo.po.BeerEntry;
+import com.beercompetition.pojo.po.Competition;
 import com.beercompetition.pojo.po.CompetitionCategory;
 import com.beercompetition.pojo.po.CompetitionRound;
 import com.beercompetition.pojo.po.CompetitionScoreConfig;
@@ -72,6 +75,7 @@ public class ScoreServiceImpl implements ScoreService {
 
     private final BeerEntryMapper beerEntryMapper;
     private final CompetitionCategoryMapper competitionCategoryMapper;
+    private final CompetitionMapper competitionMapper;
     private final CompetitionRoundMapper competitionRoundMapper;
     private final CompetitionScoreConfigMapper competitionScoreConfigMapper;
     private final EntryScanLabelMapper entryScanLabelMapper;
@@ -90,6 +94,7 @@ public class ScoreServiceImpl implements ScoreService {
         Long judgeId = BaseContext.getCurrentId();
         requireActiveJudge(judgeId);
         Long targetCompetitionId = competitionId == null ? resolveCurrentCompetitionId(judgeId) : competitionId;
+        assertCompetitionNotArchived(targetCompetitionId);
         requireAssignment(targetCompetitionId);
 
         // 2) 查询并返回当前比赛角色评分表
@@ -363,6 +368,7 @@ public class ScoreServiceImpl implements ScoreService {
             if (round == null || !RoundType.SCORE.name().equals(round.getRoundType())) {
                 continue;
             }
+            assertCompetitionNotArchived(round.getCompetitionId());
             hasScoreRound = true;
             if (!isScoreRoundEditable(round.getStatus(), captainOnly)) {
                 continue;
@@ -406,6 +412,13 @@ public class ScoreServiceImpl implements ScoreService {
     private boolean isScoreRoundEditable(String status, boolean captainOnly) {
         return RoundStatus.PUBLISHED.name().equals(status)
                 || (captainOnly && RoundStatus.SUBMITTED.name().equals(status));
+    }
+
+    private void assertCompetitionNotArchived(Long competitionId) {
+        Competition competition = competitionMapper.selectById(competitionId);
+        if (competition != null && CompetitionStatus.ARCHIVED.name().equals(competition.getStatus())) {
+            throw new BaseException("比赛已归档");
+        }
     }
 
     private boolean isScoreTableEditable(String status, boolean captainOnly) {

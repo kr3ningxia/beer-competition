@@ -111,8 +111,8 @@ onUnmounted(() => {
 })
 
 async function ensureCompetition() {
-  if (selectedCompetitionId.value) return
-  const competitions = await fetchCompetitions()
+  const competitions = await fetchCompetitions({ includeArchived: false })
+  if (selectedCompetitionId.value && competitions.some((item) => String(item.id) === String(selectedCompetitionId.value))) return
   const target = (competitions || []).find((item) => ['JUDGING', 'JUDGING_PREP'].includes(item.status))
     || (competitions || [])[0]
   selectedCompetitionId.value = target?.id || ''

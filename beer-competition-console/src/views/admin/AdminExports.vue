@@ -25,6 +25,13 @@
           <option v-for="item in competitions" :key="item.id" :value="String(item.id)">{{ item.name }}</option>
         </select>
       </label>
+      <div class="field archived-toggle">
+        <span>历史数据</span>
+        <label class="checkbox-line">
+          <input v-model="includeArchived" type="checkbox" @change="reloadCompetitions" />
+          包含已归档比赛
+        </label>
+      </div>
       <label class="field search-field">
         <span>关键词</span>
         <div>
@@ -152,6 +159,7 @@ const selectedCompetitionId = ref('')
 const exportCount = ref(0)
 const labelCopies = ref(2)
 const exportingKey = ref('')
+const includeArchived = ref(false)
 
 const filters = reactive({
   categoryId: '',
@@ -177,6 +185,7 @@ const statusLabels = {
   JUDGING: '评审中',
   RESULT_CONFIRMING: '结果确认',
   PUBLISHED: '已发布',
+  ARCHIVED: '已归档',
 }
 
 const exportTemplates = [
@@ -245,7 +254,23 @@ onMounted(async () => {
 })
 
 async function loadCompetitions() {
-  competitions.value = await fetchCompetitions()
+  competitions.value = await fetchCompetitions({ includeArchived: includeArchived.value })
+}
+
+async function reloadCompetitions() {
+  const currentId = selectedCompetitionId.value
+  await loadCompetitions()
+  const currentStillVisible = competitions.value.some((item) => String(item.id) === currentId)
+  selectedCompetitionId.value = currentStillVisible ? currentId : ''
+  if (!selectedCompetitionId.value && competitions.value.length) {
+    const focus = competitions.value.find((item) => item.status === 'JUDGING_PREP')
+      || competitions.value.find((item) => item.status === 'REGISTRATION_OPEN')
+      || competitions.value[0]
+    selectedCompetitionId.value = String(focus.id)
+  }
+  Object.assign(filters, { categoryId: '', entryStatus: '', paymentStatus: '', deliveryStatus: '', keyword: '' })
+  await loadCategories()
+  await refreshExportCount()
 }
 
 async function onCompetitionChange() {
@@ -481,6 +506,21 @@ svg {
 .field {
   display: grid;
   gap: 7px;
+}
+
+.checkbox-line {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 38px;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.field .checkbox-line input {
+  width: 16px;
+  min-height: 16px;
+  padding: 0;
 }
 
 .field input,

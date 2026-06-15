@@ -100,7 +100,7 @@
                 v-model.trim="form.extraFields[field.fieldKey]"
                 type="textarea"
                 :rows="4"
-                maxlength="300"
+                maxlength="255"
                 show-word-limit
                 placeholder="选填"
               />
@@ -131,6 +131,8 @@
               <el-input
                 v-else
                 v-model.trim="form.extraFields[field.fieldKey]"
+                maxlength="255"
+                show-word-limit
                 :placeholder="field.helpText || '请填写'"
               />
               <p v-if="field.helpText" class="field-help">{{ field.helpText }}</p>

@@ -73,7 +73,6 @@ const navItems = [
   { path: '/admin/entries', label: '酒款管理', icon: Document },
   { path: '/admin/bank-transfers', label: '转账确认', icon: Document },
   { path: '/admin/style-libraries', label: '风格库管理', icon: Files },
-  { path: null, label: '结果发布', icon: Medal, disabledReason: '请进入比赛详情发布结果' },
   { path: '/admin/exports', label: '数据导出', icon: Download },
 ]
 

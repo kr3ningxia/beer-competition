@@ -202,14 +202,18 @@ public class CompetitionServiceImpl implements CompetitionService {
     }
 
     @Override
-    public List<CompetitionVO> listCompetitions() {
+    public List<CompetitionVO> listCompetitions(boolean includeArchived) {
         // 1) 兜底关闭已到期报名，确保后台列表状态准确
         closeExpiredRegistrations(LocalDateTime.now());
 
-        // 2) 查询比赛主数据
-        List<Competition> competitions = competitionMapper.selectList(new LambdaQueryWrapper<Competition>()
+        // 2) 查询比赛主数据，常用列表默认排除归档赛事
+        LambdaQueryWrapper<Competition> wrapper = new LambdaQueryWrapper<Competition>()
                 .orderByDesc(Competition::getCompetitionDate)
-                .orderByDesc(Competition::getId));
+                .orderByDesc(Competition::getId);
+        if (!includeArchived) {
+            wrapper.ne(Competition::getStatus, CompetitionStatus.ARCHIVED.name());
+        }
+        List<Competition> competitions = competitionMapper.selectList(wrapper);
 
         // 3) 聚合每场比赛的配置检查与统计摘要
         return competitions.stream()

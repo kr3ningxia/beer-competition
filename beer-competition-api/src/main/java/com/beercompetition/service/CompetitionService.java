@@ -18,7 +18,7 @@ import java.util.List;
 
 public interface CompetitionService {
 
-    List<CompetitionVO> listCompetitions();
+    List<CompetitionVO> listCompetitions(boolean includeArchived);
 
     int closeExpiredRegistrations();
 

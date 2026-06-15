@@ -12,6 +12,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 
+/**
+ * 微信支付回调接口，接收支付和退款通知并返回微信要求的响应格式。
+ */
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/pay/wechat")
@@ -21,6 +24,9 @@ public class WechatPayController {
 
     private final WechatPaymentService wechatPaymentService;
 
+    /**
+     * 接收微信支付成功通知。
+     */
     @PostMapping("/payment-notify")
     public ResponseEntity<Map<String, String>> paymentNotify(
             @RequestHeader(value = "Wechatpay-Serial", required = false) String serial,
@@ -33,6 +39,9 @@ public class WechatPayController {
         return ResponseEntity.ok(SUCCESS_RESPONSE);
     }
 
+    /**
+     * 接收微信退款状态通知。
+     */
     @PostMapping("/refund-notify")
     public ResponseEntity<Map<String, String>> refundNotify(
             @RequestHeader(value = "Wechatpay-Serial", required = false) String serial,

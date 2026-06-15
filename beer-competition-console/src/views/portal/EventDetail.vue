@@ -205,7 +205,7 @@ onMounted(async () => {
 })
 
 function stageTone(status) {
-  if (status === 'PUBLISHED' || status === 'ARCHIVED') return 'tone-gold'
+  if (status === 'PUBLISHED') return 'tone-gold'
   if (status === 'REGISTRATION_OPEN') return 'tone-green'
   if (status === 'JUDGING') return 'tone-blue'
   return 'tone-amber'

@@ -105,7 +105,7 @@ onMounted(loadCompetitions)
 async function loadCompetitions() {
   loading.value = true
   try {
-    competitions.value = await fetchCompetitions()
+    competitions.value = await fetchCompetitions({ includeArchived: false })
   } finally {
     loading.value = false
   }

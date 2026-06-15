@@ -1,7 +1,7 @@
 import request from './request'
 
-export function fetchCompetitions() {
-  return request.get('/api/admin/competitions', { authScope: 'admin' })
+export function fetchCompetitions(params = {}) {
+  return request.get('/api/admin/competitions', { params, authScope: 'admin' })
 }
 
 export function createCompetition(payload) {

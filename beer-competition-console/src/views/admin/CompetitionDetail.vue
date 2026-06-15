@@ -5270,7 +5270,7 @@ async function markEntryStoredAction(entry) {
 function addEntryField() {
   entryFieldForm.push({
     localId: `new-field-${Date.now()}`,
-    fieldKey: `custom_${entryFieldForm.length + 1}`,
+    fieldKey: createEntryFieldKey(),
     fieldLabel: '',
     fieldType: 'text',
     helpText: '',
@@ -5278,6 +5278,10 @@ function addEntryField() {
     required: false,
     visibleToJudges: true,
   })
+}
+
+function createEntryFieldKey() {
+  return `custom_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
 }
 
 function addJudgeTable() {
@@ -5527,7 +5531,7 @@ async function saveEntryConfig() {
   const fieldItems = entryFieldForm
     .filter((field) => field.fieldLabel)
     .map((field, index) => ({
-      fieldKey: field.fieldKey || `custom_${index + 1}`,
+      fieldKey: field.fieldKey || createEntryFieldKey(),
       fieldLabel: field.fieldLabel,
       fieldType: field.fieldType,
       helpText: field.helpText,

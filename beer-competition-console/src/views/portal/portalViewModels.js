@@ -35,7 +35,7 @@ export function canSubmitEntry(competition) {
 }
 
 export function isCompetitionResultPublished(competition) {
-  return competition?.status === 'PUBLISHED' || competition?.status === 'ARCHIVED'
+  return competition?.status === 'PUBLISHED'
 }
 
 export function isEntryResultPublished(entry) {
