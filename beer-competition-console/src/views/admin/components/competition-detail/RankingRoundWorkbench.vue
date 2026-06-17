@@ -1,10 +1,10 @@
-<template>
+﻿<template>
   <section class="ranking-round-workbench">
     <header class="round-hero">
       <div>
         <small>后续轮</small>
         <h2>由桌长选择并排序</h2>
-        <p>桌长提交排序，主办方确认后锁定结果。</p>
+        <p>桌长提交排序，组委会确认后锁定结果。</p>
       </div>
       <button class="primary-action" type="button" :disabled="!mainActionEnabled" @click="$emit('rankingMainAction')">
         {{ mainActionText }}
@@ -21,7 +21,7 @@
 
     <section class="ranking-grid">
       <EntryPoolPanel
-        title="晋级酒款池"
+        title="晋级酒款名单"
         :filtered-entries="filteredRoundPool"
         :round-category-filters="roundCategoryFilters"
         :round-category-filter="roundCategoryFilter"
@@ -62,7 +62,7 @@
           </div>
 
           <section class="ranking-slots">
-            <h4>排序槽位</h4>
+            <h4>排序名额</h4>
             <article v-for="slot in getRankingSlots(table)" :key="slot.rank" :class="{ filled: slot.uuid }">
               <span>
                 <strong>{{ slot.label }}</strong>
@@ -79,7 +79,7 @@
                 <button type="button" @click.stop="$emit('removeEntryFromRoundTable', table.id, uuid)">移除</button>
               </div>
             </article>
-            <p v-if="!table.entryUuids.length">从左侧晋级池加入本桌。</p>
+            <p v-if="!table.entryUuids.length">从左侧晋级名单加入本桌。</p>
           </section>
 
           <p v-for="issue in getRoundTableIssues(table)" :key="issue" class="table-warning">
@@ -163,7 +163,7 @@ const filledCount = computed(() => props.currentRoundTables.reduce((sum, table) 
 const statusText = computed(() => props.roundStatusLabels[props.currentRound?.status] || props.currentRound?.status || '-')
 const targetSummaryLabel = computed(() => {
   const modes = new Set(props.currentRoundTables.map((table) => table.targetMode).filter(Boolean))
-  if (modes.size === 1 && modes.has('MEDALS')) return '奖项槽位'
+  if (modes.size === 1 && modes.has('MEDALS')) return '奖项名额'
   if (modes.size === 1 && modes.has('CHAMPION')) return '总冠军'
   return '晋级数量'
 })
@@ -185,13 +185,13 @@ function tableStatusLabel(status) {
 }
 
 function targetCountLabel(table) {
-  if (table?.targetMode === 'MEDALS') return '奖项槽位'
+  if (table?.targetMode === 'MEDALS') return '奖项名额'
   if (table?.targetMode === 'CHAMPION') return '总冠军'
   return '每桌晋级数量'
 }
 
 function targetCountHint(table) {
-  if (table?.targetMode === 'MEDALS') return '金奖、银奖、铜奖为可用槽位，可按评审结果留空。'
+  if (table?.targetMode === 'MEDALS') return '金奖、银奖、铜奖为可用名额，可按评审结果留空。'
   if (table?.targetMode === 'CHAMPION') return '总冠军 1 名。'
   return '桌长需要提交并排序的晋级酒款数量。'
 }

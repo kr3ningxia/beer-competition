@@ -5,8 +5,8 @@
       <div class="hero-shade" aria-hidden="true"></div>
       <div class="hero-copy">
         <span class="label-chip tone-gold">赛事结果</span>
-        <h1>赛事获奖结果</h1>
-        <p>浏览各届赛事的完整获奖名单，了解全场总冠军与各组别金银铜奖。</p>
+        <h1>比赛结果</h1>
+        <p>本届大赛各奖项获奖名单</p>
       </div>
     </section>
 

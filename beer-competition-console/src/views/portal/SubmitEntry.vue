@@ -178,7 +178,7 @@
           <div>
             <span>报名支付</span>
             <h3>{{ paymentPaid ? '支付成功' : '支付报名费' }}</h3>
-            <p>{{ paymentPaid ? '这一款酒已经报名成功，可以继续下载标签并填写送样信息。' : '请完成报名费支付，支付成功后即可下载标签并填写寄样信息。' }}</p>
+            <p>{{ paymentPaid ? '这一款酒已经报名成功，可以继续下载标签并填写送样信息。' : '请完成报名费支付，支付成功后即可下载标签并填写送样信息。' }}</p>
           </div>
           <strong>{{ formatCurrency(paymentAmount) }}</strong>
         </div>
@@ -218,7 +218,7 @@
             :loading="creatingPayment"
             @click="startSubmittedEntryPayment"
           >
-            {{ paymentOrder?.mode === 'WECHAT' ? '刷新付款码' : '获取付款码' }}
+            {{ paymentOrder?.mode === 'WECHAT' ? '刷新支付码' : '获取支付码' }}
           </el-button>
           <el-button v-if="!paymentPaid" :loading="checkingPayment" @click="checkSubmittedEntryPayment">
             刷新状态
@@ -503,7 +503,7 @@ async function startSubmittedEntryPayment(options = {}) {
     }
   } catch (error) {
     if (!options.silent) {
-      ElMessage.warning(error?.message || '付款码获取失败，请稍后重试')
+      ElMessage.warning(error?.message || '支付码获取失败，请稍后重试')
     }
   } finally {
     creatingPayment.value = false

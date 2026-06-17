@@ -60,7 +60,7 @@
               <span class="avatar">{{ getInitial(item.name) }}</span>
               <div>
                 <strong>{{ item.name || '未命名管理员' }}</strong>
-                <small>{{ item.currentUser ? '当前登录账号' : '主办方后台账号' }}</small>
+                <small>{{ item.currentUser ? '当前登录账号' : '组委会后台账号' }}</small>
               </div>
             </div>
             <span class="code-cell">{{ item.username }}</span>
@@ -156,7 +156,8 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Key, Plus, Search } from '@element-plus/icons-vue'
 import {
@@ -168,6 +169,7 @@ import {
   updateMyAdminPassword,
 } from '@/api/admin'
 
+const route = useRoute()
 const users = ref([])
 const loading = ref(false)
 const saving = ref(false)
@@ -198,6 +200,17 @@ const statusFilters = [
   { label: '启用', value: 'ACTIVE' },
   { label: '停用', value: 'DISABLED' },
 ]
+
+watch(() => route.query.keyword, (value) => {
+  const nextKeyword = value ? String(value) : ''
+  if (keyword.value === nextKeyword) return
+  keyword.value = nextKeyword
+  loadUsers()
+})
+
+if (route.query.keyword) {
+  keyword.value = String(route.query.keyword)
+}
 
 onMounted(loadUsers)
 

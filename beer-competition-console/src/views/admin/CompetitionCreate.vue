@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="competition-create">
     <section class="create-head">
       <button class="breadcrumb-link" type="button" @click="leaveCreatePage">
@@ -90,7 +90,7 @@
               <h3>赛事展示</h3>
               <label class="wide-field">
                 <span>赛事简介</span>
-                <textarea v-model.trim="draft.description" rows="3" maxlength="1000" placeholder="面向厂商说明本场赛事定位、适合提交的酒款或报名重点" />
+                <textarea v-model.trim="draft.description" rows="3" maxlength="1000" placeholder="面向厂牌说明本场赛事定位、适合提交的酒款或报名重点" />
               </label>
               <label class="wide-field">
                 <span>参赛细则链接</span>
@@ -160,7 +160,7 @@
                   <input v-model.trim="draft.deliveryAddress" placeholder="省市区、详细地址、收样点名称" />
                 </label>
                 <label>
-                  <span>酒样数量要求</span>
+                  <span>样品数量要求</span>
                   <input v-model.trim="draft.sampleQuantityNote" placeholder="例如 每款 6 瓶，单瓶不低于 330ml" />
                 </label>
                 <label class="wide-field">
@@ -177,7 +177,7 @@
             <h2>报名表配置</h2>
           </header>
           <div class="built-in-strip">
-            <h3>内置报名字段</h3>
+            <h3>内置报名信息</h3>
             <div class="built-in-fields">
               <span>酒名</span>
               <span>投递组别</span>
@@ -264,7 +264,7 @@
                 <div class="field-extra-row">
                   <label>
                     <span>提示文案</span>
-                    <input v-model.trim="field.helpText" placeholder="给厂商看的填写说明" />
+                    <input v-model.trim="field.helpText" placeholder="给厂牌看的填写说明" />
                   </label>
                   <label class="switch-line"><input v-model="field.required" type="checkbox" /> 必填</label>
                   <label
@@ -457,7 +457,7 @@ const deliveryMethodOptions = [
 ]
 
 const logisticsVisibilityOptions = [
-  { label: '付款确认后显示完整地址', value: 'PAYMENT_CONFIRMED' },
+  { label: '支付成功后显示完整地址', value: 'PAYMENT_CONFIRMED' },
   { label: '登录后显示完整地址', value: 'LOGIN_REQUIRED' },
   { label: '公开显示完整地址', value: 'PUBLIC' },
 ]

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div v-if="open" class="modal-backdrop" @click.self="$emit('close')">
     <section class="round-dialog" role="dialog" aria-modal="true" aria-labelledby="create-round-title">
       <header>
@@ -100,12 +100,12 @@ const candidateHint = computed(() => {
 const finishLabel = computed(() => (isChampion.value ? '创建决赛草稿并去分桌' : '创建草稿并去分桌'))
 const isTargetCountFixed = computed(() => Boolean(selectedTargetOption.value?.fixedTargetCount))
 const targetCountLabel = computed(() => {
-  if (props.targetMode === 'MEDALS') return '奖项槽位'
+  if (props.targetMode === 'MEDALS') return '奖项名额'
   if (props.targetMode === 'CHAMPION') return '总冠军'
   return '每桌晋级数量'
 })
 const targetCountHint = computed(() => {
-  if (props.targetMode === 'MEDALS') return '金奖、银奖、铜奖为可用槽位，可按评审结果留空。'
+  if (props.targetMode === 'MEDALS') return '金奖、银奖、铜奖为可用名额，可按评审结果留空。'
   if (props.targetMode === 'CHAMPION') return '总冠军 1 名。'
   return '每张桌由桌长提交并排序的晋级酒款数量。'
 })

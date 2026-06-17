@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <main :class="['live-board', densityClass]">
     <header class="board-header">
       <section class="title-zone">
@@ -213,7 +213,7 @@ function buildMetrics(round, tables, progress = {}) {
     { label: '评分提交', value: `${submitted} / ${total}`, unit: '', tone: submitted >= total && total > 0 ? 'success' : 'gold' },
     { label: '完成桌数', value: `${doneTables} / ${tables.length}`, unit: '桌', tone: doneTables === tables.length && tables.length ? 'success' : 'warning' },
     { label: '平均耗时', value: averageReviewTime, unit: '', tone: 'neutral' },
-    { label: '备注不足', value: commentWarnings, unit: '条', tone: commentWarnings > 0 ? 'warning' : 'success' },
+    { label: '反馈异常', value: commentWarnings, unit: '条', tone: commentWarnings > 0 ? 'warning' : 'success' },
   ]
 }
 
@@ -229,7 +229,7 @@ function buildTableTile(round, table) {
     const submitted = ['SUBMITTED', 'LOCKED'].includes(table.status)
     const done = !issueText && (isMedals ? submitted : selectedCount >= targetCount && targetCount > 0)
     const statusText = issueText ? '需关注' : done ? (isChampion ? '已提交' : '已完成') : selectedCount ? '排序中' : (isChampion ? '待提交' : '待排序')
-    const targetLabel = isChampion ? '总冠军' : isMedals ? '奖项槽位' : '排序目标'
+    const targetLabel = isChampion ? '总冠军' : isMedals ? '奖项名额' : '排序目标'
     const targetValue = isChampion ? (done ? '已选择' : '待选择') : `${targetCount} 款`
     return {
       id: table.id || displayName,
@@ -246,7 +246,7 @@ function buildTableTile(round, table) {
       tone: issueText ? 'danger' : done ? 'success' : selectedCount ? 'active' : 'warning',
       stats: [
         { label: '排序提交', value: `${selectedCount} / ${targetCount}`, accent: done || selectedCount > 0 },
-        { label: '主办方确认', value: round.status === 'LOCKED' ? '已锁定' : done ? '待确认' : '未开始' },
+        { label: '组委会确认', value: round.status === 'LOCKED' ? '已锁定' : done ? '待确认' : '未开始' },
         { label: targetLabel, value: targetValue, accent: true },
       ],
     }
@@ -334,7 +334,7 @@ function collectNotices(round, tables) {
     notices.push({ title: '桌长确认中', text: `${captainWorking.displayName}桌长正在确认本桌结果。`, tone: 'warning' })
   }
   if (tables.length && tables.every((table) => table.done)) {
-    notices.push({ title: '本轮已完成', text: '所有评审桌已完成，请等待主办方确认本轮结果。', tone: 'success' })
+    notices.push({ title: '本轮已完成', text: '所有评审桌已完成，请等待组委会确认本轮结果。', tone: 'success' })
   }
   return notices
 }
@@ -372,7 +372,7 @@ function buildRoundSteps(rounds, currentRound) {
   const nextRound = rounds[currentIndex + 1]
   const terminal = currentRound?.tables?.some((table) => table.targetMode === 'CHAMPION')
   return [
-    { label: currentRound?.name || '第一轮', status: resolveShortRoundStatus(currentRound), current: true },
+    { label: currentRound?.name || '首轮', status: resolveShortRoundStatus(currentRound), current: true },
     ...(terminal ? [] : [{ label: nextRound?.name || '下一轮', status: nextRound ? resolveShortRoundStatus(nextRound) : '待创建', muted: !nextRound }]),
     { label: '结果确认', status: currentRound?.status === 'LOCKED' && terminal ? '待发布' : '待确认', muted: true },
   ]

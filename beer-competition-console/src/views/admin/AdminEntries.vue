@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="admin-entries-page">
     <section class="page-head">
       <div>
@@ -47,12 +47,12 @@
         </select>
       </label>
       <label class="field">
-        <span>付款</span>
+        <span>支付</span>
         <select v-model="filters.paymentStatus" @change="applyFilters">
-          <option value="">全部付款</option>
-          <option value="UNPAID">待付款</option>
+          <option value="">全部支付状态</option>
+          <option value="UNPAID">待支付</option>
           <option value="PENDING_CONFIRM">等待转账确认</option>
-          <option value="PAID">已付款</option>
+          <option value="PAID">已支付</option>
           <option value="REFUNDED">已退款</option>
           <option value="CANCELED">已取消</option>
         </select>
@@ -99,7 +99,7 @@
           <span>比赛</span>
           <span>编号</span>
           <span>组别 / 风格</span>
-          <span>付款/退款</span>
+          <span>支付/退款</span>
           <span>入库</span>
           <span>最近修改</span>
           <span>操作</span>
@@ -198,11 +198,11 @@
           <section v-if="activeTab === 'profile'" class="drawer-panel profile-panel">
             <div class="risk-banner" v-if="detail.assigned || detail.resultPublished">
               <strong>{{ detail.resultPublished ? '结果已发布' : '酒款已分桌' }}</strong>
-              <span>{{ detail.resultPublished ? '当前报名信息只读。' : '修改组别或评审可见信息后，需要核对分桌和现场展示。' }}</span>
+              <span>{{ detail.resultPublished ? '当前报名信息暂不能修改。' : '修改组别或评审可见信息后，需要核对分桌和现场展示。' }}</span>
             </div>
             <section class="delivery-summary">
               <div class="section-title">
-                <strong>寄样信息</strong>
+                <strong>送样信息</strong>
                 <span :class="['state-pill', deliveryTone(detail.deliveryStatus)]">{{ deliveryLabel(detail.deliveryStatus) }}</span>
               </div>
               <dl v-if="deliveryInfoItems.length">
@@ -211,7 +211,7 @@
                   <dd>{{ item.value }}</dd>
                 </div>
               </dl>
-              <p v-else class="empty-line">厂商尚未提交寄样信息。</p>
+              <p v-else class="empty-line">厂牌尚未提交送样信息。</p>
             </section>
             <div class="form-grid">
               <label>
@@ -255,7 +255,7 @@
                 <strong>{{ entryStatusLabel(detail.status) }}</strong>
               </article>
               <article>
-                <small>付款</small>
+                <small>支付</small>
                 <strong>{{ paymentLabel(detail.paymentStatus) }}</strong>
               </article>
               <article>
@@ -272,7 +272,7 @@
               <textarea v-model.trim="statusReason" placeholder="可填写现场处理说明"></textarea>
             </label>
             <div class="status-actions">
-              <button type="button" :disabled="!detail.canConfirmPayment" @click="runDetailStatusAction('payment')">确认付款</button>
+              <button type="button" :disabled="!detail.canConfirmPayment" @click="runDetailStatusAction('payment')">确认支付</button>
               <button type="button" :disabled="!detail.canMarkStored" @click="runDetailStatusAction('stored')">确认入库</button>
               <button v-if="detail.stored || detail.deliveryStatus === 'RECEIVED'" class="danger" type="button" :disabled="!detail.canUnmarkStored" @click="runDetailStatusAction('unmarkStored')">撤销入库</button>
               <button class="danger" type="button" :disabled="!detail.canCancel" @click="runDetailStatusAction('cancel')">取消报名</button>
@@ -285,7 +285,7 @@
               <p>{{ detail.refundReason || detail.refund?.reason || '未填写退款原因' }}</p>
               <dl>
                 <div><dt>退款状态</dt><dd>{{ refundStatusText(detail.refundStatus) }}</dd></div>
-                <div><dt>付款方式</dt><dd>{{ paymentMethodLabel(detail.payment?.payMethod) }}</dd></div>
+                <div><dt>支付方式</dt><dd>{{ paymentMethodLabel(detail.payment?.payMethod) }}</dd></div>
                 <div><dt>金额</dt><dd>{{ formatMoney(detail.refund?.amount || detail.payment?.amount) }}</dd></div>
                 <div><dt>申请时间</dt><dd>{{ formatTime(detail.refundRequestedAt || detail.refund?.requestedTime) }}</dd></div>
                 <div><dt>处理时间</dt><dd>{{ formatTime(detail.refundProcessedAt || detail.refund?.processedTime) }}</dd></div>
@@ -439,7 +439,7 @@ const editForm = reactive({
 })
 
 const entryStatusOptions = [
-  { value: 'PENDING_PAYMENT', label: '待付款' },
+  { value: 'PENDING_PAYMENT', label: '待支付' },
   { value: 'REGISTERED', label: '报名成功' },
   { value: 'STORED', label: '已入库' },
   { value: 'CANCELED', label: '已取消' },
@@ -714,7 +714,7 @@ async function openRefundDetail(entry) {
 function entrySummaryItems(current = detail.value, extra = []) {
   return [
     { label: '酒款', value: current?.name || current?.shortCode || current?.uuid || '-' },
-    { label: '厂商', value: current?.breweryCompanyName || '-' },
+    { label: '厂牌', value: current?.breweryCompanyName || '-' },
     { label: '当前状态', value: `${entryStatusLabel(current?.status)} / ${deliveryLabel(current?.deliveryStatus)}` },
     ...extra,
   ]
@@ -771,7 +771,7 @@ async function runDetailStatusAction(type) {
       title: '确认取消报名？',
       copy: '取消后，该酒款会退出后续分桌、评审和结果流程；已产生的记录仍会保留用于追溯。',
       summary: entrySummaryItems(current, [
-        { label: '付款', value: paymentLabel(current.paymentStatus) },
+        { label: '支付', value: paymentLabel(current.paymentStatus) },
         { label: '分桌', value: current.assigned ? '已分桌' : '未分桌' },
       ]),
       confirmText: '确认取消',
@@ -831,7 +831,7 @@ async function runRefundAction(type) {
         ? '将重新提交微信退款。退款成功后，这款酒会取消报名并退出后续流程。'
         : refundConfirmCopy(current),
       summary: entrySummaryItems(current, [
-        { label: '付款方式', value: paymentMethodLabel(current.payment?.payMethod) },
+        { label: '支付方式', value: paymentMethodLabel(current.payment?.payMethod) },
         { label: '退款状态', value: refundStatusText(current.refundStatus) },
         { label: '退款金额', value: formatMoney(current.refund?.amount || current.payment?.amount) },
       ]),
@@ -866,7 +866,7 @@ function refundActionLabel(type) {
 }
 
 function statusActionLabel(type) {
-  if (type === 'payment') return '付款已确认'
+  if (type === 'payment') return '支付已确认'
   if (type === 'stored') return '入库已确认'
   if (type === 'unmarkStored') return '入库已撤销'
   return '报名已取消'
@@ -877,7 +877,7 @@ function entryStatusLabel(value) {
 }
 
 function paymentLabel(value) {
-  return { UNPAID: '待付款', PENDING_CONFIRM: '等待转账确认', PAID: '已付款', REFUNDED: '已退款', CANCELED: '已取消' }[value] || value || '-'
+  return { UNPAID: '待支付', PENDING_CONFIRM: '等待转账确认', PAID: '已支付', REFUNDED: '已退款', CANCELED: '已取消' }[value] || value || '-'
 }
 
 function paymentMethodLabel(value) {
@@ -913,7 +913,7 @@ function paymentRefundMeta(entry) {
   if (['APPROVED', 'PROCESSING'].includes(entry.refundStatus)) return '退款处理中'
   if (entry.refundStatus === 'SUCCESS') return '报名已取消'
   if (entry.refundStatus === 'FAILED') return '需要重试'
-  if (entry.refundStatus === 'REJECTED') return '付款仍有效'
+  if (entry.refundStatus === 'REJECTED') return '支付仍有效'
   return ''
 }
 
@@ -981,7 +981,7 @@ function traceText(trace) {
 function actionLabel(action) {
   return {
     ENTRY_UPDATE: '编辑报名信息',
-    ENTRY_CONFIRM_PAYMENT: '确认付款',
+    ENTRY_CONFIRM_PAYMENT: '确认支付',
     ENTRY_BANK_TRANSFER_CONFIRM: '确认银行转账',
     ENTRY_BANK_TRANSFER_REJECT: '驳回银行转账',
     ENTRY_MARK_STORED: '确认入库',
@@ -1030,7 +1030,7 @@ function buildAdminLabelSvg(label) {
     }
   }
 
-  const category = escapeXml(label.categoryName || '待确认组别')
+  const category = escapeXml(label.categoryName || '组别待确认')
   const style = escapeXml(label.style || 'Style Pending')
   const abv = label.abv !== '' && label.abv !== null && label.abv !== undefined ? `${label.abv}%` : 'ABV Pending'
   const code = escapeXml(label.shortCode || 'PENDING')
@@ -1092,10 +1092,10 @@ async function downloadAdminLabelPng() {
     const pngBlob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'))
     URL.revokeObjectURL(svgUrl)
 
-    if (!pngBlob) throw new Error('标签图片生成失败')
+    if (!pngBlob) throw new Error('现场标签生成失败')
 
     triggerDownload(URL.createObjectURL(pngBlob), `${detail.value.shortCode || 'entry-label'}.png`)
-    ElMessage.success('标签 PNG 已开始下载')
+    ElMessage.success('现场标签已开始下载')
   } catch {
     ElMessage.error('标签下载失败，请稍后重试')
   }

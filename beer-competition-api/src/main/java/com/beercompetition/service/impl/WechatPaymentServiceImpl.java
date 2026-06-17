@@ -77,7 +77,7 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
 
     @Override
     public WechatNativePayVO createNativePayment(Long entryId) {
-        // 1) 校验厂商作品与支付资格
+        // 1) 校验厂牌作品与支付资格
         PortalAccount account = requirePortalAccount();
         BeerEntry entry = requireOwnedEntry(entryId, account.getBreweryId());
         EntryPayment payment = ensurePayment(entry);
@@ -85,7 +85,7 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
             return toNativePayVO(payment);
         }
         if (EntryPaymentStatus.PENDING_CONFIRM.name().equals(payment.getStatus())) {
-            throw new BaseException("银行转账信息已提交，请等待主办方核对到账");
+            throw new BaseException("银行转账信息已提交，请等待组委会核对到账");
         }
         if (!EntryStatus.PENDING_PAYMENT.name().equals(entry.getStatus())) {
             throw new BaseException("当前酒款不能支付报名费");
@@ -127,7 +127,7 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
 
     @Override
     public EntryPaymentStatusVO getPortalPaymentStatus(Long entryId) {
-        // 1) 校验厂商作品
+        // 1) 校验厂牌作品
         PortalAccount account = requirePortalAccount();
         BeerEntry entry = requireOwnedEntry(entryId, account.getBreweryId());
         EntryPayment payment = findPayment(entry.getId());
@@ -276,7 +276,7 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
             throw new BaseException("微信支付金额不一致");
         }
         if (!EntryStatus.PENDING_PAYMENT.name().equals(entry.getStatus())) {
-            throw new BaseException("当前报名状态不能确认付款");
+            throw new BaseException("当前报名状态不能确认支付");
         }
 
         payment.setStatus(EntryPaymentStatus.PAID.name());
@@ -302,7 +302,7 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
         BeerEntry entry = requireEntry(refund.getBeerEntryId());
         EntryPayment payment = findPayment(entry.getId());
         if (payment == null || !EntryPaymentStatus.PAID.name().equals(payment.getStatus())) {
-            throw new BaseException("只有已付款报名可以退款");
+            throw new BaseException("只有已支付报名可以退款");
         }
         if (!isManualRefundPayment(payment)) {
             if (!StringUtils.hasText(payment.getOutTradeNo()) && wechatPayProperties.isWechatMode()) {
@@ -453,7 +453,7 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
     private PortalAccount requirePortalAccount() {
         PortalAccount account = portalAccountMapper.selectById(BaseContext.getCurrentId());
         if (account == null) {
-            throw new ResourceNotFoundException("厂商账号不存在");
+            throw new ResourceNotFoundException("厂牌账号不存在");
         }
         Brewery brewery = breweryMapper.selectById(account.getBreweryId());
         if (brewery == null) {

@@ -413,7 +413,7 @@ public class AwardServiceImpl implements AwardService {
                     .map(AwardResult::getRankNo)
                     .collect(Collectors.toSet());
             if (ranks.size() != entry.getValue().size() || ranks.stream().anyMatch(rank -> rank == null || rank < 1 || rank > 3)) {
-                throw new BaseException("组别奖项只能使用金、银、铜槽位，且同一槽位不能重复");
+                throw new BaseException("组别奖项只能使用金、银、铜名额，且同一名额不能重复");
             }
         }
     }
@@ -506,7 +506,7 @@ public class AwardServiceImpl implements AwardService {
                 throw new BaseException("奖项名次必须大于 0");
             }
             if (type == AwardType.MEDAL && item.getRankNo() > 3) {
-                throw new BaseException("组别奖项只能使用金、银、铜槽位");
+                throw new BaseException("组别奖项只能使用金、银、铜名额");
             }
             if (type == AwardType.MEDAL && item.getCategoryId() != null && !item.getCategoryId().equals(entry.getCategoryId())) {
                 throw new BaseException("组别奖项酒款与组别不匹配：" + entry.getUuid());
@@ -565,7 +565,7 @@ public class AwardServiceImpl implements AwardService {
     private void validateMedalConfirmationSlots(Map<Long, Set<Integer>> medalRanksByCategory) {
         for (Set<Integer> ranks : medalRanksByCategory.values()) {
             if (ranks.stream().anyMatch(rank -> rank == null || rank < 1 || rank > 3)) {
-                throw new BaseException("组别奖项只能使用金、银、铜槽位");
+                throw new BaseException("组别奖项只能使用金、银、铜名额");
             }
         }
     }

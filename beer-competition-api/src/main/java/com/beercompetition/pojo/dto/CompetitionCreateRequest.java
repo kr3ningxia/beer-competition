@@ -53,7 +53,7 @@ public class CompetitionCreateRequest {
 
     private LocalDateTime sampleArrivalDeadline;
 
-    @Size(max = 255, message = "酒样数量要求不能超过 255 个字符")
+    @Size(max = 255, message = "样品数量要求不能超过 255 个字符")
     private String sampleQuantityNote;
 
     @Size(max = 64, message = "收件人不能超过 64 个字符")

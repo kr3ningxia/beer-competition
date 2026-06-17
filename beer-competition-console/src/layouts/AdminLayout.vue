@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div :class="['admin-shell', { 'dashboard-shell': isDashboard }]">
     <aside class="sidebar">
       <div class="brand">
@@ -10,7 +10,7 @@
         </div>
       </div>
 
-      <nav class="nav-list" aria-label="主办方后台导航">
+      <nav class="nav-list" aria-label="组委会后台导航">
         <component
           :is="item.path ? RouterLink : 'span'"
           v-for="item in navItems"
@@ -50,6 +50,7 @@ import { computed } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
   DataBoard,
+  DocumentChecked,
   Document,
   Files,
   Download,
@@ -64,7 +65,7 @@ import { clearSession, getDisplayName } from '@/utils/auth'
 const router = useRouter()
 const route = useRoute()
 const displayName = getDisplayName('admin')
-const isDashboard = computed(() => ['/admin/dashboard', '/admin/judges', '/admin/admin-users', '/admin/entries', '/admin/bank-transfers', '/admin/style-libraries', '/admin/exports'].includes(route.path) || route.path.startsWith('/admin/competitions'))
+const isDashboard = computed(() => ['/admin/dashboard', '/admin/judges', '/admin/admin-users', '/admin/operation-logs', '/admin/entries', '/admin/bank-transfers', '/admin/style-libraries', '/admin/exports'].includes(route.path) || route.path.startsWith('/admin/competitions'))
 
 const navItems = [
   { path: '/admin/dashboard', label: '首页', icon: House },
@@ -75,6 +76,7 @@ const navItems = [
   { path: '/admin/bank-transfers', label: '转账确认', icon: Document },
   { path: '/admin/style-libraries', label: '风格库管理', icon: Files },
   { path: '/admin/admin-users', label: '管理员账号', icon: UserFilled },
+  { path: '/admin/operation-logs', label: '操作日志', icon: DocumentChecked },
   { path: '/admin/exports', label: '数据导出', icon: Download },
 ]
 
@@ -136,18 +138,17 @@ function logout() {
 .brand-mark {
   display: grid;
   place-items: center;
+  overflow: hidden;
   width: 48px;
   height: 48px;
   color: #dfb94c;
-  border: 1px solid rgba(216, 169, 53, 0.28);
   border-radius: 12px;
-  background: rgba(216, 169, 53, 0.1);
 }
 
 .brand-mark img {
-  width: 38px;
-  height: 38px;
-  object-fit: contain;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .brand h2 {

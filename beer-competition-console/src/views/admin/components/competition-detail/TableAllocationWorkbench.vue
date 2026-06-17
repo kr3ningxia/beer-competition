@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <section :class="['allocation-workbench', { 'overview-workbench': allocationMode === 'overview' }]">
     <section v-if="allocationMode === 'judges'" class="allocation-grid">
       <template v-if="usesRoundJudgeEditor">
@@ -224,7 +224,7 @@
           </p>
           <p v-if="roundValidationIssues.length === 0 && !publishDisabledReason" class="ok">
             <CircleCheck />
-            <span>{{ currentRound?.type === 'SCORE' ? '第一轮可以发布。' : '排序轮可以发布。' }}</span>
+            <span>{{ currentRound?.type === 'SCORE' ? '首轮可以发布。' : '排序轮可以发布。' }}</span>
           </p>
         </section>
       </aside>
@@ -374,11 +374,11 @@
         </p>
         <p v-if="validationIssues.length === 0 && !firstRoundExists" class="ok">
           <CircleCheck />
-          <span>可以继续分配第一轮酒款。</span>
+          <span>可以继续分配首轮酒款。</span>
         </p>
         <p v-if="validationIssues.length === 0 && firstRoundExists" class="ok">
           <CircleCheck />
-          <span>可以继续调整第一轮草稿。</span>
+          <span>可以继续调整首轮草稿。</span>
         </p>
         </section>
       </aside>
@@ -616,7 +616,7 @@
           </p>
           <p v-if="roundValidationIssues.length === 0 && (!publishDisabledReason || currentRound?.isPreparationDraft)" class="ok">
             <CircleCheck />
-            <span>{{ currentRound?.isPreparationDraft ? '当前分配会在发布时保存为第一轮。' : '当前轮次可以发布。' }}</span>
+            <span>{{ currentRound?.isPreparationDraft ? '当前分配会在发布时保存为首轮。' : '当前轮次可以发布。' }}</span>
           </p>
         </section>
       </aside>
@@ -882,7 +882,7 @@ const roundTargetOptions = computed(() => {
       {
         value: 'MEDALS',
         label: '组别金银铜轮',
-        hint: '金奖、银奖、铜奖为可用槽位，可按评审结果留空。',
+        hint: '金奖、银奖、铜奖为可用名额，可按评审结果留空。',
       },
       {
         value: 'CHAMPION',
@@ -900,7 +900,7 @@ const roundTargetOptions = computed(() => {
     {
       value: 'MEDALS',
       label: '组别金银铜轮',
-      hint: '金奖、银奖、铜奖为可用槽位，可按评审结果留空。',
+      hint: '金奖、银奖、铜奖为可用名额，可按评审结果留空。',
     },
   ]
 })
@@ -1077,16 +1077,16 @@ function formatEntryState(entry) {
   if (entry?.status === 'CANCELED') return '已取消'
   if (entry?.refundStatus === 'SUCCESS' || entry?.paymentStatus === 'REFUNDED') return '已退款'
   if (entry?.stored || entry?.status === 'STORED') return '已入库'
-  if (entry?.deliveryStatus === 'RECEIVED') return '已收样'
+  if (entry?.deliveryStatus === 'RECEIVED') return '已收到样品'
   if (entry?.deliveryStatus === 'SUBMITTED') return '已提交送样'
-  if (entry?.paymentStatus === 'PAID' || entry?.status === 'REGISTERED') return '已付款'
-  if (entry?.status === 'PENDING_PAYMENT' || entry?.paymentStatus === 'UNPAID') return '待付款'
+  if (entry?.paymentStatus === 'PAID' || entry?.status === 'REGISTERED') return '已支付'
+  if (entry?.status === 'PENDING_PAYMENT' || entry?.paymentStatus === 'UNPAID') return '待支付'
   return entry?.status || '-'
 }
 
 function getTargetCountLabel(table) {
   if (props.currentRound?.type === 'SCORE') return '晋级数量'
-  if (table?.targetMode === 'MEDALS') return '奖项槽位'
+  if (table?.targetMode === 'MEDALS') return '奖项名额'
   if (table?.targetMode === 'CHAMPION') return '总冠军'
   return '晋级数量'
 }

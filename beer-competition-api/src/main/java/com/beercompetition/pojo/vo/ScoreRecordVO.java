@@ -27,6 +27,8 @@ public class ScoreRecordVO {
     private Integer isFinal;
     private Integer isAdvanced;
     private BigDecimal consensusScore;
+    private Integer durationSeconds;
+    private Integer commentCharCount;
     private Boolean locked;
     private LocalDateTime submittedAt;
 }

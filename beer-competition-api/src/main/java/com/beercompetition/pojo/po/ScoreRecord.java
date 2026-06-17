@@ -22,6 +22,8 @@ public class ScoreRecord {
     @TableId(type = IdType.AUTO)
     private Long id;
     private Long competitionId;
+    private Long roundId;
+    private Long roundTableId;
     private Long beerEntryId;
     private Long judgeAccountId;
     private Long assignmentId;
@@ -34,6 +36,8 @@ public class ScoreRecord {
     @TableField("is_advanced")
     private Integer advancedFlag;
     private BigDecimal consensusScore;
+    private Integer durationSeconds;
+    private Integer commentCharCount;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

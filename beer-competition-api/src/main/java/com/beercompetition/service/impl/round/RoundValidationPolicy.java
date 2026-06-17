@@ -55,7 +55,7 @@ public class RoundValidationPolicy {
     public void validateCompetitionStageForRoundAllocation(Competition competition, CompetitionRound round) {
         CompetitionStatus status = parseCompetitionStatus(competition);
         if (RoundType.SCORE.name().equals(round.getRoundType()) && !isPreJudgingStage(status)) {
-            throw new BaseException("评审已开始，不能再保存第一轮编排");
+            throw new BaseException("评审已开始，不能再保存首轮编排");
         }
         if (RoundType.RANKING.name().equals(round.getRoundType()) && !isRankingRoundStage(status)) {
             throw new BaseException("当前阶段不能保存排序轮编排");
@@ -68,7 +68,7 @@ public class RoundValidationPolicy {
     public void validateCompetitionStageForRoundPublish(Competition competition, CompetitionRound round) {
         CompetitionStatus status = parseCompetitionStatus(competition);
         if (RoundType.SCORE.name().equals(round.getRoundType()) && status != CompetitionStatus.JUDGING_PREP) {
-            throw new BaseException("第一轮只能在评审准备阶段发布");
+            throw new BaseException("首轮只能在评审准备中发布");
         }
         if (RoundType.RANKING.name().equals(round.getRoundType()) && !isRankingRoundStage(status)) {
             throw new BaseException("当前阶段不能发布排序轮");
@@ -138,7 +138,7 @@ public class RoundValidationPolicy {
             }
         }
         if (requireComplete && RoundType.SCORE.name().equals(round.getRoundType()) && entryUuids.isEmpty()) {
-            throw new BaseException("第一轮必须分配已入库酒款");
+            throw new BaseException("首轮必须分配已入库样品");
         }
     }
 
@@ -180,7 +180,7 @@ public class RoundValidationPolicy {
                             || EntryStatus.CANCELED.name().equals(entry.getStatus()))
                     .findFirst()
                     .ifPresent(entry -> {
-                        throw new BaseException("第一轮只能分配已入库且未取消的酒款：" + entry.getUuid());
+                        throw new BaseException("首轮只能分配已入库且未取消的样品：" + entry.getUuid());
                     });
             return;
         }
@@ -254,7 +254,7 @@ public class RoundValidationPolicy {
         // 奖牌排序允许个别奖项空缺；普通 TopN 和总冠军排序必须正好填满目标数量。
         if (allowEmptyMedalSlots) {
             if (request.getResults().size() > targetCount) {
-                throw new BaseException("奖项结果数量不能超过奖项槽位");
+                throw new BaseException("奖项结果数量不能超过奖项名额");
             }
         } else if (request.getResults().size() != targetCount) {
             throw new BaseException("排序结果数量必须等于目标数量");
@@ -270,7 +270,7 @@ public class RoundValidationPolicy {
     public void validateRankingDraft(RoundTable table, List<RankingResultItemRequest> results) {
         int targetCount = table.getTargetCount() == null ? 0 : table.getTargetCount();
         if (results.size() > targetCount) {
-            throw new BaseException("参考排序数量不能超过槽位数量");
+            throw new BaseException("参考排序数量不能超过名额数量");
         }
         Set<Long> tableEntryIds = roundTableEntryMapper.selectList(new LambdaQueryWrapper<RoundTableEntry>()
                         .eq(RoundTableEntry::getRoundTableId, table.getId()))
@@ -347,7 +347,7 @@ public class RoundValidationPolicy {
                 .map(CompetitionScoreConfig::getJudgeRoleType)
                 .collect(Collectors.toSet());
         if (!roles.containsAll(Set.of(JudgeRoleType.CAPTAIN.name(), JudgeRoleType.PROFESSIONAL.name(), JudgeRoleType.CROSS.name()))) {
-            throw new BaseException("第一轮发布前需要完整评分表");
+            throw new BaseException("首轮发布前需要完整评分表");
         }
     }
 
@@ -368,7 +368,7 @@ public class RoundValidationPolicy {
                 throw new BaseException(label + "名次不能重复");
             }
             if (item.getRankNo() < 1 || item.getRankNo() > targetCount) {
-                throw new BaseException(label + "名次超出" + (label.equals("排序") ? "目标范围" : "槽位范围"));
+                throw new BaseException(label + "名次超出" + (label.equals("排序") ? "目标范围" : "名额范围"));
             }
         }
     }

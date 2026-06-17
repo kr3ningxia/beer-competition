@@ -382,10 +382,10 @@ public class EntryServiceImpl implements EntryService {
         PortalAccount account = requirePortalAccount();
         BeerEntry entry = requireOwnedEntry(entryId, account.getBreweryId());
         if (!LABEL_ALLOWED_STATUSES.contains(entry.getStatus())) {
-            throw new BaseException("付款确认后才能提交送样信息");
+            throw new BaseException("支付成功后才能提交送样信息");
         }
         if (hasActiveRefund(entry.getId())) {
-            throw new BaseException("退款处理中，不能提交寄样信息");
+            throw new BaseException("退款处理中，不能提交送样信息");
         }
         EntryDelivery delivery = ensureEntryDelivery(entry.getId());
         String deliveryMethod = normalizeDeliveryMethod(request.getDeliveryMethod());
@@ -440,7 +440,7 @@ public class EntryServiceImpl implements EntryService {
         PortalAccount account = requirePortalAccount();
         BeerEntry entry = requireOwnedEntry(entryId, account.getBreweryId());
         if (!LABEL_ALLOWED_STATUSES.contains(entry.getStatus())) {
-            throw new BaseException("付款确认后才能下载现场标签");
+            throw new BaseException("支付成功后才能下载现场标签");
         }
         if (hasActiveRefund(entry.getId())) {
             throw new BaseException("退款处理中，不能下载现场标签");
@@ -691,7 +691,7 @@ public class EntryServiceImpl implements EntryService {
         }
         EntryPayment payment = ensureEntryPayment(entry.getId(), entry.getCompetitionId());
         if (EntryPaymentStatus.PENDING_CONFIRM.name().equals(payment.getStatus())) {
-            throw new BaseException("银行转账信息已提交，请等待主办方核对到账");
+            throw new BaseException("银行转账信息已提交，请等待组委会核对到账");
         }
 
         // 2) 模拟支付到账并推进报名状态
@@ -721,7 +721,7 @@ public class EntryServiceImpl implements EntryService {
         // 1) 查询作品并校验状态
         BeerEntry entry = requireEntry(entryId);
         if (!EntryStatus.PENDING_PAYMENT.name().equals(entry.getStatus())) {
-            throw new BaseException("只有待付款确认的酒款可以确认付款");
+            throw new BaseException("只有待支付确认的酒款可以确认支付");
         }
         EntryPayment payment = ensureEntryPayment(entry.getId(), entry.getCompetitionId());
         if (EntryPaymentStatus.PENDING_CONFIRM.name().equals(payment.getStatus())) {
@@ -737,7 +737,7 @@ public class EntryServiceImpl implements EntryService {
         entryPaymentMapper.updateById(payment);
         entry.setStatus(EntryStatus.REGISTERED.name());
         beerEntryMapper.updateById(entry);
-        writeEntryLog("ENTRY_CONFIRM_PAYMENT", entry.getUuid(), buildStatusLogSummary("确认付款", normalizeStatusReason(request)));
+        writeEntryLog("ENTRY_CONFIRM_PAYMENT", entry.getUuid(), buildStatusLogSummary("确认支付", normalizeStatusReason(request)));
     }
 
     @Override
@@ -816,7 +816,7 @@ public class EntryServiceImpl implements EntryService {
         }
         EntryPayment payment = ensureEntryPayment(entry.getId(), entry.getCompetitionId());
         if (EntryPaymentStatus.PAID.name().equals(payment.getStatus())) {
-            throw new BaseException("已付款报名请通过退款申请处理");
+            throw new BaseException("已支付报名请通过退款申请处理");
         }
         if (EntryPaymentStatus.PENDING_CONFIRM.name().equals(payment.getStatus())) {
             throw new BaseException("银行转账确认中，请先处理转账记录");
@@ -1777,13 +1777,13 @@ public class EntryServiceImpl implements EntryService {
             return "只有报名成功的酒款可以申请退款";
         }
         if (!EntryPaymentStatus.PAID.name().equals(payment.getStatus())) {
-            return "只有已付款酒款可以申请退款";
+            return "只有已支付酒款可以申请退款";
         }
         if (competition.getRegistrationDeadline() != null && LocalDateTime.now().isAfter(competition.getRegistrationDeadline())) {
             return "报名截止后不能申请退款";
         }
         if (Objects.equals(entry.getStoredFlag(), 1)) {
-            return "酒样已入库，不能申请退款";
+            return "样品已入库，不能申请退款";
         }
         if (hasRoundAssignment(entry.getId())) {
             return "酒款已进入评审编排，不能申请退款";
@@ -2043,7 +2043,7 @@ public class EntryServiceImpl implements EntryService {
     private PortalAccount requirePortalAccount() {
         PortalAccount account = portalAccountMapper.selectById(BaseContext.getCurrentId());
         if (account == null) {
-            throw new ResourceNotFoundException("厂商账号不存在");
+            throw new ResourceNotFoundException("厂牌账号不存在");
         }
         Brewery brewery = breweryMapper.selectById(account.getBreweryId());
         if (brewery == null) {

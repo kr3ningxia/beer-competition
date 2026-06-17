@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="results-page">
     <section class="result-hero">
       <div>
@@ -143,7 +143,7 @@
                 </div>
               </article>
             </div>
-            <p v-else class="empty-feedback">主办方暂未发布评审反馈。</p>
+            <p v-else class="empty-feedback">组委会暂未发布评审反馈。</p>
           </section>
 
           <section v-if="resultDetail.roundResults.length" class="round-result-card brewer-card">
@@ -164,7 +164,7 @@
         <section v-else-if="selectedEntry" class="locked-card brewer-card">
           <span :class="['label-chip', `tone-${resultTone(selectedEntry)}`]">{{ resultStatusLabel(selectedEntry) }}</span>
           <h2>{{ selectedEntry.entryName }}</h2>
-          <p>{{ selectedEntry.lockReason || '主办方确认并发布结果后，这里会显示评分、评语和奖项信息。' }}</p>
+          <p>{{ selectedEntry.lockReason || '组委会确认并发布结果后，这里会显示评分、评语和奖项信息。' }}</p>
           <dl class="entry-meta locked-meta">
             <div>
               <dt>赛事</dt>
@@ -182,7 +182,7 @@
           <div class="locked-progress">
             <span class="done">提交资料</span>
             <span :class="{ done: selectedEntry.status !== 'PENDING_PAYMENT' }">支付报名费</span>
-            <span :class="{ done: selectedEntry.status === 'STORED' || selectedEntry.status === 'RESULT_PUBLISHED' }">酒样入库</span>
+            <span :class="{ done: selectedEntry.status === 'STORED' || selectedEntry.status === 'RESULT_PUBLISHED' }">样品入库</span>
             <span :class="{ done: selectedEntry.status === 'RESULT_PUBLISHED' }">结果发布</span>
           </div>
           <div class="empty-actions">
@@ -348,7 +348,7 @@ function resultTone(entry) {
 function resultBrief(entry) {
   if (isEntryAwarded(entry)) return entry.awardName || entry.roundResult?.awardName || '获奖结果已发布'
   if (isEntryResultPublished(entry)) return '评分和评语可查看'
-  return entry.lockReason || '等待主办方发布结果'
+  return entry.lockReason || '等待组委会发布结果'
 }
 
 function resultTypeLabel(type) {

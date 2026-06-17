@@ -42,8 +42,8 @@
 
       <section class="login-card">
         <div class="card-head">
-          <span class="card-kicker">主办方入口</span>
-          <h2>主办方后台登录</h2>
+          <span class="card-kicker">组委会入口</span>
+          <h2>组委会后台登录</h2>
           <p>进入比赛管理、评审配置和现场看板。</p>
         </div>
 
@@ -70,7 +70,7 @@
 
         <div class="security-note">
           <span />
-          <p>仅限主办方授权账号访问</p>
+          <p>仅限组委会授权账号访问</p>
         </div>
       </section>
     </section>
@@ -198,19 +198,17 @@ async function submit() {
 .brand-mark {
   display: grid;
   place-items: center;
+  overflow: hidden;
   width: 50px;
   height: 50px;
   color: var(--gold-soft);
-  border: 1px solid rgba(216, 169, 53, 0.34);
   border-radius: 12px;
-  background: rgba(216, 169, 53, 0.1);
-  box-shadow: inset 0 0 18px rgba(216, 169, 53, 0.08);
 }
 
 .brand-mark img {
-  width: 40px;
-  height: 40px;
-  object-fit: contain;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 p,

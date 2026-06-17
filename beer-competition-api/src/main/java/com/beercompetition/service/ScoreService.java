@@ -1,6 +1,7 @@
 package com.beercompetition.service;
 
 import com.beercompetition.pojo.dto.JudgeScoreSaveRequest;
+import com.beercompetition.pojo.dto.JudgeScoreStartRequest;
 import com.beercompetition.pojo.dto.JudgeScoreUpdateRequest;
 import com.beercompetition.pojo.dto.TableScoreFinalizeRequest;
 import com.beercompetition.pojo.enums.JudgeRoleType;
@@ -12,6 +13,8 @@ import java.util.List;
 public interface ScoreService {
 
     ScoreConfigVO getCurrentScoreConfig(JudgeRoleType role, Long competitionId);
+
+    void startScore(JudgeScoreStartRequest request);
 
     ScoreRecordVO createScore(JudgeScoreSaveRequest request);
 

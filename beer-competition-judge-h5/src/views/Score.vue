@@ -136,7 +136,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { createScore, fetchEntry, fetchMe, fetchMyScore, fetchScoreConfig, updateScore } from '@/api/judge'
+import { createScore, fetchEntry, fetchMe, fetchMyScore, fetchScoreConfig, startScore, updateScore } from '@/api/judge'
 
 const route = useRoute()
 const router = useRouter()
@@ -321,6 +321,10 @@ onMounted(async () => {
   entry.value = await fetchEntry(uuid)
   const scoreRole = entry.value?.scoreRoleType || me.value.role
   config.value = await fetchScoreConfig(scoreRole, entry.value?.competitionId || me.value?.competitionId)
+  startScore({
+    beerUuid: uuid,
+    judgeRoleType: scoreRole,
+  }).catch(() => {})
   existingScore.value = await fetchMyScore(uuid)
   form.judgeRoleType = scoreRole
 

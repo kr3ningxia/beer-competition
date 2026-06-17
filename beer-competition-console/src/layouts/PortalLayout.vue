@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="portal-shell">
     <header class="portal-header">
       <div class="header-inner">
@@ -12,7 +12,7 @@
           </span>
         </RouterLink>
 
-        <nav class="nav-list" aria-label="厂商导航">
+        <nav class="nav-list" aria-label="厂牌导航">
           <RouterLink
             v-for="item in visibleNavItems"
             :key="item.path"
@@ -235,25 +235,22 @@ onUnmounted(() => {
 .brand-mark {
   display: grid;
   place-items: center;
+  overflow: hidden;
   width: 44px;
   height: 44px;
   color: #2b1d10;
-  background: #e1a23d;
-  border: 1px solid rgba(87, 58, 26, 0.16);
   border-radius: 8px;
-  box-shadow: inset 0 -7px 0 rgba(74, 45, 16, 0.16);
 }
 
-.brand-mark img,
 .nav-item svg {
   width: 20px;
   height: 20px;
 }
 
 .brand-mark img {
-  width: 34px;
-  height: 34px;
-  object-fit: contain;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .brand strong {

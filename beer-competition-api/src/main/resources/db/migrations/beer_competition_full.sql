@@ -32,7 +32,8 @@ CREATE TABLE `admin_operation_log` (
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_admin_operation_log_target` (`target_type`,`target_public_id`),
-  KEY `idx_admin_operation_log_admin` (`admin_user_id`,`create_time`)
+  KEY `idx_admin_operation_log_admin` (`admin_user_id`,`create_time`),
+  KEY `idx_admin_operation_log_time_id` (`create_time`,`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=49 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='???????';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -1064,6 +1065,8 @@ DROP TABLE IF EXISTS `score_record`;
 CREATE TABLE `score_record` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `competition_id` bigint NOT NULL,
+  `round_id` bigint DEFAULT NULL,
+  `round_table_id` bigint DEFAULT NULL,
   `beer_entry_id` bigint NOT NULL,
   `judge_account_id` bigint NOT NULL,
   `assignment_id` bigint DEFAULT NULL,
@@ -1074,6 +1077,8 @@ CREATE TABLE `score_record` (
   `is_final` tinyint NOT NULL DEFAULT '0',
   `is_advanced` tinyint NOT NULL DEFAULT '0',
   `consensus_score` decimal(6,2) DEFAULT NULL,
+  `duration_seconds` int DEFAULT NULL,
+  `comment_char_count` int NOT NULL DEFAULT '0',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),

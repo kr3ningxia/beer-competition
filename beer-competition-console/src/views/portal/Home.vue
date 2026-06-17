@@ -85,13 +85,16 @@
     </section>
 
     <section class="reason-band">
-      <div>
+      <div class="reason-lead">
         <span class="label-chip tone-gold">为什么参赛</span>
-        <h2>让酒款被专业评审认真品评，也让厂牌得到可复盘的反馈。</h2>
+        <h2>让你的优秀酒款，<br />被更多人知道、喝到</h2>
       </div>
       <div class="reason-grid">
-        <article v-for="item in reasons" :key="item.title">
-          <strong>{{ item.title }}</strong>
+        <article v-for="(item, index) in reasons" :key="item.title">
+          <div class="reason-title-row">
+            <span class="reason-index">{{ String(index + 1).padStart(2, '0') }}</span>
+            <strong>{{ item.title }}</strong>
+          </div>
           <p>{{ item.text }}</p>
         </article>
       </div>
@@ -101,7 +104,6 @@
       <div class="section-head">
         <div>
           <h2 class="portal-section-title">参赛流程</h2>
-          <p>从报名到结果查看，每一步都围绕厂商需要完成的事项设计。</p>
         </div>
       </div>
       <div class="flow-grid">
@@ -117,9 +119,9 @@
       <article class="brewer-card guide-card">
         <h2 class="portal-section-title">送样与标签</h2>
         <dl>
-          <div><dt>参赛编号</dt><dd>报名后生成，用于厂商和主办方核对报名记录。</dd></div>
+          <div><dt>参赛编号</dt><dd>报名后生成，用于厂牌和组委会核对报名记录。</dd></div>
           <div><dt>现场短编号</dt><dd>展示在标签下方，扫码失败时供现场人工输入。</dd></div>
-          <div><dt>标签用途</dt><dd>支付成功后下载并贴在酒瓶或外箱，主办方收样后确认入库。</dd></div>
+          <div><dt>标签用途</dt><dd>支付成功后下载并贴在酒瓶或外箱，组委会收样后确认入库。</dd></div>
         </dl>
       </article>
       <article class="brewer-card guide-card">
@@ -161,24 +163,25 @@ onMounted(async () => {
 })
 
 const reasons = [
-  { title: '奖项背书', text: '通过组别奖项和结果发布，为年度代表作积累可传播的赛事证明。' },
-  { title: '专业反馈', text: '结果发布后查看评分、桌长评语和评审建议，帮助复盘风格表达。' },
-  { title: '厂牌曝光', text: '开放报名赛事面向精酿厂牌和行业观众，适合展示新品和稳定款。' },
+  { title: '荣誉背书', text: '获得实体版和电子版奖状及奖牌，可用于瓶贴、海报、电商详情页、酒吧物料及品牌宣传' },
+  { title: '媒体曝光', text: '获得啤酒事务局及媒体合作伙伴的报道，包括品牌故事、酒款风味、工艺亮点、评审反馈等' },
+  { title: '专业“体检”', text: '无论是否获奖，所有参赛作品都将获得由专业啤酒评审和媒体/跨界评审撰写的反馈' },
+  { title: '超赞奖品', text: '获得由赞助商提供的超赞奖品（具体奖品见赛事详情页）' },
 ]
 
 const flowSteps = [
-  { index: '01', title: '选择赛事', text: '查看日期、费用、投递组别和送样要求，确认适合报名的酒款。' },
-  { index: '02', title: '报名参赛', text: '填写酒名、组别、基础风格、ABV 和赛事配置的额外字段。' },
-  { index: '03', title: '支付报名费', text: '报名后支付报名费，支付成功即完成报名。' },
-  { index: '04', title: '下载标签', text: '支付成功后下载现场标签，标签包含参赛编号和现场短编号。' },
-  { index: '05', title: '送样入库', text: '按要求寄送或现场交付酒样，主办方收样后更新入库状态。' },
-  { index: '06', title: '查看结果', text: '结果发布后查看评分、桌长评语和奖项。' },
+  { index: '01', title: '选择赛事', text: '查看正在报名中的赛事，确认自己是否有合适投递的酒款' },
+  { index: '02', title: '报名参赛', text: '填写酒款信息、投报组别等' },
+  { index: '03', title: '支付费用', text: '根据投递的酒款数量，支付报名费' },
+  { index: '04', title: '下载标签', text: '支付成功后即可下载酒标。请将酒标按要求贴在样品上' },
+  { index: '05', title: '送样入库', text: '在赛事开放的送样时间段内将酒款送达指定地点' },
+  { index: '06', title: '查看结果', text: '查看比赛结果、裁判评语以及是否获奖' },
 ]
 
 const faqs = [
-  { question: '报名截止后还能报名参赛吗？', answer: '报名截止后不再开放报名入口，如需调整请联系主办方确认。' },
-  { question: '付款后多久可以下载标签？', answer: '支付成功后酒款状态变为报名成功，即可下载标签。' },
-  { question: '酒样需要寄几瓶？', answer: '不同赛事要求可能不同，请以主办方发布的单场通知为准。' },
+  { question: '报名截止后还能报名参赛吗？', answer: '报名截止后不再开放报名入口，如需调整请联系组委会确认。' },
+  { question: '支付后多久可以下载标签？', answer: '支付成功后酒款状态变为报名成功，即可下载标签。' },
+  { question: '样品需要寄几瓶？', answer: '不同赛事要求可能不同，请以组委会发布的单场通知为准。' },
   { question: '结果发布后能看到什么？', answer: '可查看评分明细、桌长综合评语和奖项。' },
 ]
 
@@ -492,38 +495,94 @@ dd {
 
 .reason-band {
   display: grid;
-  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
-  gap: 24px;
+  grid-template-columns: minmax(360px, 0.74fr) minmax(0, 1.26fr);
+  gap: 40px;
+  align-items: stretch;
+  min-height: 372px;
+  padding: 34px 28px;
   color: #fff6df;
   background:
-    linear-gradient(135deg, rgba(35, 24, 16, 0.96), rgba(91, 49, 18, 0.9)),
+    linear-gradient(90deg, rgba(31, 20, 13, 0.98) 0%, rgba(38, 23, 14, 0.96) 40%, rgba(74, 40, 18, 0.9) 100%),
     url("https://images.unsplash.com/photo-1566633806327-68e152aaf26d?auto=format&fit=crop&w=1600&q=80");
   background-position: center;
   background-size: cover;
 }
 
+.reason-lead {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.reason-lead .label-chip {
+  width: fit-content;
+}
+
 .reason-band h2 {
-  margin: 18px 0 0;
+  margin: 20px 0 0;
+  max-width: 500px;
   font-size: 36px;
-  line-height: 1.12;
+  line-height: 1.24;
 }
 
 .reason-grid {
   display: grid;
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 16px;
+  align-content: center;
 }
 
 .reason-grid article {
-  padding: 18px;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 12px;
+  min-height: 142px;
+  padding: 18px 19px 19px;
   background: rgba(255, 250, 240, 0.1);
-  border: 1px solid rgba(255, 250, 240, 0.18);
+  border: 1px solid rgba(255, 250, 240, 0.2);
   border-radius: 8px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 250, 240, 0.08),
+    0 12px 28px rgba(12, 8, 5, 0.14);
+}
+
+.reason-title-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+
+.reason-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 20px;
+  color: #2b1d10;
+  background: rgba(243, 217, 120, 0.92);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 20px;
+  letter-spacing: 0;
+}
+
+.reason-grid strong {
+  min-width: 0;
+  color: #fff9e8;
+  font-size: 18px;
+  line-height: 1.3;
 }
 
 .reason-grid p {
-  margin-bottom: 0;
+  margin: 0;
   color: #e6d6b8;
-  line-height: 1.65;
+  font-size: 15px;
+  line-height: 1.7;
 }
 
 .flow-grid {
@@ -609,6 +668,14 @@ details p {
     grid-column: 1;
     grid-row: auto;
   }
+
+  .reason-band {
+    min-height: auto;
+  }
+
+  .reason-band h2 {
+    max-width: 760px;
+  }
 }
 
 @media (max-width: 720px) {
@@ -628,6 +695,18 @@ details p {
   }
 
   .event-card dl {
+    grid-template-columns: 1fr;
+  }
+
+  .reason-band {
+    padding: 26px 20px;
+  }
+
+  .reason-band h2 {
+    font-size: 30px;
+  }
+
+  .reason-grid {
     grid-template-columns: 1fr;
   }
 }

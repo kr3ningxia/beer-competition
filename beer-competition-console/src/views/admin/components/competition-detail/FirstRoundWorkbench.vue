@@ -1,10 +1,10 @@
-<template>
+﻿<template>
   <section class="first-round-workbench">
     <header class="round-hero">
       <div>
-        <small>第一轮</small>
+        <small>首轮</small>
         <h2>把已入库酒款分到评审桌</h2>
-        <p>第一轮会发给评审评分，桌长最后汇总并选择晋级酒款。</p>
+        <p>首轮会发给评审评分，桌长最后汇总并选择晋级酒款。</p>
       </div>
       <button class="primary-action" type="button" :disabled="!canPublish" @click="$emit('publishCurrentRound')">
         {{ publishText }}
@@ -21,7 +21,7 @@
 
     <section class="first-round-grid">
       <EntryPoolPanel
-        title="已入库酒款池"
+        title="已入库酒款名单"
         is-score-round
         :filtered-entries="filteredRoundPool"
         :category-stats="categoryStats"
@@ -84,9 +84,9 @@
       </main>
 
       <RoundCheckPanel
-        title="第一轮发布检查"
+        title="首轮发布检查"
         target-label="晋级数量"
-        success-text="第一轮可以发布给评审。"
+        success-text="首轮可以发布给评审。"
         :selected-round-table="selectedRoundTable"
         :captain-candidates="captainCandidates"
         :round-validation-issues="roundValidationIssues"
@@ -96,7 +96,7 @@
         @remove-round-table="$emit('removeRoundTable', $event)"
       >
         <button v-if="currentRound?.status === 'PUBLISHED'" class="secondary-action" type="button" @click="$emit('completeFirstRound')">
-          确认第一轮完成
+          确认首轮完成
         </button>
       </RoundCheckPanel>
     </section>
@@ -158,7 +158,7 @@ const statusText = computed(() => props.roundStatusLabels[props.currentRound?.st
 const publishText = computed(() => {
   if (props.currentRound?.status === 'PUBLISHED') return '已发布'
   if (props.currentRound?.status === 'LOCKED') return '已锁定'
-  return '发布第一轮'
+  return '发布首轮'
 })
 
 function tableStatusLabel(status) {

@@ -14,6 +14,7 @@ import com.beercompetition.mapper.CompetitionScoreConfigMapper;
 import com.beercompetition.mapper.EntryScanLabelMapper;
 import com.beercompetition.mapper.JudgeAccountMapper;
 import com.beercompetition.mapper.JudgeAssignmentMapper;
+import com.beercompetition.mapper.JudgeScoreSessionMapper;
 import com.beercompetition.mapper.RoundResultMapper;
 import com.beercompetition.mapper.RoundTableEntryMapper;
 import com.beercompetition.mapper.RoundTableMapper;
@@ -21,6 +22,7 @@ import com.beercompetition.mapper.RoundTableMemberMapper;
 import com.beercompetition.mapper.ScoreRecordMapper;
 import com.beercompetition.pojo.dto.DimensionRequest;
 import com.beercompetition.pojo.dto.JudgeScoreSaveRequest;
+import com.beercompetition.pojo.dto.JudgeScoreStartRequest;
 import com.beercompetition.pojo.dto.JudgeScoreUpdateRequest;
 import com.beercompetition.pojo.dto.TableScoreFinalizeRequest;
 import com.beercompetition.pojo.enums.JudgeAccountStatus;
@@ -39,6 +41,7 @@ import com.beercompetition.pojo.po.CompetitionScoreConfig;
 import com.beercompetition.pojo.po.EntryScanLabel;
 import com.beercompetition.pojo.po.JudgeAccount;
 import com.beercompetition.pojo.po.JudgeAssignment;
+import com.beercompetition.pojo.po.JudgeScoreSession;
 import com.beercompetition.pojo.po.RoundResult;
 import com.beercompetition.pojo.po.RoundTable;
 import com.beercompetition.pojo.po.RoundTableEntry;
@@ -46,6 +49,7 @@ import com.beercompetition.pojo.po.RoundTableMember;
 import com.beercompetition.pojo.po.ScoreRecord;
 import com.beercompetition.pojo.vo.ScoreConfigVO;
 import com.beercompetition.pojo.vo.ScoreRecordVO;
+import com.beercompetition.service.ReviewStatsService;
 import com.beercompetition.service.ScoreService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -56,6 +60,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
@@ -81,11 +86,13 @@ public class ScoreServiceImpl implements ScoreService {
     private final EntryScanLabelMapper entryScanLabelMapper;
     private final JudgeAccountMapper judgeAccountMapper;
     private final JudgeAssignmentMapper judgeAssignmentMapper;
+    private final JudgeScoreSessionMapper judgeScoreSessionMapper;
     private final RoundTableMapper roundTableMapper;
     private final RoundTableEntryMapper roundTableEntryMapper;
     private final RoundTableMemberMapper roundTableMemberMapper;
     private final RoundResultMapper roundResultMapper;
     private final ScoreRecordMapper scoreRecordMapper;
+    private final ReviewStatsService reviewStatsService;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -110,6 +117,22 @@ public class ScoreServiceImpl implements ScoreService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public void startScore(JudgeScoreStartRequest request) {
+        // 1) 校验评分表和当前评审任务
+        Long judgeId = BaseContext.getCurrentId();
+        BeerEntry entry = requireEntry(request.getBeerUuid());
+        JudgeAssignment assignment = requireAssignment(entry.getCompetitionId());
+        if (!isScoreSubmissionAllowed(assignment.getRole(), request.getJudgeRoleType().name())) {
+            throw new ForbiddenException("当前评审角色与提交评分类型不匹配");
+        }
+        RoundTableEntry roundEntry = requireScoreRoundTask(entry.getId(), request.getJudgeRoleType().name(), false);
+
+        // 2) 幂等记录评分开始时间
+        ensureScoreSession(roundEntry, judgeId, request.getJudgeRoleType().name(), LocalDateTime.now());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public ScoreRecordVO createScore(JudgeScoreSaveRequest request) {
         // 1) 校验评分表和当前评审任务
         Long judgeId = BaseContext.getCurrentId();
@@ -117,7 +140,7 @@ public class ScoreServiceImpl implements ScoreService {
         validateScoreRequest(entry.getCompetitionId(), request.getJudgeRoleType().name(),
                 request.getDimensions(), request.getTotalScore(), request.getComments());
         JudgeAssignment assignment = requireAssignment(entry.getCompetitionId());
-        requireScoreRoundTask(entry.getId(), request.getJudgeRoleType().name(), false);
+        RoundTableEntry roundEntry = requireScoreRoundTask(entry.getId(), request.getJudgeRoleType().name(), false);
         rejectNormalScoreAfterFinal(entry.getId());
         rejectDuplicatePersonalScore(entry.getId(), judgeId);
         if (!isScoreSubmissionAllowed(assignment.getRole(), request.getJudgeRoleType().name())) {
@@ -125,8 +148,13 @@ public class ScoreServiceImpl implements ScoreService {
         }
 
         // 2) 保存个人评分记录
+        LocalDateTime submittedAt = LocalDateTime.now();
+        int commentCharCount = countDimensionNotes(request.getDimensions());
+        JudgeScoreSession session = completeScoreSession(roundEntry, judgeId, request.getJudgeRoleType().name(), submittedAt, commentCharCount, true);
         ScoreRecord scoreRecord = ScoreRecord.builder()
                 .competitionId(entry.getCompetitionId())
+                .roundId(roundEntry.getRoundId())
+                .roundTableId(roundEntry.getRoundTableId())
                 .beerEntryId(entry.getId())
                 .judgeAccountId(BaseContext.getCurrentId())
                 .assignmentId(assignment.getId())
@@ -136,12 +164,15 @@ public class ScoreServiceImpl implements ScoreService {
                 .comments(request.getComments())
                 .finalFlag(0)
                 .advancedFlag(0)
+                .durationSeconds(session.getDurationSeconds())
+                .commentCharCount(commentCharCount)
                 .build();
         try {
             scoreRecordMapper.insert(scoreRecord);
         } catch (DuplicateKeyException ex) {
             throw new BaseException("这款酒已经提交过评分，请返回评分页修改");
         }
+        reviewStatsService.evictReviewStats(roundEntry.getRoundId(), roundEntry.getRoundTableId(), judgeId, request.getJudgeRoleType().name());
         return toScoreRecordVO(scoreRecordMapper.selectById(scoreRecord.getId()));
     }
 
@@ -162,14 +193,20 @@ public class ScoreServiceImpl implements ScoreService {
         if (Integer.valueOf(1).equals(scoreRecord.getFinalFlag())) {
             throw new BaseException("桌长最终分不允许通过此接口修改");
         }
-        requireScoreRoundTask(scoreRecord.getBeerEntryId(), scoreRecord.getJudgeRoleType(), false);
+        RoundTableEntry roundEntry = requireScoreRoundTask(scoreRecord.getBeerEntryId(), scoreRecord.getJudgeRoleType(), false);
         rejectNormalScoreAfterFinal(scoreRecord.getBeerEntryId());
 
         // 2) 更新个人评分内容
+        int commentCharCount = countDimensionNotes(request.getDimensions());
+        completeScoreSession(roundEntry, scoreRecord.getJudgeAccountId(), scoreRecord.getJudgeRoleType(), LocalDateTime.now(), commentCharCount, false);
+        scoreRecord.setRoundId(roundEntry.getRoundId());
+        scoreRecord.setRoundTableId(roundEntry.getRoundTableId());
         scoreRecord.setDimensionsJson(writeDimensions(request.getDimensions()));
         scoreRecord.setTotalScore(request.getTotalScore());
         scoreRecord.setComments(request.getComments());
+        scoreRecord.setCommentCharCount(commentCharCount);
         scoreRecordMapper.updateById(scoreRecord);
+        reviewStatsService.evictReviewStats(roundEntry.getRoundId(), roundEntry.getRoundTableId(), scoreRecord.getJudgeAccountId(), scoreRecord.getJudgeRoleType());
         return toScoreRecordVO(scoreRecordMapper.selectById(scoreId));
     }
 
@@ -239,6 +276,7 @@ public class ScoreServiceImpl implements ScoreService {
         RoundTableEntry roundEntry = requireScoreRoundTask(entry.getId(), JudgeRoleType.CAPTAIN.name(), true);
         requireCaptainPersonalScoreSubmitted(roundEntry, BaseContext.getCurrentId());
         requireAllTableScoresSubmitted(roundEntry);
+        int commentCharCount = countDimensionNotes(request.getDimensions());
 
         // 2) 新增或更新桌长共识结果
         ScoreRecord finalRecord = scoreRecordMapper.selectOne(new LambdaQueryWrapper<ScoreRecord>()
@@ -262,6 +300,9 @@ public class ScoreServiceImpl implements ScoreService {
         finalRecord.setConsensusScore(request.getConsensusScore());
         finalRecord.setComments(request.getComments());
         finalRecord.setAdvancedFlag(Boolean.TRUE.equals(request.getAdvanced()) ? 1 : 0);
+        finalRecord.setRoundId(roundEntry.getRoundId());
+        finalRecord.setRoundTableId(roundEntry.getRoundTableId());
+        finalRecord.setCommentCharCount(commentCharCount);
 
         if (finalRecord.getId() == null) {
             try {
@@ -278,7 +319,57 @@ public class ScoreServiceImpl implements ScoreService {
         if (changed) {
             bumpRoundTableResultVersion(roundEntry.getRoundTableId());
         }
+        reviewStatsService.evictReviewStats(roundEntry.getRoundId(), roundEntry.getRoundTableId(), BaseContext.getCurrentId(), JudgeRoleType.CAPTAIN.name());
         return toScoreRecordVO(scoreRecordMapper.selectById(finalRecord.getId()));
+    }
+
+    private JudgeScoreSession ensureScoreSession(RoundTableEntry roundEntry, Long judgeId, String judgeRoleType, LocalDateTime startedAt) {
+        JudgeScoreSession session = findScoreSession(roundEntry.getRoundTableId(), roundEntry.getBeerEntryId(), judgeId, judgeRoleType);
+        if (session != null) {
+            return session;
+        }
+        session = JudgeScoreSession.builder()
+                .competitionId(roundEntry.getCompetitionId())
+                .roundId(roundEntry.getRoundId())
+                .roundTableId(roundEntry.getRoundTableId())
+                .beerEntryId(roundEntry.getBeerEntryId())
+                .judgeAccountId(judgeId)
+                .judgeRoleType(judgeRoleType)
+                .startedAt(startedAt)
+                .commentCharCount(0)
+                .build();
+        try {
+            judgeScoreSessionMapper.insert(session);
+        } catch (DuplicateKeyException ex) {
+            return findScoreSession(roundEntry.getRoundTableId(), roundEntry.getBeerEntryId(), judgeId, judgeRoleType);
+        }
+        return session;
+    }
+
+    private JudgeScoreSession completeScoreSession(RoundTableEntry roundEntry,
+                                                   Long judgeId,
+                                                   String judgeRoleType,
+                                                   LocalDateTime submittedAt,
+                                                   int commentCharCount,
+                                                   boolean firstSubmit) {
+        JudgeScoreSession session = ensureScoreSession(roundEntry, judgeId, judgeRoleType, submittedAt);
+        if (firstSubmit && session.getFirstSubmittedAt() == null) {
+            session.setFirstSubmittedAt(submittedAt);
+            session.setDurationSeconds(Math.toIntExact(Math.max(0L, Duration.between(session.getStartedAt(), submittedAt).toSeconds())));
+        }
+        session.setLastSubmittedAt(submittedAt);
+        session.setCommentCharCount(commentCharCount);
+        judgeScoreSessionMapper.updateById(session);
+        return session;
+    }
+
+    private JudgeScoreSession findScoreSession(Long roundTableId, Long beerEntryId, Long judgeId, String judgeRoleType) {
+        return judgeScoreSessionMapper.selectOne(new LambdaQueryWrapper<JudgeScoreSession>()
+                .eq(JudgeScoreSession::getRoundTableId, roundTableId)
+                .eq(JudgeScoreSession::getBeerEntryId, beerEntryId)
+                .eq(JudgeScoreSession::getJudgeAccountId, judgeId)
+                .eq(JudgeScoreSession::getJudgeRoleType, judgeRoleType)
+                .last("LIMIT 1"));
     }
 
     private boolean finalScoreChanged(ScoreRecord current, String nextDimensionsJson, TableScoreFinalizeRequest request) {
@@ -562,6 +653,8 @@ public class ScoreServiceImpl implements ScoreService {
                 .isAdvanced(scoreRecord.getAdvancedFlag())
                 .consensusScore(scoreRecord.getConsensusScore())
                 .locked(entry != null && hasFinalScore(entry.getId()))
+                .durationSeconds(scoreRecord.getDurationSeconds())
+                .commentCharCount(scoreRecord.getCommentCharCount())
                 .submittedAt(scoreRecord.getUpdateTime() == null ? scoreRecord.getCreateTime() : scoreRecord.getUpdateTime())
                 .build();
     }
@@ -609,6 +702,13 @@ public class ScoreServiceImpl implements ScoreService {
         } catch (JsonProcessingException ex) {
             throw new IllegalStateException("保存评分维度失败", ex);
         }
+    }
+
+    private int countDimensionNotes(List<DimensionRequest> dimensions) {
+        return dimensions.stream()
+                .map(DimensionRequest::getNote)
+                .mapToInt(this::countEffectiveChars)
+                .sum();
     }
 
     private void validateDimensions(List<DimensionRequest> dimensions) {

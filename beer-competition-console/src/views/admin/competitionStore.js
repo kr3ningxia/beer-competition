@@ -1,10 +1,10 @@
-import { reactive } from 'vue'
+﻿import { reactive } from 'vue'
 
 export const stages = [
   { label: '草稿', status: 'DRAFT' },
   { label: '报名', status: 'REGISTRATION_OPEN' },
-  { label: '收样', status: 'REGISTRATION_CLOSED' },
-  { label: '评审准备', status: 'JUDGING_PREP' },
+  { label: '收样中', status: 'REGISTRATION_CLOSED' },
+  { label: '评审准备中', status: 'JUDGING_PREP' },
   { label: '评审中', status: 'JUDGING' },
   { label: '结果确认', status: 'RESULT_CONFIRMING' },
   { label: '结果发布', status: 'PUBLISHED' },
@@ -13,8 +13,8 @@ export const stages = [
 export const statusMeta = {
   DRAFT: { label: '草稿', tone: 'neutral', next: '完善报名配置' },
   REGISTRATION_OPEN: { label: '报名中', tone: 'success', next: '查看报名酒款' },
-  REGISTRATION_CLOSED: { label: '报名截止', tone: 'warning', next: '检查入库情况' },
-  JUDGING_PREP: { label: '评审准备', tone: 'gold', next: '检查评审桌' },
+  REGISTRATION_CLOSED: { label: '收样中', tone: 'warning', next: '检查样品入库' },
+  JUDGING_PREP: { label: '评审准备中', tone: 'gold', next: '检查评审桌' },
   JUDGING: { label: '评审中', tone: 'success', next: '查看现场进度' },
   RESULT_CONFIRMING: { label: '结果确认', tone: 'gold', next: '确认结果发布' },
   PUBLISHED: { label: '已发布', tone: 'neutral', next: '查看归档数据' },
@@ -25,10 +25,10 @@ export const checkItems = [
   { key: 'baseInfo', label: '基础信息' },
   { key: 'categories', label: '投递组别' },
   { key: 'styles', label: '基础风格' },
-  { key: 'entryFields', label: '报名字段' },
+  { key: 'entryFields', label: '报名信息' },
   { key: 'judgeTables', label: '评审桌' },
   { key: 'scoreForms', label: '评分表' },
-  { key: 'storedEntries', label: '酒款入库' },
+  { key: 'storedEntries', label: '样品入库' },
   { key: 'resultSetup', label: '结果发布' },
 ]
 
@@ -75,10 +75,10 @@ export const competitions = reactive([
     ],
     entriesSummary: { total: 286, pendingPayment: 14, registered: 268, stored: 238, canceled: 4, resultPublished: 0 },
     entries: [
-      { uuid: 'BC-2026-IPA-0001', category: 'IPA', style: 'Double IPA', status: 'STORED', payment: '已付款', stored: true },
-      { uuid: 'BC-2026-LAG-0042', category: '拉格', style: 'Pilsner', status: 'REGISTERED', payment: '已付款', stored: false },
-      { uuid: 'BC-2026-STO-0108', category: '世涛', style: 'Imperial Stout', status: 'PENDING_PAYMENT', payment: '待付款', stored: false },
-      { uuid: 'BC-2026-SOU-0149', category: '酸啤', style: 'Mixed Fermentation Sour', status: 'STORED', payment: '已付款', stored: true },
+      { uuid: 'BC-2026-IPA-0001', category: 'IPA', style: 'Double IPA', status: 'STORED', payment: '已支付', stored: true },
+      { uuid: 'BC-2026-LAG-0042', category: '拉格', style: 'Pilsner', status: 'REGISTERED', payment: '已支付', stored: false },
+      { uuid: 'BC-2026-STO-0108', category: '世涛', style: 'Imperial Stout', status: 'PENDING_PAYMENT', payment: '待支付', stored: false },
+      { uuid: 'BC-2026-SOU-0149', category: '酸啤', style: 'Mixed Fermentation Sour', status: 'STORED', payment: '已支付', stored: true },
     ],
     progressSummary: { finalized: 238, total: 268, advanced: 32, commentWarnings: 6 },
     resultSetup: { awardsReady: false, published: false, championReady: false },
@@ -122,8 +122,8 @@ export const competitions = reactive([
     ],
     entriesSummary: { total: 96, pendingPayment: 12, registered: 72, stored: 0, canceled: 3, resultPublished: 0 },
     entries: [
-      { uuid: 'SOUR-2026-0001', category: '酸啤', style: 'Gose', status: 'REGISTERED', payment: '已付款', stored: false },
-      { uuid: 'SOUR-2026-0002', category: '水果酸啤', style: 'Berliner Weisse', status: 'PENDING_PAYMENT', payment: '待付款', stored: false },
+      { uuid: 'SOUR-2026-0001', category: '酸啤', style: 'Gose', status: 'REGISTERED', payment: '已支付', stored: false },
+      { uuid: 'SOUR-2026-0002', category: '水果酸啤', style: 'Berliner Weisse', status: 'PENDING_PAYMENT', payment: '待支付', stored: false },
     ],
     progressSummary: { finalized: 0, total: 72, advanced: 0, commentWarnings: 0 },
     resultSetup: { awardsReady: false, published: false, championReady: false },
@@ -139,7 +139,7 @@ export const competitions = reactive([
     },
     alerts: [
       { level: 'danger', text: '缺少 1 张评审桌桌长' },
-      { level: 'warning', text: '酸啤组尚未确认基础风格展示口径' },
+      { level: 'warning', text: '酸啤组尚未确认评审可见的基础风格信息' },
     ],
   },
   {
@@ -195,7 +195,7 @@ export const competitions = reactive([
     scoreConfigs: defaultScoreConfigs(),
     entriesSummary: { total: 128, pendingPayment: 0, registered: 121, stored: 121, canceled: 7, resultPublished: 0 },
     entries: [
-      { uuid: 'STOUT-2025-0021', category: '世涛', style: 'Imperial Stout', status: 'STORED', payment: '已付款', stored: true },
+      { uuid: 'STOUT-2025-0021', category: '世涛', style: 'Imperial Stout', status: 'STORED', payment: '已支付', stored: true },
     ],
     progressSummary: { finalized: 121, total: 121, advanced: 18, commentWarnings: 0 },
     resultSetup: { awardsReady: true, published: false, championReady: false },
@@ -209,7 +209,7 @@ export const competitions = reactive([
       storedEntries: 'done',
       resultSetup: 'confirm',
     },
-    alerts: [{ level: 'warning', text: '总冠军候选需要主办方最终确认' }],
+    alerts: [{ level: 'warning', text: '总冠军候选需要组委会最终确认' }],
   },
   {
     id: 5,
@@ -230,7 +230,7 @@ export const competitions = reactive([
     ],
     scoreConfigs: defaultScoreConfigs(),
     entriesSummary: { total: 168, pendingPayment: 0, registered: 160, stored: 160, canceled: 8, resultPublished: 160 },
-    entries: [{ uuid: 'LAGER-2025-0031', category: '拉格', style: 'Pilsner', status: 'RESULT_PUBLISHED', payment: '已付款', stored: true }],
+    entries: [{ uuid: 'LAGER-2025-0031', category: '拉格', style: 'Pilsner', status: 'RESULT_PUBLISHED', payment: '已支付', stored: true }],
     progressSummary: { finalized: 160, total: 160, advanced: 24, commentWarnings: 0 },
     resultSetup: { awardsReady: true, published: true, championReady: true },
     checks: {
@@ -326,7 +326,7 @@ export function buildDraftAlerts(source) {
     alerts.push({ level: 'danger', text: '投递组别尚未配置，暂不能开放报名' })
   }
   if (!source.baseStyles?.filter(Boolean).length) {
-    alerts.push({ level: 'warning', text: '基础风格未配置，评审扫码展示会缺少口径' })
+    alerts.push({ level: 'warning', text: '基础风格未配置，评审扫码页会缺少风格信息' })
   }
   if (!source.judgeTables?.length) {
     alerts.push({ level: 'warning', text: '评审桌尚未创建，赛前需要补齐' })

@@ -1,13 +1,13 @@
-<template>
+﻿<template>
   <div class="payment-page">
     <section class="page-head brewer-card">
       <div class="page-title">
-        <span class="section-kicker">寄样办理</span>
-        <h1>下载标签并提交寄样</h1>
+        <span class="section-kicker">送样办理</span>
+        <h1>下载标签并提交送样信息</h1>
         <p>{{ currentAction.description }}</p>
       </div>
       <RouterLink class="back-link" to="/portal/my">返回我的参赛</RouterLink>
-      <div v-if="selectedEntry" class="flow-steps" aria-label="寄样进度">
+      <div v-if="selectedEntry" class="flow-steps" aria-label="送样进度">
         <span :class="{ done: selectedEntry.paymentStatus === 'PAID' || selectedEntry.canDownloadLabel, active: selectedEntry.paymentStatus !== 'PAID' }">
           <b>1</b>支付报名费
         </span>
@@ -15,10 +15,10 @@
           <b>2</b>标签下载
         </span>
         <span :class="{ done: hasSubmittedDelivery, active: selectedEntry.canDownloadLabel && !hasSubmittedDelivery }">
-          <b>3</b>寄样信息
+          <b>3</b>送样信息
         </span>
         <span :class="{ done: selectedEntry.deliveryStatus === 'RECEIVED' || isStored(selectedEntry), active: hasSubmittedDelivery && selectedEntry.deliveryStatus !== 'RECEIVED' && !isStored(selectedEntry) }">
-          <b>4</b>主办方签收
+          <b>4</b>组委会入库
         </span>
       </div>
     </section>
@@ -51,7 +51,7 @@
 
           <div v-if="!payableEntries.length" class="empty-state">
             <strong>暂无报名酒款</strong>
-            <p>提交报名后，这里会显示每款酒的付款、标签和寄样进度。</p>
+            <p>提交报名后，这里会显示每款酒的支付、标签和送样进度。</p>
           </div>
         </div>
       </aside>
@@ -111,13 +111,13 @@
             <div>
               <span class="section-kicker">报名支付</span>
               <h3>补缴报名费</h3>
-              <p>这款酒还未完成支付，支付成功后开放标签下载和寄样信息填写。</p>
+              <p>这款酒还未完成支付，支付成功后开放标签下载和送样信息填写。</p>
             </div>
             <strong>{{ formatCurrency(entryPayAmount(selectedEntry)) }}</strong>
           </div>
           <dl class="inline-facts">
             <div>
-              <dt>付款方式</dt>
+              <dt>支付方式</dt>
               <dd>{{ paymentMethodText(selectedEntry.payment?.payMethod) }}</dd>
             </div>
             <div>
@@ -128,7 +128,7 @@
           <div v-if="showBankPending" class="bank-pending-box">
             <div>
               <strong>转账信息已提交</strong>
-              <span>主办方核对到账后，这款酒会自动开放标签下载和寄样信息填写。</span>
+              <span>组委会核对到账后，这款酒会自动开放标签下载和送样信息填写。</span>
             </div>
             <el-button
               v-if="selectedEntry.payment?.bankTransferId"
@@ -140,7 +140,7 @@
           </div>
 
           <template v-else>
-            <div class="pay-mode-tabs" aria-label="选择付款方式">
+            <div class="pay-mode-tabs" aria-label="选择支付方式">
               <button :class="{ active: payMode === 'WECHAT' }" type="button" @click="switchPayMode('WECHAT')">微信支付</button>
               <button :class="{ active: payMode === 'BANK_TRANSFER' }" type="button" @click="switchPayMode('BANK_TRANSFER')">银行转账</button>
             </div>
@@ -163,7 +163,7 @@
                 测试支付成功
               </el-button>
               <el-button v-else type="primary" size="large" :loading="creatingPayment" @click="startNativePayment">
-                {{ paymentOrder?.mode === 'WECHAT' ? '刷新付款码' : '获取付款码' }}
+                {{ paymentOrder?.mode === 'WECHAT' ? '刷新支付码' : '获取支付码' }}
               </el-button>
               <el-button :loading="checkingPayment" @click="checkPaymentStatus">刷新状态</el-button>
             </div>
@@ -177,7 +177,7 @@
               </section>
               <div class="bank-copy-row">
                 <el-button @click="copyBankAccount">复制账户信息</el-button>
-                <span>开发票或付款问题请联系小秘书微信 {{ bankAccount?.serviceWechat || 'beerxms' }}</span>
+                <span>开发票或支付问题请联系小秘书微信 {{ bankAccount?.serviceWechat || 'beerxms' }}</span>
               </div>
 
               <section class="bank-entry-picker">
@@ -190,8 +190,8 @@
                   <el-form-item label="应付金额">
                     <div class="fixed-amount">{{ formatCurrency(entryPayAmount(selectedEntry)) }}</div>
                   </el-form-item>
-                  <el-form-item label="付款户名">
-                    <el-input v-model.trim="bankTransferForm.payerName" placeholder="可填写公司账户名或付款人" />
+                  <el-form-item label="转账户名">
+                    <el-input v-model.trim="bankTransferForm.payerName" placeholder="可填写公司账户名或转账人" />
                   </el-form-item>
                   <el-form-item label="转账时间">
                     <el-date-picker
@@ -285,7 +285,7 @@
                 plain
                 @click="editingDelivery = true"
               >
-                修改寄样信息
+                修改送样信息
               </el-button>
               <el-button @click="refreshEntries(selectedEntry.id)">刷新状态</el-button>
             </div>
@@ -308,7 +308,7 @@
               </el-form-item>
 
               <el-form-item v-if="deliveryForm.deliveryMethod === 'EXPRESS'" label="快递单号">
-                <el-input v-model.trim="deliveryForm.trackingNo" placeholder="填写本次寄样的快递单号" />
+                <el-input v-model.trim="deliveryForm.trackingNo" placeholder="填写本次送样的快递单号" />
               </el-form-item>
 
               <el-form-item label="送样备注" class="full-width">
@@ -325,7 +325,7 @@
 
             <div class="button-row">
               <el-button type="primary" :loading="savingDelivery" @click="saveDelivery">
-                保存并提交寄样信息
+                保存并提交送样信息
               </el-button>
               <el-button v-if="hasSubmittedDelivery" @click="cancelEditingDelivery">取消修改</el-button>
             </div>
@@ -336,7 +336,7 @@
       <aside v-if="selectedEntry" class="requirement-aside brewer-card">
         <div class="aside-head">
           <span class="section-kicker">REQUIREMENTS</span>
-          <h2>寄样要求</h2>
+          <h2>送样要求</h2>
         </div>
 
         <dl class="aside-list">
@@ -349,8 +349,8 @@
             <dd>{{ competitionDeliveryMethodText }}</dd>
           </div>
           <div>
-            <dt>酒样要求</dt>
-            <dd>{{ selectedLogistics.sampleQuantityNote || '以主办方赛事通知为准。' }}</dd>
+            <dt>样品要求</dt>
+            <dd>{{ selectedLogistics.sampleQuantityNote || '以组委会赛事通知为准。' }}</dd>
           </div>
           <div>
             <dt>标签粘贴</dt>
@@ -482,12 +482,12 @@ const labelRecord = computed(() => ({
 const labelSvg = computed(() => buildLabelSvg(labelRecord.value))
 const labelCardTitle = computed(() => {
   if (hasSubmittedDelivery.value) return '需要时可补打现场标签'
-  return '寄样前请先贴好标签'
+  return '送样前请先贴好标签'
 })
 const labelActionDescription = computed(() => {
   if (!selectedEntry.value?.canDownloadLabel) return '支付成功后即可下载标签。'
   if (hasSubmittedDelivery.value) return '如现场需要补贴、重贴或核对编号，可重新下载或打印这一张标签。'
-  return '打印后直接贴标，再回到下方填写寄样方式和快递单号。'
+  return '打印后直接贴标，再回到下方填写送样方式和快递单号。'
 })
 
 const arrivalWindowText = computed(() => {
@@ -495,7 +495,7 @@ const arrivalWindowText = computed(() => {
   const deadline = formatDateTime(selectedLogistics.value.sampleArrivalDeadline)
   if (start !== '待更新' && deadline !== '待更新') return `${start} 至 ${deadline}`
   if (deadline !== '待更新') return `${deadline} 前送达`
-  if (!selectedEntry.value?.competitionDate) return '请至少预留 2 到 3 天运输时间，具体以主办方通知为准'
+  if (!selectedEntry.value?.competitionDate) return '请至少预留 2 到 3 天运输时间，具体以组委会通知为准'
   return `${formatDate(selectedEntry.value.competitionDate)} 前送达更稳妥`
 })
 const competitionDeliveryMethodText = computed(() => {
@@ -512,28 +512,28 @@ const canCopyLogisticsAddress = computed(() => logisticsAddressLines.value.lengt
 const logisticsAddressText = computed(() => {
   if (logisticsAddressLines.value.length) return logisticsAddressLines.value.join(' · ')
   if (selectedLogistics.value.logisticsVisibility === 'PAYMENT_CONFIRMED') return '支付成功后显示完整收件信息。'
-  return '主办方暂未填写完整收件信息，寄出前请先联系确认。'
+  return '组委会暂未填写完整收件信息，寄出前请先联系确认。'
 })
 const currentAction = computed(() => {
   const entry = selectedEntry.value
   if (!entry) {
     return {
       title: '请选择酒款',
-      description: '左侧列表会显示每款酒当前的付款与寄样进度。',
+      description: '左侧列表会显示每款酒当前的支付与送样进度。',
     }
   }
 
   if (isEntryRefundActive(entry)) {
     return {
       title: '退款申请已提交',
-      description: '主办方确认后，报名费将按原支付方式退回。',
+      description: '组委会确认后，报名费将按原支付方式退回。',
     }
   }
 
   if (isEntryRefunded(entry)) {
     return {
       title: '退款已完成',
-      description: '这款酒已退出本场比赛，标签和寄样操作已停止使用。',
+      description: '这款酒已退出本场比赛，标签和送样操作已停止使用。',
     }
   }
 
@@ -541,19 +541,19 @@ const currentAction = computed(() => {
     if (entry.paymentStatus === 'PENDING_CONFIRM') {
       return {
         title: '等待转账确认',
-        description: '转账信息已提交，主办方核对到账后会开放标签下载和寄样信息填写。',
+        description: '转账信息已提交，组委会核对到账后会开放标签下载和送样信息填写。',
       }
     }
     return {
       title: '支付报名费',
-      description: '核对金额并完成支付，支付成功后下载现场标签并填写寄样信息。',
+      description: '核对金额并完成支付，支付成功后下载现场标签并填写送样信息。',
     }
   }
 
   if (!entry.canDownloadLabel) {
     return {
-      title: '付款已完成，等待标签开放',
-      description: '当前酒款已经进入处理中，标签一开放就可以下载打印并继续填写寄样信息。',
+      title: '支付已完成，等待标签开放',
+      description: '当前酒款已经进入处理中，标签一开放就可以下载打印并继续填写送样信息。',
     }
   }
 
@@ -567,26 +567,26 @@ const currentAction = computed(() => {
   if (entry.deliveryStatus === 'RECEIVED' || isStored(entry)) {
     return {
       title: '样品已签收，可等待入库或后续赛事进度',
-      description: '主办方已经确认收到样品，这一款酒的寄样环节基本完成。',
+      description: '组委会已经确认样品入库，这一款酒的送样环节基本完成。',
     }
   }
 
   return {
-    title: '等待主办方签收样品',
-    description: '快递信息已经提交，接下来关注物流进度并等待主办方确认签收即可。',
+    title: '等待组委会确认入库',
+    description: '快递信息已经提交，接下来关注物流进度并等待组委会确认签收即可。',
   }
 })
 
 const deliveryCardTitle = computed(() => {
-  if (!selectedEntry.value?.canDownloadLabel) return '支付成功后可填写寄样信息'
-  if (showDeliverySummary.value) return selectedEntry.value.deliveryStatus === 'RECEIVED' ? '样品已签收' : '你已提交寄样信息'
-  return hasSubmittedDelivery.value ? '修改寄样信息' : '填写寄样信息'
+  if (!selectedEntry.value?.canDownloadLabel) return '支付成功后可填写送样信息'
+  if (showDeliverySummary.value) return selectedEntry.value.deliveryStatus === 'RECEIVED' ? '样品已入库' : '你已提交送样信息'
+  return hasSubmittedDelivery.value ? '修改送样信息' : '填写送样信息'
 })
 
 const deliveryCardDescription = computed(() => {
   if (!selectedEntry.value?.canDownloadLabel) return '支付成功后这里会自动开放。'
-  if (showDeliverySummary.value) return selectedEntry.value.deliveryStatus === 'RECEIVED' ? '主办方已经确认收到样品，你可以在这里查看本次提交内容。' : '快递信息已提交，建议保留单号并关注签收进度。'
-  return '寄出后请尽快提交快递信息，避免主办方无法及时核对来样。'
+  if (showDeliverySummary.value) return selectedEntry.value.deliveryStatus === 'RECEIVED' ? '组委会已经确认样品入库，你可以在这里查看本次提交内容。' : '快递信息已提交，建议保留单号并关注签收进度。'
+  return '寄出后请尽快提交快递信息，避免组委会无法及时核对来样。'
 })
 
 const deliverySummaryItems = computed(() => {
@@ -686,8 +686,8 @@ function paymentMethodText(value) {
 }
 
 function deliveryStatusText(value) {
-  if (value === 'SUBMITTED') return '已提交寄样信息'
-  if (value === 'RECEIVED') return '主办方已确认收到'
+  if (value === 'SUBMITTED') return '已提交送样信息'
+  if (value === 'RECEIVED') return '组委会已确认入库'
   return '待提交'
 }
 
@@ -716,8 +716,8 @@ function entryTaskLabel(entry) {
   if (entry.refundStatus === 'REJECTED') return '退款已驳回'
   if (entry.paymentStatus === 'PENDING_CONFIRM') return '等待转账确认'
   if (entry.deliveryStatus === 'RECEIVED' || isStored(entry)) return '已签收 / 入库'
-  if (hasDeliveryProgress(entry)) return '等待主办方签收'
-  if (entry.paymentStatus === 'PAID') return '待提交寄样'
+  if (hasDeliveryProgress(entry)) return '等待组委会确认入库'
+  if (entry.paymentStatus === 'PAID') return '待提交送样信息'
   return '待支付'
 }
 
@@ -739,9 +739,9 @@ const refundCardTitle = computed(() => {
 
 const refundCardDescription = computed(() => {
   if (isEntryRefunded(selectedEntry.value)) return '报名费已完成退款，这款酒不会继续进入本场比赛流程。'
-  if (selectedEntry.value?.refundStatus === 'REJECTED') return '主办方未通过本次退款申请，标签和寄样操作已恢复。'
-  if (selectedEntry.value?.refundStatus === 'FAILED') return '退款处理失败，请等待主办方重新处理或联系确认。'
-  return '主办方确认后，报名费将按原支付方式退回。'
+  if (selectedEntry.value?.refundStatus === 'REJECTED') return '组委会未通过本次退款申请，标签和送样操作已恢复。'
+  if (selectedEntry.value?.refundStatus === 'FAILED') return '退款处理失败，请等待组委会重新处理或联系确认。'
+  return '组委会确认后，报名费将按原支付方式退回。'
 })
 
 function refundStatusText(status) {
@@ -805,7 +805,7 @@ async function selectEntry(entry, options = {}) {
 
   if (!options.skipConfirm && selectedEntry.value?.id !== entry.id && isDirty.value) {
     try {
-      await ElMessageBox.confirm('当前酒款还有未保存的寄样信息，切换后会丢失这些修改。是否继续切换？', '未保存的修改', {
+      await ElMessageBox.confirm('当前酒款还有未保存的送样信息，切换后会丢失这些修改。是否继续切换？', '未保存的修改', {
         confirmButtonText: '继续切换',
         cancelButtonText: '留在当前酒款',
         type: 'warning',
@@ -849,7 +849,7 @@ function handleMoreCommand(command) {
 
 async function saveDelivery() {
   if (!selectedEntry.value?.canDownloadLabel) {
-    ElMessage.warning('支付成功后才能填写寄样信息')
+    ElMessage.warning('支付成功后才能填写送样信息')
     return
   }
 
@@ -862,7 +862,7 @@ async function saveDelivery() {
   savingDelivery.value = true
   try {
     await submitPortalEntryDelivery(selectedEntry.value.id, payload)
-    ElMessage.success('寄样信息已提交')
+    ElMessage.success('送样信息已提交')
     editingDelivery.value = false
     await refreshEntries(selectedEntry.value.id)
   } finally {
@@ -874,7 +874,7 @@ async function submitRefundRequest() {
   if (!selectedEntry.value?.canRequestRefund) return
   try {
     const { value } = await ElMessageBox.prompt(
-      '退款成功后，这款酒将退出本场比赛，现场标签和寄样操作会停止使用。',
+      '退款成功后，这款酒将退出本场比赛，现场标签和送样操作会停止使用。',
       '申请退款',
       {
         confirmButtonText: '提交退款申请',
@@ -901,7 +901,7 @@ async function simulatePayment() {
   simulatingPayment.value = true
   try {
     selectedEntry.value = await simulatePortalEntryPayment(selectedEntry.value.id)
-    ElMessage.success('支付成功，可以下载标签并填写寄样信息')
+    ElMessage.success('支付成功，可以下载标签并填写送样信息')
     await refreshEntries(selectedEntry.value.id)
   } catch (error) {
     ElMessage.warning(error?.message || '支付失败，请稍后重试')
@@ -926,7 +926,7 @@ async function startNativePayment(options = {}) {
     }
   } catch (error) {
     if (!options.silent) {
-      ElMessage.warning(error?.message || '付款码获取失败，请稍后重试')
+      ElMessage.warning(error?.message || '支付码获取失败，请稍后重试')
     }
   } finally {
     creatingPayment.value = false
@@ -940,7 +940,7 @@ async function checkPaymentStatus() {
   try {
     const status = await fetchPortalEntryPaymentStatus(selectedEntry.value.id)
     if (status.paymentStatus === 'PAID' || status.canDownloadLabel) {
-      ElMessage.success('支付成功，可以下载标签并填写寄样信息')
+      ElMessage.success('支付成功，可以下载标签并填写送样信息')
       stopPaymentPolling()
       await refreshEntries(selectedEntry.value.id)
     }
@@ -1017,7 +1017,7 @@ async function uploadBankVoucher(event) {
 
 async function submitBankTransferForCurrentEntry() {
   if (!selectedEntry.value) {
-    ElMessage.warning('请先选择一款要付款的酒')
+    ElMessage.warning('请先选择一款要支付的酒')
     return
   }
   if (!bankTransferForm.transferTime) {
@@ -1037,7 +1037,7 @@ async function submitBankTransferForCurrentEntry() {
       remark: bankTransferForm.remark,
       voucherAssetId: bankTransferForm.voucherAssetId || undefined,
     })
-    ElMessage.success('转账信息已提交，等待主办方核对到账')
+    ElMessage.success('转账信息已提交，等待组委会核对到账')
     await refreshEntries(selectedEntry.value?.id)
   } catch (error) {
     ElMessage.warning(error?.message || '转账信息提交失败')
@@ -1121,7 +1121,7 @@ function buildLabelSvg(label) {
     }
   }
 
-  const category = escapeXml(label.categoryName || '待确认组别')
+  const category = escapeXml(label.categoryName || '组别待确认')
   const style = escapeXml(label.style || 'Style Pending')
   const abv = label.abv !== '' && label.abv !== null && label.abv !== undefined ? `${label.abv}%` : 'ABV Pending'
   const code = escapeXml(label.shortCode || 'PENDING')
@@ -1184,11 +1184,11 @@ async function downloadLabelPng() {
     URL.revokeObjectURL(svgUrl)
 
     if (!pngBlob) {
-      throw new Error('标签图片生成失败')
+      throw new Error('现场标签生成失败')
     }
 
     triggerDownload(URL.createObjectURL(pngBlob), `${selectedEntry.value.shortCode || 'entry-label'}.png`)
-    ElMessage.success('标签 PNG 已开始下载')
+    ElMessage.success('现场标签已开始下载')
   } catch {
     ElMessage.error('标签下载失败，请稍后重试')
   }

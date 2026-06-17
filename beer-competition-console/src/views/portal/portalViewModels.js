@@ -2,7 +2,7 @@ export const entryStatusMeta = {
   PENDING_PAYMENT: {
     label: '待支付',
     tone: 'amber',
-    step: '待付款',
+    step: '待支付',
   },
   REGISTERED: {
     label: '报名成功',
@@ -151,10 +151,10 @@ export function entryPrimaryAction(entry) {
     return { label: '查看结果', to: entryResultPath(entry) }
   }
   if (isEntryDeliveryActionPending(entry)) {
-    return { label: '办理寄样', to: paymentPath }
+    return { label: '办理送样', to: paymentPath }
   }
   if (entry.status === 'REGISTERED') {
-    return { label: '查看寄样进度', to: paymentPath }
+    return { label: '查看送样进度', to: paymentPath }
   }
   if (entry.status === 'STORED') {
     return { label: '查看参赛进度', to: '/portal/entries' }
@@ -180,14 +180,14 @@ export function entryTimeline(entry) {
     { label: '提交资料', done: true, hint: entry?.submittedAt || '已提交' },
     { label: '支付报名费', done: paid, hint: paid ? '已支付' : pendingConfirm ? '等待转账确认' : '待支付' },
     { label: '标签可用', done: paid, hint: paid ? '可下载并贴在酒瓶或外箱' : '支付成功后开放下载' },
-    { label: '酒样入库', done: stored, hint: stored ? '已入库' : '等待主办方收样确认' },
-    { label: '结果发布', done: resultPublished, hint: resultPublished ? '结果已发布' : '等待主办方发布结果' },
+    { label: '样品入库', done: stored, hint: stored ? '已入库' : '等待组委会确认入库' },
+    { label: '结果发布', done: resultPublished, hint: resultPublished ? '结果已发布' : '等待组委会发布结果' },
   ]
   if (entry?.refundStatus) {
     items.splice(2, 0, {
       label: isEntryRefunded(entry) ? '退款完成' : '退款申请',
       done: isEntryRefunded(entry),
-      hint: isEntryRefunded(entry) ? '报名费已退款，报名已取消' : '退款申请已提交，等待主办方处理',
+      hint: isEntryRefunded(entry) ? '报名费已退款，报名已取消' : '退款申请已提交，等待组委会处理',
     })
   }
   return items
@@ -218,10 +218,10 @@ export function nextActionText(entry) {
     return '待支付报名费'
   }
   if (isEntryDeliveryActionPending(entry)) {
-    return '办理寄样'
+    return '办理送样'
   }
   if (entry.status === 'REGISTERED') {
-    return hasEntryDeliveryProgress(entry) ? '等待主办方确认收样' : '办理寄样'
+    return hasEntryDeliveryProgress(entry) ? '等待组委会确认入库' : '办理送样'
   }
   if (isEntryResultPublished(entry)) {
     return '查看结果'

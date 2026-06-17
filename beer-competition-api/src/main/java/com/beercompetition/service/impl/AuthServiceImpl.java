@@ -115,7 +115,7 @@ public class AuthServiceImpl implements AuthService {
         validateSmsCode(SmsBizType.PORTAL_LOGIN, request.getPhone(), request.getCode());
         String phone = piiService.normalizePhone(request.getPhone());
 
-        // 2) 查询或自动创建厂商账号
+        // 2) 查询或自动创建厂牌账号
         boolean newAccount = false;
         PortalAccount account = portalAccountMapper.selectOne(new LambdaQueryWrapper<PortalAccount>()
                 .eq(PortalAccount::getPhone, phone));
@@ -124,7 +124,7 @@ public class AuthServiceImpl implements AuthService {
             newAccount = true;
         }
         if (account.getStatus() == null || account.getStatus() != 1) {
-            throw new BaseException("厂商账号已禁用");
+            throw new BaseException("厂牌账号已禁用");
         }
 
         // 3) 组装并返回登录态
@@ -150,7 +150,7 @@ public class AuthServiceImpl implements AuthService {
         }
         JudgeAccountStatus status = JudgeAccountStatus.of(account.getStatus());
         if (!status.canLogin()) {
-            throw new BaseException("评审账号已停用，请联系主办方");
+            throw new BaseException("评审账号已停用，请联系组委会");
         }
 
         // 3) 组装并返回登录态
@@ -189,7 +189,7 @@ public class AuthServiceImpl implements AuthService {
             return buildJudgeLoginResponse(account);
         }
         if (status == JudgeAccountStatus.DISABLED) {
-            throw new BaseException("评审账号已停用，请联系主办方");
+            throw new BaseException("评审账号已停用，请联系组委会");
         }
         throw new BaseException("评审账号已存在，请直接登录");
     }
@@ -218,7 +218,7 @@ public class AuthServiceImpl implements AuthService {
             case PORTAL -> {
                 PortalAccount account = portalAccountMapper.selectById(currentId);
                 if (account == null) {
-                    throw new ResourceNotFoundException("厂商账号不存在");
+                    throw new ResourceNotFoundException("厂牌账号不存在");
                 }
                 boolean profileComplete = isPortalProfileComplete(account);
                 yield CurrentUserResponse.builder()

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="event-detail-page">
     <RouterLink class="back-link" to="/portal/events">&lt; 返回</RouterLink>
 
@@ -65,7 +65,7 @@
         <dl>
           <div><dt>送样方式</dt><dd>{{ deliveryMethodText(logistics.deliveryMethod) }}</dd></div>
           <div><dt>建议送达</dt><dd>{{ arrivalWindowText }}</dd></div>
-          <div><dt>酒样要求</dt><dd>{{ logistics.sampleQuantityNote || '以主办方后续通知为准' }}</dd></div>
+          <div><dt>样品要求</dt><dd>{{ logistics.sampleQuantityNote || '以组委会后续通知为准' }}</dd></div>
           <div v-if="logistics.deliveryNote"><dt>包装说明</dt><dd>{{ logistics.deliveryNote }}</dd></div>
         </dl>
       </article>
@@ -75,7 +75,7 @@
       <div class="section-heading">
         <div>
           <h2 class="portal-section-title">参赛流程</h2>
-          <p>从报名资料到结果发布，厂商端主要关注这些节点。</p>
+          <p>从报名资料到结果发布，厂牌端主要关注这些节点。</p>
         </div>
       </div>
       <div class="process-strip">
@@ -165,7 +165,7 @@ const categoryNamesText = computed(() => {
   return names.length ? names.join(' / ') : '暂未配置'
 })
 const fullDescription = computed(() => {
-  return competition.value.description || '主办方暂未填写赛事简介，请以参赛细则和后续通知为准。'
+  return competition.value.description || '组委会暂未填写赛事简介，请以参赛细则和后续通知为准。'
 })
 const heroPrimaryAction = computed(() => {
   if (isCompetitionResultPublished(competition.value)) {
@@ -187,13 +187,13 @@ const arrivalWindowText = computed(() => {
   const deadline = formatDateTime(logistics.value.sampleArrivalDeadline)
   if (start !== '-' && deadline !== '-') return `${start} 至 ${deadline}`
   if (deadline !== '-') return `${deadline} 前送达`
-  return '以主办方通知为准'
+  return '以组委会通知为准'
 })
 const processSteps = [
   { title: '提交资料', text: '填写酒名、组别、基础风格、ABV 和补充字段。' },
   { title: '支付报名费', text: '支付成功后报名完成，并开放标签相关操作。' },
-  { title: '下载标签', text: '将现场标签贴在酒瓶或外箱，便于主办方核对。' },
-  { title: '送样入库', text: '按送样窗口寄送或现场交样，等待主办方确认。' },
+  { title: '下载标签', text: '将现场标签贴在酒瓶或外箱，便于组委会核对。' },
+  { title: '送样入库', text: '按送样窗口寄送或现场交样，等待组委会确认。' },
   { title: '查看结果', text: '结果发布后查看评分、评语、奖项和证书。' },
 ]
 

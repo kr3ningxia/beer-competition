@@ -9,6 +9,7 @@ import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.mapper.AdminOperationLogMapper;
 import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.CompetitionRoundMapper;
+import com.beercompetition.mapper.CompetitionScoreConfigMapper;
 import com.beercompetition.mapper.RoundTableEntryMapper;
 import com.beercompetition.mapper.RoundTableMapper;
 import com.beercompetition.mapper.RoundTableMemberMapper;
@@ -22,6 +23,7 @@ import com.beercompetition.pojo.enums.RoundType;
 import com.beercompetition.pojo.po.AdminOperationLog;
 import com.beercompetition.pojo.po.Competition;
 import com.beercompetition.pojo.po.CompetitionRound;
+import com.beercompetition.pojo.po.CompetitionScoreConfig;
 import com.beercompetition.pojo.po.RoundTable;
 import com.beercompetition.pojo.po.RoundTableEntry;
 import com.beercompetition.pojo.po.RoundTableMember;
@@ -56,6 +58,7 @@ public class AdminFeedbackServiceImpl implements AdminFeedbackService {
 
     private final CompetitionMapper competitionMapper;
     private final CompetitionRoundMapper competitionRoundMapper;
+    private final CompetitionScoreConfigMapper competitionScoreConfigMapper;
     private final RoundTableMapper roundTableMapper;
     private final RoundTableEntryMapper roundTableEntryMapper;
     private final RoundTableMemberMapper roundTableMemberMapper;
@@ -75,7 +78,7 @@ public class AdminFeedbackServiceImpl implements AdminFeedbackService {
         assertScoreRecordBelongsToCompetition(scoreRecord, competition.getId());
         assertUpdateTimeFresh(scoreRecord, request.getExpectedUpdatedAt());
 
-        // 2) 查询第一轮评分上下文并校验记录归属
+        // 2) 查询首轮评分上下文并校验记录归属
         CompetitionRound firstScoreRound = requireFirstScoreRound(competition.getId());
         RoundTableEntry roundEntry = requireFirstRoundEntry(firstScoreRound.getId(), scoreRecord.getBeerEntryId());
         RoundTable table = requireRoundTable(roundEntry.getRoundTableId());
@@ -90,6 +93,9 @@ public class AdminFeedbackServiceImpl implements AdminFeedbackService {
         } else {
             updatePersonalComments(scoreRecord, comments, request.getDimensionNotes());
         }
+        int commentCharCount = countScoreRecordCommentChars(scoreRecord);
+        validateMinCommentLength(competition.getId(), finalScore, scoreRecord.getJudgeRoleType(), commentCharCount);
+        scoreRecord.setCommentCharCount(commentCharCount);
         scoreRecordMapper.updateById(scoreRecord);
         if (finalScore && scoreChanged(oldComments, oldDimensionsJson, scoreRecord) && isConfirmationOpen(firstScoreRound, table)) {
             bumpRoundTableResultVersion(table);
@@ -115,7 +121,7 @@ public class AdminFeedbackServiceImpl implements AdminFeedbackService {
                                         String fallbackComments,
                                         List<AdminFeedbackDimensionNoteRequest> dimensionNotes) {
         if (!Objects.equals(scoreRecord.getFinalFlag(), FLAG_FALSE)) {
-            throw new ForbiddenException("只能修改评委原始评分或桌长最终意见");
+            throw new ForbiddenException("只能修改评审原始评分或桌长最终意见");
         }
         List<DimensionRequest> dimensions = readDimensions(scoreRecord.getDimensionsJson());
         if (!dimensions.isEmpty()) {
@@ -220,7 +226,7 @@ public class AdminFeedbackServiceImpl implements AdminFeedbackService {
                 .orderByAsc(CompetitionRound::getId)
                 .last("LIMIT 1"));
         if (firstScoreRound == null) {
-            throw new ResourceNotFoundException("第一轮评分轮次不存在");
+            throw new ResourceNotFoundException("首轮评分轮次不存在");
         }
         return firstScoreRound;
     }
@@ -231,7 +237,7 @@ public class AdminFeedbackServiceImpl implements AdminFeedbackService {
                 .eq(RoundTableEntry::getBeerEntryId, beerEntryId)
                 .last("LIMIT 1"));
         if (roundEntry == null) {
-            throw new ForbiddenException("评分记录不属于第一轮评分酒款");
+            throw new ForbiddenException("评分记录不属于首轮评分酒款");
         }
         return roundEntry;
     }
@@ -317,6 +323,35 @@ public class AdminFeedbackServiceImpl implements AdminFeedbackService {
         if (value != null && value.length() > COMMENT_MAX_LENGTH) {
             throw new BaseException("评价内容不能超过 1000 字");
         }
+    }
+
+    private void validateMinCommentLength(Long competitionId, boolean finalScore, String judgeRoleType, int commentCharCount) {
+        String role = finalScore ? "CAPTAIN" : judgeRoleType;
+        int minCommentLength = competitionScoreConfigMapper.selectList(new LambdaQueryWrapper<CompetitionScoreConfig>()
+                        .eq(CompetitionScoreConfig::getCompetitionId, competitionId)
+                        .eq(CompetitionScoreConfig::getJudgeRoleType, role))
+                .stream()
+                .findFirst()
+                .map(CompetitionScoreConfig::getMinCommentLength)
+                .filter(Objects::nonNull)
+                .orElse(0);
+        if (minCommentLength > 0 && commentCharCount < minCommentLength) {
+            throw new BaseException((finalScore ? "桌长综合评语" : "评价内容") + "至少 " + minCommentLength + " 字");
+        }
+    }
+
+    private int countScoreRecordCommentChars(ScoreRecord scoreRecord) {
+        List<DimensionRequest> dimensions = readDimensions(scoreRecord.getDimensionsJson());
+        String dimensionText = dimensions.stream()
+                .map(DimensionRequest::getNote)
+                .filter(StringUtils::hasText)
+                .collect(Collectors.joining("\n"));
+        String text = StringUtils.hasText(dimensionText) ? dimensionText : scoreRecord.getComments();
+        return countEffectiveChars(text);
+    }
+
+    private int countEffectiveChars(String text) {
+        return StringUtils.hasText(text) ? text.replaceAll("\\s+", "").length() : 0;
     }
 
     private String firstText(String primary, String fallback) {

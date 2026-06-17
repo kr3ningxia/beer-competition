@@ -621,14 +621,14 @@ public class CompetitionServiceImpl implements CompetitionService {
         Competition competition = getCompetitionOrThrow(id);
         CompetitionStatus oldStatus = parseStatus(competition);
         if (oldStatus != CompetitionStatus.JUDGING_PREP) {
-            throw new BaseException("只有评审准备阶段可以退回收样核对");
+            throw new BaseException("只有评审准备中可以退回样品入库核对");
         }
         CompetitionRound firstRound = competitionRoundMapper.selectOne(new LambdaQueryWrapper<CompetitionRound>()
                 .eq(CompetitionRound::getCompetitionId, id)
                 .eq(CompetitionRound::getRoundNo, 1)
                 .last("LIMIT 1"));
         if (firstRound != null && !RoundStatus.DRAFT.name().equals(firstRound.getStatus())) {
-            throw new BaseException("第一轮已发布，不能退回收样核对");
+            throw new BaseException("首轮已发布，不能退回样品入库核对");
         }
 
         // 2) 只回退比赛主状态，保留第一轮草稿和分桌草稿
@@ -637,7 +637,7 @@ public class CompetitionServiceImpl implements CompetitionService {
 
         // 3) 写入阶段恢复审计并返回详情
         writeCompetitionStageLog("COMPETITION_RETURN_TO_SAMPLE_CHECK", competition.getId(), oldStatus,
-                CompetitionStatus.REGISTRATION_CLOSED, "退回收样核对", request.getReason(),
+                CompetitionStatus.REGISTRATION_CLOSED, "退回样品入库核对", request.getReason(),
                 competition.getRegistrationDeadline(), competition.getRegistrationDeadline());
         return getCompetitionDetail(id);
     }
@@ -821,7 +821,7 @@ public class CompetitionServiceImpl implements CompetitionService {
                                                        Map<Long, RoundTable> tableById,
                                                        Map<Long, List<AwardResult>> awardsByEntry) {
         List<List<String>> rows = new ArrayList<>();
-        rows.add(List.of("匿名编号", "短编号", "酒款名称", "厂商", "联系人", "投递组别", "基础风格", "酒精度",
+        rows.add(List.of("匿名编号", "短编号", "酒款名称", "厂牌", "联系人", "投递组别", "基础风格", "酒精度",
                 "额外报名信息", "报名状态", "入库状态", "发布状态", "原始评分数", "桌长共识分",
                 "桌长综合评语", "轮次记录", "奖项结果"));
         for (BeerEntry entry : entries) {
@@ -1092,6 +1092,9 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .maxTotal(dimensions.isEmpty() ? SCORE_FORM_TOTAL : getScoreTotal(dimensions))
                 .submittedAt(score == null ? null : firstTime(score.getUpdateTime(), score.getCreateTime()))
                 .updatedAt(score == null ? null : firstTime(score.getUpdateTime(), score.getCreateTime()))
+                .durationSeconds(score == null ? null : score.getDurationSeconds())
+                .commentCharCount(score == null ? 0 : resolveFeedbackCommentCharCount(score))
+                .minCommentLength(minCommentLengthByRole.getOrDefault(role, DEFAULT_MIN_COMMENT_LENGTH))
                 .dimensions(dimensions)
                 .comments(score == null ? "" : score.getComments())
                 .anomaly(score == null ? JUDGE_ANOMALY_NOT_SUBMITTED : resolveCommentAnomaly(score, role, minCommentLengthByRole))
@@ -1126,6 +1129,8 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .comments(finalScore.getComments())
                 .submittedAt(firstTime(finalScore.getUpdateTime(), finalScore.getCreateTime()))
                 .updatedAt(firstTime(finalScore.getUpdateTime(), finalScore.getCreateTime()))
+                .commentCharCount(resolveFeedbackCommentCharCount(finalScore))
+                .minCommentLength(minCommentLengthByRole.getOrDefault(JudgeRoleType.CAPTAIN.name(), DEFAULT_MIN_COMMENT_LENGTH))
                 .build();
     }
 
@@ -1153,7 +1158,7 @@ public class CompetitionServiceImpl implements CompetitionService {
     }
 
     private String resolveCommentAnomaly(ScoreRecord record, String role, Map<String, Integer> minCommentLengthByRole) {
-        int effectiveChars = countEffectiveChars(effectiveFeedbackText(record));
+        int effectiveChars = resolveFeedbackCommentCharCount(record);
         if (effectiveChars == 0) {
             return JUDGE_ANOMALY_COMMENT_MISSING;
         }
@@ -1164,17 +1169,26 @@ public class CompetitionServiceImpl implements CompetitionService {
         return null;
     }
 
+    private int resolveFeedbackCommentCharCount(ScoreRecord record) {
+        if (record == null) {
+            return 0;
+        }
+        Integer storedCount = record.getCommentCharCount();
+        if (storedCount != null && storedCount > 0) {
+            return storedCount;
+        }
+        return countEffectiveChars(effectiveFeedbackText(record));
+    }
+
     private String effectiveFeedbackText(ScoreRecord record) {
         if (record == null) {
             return "";
         }
-        if (StringUtils.hasText(record.getComments())) {
-            return record.getComments();
-        }
-        return readDimensions(record.getDimensionsJson()).stream()
+        String dimensionText = readDimensions(record.getDimensionsJson()).stream()
                 .map(DimensionRequest::getNote)
                 .filter(StringUtils::hasText)
                 .collect(Collectors.joining("\n"));
+        return StringUtils.hasText(dimensionText) ? dimensionText : record.getComments();
     }
 
     private List<RoundTableMember> normalizeReviewMembers(RoundTable table, List<RoundTableMember> members) {
@@ -1340,10 +1354,10 @@ public class CompetitionServiceImpl implements CompetitionService {
 
     private String formatEntryStatus(String status) {
         if (EntryStatus.PENDING_PAYMENT.name().equals(status)) {
-            return "待付款";
+            return "待支付";
         }
         if (EntryStatus.REGISTERED.name().equals(status)) {
-            return "已付款，报名成功";
+            return "已支付，报名成功";
         }
         if (EntryStatus.STORED.name().equals(status)) {
             return "已入库";
@@ -1880,7 +1894,7 @@ public class CompetitionServiceImpl implements CompetitionService {
         try {
             return LogisticsVisibility.valueOf(normalized.toUpperCase()).name();
         } catch (IllegalArgumentException ex) {
-            throw new BaseException("寄样地址展示规则不正确");
+            throw new BaseException("送样地址展示规则不正确");
         }
     }
 
@@ -2349,7 +2363,7 @@ public class CompetitionServiceImpl implements CompetitionService {
         if (entriesSummary.getPendingPayment() > 0) {
             alerts.add(CompetitionAlertVO.builder()
                     .level("warning")
-                    .text("还有 " + entriesSummary.getPendingPayment() + " 款酒等待付款；请进入参赛酒款跟进支付。")
+                    .text("还有 " + entriesSummary.getPendingPayment() + " 款酒等待支付；请进入参赛酒款跟进支付。")
                     .build());
         }
         return alerts;
@@ -2383,12 +2397,12 @@ public class CompetitionServiceImpl implements CompetitionService {
                     .enabled(true)
                     .build();
             case REGISTRATION_CLOSED -> CompetitionPrimaryActionVO.builder()
-                    .text("完成收样核对，进入评审准备")
+                    .text("完成样品入库核对，进入评审准备中")
                     .targetTab("judges")
                     .enabled(true)
                     .build();
             case JUDGING_PREP -> CompetitionPrimaryActionVO.builder()
-                    .text("创建第一轮")
+                    .text("创建首轮")
                     .targetTab("judges")
                     .enabled(true)
                     .build();

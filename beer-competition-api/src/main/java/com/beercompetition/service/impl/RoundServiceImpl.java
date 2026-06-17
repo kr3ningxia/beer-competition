@@ -83,6 +83,7 @@ import com.beercompetition.pojo.vo.RoundTableJudgeProgressVO;
 import com.beercompetition.pojo.vo.RoundTableVO;
 import com.beercompetition.service.AwardService;
 import com.beercompetition.service.EntryScanLabelService;
+import com.beercompetition.service.ReviewStatsService;
 import com.beercompetition.service.RoundService;
 import com.beercompetition.service.impl.round.RoundQuerySupport;
 import com.beercompetition.service.impl.round.RoundValidationPolicy;
@@ -144,6 +145,7 @@ public class RoundServiceImpl implements RoundService {
     private final RoundJudgeRankingDraftMapper roundJudgeRankingDraftMapper;
     private final EntryScanLabelService entryScanLabelService;
     private final AwardService awardService;
+    private final ReviewStatsService reviewStatsService;
     private final ObjectMapper objectMapper;
     private final RoundQuerySupport roundQuerySupport;
     private final RoundValidationPolicy roundValidationPolicy;
@@ -260,12 +262,12 @@ public class RoundServiceImpl implements RoundService {
                 CompetitionStatus.REGISTRATION_CLOSED,
                 CompetitionStatus.JUDGING_PREP
         ).contains(roundValidationPolicy.parseCompetitionStatus(competition))) {
-            throw new BaseException("评审已开始，不能再创建第一轮编排");
+            throw new BaseException("评审已开始，不能再创建首轮编排");
         }
         if (competitionRoundMapper.selectCount(new LambdaQueryWrapper<CompetitionRound>()
                 .eq(CompetitionRound::getCompetitionId, competitionId)
                 .eq(CompetitionRound::getRoundNo, 1)) > 0) {
-            throw new BaseException("第一轮已经创建");
+            throw new BaseException("首轮已经创建");
         }
         List<JudgeTable> baseTables = roundQuerySupport.listBaseTables(competitionId);
         if (baseTables.isEmpty()) {
@@ -281,11 +283,11 @@ public class RoundServiceImpl implements RoundService {
             }
         }
 
-        // 2) 创建第一轮
+        // 2) 创建首轮
         CompetitionRound round = CompetitionRound.builder()
                 .competitionId(competitionId)
                 .roundNo(1)
-                .roundName("第一轮")
+                .roundName("首轮")
                 .roundType(RoundType.SCORE.name())
                 .status(RoundStatus.DRAFT.name())
                 .sortOrder(1)
@@ -299,7 +301,7 @@ public class RoundServiceImpl implements RoundService {
             return;
         }
 
-        // 3) 没有传入酒款草稿时，只按基础桌生成空的第一轮桌
+        // 3) 没有传入酒款草稿时，只按基础桌生成空的首轮桌
         Map<Long, List<JudgeAssignment>> assignmentsByTable = assignments.stream().collect(Collectors.groupingBy(JudgeAssignment::getTableId));
         List<RoundTable> roundTables = new ArrayList<>();
         for (int index = 0; index < baseTables.size(); index++) {
@@ -541,15 +543,15 @@ public class RoundServiceImpl implements RoundService {
         // 1) 查询第一轮并校验评分结果
         Competition competition = roundQuerySupport.requireCompetition(competitionId);
         if (roundValidationPolicy.parseCompetitionStatus(competition) != CompetitionStatus.JUDGING) {
-            throw new BaseException("只有评审中的比赛可以确认第一轮完成");
+            throw new BaseException("只有评审中的比赛可以确认首轮完成");
         }
         CompetitionRound round = roundQuerySupport.requireRound(competitionId, roundId);
         if (!RoundType.SCORE.name().equals(round.getRoundType())) {
-            throw new BaseException("只有第一轮评分制轮次可以执行此操作");
+            throw new BaseException("只有首轮评分制轮次可以执行此操作");
         }
         List<RoundTableEntry> entries = roundQuerySupport.listRoundEntries(roundId);
         if (entries.isEmpty()) {
-            throw new BaseException("第一轮没有酒款分配");
+            throw new BaseException("首轮没有酒款分配");
         }
         List<RoundTable> tables = roundQuerySupport.listRoundTables(roundId);
         Map<Long, RoundTable> tableById = tables.stream().collect(Collectors.toMap(RoundTable::getId, Function.identity()));
@@ -810,6 +812,7 @@ public class RoundServiceImpl implements RoundService {
                 .canSubmitRanking(canSubmitRanking(member, round, table))
                 .scoreConfirmation(RoundType.SCORE.name().equals(round.getRoundType()) ? buildScoreConfirmation(table, member) : null)
                 .rankingConfirmation(RoundType.RANKING.name().equals(round.getRoundType()) ? buildRankingConfirmation(table, member) : null)
+                .myReviewStats(RoundType.SCORE.name().equals(round.getRoundType()) ? reviewStatsService.getMyRoundTableStats(roundTableId) : null)
                 .entries(entries.stream()
                         .map(item -> toEntryVO(
                                 entryById.get(item.getBeerEntryId()),

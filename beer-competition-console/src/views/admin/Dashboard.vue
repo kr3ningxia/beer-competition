@@ -104,9 +104,9 @@ const summaryCards = computed(() => {
   return [
     { label: '参赛酒款', value: entries.total || 0, hint: '本场全部酒款', tone: 'neutral' },
     { label: '已入库', value: entries.stored || 0, hint: '可进入评审', tone: 'success' },
-    { label: isRanking ? '排序桌提交' : '桌长汇总', value: isRanking ? `${rankingSubmitted} / ${roundTables.value.length}` : `${progress.finalized || 0} / ${progress.total || 0}`, hint: isRanking ? '等待主办方确认' : '第一轮评分制', tone: 'gold' },
+    { label: isRanking ? '排序桌提交' : '桌长汇总', value: isRanking ? `${rankingSubmitted} / ${roundTables.value.length}` : `${progress.finalized || 0} / ${progress.total || 0}`, hint: isRanking ? '等待组委会确认' : '首轮评分制', tone: 'gold' },
     { label: '平均耗时', value: formatMinutes(progress.averageReviewMinutes), hint: '本轮提交', tone: 'neutral' },
-    { label: '备注不足', value: progress.commentWarnings || 0, hint: '需复核', tone: (progress.commentWarnings || 0) > 0 ? 'warning' : 'success' },
+    { label: '反馈异常', value: progress.commentWarnings || 0, hint: '复核兜底', tone: (progress.commentWarnings || 0) > 0 ? 'warning' : 'success' },
     { label: '结果发布', value: detail.value?.resultSetup?.published ? '已发布' : '未发布', hint: detail.value?.resultSetup?.canPublishResults ? '可发布' : '按流程推进', tone: detail.value?.resultSetup?.published ? 'success' : 'warning' },
   ]
 })
@@ -156,7 +156,7 @@ function statusText(status) {
     DRAFT: '草稿',
     REGISTRATION_OPEN: '报名中',
     REGISTRATION_CLOSED: '报名已截止',
-    JUDGING_PREP: '评审准备',
+    JUDGING_PREP: '评审准备中',
     JUDGING: '评审中',
     RESULT_CONFIRMING: '结果确认',
     PUBLISHED: '已发布',

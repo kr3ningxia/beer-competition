@@ -1,10 +1,10 @@
-<template>
+﻿<template>
   <section class="judge-setup-panel">
     <header class="task-hero">
       <div>
-        <small>第一轮评审人员</small>
+        <small>首轮评审人员</small>
         <h2>先安排每张基础桌的评审</h2>
-        <p>完成后继续分配第一轮酒款，发布前都可以调整。</p>
+        <p>完成后继续分配首轮酒款，发布前都可以调整。</p>
       </div>
       <button class="primary-action" type="button" :disabled="validationIssues.length > 0" @click="$emit('generateFirstRound')">
         保存并安排酒款
@@ -138,7 +138,7 @@
           </p>
           <p v-if="validationIssues.length === 0" class="ok">
             <CircleCheck />
-            <span>可以继续分配第一轮酒款。</span>
+            <span>可以继续分配首轮酒款。</span>
           </p>
         </div>
       </aside>

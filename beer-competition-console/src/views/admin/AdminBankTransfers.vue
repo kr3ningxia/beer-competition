@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="bank-transfer-page">
     <section class="page-head">
       <div>
@@ -65,7 +65,7 @@
           <div v-for="item in transfers" :key="item.id" :class="['table-row', { urgent: item.status === 'SUBMITTED' }]">
             <div class="strong-cell">
               <strong>{{ item.breweryName || '-' }}</strong>
-              <small>{{ item.payerName || '未填写付款户名' }}</small>
+              <small>{{ item.payerName || '未填写转账户名' }}</small>
             </div>
             <div class="soft-cell">
               <strong>{{ item.competitionName || '-' }}</strong>
@@ -92,7 +92,7 @@
           </div>
           <div v-if="!loading && !transfers.length" class="empty-state">
             <h2>暂无转账记录</h2>
-            <p>厂商提交银行转账信息后会出现在这里。</p>
+            <p>厂牌提交银行转账信息后会出现在这里。</p>
           </div>
         </div>
       </div>
@@ -134,7 +134,7 @@
               <button type="button" :disabled="!detail.voucherAssetId" @click="downloadVoucher">下载凭证</button>
             </div>
             <dl>
-              <div><dt>付款户名</dt><dd>{{ detail.payerName || '-' }}</dd></div>
+              <div><dt>转账户名</dt><dd>{{ detail.payerName || '-' }}</dd></div>
               <div><dt>转账备注</dt><dd>{{ detail.remark || '-' }}</dd></div>
               <div><dt>凭证文件</dt><dd>{{ detail.voucherFileName || '未上传' }}</dd></div>
               <div><dt>处理说明</dt><dd>{{ detail.adminNote || '-' }}</dd></div>

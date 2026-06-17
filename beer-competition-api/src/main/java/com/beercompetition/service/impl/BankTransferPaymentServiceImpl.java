@@ -100,7 +100,7 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
 
     @Override
     public BankTransferVoucherVO uploadVoucher(MultipartFile file) {
-        // 1) 校验当前厂商账号和凭证文件
+        // 1) 校验当前厂牌账号和凭证文件
         PortalAccount account = requirePortalAccount();
         validateVoucherFile(file);
         String filename = sanitizeUploadFilename(file.getOriginalFilename(), "bank-transfer-voucher.pdf");
@@ -140,11 +140,11 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
         String remark = normalizeRequired(request.getRemark(), "请填写转账备注");
         FileAsset voucher = resolveVoucherAsset(request.getVoucherAssetId(), account.getId());
 
-        // 2) 读取并校验当前酒款与付款记录
+        // 2) 读取并校验当前酒款与支付记录
         BeerEntry entry = requireOwnedPayableEntry(entryId, brewery.getId());
         EntryPayment payment = ensurePayment(entry);
 
-        // 3) 创建转账记录并锁定关联付款
+        // 3) 创建转账记录并锁定关联支付
         BankTransferPayment transfer = BankTransferPayment.builder()
                 .transferNo(generateTransferNo())
                 .breweryId(brewery.getId())
@@ -172,7 +172,7 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
 
     @Override
     public BankTransferVO getPortalTransfer(Long id) {
-        // 1) 校验当前厂商归属
+        // 1) 校验当前厂牌归属
         PortalAccount account = requirePortalAccount();
         BankTransferPayment transfer = requireTransfer(id);
         if (!Objects.equals(transfer.getPortalAccountId(), account.getId())) {
@@ -186,7 +186,7 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
     @Override
     @Transactional(rollbackFor = Exception.class)
     public BankTransferVO cancelPortalTransfer(Long id) {
-        // 1) 校验当前厂商归属和转账状态
+        // 1) 校验当前厂牌归属和转账状态
         PortalAccount account = requirePortalAccount();
         BankTransferPayment transfer = requireTransfer(id);
         if (!Objects.equals(transfer.getPortalAccountId(), account.getId())) {
@@ -196,7 +196,7 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
             throw new BaseException("当前转账记录不能取消");
         }
 
-        // 2) 取消转账并释放关联付款
+        // 2) 取消转账并释放关联支付
         transfer.setStatus(BankTransferPaymentStatus.CANCELED.name());
         transfer.setProcessedTime(LocalDateTime.now());
         bankTransferPaymentMapper.updateById(transfer);
@@ -244,7 +244,7 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
             throw new BaseException("只有待确认的转账可以确认到账");
         }
 
-        // 2) 推进转账、付款和报名状态
+        // 2) 推进转账、支付和报名状态
         LocalDateTime now = LocalDateTime.now();
         transfer.setStatus(BankTransferPaymentStatus.CONFIRMED.name());
         transfer.setAdminId(BaseContext.getCurrentId());
@@ -282,7 +282,7 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
             throw new BaseException("只有待确认的转账可以驳回");
         }
 
-        // 2) 驳回转账并释放关联付款
+        // 2) 驳回转账并释放关联支付
         String adminNote = normalizeRequired(request == null ? null : request.getAdminNote(), "请填写驳回原因");
         transfer.setStatus(BankTransferPaymentStatus.REJECTED.name());
         transfer.setAdminId(BaseContext.getCurrentId());
@@ -338,7 +338,7 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
             throw new BaseException("酒款不存在或不属于当前厂牌");
         }
         if (!EntryStatus.PENDING_PAYMENT.name().equals(entry.getStatus())) {
-            throw new BaseException("只有待付款酒款可以提交银行转账");
+            throw new BaseException("只有待支付酒款可以提交银行转账");
         }
         return entry;
     }
@@ -358,7 +358,7 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
             entryPaymentMapper.insert(payment);
         }
         if (!EntryPaymentStatus.UNPAID.name().equals(payment.getStatus())) {
-            throw new BaseException("这款酒已付款或正在等待转账确认");
+            throw new BaseException("这款酒已支付或正在等待转账确认");
         }
         return payment;
     }
@@ -421,7 +421,7 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
     private PortalAccount requirePortalAccount() {
         PortalAccount account = portalAccountMapper.selectById(BaseContext.getCurrentId());
         if (account == null) {
-            throw new ForbiddenException("请先登录厂商账号");
+            throw new ForbiddenException("请先登录厂牌账号");
         }
         return account;
     }

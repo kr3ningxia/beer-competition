@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="style-library-page">
     <header class="style-page-header">
       <h1>风格库管理</h1>
@@ -164,7 +164,7 @@
           </label>
           <label>
             <span>名称</span>
-            <input v-model.trim="editor.name" placeholder="例如 主办方标准风格库" />
+            <input v-model.trim="editor.name" placeholder="例如 组委会标准风格库" />
           </label>
           <label>
             <span>版本</span>
@@ -176,7 +176,7 @@
           </label>
           <label>
             <span>来源</span>
-            <input v-model.trim="editor.source" placeholder="例如 主办方" />
+            <input v-model.trim="editor.source" placeholder="例如 组委会" />
           </label>
         </div>
 
@@ -256,7 +256,7 @@
                   </label>
                   <label class="detail-description">
                     <span>评审可见说明</span>
-                    <textarea v-model.trim="selectedStyle.description" rows="3" placeholder="用一两句话说明评审时关注的风格口径"></textarea>
+                    <textarea v-model.trim="selectedStyle.description" rows="3" placeholder="用一两句话说明评审时关注的风格特点"></textarea>
                   </label>
                 </div>
               </template>
@@ -443,7 +443,7 @@ function createEmptyEditor() {
     name: '',
     version: '',
     language: '中文',
-    source: '主办方',
+    source: '组委会',
     status: 1,
     tagsText: '报名必填, 支持搜索, 评审可见',
     categories: [],

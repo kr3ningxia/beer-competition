@@ -2,8 +2,6 @@
   <div class="portal-login">
     <main class="login-shell">
       <section class="login-panel">
-        <RouterLink class="brand-link" to="/portal/home">啤酒事务局</RouterLink>
-        <span class="label-chip tone-gold">BREWER ENTRY</span>
         <h1>参赛入口</h1>
         <p class="login-lead">手机号验证后进入参赛平台，新手机号会自动创建账号。</p>
 
@@ -53,7 +51,7 @@
 <script setup>
 import { computed, onBeforeUnmount, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { portalLogin, sendSmsCode } from '@/api/auth'
 import { setSession } from '@/utils/auth'
 
@@ -194,16 +192,8 @@ onBeforeUnmount(() => window.clearInterval(timer))
   background: rgba(255, 253, 247, 0.96);
 }
 
-.brand-link {
-  display: inline-flex;
-  margin-bottom: 28px;
-  color: #6b4710;
-  font-weight: 900;
-  text-decoration: none;
-}
-
 .login-panel h1 {
-  margin: 18px 0 12px;
+  margin: 0 0 12px;
   font-size: 40px;
   line-height: 1.1;
   letter-spacing: 0;
@@ -235,18 +225,6 @@ onBeforeUnmount(() => window.clearInterval(timer))
 .login-form :deep(.el-button) {
   min-height: 42px;
   border-radius: 8px;
-  font-weight: 800;
-}
-
-.label-chip {
-  display: inline-flex;
-  align-items: center;
-  min-height: 26px;
-  padding: 0 10px;
-  color: #6b4710;
-  background: #f3d978;
-  border-radius: 999px;
-  font-size: 12px;
   font-weight: 800;
 }
 

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="my-page">
     <section class="my-hero">
       <div>
@@ -114,10 +114,10 @@ const heroCopy = computed(() => {
     return `有 ${unpaidEntries.value.length} 款酒需要支付报名费。`
   }
   if (labelEntries.value.length > 0) {
-    return `有 ${labelEntries.value.length} 款酒需要办理寄样。`
+    return `有 ${labelEntries.value.length} 款酒需要办理送样。`
   }
   if (waitingDeliveryEntries.value.length > 0) {
-    return `有 ${waitingDeliveryEntries.value.length} 款酒等待主办方确认收样。`
+    return `有 ${waitingDeliveryEntries.value.length} 款酒等待组委会确认入库。`
   }
   if (resultEntries.value.length > 0) {
     return `有 ${resultEntries.value.length} 款酒的结果已经发布。`
@@ -136,7 +136,7 @@ const heroReminder = computed(() => {
     return { label: `${unpaidEntries.value.length} 款待支付`, to: '/portal/payment' }
   }
   if (labelEntries.value.length > 0) {
-    return { label: `${labelEntries.value.length} 款待办理寄样`, to: '/portal/payment' }
+    return { label: `${labelEntries.value.length} 款待办理送样`, to: '/portal/payment' }
   }
   if (waitingDeliveryEntries.value.length > 0) {
     return { label: `${waitingDeliveryEntries.value.length} 款等待确认`, to: '/portal/payment' }
@@ -155,19 +155,19 @@ function competitionProgressText(competition) {
   const item = summary(competition.id)
   if (!item.submitted) return '本场暂无酒款记录。'
   if (item.pendingPayment > 0) {
-    return '还有酒款待支付，处理后才能办理寄样。'
+    return '还有酒款待支付，处理后才能办理送样。'
   }
   if (item.deliveryActionPending > 0) {
-    return '请办理寄样，并按赛事要求贴好现场标签。'
+    return '请办理送样，并按赛事要求贴好现场标签。'
   }
   if (item.deliverySubmitted > 0 || item.registered > 0) {
-    return '寄样信息已提交，等待主办方确认收样。'
+    return '送样信息已提交，等待组委会确认入库。'
   }
   if (item.result > 0) {
     return '结果已发布，可以查看本场评分、评语和奖项。'
   }
   if (item.stored > 0) {
-    return '酒样已入库，等待主办方发布评审结果。'
+    return '样品已入库，等待组委会发布评审结果。'
   }
   return '报名记录已提交，请继续关注支付、标签和送样状态。'
 }
@@ -207,14 +207,14 @@ function competitionActions(competition) {
   }
   if (item.deliveryActionPending > 0) {
     return [
-      { label: '办理寄样', to: '/portal/payment', primary: true },
+      { label: '办理送样', to: '/portal/payment', primary: true },
       { label: '查看酒款', to: entriesPath },
       ...extraActions,
     ]
   }
   if (item.deliverySubmitted > 0 || item.registered > 0) {
     return [
-      { label: '查看寄样进度', to: '/portal/payment', primary: true },
+      { label: '查看送样进度', to: '/portal/payment', primary: true },
       { label: '查看酒款', to: entriesPath },
       ...extraActions,
     ]
@@ -243,19 +243,19 @@ function recentEntryAction(entry) {
 
 function entryStatusText(entry) {
   if (isEntryPaymentPending(entry)) {
-    return '待支付报名费，支付后才能办理寄样。'
+    return '待支付报名费，支付后才能办理送样。'
   }
   if (isEntryDeliveryActionPending(entry)) {
-    return '请办理寄样，并按赛事要求贴好现场标签。'
+    return '请办理送样，并按赛事要求贴好现场标签。'
   }
   if (entry.status === 'REGISTERED') {
-    return hasEntryDeliveryProgress(entry) ? '寄样信息已提交，等待主办方确认收样。' : '请办理寄样，并按赛事要求贴好现场标签。'
+    return hasEntryDeliveryProgress(entry) ? '送样信息已提交，等待组委会确认入库。' : '请办理送样，并按赛事要求贴好现场标签。'
   }
   if (isEntryResultPublished(entry)) {
     return '结果已发布，可以查看评分、评语和奖项。'
   }
   if (entry.status === 'STORED') {
-    return '酒样已入库，等待主办方发布评审结果。'
+    return '样品已入库，等待组委会发布评审结果。'
   }
   return nextActionText(entry)
 }

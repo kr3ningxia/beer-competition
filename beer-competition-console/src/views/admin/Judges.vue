@@ -216,12 +216,13 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Connection, Refresh, Right, Search } from '@element-plus/icons-vue'
 import { fetchJudgeDetail, fetchJudgesPage, updateJudge, updateJudgePhone, updateJudgeStatus } from '@/api/admin'
 
+const route = useRoute()
 const router = useRouter()
 const judges = ref([])
 const keyword = ref('')
@@ -267,7 +268,19 @@ const visiblePages = computed(() => {
   return pages
 })
 
+watch(() => route.query.keyword, (value) => {
+  const nextKeyword = value ? String(value) : ''
+  if (keyword.value === nextKeyword) return
+  keyword.value = nextKeyword
+  pagination.page = 1
+  loadJudges()
+})
+
 onMounted(loadJudges)
+
+if (route.query.keyword) {
+  keyword.value = String(route.query.keyword)
+}
 
 async function loadJudges() {
   loading.value = true

@@ -23,6 +23,9 @@ public class AdminFeedbackJudgeScoreVO {
     private BigDecimal maxTotal;
     private LocalDateTime submittedAt;
     private LocalDateTime updatedAt;
+    private Integer durationSeconds;
+    private Integer commentCharCount;
+    private Integer minCommentLength;
     private List<DimensionRequest> dimensions;
     private String comments;
     private String anomaly;

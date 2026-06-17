@@ -112,7 +112,7 @@ export function fetchJudgeTasks() {
 }
 
 export function fetchRoundTable(roundTableId) {
-  return request.get(`/api/judge/round-tables/${roundTableId}`)
+  return request.get(`/api/judge/round-tables/${roundTableId}`).then(normalizeRoundTable)
 }
 
 export function submitRanking(roundTableId, payload) {
@@ -176,6 +176,10 @@ export async function fetchScoreConfig(role, competitionId) {
     },
   })
   return normalizeScoreConfig(config)
+}
+
+export function startScore(payload) {
+  return request.post('/api/judge/scores/start', payload)
 }
 
 export function submitScoreRoundTable(roundTableId) {
@@ -279,6 +283,21 @@ function normalizeScoreConfig(config) {
       notePlaceholder: item.notePlaceholder || item.notePrompt || '',
       description: item.description || item.notePrompt || '',
     })),
+  }
+}
+
+function normalizeRoundTable(table) {
+  return {
+    ...table,
+    myReviewStats: table?.myReviewStats ? {
+      ...table.myReviewStats,
+      submittedCount: Number(table.myReviewStats.submittedCount || 0),
+      averageDurationSeconds: Number(table.myReviewStats.averageDurationSeconds || 0),
+      averageCommentChars: Number(table.myReviewStats.averageCommentChars || 0),
+      siteAverageDurationSeconds: Number(table.myReviewStats.siteAverageDurationSeconds || 0),
+      siteAverageCommentChars: Number(table.myReviewStats.siteAverageCommentChars || 0),
+      commentMinLength: Number(table.myReviewStats.commentMinLength || 0),
+    } : null,
   }
 }
 

@@ -2,6 +2,7 @@ package com.beercompetition.controller.judge;
 
 import com.beercompetition.common.result.Result;
 import com.beercompetition.pojo.dto.JudgeScoreSaveRequest;
+import com.beercompetition.pojo.dto.JudgeScoreStartRequest;
 import com.beercompetition.pojo.dto.JudgeScoreUpdateRequest;
 import com.beercompetition.pojo.dto.TableScoreFinalizeRequest;
 import com.beercompetition.pojo.enums.JudgeRoleType;
@@ -38,6 +39,15 @@ public class JudgeScoreController {
     public Result<ScoreConfigVO> currentScoreConfig(@RequestParam JudgeRoleType role,
                                                     @RequestParam(required = false) Long competitionId) {
         return Result.success(scoreService.getCurrentScoreConfig(role, competitionId));
+    }
+
+    /**
+     * 记录评委打开评分页的开始时间。
+     */
+    @PostMapping("/scores/start")
+    public Result<String> startScore(@RequestBody @Valid JudgeScoreStartRequest request) {
+        scoreService.startScore(request);
+        return Result.success("记录成功");
     }
 
     /**

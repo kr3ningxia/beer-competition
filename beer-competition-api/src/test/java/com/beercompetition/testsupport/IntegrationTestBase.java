@@ -87,6 +87,11 @@ public abstract class IntegrationTestBase {
                 WHERE c.code LIKE ?
                 """, prefix + "%");
         jdbcTemplate.update("""
+                DELETE jss FROM judge_score_session jss
+                JOIN competition c ON c.id = jss.competition_id
+                WHERE c.code LIKE ?
+                """, prefix + "%");
+        jdbcTemplate.update("""
                 DELETE sr FROM score_record sr
                 JOIN competition c ON c.id = sr.competition_id
                 WHERE c.code LIKE ?

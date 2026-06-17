@@ -20,4 +20,6 @@ public class AdminFeedbackCaptainOpinionVO {
     private String comments;
     private LocalDateTime submittedAt;
     private LocalDateTime updatedAt;
+    private Integer commentCharCount;
+    private Integer minCommentLength;
 }

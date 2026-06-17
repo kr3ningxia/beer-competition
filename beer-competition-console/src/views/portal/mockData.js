@@ -1,4 +1,4 @@
-export const breweryProfile = {
+﻿export const breweryProfile = {
   breweryName: '山雾麦芽工坊',
   contactName: '林启航',
   phone: '13800000001',
@@ -54,7 +54,7 @@ export const competitions = [
         fieldKey: 'packageSpec',
         fieldLabel: '送样包装规格',
         fieldType: 'text',
-        helpText: '填写瓶装或罐装规格，便于主办方收样核对。',
+        helpText: '填写瓶装或罐装规格，便于组委会样品入库核对。',
         options: [],
         required: true,
         visibleToJudges: false,
@@ -71,7 +71,7 @@ export const competitions = [
     timeline: [
       { label: '开放报名', date: '2026-05-01', done: true },
       { label: '报名截止', date: '2026-07-20', active: true },
-      { label: '酒样入库', date: '2026-08-01' },
+      { label: '样品入库', date: '2026-08-01' },
       { label: '现场评审', date: '2026-08-18' },
       { label: '结果发布', date: '待确认' },
     ],
@@ -94,7 +94,7 @@ export const competitions = [
     sampleRequirement: '每款酒请准备 3 瓶或 3 罐，建议随箱附上参赛编号清单。',
     sampleDeadline: '2026-08-25 18:00',
     sampleAddress: '广东省广州市番禺区啤酒实验场赛事收样台',
-    awardNote: '按专项组别评出奖项，结果发布后开放厂商反馈。',
+    awardNote: '按专项组别评出奖项，结果发布后开放厂牌反馈。',
     categories: ['经典赛松', '果味农舍', '野菌混酿'],
     styleOptions: ['Saison', 'Biere de Garde', 'Mixed Fermentation', 'Fruit Saison'],
     entryFields: [
@@ -122,7 +122,7 @@ export const competitions = [
         fieldKey: 'sampleBatch',
         fieldLabel: '送样批次',
         fieldType: 'text',
-        helpText: '填写厂内批次号，供主办方和厂商核对。',
+        helpText: '填写厂内批次号，供组委会和厂牌核对。',
         options: [],
         required: false,
         visibleToJudges: false,
@@ -139,7 +139,7 @@ export const competitions = [
     timeline: [
       { label: '开放报名', date: '2026-06-15', done: true },
       { label: '报名截止', date: '2026-08-10', active: true },
-      { label: '酒样入库', date: '2026-08-25' },
+      { label: '样品入库', date: '2026-08-25' },
       { label: '现场评审', date: '2026-09-12' },
       { label: '结果发布', date: '待确认' },
     ],
@@ -159,7 +159,7 @@ export const competitions = [
     organizer: 'Barrel & Winter Beer Cup 组委会',
     description: '冬季烈性啤酒、木桶熟成与甜点风味专项赛事，当前仅开放历史结果查看。',
     audience: '适合木桶熟成、冬季烈性和甜点风味酒款。',
-    sampleRequirement: '历史赛事已结束，不再接收酒样。',
+    sampleRequirement: '历史赛事已结束，不再接收样品。',
     sampleDeadline: '2025-11-20 18:00',
     sampleAddress: '佛山创意产业园赛事中心',
     awardNote: '历史结果已发布，可登录后查看本厂牌参赛反馈。',
@@ -197,7 +197,7 @@ export const competitions = [
     timeline: [
       { label: '开放报名', date: '2025-09-12', done: true },
       { label: '报名截止', date: '2025-10-31', done: true },
-      { label: '酒样入库', date: '2025-11-20', done: true },
+      { label: '样品入库', date: '2025-11-20', done: true },
       { label: '现场评审', date: '2025-12-06', done: true },
       { label: '结果发布', date: '2025-12-20', done: true },
     ],
@@ -208,7 +208,7 @@ export const competitions = [
 export const activeCompetition = competitions[0]
 
 export const statusMeta = {
-  PENDING_PAYMENT: { label: '待付款', tone: 'amber' },
+  PENDING_PAYMENT: { label: '待支付', tone: 'amber' },
   REGISTERED: { label: '报名成功', tone: 'green' },
   STORED: { label: '已入库', tone: 'blue' },
   RESULT_PUBLISHED: { label: '结果已出', tone: 'gold' },

@@ -145,7 +145,7 @@ class CompetitionStateMachineIntegrationTest extends IntegrationTestBase {
 
         assertThatThrownBy(() -> competitionService.returnToSampleCheck(fixture.competition().getId(), request))
                 .isInstanceOf(BaseException.class)
-                .hasMessageContaining("第一轮已发布");
+                .hasMessageContaining("首轮已发布");
     }
 
     private Long countCompetitionLog(String action, Long competitionId) {

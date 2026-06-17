@@ -4,6 +4,7 @@ import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ForbiddenException;
 import com.beercompetition.pojo.dto.DimensionRequest;
 import com.beercompetition.pojo.dto.JudgeScoreSaveRequest;
+import com.beercompetition.pojo.dto.JudgeScoreStartRequest;
 import com.beercompetition.pojo.dto.JudgeScoreUpdateRequest;
 import com.beercompetition.pojo.dto.TableScoreFinalizeRequest;
 import com.beercompetition.pojo.enums.JudgeRoleType;
@@ -37,10 +38,40 @@ class ScoreGuardrailIntegrationTest extends IntegrationTestBase {
         assertThat(score.getBeerUuid()).isEqualTo(fixture.entryA1().getUuid());
         assertThat(score.getJudgeRoleType()).isEqualTo(JudgeRoleType.PROFESSIONAL.name());
         assertThat(score.getTotalScore()).isEqualByComparingTo(new BigDecimal("45"));
+        assertThat(score.getCommentCharCount()).isEqualTo(8);
+        assertThat(score.getDurationSeconds()).isNotNull();
 
         assertThatThrownBy(() -> scoreService.createScore(professionalScoreRequest(fixture.entryA1().getUuid(), 17, 26)))
                 .isInstanceOf(BaseException.class)
                 .hasMessageContaining("已经提交过评分");
+    }
+
+    @Test
+    void scoreStartIsIdempotentAndUpdateKeepsDurationButRefreshesCommentCount() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        testData.createPublishedScoreRound(fixture, List.of(fixture.entryA1()), 1);
+
+        asJudge(fixture.professional().getId());
+        JudgeScoreStartRequest startRequest = new JudgeScoreStartRequest();
+        startRequest.setBeerUuid(fixture.entryA1().getUuid());
+        startRequest.setJudgeRoleType(JudgeRoleType.PROFESSIONAL);
+        scoreService.startScore(startRequest);
+        scoreService.startScore(startRequest);
+
+        var score = scoreService.createScore(professionalScoreRequest(fixture.entryA1().getUuid(), 18, 27));
+        Integer originalDuration = score.getDurationSeconds();
+
+        JudgeScoreUpdateRequest update = new JudgeScoreUpdateRequest();
+        update.setDimensions(List.of(
+                dimension("aroma", "香气", 20, 17, "香气清晰持久"),
+                dimension("taste", "口味", 30, 26, "口味平衡干净")
+        ));
+        update.setTotalScore(new BigDecimal("43"));
+        update.setComments("修改评分");
+        var updated = scoreService.updateScore(score.getId(), update);
+
+        assertThat(updated.getDurationSeconds()).isEqualTo(originalDuration);
+        assertThat(updated.getCommentCharCount()).isEqualTo(12);
     }
 
     @Test
@@ -119,14 +150,14 @@ class ScoreGuardrailIntegrationTest extends IntegrationTestBase {
 
     private List<DimensionRequest> professionalDimensions(int aroma, int taste) {
         return List.of(
-                dimension("aroma", "香气", 20, aroma),
-                dimension("taste", "口味", 30, taste)
+                dimension("aroma", "香气", 20, aroma, "香气清晰"),
+                dimension("taste", "口味", 30, taste, "口味平衡")
         );
     }
 
     private TableScoreFinalizeRequest finalizeRequest(int score, boolean advanced) {
         TableScoreFinalizeRequest request = new TableScoreFinalizeRequest();
-        request.setDimensions(List.of(dimension("consensus", "共识分", 50, score)));
+        request.setDimensions(List.of(dimension("consensus", "共识分", 50, score, "桌长共识")));
         request.setConsensusScore(new BigDecimal(score));
         request.setComments("桌长总结");
         request.setAdvanced(advanced);
@@ -134,11 +165,16 @@ class ScoreGuardrailIntegrationTest extends IntegrationTestBase {
     }
 
     private DimensionRequest dimension(String key, String label, int maxScore, int score) {
+        return dimension(key, label, maxScore, score, null);
+    }
+
+    private DimensionRequest dimension(String key, String label, int maxScore, int score, String note) {
         DimensionRequest dimension = new DimensionRequest();
         dimension.setKey(key);
         dimension.setLabel(label);
         dimension.setMaxScore(new BigDecimal(maxScore));
         dimension.setScore(new BigDecimal(score));
+        dimension.setNote(note);
         return dimension;
     }
 }

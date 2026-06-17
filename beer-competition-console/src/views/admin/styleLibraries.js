@@ -1,4 +1,4 @@
-export const fallbackStyleLibraries = [
+﻿export const fallbackStyleLibraries = [
   {
     value: 'BJCP_2021_CN',
     label: 'BJCP 2021 中文标准库',
@@ -23,15 +23,15 @@ export const fallbackStyleLibraries = [
   },
   {
     value: 'CUSTOM_STANDARD',
-    label: '主办方标准风格库',
+    label: '组委会标准风格库',
     version: '2026A',
     language: '中文',
     status: '启用',
-    source: '主办方',
+    source: '组委会',
     categoryCount: 18,
     styleCount: 64,
     updatedAt: '2026.05.26',
-    tags: ['自定义分类', '报名可搜', '评审可见'],
+    tags: ['自定义分类', '报名时可搜索', '评审可见'],
     categories: ['拉格专题', '特色增味'],
     styles: ['浅色拉格', '深色拉格', '创意拉格', '水果酸啤', '桶陈世涛', '茶咖啡增味', '实验啤酒'],
     styleItems: [

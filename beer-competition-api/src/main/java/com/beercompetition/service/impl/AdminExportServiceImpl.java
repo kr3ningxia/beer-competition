@@ -107,7 +107,7 @@ public class AdminExportServiceImpl implements AdminExportService {
         // 2) 组装报名台账工作表
         List<List<String>> rows = new ArrayList<>();
         rows.add(List.of("比赛名称", "比赛编号", "酒款 UUID", "匿名标签编码", "现场短编号", "酒款名称", "厂牌名称",
-                "联系人", "投递组别", "基础风格", "ABV", "额外报名字段", "酒款状态", "付款状态", "报名金额", "付款时间", "报名时间"));
+                "联系人", "投递组别", "基础风格", "ABV", "额外报名字段", "酒款状态", "支付状态", "报名金额", "支付时间", "报名时间"));
         for (BeerEntry entry : context.entries()) {
             EntryScanLabel label = context.labelsByEntryId().get(entry.getId());
             Brewery brewery = context.breweriesById().get(entry.getBreweryId());
@@ -153,8 +153,8 @@ public class AdminExportServiceImpl implements AdminExportService {
 
         // 2) 组装收样入库工作表
         List<List<String>> rows = new ArrayList<>();
-        rows.add(List.of("比赛名称", "酒款 UUID", "现场短编号", "酒款名称", "厂牌名称", "组别", "风格", "寄样方式",
-                "快递公司", "快递单号", "寄样备注", "送样状态", "提交时间", "签收时间", "入库状态", "签收备注"));
+        rows.add(List.of("比赛名称", "酒款 UUID", "现场短编号", "酒款名称", "厂牌名称", "组别", "风格", "送样方式",
+                "快递公司", "快递单号", "送样备注", "送样状态", "提交时间", "签收时间", "入库状态", "签收备注"));
         for (BeerEntry entry : context.entries()) {
             EntryScanLabel label = context.labelsByEntryId().get(entry.getId());
             Brewery brewery = context.breweriesById().get(entry.getBreweryId());
@@ -182,9 +182,9 @@ public class AdminExportServiceImpl implements AdminExportService {
         // 3) 记录导出并返回 Excel
         logExport("EXPORT_DELIVERY", context.competition(), context.filters(), context.entries().size());
         return FileDownloadVO.builder()
-                .fileName(safeFilename(context.competition().getName()) + "-收样入库清单.xlsx")
+                .fileName(safeFilename(context.competition().getName()) + "-样品入库清单.xlsx")
                 .contentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-                .content(SimpleXlsxBuilder.build(List.of(new SimpleXlsxBuilder.Sheet("收样入库清单", rows))))
+                .content(SimpleXlsxBuilder.build(List.of(new SimpleXlsxBuilder.Sheet("样品入库清单", rows))))
                 .build();
     }
 
@@ -538,7 +538,7 @@ public class AdminExportServiceImpl implements AdminExportService {
 
     private String entryStatusLabel(String status) {
         return switch (value(status)) {
-            case "PENDING_PAYMENT" -> "待付款";
+            case "PENDING_PAYMENT" -> "待支付";
             case "REGISTERED" -> "报名成功";
             case "STORED" -> "已入库";
             case "CANCELED" -> "已取消";
@@ -549,8 +549,8 @@ public class AdminExportServiceImpl implements AdminExportService {
 
     private String paymentStatusLabel(String status) {
         return switch (value(status)) {
-            case "UNPAID" -> "待付款";
-            case "PAID" -> "已付款";
+            case "UNPAID" -> "待支付";
+            case "PAID" -> "已支付";
             case "CANCELED" -> "已取消";
             case "REFUNDED" -> "已退款";
             default -> value(status);

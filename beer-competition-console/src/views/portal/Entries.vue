@@ -3,7 +3,7 @@
     <section class="toolbar brewer-card">
       <div>
         <h2 class="portal-section-title">我的酒款</h2>
-        <p>按酒款查看报名记录，并处理付款、现场标签、酒样入库和结果。</p>
+        <p>按酒款查看报名记录，并处理支付、现场标签、样品入库和结果。</p>
       </div>
       <div class="toolbar-actions">
         <el-input v-model="keyword" placeholder="搜索酒名 / 现场短编号" clearable />
@@ -110,7 +110,7 @@
             <div><dt>ABV</dt><dd>{{ selectedEntry.abv }}%</dd></div>
             <div><dt>现场短编号</dt><dd>{{ selectedEntry.shortCode }}</dd></div>
             <div><dt>提交时间</dt><dd>{{ selectedEntry.submittedAt }}</dd></div>
-            <div><dt>付款状态</dt><dd>{{ paymentStatusText(selectedEntry) }}</dd></div>
+            <div><dt>支付状态</dt><dd>{{ paymentStatusText(selectedEntry) }}</dd></div>
             <div v-if="selectedEntry.refundStatus"><dt>退款状态</dt><dd>{{ refundStatusText(selectedEntry.refundStatus) }}</dd></div>
             <div><dt>入库状态</dt><dd>{{ isStored(selectedEntry) ? '已入库' : '待入库' }}</dd></div>
           </dl>
@@ -307,13 +307,13 @@ function timeline(entry) {
     { label: '提交资料', time: entry.submittedAt, done: true },
     { label: '支付报名费', hint: entry.paymentStatus === 'PAID' ? '已支付' : '待支付', done: entry.paymentStatus === 'PAID' },
     { label: '标签可下载', hint: entry.canDownloadLabel ? '已生成现场标签' : '支付成功后开放下载', done: entry.canDownloadLabel },
-    { label: '酒样入库', hint: isStored(entry) ? '已入库' : '等待主办方确认收样', done: isStored(entry) },
-    { label: '结果发布', hint: resultPublished ? '结果已发布' : '等待主办方发布结果', done: resultPublished },
+    { label: '样品入库', hint: isStored(entry) ? '已入库' : '等待组委会确认入库', done: isStored(entry) },
+    { label: '结果发布', hint: resultPublished ? '结果已发布' : '等待组委会发布结果', done: resultPublished },
   ]
   if (entry.refundStatus) {
     items.splice(2, 0, {
       label: isEntryRefunded(entry) ? '退款完成' : '退款申请',
-      hint: isEntryRefunded(entry) ? '报名已取消' : '等待主办方处理',
+      hint: isEntryRefunded(entry) ? '报名已取消' : '等待组委会处理',
       time: entry.refundProcessedAt || entry.refundRequestedAt,
       done: isEntryRefunded(entry),
     })
@@ -335,14 +335,14 @@ function paymentStatusText(entry) {
   if (isEntryRefunded(entry)) return '已退款'
   if (entry?.refundStatus === 'FAILED') return '退款失败'
   if (entry?.refundStatus === 'REJECTED') return '退款已驳回'
-  if (entry?.paymentStatus === 'PAID') return '已付款'
+  if (entry?.paymentStatus === 'PAID') return '已支付'
   if (entry?.paymentStatus === 'CANCELED') return '已取消'
-  return '待付款'
+  return '待支付'
 }
 
 function refundStatusText(status) {
   return {
-    REQUESTED: '待主办方处理',
+    REQUESTED: '待组委会处理',
     APPROVED: '退款处理中',
     PROCESSING: '退款处理中',
     SUCCESS: '已退款',
@@ -362,7 +362,7 @@ async function submitRefundRequest(entry) {
   }
   try {
     const { value } = await ElMessageBox.prompt(
-      '退款成功后，这款酒将退出本场比赛，现场标签和寄样操作会停止使用。',
+      '退款成功后，这款酒将退出本场比赛，现场标签和送样操作会停止使用。',
       '申请退款',
       {
         confirmButtonText: '提交退款申请',
@@ -386,7 +386,7 @@ async function submitRefundRequest(entry) {
 function refundUnavailableText(entry) {
   if (isEntryRefunded(entry)) return '这款酒已完成退款'
   if (entry?.paymentStatus !== 'PAID') return '报名费支付完成后才能申请退款'
-  if (isStored(entry)) return '酒样已入库，不能申请退款'
+  if (isStored(entry)) return '样品已入库，不能申请退款'
   if (entry?.status === 'CANCELED') return '报名已取消，不能申请退款'
   return '当前状态不能申请退款'
 }

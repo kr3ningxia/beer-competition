@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="admin-exports-page">
     <section class="page-head">
       <div>
@@ -54,11 +54,11 @@
         </select>
       </label>
       <label class="field">
-        <span>付款</span>
+        <span>支付</span>
         <select v-model="filters.paymentStatus" @change="refreshExportCount">
-          <option value="">全部付款</option>
-          <option value="UNPAID">待付款</option>
-          <option value="PAID">已付款</option>
+          <option value="">全部支付状态</option>
+          <option value="UNPAID">待支付</option>
+          <option value="PAID">已支付</option>
           <option value="REFUNDED">已退款</option>
           <option value="CANCELED">已取消</option>
         </select>
@@ -170,7 +170,7 @@ const filters = reactive({
 })
 
 const entryStatusOptions = [
-  { value: 'PENDING_PAYMENT', label: '待付款' },
+  { value: 'PENDING_PAYMENT', label: '待支付' },
   { value: 'REGISTERED', label: '报名成功' },
   { value: 'STORED', label: '已入库' },
   { value: 'CANCELED', label: '已取消' },
@@ -193,7 +193,7 @@ const exportTemplates = [
     key: 'entries',
     title: '报名酒款台账',
     stage: '报名核对',
-    description: '导出酒款、厂牌、组别、付款和报名字段，用于报名截止后的资料复核。',
+    description: '导出酒款、厂牌、组别、支付状态和报名信息，用于报名截止后的资料复核。',
     fileType: 'Excel',
     scope: '当前筛选范围',
     action: '导出台账',
@@ -202,9 +202,9 @@ const exportTemplates = [
   },
   {
     key: 'delivery',
-    title: '收样入库清单',
+    title: '样品入库清单',
     stage: '现场准备',
-    description: '导出寄样、快递单号、签收和入库状态，用于现场收样核对。',
+    description: '导出送样、快递单号、签收和入库状态，用于现场样品核对。',
     fileType: 'Excel',
     scope: '当前筛选范围',
     action: '导出清单',
@@ -213,11 +213,11 @@ const exportTemplates = [
   },
   {
     key: 'labels',
-    title: '批量二维码 / 瓶贴',
+    title: '批量现场标签',
     stage: '贴瓶打印',
     description: '导出可打印标签包，标签只包含二维码、短编号、组别、风格和 ABV。',
     fileType: 'ZIP',
-    scope: '已付款且有标签',
+    scope: '已支付且已生成现场标签',
     action: '下载瓶贴包',
     icon: Printer,
     tone: 'gold',
@@ -323,7 +323,7 @@ async function runExport(type) {
     }
     if (type === 'delivery') {
       blob = await exportCompetitionDelivery(selectedCompetitionId.value, params)
-      fallbackName = `${selectedCompetition.value?.name || '比赛'}-收样入库清单.xlsx`
+      fallbackName = `${selectedCompetition.value?.name || '比赛'}-样品入库清单.xlsx`
     }
     if (type === 'labels') {
       blob = await exportCompetitionLabels(selectedCompetitionId.value, { ...params, copies: normalizedCopies() })

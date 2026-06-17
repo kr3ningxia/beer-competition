@@ -24,6 +24,10 @@ export function updateCompetitionFeedbackComment(competitionId, scoreRecordId, p
   return request.patch(`/api/admin/competitions/${competitionId}/feedback-review/score-records/${scoreRecordId}/comments`, payload, { authScope: 'admin' })
 }
 
+export function fetchAdminOperationLogs(params = {}) {
+  return request.get('/api/admin/operation-logs', { params, authScope: 'admin' })
+}
+
 export function fetchAdminEntries(params = {}) {
   return request.get('/api/admin/entries', { params, authScope: 'admin' })
 }

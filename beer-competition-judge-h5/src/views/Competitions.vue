@@ -37,6 +37,18 @@
         <span v-else>{{ progressLabel }} <strong>{{ progressCount }}</strong></span>
         <span v-if="scoreConfirmationVisible"><strong>{{ scoreConfirmationProgressLabel }}</strong></span>
       </div>
+      <div v-if="showReviewStats" class="review-stats-strip">
+        <article class="review-stat-card">
+          <span>平均用时</span>
+          <strong>{{ myReviewStatsText.duration }}</strong>
+          <small>{{ myReviewStatsText.siteDuration }}</small>
+        </article>
+        <article class="review-stat-card">
+          <span>平均评语</span>
+          <strong>{{ myReviewStatsText.comment }}</strong>
+          <small>{{ myReviewStatsText.siteComment }}</small>
+        </article>
+      </div>
     </section>
 
     <section v-if="!current" class="card action-card">
@@ -278,6 +290,18 @@ const rankingConfirmationProgressText = computed(() => `${rankingConfirmation.va
 const scoreConfirmationProgressLabel = computed(() => (
   scoreConfirmation.value?.mineConfirmed ? '已确认结果' : '待确认结果'
 ))
+const myReviewStats = computed(() => currentRoundTable.value?.myReviewStats || null)
+const showReviewStats = computed(() => Boolean(myReviewStats.value) && !isRankingRound.value)
+const myReviewStatsText = computed(() => ({
+  duration: formatSeconds(myReviewStats.value?.averageDurationSeconds),
+  siteDuration: myReviewStats.value?.submittedCount > 0
+    ? `现场 ${formatSeconds(myReviewStats.value?.siteAverageDurationSeconds)}`
+    : '完成首款后显示',
+  comment: formatCount(myReviewStats.value?.averageCommentChars, '字'),
+  siteComment: myReviewStats.value?.submittedCount > 0
+    ? `现场 ${formatCount(myReviewStats.value?.siteAverageCommentChars, '字')}`
+    : '完成首款后显示',
+}))
 const rankingConfirmationHint = computed(() => (
   rankingConfirmation.value?.mineConfirmed
     ? '你已确认本桌排序，等待桌长最终提交。'
@@ -407,6 +431,24 @@ function displayShortCode(entry) {
 
 function styleDisplayName(entry) {
   return [entry?.styleCode, entry?.style].filter(Boolean).join(' ')
+}
+
+function formatSeconds(value) {
+  const seconds = Number(value || 0)
+  if (!seconds) return '--'
+  const minutes = Math.floor(seconds / 60)
+  const rest = seconds % 60
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60)
+    const remainMinutes = minutes % 60
+    return remainMinutes ? `${hours}小时${remainMinutes}分` : `${hours}小时`
+  }
+  return `${minutes}分${rest}秒`
+}
+
+function formatCount(value, unit) {
+  const count = Number(value || 0)
+  return count > 0 ? `${count}${unit}` : `--`
 }
 
 function entryStatus(entry) {
@@ -547,6 +589,7 @@ async function syncTaskDashboard(options = {}) {
     if (current.value.taskType === 'CAPTAIN_FINALIZE') {
       const board = await fetchCaptainBoard(current.value.roundTableId)
       captainBoard.value = board
+      currentRoundTable.value = board.roundTable || null
       entries.value = board.entries || []
       return
     }
@@ -708,6 +751,44 @@ onBeforeUnmount(() => {
 .progress-strip strong {
   color: #fff;
   font-size: 13px;
+}
+
+.review-stats-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.review-stat-card {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.075);
+}
+
+.review-stat-card span,
+.review-stat-card small {
+  overflow: hidden;
+  color: rgba(248, 250, 252, 0.68);
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.25;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.review-stat-card strong {
+  overflow: hidden;
+  color: #fff;
+  font-size: 17px;
+  line-height: 1.1;
+  font-weight: 900;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .action-card {
