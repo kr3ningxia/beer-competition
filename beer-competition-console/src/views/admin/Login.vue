@@ -44,7 +44,7 @@
         <div class="card-head">
           <span class="card-kicker">组委会入口</span>
           <h2>组委会后台登录</h2>
-          <p>进入比赛管理、评审配置和现场看板。</p>
+          <p>进入比赛管理、评审配置和现场看板</p>
         </div>
 
         <el-form :model="form" label-position="top" @submit.prevent="submit">

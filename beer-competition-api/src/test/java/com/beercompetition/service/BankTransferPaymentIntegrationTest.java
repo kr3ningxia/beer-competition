@@ -76,6 +76,30 @@ class BankTransferPaymentIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    void updateSubmittedTransferKeepsTheSameTransferRecord() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        var entry = createPendingEntry(fixture, "修改转账");
+
+        asPortal(fixture.portalA().account().getId());
+        var submitted = bankTransferPaymentService.submitPortalTransfer(submitRequest(
+                entry.getId(), "原付款户名", null));
+        PortalBankTransferSubmitRequest updateRequest = submitRequest(entry.getId(), "新付款户名", null);
+        updateRequest.setRemark(testRun + "-更新后的转账备注");
+        updateRequest.setTransferTime(LocalDateTime.now().minusMinutes(1));
+
+        var updated = bankTransferPaymentService.updatePortalTransfer(submitted.getId(), updateRequest);
+
+        assertThat(updated.getId()).isEqualTo(submitted.getId());
+        assertThat(updated.getPayerName()).isEqualTo("新付款户名");
+        assertThat(updated.getRemark()).isEqualTo(testRun + "-更新后的转账备注");
+        assertPayment(entry.getId(), EntryPaymentStatus.PENDING_CONFIRM, EntryPayMethod.BANK_TRANSFER, submitted.getId());
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM bank_transfer_payment WHERE entry_payment_id = ?",
+                Long.class,
+                updated.getPaymentId())).isEqualTo(1L);
+    }
+
+    @Test
     void rejectTransferReleasesEntryPaymentForRetry() {
         BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
         var entry = createPendingEntry(fixture, "驳回后重提");
@@ -117,6 +141,25 @@ class BankTransferPaymentIntegrationTest extends IntegrationTestBase {
         assertThat(canceled.getStatus()).isEqualTo(BankTransferPaymentStatus.CANCELED.name());
         assertThatEntryStatus(entry.getId(), EntryStatus.PENDING_PAYMENT);
         assertPayment(entry.getId(), EntryPaymentStatus.UNPAID, EntryPayMethod.MANUAL, null);
+    }
+
+    @Test
+    void portalCanCancelUnpaidEntryButNotPendingBankTransferEntry() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        var unpaidEntry = createPendingEntry(fixture, "待支付取消报名");
+        var pendingTransferEntry = createPendingEntry(fixture, "转账确认中取消报名");
+
+        asPortal(fixture.portalA().account().getId());
+        var canceled = entryService.cancelPortalEntry(unpaidEntry.getId());
+
+        assertThat(canceled.getStatus()).isEqualTo(EntryStatus.CANCELED.name());
+        assertPayment(unpaidEntry.getId(), EntryPaymentStatus.CANCELED, EntryPayMethod.MOCK, null);
+
+        bankTransferPaymentService.submitPortalTransfer(submitRequest(
+                pendingTransferEntry.getId(), "测试付款户名", null));
+        assertThatThrownBy(() -> entryService.cancelPortalEntry(pendingTransferEntry.getId()))
+                .isInstanceOf(BaseException.class)
+                .hasMessageContaining("银行转账确认中");
     }
 
     @Test

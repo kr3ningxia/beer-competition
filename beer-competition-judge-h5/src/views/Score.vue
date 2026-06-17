@@ -41,7 +41,7 @@
         </div>
 
           <div v-if="entry.locked" class="locked-alert">
-            桌长已确认本桌结果，此评分不可继续修改。
+            桌长已确认本桌结果，此评分已锁定。
           </div>
 
           <div class="dimension-list">

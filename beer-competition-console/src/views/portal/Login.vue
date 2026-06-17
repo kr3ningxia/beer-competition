@@ -3,7 +3,7 @@
     <main class="login-shell">
       <section class="login-panel">
         <h1>参赛入口</h1>
-        <p class="login-lead">手机号验证后进入参赛平台，新手机号会自动创建账号。</p>
+        <p class="login-lead">手机号验证后进入参赛平台，新手机号会自动创建账号</p>
 
         <el-form :model="form" label-position="top" class="login-form" @submit.prevent="submit">
           <el-form-item label="手机号">

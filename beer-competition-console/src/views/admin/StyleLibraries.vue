@@ -36,7 +36,7 @@
               <span><DocumentCopy />{{ library.styleCount }} 风格</span>
             </small>
           </button>
-          <p v-if="filteredLibraryOptions.length === 0" class="empty-line list-empty">没有匹配的风格库。</p>
+          <p v-if="filteredLibraryOptions.length === 0" class="empty-line list-empty">没有匹配的风格库</p>
         </div>
       </aside>
 
@@ -94,7 +94,7 @@
                 <span class="category-name" :title="categoryName(category)">{{ displayCategoryName(category) }}</span>
                 <small>{{ countStylesInCategory(category) }}</small>
               </button>
-              <p v-if="filteredPreviewCategories.length === 0" class="empty-line list-empty">无匹配分类。</p>
+              <p v-if="filteredPreviewCategories.length === 0" class="empty-line list-empty">无匹配分类</p>
             </div>
           </aside>
 
@@ -140,7 +140,7 @@
                   </template>
                 </footer>
               </article>
-              <p v-if="previewStyles.length === 0" class="empty-line style-empty">未找到匹配的风格。</p>
+              <p v-if="previewStyles.length === 0" class="empty-line style-empty">未找到匹配的风格</p>
             </div>
           </section>
         </section>
@@ -195,7 +195,7 @@
               <input v-model.trim="category.name" placeholder="分类名称" @focus="editorCategory = category.name" @input="syncCategoryName(category)" />
               <button type="button" @click="removeCategory(category.localId)">删除</button>
             </label>
-            <p v-if="editor.categories.length === 0" class="empty-line">先添加分类。</p>
+            <p v-if="editor.categories.length === 0" class="empty-line">先添加分类</p>
           </aside>
 
           <section class="style-editor-main">
@@ -221,7 +221,7 @@
                   </span>
                   <em>{{ style.status === 1 ? '启用' : '停用' }}</em>
                 </button>
-                <p v-if="editorStyles.length === 0" class="empty-line">当前分类没有风格。</p>
+                <p v-if="editorStyles.length === 0" class="empty-line">当前分类没有风格</p>
               </div>
             </section>
 
@@ -260,7 +260,7 @@
                   </label>
                 </div>
               </template>
-              <p v-else class="empty-line">选择一个风格查看详情。</p>
+              <p v-else class="empty-line">选择一个风格查看详情</p>
             </aside>
           </section>
         </section>

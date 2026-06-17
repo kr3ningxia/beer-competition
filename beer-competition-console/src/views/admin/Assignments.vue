@@ -4,7 +4,7 @@
       <div>
         <small>评审编排入口</small>
         <h1>选择比赛后编排评审</h1>
-        <p>进入比赛后，把评审和酒款安排到对应桌。</p>
+        <p>进入比赛后，把评审和酒款安排到对应桌</p>
       </div>
       <button class="tool-button" type="button" @click="loadCompetitions">
         <Refresh />
@@ -62,7 +62,7 @@
 
     <section v-if="!loading && filteredCompetitions.length === 0" class="empty-state">
       <h2>没有匹配的比赛</h2>
-      <p>调整搜索条件或状态筛选后再进入评审编排。</p>
+      <p>调整搜索条件或状态筛选后再进入评审编排</p>
     </section>
   </div>
 </template>

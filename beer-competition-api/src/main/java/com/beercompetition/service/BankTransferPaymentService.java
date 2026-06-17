@@ -19,6 +19,8 @@ public interface BankTransferPaymentService {
 
     BankTransferVO getPortalTransfer(Long id);
 
+    BankTransferVO updatePortalTransfer(Long id, PortalBankTransferSubmitRequest request);
+
     BankTransferVO cancelPortalTransfer(Long id);
 
     PageResult<BankTransferVO> listAdminTransfers(String status, Long competitionId, String keyword,

@@ -4,7 +4,7 @@
       <div>
         <small>首轮</small>
         <h2>把已入库酒款分到评审桌</h2>
-        <p>首轮会发给评审评分，桌长最后汇总并选择晋级酒款。</p>
+        <p>首轮会发给评审评分，桌长最后汇总并选择晋级酒款</p>
       </div>
       <button class="primary-action" type="button" :disabled="!canPublish" @click="$emit('publishCurrentRound')">
         {{ publishText }}
@@ -74,7 +74,7 @@
               <span>{{ uuid }}</span>
               <button type="button" @click.stop="$emit('removeEntryFromRoundTable', table.id, uuid)">移除</button>
             </article>
-            <p v-if="!table.entryUuids.length">从左侧酒款池加入本桌。</p>
+            <p v-if="!table.entryUuids.length">从左侧酒款池加入本桌</p>
           </div>
           <p v-for="issue in getRoundTableIssues(table)" :key="issue" class="table-warning">
             <Warning />
@@ -86,7 +86,7 @@
       <RoundCheckPanel
         title="首轮发布检查"
         target-label="晋级数量"
-        success-text="首轮可以发布给评审。"
+        success-text="首轮可以发布给评审"
         :selected-round-table="selectedRoundTable"
         :captain-candidates="captainCandidates"
         :round-validation-issues="roundValidationIssues"

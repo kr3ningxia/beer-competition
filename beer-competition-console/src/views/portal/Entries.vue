@@ -3,7 +3,7 @@
     <section class="toolbar brewer-card">
       <div>
         <h2 class="portal-section-title">我的酒款</h2>
-        <p>按酒款查看报名记录，并处理支付、现场标签、样品入库和结果。</p>
+        <p>按酒款查看报名记录，并处理支付、现场标签、样品入库和结果</p>
       </div>
       <div class="toolbar-actions">
         <el-input v-model="keyword" placeholder="搜索酒名 / 现场短编号" clearable />
@@ -128,7 +128,7 @@
               </li>
             </ul>
           </div>
-          <p class="privacy-note">评审扫码时隐藏酒名、厂牌和联系人信息。</p>
+          <p class="privacy-note">评审扫码时隐藏酒名、厂牌和联系人信息</p>
         </section>
 
         <section class="drawer-section">
@@ -187,7 +187,8 @@ const competitions = ref([])
 const currencyFormatter = new Intl.NumberFormat('zh-CN', {
   style: 'currency',
   currency: 'CNY',
-  maximumFractionDigits: 0,
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
 })
 
 const statusOptions = Object.entries(entryStatusMeta).map(([value, meta]) => ({ value, label: meta.label }))
@@ -306,7 +307,7 @@ function timeline(entry) {
   const items = [
     { label: '提交资料', time: entry.submittedAt, done: true },
     { label: '支付报名费', hint: entry.paymentStatus === 'PAID' ? '已支付' : '待支付', done: entry.paymentStatus === 'PAID' },
-    { label: '标签可下载', hint: entry.canDownloadLabel ? '已生成现场标签' : '支付成功后开放下载', done: entry.canDownloadLabel },
+    { label: '标签下载', hint: entry.canDownloadLabel ? '已生成现场标签' : '支付成功后开放下载', done: entry.canDownloadLabel },
     { label: '样品入库', hint: isStored(entry) ? '已入库' : '等待组委会确认入库', done: isStored(entry) },
     { label: '结果发布', hint: resultPublished ? '结果已发布' : '等待组委会发布结果', done: resultPublished },
   ]
@@ -362,7 +363,7 @@ async function submitRefundRequest(entry) {
   }
   try {
     const { value } = await ElMessageBox.prompt(
-      '退款成功后，这款酒将退出本场比赛，现场标签和送样操作会停止使用。',
+      '退款成功后，这款酒将退出本场比赛，现场标签和送样操作会停止使用',
       '申请退款',
       {
         confirmButtonText: '提交退款申请',

@@ -40,6 +40,10 @@ export function submitPortalEntryDelivery(entryId, data) {
   return request.post(`/api/portal/entries/${entryId}/delivery`, data, { authScope: 'portal' })
 }
 
+export function cancelPortalEntry(entryId) {
+  return request.post(`/api/portal/entries/${entryId}/cancel`, {}, { authScope: 'portal' })
+}
+
 export function simulatePortalEntryPayment(entryId) {
   return request.post(`/api/portal/entries/${entryId}/payment/simulate`, {}, { authScope: 'portal' })
 }
@@ -68,6 +72,10 @@ export function submitPortalBankTransfer(data) {
 
 export function fetchPortalBankTransfer(id) {
   return request.get(`/api/portal/payment/bank-transfer/${id}`, { authScope: 'portal' })
+}
+
+export function updatePortalBankTransfer(id, data) {
+  return request.put(`/api/portal/payment/bank-transfer/${id}`, data, { authScope: 'portal' })
 }
 
 export function cancelPortalBankTransfer(id) {

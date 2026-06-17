@@ -1,15 +1,15 @@
-﻿<template>
+<template>
   <main :class="['live-board', densityClass]">
     <header class="board-header">
       <section class="title-zone">
         <div class="top-line">
-          <button type="button" class="back-button" @click="goBack">← 返回</button>
-          <span class="brand-mark">CRAFT BEER AWARDS</span>
-          <i aria-hidden="true" />
-          <span class="screen-name">现场评审进度</span>
+          <button type="button" class="back-button" @click="goBack">返回</button>
+          <span class="brand-mark">CHINESE LAGER AWARDS</span>
+          <span class="screen-name">评审现场实时大屏</span>
         </div>
 
         <h1>{{ board.title }}</h1>
+        <p class="subtitle">{{ board.subtitle }}</p>
 
         <div class="stage-line">
           <span>{{ board.roundName }}</span>
@@ -18,67 +18,100 @@
         </div>
       </section>
 
-      <section class="notice-stack" aria-label="现场状态">
-        <article v-for="notice in board.notices" :key="`${notice.title}-${notice.text}`" :class="['notice-panel', notice.tone]">
-          <span class="notice-dot" />
-          <p><strong>{{ notice.title }}</strong>{{ notice.text }}</p>
+      <section class="partner-wall" aria-label="赛事合作方">
+        <article v-for="group in board.partners" :key="group.label" :class="{ featured: group.featured }">
+          <span>{{ group.label }}</span>
+          <strong>{{ group.names.join(' / ') }}</strong>
         </article>
       </section>
     </header>
 
-    <section class="metric-strip" aria-label="本轮总览">
-      <article v-for="metric in board.metrics" :key="metric.label" :class="['metric-card', metric.tone]">
-        <i aria-hidden="true" />
-        <span>{{ metric.label }}</span>
-        <strong>{{ metric.value }}</strong>
-        <small>{{ metric.unit }}</small>
-      </article>
+    <section class="scoreboard-stage" aria-label="评审进度总览">
+      <section class="hero-panel">
+        <div class="progress-copy">
+          <span class="eyebrow">{{ board.progress.eyebrow }}</span>
+          <strong>{{ board.progress.done }} / {{ board.progress.total }}</strong>
+          <p>{{ board.progress.label }}</p>
+          <div class="progress-track" aria-hidden="true">
+            <span :style="{ width: `${board.progress.percent}%` }" />
+          </div>
+        </div>
+
+        <div class="beer-hero" aria-hidden="true">
+          <div class="glass-halo" />
+          <div class="beer-glass-large">
+            <span class="glass-shine" />
+            <span class="beer-liquid" :style="{ height: `${board.progress.liquidPercent}%` }">
+              <i />
+              <i />
+              <i />
+            </span>
+            <span class="foam-line" :style="{ bottom: `${board.progress.foamBottom}%` }" />
+            <strong>{{ board.progress.percent }}%</strong>
+          </div>
+        </div>
+      </section>
+
+      <aside class="metric-panel">
+        <article v-for="metric in board.metrics" :key="metric.label" :class="['metric-card', metric.tone]">
+          <span>{{ metric.label }}</span>
+          <strong>{{ metric.value }}</strong>
+          <small>{{ metric.unit }}</small>
+        </article>
+
+        <div class="notice-panel" :class="board.notice.tone">
+          <span class="notice-dot" />
+          <p><strong>{{ board.notice.title }}</strong>{{ board.notice.text }}</p>
+        </div>
+      </aside>
     </section>
 
-    <section class="table-grid" aria-label="评审桌状态">
-      <article v-for="table in board.tables" :key="table.id" :class="['table-card', table.tone]">
-        <header class="table-head">
-          <div class="table-name">
-            <div class="name-row">
-              <h2>{{ table.displayName }}</h2>
-              <b class="status-pill"><i aria-hidden="true" />{{ table.statusText }}</b>
-            </div>
-            <span>{{ table.entryCount }} 款酒</span>
-          </div>
+    <section class="desk-board" aria-label="评审桌汇总">
+      <header class="desk-board-head">
+        <span>{{ board.deskTitle }}</span>
+        <strong>{{ board.deskHint }}</strong>
+      </header>
 
-          <div class="beer-meter" aria-hidden="true">
-            <div class="beer-glass">
-              <span :style="{ height: `${table.visualPercent}%` }" />
-            </div>
-            <strong>{{ table.visualPercent }}%</strong>
-          </div>
-        </header>
+      <div class="desk-table" role="table">
+        <div class="desk-row desk-row-head" role="row">
+          <span role="columnheader">评审桌</span>
+          <span role="columnheader">{{ board.tableColumns.done }}</span>
+          <span role="columnheader">{{ board.tableColumns.pending }}</span>
+          <span role="columnheader">完成率</span>
+          <span role="columnheader">平均用时</span>
+          <span role="columnheader">平均评语</span>
+          <span role="columnheader">状态</span>
+        </div>
 
-        <section class="table-facts">
-          <span v-for="stat in table.stats" :key="stat.label" :class="{ accent: stat.accent }">
-            <small>{{ stat.label }}</small>
-            <strong>{{ stat.value }}</strong>
+        <div v-for="table in board.tables" :key="table.id" :class="['desk-row', table.tone]" role="row">
+          <strong role="cell">{{ table.displayName }}</strong>
+          <span role="cell">{{ table.doneCount }}</span>
+          <span role="cell">{{ table.pendingCount }}</span>
+          <span role="cell">
+            <b>{{ table.visualPercent }}%</b>
+            <i class="mini-track" aria-hidden="true"><i :style="{ width: `${table.visualPercent}%` }" /></i>
           </span>
-        </section>
+          <span role="cell">{{ table.averageTime }}</span>
+          <span role="cell">{{ table.averageComment }}</span>
+          <span role="cell"><em>{{ table.statusText }}</em></span>
+        </div>
 
-        <p v-if="table.issueText" class="issue-text">{{ table.issueText }}</p>
-      </article>
-
-      <article v-if="!board.tables.length" class="empty-card">
-        <strong>等待轮次发布</strong>
-        <span>轮次发布后，评审桌状态会显示在这里。</span>
-      </article>
+        <div v-if="!board.tables.length" class="desk-empty">
+          <strong>等待轮次发布</strong>
+          <span>轮次发布后，评审桌进度会显示在这里</span>
+        </div>
+      </div>
     </section>
 
-    <footer class="round-footer" aria-label="轮次路径">
-      <span class="footer-label">轮次路径</span>
+    <footer class="round-footer" aria-label="现场进程">
+      <span class="footer-label">现场进程</span>
       <ol>
         <li v-for="step in board.roundSteps" :key="step.label" :class="{ current: step.current, muted: step.muted }">
           <strong>{{ step.label }}</strong>
           <span>{{ step.status }}</span>
         </li>
       </ol>
-      <small>CRAFT BEER AWARDS · LIVE SCOREBOARD</small>
+      <small>CHINESE LAGER AWARDS · LIVE SCOREBOARD</small>
     </footer>
   </main>
 </template>
@@ -89,6 +122,14 @@ import { useRoute, useRouter } from 'vue-router'
 import { fetchCompetitionProgress, fetchCompetitions } from '@/api/admin'
 
 const REFRESH_SECONDS = 10
+const EVENT_TITLE = '首届中国拉格大赛'
+const EVENT_SUBTITLE = 'The 1st Chinese Lager Awards'
+const PARTNERS = [
+  { label: '主办方', names: ['啤酒事务局'], featured: true },
+  { label: '首席赞助', names: ['臻麦'], featured: true },
+  { label: '行业赞助', names: ['迈拓设备', 'Fermentis', 'Kegland'] },
+  { label: '协办', names: ['力波1987精酿'] },
+]
 
 const route = useRoute()
 const router = useRouter()
@@ -156,71 +197,103 @@ function buildBoard(data) {
   const currentRound = data.currentRound || rounds.find((round) => ['PUBLISHED', 'IN_PROGRESS', 'SUBMITTED'].includes(round.status))
     || rounds[rounds.length - 1]
     || rounds[0]
-  const tables = (currentRound?.tables || []).slice(0, 8).map((table) => buildTableTile(currentRound, table))
-  const notices = collectNotices(currentRound, tables)
-  const displayNotices = (notices.length ? notices : [buildDefaultNotice(currentRound, tables)]).slice(0, 2)
+  const progressSummary = data.progressSummary || {}
+  const isRanking = currentRound?.type === 'RANKING'
+  const tables = (currentRound?.tables || []).slice(0, 8).map((table) => buildTableTile(currentRound, table, progressSummary))
+  const progress = buildProgress(currentRound, tables, progressSummary)
+  const totalEntryCount = countCompetitionEntries(data, progress.total)
+
   return {
-    title: data.name || '现场比赛',
+    title: EVENT_TITLE,
+    subtitle: EVENT_SUBTITLE,
     roundName: currentRound?.name || '未创建轮次',
-    roundTypeText: currentRound?.type === 'RANKING' ? '排序轮' : '评分制',
+    roundTypeText: isRanking ? '排序轮' : '评分制',
     statusText: resolveStatusText(data.status, currentRound),
-    metrics: buildMetrics(currentRound, tables, data.progressSummary || {}),
+    partners: PARTNERS,
+    progress,
+    metrics: buildMetrics(currentRound, tables, progressSummary, totalEntryCount, progress),
     tables,
-    notices: displayNotices,
+    notice: collectNotice(currentRound, tables),
+    deskTitle: isRanking ? '排序轮桌次进度' : '首轮桌次评审进度',
+    deskHint: isRanking ? '按桌次查看排序提交状态' : '按桌次查看已评审、待评审与反馈效率',
+    tableColumns: isRanking
+      ? { done: '已排序', pending: '待排序' }
+      : { done: '已评审', pending: '待评审' },
     roundSteps: buildRoundSteps(rounds, currentRound),
   }
 }
 
 function buildEmptyBoard() {
+  const progress = buildProgress(null, [], {})
   return {
-    title: '现场比赛',
+    title: EVENT_TITLE,
+    subtitle: EVENT_SUBTITLE,
     roundName: '未创建轮次',
     roundTypeText: '等待发布',
     statusText: '现场准备中',
-    metrics: [
-      { label: '本轮酒款', value: '-', unit: '款', tone: 'neutral' },
-      { label: '评审桌', value: '-', unit: '桌', tone: 'neutral' },
-      { label: '评分提交', value: '-', unit: '', tone: 'gold' },
-      { label: '完成桌数', value: '-', unit: '桌', tone: 'success' },
-    ],
+    partners: PARTNERS,
+    progress,
+    metrics: buildMetrics(null, [], {}, 0, progress),
     tables: [],
-    notices: [{ title: '等待轮次', text: '当前比赛还没有发布可投屏的评审轮次。', tone: 'warning' }],
+    notice: { title: '等待轮次', text: '当前比赛还没有发布可投屏的评审轮次', tone: 'warning' },
+    deskTitle: '首轮桌次评审进度',
+    deskHint: '轮次发布后自动更新',
+    tableColumns: { done: '已评审', pending: '待评审' },
     roundSteps: buildRoundSteps([], null),
   }
 }
 
-function buildMetrics(round, tables, progress = {}) {
-  const entryCount = countRoundEntries(round)
-  const doneTables = tables.filter((table) => table.done).length
-  const averageReviewTime = formatMinutes(progress.averageReviewMinutes)
+function buildProgress(round, tables, progress = {}) {
   if (round?.type === 'RANKING') {
-    const selected = tables.reduce((sum, table) => sum + table.selectedCount, 0)
-    const target = tables.reduce((sum, table) => sum + table.targetCount, 0)
-    return [
-      { label: '候选酒款', value: entryCount, unit: '款', tone: 'neutral' },
-      { label: '评审桌', value: tables.length, unit: '桌', tone: 'neutral' },
-      { label: '排序提交', value: `${selected} / ${target}`, unit: '', tone: doneTables === tables.length && tables.length ? 'success' : 'gold' },
-      { label: '完成桌数', value: `${doneTables} / ${tables.length}`, unit: '桌', tone: doneTables === tables.length && tables.length ? 'success' : 'warning' },
-      { label: '平均耗时', value: averageReviewTime, unit: '', tone: 'neutral' },
-    ]
+    const done = normalizeCount(progress.finalized, tables.filter((table) => table.done).length)
+    const total = normalizeCount(progress.total, tables.length)
+    const percent = total ? normalizePercent(done * 100 / total) : 0
+    return {
+      eyebrow: '排序进度',
+      done,
+      total,
+      percent,
+      liquidPercent: 100 - percent,
+      foamBottom: normalizeFoamBottom(percent),
+      label: total ? `已提交 ${done} 桌，剩余 ${Math.max(total - done, 0)} 桌` : '等待排序轮发布',
+    }
   }
-  const submitted = tables.reduce((sum, table) => sum + table.submittedCount, 0)
-  const total = tables.reduce((sum, table) => sum + table.submittedTotal, 0)
-  const commentWarnings = Number(progress.commentWarnings || 0)
+
+  const fallbackTotal = tables.reduce((sum, table) => sum + table.submittedTotal, 0)
+  const fallbackDone = tables.reduce((sum, table) => sum + table.doneCount, 0)
+  const total = normalizeCount(progress.total, fallbackTotal)
+  const done = Math.min(normalizeCount(progress.finalized, fallbackDone), total || fallbackDone)
+  const percent = total ? normalizePercent(done * 100 / total) : 0
+  return {
+    eyebrow: '本轮已评',
+    done,
+    total,
+    percent,
+    liquidPercent: 100 - percent,
+    foamBottom: normalizeFoamBottom(percent),
+    label: total ? `已完成 ${done} 款，剩余 ${Math.max(total - done, 0)} 款` : '等待首轮酒款发布',
+  }
+}
+
+function buildMetrics(round, tables, progress = {}, competitionEntryCount = 0, roundProgress = null) {
+  const isRanking = round?.type === 'RANKING'
+  const progressData = roundProgress || buildProgress(round, tables, progress)
   return [
-    { label: '本轮酒款', value: entryCount, unit: '款', tone: 'neutral' },
-    { label: '评审桌', value: tables.length, unit: '桌', tone: 'neutral' },
-    { label: '评分提交', value: `${submitted} / ${total}`, unit: '', tone: submitted >= total && total > 0 ? 'success' : 'gold' },
-    { label: '完成桌数', value: `${doneTables} / ${tables.length}`, unit: '桌', tone: doneTables === tables.length && tables.length ? 'success' : 'warning' },
-    { label: '平均耗时', value: averageReviewTime, unit: '', tone: 'neutral' },
-    { label: '反馈异常', value: commentWarnings, unit: '条', tone: commentWarnings > 0 ? 'warning' : 'success' },
+    { label: '参赛酒款', value: competitionEntryCount || '-', unit: competitionEntryCount ? '款' : '', tone: 'neutral' },
+    { label: isRanking ? '本轮桌数' : '本轮酒款', value: progressData.total || '-', unit: isRanking ? '桌' : '款', tone: 'neutral' },
+    { label: isRanking ? '本轮已排' : '本轮已评', value: progressData.total ? `${progressData.done}/${progressData.total}` : '-', unit: '', tone: progressData.percent >= 100 ? 'success' : 'gold' },
+    { label: '平均用时', value: formatMinutes(progress.averageReviewMinutes), unit: '', tone: 'neutral' },
+    { label: '平均评语', value: formatCommentChars(progress.averageCommentChars || progress.siteAverageCommentChars), unit: '', tone: 'neutral' },
   ]
 }
 
-function buildTableTile(round, table) {
+function buildTableTile(round, table, progress = {}) {
   const entryCount = table.entryUuids?.length || 0
   const targetCount = Number(table.targetCount || 0)
   const displayName = table.name || '未命名桌'
+  const averageTime = resolveTableAverageTime(table)
+  const averageComment = resolveTableAverageComment(table)
+
   if (round?.type === 'RANKING') {
     const selectedCount = (table.rankings || []).filter((slot) => slot.uuid).length
     const isChampion = table.targetMode === 'CHAMPION'
@@ -228,9 +301,9 @@ function buildTableTile(round, table) {
     const issueText = getTableIssue(table)
     const submitted = ['SUBMITTED', 'LOCKED'].includes(table.status)
     const done = !issueText && (isMedals ? submitted : selectedCount >= targetCount && targetCount > 0)
-    const statusText = issueText ? '需关注' : done ? (isChampion ? '已提交' : '已完成') : selectedCount ? '排序中' : (isChampion ? '待提交' : '待排序')
-    const targetLabel = isChampion ? '总冠军' : isMedals ? '奖项名额' : '排序目标'
-    const targetValue = isChampion ? (done ? '已选择' : '待选择') : `${targetCount} 款`
+    const visualPercent = targetCount ? normalizePercent(selectedCount * 100 / targetCount) : (done ? 100 : 0)
+    const pendingCount = Math.max(targetCount - selectedCount, 0)
+    const statusText = issueText ? '需处理' : done ? (isChampion ? '已提交' : '已完成') : selectedCount ? '排序中' : '待排序'
     return {
       id: table.id || displayName,
       displayName,
@@ -239,22 +312,20 @@ function buildTableTile(round, table) {
       selectedCount,
       submittedCount: selectedCount,
       submittedTotal: Math.max(targetCount, 0),
-      visualPercent: targetCount ? normalizePercent(selectedCount * 100 / targetCount) : 0,
+      doneCount: selectedCount,
+      pendingCount,
+      visualPercent,
+      averageTime,
+      averageComment,
       statusText,
       done,
       issueText,
       tone: issueText ? 'danger' : done ? 'success' : selectedCount ? 'active' : 'warning',
-      stats: [
-        { label: '排序提交', value: `${selectedCount} / ${targetCount}`, accent: done || selectedCount > 0 },
-        { label: '组委会确认', value: round.status === 'LOCKED' ? '已锁定' : done ? '待确认' : '未开始' },
-        { label: targetLabel, value: targetValue, accent: true },
-      ],
     }
   }
 
   const judgeProgress = normalizePercent(table.judgeProgress)
   const captainProgress = normalizePercent(table.captainProgress)
-  const selectedCount = Number(table.advancedCount || 0)
   const submittedTotal = entryCount
   const submittedCount = estimateCount(submittedTotal, judgeProgress)
   const captainConfirmedCount = estimateCount(entryCount, captainProgress)
@@ -263,7 +334,7 @@ function buildTableTile(round, table) {
   let statusText = '等待评分'
   let tone = 'idle'
   if (issueText) {
-    statusText = '需关注'
+    statusText = '需处理'
     tone = 'danger'
   } else if (done) {
     statusText = '已完成'
@@ -284,27 +355,20 @@ function buildTableTile(round, table) {
     displayName,
     entryCount,
     targetCount,
-    selectedCount,
+    selectedCount: Number(table.advancedCount || 0),
     submittedCount,
     submittedTotal,
+    doneCount: submittedCount,
+    pendingCount: Math.max(submittedTotal - submittedCount, 0),
     captainConfirmedCount,
     visualPercent: judgeProgress,
+    averageTime,
+    averageComment,
     statusText,
     done,
     issueText,
     tone,
-    stats: [
-      { label: '评分表提交', value: `${submittedCount} / ${submittedTotal}`, accent: judgeProgress > 0 || done },
-      { label: '桌长确认', value: resolveCaptainText(captainProgress, captainConfirmedCount, entryCount), accent: captainProgress > 0 || judgeProgress >= 100 },
-      { label: '晋级名额', value: `${targetCount} 款`, accent: true },
-    ],
   }
-}
-
-function resolveCaptainText(progress, confirmedCount, entryCount) {
-  if (progress >= 100) return '已完成'
-  if (progress > 0) return `${confirmedCount} / ${entryCount}`
-  return '未开始'
 }
 
 function getTableIssue(table) {
@@ -314,35 +378,18 @@ function getTableIssue(table) {
   return ''
 }
 
-function collectNotices(round, tables) {
-  if (!round) return [{ title: '等待轮次', text: '当前比赛还没有发布可投屏的评审轮次。', tone: 'warning' }]
+function collectNotice(round, tables) {
+  if (!round) return { title: '等待轮次', text: '当前比赛还没有发布可投屏的评审轮次', tone: 'warning' }
   const issue = tables.find((table) => table.issueText)
-  if (issue) return [{ title: '需现场处理', text: `${issue.displayName}${issue.issueText}，请工作人员处理。`, tone: 'danger' }]
+  if (issue) return { title: '需现场处理', text: `${issue.displayName}${issue.issueText}，请工作人员处理`, tone: 'danger' }
 
-  const notices = []
-  const waitingCaptain = tables.find((table) => table.statusText === '待确认')
-  const scoring = tables.find((table) => table.statusText === '评分中')
-  const captainWorking = tables.find((table) => table.statusText === '确认中')
-  if (scoring) {
-    const pending = Math.max(scoring.submittedTotal - scoring.submittedCount, 0)
-    notices.push({ title: '评审进行中', text: `${scoring.displayName}还有 ${pending} 份评分待提交。`, tone: 'gold' })
-  }
-  if (waitingCaptain) {
-    notices.push({ title: '等待桌长', text: `${waitingCaptain.displayName}评分已完成，等待桌长确认。`, tone: 'warning' })
-  }
-  if (captainWorking) {
-    notices.push({ title: '桌长确认中', text: `${captainWorking.displayName}桌长正在确认本桌结果。`, tone: 'warning' })
-  }
+  const active = tables.find((table) => ['评分中', '排序中', '确认中', '待确认'].includes(table.statusText))
+  if (active) return { title: active.statusText, text: `${active.displayName}正在推进，请关注桌次进度`, tone: active.tone === 'active' ? 'gold' : 'warning' }
   if (tables.length && tables.every((table) => table.done)) {
-    notices.push({ title: '本轮已完成', text: '所有评审桌已完成，请等待组委会确认本轮结果。', tone: 'success' })
+    return { title: '本轮已完成', text: '所有评审桌已完成，请等待组委会确认本轮结果', tone: 'success' }
   }
-  return notices
-}
-
-function buildDefaultNotice(round, tables) {
-  if (!round) return { title: '等待轮次', text: '当前比赛还没有发布可投屏的评审轮次。', tone: 'warning' }
-  if (!tables.length) return { title: '等待分桌', text: '当前轮次还没有评审桌。', tone: 'warning' }
-  return { title: '现场正常', text: '评审桌状态正常，暂无需要现场处理的事项。', tone: 'success' }
+  if (!tables.length) return { title: '等待分桌', text: '当前轮次还没有评审桌', tone: 'warning' }
+  return { title: '现场正常', text: '评审桌状态正常，现场进度会自动刷新', tone: 'success' }
 }
 
 function resolveStatusText(status, round) {
@@ -354,8 +401,10 @@ function resolveStatusText(status, round) {
   return '现场准备中'
 }
 
-function countRoundEntries(round) {
-  return new Set((round?.tables || []).flatMap((table) => table.entryUuids || [])).size
+function countCompetitionEntries(data, fallback = 0) {
+  const entryPoolCount = Array.isArray(data?.entryPool) ? data.entryPool.length : 0
+  const entriesSummaryCount = Number(data?.entriesSummary?.registered || data?.entrySummary?.registered || 0)
+  return entryPoolCount || entriesSummaryCount || fallback || 0
 }
 
 function formatMinutes(value) {
@@ -365,6 +414,30 @@ function formatMinutes(value) {
   const hours = Math.floor(minutes / 60)
   const rest = minutes % 60
   return rest ? `${hours}小时${rest}分钟` : `${hours}小时`
+}
+
+function formatCommentChars(value) {
+  const chars = Number(value || 0)
+  return chars > 0 ? `${chars}字` : '-'
+}
+
+function resolveTableAverageTime(table) {
+  const seconds = Number(table.averageDurationSeconds || table.reviewStats?.averageDurationSeconds || 0)
+  if (seconds > 0) return formatDurationSeconds(seconds)
+  return formatMinutes(table.averageReviewMinutes)
+}
+
+function resolveTableAverageComment(table) {
+  return formatCommentChars(table.averageCommentChars || table.reviewStats?.averageCommentChars)
+}
+
+function formatDurationSeconds(secondsValue) {
+  const seconds = Number(secondsValue || 0)
+  if (seconds <= 0) return '-'
+  const minutes = Math.floor(seconds / 60)
+  const secondsRest = seconds % 60
+  if (!minutes) return `${secondsRest}秒`
+  return secondsRest ? `${minutes}分${secondsRest}秒` : `${minutes}分钟`
 }
 
 function buildRoundSteps(rounds, currentRound) {
@@ -391,40 +464,53 @@ function estimateCount(total, percent) {
   return Math.min(total, Math.round(total * normalizePercent(percent) / 100))
 }
 
+function normalizeCount(value, fallback = 0) {
+  const number = Number(value)
+  if (!Number.isFinite(number) || number < 0) return Number(fallback || 0)
+  return Math.round(number)
+}
+
 function normalizePercent(value) {
   const number = Number(value || 0)
   if (!Number.isFinite(number)) return 0
   return Math.max(0, Math.min(100, Math.round(number)))
 }
+
+function normalizeFoamBottom(percent) {
+  const liquidPercent = 100 - normalizePercent(percent)
+  if (liquidPercent <= 4) return 5
+  return Math.min(88, Math.max(11, liquidPercent))
+}
 </script>
 
 <style scoped>
 .live-board {
-  --bg: #100b07;
-  --panel: #24170f;
-  --panel-soft: #2d1d12;
-  --panel-deep: #1a0f0a;
-  --line: rgba(224, 162, 57, 0.2);
-  --line-strong: rgba(224, 162, 57, 0.42);
-  --text: #fff9eb;
-  --muted: #b4a58a;
-  --dim: #7c6e58;
-  --gold: #e0a239;
-  --gold-soft: #ffd069;
-  --green: #bed894;
-  --orange: #ff964b;
-  --danger: #ff725e;
+  --bg: #070807;
+  --panel: rgba(18, 19, 17, 0.82);
+  --panel-deep: rgba(9, 10, 9, 0.78);
+  --line: rgba(225, 178, 91, 0.24);
+  --line-strong: rgba(225, 178, 91, 0.52);
+  --text: #fff8e8;
+  --muted: #b5aa92;
+  --dim: #7d7668;
+  --gold: #dca64c;
+  --gold-soft: #ffd682;
+  --lager: #f2b33f;
+  --teal: #69c5b9;
+  --green: #b8d986;
+  --orange: #f29c55;
+  --danger: #ef6a55;
   position: fixed;
   inset: 0;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
-  gap: 13px;
-  padding: 24px 34px 17px;
+  grid-template-rows: auto minmax(220px, 27vh) minmax(300px, 1fr) auto;
+  gap: 16px;
+  padding: 28px 34px 18px;
   overflow: hidden;
   color: var(--text);
   background:
-    radial-gradient(circle at 4% 0%, rgba(224, 162, 57, 0.16), transparent 26%),
-    linear-gradient(180deg, #211508 0%, #120c07 48%, #0b0705 100%);
+    linear-gradient(115deg, rgba(222, 167, 76, 0.13), transparent 38%),
+    linear-gradient(180deg, #11120f 0%, #090a09 52%, #040504 100%);
   font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
   letter-spacing: 0;
 }
@@ -434,12 +520,12 @@ function normalizePercent(value) {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  opacity: 0.22;
+  opacity: 0.18;
   background-image:
     linear-gradient(rgba(255, 214, 132, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 214, 132, 0.05) 1px, transparent 1px);
-  background-size: 64px 64px;
-  mask-image: linear-gradient(180deg, #000, transparent 82%);
+    linear-gradient(90deg, rgba(105, 197, 185, 0.045) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: linear-gradient(180deg, #000 0%, transparent 88%);
 }
 
 .live-board::after {
@@ -448,7 +534,7 @@ function normalizePercent(value) {
   inset: auto 34px 8px;
   height: 1px;
   pointer-events: none;
-  background: linear-gradient(90deg, transparent, rgba(224, 162, 57, 0.72), rgba(190, 216, 148, 0.42), transparent);
+  background: linear-gradient(90deg, transparent, rgba(220, 166, 76, 0.82), rgba(105, 197, 185, 0.62), transparent);
 }
 
 .live-board > * {
@@ -458,12 +544,12 @@ function normalizePercent(value) {
 
 .board-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(360px, 34%);
-  gap: 34px;
-  align-items: start;
-  padding-top: 0;
-  padding-bottom: 14px;
-  border-bottom: 1px solid rgba(224, 162, 57, 0.18);
+  grid-template-columns: minmax(0, 1fr) minmax(480px, 38%);
+  gap: 36px;
+  align-items: end;
+  min-height: 132px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(225, 178, 91, 0.18);
 }
 
 .title-zone {
@@ -475,58 +561,77 @@ function normalizePercent(value) {
   align-items: center;
   gap: 14px;
   min-width: 0;
-  height: 25px;
   color: var(--dim);
   font-size: 13px;
   font-weight: 900;
-}
-
-.top-line i {
-  width: 1px;
-  height: 14px;
-  background: rgba(224, 162, 57, 0.35);
 }
 
 .back-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 25px;
-  padding: 0 12px;
-  color: #c6b79a;
-  border: 1px solid rgba(224, 162, 57, 0.18);
+  height: 28px;
+  padding: 0 13px;
+  color: #d7c8aa;
+  border: 1px solid rgba(225, 178, 91, 0.22);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.04);
   font: inherit;
   cursor: pointer;
 }
 
+.back-button::before {
+  content: "←";
+  margin-right: 6px;
+}
+
 .brand-mark {
   overflow: hidden;
-  max-width: 220px;
+  max-width: 300px;
   color: var(--gold);
   font-size: 12px;
-  letter-spacing: 7px;
+  letter-spacing: 6px;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
 .screen-name {
-  color: #b8aa8e;
+  color: #d8ccb4;
   white-space: nowrap;
 }
 
+.screen-name::before {
+  content: "";
+  display: inline-block;
+  width: 1px;
+  height: 14px;
+  margin-right: 14px;
+  vertical-align: -2px;
+  background: rgba(225, 178, 91, 0.36);
+}
+
 .title-zone h1 {
-  max-width: 960px;
-  margin: 9px 0 4px;
+  max-width: 920px;
+  margin: 10px 0 0;
   overflow: hidden;
   color: var(--text);
-  font-size: 42px;
-  line-height: 1.08;
+  font-size: clamp(38px, 3.25vw, 58px);
+  line-height: 1.02;
   font-weight: 950;
   white-space: nowrap;
   text-overflow: ellipsis;
-  text-shadow: 0 8px 20px rgba(0, 0, 0, 0.55);
+  text-shadow: 0 14px 28px rgba(0, 0, 0, 0.56);
+}
+
+.subtitle {
+  margin: 5px 0 10px;
+  overflow: hidden;
+  color: #e5c68a;
+  font-size: clamp(17px, 1.18vw, 23px);
+  line-height: 1.1;
+  font-weight: 800;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .stage-line {
@@ -543,9 +648,9 @@ function normalizePercent(value) {
   align-items: center;
   min-height: 34px;
   padding: 0 13px;
-  border: 1px solid rgba(224, 162, 57, 0.16);
+  border: 1px solid rgba(225, 178, 91, 0.18);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.04);
   font-size: 15px;
   font-style: normal;
   font-weight: 900;
@@ -555,45 +660,361 @@ function normalizePercent(value) {
 .stage-line span {
   color: var(--gold-soft);
   border-color: var(--line-strong);
-  background: rgba(224, 162, 57, 0.12);
+  background: rgba(220, 166, 76, 0.13);
 }
 
 .stage-line b {
   gap: 8px;
   color: var(--green);
-  background: rgba(190, 216, 148, 0.08);
+  background: rgba(184, 217, 134, 0.1);
 }
 
-.stage-line b i,
-.status-pill i {
+.stage-line b i {
   width: 9px;
   height: 9px;
   border-radius: 999px;
   background: currentColor;
+  box-shadow: 0 0 16px currentColor;
 }
 
 .stage-line em {
-  color: #ad9d81;
+  color: #d5c7ad;
 }
 
-.notice-stack {
+.partner-wall {
   display: grid;
-  gap: 9px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.partner-wall article {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  min-height: 50px;
+  padding: 9px 13px;
+  border: 1px solid rgba(225, 178, 91, 0.18);
+  border-radius: 8px;
+  background: rgba(18, 19, 17, 0.62);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.partner-wall article.featured {
+  border-color: rgba(225, 178, 91, 0.36);
+  background: rgba(220, 166, 76, 0.09);
+}
+
+.partner-wall span {
+  color: #8f8878;
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 900;
+}
+
+.partner-wall strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: clamp(15px, 1.12vw, 20px);
+  line-height: 1.1;
+  font-weight: 950;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.scoreboard-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(430px, 28%);
+  gap: 16px;
+  min-height: 0;
+}
+
+.hero-panel {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(230px, 30%);
+  align-items: stretch;
+  gap: 24px;
+  min-width: 0;
+  min-height: 0;
+  padding: 18px 34px;
+  overflow: hidden;
+  border: 1px solid rgba(225, 178, 91, 0.24);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(220, 166, 76, 0.16), transparent 42%),
+    linear-gradient(180deg, rgba(20, 21, 18, 0.92), rgba(7, 8, 7, 0.78));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 26px 54px rgba(0, 0, 0, 0.28);
+}
+
+.hero-panel::before {
+  content: "";
+  position: absolute;
+  inset: 17px;
+  pointer-events: none;
+  border: 1px solid rgba(225, 178, 91, 0.09);
+  border-radius: 6px;
+}
+
+.progress-copy {
+  align-self: center;
+  min-width: 0;
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  min-height: 31px;
+  padding: 0 12px;
+  color: #0c0d0b;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--gold-soft), var(--teal));
+  font-size: 14px;
+  line-height: 1;
+  font-weight: 950;
+}
+
+.progress-copy strong {
+  display: block;
+  margin-top: 16px;
+  color: var(--text);
+  font-size: clamp(62px, 7vw, 124px);
+  line-height: 0.92;
+  font-weight: 950;
+  text-shadow: 0 18px 44px rgba(0, 0, 0, 0.58);
+}
+
+.progress-copy p {
+  margin: 12px 0 18px;
+  color: #d7c8aa;
+  font-size: clamp(19px, 1.75vw, 30px);
+  line-height: 1.12;
+  font-weight: 900;
+}
+
+.progress-track {
+  position: relative;
+  width: min(680px, 100%);
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--lager), var(--gold-soft), var(--teal));
+  box-shadow: 0 0 22px rgba(220, 166, 76, 0.46);
+  transition: width 0.35s ease;
+}
+
+.beer-hero {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  box-sizing: border-box;
+  min-width: 0;
+  height: auto;
+  min-height: 0;
+  padding: 0;
+}
+
+.glass-halo {
+  position: absolute;
+  top: 50%;
+  width: min(230px, 82%);
+  aspect-ratio: 1;
+  transform: translateY(-50%);
+  border: 1px solid rgba(225, 178, 91, 0.22);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(220, 166, 76, 0.22), transparent 62%);
+  filter: blur(1px);
+}
+
+.beer-glass-large {
+  position: relative;
+  width: clamp(96px, 6.8vw, 128px);
+  height: clamp(126px, 16vh, 160px);
+  overflow: hidden;
+  border: 8px solid rgba(255, 248, 232, 0.7);
+  border-top-width: 10px;
+  border-radius: 18px 18px 28px 28px;
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow:
+    inset 0 0 0 3px rgba(34, 28, 18, 0.62),
+    inset 20px 0 34px rgba(255, 255, 255, 0.05),
+    0 24px 52px rgba(0, 0, 0, 0.42);
+}
+
+.beer-glass-large::after {
+  content: "";
+  position: absolute;
+  top: 42px;
+  right: -40px;
+  width: 38px;
+  height: 76px;
+  border: 7px solid rgba(255, 248, 232, 0.42);
+  border-left: 0;
+  border-radius: 0 40px 40px 0;
+}
+
+.glass-shine {
+  position: absolute;
+  z-index: 3;
+  left: 20px;
+  top: 20px;
+  width: 58%;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.beer-liquid {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  max-height: calc(100% - 18px);
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 7px 7px 18px 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 224, 127, 0.96) 0%, rgba(242, 179, 63, 0.96) 42%, rgba(168, 105, 29, 0.98) 100%);
+  box-shadow: inset 0 14px 18px rgba(255, 255, 255, 0.12);
+  transition: height 0.45s ease;
+}
+
+.beer-liquid i {
+  position: absolute;
+  bottom: 9%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.72);
+  animation: bubble-rise 4.8s linear infinite;
+}
+
+.beer-liquid i:nth-child(1) {
+  left: 26%;
+}
+
+.beer-liquid i:nth-child(2) {
+  left: 48%;
+  width: 4px;
+  height: 4px;
+  animation-delay: 1.1s;
+}
+
+.beer-liquid i:nth-child(3) {
+  left: 68%;
+  animation-delay: 2.4s;
+}
+
+.foam-line {
+  position: absolute;
+  z-index: 2;
+  left: 13px;
+  right: 13px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 250, 229, 0.88);
+  box-shadow: 0 0 18px rgba(255, 240, 190, 0.3);
+  transition: bottom 0.45s ease;
+}
+
+.beer-glass-large > strong {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  z-index: 3;
+  transform: translateX(-50%);
+  margin: 0;
+  color: #fff8e8;
+  font-size: clamp(18px, 1.8vw, 28px);
+  line-height: 1;
+  font-weight: 950;
+  text-align: center;
+  text-shadow: 0 3px 10px rgba(55, 27, 0, 0.82);
+}
+
+.metric-panel {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.metric-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
   align-content: center;
-  padding-top: 14px;
+  gap: 7px 8px;
+  min-width: 0;
+  min-height: 0;
+  padding: 11px 16px;
+  overflow: hidden;
+  border: 1px solid rgba(225, 178, 91, 0.18);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.metric-card span {
+  grid-column: 1 / 3;
+  overflow: hidden;
+  color: #aaa18e;
+  font-size: 14px;
+  line-height: 1;
+  font-weight: 900;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.metric-card strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: clamp(22px, 1.9vw, 32px);
+  line-height: 1.05;
+  font-weight: 950;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.metric-card small {
+  align-self: center;
+  color: #887f70;
+  font-size: 14px;
+  line-height: 1.1;
+  font-weight: 900;
+}
+
+.metric-card.gold strong {
+  color: var(--gold-soft);
+}
+
+.metric-card.success strong {
+  color: var(--green);
 }
 
 .notice-panel {
+  grid-column: auto;
   display: flex;
   align-items: center;
   gap: 12px;
   min-width: 0;
-  min-height: 38px;
-  padding: 0 14px;
-  border: 1px solid rgba(224, 162, 57, 0.16);
+  min-height: 0;
+  padding: 10px 14px;
+  border: 1px solid rgba(225, 178, 91, 0.2);
   border-radius: 8px;
-  background: rgba(36, 23, 15, 0.64);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  background: rgba(18, 19, 17, 0.72);
 }
 
 .notice-dot {
@@ -602,18 +1023,21 @@ function normalizePercent(value) {
   height: 9px;
   border-radius: 999px;
   background: var(--gold);
-  box-shadow: 0 0 18px rgba(224, 162, 57, 0.46);
+  box-shadow: 0 0 18px rgba(220, 166, 76, 0.58);
 }
 
 .notice-panel p {
   min-width: 0;
   margin: 0;
   overflow: hidden;
-  color: #d3c2a6;
+  color: #d5c8ae;
   font-size: 14px;
   line-height: 1.25;
   font-weight: 850;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
   text-overflow: ellipsis;
 }
 
@@ -625,7 +1049,7 @@ function normalizePercent(value) {
 
 .notice-panel.success .notice-dot {
   background: var(--green);
-  box-shadow: 0 0 18px rgba(190, 216, 148, 0.48);
+  box-shadow: 0 0 18px rgba(184, 217, 134, 0.52);
 }
 
 .notice-panel.success strong {
@@ -634,362 +1058,198 @@ function normalizePercent(value) {
 
 .notice-panel.warning .notice-dot {
   background: var(--orange);
-  box-shadow: 0 0 18px rgba(255, 150, 75, 0.48);
+  box-shadow: 0 0 18px rgba(242, 156, 85, 0.56);
 }
 
 .notice-panel.warning strong {
-  color: #ffb16e;
+  color: #ffb777;
 }
 
 .notice-panel.danger {
-  border-color: rgba(255, 114, 94, 0.36);
-  background: rgba(54, 18, 13, 0.66);
+  border-color: rgba(239, 106, 85, 0.42);
+  background: rgba(54, 18, 13, 0.72);
 }
 
 .notice-panel.danger .notice-dot {
   background: var(--danger);
-  box-shadow: 0 0 20px rgba(255, 114, 94, 0.56);
+  box-shadow: 0 0 20px rgba(239, 106, 85, 0.64);
 }
 
 .notice-panel.danger strong {
-  color: #ff9d91;
+  color: #ff9f92;
 }
 
-.metric-strip {
+.desk-board {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 16px;
-}
-
-.metric-card {
-  position: relative;
-  display: grid;
-  grid-template-columns: 14px minmax(0, 1fr) auto;
-  grid-template-rows: auto 1fr;
-  gap: 6px 10px;
-  min-width: 0;
-  min-height: 91px;
-  padding: 17px 22px;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
   overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: rgba(36, 23, 15, 0.76);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(225, 178, 91, 0.2);
+  border-radius: 8px;
+  background: rgba(12, 13, 12, 0.72);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
-.metric-card i {
-  grid-row: 1 / 3;
-  align-self: center;
-  width: 6px;
-  height: 44px;
-  border-radius: 999px;
-  background: rgba(180, 165, 138, 0.48);
-}
-
-.metric-card span {
-  grid-column: 2 / 4;
-  color: #a99b81;
-  font-size: 14px;
-  line-height: 1;
-  font-weight: 900;
-}
-
-.metric-card strong {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text);
-  font-size: 33px;
-  line-height: 1;
-  font-weight: 950;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.metric-card small {
-  align-self: end;
-  color: #8f8169;
-  font-size: 14px;
-  font-weight: 900;
-}
-
-.metric-card.gold i,
-.metric-card.warning i {
-  background: var(--gold);
-}
-
-.metric-card.gold strong,
-.metric-card.warning strong {
-  color: var(--gold-soft);
-}
-
-.metric-card.success i {
-  background: var(--green);
-}
-
-.metric-card.success strong {
-  color: var(--green);
-}
-
-.table-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: clamp(260px, 32vh, 340px);
-  align-content: start;
-  gap: 16px;
+.live-board.tables-1 .desk-board,
+.live-board.tables-2 .desk-board,
+.live-board.tables-3 .desk-board,
+.live-board.tables-4 .desk-board {
+  align-self: start;
   min-height: 0;
 }
 
-.table-card {
-  position: relative;
-  display: grid;
-  grid-template-rows: minmax(136px, 1fr) auto auto;
-  gap: 14px;
-  min-width: 0;
-  min-height: 0;
-  padding: 20px 20px 12px;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: rgba(36, 23, 15, 0.84);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 18px 40px rgba(0, 0, 0, 0.22);
+.live-board.tables-1 .desk-table,
+.live-board.tables-2 .desk-table,
+.live-board.tables-3 .desk-table,
+.live-board.tables-4 .desk-table {
+  min-height: auto;
 }
 
-.table-card::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 42%);
-}
-
-.table-card.danger {
-  border-color: rgba(255, 114, 94, 0.52);
-  background: rgba(52, 19, 14, 0.86);
-}
-
-.table-head {
-  position: relative;
+.desk-board-head {
   display: flex;
+  align-items: baseline;
   justify-content: space-between;
   gap: 16px;
-  min-width: 0;
+  min-height: 44px;
+  padding: 0 18px;
+  border-bottom: 1px solid rgba(225, 178, 91, 0.14);
+}
+
+.desk-board-head span {
+  color: var(--gold-soft);
+  font-size: 17px;
+  font-weight: 950;
+}
+
+.desk-board-head strong {
+  overflow: hidden;
+  color: #8e8677;
+  font-size: 13px;
+  font-weight: 900;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.desk-table {
+  display: grid;
+  align-content: start;
   min-height: 0;
+  overflow: hidden;
 }
 
-.table-name {
-  align-self: start;
-  min-width: 0;
-}
-
-.name-row {
-  display: flex;
+.desk-row {
+  display: grid;
+  grid-template-columns: minmax(130px, 1.1fr) 0.72fr 0.72fr 1.15fr 0.9fr 0.9fr 0.86fr;
   align-items: center;
-  gap: 14px;
-  min-width: 0;
+  gap: 12px;
+  min-height: 38px;
+  padding: 0 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+  color: #d4c8ae;
 }
 
-.table-name h2 {
-  margin: 0;
+.desk-row-head {
+  min-height: 36px;
+  color: #847d70;
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.desk-row strong {
+  min-width: 0;
   overflow: hidden;
   color: var(--text);
-  font-size: 54px;
-  line-height: 0.98;
+  font-size: clamp(18px, 1.5vw, 28px);
+  line-height: 1;
   font-weight: 950;
   white-space: nowrap;
   text-overflow: ellipsis;
-  text-shadow: 0 8px 18px rgba(0, 0, 0, 0.42);
 }
 
-.table-name span {
-  display: block;
-  margin-top: 8px;
-  color: #a9997e;
-  font-size: 15px;
-  line-height: 1;
+.desk-row span {
+  min-width: 0;
+  overflow: hidden;
+  font-size: clamp(16px, 1.2vw, 21px);
   font-weight: 900;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-.status-pill {
+.desk-row span b {
+  display: inline-block;
+  min-width: 46px;
+  color: var(--gold-soft);
+  font-size: clamp(16px, 1.2vw, 21px);
+}
+
+.desk-row em {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  flex: 0 0 auto;
-  max-width: 154px;
-  height: 28px;
-  padding: 0 12px;
+  max-width: 96px;
+  min-height: 28px;
+  padding: 0 10px;
   overflow: hidden;
   color: var(--gold-soft);
   border-radius: 999px;
-  background: rgba(224, 162, 57, 0.18);
+  background: rgba(220, 166, 76, 0.13);
   font-size: 13px;
+  font-style: normal;
   font-weight: 950;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
-.table-card.success .status-pill {
+.desk-row.success em {
   color: var(--green);
-  background: rgba(190, 216, 148, 0.13);
+  background: rgba(184, 217, 134, 0.12);
 }
 
-.table-card.warning .status-pill {
-  color: #ffa667;
-  background: rgba(255, 150, 75, 0.13);
+.desk-row.warning em {
+  color: #ffb777;
+  background: rgba(242, 156, 85, 0.12);
 }
 
-.table-card.danger .status-pill {
-  color: #ff9d91;
-  background: rgba(255, 114, 94, 0.16);
+.desk-row.danger em {
+  color: #ff9f92;
+  background: rgba(239, 106, 85, 0.14);
 }
 
-.beer-meter {
-  display: grid;
-  justify-items: center;
-  gap: 6px;
-  flex: 0 0 78px;
-  padding-top: 1px;
-}
-
-.beer-glass {
-  position: relative;
-  width: 44px;
-  height: 74px;
-  border: 4px solid rgba(255, 248, 235, 0.44);
-  border-top-width: 5px;
-  border-radius: 6px 6px 10px 10px;
+.mini-track {
+  display: inline-block;
+  width: min(120px, 44%);
+  height: 7px;
+  margin-left: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  vertical-align: 2px;
   background: rgba(255, 255, 255, 0.08);
-  box-shadow: inset 0 0 0 2px rgba(55, 36, 22, 0.45), 0 8px 18px rgba(0, 0, 0, 0.25);
 }
 
-.beer-glass::before {
-  content: "";
-  position: absolute;
-  left: 7px;
-  right: 7px;
-  top: 6px;
-  height: 8px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.86);
-  z-index: 2;
+.mini-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--lager), var(--teal));
 }
 
-.beer-glass::after {
-  content: "";
-  position: absolute;
-  top: 18px;
-  right: -18px;
-  width: 18px;
-  height: 29px;
-  border: 4px solid rgba(255, 248, 235, 0.34);
-  border-left: 0;
-  border-radius: 0 16px 16px 0;
-}
-
-.beer-glass span {
-  position: absolute;
-  left: 4px;
-  right: 4px;
-  bottom: 4px;
-  max-height: calc(100% - 14px);
-  min-height: 5px;
-  border-radius: 2px 2px 6px 6px;
-  background:
-    radial-gradient(circle at 25% 70%, rgba(255, 255, 255, 0.55) 0 1px, transparent 2px),
-    radial-gradient(circle at 35% 52%, rgba(255, 255, 255, 0.5) 0 1px, transparent 2px),
-    linear-gradient(180deg, #ffd46f 0%, #d99a2b 100%);
-  transition: height 0.28s ease;
-}
-
-.beer-meter strong {
-  color: var(--text);
-  font-size: 13px;
-  line-height: 1;
-  font-weight: 950;
-}
-
-.table-facts {
-  position: relative;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.table-facts span {
-  display: grid;
-  gap: 8px;
-  min-width: 0;
-  min-height: 74px;
-  padding: 12px 13px 11px;
-  border: 1px solid rgba(224, 162, 57, 0.08);
-  border-radius: 10px;
-  background: rgba(26, 15, 10, 0.72);
-}
-
-.table-facts small {
-  overflow: hidden;
-  color: #a49378;
-  font-size: 12px;
-  line-height: 1;
-  font-weight: 900;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.table-facts strong {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text);
-  font-size: 25px;
-  line-height: 1;
-  font-weight: 950;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.table-facts .accent strong {
-  color: var(--gold-soft);
-}
-
-.table-card.success .table-facts .accent strong {
-  color: var(--green);
-}
-
-.table-card.warning .table-facts .accent strong {
-  color: #ffa667;
-}
-
-.table-card.danger .table-facts .accent strong {
-  color: #ff9d91;
-}
-
-.issue-text {
-  position: relative;
-  margin: -4px 0 0;
-  color: #ffb5aa;
-  font-size: 14px;
-  font-weight: 900;
-}
-
-.empty-card {
+.desk-empty {
   display: grid;
   place-content: center;
-  gap: 12px;
-  min-height: 220px;
+  gap: 10px;
+  min-height: 120px;
   color: var(--muted);
   text-align: center;
-  border: 1px dashed var(--line-strong);
-  border-radius: 14px;
-  background: rgba(36, 23, 15, 0.6);
 }
 
-.empty-card strong {
+.desk-empty strong {
   color: var(--text);
-  font-size: 36px;
+  font-size: 30px;
 }
 
-.empty-card span {
-  font-size: 18px;
+.desk-empty span {
+  font-size: 16px;
   font-weight: 850;
 }
 
@@ -998,27 +1258,30 @@ function normalizePercent(value) {
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 16px;
-  min-height: 38px;
-  color: #8f7c5b;
+  min-height: 36px;
+  color: #8f856f;
 }
 
 .footer-label {
-  color: #a99162;
+  color: #bda76f;
   font-size: 14px;
   font-weight: 900;
 }
 
 .footer-label::before {
-  content: "♦";
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
   margin-right: 10px;
-  color: var(--gold);
-  font-size: 12px;
+  transform: rotate(45deg);
+  background: var(--gold);
 }
 
 .round-footer ol {
   display: flex;
   align-items: center;
-  gap: 30px;
+  gap: 28px;
   min-width: 0;
   margin: 0;
   padding: 0;
@@ -1030,12 +1293,12 @@ function normalizePercent(value) {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-height: 38px;
-  padding: 0 14px;
-  color: #9b8d73;
-  border: 1px solid rgba(224, 162, 57, 0.08);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.02);
+  min-height: 34px;
+  padding: 0 13px;
+  color: #9b917a;
+  border: 1px solid rgba(225, 178, 91, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
   font-size: 14px;
   font-weight: 900;
 }
@@ -1043,267 +1306,119 @@ function normalizePercent(value) {
 .round-footer li + li::before {
   content: "→";
   position: absolute;
-  left: -22px;
-  color: rgba(224, 162, 57, 0.32);
+  left: -21px;
+  color: rgba(225, 178, 91, 0.38);
 }
 
 .round-footer li.current {
   color: var(--gold-soft);
   border-color: var(--line-strong);
-  background: rgba(224, 162, 57, 0.12);
+  background: rgba(220, 166, 76, 0.13);
 }
 
 .round-footer li.muted {
-  opacity: 0.48;
+  opacity: 0.52;
 }
 
 .round-footer li span {
-  color: #9f9278;
+  color: #9e927a;
   font-weight: 850;
 }
 
 .round-footer small {
   overflow: hidden;
-  color: rgba(169, 145, 98, 0.72);
+  color: rgba(189, 167, 111, 0.76);
   font-size: 12px;
   font-weight: 900;
-  letter-spacing: 5px;
+  letter-spacing: 4px;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
-.tables-1 .table-grid {
-  grid-template-columns: minmax(0, 1fr);
-  grid-auto-rows: clamp(360px, 48vh, 520px);
+.live-board.tables-5,
+.live-board.tables-6,
+.live-board.tables-7,
+.live-board.tables-8 {
+  gap: 12px;
+  grid-template-rows: auto minmax(210px, 25vh) minmax(330px, 1fr) auto;
 }
 
-.tables-1 .table-card {
-  padding: 30px;
+.tables-5 .desk-row,
+.tables-6 .desk-row,
+.tables-7 .desk-row,
+.tables-8 .desk-row {
+  min-height: 32px;
 }
 
-.tables-1 .table-name h2 {
-  font-size: 92px;
-}
-
-.tables-1 .table-name span {
-  font-size: 24px;
-}
-
-.tables-1 .status-pill {
-  height: 38px;
-  padding: 0 18px;
-  font-size: 18px;
-}
-
-.tables-1 .beer-meter {
-  flex-basis: 132px;
-}
-
-.tables-1 .beer-glass {
-  width: 68px;
-  height: 112px;
-}
-
-.tables-1 .beer-meter strong {
-  font-size: 18px;
-}
-
-.tables-1 .table-facts strong {
-  font-size: 42px;
-}
-
-.tables-1 .table-facts small {
-  font-size: 16px;
-}
-
-.tables-2 .table-grid {
-  grid-auto-rows: clamp(300px, 42vh, 420px);
-}
-
-.tables-2 .table-card {
-  min-height: 0;
-}
-
-.tables-5 .table-grid,
-.tables-6 .table-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-auto-rows: clamp(210px, 27vh, 260px);
-}
-
-.tables-7 .table-grid,
-.tables-8 .table-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  grid-auto-rows: clamp(190px, 24vh, 230px);
-}
-
-.tables-5,
-.tables-6,
-.tables-7,
-.tables-8 {
-  gap: 10px;
-  padding: 18px 26px 14px;
-}
-
-.tables-5 .board-header,
-.tables-6 .board-header,
-.tables-7 .board-header,
-.tables-8 .board-header {
-  padding-bottom: 10px;
-}
-
-.tables-5 .title-zone h1,
-.tables-6 .title-zone h1,
-.tables-7 .title-zone h1,
-.tables-8 .title-zone h1 {
-  font-size: 35px;
-}
-
-.tables-5 .metric-card,
-.tables-6 .metric-card,
-.tables-7 .metric-card,
-.tables-8 .metric-card {
-  min-height: 76px;
-  padding: 13px 16px;
-}
-
-.tables-5 .metric-card strong,
-.tables-6 .metric-card strong,
-.tables-7 .metric-card strong,
-.tables-8 .metric-card strong {
-  font-size: 27px;
-}
-
-.tables-5 .table-card,
-.tables-6 .table-card,
-.tables-7 .table-card,
-.tables-8 .table-card {
-  gap: 10px;
-  padding: 14px;
-}
-
-.tables-5 .table-name h2,
-.tables-6 .table-name h2 {
-  font-size: 38px;
-}
-
-.tables-7 .table-name h2,
-.tables-8 .table-name h2 {
-  font-size: 32px;
-}
-
-.tables-5 .name-row,
-.tables-6 .name-row,
-.tables-7 .name-row,
-.tables-8 .name-row {
-  display: grid;
-  gap: 7px;
-}
-
-.tables-5 .status-pill,
-.tables-6 .status-pill,
-.tables-7 .status-pill,
-.tables-8 .status-pill {
-  justify-self: start;
-  max-width: 120px;
-}
-
-.tables-5 .beer-meter,
-.tables-6 .beer-meter,
-.tables-7 .beer-meter,
-.tables-8 .beer-meter {
-  flex-basis: 56px;
-}
-
-.tables-5 .beer-glass,
-.tables-6 .beer-glass,
-.tables-7 .beer-glass,
-.tables-8 .beer-glass {
-  width: 34px;
-  height: 58px;
-}
-
-.tables-5 .table-facts,
-.tables-6 .table-facts,
-.tables-7 .table-facts,
-.tables-8 .table-facts {
-  gap: 7px;
-}
-
-.tables-5 .table-facts span,
-.tables-6 .table-facts span,
-.tables-7 .table-facts span,
-.tables-8 .table-facts span {
-  min-height: 56px;
-  padding: 9px;
-}
-
-.tables-5 .table-facts strong,
-.tables-6 .table-facts strong {
+.tables-5 .desk-row strong,
+.tables-6 .desk-row strong,
+.tables-7 .desk-row strong,
+.tables-8 .desk-row strong {
   font-size: 19px;
 }
 
-.tables-7 .table-facts,
-.tables-8 .table-facts {
-  grid-template-columns: 1fr;
-}
-
-.tables-7 .table-facts span,
-.tables-8 .table-facts span {
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: baseline;
-}
-
-.tables-7 .table-facts strong,
-.tables-8 .table-facts strong {
+.tables-5 .desk-row span,
+.tables-6 .desk-row span,
+.tables-7 .desk-row span,
+.tables-8 .desk-row span {
   font-size: 16px;
+}
+
+@keyframes bubble-rise {
+  0% {
+    transform: translateY(0) scale(0.8);
+    opacity: 0;
+  }
+
+  18% {
+    opacity: 0.8;
+  }
+
+  100% {
+    transform: translateY(-170px) scale(1.1);
+    opacity: 0;
+  }
 }
 
 @media (max-width: 1500px) {
   .live-board {
-    gap: 10px;
-    padding: 18px 26px 14px;
+    gap: 12px;
+    padding: 20px 26px 14px;
+    grid-template-rows: auto minmax(214px, 27vh) minmax(300px, 1fr) auto;
   }
 
   .board-header {
-    grid-template-columns: minmax(0, 1fr) minmax(340px, 34%);
-    gap: 24px;
+    grid-template-columns: minmax(0, 1fr) minmax(410px, 38%);
+    gap: 26px;
+    min-height: 128px;
     padding-bottom: 10px;
   }
 
-  .title-zone h1 {
-    font-size: 40px;
+  .partner-wall article {
+    min-height: 50px;
+    padding: 9px 12px;
+  }
+
+  .scoreboard-stage {
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 29%);
+    gap: 12px;
+  }
+
+  .hero-panel {
+    padding: 22px 30px;
+  }
+
+  .metric-panel {
+    gap: 9px;
   }
 
   .metric-card {
-    min-height: 74px;
-    padding: 12px 16px;
+    padding: 13px 14px;
   }
 
-  .metric-card strong {
-    font-size: 29px;
-  }
-
-  .table-card {
-    grid-template-rows: minmax(118px, 1fr) auto auto;
-    padding: 16px 16px 11px;
-  }
-
-  .table-name h2 {
-    font-size: 50px;
-  }
-
-  .beer-glass {
-    width: 38px;
-    height: 64px;
-  }
-
-  .table-facts span {
-    min-height: 62px;
-    padding: 10px;
-  }
-
-  .table-facts strong {
-    font-size: 23px;
+  .desk-row {
+    min-height: 37px;
+    gap: 9px;
   }
 }
 </style>

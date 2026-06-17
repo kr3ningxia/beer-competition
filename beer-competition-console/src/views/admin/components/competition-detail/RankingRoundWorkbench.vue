@@ -4,7 +4,7 @@
       <div>
         <small>后续轮</small>
         <h2>由桌长选择并排序</h2>
-        <p>桌长提交排序，组委会确认后锁定结果。</p>
+        <p>桌长提交排序，组委会确认后锁定结果</p>
       </div>
       <button class="primary-action" type="button" :disabled="!mainActionEnabled" @click="$emit('rankingMainAction')">
         {{ mainActionText }}
@@ -79,7 +79,7 @@
                 <button type="button" @click.stop="$emit('removeEntryFromRoundTable', table.id, uuid)">移除</button>
               </div>
             </article>
-            <p v-if="!table.entryUuids.length">从左侧晋级名单加入本桌。</p>
+            <p v-if="!table.entryUuids.length">从左侧晋级名单加入本桌</p>
           </section>
 
           <p v-for="issue in getRoundTableIssues(table)" :key="issue" class="table-warning">
@@ -94,7 +94,7 @@
         :target-label="selectedTableTargetLabel"
         :target-hint="selectedTableTargetHint"
         :target-fixed="selectedTableTargetFixed"
-        success-text="本轮可以发布。"
+        success-text="本轮可以发布"
         :selected-round-table="selectedRoundTable"
         :captain-candidates="captainCandidates"
         :round-validation-issues="roundValidationIssues"
@@ -191,9 +191,9 @@ function targetCountLabel(table) {
 }
 
 function targetCountHint(table) {
-  if (table?.targetMode === 'MEDALS') return '金奖、银奖、铜奖为可用名额，可按评审结果留空。'
-  if (table?.targetMode === 'CHAMPION') return '总冠军 1 名。'
-  return '桌长需要提交并排序的晋级酒款数量。'
+  if (table?.targetMode === 'MEDALS') return '金奖、银奖、铜奖为可用名额，可按评审结果留空'
+  if (table?.targetMode === 'CHAMPION') return '总冠军 1 名'
+  return '桌长需要提交并排序的晋级酒款数量'
 }
 
 function isTargetCountFixed(table) {

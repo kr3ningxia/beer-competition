@@ -2,9 +2,9 @@
   <div class="events-page">
     <section class="events-hero">
       <div>
-        <span class="label-chip tone-gold">赛事目录</span>
-        <h1>选择适合你酒款的赛事</h1>
-        <p>查看报名窗口、投递组别、基础风格和结果开放状态，再进入单场赛事报名参赛。</p>
+        <span class="label-chip tone-gold">赛事甄选</span>
+        <h1>为你的酒款匹配更合适的赛场</h1>
+        <p>查看报名窗口、投递组别、风格要求与结果状态，进入单场赛事完成报名</p>
       </div>
       <RouterLink class="primary-action" to="/portal/home">返回赛事首页</RouterLink>
     </section>
@@ -38,7 +38,7 @@
       </article>
       <div v-if="!competitions.length" class="empty-state brewer-card">
         <strong>暂无可展示赛事</strong>
-        <p>赛事开放后会在这里显示。</p>
+        <p>赛事开放后会在这里显示</p>
       </div>
     </section>
   </div>

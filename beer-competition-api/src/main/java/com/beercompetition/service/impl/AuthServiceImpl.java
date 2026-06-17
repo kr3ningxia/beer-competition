@@ -13,21 +13,29 @@ import com.beercompetition.mapper.JudgeAccountMapper;
 import com.beercompetition.mapper.JudgeAssignmentMapper;
 import com.beercompetition.mapper.JudgeTableMapper;
 import com.beercompetition.mapper.PortalAccountMapper;
+import com.beercompetition.mapper.CompetitionRoundMapper;
+import com.beercompetition.mapper.RoundTableMapper;
+import com.beercompetition.mapper.RoundTableMemberMapper;
 import com.beercompetition.mapper.SmsCodeLogMapper;
 import com.beercompetition.pojo.dto.AdminLoginRequest;
 import com.beercompetition.pojo.dto.SmsLoginRequest;
 import com.beercompetition.pojo.dto.SmsSendRequest;
 import com.beercompetition.pojo.enums.JudgeAccountStatus;
 import com.beercompetition.pojo.enums.JudgeRoleType;
+import com.beercompetition.pojo.enums.RoundStatus;
+import com.beercompetition.pojo.enums.RoundType;
 import com.beercompetition.pojo.enums.SmsBizType;
 import com.beercompetition.pojo.enums.UserRole;
 import com.beercompetition.pojo.po.AdminUser;
 import com.beercompetition.pojo.po.Brewery;
 import com.beercompetition.pojo.po.Competition;
+import com.beercompetition.pojo.po.CompetitionRound;
 import com.beercompetition.pojo.po.JudgeAccount;
 import com.beercompetition.pojo.po.JudgeAssignment;
 import com.beercompetition.pojo.po.JudgeTable;
 import com.beercompetition.pojo.po.PortalAccount;
+import com.beercompetition.pojo.po.RoundTable;
+import com.beercompetition.pojo.po.RoundTableMember;
 import com.beercompetition.pojo.po.SmsCodeLog;
 import com.beercompetition.pojo.vo.CurrentUserResponse;
 import com.beercompetition.pojo.vo.LoginResponse;
@@ -44,6 +52,7 @@ import org.springframework.util.StringUtils;
 
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -60,6 +69,9 @@ public class AuthServiceImpl implements AuthService {
     private final JudgeAssignmentMapper judgeAssignmentMapper;
     private final JudgeTableMapper judgeTableMapper;
     private final CompetitionMapper competitionMapper;
+    private final CompetitionRoundMapper competitionRoundMapper;
+    private final RoundTableMapper roundTableMapper;
+    private final RoundTableMemberMapper roundTableMemberMapper;
     private final SmsCodeLogMapper smsCodeLogMapper;
     private final RedisTemplate<String, Object> redisTemplate;
     private final JwtProperties jwtProperties;
@@ -236,9 +248,7 @@ public class AuthServiceImpl implements AuthService {
                     throw new ResourceNotFoundException("评审账号不存在");
                 }
                 JudgeAccountStatus status = JudgeAccountStatus.of(account.getStatus());
-                JudgeAssignment assignment = findFirstAssignment(account.getId());
-                JudgeTable table = assignment == null ? null : judgeTableMapper.selectById(assignment.getTableId());
-                Competition competition = assignment == null ? null : competitionMapper.selectById(assignment.getCompetitionId());
+                CurrentJudgeContext context = findCurrentJudgeContext(account.getId());
                 yield CurrentUserResponse.builder()
                         .role(role.name())
                         .displayName(resolveJudgeDisplayName(account))
@@ -248,12 +258,12 @@ public class AuthServiceImpl implements AuthService {
                         .status(status.getCode())
                         .statusLabel(status.getLabel())
                         .profileRequired(status == JudgeAccountStatus.PROFILE_INCOMPLETE)
-                        .canScore(status == JudgeAccountStatus.ACTIVE && assignment != null)
-                        .currentCompetitionId(competition == null ? null : competition.getId())
-                        .currentCompetition(competition == null ? null : competition.getName())
-                        .judgeRoleType(assignment == null ? null : assignment.getRole())
-                        .roleLabel(assignment == null ? null : roleLabel(assignment.getRole()))
-                        .tableName(table == null ? null : table.getTableName())
+                        .canScore(status == JudgeAccountStatus.ACTIVE && context != null)
+                        .currentCompetitionId(context == null || context.competition() == null ? null : context.competition().getId())
+                        .currentCompetition(context == null || context.competition() == null ? null : context.competition().getName())
+                        .judgeRoleType(context == null ? null : context.role())
+                        .roleLabel(context == null ? null : roleLabel(context.role()))
+                        .tableName(context == null ? null : context.tableName())
                         .build();
             }
         };
@@ -363,6 +373,65 @@ public class AuthServiceImpl implements AuthService {
                 .stream()
                 .findFirst()
                 .orElse(null);
+    }
+
+    private CurrentJudgeContext findCurrentJudgeContext(Long judgeAccountId) {
+        CurrentJudgeContext taskContext = findCurrentVisibleTaskContext(judgeAccountId);
+        if (taskContext != null) {
+            return taskContext;
+        }
+        JudgeAssignment assignment = findFirstAssignment(judgeAccountId);
+        if (assignment == null) {
+            return null;
+        }
+        JudgeTable table = judgeTableMapper.selectById(assignment.getTableId());
+        Competition competition = competitionMapper.selectById(assignment.getCompetitionId());
+        return new CurrentJudgeContext(competition, table == null ? null : table.getTableName(), assignment.getRole());
+    }
+
+    private CurrentJudgeContext findCurrentVisibleTaskContext(Long judgeAccountId) {
+        List<RoundTableMember> members = roundTableMemberMapper.selectList(new LambdaQueryWrapper<RoundTableMember>()
+                .eq(RoundTableMember::getJudgeAccountId, judgeAccountId)
+                .eq(RoundTableMember::getSystemTaskRequired, 1));
+        CurrentJudgeContext bestContext = null;
+        Long bestRoundId = null;
+        Long bestTableId = null;
+        for (RoundTableMember member : members) {
+            RoundTable table = roundTableMapper.selectById(member.getRoundTableId());
+            if (table == null) {
+                continue;
+            }
+            CompetitionRound round = competitionRoundMapper.selectById(table.getRoundId());
+            if (round == null || !isVisibleJudgeTask(round, table, member)) {
+                continue;
+            }
+            if (bestRoundId != null
+                    && (round.getId() < bestRoundId
+                    || (round.getId().equals(bestRoundId) && table.getId() <= bestTableId))) {
+                continue;
+            }
+            Competition competition = competitionMapper.selectById(table.getCompetitionId());
+            bestContext = new CurrentJudgeContext(competition, table.getTableName(), member.getRole());
+            bestRoundId = round.getId();
+            bestTableId = table.getId();
+        }
+        return bestContext;
+    }
+
+    private boolean isVisibleJudgeTask(CompetitionRound round, RoundTable table, RoundTableMember member) {
+        if (RoundType.SCORE.name().equals(round.getRoundType())) {
+            return RoundStatus.PUBLISHED.name().equals(round.getStatus())
+                    && (RoundStatus.PUBLISHED.name().equals(table.getStatus())
+                    || JudgeRoleType.CAPTAIN.name().equals(member.getRole()));
+        }
+        if (RoundType.RANKING.name().equals(round.getRoundType())) {
+            return RoundStatus.IN_PROGRESS.name().equals(round.getStatus())
+                    || RoundStatus.SUBMITTED.name().equals(round.getStatus());
+        }
+        return false;
+    }
+
+    private record CurrentJudgeContext(Competition competition, String tableName, String role) {
     }
 
     private String roleLabel(String role) {

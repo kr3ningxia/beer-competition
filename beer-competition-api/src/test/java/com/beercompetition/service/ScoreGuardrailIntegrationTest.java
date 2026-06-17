@@ -8,6 +8,7 @@ import com.beercompetition.pojo.dto.JudgeScoreStartRequest;
 import com.beercompetition.pojo.dto.JudgeScoreUpdateRequest;
 import com.beercompetition.pojo.dto.TableScoreFinalizeRequest;
 import com.beercompetition.pojo.enums.JudgeRoleType;
+import com.beercompetition.pojo.enums.UserRole;
 import com.beercompetition.testsupport.BeerCompetitionTestData;
 import com.beercompetition.testsupport.IntegrationTestBase;
 import org.junit.jupiter.api.Test;
@@ -26,6 +27,9 @@ class ScoreGuardrailIntegrationTest extends IntegrationTestBase {
 
     @Autowired
     private ScoreService scoreService;
+
+    @Autowired
+    private AuthService authService;
 
     @Test
     void assignedJudgeCanScoreOnceAndDuplicateCreateIsRejected() {
@@ -84,6 +88,34 @@ class ScoreGuardrailIntegrationTest extends IntegrationTestBase {
         assertThatThrownBy(() -> scoreService.createScore(professionalScoreRequest(fixture.entryA1().getUuid(), 18, 27)))
                 .isInstanceOf(ForbiddenException.class)
                 .hasMessageContaining("未分配");
+    }
+
+    @Test
+    void visibleRoundMemberCanScoreWhenBaseAssignmentIsMissing() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        BeerCompetitionTestData.ScoreRound round = testData.createPublishedScoreRound(fixture, List.of(fixture.entryA1()), 1);
+        jdbcTemplate.update("""
+                DELETE FROM competition_judge_assignment
+                WHERE competition_id = ?
+                  AND judge_account_id = ?
+                """, fixture.competition().getId(), fixture.professional().getId());
+
+        asJudge(fixture.professional().getId());
+        var currentUser = authService.getCurrentUser(UserRole.JUDGE);
+        assertThat(currentUser.getCurrentCompetitionId()).isEqualTo(fixture.competition().getId());
+        assertThat(currentUser.getTableName()).isEqualTo(round.table().getTableName());
+        assertThat(currentUser.getJudgeRoleType()).isEqualTo(JudgeRoleType.PROFESSIONAL.name());
+
+        var score = scoreService.createScore(professionalScoreRequest(fixture.entryA1().getUuid(), 18, 27));
+
+        assertThat(score.getBeerUuid()).isEqualTo(fixture.entryA1().getUuid());
+        Integer assignmentCount = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM competition_judge_assignment
+                WHERE competition_id = ?
+                  AND judge_account_id = ?
+                """, Integer.class, fixture.competition().getId(), fixture.professional().getId());
+        assertThat(assignmentCount).isEqualTo(1);
     }
 
     @Test

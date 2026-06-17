@@ -87,7 +87,7 @@
                 </button>
               </article>
               <p v-else class="role-empty">
-                从左侧拖入，或选中这里后点击“加入”。
+                从左侧拖入，或选中这里后点击“加入”
               </p>
             </div>
             <div
@@ -121,7 +121,7 @@
                 </button>
               </article>
               <p v-if="getScoreRoleMembers(table, role.value).length === 0" class="role-empty">
-                从左侧拖入，或选中这里后点击“加入”。
+                从左侧拖入，或选中这里后点击“加入”
               </p>
             </div>
             <div
@@ -153,7 +153,7 @@
                 </button>
               </article>
               <p v-if="getRankingParticipants(table).length === 0" class="role-empty">
-                默认加入到这里，也可以拖入。
+                默认加入到这里，也可以拖入
               </p>
             </div>
           </section>
@@ -224,7 +224,7 @@
           </p>
           <p v-if="roundValidationIssues.length === 0 && !publishDisabledReason" class="ok">
             <CircleCheck />
-            <span>{{ currentRound?.type === 'SCORE' ? '首轮可以发布。' : '排序轮可以发布。' }}</span>
+            <span>{{ currentRound?.type === 'SCORE' ? '首轮可以发布' : '排序轮可以发布' }}</span>
           </p>
         </section>
       </aside>
@@ -374,11 +374,11 @@
         </p>
         <p v-if="validationIssues.length === 0 && !firstRoundExists" class="ok">
           <CircleCheck />
-          <span>可以继续分配首轮酒款。</span>
+          <span>可以继续分配首轮酒款</span>
         </p>
         <p v-if="validationIssues.length === 0 && firstRoundExists" class="ok">
           <CircleCheck />
-          <span>可以继续调整首轮草稿。</span>
+          <span>可以继续调整首轮草稿</span>
         </p>
         </section>
       </aside>
@@ -432,7 +432,7 @@
             </div>
             <button type="button" :disabled="!selectedRoundTableId" @click="$emit('addEntryToSelectedTable', entry.uuid)">加入</button>
           </article>
-          <p v-if="!filteredRoundPool.length" class="resource-empty">暂无可分配酒款。</p>
+          <p v-if="!filteredRoundPool.length" class="resource-empty">暂无可分配酒款</p>
         </div>
       </aside>
 
@@ -538,12 +538,12 @@
               </div>
               <button type="button" @click.stop="$emit('removeEntryFromRoundTable', table.id, uuid)">移除</button>
             </article>
-            <p v-if="!table.entryUuids.length">从左侧加入酒款。</p>
+            <p v-if="!table.entryUuids.length">从左侧加入酒款</p>
           </div>
         </article>
         <section v-if="!currentRoundTables.length" class="desk-empty-state">
           <strong>暂无桌次</strong>
-          <span>先在右侧新增桌，再分配酒款。</span>
+          <span>先在右侧新增桌，再分配酒款</span>
         </section>
       </main>
 
@@ -616,7 +616,7 @@
           </p>
           <p v-if="roundValidationIssues.length === 0 && (!publishDisabledReason || currentRound?.isPreparationDraft)" class="ok">
             <CircleCheck />
-            <span>{{ currentRound?.isPreparationDraft ? '当前分配会在发布时保存为首轮。' : '当前轮次可以发布。' }}</span>
+            <span>{{ currentRound?.isPreparationDraft ? '当前分配会在发布时保存为首轮' : '当前轮次可以发布' }}</span>
           </p>
         </section>
       </aside>
@@ -716,7 +716,7 @@
                     </div>
                   </li>
                 </ul>
-                <p v-else class="overview-empty">还没有安排成员。</p>
+                <p v-else class="overview-empty">还没有安排成员</p>
               </section>
 
               <section class="overview-block overview-entries">
@@ -737,7 +737,7 @@
                     </div>
                   </li>
                 </ul>
-                <p v-else class="overview-empty">还没有分配酒款。</p>
+                <p v-else class="overview-empty">还没有分配酒款</p>
               </section>
             </div>
 
@@ -864,10 +864,11 @@ const canRunPrimaryRoundAction = computed(() => {
 const primaryRoundActionLabel = computed(() => {
   return props.currentRound?.type === 'SCORE' ? '发布给评审' : '发布给桌长和参与评审'
 })
+const overviewBaseValidationIssues = computed(() => (usesRoundJudgeEditor.value ? [] : props.validationIssues))
 const overviewStatusText = computed(() => {
   if (props.canPublish) return '可发布'
-  if (props.currentRound?.isPreparationDraft && props.roundValidationIssues.length === 0 && props.validationIssues.length === 0) return '预排草稿'
-  if (props.publishDisabledReason && props.roundValidationIssues.length === 0 && props.validationIssues.length === 0) return '预排草稿'
+  if (props.currentRound?.isPreparationDraft && props.roundValidationIssues.length === 0 && overviewBaseValidationIssues.value.length === 0) return '预排草稿'
+  if (props.publishDisabledReason && props.roundValidationIssues.length === 0 && overviewBaseValidationIssues.value.length === 0) return '预排草稿'
   return '需处理'
 })
 const overviewStatusClass = computed(() => (props.canPublish ? 'ok' : 'warning'))
@@ -877,17 +878,17 @@ const roundTargetOptions = computed(() => {
       {
         value: 'TOP_N',
         label: '普通排序轮',
-        hint: '继续筛选，锁定后可创建下一轮。',
+        hint: '继续筛选，锁定后可创建下一轮',
       },
       {
         value: 'MEDALS',
         label: '组别金银铜轮',
-        hint: '金奖、银奖、铜奖为可用名额，可按评审结果留空。',
+        hint: '金奖、银奖、铜奖为可用名额，可按评审结果留空',
       },
       {
         value: 'CHAMPION',
         label: '决赛轮',
-        hint: '从各组别金奖中选出 1 款全场总冠军。',
+        hint: '从各组别金奖中选出 1 款全场总冠军',
       },
     ]
   }
@@ -895,12 +896,12 @@ const roundTargetOptions = computed(() => {
     {
       value: 'TOP_N',
       label: '普通排序轮',
-      hint: '继续筛选，锁定后可创建下一轮。',
+      hint: '继续筛选，锁定后可创建下一轮',
     },
     {
       value: 'MEDALS',
       label: '组别金银铜轮',
-      hint: '金奖、银奖、铜奖为可用名额，可按评审结果留空。',
+      hint: '金奖、银奖、铜奖为可用名额，可按评审结果留空',
     },
   ]
 })
@@ -915,8 +916,8 @@ const currentRoundTargetMode = computed(() => {
 })
 const currentRoundTargetHint = computed(() => {
   const option = roundTargetOptions.value.find((item) => item.value === currentRoundTargetMode.value)
-  if (props.currentRound?.status !== 'DRAFT') return option ? `${option.label}已发布，不能在这里修改。` : '当前轮次已发布，不能在这里修改。'
-  return option?.hint || '草稿阶段可以修改轮次目标。'
+  if (props.currentRound?.status !== 'DRAFT') return option ? `${option.label}已发布，不能在这里修改` : '当前轮次已发布，不能在这里修改'
+  return option?.hint || '草稿阶段可以修改轮次目标'
 })
 const tableScopeOptions = computed(() => {
   const categories = new Map()
@@ -937,10 +938,12 @@ const tableScopeOptions = computed(() => {
 
 const overviewMetrics = computed(() => {
   const assignedEntries = new Set(props.currentRoundTables.flatMap((table) => table.entryUuids)).size
-  const assignedJudges = props.currentRound?.type === 'SCORE'
-    ? props.judgeTableForm.reduce((sum, table) => sum + props.assignmentsForTable(table).length, 0)
-    : props.currentRoundTables.reduce((sum, table) => sum + getRoundMembers(table).length, 0)
-  const issueCount = props.roundValidationIssues.length + props.validationIssues.length + currentRoundConflictWarnings.value.length
+  const assignedJudges = usesRoundJudgeEditor.value
+    ? new Set(props.currentRoundTables.flatMap((table) => getRoundJudgeAssignments(table).map((assignment) => assignment.judgePublicId)).filter(Boolean)).size
+    : props.currentRound?.type === 'SCORE'
+      ? props.judgeTableForm.reduce((sum, table) => sum + props.assignmentsForTable(table).length, 0)
+      : props.currentRoundTables.reduce((sum, table) => sum + getRoundMembers(table).length, 0)
+  const issueCount = props.roundValidationIssues.length + overviewBaseValidationIssues.value.length + currentRoundConflictWarnings.value.length
   return {
     assignedEntries,
     assignedJudges,
@@ -1105,12 +1108,27 @@ function getJudgeTable(roundTable) {
   return props.judgeTableForm.find((table) => table.tableName === roundTable.name)
 }
 
-function getTableJudgeAssignments(roundTable) {
-  if (props.currentRound?.type === 'RANKING' && getRoundMembers(roundTable).length) {
-    return getRoundMembers(roundTable).map((member) => ({
+function getRoundJudgeAssignments(roundTable) {
+  const assignments = []
+  const seen = new Set()
+  if (roundTable?.captainPublicId) {
+    assignments.push({ judgePublicId: roundTable.captainPublicId, role: 'CAPTAIN' })
+    seen.add(roundTable.captainPublicId)
+  }
+  getRoundMembers(roundTable).forEach((member) => {
+    if (!member?.judgePublicId || seen.has(member.judgePublicId)) return
+    assignments.push({
       judgePublicId: member.judgePublicId,
-      role: member.role,
-    }))
+      role: member.role || 'PROFESSIONAL',
+    })
+    seen.add(member.judgePublicId)
+  })
+  return assignments
+}
+
+function getTableJudgeAssignments(roundTable) {
+  if (usesRoundJudgeEditor.value) {
+    return getRoundJudgeAssignments(roundTable)
   }
   const judgeTable = getJudgeTable(roundTable)
   if (judgeTable) return props.assignmentsForTable(judgeTable)
@@ -1208,7 +1226,7 @@ function formatCategorySummary(roundTable) {
 function getOverviewTableIssues(roundTable) {
   const issues = [...props.getRoundTableIssues(roundTable)]
   issues.push(...props.getRoundTableConflictWarnings(roundTable))
-  if (props.currentRound?.type === 'SCORE') {
+  if (props.currentRound?.type === 'SCORE' && props.currentRound?.isPreparationDraft) {
     const judgeTable = getJudgeTable(roundTable)
     if (judgeTable) issues.push(...props.tableValidationIssues(judgeTable))
     else issues.push(`${roundTable.name}缺少对应评审桌`)

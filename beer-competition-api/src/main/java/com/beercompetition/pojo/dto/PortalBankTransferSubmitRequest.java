@@ -13,7 +13,7 @@ public class PortalBankTransferSubmitRequest {
     @NotNull(message = "请先选择一款要支付的酒")
     private Long entryId;
 
-    @Size(max = 128, message = "转账户名最多 128 个字")
+    @Size(max = 128, message = "付款账户名最多 128 个字")
     private String payerName;
 
     @NotNull(message = "请选择转账时间")

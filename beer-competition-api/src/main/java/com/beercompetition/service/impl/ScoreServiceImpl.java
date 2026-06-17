@@ -14,6 +14,7 @@ import com.beercompetition.mapper.CompetitionScoreConfigMapper;
 import com.beercompetition.mapper.EntryScanLabelMapper;
 import com.beercompetition.mapper.JudgeAccountMapper;
 import com.beercompetition.mapper.JudgeAssignmentMapper;
+import com.beercompetition.mapper.JudgeTableMapper;
 import com.beercompetition.mapper.JudgeScoreSessionMapper;
 import com.beercompetition.mapper.RoundResultMapper;
 import com.beercompetition.mapper.RoundTableEntryMapper;
@@ -41,6 +42,7 @@ import com.beercompetition.pojo.po.CompetitionScoreConfig;
 import com.beercompetition.pojo.po.EntryScanLabel;
 import com.beercompetition.pojo.po.JudgeAccount;
 import com.beercompetition.pojo.po.JudgeAssignment;
+import com.beercompetition.pojo.po.JudgeTable;
 import com.beercompetition.pojo.po.JudgeScoreSession;
 import com.beercompetition.pojo.po.RoundResult;
 import com.beercompetition.pojo.po.RoundTable;
@@ -86,6 +88,7 @@ public class ScoreServiceImpl implements ScoreService {
     private final EntryScanLabelMapper entryScanLabelMapper;
     private final JudgeAccountMapper judgeAccountMapper;
     private final JudgeAssignmentMapper judgeAssignmentMapper;
+    private final JudgeTableMapper judgeTableMapper;
     private final JudgeScoreSessionMapper judgeScoreSessionMapper;
     private final RoundTableMapper roundTableMapper;
     private final RoundTableEntryMapper roundTableEntryMapper;
@@ -575,14 +578,83 @@ public class ScoreServiceImpl implements ScoreService {
     }
 
     private JudgeAssignment requireAssignment(Long competitionId) {
-        requireActiveJudge(BaseContext.getCurrentId());
+        Long judgeId = BaseContext.getCurrentId();
+        requireActiveJudge(judgeId);
         JudgeAssignment assignment = judgeAssignmentMapper.selectOne(new LambdaQueryWrapper<JudgeAssignment>()
                 .eq(JudgeAssignment::getCompetitionId, competitionId)
-                .eq(JudgeAssignment::getJudgeAccountId, BaseContext.getCurrentId()));
+                .eq(JudgeAssignment::getJudgeAccountId, judgeId)
+                .last("LIMIT 1"));
+        if (assignment == null) {
+            assignment = createAssignmentFromVisibleRoundMember(competitionId, judgeId);
+        }
         if (assignment == null) {
             throw new ForbiddenException("当前评审未分配到该比赛");
         }
         return assignment;
+    }
+
+    private JudgeAssignment createAssignmentFromVisibleRoundMember(Long competitionId, Long judgeId) {
+        List<RoundTableMember> members = roundTableMemberMapper.selectList(new LambdaQueryWrapper<RoundTableMember>()
+                .eq(RoundTableMember::getJudgeAccountId, judgeId)
+                .eq(RoundTableMember::getSystemTaskRequired, FLAG_TRUE));
+        if (members.isEmpty()) {
+            return null;
+        }
+        Map<Long, RoundTableMember> memberByTableId = members.stream()
+                .collect(Collectors.toMap(RoundTableMember::getRoundTableId, item -> item, (left, right) -> left));
+        List<RoundTable> tables = roundTableMapper.selectList(new LambdaQueryWrapper<RoundTable>()
+                .eq(RoundTable::getCompetitionId, competitionId)
+                .in(RoundTable::getId, memberByTableId.keySet())
+                .orderByDesc(RoundTable::getRoundId)
+                .orderByDesc(RoundTable::getId));
+        for (RoundTable table : tables) {
+            RoundTableMember member = memberByTableId.get(table.getId());
+            CompetitionRound round = competitionRoundMapper.selectById(table.getRoundId());
+            if (member == null || round == null || !isVisibleJudgeRound(round, table, member)) {
+                continue;
+            }
+            JudgeTable baseTable = ensureJudgeTable(competitionId, table.getTableName(), table.getSortOrder());
+            JudgeAssignment created = JudgeAssignment.builder()
+                    .competitionId(competitionId)
+                    .tableId(baseTable.getId())
+                    .judgeAccountId(judgeId)
+                    .role(member.getRole())
+                    .build();
+            judgeAssignmentMapper.insert(created);
+            return created;
+        }
+        return null;
+    }
+
+    private boolean isVisibleJudgeRound(CompetitionRound round, RoundTable table, RoundTableMember member) {
+        if (RoundType.SCORE.name().equals(round.getRoundType())) {
+            return RoundStatus.PUBLISHED.name().equals(round.getStatus())
+                    && (RoundStatus.PUBLISHED.name().equals(table.getStatus())
+                    || JudgeRoleType.CAPTAIN.name().equals(member.getRole()));
+        }
+        if (RoundType.RANKING.name().equals(round.getRoundType())) {
+            return RoundStatus.IN_PROGRESS.name().equals(round.getStatus())
+                    || RoundStatus.SUBMITTED.name().equals(round.getStatus());
+        }
+        return false;
+    }
+
+    private JudgeTable ensureJudgeTable(Long competitionId, String tableName, Integer sortOrder) {
+        String normalizedName = StringUtils.hasText(tableName) ? tableName.trim() : "评审桌";
+        JudgeTable table = judgeTableMapper.selectOne(new LambdaQueryWrapper<JudgeTable>()
+                .eq(JudgeTable::getCompetitionId, competitionId)
+                .eq(JudgeTable::getTableName, normalizedName)
+                .last("LIMIT 1"));
+        if (table != null) {
+            return table;
+        }
+        JudgeTable created = JudgeTable.builder()
+                .competitionId(competitionId)
+                .tableName(normalizedName)
+                .sortOrder(sortOrder == null ? 0 : sortOrder)
+                .build();
+        judgeTableMapper.insert(created);
+        return created;
     }
 
     private Long resolveCurrentCompetitionId(Long judgeId) {

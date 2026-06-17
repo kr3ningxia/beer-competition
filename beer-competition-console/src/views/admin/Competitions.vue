@@ -100,7 +100,7 @@
       <div v-else-if="filteredCompetitions.length === 0" class="empty-state">
         <Search />
         <strong>没有符合条件的比赛</strong>
-        <p>调整名称、年份或状态筛选后再查看赛事台账。</p>
+        <p>调整名称、年份或状态筛选后再查看赛事台账</p>
       </div>
     </section>
 
@@ -164,11 +164,11 @@
           <div class="drawer-alerts">
             <p v-if="selectedCompetition.dataIntegrityIssues.length" class="danger">
               <Warning />
-              数据需修正：比赛已开放报名，但缺少开放报名必需配置。
+              数据需修正：比赛已开放报名，但缺少开放报名必需配置
             </p>
             <p v-else-if="selectedCompetition.alerts.length === 0" class="success">
               <CircleCheck />
-              关键配置已确认，当前比赛可以继续推进。
+              关键配置已确认，当前比赛可以继续推进
             </p>
             <p v-for="alert in selectedCompetition.alerts" v-else :key="alert.text" :class="alert.level">
               <component :is="alert.level === 'danger' ? Warning : Clock" />

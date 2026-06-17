@@ -7,7 +7,7 @@ export const entryStatusMeta = {
   REGISTERED: {
     label: '报名成功',
     tone: 'green',
-    step: '标签可用',
+    step: '标签下载',
   },
   STORED: {
     label: '已确认入库',
@@ -94,12 +94,22 @@ export function entryPayAmount(entry) {
   return entry?.payment?.amount ?? entry?.entryFee ?? 0
 }
 
+export function formatMoney(value) {
+  if (value === null || value === undefined || value === '') return '¥0'
+  return new Intl.NumberFormat('zh-CN', {
+    style: 'currency',
+    currency: 'CNY',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(Number(value))
+}
+
 export function formatCompetitionFee(competition) {
   if (!competition || competition.entryFee === null || competition.entryFee === undefined) return '待公布'
   if (isEarlyBirdActive(competition)) {
-    return `早鸟价 ¥${competition.earlyBirdFee} / 款`
+    return `早鸟价 ${formatMoney(competition.earlyBirdFee)} / 款`
   }
-  return `报名费 ¥${competition.entryFee} / 款`
+  return `报名费 ${formatMoney(competition.entryFee)} / 款`
 }
 
 export function isEntryAwarded(entry) {
@@ -179,7 +189,7 @@ export function entryTimeline(entry) {
   const items = [
     { label: '提交资料', done: true, hint: entry?.submittedAt || '已提交' },
     { label: '支付报名费', done: paid, hint: paid ? '已支付' : pendingConfirm ? '等待转账确认' : '待支付' },
-    { label: '标签可用', done: paid, hint: paid ? '可下载并贴在酒瓶或外箱' : '支付成功后开放下载' },
+    { label: '标签下载', done: paid, hint: paid ? '已开放下载，请贴在酒瓶或外箱' : '支付成功后开放下载' },
     { label: '样品入库', done: stored, hint: stored ? '已入库' : '等待组委会确认入库' },
     { label: '结果发布', done: resultPublished, hint: resultPublished ? '结果已发布' : '等待组委会发布结果' },
   ]

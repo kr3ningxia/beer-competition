@@ -15,6 +15,7 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -78,6 +79,15 @@ public class PortalPaymentController {
     @GetMapping("/payment/bank-transfer/{id}")
     public Result<BankTransferVO> bankTransferDetail(@PathVariable Long id) {
         return Result.success(bankTransferPaymentService.getPortalTransfer(id));
+    }
+
+    /**
+     * 修改当前厂商待确认的银行转账付款信息。
+     */
+    @PutMapping("/payment/bank-transfer/{id}")
+    public Result<BankTransferVO> updateBankTransfer(@PathVariable Long id,
+                                                     @RequestBody @Valid PortalBankTransferSubmitRequest request) {
+        return Result.success(bankTransferPaymentService.updatePortalTransfer(id, request));
     }
 
     /**

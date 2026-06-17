@@ -72,7 +72,7 @@
 
       <div v-else class="empty-state brewer-card">
         <strong>暂无已发布结果</strong>
-        <p>结果发布后会在这里展示获奖名单。</p>
+        <p>结果发布后会在这里展示获奖名单</p>
       </div>
     </section>
   </div>

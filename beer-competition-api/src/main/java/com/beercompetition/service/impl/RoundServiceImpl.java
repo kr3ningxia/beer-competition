@@ -1485,6 +1485,7 @@ public class RoundServiceImpl implements RoundService {
         if (captainJudgeId == null) {
             return;
         }
+        ensureJudgeAssignment(table, table.getTableName(), captainJudgeId, JudgeRoleType.CAPTAIN.name());
         roundTableMemberMapper.insert(RoundTableMember.builder()
                 .roundTableId(table.getId())
                 .judgeAccountId(captainJudgeId)
@@ -1502,12 +1503,15 @@ public class RoundServiceImpl implements RoundService {
                 .map(participantMap::get)
                 .filter(Objects::nonNull)
                 .filter(judge -> !judge.getId().equals(captainJudgeId))
-                .forEach(judge -> roundTableMemberMapper.insert(RoundTableMember.builder()
-                        .roundTableId(table.getId())
-                        .judgeAccountId(judge.getId())
-                        .role(JudgeRoleType.PROFESSIONAL.name())
-                        .systemTaskRequired(FLAG_FALSE)
-                        .build()));
+                .forEach(judge -> {
+                    ensureJudgeAssignment(table, table.getTableName(), judge.getId(), JudgeRoleType.PROFESSIONAL.name());
+                    roundTableMemberMapper.insert(RoundTableMember.builder()
+                            .roundTableId(table.getId())
+                            .judgeAccountId(judge.getId())
+                            .role(JudgeRoleType.PROFESSIONAL.name())
+                            .systemTaskRequired(FLAG_FALSE)
+                            .build());
+                });
     }
 
     private void insertScoreRoundMembers(RoundTable table,
@@ -1534,10 +1538,12 @@ public class RoundServiceImpl implements RoundService {
             if (judge == null || !insertedIds.add(judge.getId())) {
                 continue;
             }
+            String memberRole = resolveScoreMemberRole(item.getRole());
+            ensureJudgeAssignment(table, tableName, judge.getId(), memberRole);
             roundTableMemberMapper.insert(RoundTableMember.builder()
                     .roundTableId(table.getId())
                     .judgeAccountId(judge.getId())
-                    .role(resolveScoreMemberRole(item.getRole()))
+                    .role(memberRole)
                     .systemTaskRequired(FLAG_TRUE)
                     .build());
         }
@@ -1548,6 +1554,44 @@ public class RoundServiceImpl implements RoundService {
             return JudgeRoleType.CROSS.name();
         }
         return JudgeRoleType.PROFESSIONAL.name();
+    }
+
+    private void ensureJudgeAssignment(RoundTable table, String tableName, Long judgeId, String role) {
+        if (table == null || judgeId == null || !StringUtils.hasText(role)) {
+            return;
+        }
+        JudgeAssignment existing = judgeAssignmentMapper.selectOne(new LambdaQueryWrapper<JudgeAssignment>()
+                .eq(JudgeAssignment::getCompetitionId, table.getCompetitionId())
+                .eq(JudgeAssignment::getJudgeAccountId, judgeId)
+                .last("LIMIT 1"));
+        if (existing != null) {
+            return;
+        }
+        JudgeTable baseTable = ensureJudgeTable(table.getCompetitionId(), tableName, table.getSortOrder());
+        judgeAssignmentMapper.insert(JudgeAssignment.builder()
+                .competitionId(table.getCompetitionId())
+                .tableId(baseTable.getId())
+                .judgeAccountId(judgeId)
+                .role(role)
+                .build());
+    }
+
+    private JudgeTable ensureJudgeTable(Long competitionId, String tableName, Integer sortOrder) {
+        String normalizedName = StringUtils.hasText(tableName) ? tableName.trim() : "评审桌";
+        JudgeTable table = judgeTableMapper.selectOne(new LambdaQueryWrapper<JudgeTable>()
+                .eq(JudgeTable::getCompetitionId, competitionId)
+                .eq(JudgeTable::getTableName, normalizedName)
+                .last("LIMIT 1"));
+        if (table != null) {
+            return table;
+        }
+        JudgeTable created = JudgeTable.builder()
+                .competitionId(competitionId)
+                .tableName(normalizedName)
+                .sortOrder(sortOrder == null ? 0 : sortOrder)
+                .build();
+        judgeTableMapper.insert(created);
+        return created;
     }
 
     private void insertScoreRoundMembersFromBaseTable(RoundTable table, String tableName) {

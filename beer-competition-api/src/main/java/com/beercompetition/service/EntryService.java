@@ -41,6 +41,8 @@ public interface EntryService {
 
     EntryDetailVO submitPortalEntryDelivery(Long entryId, PortalEntryDeliverySubmitRequest request);
 
+    EntryDetailVO cancelPortalEntry(Long entryId);
+
     EntryDetailVO requestPortalEntryRefund(Long entryId, PortalEntryRefundRequest request);
 
     PortalEntryLabelVO getPortalEntryLabel(Long entryId);

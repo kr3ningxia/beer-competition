@@ -42,7 +42,7 @@
             <span>{{ table.primary }}</span>
             <em>{{ table.status }}</em>
           </div>
-          <p v-if="!tableRows.length" class="empty-line">当前还没有可展示的轮次桌。</p>
+          <p v-if="!tableRows.length" class="empty-line">当前还没有可展示的轮次桌</p>
         </div>
       </article>
 
@@ -56,7 +56,7 @@
         </header>
         <div class="issue-list">
           <div v-for="issue in issueRows" :key="issue" class="issue-row">{{ issue }}</div>
-          <p v-if="!issueRows.length" class="empty-line">暂无需要处理的事项。</p>
+          <p v-if="!issueRows.length" class="empty-line">暂无需要处理的事项</p>
         </div>
       </article>
     </section>
@@ -75,7 +75,7 @@
           <span>{{ statusText(item.status) }}</span>
           <em>查看</em>
         </button>
-        <p v-if="!competitions.length" class="empty-line">暂无比赛。</p>
+        <p v-if="!competitions.length" class="empty-line">暂无比赛</p>
       </div>
     </section>
   </main>

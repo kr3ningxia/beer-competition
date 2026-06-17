@@ -269,7 +269,7 @@
                   <label class="switch-line"><input v-model="field.required" type="checkbox" /> 必填</label>
                   <label
                     class="switch-line visibility-switch"
-                    data-tooltip="评审可见字段会进入匿名扫码页，只勾选评酒时需要判断的信息。"
+                    data-tooltip="评审可见字段会进入匿名扫码页，只勾选评酒时需要判断的信息"
                     :class="{ warning: field.visibleToJudges }"
                   >
                     <input v-model="field.visibleToJudges" type="checkbox" />
@@ -343,7 +343,7 @@
               </span>
               <div>
                 <h3>{{ reviewBlockingItems.length ? `还有 ${reviewBlockingItems.length} 项需要处理` : '可以保存草稿' }}</h3>
-                <p>{{ reviewBlockingItems.length ? reviewBlockingText : '保存后进入工作台继续配置评审桌、轮次和奖项。' }}</p>
+                <p>{{ reviewBlockingItems.length ? reviewBlockingText : '保存后进入工作台继续配置评审桌、轮次和奖项' }}</p>
               </div>
             </div>
             <div class="section-actions inline-actions">
@@ -478,16 +478,16 @@ const draft = reactive({
   entryFee: 199,
   earlyBirdFee: 159,
   earlyBirdDeadline: '2026-06-30T18:00',
-  description: '面向精酿厂牌的综合赛事，适合提交稳定量产款和年度新品。',
+  description: '面向精酿厂牌的综合赛事，适合提交稳定量产款和年度新品',
   rulesUrl: 'https://mp.weixin.qq.com/s/iGxSnomHIXvdOyMO9xgd2Q',
   deliveryMethod: 'BOTH',
   sampleArrivalStart: '2026-08-10T10:00',
   sampleArrivalDeadline: '2026-08-15T18:00',
-  sampleQuantityNote: '每款 6 瓶，单瓶容量建议不低于 330ml。',
+  sampleQuantityNote: '每款 6 瓶，单瓶容量不低于 330ml',
   deliveryRecipient: '赛事收样组',
   deliveryPhone: '',
   deliveryAddress: '',
-  deliveryNote: '请做好防震、防漏和外箱加固；每款酒瓶身至少贴 1 张现场标签，整箱寄送时建议外箱再贴 1 张。',
+  deliveryNote: '请做好防震、防漏和外箱加固；每款酒瓶身至少贴 1 张现场标签，整箱寄送时外箱必须再贴 1 张',
   logisticsVisibility: 'PAYMENT_CONFIRMED',
   categories: [
     { id: 'cat-1', name: '浅色拉格' },
@@ -500,7 +500,7 @@ const draft = reactive({
       key: 'specialIngredients',
       label: '增味原料或特殊工艺',
       type: 'textarea',
-      helpText: '如使用茶、咖啡、水果、桶陈等，请描述原料和工艺。',
+      helpText: '如使用茶、咖啡、水果、桶陈等，请描述原料和工艺',
       required: false,
       visibleToJudges: true,
     },
@@ -510,9 +510,9 @@ const draft = reactive({
 const initialDraftSnapshot = JSON.stringify(toDraftSnapshot(draft))
 
 const scoreDescriptions = {
-  CROSS: '每场比赛可配置 2-3 个维度，总分 50。',
-  PROFESSIONAL: '固定 BJCP 口径，允许调整备注提示。',
-  CAPTAIN: '桌长填写独立共识分和综合评语。',
+  CROSS: '每场比赛可配置 2-3 个维度，总分 50',
+  PROFESSIONAL: '固定 BJCP 口径，允许调整备注提示',
+  CAPTAIN: '桌长填写独立共识分和综合评语',
 }
 
 const categoryCount = computed(() => draft.categories.filter((category) => category.name).length)
@@ -555,7 +555,7 @@ function addCrossDimension(config) {
     key: `cross_${next}`,
     label: '',
     maxScore: 10,
-    notePrompt: '请补充这个维度的具体反馈。',
+    notePrompt: '请补充这个维度的具体反馈',
   })
 }
 
@@ -638,7 +638,7 @@ async function leaveCreatePage() {
     return
   }
   try {
-    await ElMessageBox.confirm('当前新建比赛内容尚未保存，离开后本页填写内容会丢失。', '离开新建比赛？', {
+    await ElMessageBox.confirm('当前新建比赛内容尚未保存，离开后本页填写内容会丢失', '离开新建比赛？', {
       confirmButtonText: '离开',
       cancelButtonText: '继续编辑',
       type: 'warning',
@@ -802,15 +802,15 @@ function createEntryFieldKey() {
 
 function createScoreConfigs() {
   const promptMap = {
-    香气: '描述香气强度、干净度和主要香气来源。',
-    外观: '描述颜色、清澈度、泡沫和持久性。',
-    味道: '描述甜苦酸平衡、风味层次和缺陷。',
-    口感: '描述酒体、杀口感、顺滑度和余味。',
-    整体印象: '汇总整体表现、完成度和改进建议。',
-    整体感受: '描述第一印象、愉悦度和整体完成度。',
-    适饮性: '描述是否易饮、是否愿意继续饮用。',
-    记忆点: '描述最容易被记住的风味或体验。',
-    共识评分: '桌长讨论后填写独立共识分。',
+    香气: '描述香气强度、干净度和主要香气来源',
+    外观: '描述颜色、清澈度、泡沫和持久性',
+    味道: '描述甜苦酸平衡、风味层次和缺陷',
+    口感: '描述酒体、杀口感、顺滑度和余味',
+    整体印象: '汇总整体表现、完成度和改进方向',
+    整体感受: '描述第一印象、愉悦度和整体完成度',
+    适饮性: '描述是否易饮、是否愿意继续饮用',
+    记忆点: '描述最容易被记住的风味或体验',
+    共识评分: '桌长讨论后填写独立共识分',
   }
   return defaultScoreConfigs().map((config) => ({
     ...config,
@@ -820,7 +820,7 @@ function createScoreConfigs() {
       key: dimension.key || `${config.role.toLowerCase()}_${index + 1}`,
       label: dimension.label,
       maxScore: dimension.maxScore,
-      notePrompt: promptMap[dimension.label] || '请输入该维度备注提示。',
+      notePrompt: promptMap[dimension.label] || '请输入该维度备注提示',
     })),
   }))
 }
@@ -899,8 +899,8 @@ function buildReviewItems(source) {
       target: 'logistics-info',
       status: isOptionalDeadlineAfterStart(source.sampleArrivalStart, source.sampleArrivalDeadline) ? 'done' : 'pending',
       detail: isOptionalDeadlineAfterStart(source.sampleArrivalStart, source.sampleArrivalDeadline)
-        ? logisticsSummary.join('，') || '可保存草稿，开放报名前建议补齐送样信息'
-        : '建议送达截止需晚于开始时间',
+        ? logisticsSummary.join('，') || '可保存草稿，开放报名前请补齐送样信息'
+        : '送达截止需晚于送达开始',
     },
     {
       key: 'categories',
@@ -1637,14 +1637,18 @@ textarea::placeholder {
 }
 
 :global(.competition-create-library-popper .el-select-dropdown__item.hover),
+:global(.competition-create-library-popper .el-select-dropdown__item.is-hovering),
 :global(.competition-create-library-popper .el-select-dropdown__item:hover),
 :global(.competition-create-select-popper .el-select-dropdown__item.hover),
+:global(.competition-create-select-popper .el-select-dropdown__item.is-hovering),
 :global(.competition-create-select-popper .el-select-dropdown__item:hover) {
   background: rgba(216, 169, 53, 0.08);
 }
 
 :global(.competition-create-library-popper .el-select-dropdown__item.selected),
-:global(.competition-create-select-popper .el-select-dropdown__item.selected) {
+:global(.competition-create-library-popper .el-select-dropdown__item.is-selected),
+:global(.competition-create-select-popper .el-select-dropdown__item.selected),
+:global(.competition-create-select-popper .el-select-dropdown__item.is-selected) {
   color: #e0b84a;
   background: rgba(216, 169, 53, 0.11);
 }

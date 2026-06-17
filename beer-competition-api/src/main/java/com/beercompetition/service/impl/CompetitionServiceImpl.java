@@ -1910,7 +1910,7 @@ public class CompetitionServiceImpl implements CompetitionService {
         if (competition.getSampleArrivalStart() != null
                 && competition.getSampleArrivalDeadline() != null
                 && !competition.getSampleArrivalDeadline().isAfter(competition.getSampleArrivalStart())) {
-            throw new BaseException("建议送达截止时间必须晚于开始时间");
+            throw new BaseException("送达截止时间必须晚于送达开始时间");
         }
     }
 

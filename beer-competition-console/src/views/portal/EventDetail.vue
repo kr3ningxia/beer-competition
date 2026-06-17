@@ -64,7 +64,7 @@
         <h2 class="portal-section-title">送样与标签</h2>
         <dl>
           <div><dt>送样方式</dt><dd>{{ deliveryMethodText(logistics.deliveryMethod) }}</dd></div>
-          <div><dt>建议送达</dt><dd>{{ arrivalWindowText }}</dd></div>
+          <div><dt>送达时间</dt><dd>{{ arrivalWindowText }}</dd></div>
           <div><dt>样品要求</dt><dd>{{ logistics.sampleQuantityNote || '以组委会后续通知为准' }}</dd></div>
           <div v-if="logistics.deliveryNote"><dt>包装说明</dt><dd>{{ logistics.deliveryNote }}</dd></div>
         </dl>
@@ -75,7 +75,7 @@
       <div class="section-heading">
         <div>
           <h2 class="portal-section-title">参赛流程</h2>
-          <p>从报名资料到结果发布，厂牌端主要关注这些节点。</p>
+          <p>从报名资料到结果发布，厂牌端按这些节点推进</p>
         </div>
       </div>
       <div class="process-strip">
@@ -92,7 +92,7 @@
         <div>
           <span class="label-chip tone-blue">你已参加本赛事</span>
           <h2>本场参赛状态</h2>
-          <p>具体酒款、标签和送样处理请进入“我的参赛”。</p>
+          <p>具体酒款、标签和送样处理请进入“我的参赛”</p>
         </div>
         <div class="brief-stats">
           <span><small>已提交</small><b>{{ eventSummary.submitted }}</b></span>
@@ -111,7 +111,7 @@
         <div>
           <span class="label-chip tone-amber">尚未参加本赛事</span>
           <h2>确认规则后报名参赛</h2>
-          <p>先核对组别、基础风格、费用和送样要求。</p>
+          <p>先核对组别、基础风格、费用和送样要求</p>
         </div>
         <div class="brief-actions">
           <RouterLink v-if="canSubmitEntry(competition)" :to="`/portal/submit?competitionId=${competition.id}`">报名参赛</RouterLink>
@@ -123,7 +123,7 @@
         <div>
           <span class="label-chip tone-amber">公开赛事详情</span>
           <h2>登录后报名并追踪参赛酒款</h2>
-          <p>未登录时可以先查看赛事规则、费用和送样要求。</p>
+          <p>登录前请先核对赛事规则、费用和送样要求</p>
         </div>
         <div class="brief-actions">
           <RouterLink to="/portal/login">登录报名</RouterLink>
@@ -165,7 +165,7 @@ const categoryNamesText = computed(() => {
   return names.length ? names.join(' / ') : '暂未配置'
 })
 const fullDescription = computed(() => {
-  return competition.value.description || '组委会暂未填写赛事简介，请以参赛细则和后续通知为准。'
+  return competition.value.description || '组委会暂未填写赛事简介，请以参赛细则和后续通知为准'
 })
 const heroPrimaryAction = computed(() => {
   if (isCompetitionResultPublished(competition.value)) {
@@ -190,11 +190,11 @@ const arrivalWindowText = computed(() => {
   return '以组委会通知为准'
 })
 const processSteps = [
-  { title: '提交资料', text: '填写酒名、组别、基础风格、ABV 和补充字段。' },
-  { title: '支付报名费', text: '支付成功后报名完成，并开放标签相关操作。' },
-  { title: '下载标签', text: '将现场标签贴在酒瓶或外箱，便于组委会核对。' },
-  { title: '送样入库', text: '按送样窗口寄送或现场交样，等待组委会确认。' },
-  { title: '查看结果', text: '结果发布后查看评分、评语、奖项和证书。' },
+  { title: '提交资料', text: '填写酒名、组别、基础风格、ABV 和补充字段' },
+  { title: '支付报名费', text: '支付成功后报名完成，并开放标签相关操作' },
+  { title: '下载标签', text: '将现场标签贴在酒瓶或外箱，便于组委会核对' },
+  { title: '送样入库', text: '按送样时间寄送或现场交样，并跟进入库状态' },
+  { title: '查看结果', text: '结果发布后查看评分、评语、奖项和证书' },
 ]
 
 onMounted(async () => {

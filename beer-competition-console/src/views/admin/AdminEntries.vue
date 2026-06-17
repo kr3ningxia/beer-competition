@@ -145,7 +145,7 @@
           </div>
           <div v-if="!loading && !entries.length" class="empty-state">
             <h2>没有符合条件的酒款</h2>
-            <p>调整筛选条件后再查看。</p>
+            <p>调整筛选条件后再查看</p>
           </div>
         </div>
       </div>
@@ -198,7 +198,7 @@
           <section v-if="activeTab === 'profile'" class="drawer-panel profile-panel">
             <div class="risk-banner" v-if="detail.assigned || detail.resultPublished">
               <strong>{{ detail.resultPublished ? '结果已发布' : '酒款已分桌' }}</strong>
-              <span>{{ detail.resultPublished ? '当前报名信息暂不能修改。' : '修改组别或评审可见信息后，需要核对分桌和现场展示。' }}</span>
+              <span>{{ detail.resultPublished ? '当前报名信息暂不能修改' : '修改组别或评审可见信息后，需要核对分桌和现场展示' }}</span>
             </div>
             <section class="delivery-summary">
               <div class="section-title">
@@ -211,7 +211,7 @@
                   <dd>{{ item.value }}</dd>
                 </div>
               </dl>
-              <p v-else class="empty-line">厂牌尚未提交送样信息。</p>
+              <p v-else class="empty-line">厂牌尚未提交送样信息</p>
             </section>
             <div class="form-grid">
               <label>
@@ -320,7 +320,7 @@
               <strong>{{ traceTitle(trace) }}</strong>
               <span>{{ traceText(trace) }}</span>
             </div>
-            <p v-if="!detail.traces?.length" class="empty-line">还没有分桌或结果轨迹。</p>
+            <p v-if="!detail.traces?.length" class="empty-line">还没有分桌或结果轨迹</p>
           </section>
 
           <section v-if="activeTab === 'logs'" class="drawer-panel log-panel">
@@ -329,7 +329,7 @@
               <small>{{ formatTime(log.createTime) }} · 管理员 {{ log.adminUserId || '-' }}</small>
               <p>{{ formatLogSummary(log.summary) }}</p>
             </div>
-            <p v-if="!detail.logs?.length" class="empty-line">暂无修改记录。</p>
+            <p v-if="!detail.logs?.length" class="empty-line">暂无修改记录</p>
           </section>
         </template>
       </aside>
@@ -663,7 +663,7 @@ async function saveProfile() {
   }
   if (detail.value.assigned) {
     try {
-      await ElMessageBox.confirm('这款酒已经分桌，保存后请核对分桌、晋级和奖项归属。', '确认修改？', {
+      await ElMessageBox.confirm('这款酒已经分桌，保存后请核对分桌、晋级和奖项归属', '确认修改？', {
         confirmButtonText: '保存',
         cancelButtonText: '取消',
         type: 'warning',
@@ -769,7 +769,7 @@ async function runDetailStatusAction(type) {
       action: 'status',
       kicker: '报名处理',
       title: '确认取消报名？',
-      copy: '取消后，该酒款会退出后续分桌、评审和结果流程；已产生的记录仍会保留用于追溯。',
+      copy: '取消后，该酒款会退出后续分桌、评审和结果流程；已产生的记录仍会保留用于追溯',
       summary: entrySummaryItems(current, [
         { label: '支付', value: paymentLabel(current.paymentStatus) },
         { label: '分桌', value: current.assigned ? '已分桌' : '未分桌' },
@@ -777,7 +777,7 @@ async function runDetailStatusAction(type) {
       confirmText: '确认取消',
       loadingText: '取消中',
       reasonLabel: '处理原因',
-      reasonPlaceholder: '可填写取消报名的现场说明。',
+      reasonPlaceholder: '可填写取消报名的现场说明',
       payload: { type },
     })
     return
@@ -787,7 +787,7 @@ async function runDetailStatusAction(type) {
       action: 'status',
       kicker: '入库撤销',
       title: '确认撤销入库？',
-      copy: '撤销后，该酒款将回到已寄出状态，需要重新确认入库后才能继续现场流程。',
+      copy: '撤销后，该酒款将回到已寄出状态，需要重新确认入库后才能继续现场流程',
       summary: entrySummaryItems(current, [
         { label: '入库', value: deliveryLabel(current.deliveryStatus) },
         { label: '短编号', value: current.shortCode || '-' },
@@ -795,7 +795,7 @@ async function runDetailStatusAction(type) {
       confirmText: '撤销入库',
       loadingText: '撤销中',
       reasonLabel: '撤销原因',
-      reasonPlaceholder: '请填写撤销入库原因。',
+      reasonPlaceholder: '请填写撤销入库原因',
       reasonRequired: true,
       payload: { type },
     })
@@ -828,7 +828,7 @@ async function runRefundAction(type) {
       kicker: '退款处理',
       title: refundConfirmTitle(current, type),
       copy: type === 'retry'
-        ? '将重新提交微信退款。退款成功后，这款酒会取消报名并退出后续流程。'
+        ? '将重新提交微信退款，退款成功后，这款酒会取消报名并退出后续流程'
         : refundConfirmCopy(current),
       summary: entrySummaryItems(current, [
         { label: '支付方式', value: paymentMethodLabel(current.payment?.payMethod) },
@@ -838,7 +838,7 @@ async function runRefundAction(type) {
       confirmText: type === 'retry' ? '重试退款' : refundApproveButtonText(current),
       loadingText: type === 'retry' ? '重试中' : '确认中',
       reasonLabel: '处理原因',
-      reasonPlaceholder: '可填写退款处理说明。',
+      reasonPlaceholder: '可填写退款处理说明',
       payload: { type },
     })
     return
@@ -932,9 +932,9 @@ function refundConfirmTitle(entry, type) {
 
 function refundConfirmCopy(entry) {
   if (isManualRefundPayment(entry)) {
-    return '请在完成实际转账退款后再确认。确认后，这款酒会取消报名并退出后续流程。'
+    return '请在完成实际转账退款后再确认，确认后，这款酒会取消报名并退出后续流程'
   }
-  return '确认后将提交退款处理。退款成功后，这款酒会取消报名并退出后续流程。'
+  return '确认后将提交退款处理，退款成功后，这款酒会取消报名并退出后续流程'
 }
 
 function deliveryLabel(value) {

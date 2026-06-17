@@ -22,7 +22,7 @@
         <span>关键词</span>
         <div>
           <Search />
-          <input v-model.trim="filters.keyword" placeholder="搜索厂牌、赛事、转账备注、转账单号" @keyup.enter="applyFilters" />
+          <input v-model.trim="filters.keyword" placeholder="搜索厂牌、赛事、付款账户名、转账备注" @keyup.enter="applyFilters" />
         </div>
       </label>
       <label class="field">
@@ -54,9 +54,8 @@
         <div class="table-head">
           <span>厂牌</span>
           <span>赛事</span>
-          <span>转账单号</span>
           <span>金额 / 酒款</span>
-          <span>转账信息</span>
+          <span>付款信息</span>
           <span>状态</span>
           <span>提交时间</span>
           <span>操作</span>
@@ -65,34 +64,33 @@
           <div v-for="item in transfers" :key="item.id" :class="['table-row', { urgent: item.status === 'SUBMITTED' }]">
             <div class="strong-cell">
               <strong>{{ item.breweryName || '-' }}</strong>
-              <small>{{ item.payerName || '未填写转账户名' }}</small>
+              <small>{{ item.payerName || '未填写付款账户名' }}</small>
             </div>
             <div class="soft-cell">
               <strong>{{ item.competitionName || '-' }}</strong>
               <small>{{ item.competitionCode || '-' }}</small>
-            </div>
-            <div class="code-cell">
-              <strong>{{ item.transferNo }}</strong>
-              <small>{{ item.voucherFileName ? '已上传凭证' : '未上传凭证' }}</small>
             </div>
             <div class="soft-cell">
               <strong>{{ formatMoney(item.amount) }}</strong>
               <small>{{ item.entryName || '当前酒款' }}</small>
             </div>
             <div class="soft-cell">
-              <strong>{{ item.remark || '-' }}</strong>
-              <small>{{ formatTime(item.transferTime) }}</small>
+              <strong class="remark-preview" :title="item.remark || ''">{{ item.remark || '-' }}</strong>
+              <small>{{ formatTime(item.transferTime) }} · {{ item.voucherFileName ? '已上传凭证' : '未上传凭证' }}</small>
             </div>
             <span :class="['state-pill', statusTone(item.status)]">{{ statusLabel(item.status) }}</span>
             <span class="time-cell">{{ formatTime(item.submittedTime) }}</span>
             <div class="row-actions">
-              <button type="button" @click="openDetail(item.id)">查看</button>
-              <button v-if="item.status === 'SUBMITTED'" class="primary-action" type="button" @click="openDetail(item.id, 'confirm')">确认</button>
+              <button type="button" @click="openDetail(item)">查看</button>
+              <button v-if="item.status === 'SUBMITTED'" class="primary-action" type="button" @click="openDetail(item, 'confirm')">确认</button>
             </div>
           </div>
           <div v-if="!loading && !transfers.length" class="empty-state">
-            <h2>暂无转账记录</h2>
-            <p>厂牌提交银行转账信息后会出现在这里。</p>
+            <h2>{{ emptyStateTitle }}</h2>
+            <p>{{ emptyStateDescription }}</p>
+            <button v-if="emptyStateAction" type="button" @click="switchStatus(emptyStateAction.status)">
+              {{ emptyStateAction.label }}
+            </button>
           </div>
         </div>
       </div>
@@ -114,7 +112,7 @@
           <div>
             <span>{{ detail?.competitionName || '转账详情' }}</span>
             <h2>{{ detail?.breweryName || '-' }}</h2>
-            <small>{{ detail?.transferNo }}</small>
+            <small v-if="detail?.competitionCode">{{ detail.competitionCode }}</small>
           </div>
           <button type="button" @click="closeDetail">关闭</button>
         </header>
@@ -124,19 +122,23 @@
           <section class="summary-grid">
             <article><small>状态</small><strong>{{ statusLabel(detail.status) }}</strong></article>
             <article><small>金额</small><strong>{{ formatMoney(detail.amount) }}</strong></article>
-            <article><small>酒款</small><strong>{{ detail.entryName || '-' }}</strong></article>
-            <article><small>转账时间</small><strong>{{ formatTime(detail.transferTime) }}</strong></article>
+            <article><small>付款时间</small><strong>{{ formatTime(detail.transferTime) }}</strong></article>
+            <article><small>提交时间</small><strong>{{ formatTime(detail.submittedTime) }}</strong></article>
           </section>
 
           <section class="info-card">
             <div class="section-title">
-              <strong>转账信息</strong>
-              <button type="button" :disabled="!detail.voucherAssetId" @click="downloadVoucher">下载凭证</button>
+              <strong>付款信息</strong>
+              <div class="section-actions">
+                <button type="button" :disabled="!detail.voucherAssetId || previewingVoucher" @click="previewVoucher">查看凭证</button>
+                <button type="button" :disabled="!detail.voucherAssetId" @click="downloadVoucher">下载凭证</button>
+              </div>
             </div>
             <dl>
-              <div><dt>转账户名</dt><dd>{{ detail.payerName || '-' }}</dd></div>
-              <div><dt>转账备注</dt><dd>{{ detail.remark || '-' }}</dd></div>
+              <div><dt>付款账户名</dt><dd>{{ detail.payerName || '-' }}</dd></div>
               <div><dt>凭证文件</dt><dd>{{ detail.voucherFileName || '未上传' }}</dd></div>
+              <div class="full-info-row"><dt>转账备注</dt><dd>{{ detail.remark || '-' }}</dd></div>
+              <div><dt>处理时间</dt><dd>{{ formatTime(detail.processedTime) }}</dd></div>
               <div><dt>处理说明</dt><dd>{{ detail.adminNote || '-' }}</dd></div>
             </dl>
           </section>
@@ -159,7 +161,7 @@
           <section v-if="detail.status === 'SUBMITTED'" class="process-card">
             <label>
               <span>处理说明</span>
-              <textarea v-model.trim="processNote" placeholder="确认到账可不填；驳回时请填写原因。"></textarea>
+              <textarea v-model.trim="processNote" placeholder="确认到账可不填；驳回时请填写原因"></textarea>
             </label>
             <div class="status-actions">
               <button type="button" :disabled="processing" @click="confirmTransfer">确认到账</button>
@@ -169,12 +171,22 @@
         </template>
       </aside>
     </div>
+
+    <div v-if="voucherPreviewOpen" class="voucher-preview-mask" @click.self="closeVoucherPreview">
+      <section class="voucher-preview-panel">
+        <header>
+          <strong>{{ voucherPreviewName }}</strong>
+          <button type="button" @click="closeVoucherPreview">关闭</button>
+        </header>
+        <img v-if="voucherPreviewType === 'image'" :src="voucherPreviewUrl" alt="付款凭证" />
+      </section>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, RefreshLeft, Search } from '@element-plus/icons-vue'
 import {
   confirmAdminBankTransfer,
@@ -192,6 +204,11 @@ const detailOpen = ref(false)
 const detail = ref(null)
 const processNote = ref('')
 const processing = ref(false)
+const previewingVoucher = ref(false)
+const voucherPreviewOpen = ref(false)
+const voucherPreviewUrl = ref('')
+const voucherPreviewName = ref('')
+const voucherPreviewType = ref('')
 
 const filters = reactive({
   status: 'SUBMITTED',
@@ -208,8 +225,30 @@ const visiblePages = computed(() => {
   for (let page = start; page <= end; page += 1) pages.push(page)
   return pages
 })
+const emptyStateTitle = computed(() => {
+  if (filters.status === 'SUBMITTED') return '暂无待确认转账'
+  if (filters.status === 'CONFIRMED') return '暂无已确认转账'
+  if (filters.status === 'REJECTED') return '暂无已驳回转账'
+  if (filters.status === 'CANCELED') return '暂无已取消转账'
+  return '暂无转账记录'
+})
+const emptyStateDescription = computed(() => {
+  if (filters.status === 'SUBMITTED') return '已确认或驳回的记录会移出待办，可切换状态继续查看'
+  if (filters.status === 'CONFIRMED') return '确认到账后的记录会归档到这里'
+  if (filters.status === 'REJECTED') return '驳回后的记录会归档到这里，厂商可重新提交付款信息'
+  if (filters.status === 'CANCELED') return '厂商取消提交的记录会归档到这里'
+  return '厂牌提交银行转账信息后会出现在这里'
+})
+const emptyStateAction = computed(() => {
+  if (filters.status === 'SUBMITTED') return { label: '查看已确认记录', status: 'CONFIRMED' }
+  if (filters.status === 'CONFIRMED' || filters.status === 'REJECTED' || filters.status === 'CANCELED') {
+    return { label: '返回待确认', status: 'SUBMITTED' }
+  }
+  return null
+})
 
 onMounted(loadTransfers)
+onBeforeUnmount(closeVoucherPreview)
 
 async function loadTransfers() {
   loading.value = true
@@ -234,6 +273,12 @@ function resetFilters() {
   loadTransfers()
 }
 
+function switchStatus(status) {
+  filters.status = status
+  filters.page = 1
+  loadTransfers()
+}
+
 function changePage(page) {
   filters.page = page
   loadTransfers()
@@ -244,12 +289,19 @@ function changePageSize() {
   loadTransfers()
 }
 
-async function openDetail(id, intent = '') {
+async function openDetail(target, intent = '') {
+  const id = typeof target === 'object' ? target.id : target
+  const previousStatus = typeof target === 'object' ? target.status : ''
   detailOpen.value = true
   detailLoading.value = true
   processNote.value = ''
   try {
     detail.value = await fetchAdminBankTransferDetail(id)
+    const row = transfers.value.find((item) => item.id === id)
+    if (row) Object.assign(row, detail.value)
+    if (previousStatus && detail.value?.status !== previousStatus) {
+      await loadTransfers()
+    }
     if (intent === 'confirm') {
       processNote.value = ''
     }
@@ -261,14 +313,28 @@ async function openDetail(id, intent = '') {
 function closeDetail() {
   detailOpen.value = false
   detail.value = null
+  closeVoucherPreview()
 }
 
 async function confirmTransfer() {
   if (!detail.value) return
+  try {
+    await ElMessageBox.confirm(
+      `确认这笔 ${formatMoney(detail.value.amount)} 转账已经到账？确认后该酒款将开放标签下载和送样信息填写`,
+      '确认到账',
+      {
+        confirmButtonText: '确认到账',
+        cancelButtonText: '再核对一下',
+        type: 'warning',
+      },
+    )
+  } catch {
+    return
+  }
   processing.value = true
   try {
     detail.value = await confirmAdminBankTransfer(detail.value.id, { adminNote: processNote.value || undefined })
-    ElMessage.success('已确认到账')
+    ElMessage.success('已确认到账，记录已移至已确认')
     await loadTransfers()
   } catch (error) {
     ElMessage.warning(error?.message || '确认失败')
@@ -283,10 +349,23 @@ async function rejectTransfer() {
     ElMessage.warning('请填写驳回原因')
     return
   }
+  try {
+    await ElMessageBox.confirm(
+      '驳回后厂商需要重新提交付款信息，请确认原因已经写清楚',
+      '驳回转账',
+      {
+        confirmButtonText: '确认驳回',
+        cancelButtonText: '再核对一下',
+        type: 'warning',
+      },
+    )
+  } catch {
+    return
+  }
   processing.value = true
   try {
     detail.value = await rejectAdminBankTransfer(detail.value.id, { adminNote: processNote.value })
-    ElMessage.success('已驳回转账')
+    ElMessage.success('已驳回转账，记录已移至已驳回')
     await loadTransfers()
   } catch (error) {
     ElMessage.warning(error?.message || '驳回失败')
@@ -306,6 +385,57 @@ async function downloadVoucher() {
   link.click()
   link.remove()
   setTimeout(() => URL.revokeObjectURL(objectUrl), 500)
+}
+
+async function previewVoucher() {
+  if (!detail.value?.voucherAssetId) return
+  previewingVoucher.value = true
+  try {
+    const blob = await downloadAdminBankTransferVoucher(detail.value.id)
+    const fileName = detail.value.voucherFileName || '付款凭证'
+    const objectUrl = URL.createObjectURL(blob)
+    if (isImageVoucher(blob, fileName)) {
+      closeVoucherPreview()
+      voucherPreviewName.value = fileName
+      voucherPreviewType.value = 'image'
+      voucherPreviewUrl.value = objectUrl
+      voucherPreviewOpen.value = true
+      return
+    }
+    if (isPdfVoucher(blob, fileName)) {
+      window.open(objectUrl, '_blank', 'noopener')
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 30000)
+      return
+    }
+    URL.revokeObjectURL(objectUrl)
+    ElMessage.warning('当前凭证格式不支持在线预览，请下载后查看')
+  } catch (error) {
+    ElMessage.warning(error?.message || '凭证预览失败')
+  } finally {
+    previewingVoucher.value = false
+  }
+}
+
+function closeVoucherPreview() {
+  if (voucherPreviewUrl.value) {
+    URL.revokeObjectURL(voucherPreviewUrl.value)
+  }
+  voucherPreviewOpen.value = false
+  voucherPreviewUrl.value = ''
+  voucherPreviewName.value = ''
+  voucherPreviewType.value = ''
+}
+
+function isImageVoucher(blob, fileName) {
+  const type = blob?.type || ''
+  if (type.startsWith('image/')) return true
+  return /\.(jpe?g|png|webp|gif|bmp)$/i.test(fileName || '')
+}
+
+function isPdfVoucher(blob, fileName) {
+  const type = blob?.type || ''
+  if (type === 'application/pdf') return true
+  return /\.pdf$/i.test(fileName || '')
 }
 
 function statusLabel(value) {
@@ -393,6 +523,7 @@ function formatTime(value) {
 .status-actions button,
 .transfer-drawer header button,
 .section-title button,
+.empty-state button,
 .pager-buttons button {
   display: inline-flex;
   align-items: center;
@@ -512,6 +643,13 @@ button:disabled {
   align-items: center;
 }
 
+.section-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
 .table-title {
   margin-bottom: 12px;
 }
@@ -527,10 +665,10 @@ button:disabled {
 .table-head,
 .table-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(200px, 1.15fr) minmax(170px, 0.9fr) 120px minmax(210px, 1fr) 86px 130px 110px;
+  grid-template-columns: minmax(190px, 1.05fr) minmax(220px, 1.2fr) 130px minmax(240px, 1.35fr) 86px 130px 110px;
   gap: 12px;
   align-items: center;
-  min-width: 1240px;
+  min-width: 1120px;
 }
 
 .table-head {
@@ -546,7 +684,7 @@ button:disabled {
   flex: 1 1 auto;
   align-content: start;
   gap: 8px;
-  min-width: 1240px;
+  min-width: 1120px;
   min-height: 0;
   overflow-y: auto;
   padding-right: 4px;
@@ -566,24 +704,30 @@ button:disabled {
 }
 
 .strong-cell,
-.soft-cell,
-.code-cell {
+.soft-cell {
   display: grid;
   gap: 4px;
   min-width: 0;
 }
 
 .strong-cell strong,
-.soft-cell strong,
-.code-cell strong {
+.soft-cell strong {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.soft-cell .remark-preview {
+  display: -webkit-box;
+  overflow: hidden;
+  line-height: 1.35;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 .strong-cell small,
 .soft-cell small,
-.code-cell small,
 .time-cell {
   overflow: hidden;
   color: #8ea4ad;
@@ -687,6 +831,13 @@ button:disabled {
   color: #8ea4ad;
 }
 
+.empty-state button {
+  margin-top: 14px;
+  color: #ffdc73;
+  border-color: rgba(216, 169, 53, 0.32);
+  background: rgba(216, 169, 53, 0.12);
+}
+
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -720,6 +871,10 @@ button:disabled {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px 12px;
   margin: 0;
+}
+
+.info-card .full-info-row {
+  grid-column: 1 / -1;
 }
 
 .info-card dt,
@@ -774,6 +929,63 @@ button:disabled {
   padding: 10px 12px;
   resize: vertical;
   line-height: 1.5;
+}
+
+.voucher-preview-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background: rgba(3, 8, 10, 0.78);
+}
+
+.voucher-preview-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(980px, 96vw);
+  max-height: 92vh;
+  overflow: hidden;
+  border: 1px solid rgba(218, 232, 237, 0.16);
+  border-radius: 8px;
+  background: #111b20;
+  box-shadow: 0 26px 80px rgba(0, 0, 0, 0.42);
+}
+
+.voucher-preview-panel header {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(218, 232, 237, 0.1);
+}
+
+.voucher-preview-panel header strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.voucher-preview-panel button {
+  min-height: 34px;
+  padding: 0 12px;
+  color: #d5e2e7;
+  border: 1px solid rgba(218, 232, 237, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.voucher-preview-panel img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(92vh - 60px);
+  margin: auto;
+  object-fit: contain;
 }
 
 @media (max-width: 980px) {

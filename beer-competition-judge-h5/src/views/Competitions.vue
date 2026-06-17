@@ -37,16 +37,22 @@
         <span v-else>{{ progressLabel }} <strong>{{ progressCount }}</strong></span>
         <span v-if="scoreConfirmationVisible"><strong>{{ scoreConfirmationProgressLabel }}</strong></span>
       </div>
-      <div v-if="showReviewStats" class="review-stats-strip">
-        <article class="review-stat-card">
-          <span>平均用时</span>
-          <strong>{{ myReviewStatsText.duration }}</strong>
-          <small>{{ myReviewStatsText.siteDuration }}</small>
-        </article>
-        <article class="review-stat-card">
-          <span>平均评语</span>
-          <strong>{{ myReviewStatsText.comment }}</strong>
-          <small>{{ myReviewStatsText.siteComment }}</small>
+      <div v-if="showReviewStats" :class="['review-stats-strip', { empty: !showDetailedReviewStats }]">
+        <template v-if="showDetailedReviewStats">
+          <article class="review-stat-card">
+            <span>我的平均用时</span>
+            <strong>{{ myReviewStatsText.duration }}</strong>
+            <small>{{ myReviewStatsText.siteDuration }}</small>
+          </article>
+          <article class="review-stat-card">
+            <span>我的平均评语字数</span>
+            <strong>{{ myReviewStatsText.comment }}</strong>
+            <small>{{ myReviewStatsText.siteComment }}</small>
+          </article>
+        </template>
+        <article v-else class="review-stat-empty">
+          <strong>首款提交后显示评分统计</strong>
+          <small>包含平均用时、评语字数和现场参考。</small>
         </article>
       </div>
     </section>
@@ -265,7 +271,7 @@ const showRankingFilledProgress = computed(() => (
 const rankingTaskHint = computed(() => (
   canSubmitRanking.value
     ? ''
-    : '你可以查看本桌候选，排序由桌长提交。'
+    : '请查看本桌候选，排序由桌长提交。'
 ))
 const myScoredCount = computed(() => entries.value.filter((entry) => entry.scored).length)
 const finalizedCount = computed(() => entries.value.filter((entry) => entry.finalized).length)
@@ -274,6 +280,7 @@ const advanceTargetCount = computed(() => Number(captainBoard.value?.roundTable?
 const myPendingScoreCount = computed(() => entries.value.filter((entry) => !entry.scored).length)
 const readyFinalizeCount = computed(() => entries.value.filter((entry) => readyForFinalize(entry)).length)
 const pendingTableScoreCount = computed(() => entries.value.reduce((sum, entry) => sum + entryMissingScoreCount(entry), 0))
+const peerReadyWaitingMeCount = computed(() => entries.value.filter((entry) => !entry.scored && tableScoresComplete(entry)).length)
 const rankingFilledCount = computed(() => rankingSlots.value.filter((slot) => slot.beerEntryId).length)
 const scoreConfirmationVisible = computed(() => (
   !isCaptain.value
@@ -292,15 +299,17 @@ const scoreConfirmationProgressLabel = computed(() => (
 ))
 const myReviewStats = computed(() => currentRoundTable.value?.myReviewStats || null)
 const showReviewStats = computed(() => Boolean(myReviewStats.value) && !isRankingRound.value)
+const hasSubmittedReviewStats = computed(() => Number(myReviewStats.value?.submittedCount || 0) > 0)
+const hasSiteReviewStats = computed(() => (
+  Number(myReviewStats.value?.siteAverageDurationSeconds || 0) > 0
+  || Number(myReviewStats.value?.siteAverageCommentChars || 0) > 0
+))
+const showDetailedReviewStats = computed(() => hasSubmittedReviewStats.value || hasSiteReviewStats.value)
 const myReviewStatsText = computed(() => ({
-  duration: formatSeconds(myReviewStats.value?.averageDurationSeconds),
-  siteDuration: myReviewStats.value?.submittedCount > 0
-    ? `现场 ${formatSeconds(myReviewStats.value?.siteAverageDurationSeconds)}`
-    : '完成首款后显示',
-  comment: formatCount(myReviewStats.value?.averageCommentChars, '字'),
-  siteComment: myReviewStats.value?.submittedCount > 0
-    ? `现场 ${formatCount(myReviewStats.value?.siteAverageCommentChars, '字')}`
-    : '完成首款后显示',
+  duration: hasSubmittedReviewStats.value ? formatSeconds(myReviewStats.value?.averageDurationSeconds) : '待提交',
+  siteDuration: hasSiteReviewStats.value ? `现场平均 ${formatSeconds(myReviewStats.value?.siteAverageDurationSeconds)}` : '现场暂无参考',
+  comment: hasSubmittedReviewStats.value ? formatCount(myReviewStats.value?.averageCommentChars, '字') : '待提交',
+  siteComment: hasSiteReviewStats.value ? `现场平均 ${formatCount(myReviewStats.value?.siteAverageCommentChars, '字')}` : '现场暂无参考',
 }))
 const rankingConfirmationHint = computed(() => (
   rankingConfirmation.value?.mineConfirmed
@@ -322,7 +331,7 @@ const taskSectionTitle = computed(() => (isCaptain.value ? '本桌酒款' : '我
 const taskSectionHint = computed(() => (
   isScoreRoundCaptain.value
     ? `扫码完成自己的专业评分；同桌评分齐全后，从下方进入本桌汇总。`
-    : '扫码或点酒款进入评分，已评分酒款在确认前可查看或调整。'
+    : '扫码或点酒款进入评分，已评分酒款在确认前开放查看和调整。'
 ))
 const tableReadyForReview = computed(() => {
   if (!entries.value.length) return false
@@ -332,18 +341,25 @@ const tableReadyForReview = computed(() => {
 const tableCheckoutTitle = computed(() => {
   if (!entries.value.length) return ''
   if (tableReadyForReview.value) return '本桌可提交'
+  if (readyFinalizeCount.value > 0 && myPendingScoreCount.value > 0) return '处理本桌待办'
   if (readyFinalizeCount.value > 0) return '有酒款可汇总'
-  if (myPendingScoreCount.value > 0) return '先完成你的评分'
+  if (myPendingScoreCount.value > 0) return '先完成个人评分'
   if (pendingTableScoreCount.value > 0) return '等待同桌评分'
   return '本桌结果未完成'
 })
 const tableCheckoutText = computed(() => {
   if (!entries.value.length) return ''
+  if (readyFinalizeCount.value > 0 && myPendingScoreCount.value > 0) {
+    return `${readyFinalizeCount.value} 款可汇总，另有 ${myPendingScoreCount.value} 款个人评分待提交。`
+  }
   if (myPendingScoreCount.value > 0) {
-    return `你还有 ${myPendingScoreCount.value} 款未评分，完成后再看同桌进度。`
+    if (peerReadyWaitingMeCount.value > 0) {
+      return `${peerReadyWaitingMeCount.value} 款同桌评分已齐，提交你的个人评分后即可汇总。`
+    }
+    return `还有 ${myPendingScoreCount.value} 款个人评分待提交，下方可查看同桌进度。`
   }
   if (readyFinalizeCount.value > 0) {
-    return `${readyFinalizeCount.value} 款评分已齐，可填写桌长意见。`
+    return `${readyFinalizeCount.value} 款评分已齐，请填写桌长意见。`
   }
   if (pendingTableScoreCount.value > 0) {
     return `还差 ${pendingTableScoreCount.value} 份同桌评分，齐全后再填写桌长意见。`
@@ -458,7 +474,7 @@ function entryStatus(entry) {
       : { label: '已确认', className: 'status-lock' }
   }
   if (isCaptain.value) {
-    if (!entry.scored) return { label: '待我评分', className: 'status-warn' }
+    if (!entry.scored) return { label: tableScoresComplete(entry) ? '待我评' : '待我评分', className: 'status-warn' }
     if (readyForFinalize(entry)) return { label: '可汇总', className: 'status-ok' }
     if (entryMissingScoreCount(entry) > 0) return { label: '等同桌', className: 'status-warn' }
     return { label: '待汇总', className: 'status-warn' }
@@ -484,7 +500,8 @@ function entryFinalizeText(entry) {
 function tableScoreProgress(entry) {
   const expected = Number(entry.expectedCount || 0)
   const submitted = Number(entry.submittedCount || 0)
-  return expected > 0 ? `${submitted} / ${expected}` : `${submitted} 份`
+  if (expected <= 0) return `${submitted} 份`
+  return submitted >= expected ? `已齐 ${submitted} / ${expected}` : `${submitted} / ${expected}`
 }
 
 function readyForFinalize(entry) {
@@ -493,9 +510,15 @@ function readyForFinalize(entry) {
   return Boolean(entry.scored && !entry.finalized && submitted >= expected)
 }
 
+function tableScoresComplete(entry) {
+  const expected = Number(entry.expectedCount || 0)
+  const submitted = Number(entry.submittedCount || 0)
+  return expected > 0 && submitted >= expected
+}
+
 function captainAction(entry) {
   if (entry.finalized) return { label: '查看意见', primary: false }
-  if (!entry.scored) return null
+  if (!entry.scored) return { label: '去评分', primary: true }
   if (readyForFinalize(entry)) return { label: '汇总意见', primary: true }
   if (entryMissingScoreCount(entry) > 0) return { label: '看进度', primary: false }
   return null
@@ -760,6 +783,10 @@ onBeforeUnmount(() => {
   margin-top: 10px;
 }
 
+.review-stats-strip.empty {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .review-stat-card {
   display: grid;
   gap: 4px;
@@ -779,6 +806,37 @@ onBeforeUnmount(() => {
   line-height: 1.25;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+.review-stat-empty {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.review-stat-empty strong,
+.review-stat-empty small {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.review-stat-empty strong {
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.3;
+  font-weight: 850;
+}
+
+.review-stat-empty small {
+  color: rgba(248, 250, 252, 0.66);
+  font-size: 11px;
+  line-height: 1.25;
+  font-weight: 750;
 }
 
 .review-stat-card strong {

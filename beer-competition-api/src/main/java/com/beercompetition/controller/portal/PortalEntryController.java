@@ -56,6 +56,14 @@ public class PortalEntryController {
     }
 
     /**
+     * 当前厂商取消待支付的报名酒款。
+     */
+    @PostMapping("/entries/{id}/cancel")
+    public Result<EntryDetailVO> cancelEntry(@PathVariable Long id) {
+        return Result.success(entryService.cancelPortalEntry(id));
+    }
+
+    /**
      * 测试环境模拟报名支付到账。
      */
     @PostMapping("/entries/{id}/payment/simulate")

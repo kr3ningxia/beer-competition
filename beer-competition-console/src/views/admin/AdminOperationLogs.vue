@@ -107,7 +107,7 @@
           </div>
           <div v-if="!loading && logs.length === 0" class="empty-state">
             <h2>没有符合条件的操作记录</h2>
-            <p>调整筛选条件后再查看。</p>
+            <p>调整筛选条件后再查看</p>
           </div>
         </div>
       </div>

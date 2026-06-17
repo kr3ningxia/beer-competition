@@ -62,7 +62,7 @@ defineProps({
   targetLabel: { type: String, default: '目标设置' },
   targetHint: { type: String, default: '' },
   targetFixed: Boolean,
-  successText: { type: String, default: '当前轮次可以发布。' },
+  successText: { type: String, default: '当前轮次可以发布' },
   selectedRoundTable: { type: Object, default: null },
   captainCandidates: { type: Array, required: true },
   roundValidationIssues: { type: Array, required: true },

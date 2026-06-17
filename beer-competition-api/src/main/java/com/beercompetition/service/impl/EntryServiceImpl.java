@@ -409,6 +409,33 @@ public class EntryServiceImpl implements EntryService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public EntryDetailVO cancelPortalEntry(Long entryId) {
+        // 1) 查询厂商酒款并校验取消条件
+        PortalAccount account = requirePortalAccount();
+        BeerEntry entry = requireOwnedEntry(entryId, account.getBreweryId());
+        if (!EntryStatus.PENDING_PAYMENT.name().equals(entry.getStatus())) {
+            throw new BaseException("当前酒款不能取消报名");
+        }
+        EntryPayment payment = ensureEntryPayment(entry.getId(), entry.getCompetitionId());
+        if (EntryPaymentStatus.PAID.name().equals(payment.getStatus())) {
+            throw new BaseException("已支付报名请通过退款申请处理");
+        }
+        if (EntryPaymentStatus.PENDING_CONFIRM.name().equals(payment.getStatus())) {
+            throw new BaseException("银行转账确认中，请先修改或等待转账确认");
+        }
+
+        // 2) 取消未付款报名并返回详情
+        payment.setStatus(EntryPaymentStatus.CANCELED.name());
+        payment.setConfirmRemark("厂商取消报名");
+        entryPaymentMapper.updateById(payment);
+        entry.setStatus(EntryStatus.CANCELED.name());
+        beerEntryMapper.updateById(entry);
+        writeEntryLog("ENTRY_PORTAL_CANCEL", entry.getUuid(), "厂商取消报名");
+        return toEntryDetailVO(beerEntryMapper.selectById(entry.getId()));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public EntryDetailVO requestPortalEntryRefund(Long entryId, PortalEntryRefundRequest request) {
         // 1) 查询厂商酒款并校验退款资格
         PortalAccount account = requirePortalAccount();

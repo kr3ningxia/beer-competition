@@ -39,7 +39,7 @@
 
       <div v-else class="empty">
         <h2 class="section-title">还没有提交评分</h2>
-        <p class="caption">扫码或输入编号后，就可以开始本轮评分。</p>
+        <p class="caption">扫码或输入编号后，开始本轮评分。</p>
         <button class="button primary full" type="button" @click="$router.push('/competitions')">返回扫码</button>
       </div>
     </section>

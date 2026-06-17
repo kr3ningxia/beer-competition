@@ -85,14 +85,14 @@
 
         <div v-else class="empty-state brewer-card">
           <strong>未找到匹配的获奖记录</strong>
-          <p>调整关键词、组别或奖项筛选后再查看。</p>
+          <p>调整关键词、组别或奖项筛选后再查看</p>
         </div>
       </section>
     </template>
 
     <div v-else class="empty-state brewer-card">
       <strong>{{ loading ? '正在读取赛事结果' : '暂无已发布赛事结果' }}</strong>
-      <p v-if="!loading">返回列表查看其他赛事。</p>
+      <p v-if="!loading">返回列表查看其他赛事</p>
     </div>
   </div>
 </template>

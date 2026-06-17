@@ -3,7 +3,7 @@
     <section class="form-card brewer-card">
       <div class="form-header">
         <h2 class="portal-section-title">提交参赛酒款</h2>
-        <p>先完成酒款资料，提交后支付报名费。</p>
+        <p>填写酒款资料后，选择付款方式并提交报名；付款确认后开放标签下载和送样信息填写</p>
       </div>
 
       <section v-if="selectedCompetition" class="competition-banner">
@@ -16,7 +16,7 @@
 
       <section v-else class="competition-empty">
         <strong>未找到赛事</strong>
-        <p>请从赛事详情页进入报名，或先返回赛事列表重新选择。</p>
+        <p>请从赛事详情页进入报名，或先返回赛事列表重新选择</p>
         <RouterLink class="secondary-link" to="/portal/events">返回赛事列表</RouterLink>
       </section>
 
@@ -140,30 +140,69 @@
           </div>
         </section>
 
-        <el-form-item prop="confirmed" class="confirm-item">
-          <div class="confirm-box">
-            <el-checkbox v-model="form.confirmed">
-              我确认评审可见内容不含厂牌或联系方式
-            </el-checkbox>
+        <section class="confirm-panel" aria-label="报名确认">
+          <el-form-item prop="confirmed" class="confirm-item">
+            <div class="confirm-row">
+              <el-checkbox v-model="form.confirmed">
+                我确认评审可见内容不含厂牌或联系方式
+              </el-checkbox>
+            </div>
+          </el-form-item>
+          <el-form-item v-if="hasRulesUrl" prop="rulesAccepted" class="confirm-item">
+            <div class="confirm-row">
+              <el-checkbox v-model="form.rulesAccepted">
+                <span class="rules-confirm-copy">
+                  我已阅读并同意本次大赛
+                  <a
+                    :href="selectedCompetition.rulesUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    @click.stop
+                  >
+                    参赛细则
+                  </a>
+                </span>
+              </el-checkbox>
+            </div>
+          </el-form-item>
+        </section>
+
+        <section v-if="!submittedEntry" class="payment-method-panel" aria-labelledby="entry-payment-title">
+          <div class="payment-method-head">
+            <div>
+              <h3 id="entry-payment-title">选择付款方式</h3>
+            </div>
+            <div class="payment-method-amount">
+              <span>本款应付</span>
+              <strong>{{ entryFeeLabel }}</strong>
+            </div>
           </div>
-        </el-form-item>
-        <el-form-item v-if="hasRulesUrl" prop="rulesAccepted" class="confirm-item">
-          <div class="confirm-box">
-            <el-checkbox v-model="form.rulesAccepted">
-              <span class="rules-confirm-copy">
-                我已阅读并同意本次大赛
-                <a
-                  :href="selectedCompetition.rulesUrl"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  @click.stop
-                >
-                  参赛细则
-                </a>
-              </span>
-            </el-checkbox>
+          <div class="payment-method-options" role="radiogroup" aria-label="选择付款方式">
+            <button
+              :class="['payment-method-option', 'recommended', { active: payMode === 'WECHAT' }]"
+              type="button"
+              role="radio"
+              :aria-checked="payMode === 'WECHAT'"
+              @click="payMode = 'WECHAT'"
+            >
+              <div class="payment-method-option-title">
+                <span>微信扫码支付</span>
+              </div>
+            </button>
+            <button
+              :class="['payment-method-option', { active: payMode === 'BANK_TRANSFER' }]"
+              type="button"
+              role="radio"
+              :aria-checked="payMode === 'BANK_TRANSFER'"
+              @click="payMode = 'BANK_TRANSFER'"
+            >
+              <div class="payment-method-option-title">
+                <span>银行转账</span>
+              </div>
+            </button>
           </div>
-        </el-form-item>
+          <p class="payment-method-note">{{ selectedPaymentModeNote }}</p>
+        </section>
 
         <div v-if="!submittedEntry" class="form-actions">
           <p>{{ submitHint }}</p>
@@ -177,8 +216,8 @@
         <div class="payment-head">
           <div>
             <span>报名支付</span>
-            <h3>{{ paymentPaid ? '支付成功' : '支付报名费' }}</h3>
-            <p>{{ paymentPaid ? '这一款酒已经报名成功，可以继续下载标签并填写送样信息。' : '请完成报名费支付，支付成功后即可下载标签并填写送样信息。' }}</p>
+            <h3>{{ paymentPaid ? '报名已完成' : '完成报名付款' }}</h3>
+            <p>{{ paymentPaid ? '请下载标签，并填写这款酒的送样信息' : '请使用微信扫码支付本款报名费，付款成功后，页面会自动更新报名状态' }}</p>
           </div>
           <strong>{{ formatCurrency(paymentAmount) }}</strong>
         </div>
@@ -190,7 +229,7 @@
           </div>
           <div>
             <dt>状态</dt>
-            <dd>{{ paymentPaid ? '报名成功' : '待支付' }}</dd>
+            <dd>{{ paymentPaid ? '报名已完成' : '付款后办理送样' }}</dd>
           </div>
         </dl>
 
@@ -209,7 +248,7 @@
             :loading="simulatingPayment"
             @click="paySubmittedEntry"
           >
-            测试支付成功
+            模拟微信到账
           </el-button>
           <el-button
             v-else-if="!paymentPaid"
@@ -218,17 +257,17 @@
             :loading="creatingPayment"
             @click="startSubmittedEntryPayment"
           >
-            {{ paymentOrder?.mode === 'WECHAT' ? '刷新支付码' : '获取支付码' }}
+            {{ paymentOrder?.mode === 'WECHAT' ? '重新生成支付码' : '生成微信支付码' }}
           </el-button>
           <el-button v-if="!paymentPaid" :loading="checkingPayment" @click="checkSubmittedEntryPayment">
-            刷新状态
+            查看支付结果
           </el-button>
           <RouterLink
             v-if="!paymentPaid"
             class="secondary-link"
             :to="`/portal/payment?entryId=${submittedEntry.id}&payMode=bank`"
           >
-            使用银行转账
+            改用银行转账
           </RouterLink>
           <RouterLink
             v-else
@@ -237,7 +276,7 @@
           >
             下载标签并填写送样信息
           </RouterLink>
-          <el-button :disabled="simulatingPayment" @click="resetForNextEntry">继续提交另一款</el-button>
+          <el-button v-if="paymentPaid" :disabled="simulatingPayment" @click="resetForNextEntry">继续提交另一款</el-button>
         </div>
       </section>
     </section>
@@ -278,7 +317,7 @@
           </div>
         </dl>
         <div class="foam-line" />
-        <p class="receipt-status">{{ submittedEntry ? (paymentPaid ? '已支付，报名成功' : '待支付报名费') : '提交后进入支付' }}</p>
+        <p class="receipt-status">{{ receiptStatusText }}</p>
       </div>
 
     </aside>
@@ -287,7 +326,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import QRCode from 'qrcode'
 import {
@@ -301,6 +340,7 @@ import {
 import { currentEntryFee, formatCompetitionFee, isEarlyBirdActive } from './portalViewModels'
 
 const route = useRoute()
+const router = useRouter()
 const entryFormRef = ref(null)
 const selectedDetail = ref(null)
 const submittedEntry = ref(null)
@@ -310,13 +350,15 @@ const creatingPayment = ref(false)
 const checkingPayment = ref(false)
 const paymentOrder = ref(null)
 const paymentQrDataUrl = ref('')
+const payMode = ref('WECHAT')
 let paymentPollingTimer = null
 let paymentPollingCount = 0
 const queryCompetitionId = Number(route.query.competitionId || 0)
 const currencyFormatter = new Intl.NumberFormat('zh-CN', {
   style: 'currency',
   currency: 'CNY',
-  maximumFractionDigits: 0,
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
 })
 
 const form = reactive({
@@ -336,24 +378,45 @@ const selectedCategoryName = computed(() => selectedCompetition.value?.categorie
 const paymentAmount = computed(() => submittedEntry.value?.payment?.amount ?? submittedEntry.value?.entryFee ?? selectedCompetition.value?.entryFee ?? 0)
 const paymentPaid = computed(() => submittedEntry.value?.paymentStatus === 'PAID' || submittedEntry.value?.canDownloadLabel)
 const paymentExpireText = computed(() => {
-  if (!paymentOrder.value?.expireTime) return '请在页面提示时间内完成支付。'
-  return `${formatDateTime(paymentOrder.value.expireTime)} 前完成支付。`
+  if (!paymentOrder.value?.expireTime) return '请在页面提示时间内完成支付'
+  return `${formatDateTime(paymentOrder.value.expireTime)} 前完成支付`
 })
 const currentFeeText = computed(() => formatCompetitionFee(selectedCompetition.value))
 const entryFeeLabel = computed(() => formatCurrency(currentEntryFee(selectedCompetition.value)))
 const earlyBirdActive = computed(() => isEarlyBirdActive(selectedCompetition.value))
 const earlyBirdDeadlineText = computed(() => formatMonthDayTime(selectedCompetition.value?.earlyBirdDeadline))
 const submitHint = computed(() => {
-  if (earlyBirdActive.value) {
-    return `当前可享早鸟价，${earlyBirdDeadlineText.value ? `${earlyBirdDeadlineText.value} 前` : '现在'}提交后进入支付。`
+  if (Number(currentEntryFee(selectedCompetition.value)) <= 0) {
+    return '本款无需支付报名费，提交后直接办理标签和送样'
   }
-  return '提交后进入支付，支付成功即完成报名。'
+  if (earlyBirdActive.value) {
+    return `当前享早鸟价，${earlyBirdDeadlineText.value ? `${earlyBirdDeadlineText.value} 前` : '现在'}提交并完成付款有效`
+  }
+  if (payMode.value === 'BANK_TRANSFER') {
+    return '提交报名后填写转账信息，到账确认后办理标签和送样'
+  }
+  return '提交报名后生成微信支付码，付款成功即完成报名'
 })
 const submitButtonLabel = computed(() => {
-  if (earlyBirdActive.value) {
-    return `锁定早鸟价并提交报名 ${entryFeeLabel.value}`
+  if (Number(currentEntryFee(selectedCompetition.value)) <= 0) {
+    return '提交报名'
   }
-  return `提交报名并支付 ${entryFeeLabel.value}`
+  if (payMode.value === 'BANK_TRANSFER') {
+    return `提交报名并填写转账信息 ${entryFeeLabel.value}`
+  }
+  return `提交报名并生成微信支付码 ${entryFeeLabel.value}`
+})
+const receiptStatusText = computed(() => {
+  if (!submittedEntry.value) return '下一步：选择付款方式'
+  if (paymentPaid.value) return '办理送样'
+  if (submittedEntry.value?.paymentStatus === 'PENDING_CONFIRM') return '等待到账确认'
+  return '下一步：完成付款'
+})
+const selectedPaymentModeNote = computed(() => {
+  if (payMode.value === 'BANK_TRANSFER') {
+    return '适合对公付款，提交转账信息后，组委会将在五个工作日内核对到账'
+  }
+  return '支付成功后立即完成报名，并开放标签下载和送样信息填写'
 })
 const formRules = computed(() => {
   const rules = {
@@ -464,8 +527,13 @@ async function submitEntry() {
       rulesAccepted: hasRulesUrl.value ? form.rulesAccepted : undefined,
     })
     submittedEntry.value = entry
+    if (payMode.value === 'BANK_TRANSFER') {
+      ElMessage.success('报名已提交，请继续填写转账信息')
+      await router.push(`/portal/payment?entryId=${entry.id}&payMode=bank`)
+      return
+    }
     await startSubmittedEntryPayment({ silent: true })
-    ElMessage.success('报名已提交，请完成支付')
+    ElMessage.success('报名已提交，请完成付款')
   } catch (error) {
     ElMessage.warning(error?.message || '报名提交失败，请稍后重试')
   } finally {
@@ -503,7 +571,7 @@ async function startSubmittedEntryPayment(options = {}) {
     }
   } catch (error) {
     if (!options.silent) {
-      ElMessage.warning(error?.message || '支付码获取失败，请稍后重试')
+      ElMessage.warning(error?.message || '支付码生成失败，请稍后重试')
     }
   } finally {
     creatingPayment.value = false
@@ -522,7 +590,7 @@ async function checkSubmittedEntryPayment() {
       ElMessage.success('支付成功，报名已完成')
     }
   } catch (error) {
-    ElMessage.warning(error?.message || '支付状态刷新失败')
+    ElMessage.warning(error?.message || '支付结果查询失败')
   } finally {
     checkingPayment.value = false
   }
@@ -805,16 +873,51 @@ function styleLabel(item) {
   line-height: 1.5;
 }
 
+.confirm-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 16px 18px;
+  background: #fff7e6;
+  border: 1px dashed rgba(87, 58, 26, 0.2);
+  border-radius: 8px;
+}
+
 .confirm-item {
   margin-bottom: 0;
 }
 
-.confirm-box {
+.confirm-item :deep(.el-form-item__content) {
+  display: block;
+  line-height: normal;
+}
+
+.confirm-item :deep(.el-form-item__error) {
+  position: static;
+  margin-top: 4px;
+  padding-left: 24px;
+  line-height: 1.45;
+}
+
+.confirm-row {
   width: 100%;
-  padding: 12px 14px;
-  background: #fff7e6;
-  border: 1px dashed rgba(87, 58, 26, 0.2);
-  border-radius: 8px;
+}
+
+.confirm-row :deep(.el-checkbox) {
+  align-items: flex-start;
+  height: auto;
+  min-height: 22px;
+  white-space: normal;
+}
+
+.confirm-row :deep(.el-checkbox__input) {
+  margin-top: 2px;
+}
+
+.confirm-row :deep(.el-checkbox__label) {
+  color: #4a3b2c;
+  font-weight: 700;
+  line-height: 1.5;
 }
 
 .rules-confirm-copy a {
@@ -822,6 +925,126 @@ function styleLabel(item) {
   font-weight: 900;
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+
+.payment-method-panel {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+  padding: 18px;
+  background: linear-gradient(180deg, #fffdf8, #fff7e6);
+  border: 1px solid rgba(87, 58, 26, 0.14);
+  border-radius: 8px;
+}
+
+.payment-method-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+}
+
+.payment-method-amount span {
+  display: block;
+  color: #8b5c19;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.payment-method-head h3 {
+  margin: 0;
+  color: #2b1d10;
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.payment-method-amount {
+  display: grid;
+  gap: 2px;
+  justify-items: end;
+  text-align: right;
+}
+
+.payment-method-amount strong {
+  color: #8b5c19;
+  font-size: 24px;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.payment-method-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.payment-method-option {
+  position: relative;
+  display: grid;
+  min-height: 64px;
+  padding: 18px 76px 18px 42px;
+  text-align: left;
+  color: #4a3b2c;
+  background: #fffdf8;
+  border: 1px solid rgba(87, 58, 26, 0.14);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.payment-method-option::before {
+  position: absolute;
+  top: 18px;
+  left: 16px;
+  width: 15px;
+  height: 15px;
+  border: 2px solid #c4aa84;
+  border-radius: 50%;
+  content: '';
+}
+
+.payment-method-option.active {
+  border-color: rgba(185, 120, 31, 0.45);
+  box-shadow: 0 10px 24px rgba(141, 88, 18, 0.1);
+}
+
+.payment-method-option.active::before {
+  border-color: #b9781f;
+  background: radial-gradient(circle, #b9781f 0 42%, transparent 46%);
+}
+
+.payment-method-option.recommended::after {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  padding: 2px 7px;
+  color: #7d4c0e;
+  background: #f9dfa4;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  content: '推荐';
+}
+
+.payment-method-option-title {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  min-height: 22px;
+}
+
+.payment-method-option-title span {
+  color: #2b1d10;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.payment-method-note {
+  margin: 0;
+  color: #746a5f;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .form-actions {
@@ -1099,6 +1322,7 @@ function styleLabel(item) {
   .form-grid,
   .dynamic-field-list,
   .form-actions,
+  .payment-method-options,
   .payment-facts {
     grid-template-columns: 1fr;
   }

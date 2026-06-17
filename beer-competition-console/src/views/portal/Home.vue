@@ -13,28 +13,27 @@
       <div v-if="activeCompetition" class="hero-copy">
         <span class="label-chip tone-green">{{ activeCompetition.currentStageLabel }}</span>
         <h1>{{ activeCompetition.name }}</h1>
-        <p>{{ activeCompetition.description || '查看报名窗口、投递组别、基础风格和当前应付金额，确认后报名参赛。' }}</p>
+        <p>{{ activeCompetition.description || '查看报名窗口、投递组别、基础风格和当前应付金额，确认后报名参赛' }}</p>
         <div class="hero-facts">
           <span>报名截止 {{ formatMonthDayTime(activeCompetition.registrationDeadline) || '-' }}</span>
           <span>{{ entryFeeText(activeCompetition) }}</span>
           <span>送样截止 {{ formatMonthDayTime(activeCompetition.logistics?.sampleArrivalDeadline) || '-' }}</span>
         </div>
         <div class="hero-actions">
-          <RouterLink class="primary-action" to="/portal/events">查看开放赛事</RouterLink>
-          <a class="secondary-action" href="#entry-flow">了解参赛流程</a>
+          <RouterLink class="primary-action" :to="heroPrimaryAction.to">{{ heroPrimaryAction.label }}</RouterLink>
           <RouterLink
-            v-if="canSubmitEntry(activeCompetition)"
-            class="text-action"
+            class="secondary-action"
             :to="`/portal/events/${activeCompetition.id}`"
           >
-            查看详情
+            查看赛事详情
           </RouterLink>
+          <a class="text-action" href="#entry-flow">参赛流程</a>
         </div>
       </div>
       <div v-else class="hero-copy">
         <span class="label-chip tone-amber">赛事报名</span>
         <h1>厂牌参赛入口</h1>
-        <p>当前暂无开放展示赛事，可以稍后再回来查看。</p>
+        <p>当前暂无开放展示赛事，请稍后再回来查看</p>
       </div>
       <aside class="hero-card">
         <span>{{ activeCompetition ? 'ENTRY INFO' : 'BEER AWARDS' }}</span>
@@ -80,7 +79,7 @@
       </div>
       <div v-if="!openCompetitions.length" class="empty-state">
         <strong>暂无开放报名赛事</strong>
-        <p>赛事开放后会在这里显示报名入口。</p>
+        <p>赛事开放后会在这里显示报名入口</p>
       </div>
     </section>
 
@@ -119,9 +118,9 @@
       <article class="brewer-card guide-card">
         <h2 class="portal-section-title">送样与标签</h2>
         <dl>
-          <div><dt>参赛编号</dt><dd>报名后生成，用于厂牌和组委会核对报名记录。</dd></div>
-          <div><dt>现场短编号</dt><dd>展示在标签下方，扫码失败时供现场人工输入。</dd></div>
-          <div><dt>标签用途</dt><dd>支付成功后下载并贴在酒瓶或外箱，组委会收样后确认入库。</dd></div>
+          <div><dt>参赛编号</dt><dd>报名后生成，用于厂牌和组委会核对报名记录</dd></div>
+          <div><dt>现场短编号</dt><dd>展示在标签下方，扫码失败时供现场人工输入</dd></div>
+          <div><dt>标签用途</dt><dd>支付成功后下载并贴在酒瓶或外箱，组委会收样后确认入库</dd></div>
         </dl>
       </article>
       <article class="brewer-card guide-card">
@@ -152,6 +151,14 @@ const activeCompetition = computed(() => homeData.value.activeCompetition)
 const openCompetitions = computed(() => homeData.value.openCompetitions || [])
 const pendingCount = computed(() => entries.value.filter((entry) => isEntryVendorActionPending(entry)).length)
 const publishedResultCount = computed(() => results.value.filter((entry) => isEntryResultPublished(entry)).length)
+const heroPrimaryAction = computed(() => {
+  if (!activeCompetition.value || !canSubmitEntry(activeCompetition.value)) {
+    return { label: '查看全部赛事', to: '/portal/events' }
+  }
+  return loggedIn.value
+    ? { label: '报名参赛', to: `/portal/submit?competitionId=${activeCompetition.value.id}` }
+    : { label: '登录后报名', to: '/portal/login' }
+})
 
 onMounted(async () => {
   homeData.value = await fetchPortalHome()
@@ -173,16 +180,16 @@ const flowSteps = [
   { index: '01', title: '选择赛事', text: '查看正在报名中的赛事，确认自己是否有合适投递的酒款' },
   { index: '02', title: '报名参赛', text: '填写酒款信息、投报组别等' },
   { index: '03', title: '支付费用', text: '根据投递的酒款数量，支付报名费' },
-  { index: '04', title: '下载标签', text: '支付成功后即可下载酒标。请将酒标按要求贴在样品上' },
+  { index: '04', title: '下载标签', text: '支付成功后下载酒标，并按要求贴在样品上' },
   { index: '05', title: '送样入库', text: '在赛事开放的送样时间段内将酒款送达指定地点' },
   { index: '06', title: '查看结果', text: '查看比赛结果、裁判评语以及是否获奖' },
 ]
 
 const faqs = [
-  { question: '报名截止后还能报名参赛吗？', answer: '报名截止后不再开放报名入口，如需调整请联系组委会确认。' },
-  { question: '支付后多久可以下载标签？', answer: '支付成功后酒款状态变为报名成功，即可下载标签。' },
-  { question: '样品需要寄几瓶？', answer: '不同赛事要求可能不同，请以组委会发布的单场通知为准。' },
-  { question: '结果发布后能看到什么？', answer: '可查看评分明细、桌长综合评语和奖项。' },
+  { question: '报名截止后还能报名参赛吗？', answer: '报名截止后不再开放报名入口，如需调整请联系组委会确认' },
+  { question: '支付后多久开放标签下载？', answer: '支付成功后酒款状态变为报名成功，标签下载同步开放' },
+  { question: '样品需要寄几瓶？', answer: '不同赛事要求可能不同，请以组委会发布的单场通知为准' },
+  { question: '结果发布后能看到什么？', answer: '结果页展示评分明细、桌长综合评语和奖项' },
 ]
 
 function formatDateTime(value) {

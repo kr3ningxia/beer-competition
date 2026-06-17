@@ -94,7 +94,7 @@
           </div>
           <div v-if="!loading && users.length === 0" class="empty-state">
             <h2>没有匹配的管理员</h2>
-            <p>调整搜索条件或新增一个后台账号。</p>
+            <p>调整搜索条件或新增一个后台账号</p>
           </div>
         </div>
       </div>
@@ -132,7 +132,7 @@
           <button class="icon-close" type="button" @click="closePasswordEditor">×</button>
         </header>
         <p v-if="passwordMode === 'reset'" class="hint-line">
-          {{ passwordTarget?.name || passwordTarget?.username }} 下次登录需使用新密码。
+          {{ passwordTarget?.name || passwordTarget?.username }} 下次登录需使用新密码
         </p>
         <label v-if="passwordMode === 'mine'">
           <span>当前密码</span>

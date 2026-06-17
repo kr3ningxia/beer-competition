@@ -4,7 +4,7 @@
       <div class="hero-copy">
         <span class="label-chip tone-green">厂牌资料</span>
         <h2>{{ profileForm.companyName || '完善厂牌资料' }}</h2>
-        <p>报名资料会用于参赛核对、送样沟通和结果通知。</p>
+        <p>报名资料会用于参赛核对、送样沟通和结果通知</p>
       </div>
       <div class="hero-avatar">
         <div class="avatar-frame">

@@ -234,6 +234,7 @@ const myPendingScoreCount = computed(() => boardEntries.value.filter((item) => !
 const readyFinalizeEntries = computed(() => boardEntries.value.filter((item) => readyForFinalize(item)))
 const readyFinalizeCount = computed(() => readyFinalizeEntries.value.length)
 const pendingTableScoreCount = computed(() => boardEntries.value.reduce((sum, item) => sum + entryMissingScoreCount(item), 0))
+const peerReadyWaitingMeCount = computed(() => boardEntries.value.filter((item) => !item.scored && tableScoresComplete(item)).length)
 const initialBoardLoading = computed(() => loadingBoard.value && !board.value)
 const scoreConfirmation = computed(() => board.value?.scoreConfirmation || board.value?.roundTable?.scoreConfirmation || null)
 const confirmationConfirmedCount = computed(() => Number(scoreConfirmation.value?.confirmedCount ?? board.value?.roundTable?.confirmationConfirmedCount ?? 0))
@@ -265,6 +266,7 @@ const captainSummaryState = computed(() => {
   if (!boardEntries.value.length) return 'empty'
   if (tableReadyForReview.value) return 'ready-review'
   if (finalizedCount.value === boardEntries.value.length) return 'advance-check'
+  if (readyFinalizeCount.value > 0 && myPendingScoreCount.value > 0) return 'mixed-todos'
   if (readyFinalizeCount.value > 0) return 'ready-finalize'
   if (myPendingScoreCount.value > 0) return 'need-score'
   return 'waiting-peer'
@@ -273,9 +275,10 @@ const captainSummaryTitle = computed(() => {
   if (captainSummaryState.value === 'loading') return '正在载入本桌任务'
   if (captainSummaryState.value === 'ready-review') return '本桌结果可核对'
   if (captainSummaryState.value === 'advance-check') return '晋级名单待核对'
-  if (captainSummaryState.value === 'ready-finalize') return '有酒款可以汇总'
+  if (captainSummaryState.value === 'mixed-todos') return '处理本桌待办'
+  if (captainSummaryState.value === 'ready-finalize') return '有酒款待汇总'
   if (captainSummaryState.value === 'waiting-peer') return '等待同桌评分完成'
-  if (captainSummaryState.value === 'need-score') return '先完成你的评分'
+  if (captainSummaryState.value === 'need-score') return '先完成个人评分'
   return '本桌汇总未完成'
 })
 const captainSummaryBadges = computed(() => {
@@ -299,6 +302,12 @@ const captainSummaryBadges = computed(() => {
       `待汇总 ${unfinalizedCount.value} 款`,
     ]
   }
+  if (captainSummaryState.value === 'mixed-todos') {
+    return [
+      `可汇总 ${readyFinalizeCount.value} 款`,
+      `待我评分 ${myPendingScoreCount.value} 款`,
+    ]
+  }
   const badges = [
     `待汇总 ${unfinalizedCount.value} 款`,
   ]
@@ -312,8 +321,14 @@ const tableCheckText = computed(() => {
   if (!boardEntries.value.length) return '请联系现场工作人员确认本轮评审桌和酒款配置。'
   if (tableReadyForReview.value) return '酒款意见和晋级名单已齐，请核对无误后提交本桌结果。'
   if (captainSummaryState.value === 'advance-check') return '酒款意见已完成，还需按本桌目标确认晋级名单。'
-  if (captainSummaryState.value === 'ready-finalize') return '同桌评分已齐，可填写桌长意见。'
-  if (captainSummaryState.value === 'need-score') return `你还有 ${myPendingScoreCount.value} 款未评分，完成后再看同桌进度。`
+  if (captainSummaryState.value === 'mixed-todos') return `${readyFinalizeCount.value} 款可汇总，另有 ${myPendingScoreCount.value} 款个人评分待提交。`
+  if (captainSummaryState.value === 'ready-finalize') return '同桌评分已齐，请填写桌长意见。'
+  if (captainSummaryState.value === 'need-score') {
+    if (peerReadyWaitingMeCount.value > 0) {
+      return `${peerReadyWaitingMeCount.value} 款同桌评分已齐，提交你的个人评分后即可汇总。`
+    }
+    return `还有 ${myPendingScoreCount.value} 款个人评分待提交，下方可查看同桌进度。`
+  }
   return `还差 ${pendingTableScoreCount.value} 份同桌评分，齐全后再填写桌长意见。`
 })
 const nextActionEntry = computed(() => (
@@ -326,6 +341,7 @@ const captainSummaryActionLabel = computed(() => {
   if (captainSummaryState.value === 'loading') return '请稍候'
   if (captainSummaryState.value === 'ready-review') return '核对本桌结果'
   if (captainSummaryState.value === 'advance-check') return '核对晋级名单'
+  if (captainSummaryState.value === 'mixed-todos') return '处理可汇总酒款'
   if (captainSummaryState.value === 'ready-finalize') return '处理可汇总酒款'
   if (captainSummaryState.value === 'need-score') return '去扫码评分'
   if (captainSummaryState.value === 'waiting-peer') return '看酒款进度'
@@ -333,6 +349,7 @@ const captainSummaryActionLabel = computed(() => {
 })
 const summaryActionPrimary = computed(() => (
   captainSummaryState.value === 'ready-finalize'
+  || captainSummaryState.value === 'mixed-todos'
   || captainSummaryState.value === 'need-score'
   || captainSummaryState.value === 'ready-review'
   || captainSummaryState.value === 'advance-check'
@@ -340,6 +357,7 @@ const summaryActionPrimary = computed(() => (
 const canOpenNextAction = computed(() => (
   captainSummaryState.value !== 'loading'
   && (captainSummaryState.value === 'need-score'
+  || captainSummaryState.value === 'mixed-todos'
   || captainSummaryState.value === 'empty'
   || Boolean(nextActionEntry.value?.uuid))
 ))
@@ -494,6 +512,12 @@ function readyForFinalize(item) {
   const expected = Number(item.expectedCount || 0)
   const submitted = Number(item.submittedCount || 0)
   return Boolean(item.scored && !item.finalized && submitted >= expected)
+}
+
+function tableScoresComplete(item) {
+  const expected = Number(item.expectedCount || 0)
+  const submitted = Number(item.submittedCount || 0)
+  return expected > 0 && submitted >= expected
 }
 
 function entryMissingScoreCount(item) {

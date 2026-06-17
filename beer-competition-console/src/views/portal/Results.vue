@@ -53,7 +53,7 @@
 
         <div v-else class="side-empty">
           <strong>没有匹配的酒款</strong>
-          <p>换一个关键词或筛选条件。</p>
+          <p>换一个关键词或筛选条件</p>
         </div>
       </aside>
 
@@ -116,7 +116,7 @@
               <h2 class="portal-section-title">综合评语</h2>
               <span>{{ scoreWithMax(captainScore, true) }}</span>
             </div>
-            <p>{{ readableComment(captainScore.comments, '暂无综合文字反馈。') }}</p>
+            <p>{{ readableComment(captainScore.comments, '暂无综合文字反馈') }}</p>
           </section>
 
           <section class="feedback-card brewer-card">
@@ -143,7 +143,7 @@
                 </div>
               </article>
             </div>
-            <p v-else class="empty-feedback">组委会暂未发布评审反馈。</p>
+            <p v-else class="empty-feedback">组委会暂未发布评审反馈</p>
           </section>
 
           <section v-if="resultDetail.roundResults.length" class="round-result-card brewer-card">
@@ -164,7 +164,7 @@
         <section v-else-if="selectedEntry" class="locked-card brewer-card">
           <span :class="['label-chip', `tone-${resultTone(selectedEntry)}`]">{{ resultStatusLabel(selectedEntry) }}</span>
           <h2>{{ selectedEntry.entryName }}</h2>
-          <p>{{ selectedEntry.lockReason || '组委会确认并发布结果后，这里会显示评分、评语和奖项信息。' }}</p>
+          <p>{{ selectedEntry.lockReason || '组委会确认并发布结果后，这里会显示评分、评语和奖项信息' }}</p>
           <dl class="entry-meta locked-meta">
             <div>
               <dt>赛事</dt>
@@ -193,7 +193,7 @@
 
         <section v-else class="locked-card brewer-card">
           <h2>当前暂无已发布结果</h2>
-          <p>选择左侧酒款，可以查看结果状态和发布后的反馈。</p>
+          <p>选择左侧酒款，查看结果状态和发布后的反馈</p>
           <div class="empty-actions">
             <RouterLink to="/portal/my">查看我的参赛</RouterLink>
             <RouterLink to="/portal/events">浏览开放赛事</RouterLink>
@@ -204,7 +204,7 @@
 
     <section v-else class="locked-card brewer-card">
       <h2>还没有参赛酒款</h2>
-      <p>提交报名后，比赛结果会在发布后显示。</p>
+      <p>提交报名后，比赛结果会在发布后显示</p>
       <div class="empty-actions">
         <RouterLink to="/portal/my">查看我的参赛</RouterLink>
         <RouterLink to="/portal/events">浏览开放赛事</RouterLink>
@@ -245,8 +245,8 @@ const finalScoreMax = computed(() => scoreMax(captainScore.value) || 50)
 const awardTitle = computed(() => selectedEntry.value?.awardName || selectedEntry.value?.roundResult?.awardName || selectedEntry.value?.roundResult?.slotLabel || '')
 const resultOutcome = computed(() => awardTitle.value || '未获奖')
 const resultHeroText = computed(() => {
-  if (!results.value.length) return '提交报名后，比赛结果会在发布后显示。'
-  return `已发布 ${publishedEntries.value.length} 款，已获奖 ${awardedEntries.value.length} 款，待发布 ${results.value.length - publishedEntries.value.length} 款。`
+  if (!results.value.length) return '提交报名后，比赛结果会在发布后显示'
+  return `已发布 ${publishedEntries.value.length} 款，已获奖 ${awardedEntries.value.length} 款，待发布 ${results.value.length - publishedEntries.value.length} 款`
 })
 const categoryEntryCountText = computed(() => {
   const count = Number(selectedEntry.value?.categoryEntryCount || 0)
@@ -258,7 +258,7 @@ const finalScoreText = computed(() => {
 })
 const certificateStatusText = computed(() => {
   if (!isEntryAwarded(selectedEntry.value)) return '无获奖证书'
-  return selectedEntry.value?.certificateAvailable ? '可下载' : '暂未开放'
+  return selectedEntry.value?.certificateAvailable ? '下载开放' : '暂未开放'
 })
 const filteredResults = computed(() => {
   const word = keyword.value.trim().toLowerCase()
@@ -347,7 +347,7 @@ function resultTone(entry) {
 
 function resultBrief(entry) {
   if (isEntryAwarded(entry)) return entry.awardName || entry.roundResult?.awardName || '获奖结果已发布'
-  if (isEntryResultPublished(entry)) return '评分和评语可查看'
+  if (isEntryResultPublished(entry)) return '评分和评语已开放'
   return entry.lockReason || '等待组委会发布结果'
 }
 

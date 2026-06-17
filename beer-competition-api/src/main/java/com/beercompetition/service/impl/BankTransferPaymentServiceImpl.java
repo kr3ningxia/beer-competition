@@ -185,6 +185,36 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public BankTransferVO updatePortalTransfer(Long id, PortalBankTransferSubmitRequest request) {
+        // 1) 校验当前厂牌归属和转账状态
+        PortalAccount account = requirePortalAccount();
+        BankTransferPayment transfer = requireTransfer(id);
+        if (!Objects.equals(transfer.getPortalAccountId(), account.getId())) {
+            throw new ForbiddenException("无权修改该转账记录");
+        }
+        if (!BankTransferPaymentStatus.SUBMITTED.name().equals(transfer.getStatus())) {
+            throw new BaseException("只有待确认的转账可以修改");
+        }
+        if (!Objects.equals(transfer.getBeerEntryId(), request.getEntryId())) {
+            throw new BaseException("不能修改到其他报名酒款");
+        }
+
+        // 2) 校验凭证并更新付款信息
+        String payerName = normalizeNullable(request.getPayerName());
+        String remark = normalizeRequired(request.getRemark(), "请填写转账备注");
+        FileAsset voucher = resolveVoucherAsset(request.getVoucherAssetId(), account.getId());
+        transfer.setPayerName(payerName);
+        transfer.setTransferTime(request.getTransferTime());
+        transfer.setRemark(remark);
+        transfer.setVoucherAssetId(voucher == null ? null : voucher.getId());
+        bankTransferPaymentMapper.updateById(transfer);
+
+        // 3) 返回更新后的转账详情
+        return toBankTransferVO(bankTransferPaymentMapper.selectById(id), true);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public BankTransferVO cancelPortalTransfer(Long id) {
         // 1) 校验当前厂牌归属和转账状态
         PortalAccount account = requirePortalAccount();

@@ -117,7 +117,7 @@
           </div>
           <div v-if="!loading && judges.length === 0" class="empty-state">
             <h2>没有匹配的评审</h2>
-            <p>调整搜索条件或状态筛选后再查看。</p>
+            <p>调整搜索条件或状态筛选后再查看</p>
           </div>
         </div>
       </div>
@@ -153,7 +153,7 @@
           <h2>编辑评审资料</h2>
           <button class="icon-close" type="button" @click="closeEditor">×</button>
         </header>
-        <p class="privacy-hint">完整联系方式仅供内部联络和资料维护使用，系统会记录查看和修改操作。</p>
+        <p class="privacy-hint">完整联系方式仅供内部联络和资料维护使用，系统会记录查看和修改操作</p>
         <label>
           <span>手机号</span>
           <div class="readonly-row">
@@ -197,7 +197,7 @@
           <h2>更正手机号</h2>
           <button class="icon-close" type="button" @click="closePhoneEditor">×</button>
         </header>
-        <p class="privacy-hint">手机号是评审登录身份。仅在录入错误且评审尚未分配比赛时更正。</p>
+        <p class="privacy-hint">手机号是评审登录身份，仅在录入错误且评审尚未分配比赛时更正</p>
         <label>
           <span>新手机号</span>
           <input v-model.trim="phoneForm.phone" inputmode="tel" />
@@ -422,7 +422,7 @@ function closePhoneEditor() {
 }
 
 async function savePhoneEditor() {
-  await ElMessageBox.confirm('更正后评审需使用新手机号登录。确认保存吗？', '确认更正手机号', {
+  await ElMessageBox.confirm('更正后评审需使用新手机号登录，确认保存吗？', '确认更正手机号', {
     confirmButtonText: '保存',
     cancelButtonText: '取消',
     type: 'warning',

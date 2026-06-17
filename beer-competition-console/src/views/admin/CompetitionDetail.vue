@@ -50,10 +50,6 @@
     </section>
 
     <section v-if="competition" class="detail-shell">
-      <section v-if="preplanningNotice" class="stage-hint-banner">
-        <Warning />
-        <p>{{ preplanningNotice }}</p>
-      </section>
       <div class="detail-tabbar">
         <nav class="detail-tabs" aria-label="比赛详情导航">
           <button
@@ -111,7 +107,7 @@
               <div class="alert-list">
                 <p v-if="overviewActionItems.length === 0" class="success">
                   <CircleCheck />
-                  <span>当前阶段没有阻塞项，可以继续推进。</span>
+                  <span>当前阶段没有阻塞项，可以继续推进</span>
                 </p>
                 <p v-for="item in overviewActionItems" v-else :key="item.key" :class="item.level">
                   <component :is="item.level === 'danger' ? Warning : Clock" />
@@ -161,14 +157,14 @@
         <section v-if="activeTab === 'baseInfo'" class="tab-panel base-info-panel">
           <div v-if="!editable.baseInfo" class="edit-banner locked">
             <Lock />
-            {{ editable.description ? '当前阶段仅允许维护赛事简介，价格和报名时间已锁定。' : '当前阶段基础信息已锁定。' }}
+            {{ editable.description ? '当前阶段仅允许维护赛事简介，价格和报名时间已锁定' : '当前阶段基础信息已锁定' }}
           </div>
 
           <article class="panel-card base-info-card">
             <div class="panel-heading">
               <div>
                 <h2>基础信息</h2>
-                <span>厂牌端会展示赛事简介、报名窗口和当前应付金额。</span>
+                <span>厂牌端会展示赛事简介、报名窗口和当前应付金额</span>
               </div>
             </div>
             <div class="base-info-groups">
@@ -295,7 +291,7 @@
         <section v-if="activeTab === 'entryConfig'" class="tab-panel entry-config-panel">
           <div v-if="!editable.entryStructure" class="edit-banner locked">
             <Lock />
-            报名已开放，报名结构已锁定。若需修改投递组别或补充字段，请先关闭报名或由管理员修正数据。
+            比赛已进入后续流程，报名结构已锁定，投递组别和补充字段不再直接编辑
           </div>
 
           <article class="panel-card category-card">
@@ -318,7 +314,7 @@
             </div>
             <div v-else class="pill-list">
               <span v-for="category in categoryForm" :key="category">{{ category }}</span>
-              <p v-if="categoryForm.length === 0" class="empty-line">当前没有投递组别数据，请管理员修正。</p>
+              <p v-if="categoryForm.length === 0" class="empty-line">当前没有投递组别数据，请管理员修正</p>
             </div>
           </article>
 
@@ -360,7 +356,7 @@
                 >
                   ...更多
                 </button>
-                <p v-if="styleCategorySummary.length === 0" class="empty-line">当前风格库还没有可用分类。</p>
+                <p v-if="styleCategorySummary.length === 0" class="empty-line">当前风格库还没有可用分类</p>
               </div>
             </div>
           </article>
@@ -400,7 +396,7 @@
                   <Delete />
                 </button>
               </div>
-              <p v-if="entryFieldForm.length === 0" class="empty-line">当前没有报名补充字段。</p>
+              <p v-if="entryFieldForm.length === 0" class="empty-line">当前没有报名补充字段</p>
             </div>
           </article>
         </section>
@@ -713,7 +709,7 @@
                       详情
                     </button>
                   </div>
-                  <p v-if="!currentRoundTables.length" class="empty-line">还没有轮次桌。先在分桌分配中安排首轮。</p>
+                  <p v-if="!currentRoundTables.length" class="empty-line">还没有轮次桌，先在分桌分配中安排首轮</p>
                 </div>
               </section>
 
@@ -763,7 +759,7 @@
                 </div>
               </div>
               <p v-if="getScoreTotal(config) !== 50" class="score-warning">
-                当前总分 {{ getScoreTotal(config) }}，必须调整为 50 后才能保存。
+                当前总分 {{ getScoreTotal(config) }}，必须调整为 50 后才能保存
               </p>
               <label class="score-comment-limit">
                 <span>备注合计字数下限：</span>
@@ -938,7 +934,7 @@
                               </button>
                             </span>
                           </header>
-                          <p v-if="!judge.scored" class="judge-missing-text">该评审尚未提交个人评分。</p>
+                          <p v-if="!judge.scored" class="judge-missing-text">该评审尚未提交个人评分</p>
                           <div v-else class="judge-dimension-list">
                             <div v-for="dimension in judge.dimensions" :key="dimension.key || dimension.label" class="judge-dimension-row">
                               <span>{{ dimension.label || dimension.key }}</span>
@@ -976,7 +972,7 @@
               </div>
               <div v-if="awardDrafts.length && !championAwards.length" class="award-missing-banner">
                 <Warning />
-                <span>缺少全场总冠军，请锁定决赛轮后重新生成奖项。</span>
+                <span>缺少全场总冠军，请锁定决赛轮后重新生成奖项</span>
               </div>
               <div v-if="awardRows.length" class="award-result-table">
                 <div class="award-result-row table-head">
@@ -1057,7 +1053,7 @@
                   </div>
                 </div>
               </div>
-              <p v-else class="empty-line">锁定决赛轮后生成奖项。</p>
+              <p v-else class="empty-line">锁定决赛轮后生成奖项</p>
               <input ref="awardCertificateInput" class="file-input" type="file" accept="application/pdf,.pdf" @change="handleAwardCertificateSelected" />
             </article>
 
@@ -1114,7 +1110,7 @@
                   发布到厂牌端
                 </button>
                 <p v-if="!showGenerateAwardsAction && !showConfirmAwardsAction && !showPublishResultsAction">
-                  结果已发布，当前只需要按获奖名单补充奖状。
+                  结果已发布，当前只需要按获奖名单补充奖状
                 </p>
               </div>
             </article>
@@ -1162,7 +1158,7 @@
             <h2 id="publish-registration-title">确认发布报名？</h2>
           </header>
           <p class="confirm-copy">
-            发布后，厂牌端将展示本场比赛并允许报名参赛。发布前请确认报名时间、投递组别和风格库已经核对完成。
+            发布后，厂牌端将展示本场比赛并允许报名参赛，发布前请确认报名时间、投递组别和风格库已经核对完成
           </p>
           <div class="confirm-summary">
             <span>
@@ -1195,7 +1191,7 @@
             <h2 id="close-registration-title">确认截止报名？</h2>
           </header>
           <p class="confirm-copy">
-            截止后，厂牌端将停止接收新的报名提交。已报名酒款仍会保留在后台，后续可继续处理支付、入库和评审准备。
+            截止后，厂牌端将停止接收新的报名提交，已报名酒款仍会保留在后台，后续可继续处理支付、入库和评审准备
           </p>
           <div class="confirm-summary">
             <span>
@@ -1228,7 +1224,7 @@
             <h2 id="round-publish-confirm-title">确认发布当前轮次？</h2>
           </header>
           <p class="confirm-copy">
-            发布后，{{ currentRoundPublishTarget }}会在对应端看到本轮任务。发布前请确认桌次、人员和酒款都已经核对完成。
+            发布后，{{ currentRoundPublishTarget }}会在对应端看到本轮任务，发布前请确认桌次、人员和酒款都已经核对完成
           </p>
           <div class="confirm-summary">
             <span>
@@ -1325,7 +1321,7 @@
             <h2 id="first-round-complete-title">确认首轮完成？</h2>
           </header>
           <p class="confirm-copy">
-            确认后将锁定首轮，并生成晋级酒款。请确认所有评分和桌长汇总已经核对无误。
+            确认后将锁定首轮，并生成晋级酒款，请确认所有评分和桌长汇总已经核对无误
           </p>
           <div class="confirm-summary">
             <span>
@@ -1986,10 +1982,10 @@ const currentRoundTargetCount = computed(() => currentRoundTables.value.reduce((
 const advancedPool = computed(() => roundEntryPool.value.filter((entry) => entry.advanced))
 const preplanningNotice = computed(() => {
   if (competition.value?.status === 'REGISTRATION_OPEN') {
-    return '报名仍在进行，当前分桌和轮次会保留为预排草稿，不会发布给评审。新增或入库酒款后可继续调整。'
+    return '报名仍在进行，当前分桌和轮次会保留为预排草稿，不会发布给评审，新增或入库酒款后可继续调整'
   }
   if (competition.value?.status === 'JUDGING_PREP' && currentRound.value?.status === 'DRAFT') {
-    return '当前处于评审准备中，退回样品入库核对会保留首轮草稿；发布前请重新核对入库酒款和分桌。'
+    return '当前处于评审准备中，退回样品入库核对会保留首轮草稿；发布前请重新核对入库酒款和分桌'
   }
   return ''
 })
@@ -2154,12 +2150,12 @@ const roundLockConfirmTitle = computed(() => {
 })
 const roundLockConfirmCopy = computed(() => {
   if (currentRoundIsTerminal.value) {
-    return '锁定后，总冠军排序将固定，后续进入奖项确认和结果发布。请确认决赛桌提交内容已经核对无误。'
+    return '锁定后，总冠军排序将固定，后续进入奖项确认和结果发布，请确认决赛桌提交内容已经核对无误'
   }
   if (currentRound.value?.type === 'SCORE') {
-    return '锁定后，本轮评分、桌长汇总和晋级结果将固定。请确认所有评审桌结果已经核对无误。'
+    return '锁定后，本轮评分、桌长汇总和晋级结果将固定，请确认所有评审桌结果已经核对无误'
   }
-  return '锁定后，本轮排序结果将固定，并作为后续轮次或奖项确认依据。请确认桌长提交内容已经核对无误。'
+  return '锁定后，本轮排序结果将固定，并作为后续轮次或奖项确认依据，请确认桌长提交内容已经核对无误'
 })
 const firstRoundCompletionStatus = computed(() => buildFirstRoundCompletionStatus())
 const roundReadinessTitle = computed(() => {
@@ -2177,39 +2173,39 @@ const roundReadinessTitle = computed(() => {
   return currentRoundStatusText.value
 })
 const roundReadinessDetail = computed(() => {
-  if (!currentRound.value) return '请先创建轮次。'
+  if (!currentRound.value) return '请先创建轮次'
   if (roundValidationIssues.value.length) return roundValidationIssues.value[0]
-  if (currentRound.value.status === 'DRAFT' && currentRound.value.isPreparationDraft) return roundPublishDisabledReason.value || '点击发布后会保存当前分桌，并发布给评审端。'
+  if (currentRound.value.status === 'DRAFT' && currentRound.value.isPreparationDraft) return roundPublishDisabledReason.value || '点击发布后会保存当前分桌，并发布给评审端'
   if (currentRound.value.status === 'DRAFT' && roundPublishDisabledReason.value) return roundPublishDisabledReason.value
   if (currentRound.value.status === 'DRAFT') return currentRound.value.type === 'SCORE'
-    ? '发布后，评审开始评分，桌长可查看本桌酒款并汇总结果。'
-    : '发布后，桌长提交排序，参与评审查看本桌候选酒款。'
+    ? '发布后，评审开始评分，桌长可查看本桌酒款并汇总结果'
+    : '发布后，桌长提交排序，参与评审查看本桌候选酒款'
   if (currentRound.value.status === 'PUBLISHED') return currentRound.value.type === 'SCORE'
     ? firstRoundCompletionStatus.value.hint
-    : '等待桌长提交排序结果。'
-  if (currentRound.value.status === 'IN_PROGRESS') return '各桌正在处理排序任务。'
+    : '等待桌长提交排序结果'
+  if (currentRound.value.status === 'IN_PROGRESS') return '各桌正在处理排序任务'
   if (currentRound.value.status === 'SUBMITTED') return currentRoundIsTerminal.value
-    ? '确认总冠军结果无误后锁定，锁定后确认奖项。'
-    : (currentRound.value.type === 'SCORE' ? '桌长汇总已提交，确认无误后可以锁定本轮。' : '排序结果已提交，确认无误后可以锁定本轮。')
+    ? '确认总冠军结果无误后锁定，锁定后确认奖项'
+    : (currentRound.value.type === 'SCORE' ? '桌长汇总已提交，确认无误后可以锁定本轮' : '排序结果已提交，确认无误后可以锁定本轮')
   if (currentRound.value.status === 'LOCKED') return currentRoundIsTerminal.value
-    ? '总冠军结果已固定，请确认奖项并发布结果。'
-    : (isMedalRound(currentRound.value) ? '组别奖项已生成，下一步创建决赛轮。' : (canCreateNextRound.value ? `可以创建${nextRoundName.value}。` : '本轮结果已固定。'))
+    ? '总冠军结果已固定，请确认奖项并发布结果'
+    : (isMedalRound(currentRound.value) ? '组别奖项已生成，下一步创建决赛轮' : (canCreateNextRound.value ? `可以创建${nextRoundName.value}` : '本轮结果已固定'))
   return roundNextStepText.value
 })
 const roundNextStepText = computed(() => {
-  if (!currentRound.value) return '请先创建并配置首轮。'
+  if (!currentRound.value) return '请先创建并配置首轮'
   if (currentRound.value.status === 'DRAFT') {
-    if (currentRound.value.isPreparationDraft) return roundValidationIssues.value.length ? '先处理发布前检查里的问题。' : (roundPublishDisabledReason.value || '点击发布，让评审开始首轮评分。')
+    if (currentRound.value.isPreparationDraft) return roundValidationIssues.value.length ? '先处理发布前检查里的问题' : (roundPublishDisabledReason.value || '点击发布，让评审开始首轮评分')
     if (roundPublishDisabledReason.value) return roundPublishDisabledReason.value
-    return canPublishCurrentRound.value ? `点击发布，让${currentRoundPublishTarget.value}开始${currentRound.value.name}。` : '先处理发布前检查里的问题。'
+    return canPublishCurrentRound.value ? `点击发布，让${currentRoundPublishTarget.value}开始${currentRound.value.name}` : '先处理发布前检查里的问题'
   }
-  if (currentRound.value.status === 'PUBLISHED') return '等待评审评分完成，再由桌长汇总首轮结果。'
-  if (currentRound.value.status === 'IN_PROGRESS') return '等待桌长提交排序。'
-  if (currentRound.value.status === 'SUBMITTED') return currentRoundIsTerminal.value ? '确认总冠军后锁定决赛轮。' : (canCreateNextRound.value ? `可先创建${nextRoundName.value}草稿安排桌次和人员。` : '确认本轮无误后锁定。')
+  if (currentRound.value.status === 'PUBLISHED') return '等待评审评分完成，再由桌长汇总首轮结果'
+  if (currentRound.value.status === 'IN_PROGRESS') return '等待桌长提交排序'
+  if (currentRound.value.status === 'SUBMITTED') return currentRoundIsTerminal.value ? '确认总冠军后锁定决赛轮' : (canCreateNextRound.value ? `可先创建${nextRoundName.value}草稿安排桌次和人员` : '确认本轮无误后锁定')
   if (currentRound.value.status === 'LOCKED') return currentRoundIsTerminal.value
-    ? '进入结果发布页确认奖项。'
-    : (advancedPool.value.length ? '晋级酒款已准备好，可创建下一轮。' : '本轮已锁定。')
-  return '继续推进当前轮次。'
+    ? '进入结果发布页确认奖项'
+    : (advancedPool.value.length ? '晋级酒款已准备好，可创建下一轮' : '本轮已锁定')
+  return '继续推进当前轮次'
 })
 const canCreateNextRound = computed(() => {
   const lastRound = rounds.value[rounds.value.length - 1]
@@ -2235,13 +2231,13 @@ const createRoundTargetOptions = computed(() => {
     {
       value: 'TOP_N',
       label: '普通排序轮',
-      description: '从晋级名单继续筛选，可按现场需要设置排序数量。',
+      description: '从晋级名单继续筛选，可按现场需要设置排序数量',
       defaultTargetCount: 3,
     },
     {
       value: 'MEDALS',
       label: '组别金银铜轮',
-      description: '每张桌只放同一投递组别，金、银、铜可按评审结果留空。',
+      description: '每张桌只放同一投递组别，金、银、铜可按评审结果留空',
       fixedTargetCount: 3,
     },
   )
@@ -2532,7 +2528,7 @@ async function refreshRoundProgress() {
     applyRoundState(preferredRoundId, { preferredTableId, keepEntrySelection: true })
     ensureActiveTabAvailable()
   } catch {
-    // 现场进度静默刷新失败时保留当前页面状态。
+    // 现场进度静默刷新失败时保留当前页面状态
   } finally {
     roundProgressRefreshing = false
   }
@@ -2752,15 +2748,15 @@ function buildFeedbackIssues(entry) {
   if (!entry) return []
   const issues = []
   const missing = Math.max(0, Number(entry.personalTotal || 0) - Number(entry.personalSubmitted || 0))
-  if (missing > 0) issues.push({ severity: 'blocking', message: `还有 ${missing} 位评审未提交个人评分。` })
+  if (missing > 0) issues.push({ severity: 'blocking', message: `还有 ${missing} 位评审未提交个人评分` })
   if (!entry.captainOpinion?.submitted) {
-    issues.push({ severity: 'blocking', message: '桌长尚未提交最终意见，发布后厂牌看不到最终反馈。' })
+    issues.push({ severity: 'blocking', message: '桌长尚未提交最终意见，发布后厂牌看不到最终反馈' })
   } else if (!String(entry.captainOpinion.comments || '').trim()) {
-    issues.push({ severity: 'blocking', message: '桌长综合评语为空，发布后厂牌看不到最终反馈。' })
+    issues.push({ severity: 'blocking', message: '桌长综合评语为空，发布后厂牌看不到最终反馈' })
   }
   ;(entry.judges || []).forEach((judge) => {
     if (judge.anomaly === 'comment_missing') {
-      issues.push({ severity: 'warning', message: `评审「${judge.judgeName}」评价内容缺失。` })
+      issues.push({ severity: 'warning', message: `评审「${judge.judgeName}」评价内容缺失` })
     }
   })
   return issues
@@ -3104,7 +3100,7 @@ function resolveRegistrationWindowInfo() {
   const deadline = parseDateTime(competition.value?.registrationDeadline)
   if (status === 'DRAFT') return { label: '未发布', tone: 'neutral', detail: '开放报名后厂牌可立即提交' }
   if (status === 'REGISTRATION_OPEN') {
-    if (deadline && now > deadline) return { label: '已过截止', tone: 'warning', detail: '已到报名截止时间，建议结束报名' }
+    if (deadline && now > deadline) return { label: '已过截止', tone: 'warning', detail: '已到报名截止时间，请结束报名' }
     return { label: '报名中', tone: 'success', detail: deadline ? `将于 ${formatDateTime(competition.value.registrationDeadline)} 自动截止` : '正在接受报名' }
   }
   if (status === 'REGISTRATION_CLOSED') return { label: '已截止', tone: 'warning', detail: '可进入评审准备' }
@@ -3245,7 +3241,7 @@ function buildOverviewActionItems() {
     issues.push(...roundValidationIssues.value.slice(0, 3).map((text, index) => ({ key: `round-${index}`, level: 'warning', text, targetTab: 'rounds' })))
   }
   if (competition.value?.entriesSummary?.pendingPayment > 0) {
-    issues.push({ key: 'payment', level: 'warning', text: `还有 ${competition.value.entriesSummary.pendingPayment} 款酒等待支付。`, targetTab: 'entries' })
+    issues.push({ key: 'payment', level: 'warning', text: `还有 ${competition.value.entriesSummary.pendingPayment} 款酒等待支付`, targetTab: 'entries' })
   }
   return issues
 }
@@ -3333,26 +3329,26 @@ function resolveDetailTabDisabledReason(tabKey) {
     return ''
   }
   if (tabKey === 'entries') {
-    return status === 'DRAFT' ? '报名发布后才会产生参赛酒款，草稿阶段先完成报名配置。' : ''
+    return status === 'DRAFT' ? '报名发布后才会产生参赛酒款，草稿阶段先完成报名配置' : ''
   }
   if (tabKey === 'judges') {
-    if (status === 'DRAFT') return '草稿阶段先完成报名配置并发布报名，避免提前分配不存在或未确认的酒款。'
+    if (status === 'DRAFT') return '草稿阶段先完成报名配置并发布报名，避免提前分配不存在或未确认的酒款'
     return ''
   }
   if (tabKey === 'rounds') {
-    if (status === 'DRAFT') return '草稿阶段不能编排正式轮次，请先发布报名。'
-    if (status === 'REGISTRATION_CLOSED' && !hasEntries) return '当前还没有参赛酒款，无法编排轮次。'
+    if (status === 'DRAFT') return '草稿阶段不能编排正式轮次，请先发布报名'
+    if (status === 'REGISTRATION_CLOSED' && !hasEntries) return '当前还没有参赛酒款，无法编排轮次'
     return ''
   }
   if (tabKey === 'feedback') {
     if (!['JUDGING', 'RESULT_CONFIRMING', 'PUBLISHED', 'ARCHIVED'].includes(status) && !hasFeedback) {
-      return '评审开始并产生评分反馈后才能查看评价。'
+      return '评审开始并产生评分反馈后才能查看评价'
     }
     return ''
   }
   if (tabKey === 'results') {
     if (!['RESULT_CONFIRMING', 'PUBLISHED', 'ARCHIVED'].includes(status) && !hasAwards) {
-      return '结果发布需等评审轮次锁定并进入结果确认阶段。'
+      return '结果发布需等评审轮次锁定并进入结果确认阶段'
     }
     return ''
   }
@@ -3543,7 +3539,7 @@ function buildRoundPyramidNodes() {
     summary: '',
     note: rounds.value.length ? '待轮次完成' : '完成轮次后进入',
     placeholderText: '结果',
-    hint: published ? '结果已发布。' : (terminalLocked ? '确认奖项并发布。' : '完成决赛轮后确认结果。'),
+    hint: published ? '结果已发布' : (terminalLocked ? '确认奖项并发布' : '完成决赛轮后确认结果'),
     tableChips: [],
     extraTableCount: 0,
     width: 48,
@@ -3564,7 +3560,7 @@ function buildRoundPyramidNodes() {
       summary: creatingFinal ? '总冠军 1 名' : `${advancedPool.value.length} 款晋级酒`,
       note: creatingFinal ? '点击创建决赛轮' : `点击创建${nextRoundName.value}`,
       placeholderText: '创建',
-      hint: creatingFinal ? '创建决赛轮。' : `创建${nextRoundName.value}。`,
+      hint: creatingFinal ? '创建决赛轮' : `创建${nextRoundName.value}`,
       tableChips: [],
       extraTableCount: 0,
       width: 58,
@@ -3617,7 +3613,7 @@ function buildRoundPyramidNodes() {
       summary: '',
       note: '',
       placeholderText: '首轮',
-      hint: '先在分桌分配中安排首轮。',
+      hint: '先在分桌分配中安排首轮',
       tableChips: [],
       extraTableCount: 0,
       width: 96,
@@ -3644,8 +3640,8 @@ function getRoundNodeDetail(round) {
 }
 
 function getRoundNodeHint(round) {
-  if (round.type === 'SCORE') return '评审评分，桌长从本桌酒款中选择晋级。'
-  return '桌长从晋级酒款中选择并排序。'
+  if (round.type === 'SCORE') return '评审评分，桌长从本桌酒款中选择晋级'
+  return '桌长从晋级酒款中选择并排序'
 }
 
 function buildRoundTableSummary(table) {
@@ -3691,7 +3687,7 @@ function buildChampionTargetOption() {
   return {
     value: 'CHAMPION',
     label: '决赛轮',
-    description: '从各组别金奖中选出 1 款全场总冠军。',
+    description: '从各组别金奖中选出 1 款全场总冠军',
     fixedTargetCount: 1,
     fixedTableCount: 1,
   }
@@ -3968,7 +3964,7 @@ function buildRoundTodoHint() {
     return {
       tone: 'warning',
       title: '还没有轮次',
-      detail: '先完成评审和酒款分配。',
+      detail: '先完成评审和酒款分配',
       action: '',
     }
   }
@@ -3977,7 +3973,7 @@ function buildRoundTodoHint() {
       return {
         tone: 'warning',
         title: '还没有分配酒款',
-        detail: '先在分桌分配中加入酒款。',
+        detail: '先在分桌分配中加入酒款',
         action: 'goToRoundAllocation',
       }
     }
@@ -3992,7 +3988,7 @@ function buildRoundTodoHint() {
     return {
       tone: canPublishCurrentRound.value ? 'ready' : 'warning',
       title: canPublishCurrentRound.value ? `${currentRound.value.name}可以发布` : '继续完善本轮配置',
-      detail: canPublishCurrentRound.value ? `发布后，${currentRoundPublishTarget.value}会看到本轮任务。` : roundNextStepText.value,
+      detail: canPublishCurrentRound.value ? `发布后，${currentRoundPublishTarget.value}会看到本轮任务` : roundNextStepText.value,
       action: '',
     }
   }
@@ -4001,8 +3997,8 @@ function buildRoundTodoHint() {
       tone: 'ready',
       title: currentRound.value.type === 'SCORE' ? '等待评审评分' : '等待桌长排序',
       detail: currentRound.value.type === 'SCORE'
-        ? '评审评分完成后，由桌长汇总本轮结果。'
-        : '桌长提交排序后，再确认并锁定本轮结果。',
+        ? '评审评分完成后，由桌长汇总本轮结果'
+        : '桌长提交排序后，再确认并锁定本轮结果',
       action: 'focusRoundProgress',
     }
   }
@@ -4010,7 +4006,7 @@ function buildRoundTodoHint() {
     return {
       tone: 'ready',
       title: '排序处理中',
-      detail: '等待各桌完成选择和排序。',
+      detail: '等待各桌完成选择和排序',
       action: 'focusRoundProgress',
     }
   }
@@ -4019,8 +4015,8 @@ function buildRoundTodoHint() {
       tone: 'ready',
       title: currentRoundIsTerminal.value ? '可以确认锁定' : (canCreateNextRound.value ? `可提前创建${nextRoundName.value}草稿` : '可以确认锁定'),
       detail: currentRoundIsTerminal.value
-        ? '确认总冠军结果无误后锁定，锁定后确认奖项。'
-        : (canCreateNextRound.value ? '先排下一轮桌次和人员；晋级酒款等本轮锁定后同步。' : '确认本轮结果无误后锁定。'),
+        ? '确认总冠军结果无误后锁定，锁定后确认奖项'
+        : (canCreateNextRound.value ? '先排下一轮桌次和人员；晋级酒款等本轮锁定后同步' : '确认本轮结果无误后锁定'),
       action: !currentRoundIsTerminal.value && canCreateNextRound.value ? 'createNextRound' : '',
     }
   }
@@ -4029,14 +4025,14 @@ function buildRoundTodoHint() {
       return {
         tone: 'done',
         title: '决赛轮结果已固定',
-        detail: '总冠军结果已固定，请确认奖项并发布结果。',
+        detail: '总冠军结果已固定，请确认奖项并发布结果',
         action: 'goToResults',
       }
     }
     return {
       tone: canCreateNextRound.value ? 'ready' : 'done',
       title: `${currentRound.value.name}结果已固定`,
-      detail: isMedalRound(currentRound.value) ? '组别奖项已生成，下一步创建决赛轮。' : (canCreateNextRound.value ? `${advancedPool.value.length} 款晋级酒可用于${nextRoundName.value}。` : '本轮结果已固定。'),
+      detail: isMedalRound(currentRound.value) ? '组别奖项已生成，下一步创建决赛轮' : (canCreateNextRound.value ? `${advancedPool.value.length} 款晋级酒可用于${nextRoundName.value}` : '本轮结果已固定'),
       action: canCreateNextRound.value ? 'createNextRound' : '',
     }
   }
@@ -4153,13 +4149,13 @@ function getRoundPublishStageIssue(round) {
   if (round?.status !== 'DRAFT') return ''
   if (round.type === 'SCORE' && competition.value?.status !== 'JUDGING_PREP') {
     if (competition.value?.status === 'REGISTRATION_OPEN') {
-      return '报名仍在进行，当前轮次会保留为预排草稿；截止报名并进入评审准备中后才能发布给评审。'
+      return '报名仍在进行，当前轮次会保留为预排草稿；截止报名并进入评审准备中后才能发布给评审'
     }
-    if (competition.value?.status === 'REGISTRATION_CLOSED') return '进入评审准备中后才能发布首轮。'
-    return '发布报名并进入评审准备中后才能发布首轮。'
+    if (competition.value?.status === 'REGISTRATION_CLOSED') return '进入评审准备中后才能发布首轮'
+    return '发布报名并进入评审准备中后才能发布首轮'
   }
   if (round.type === 'RANKING' && !['JUDGING', 'RESULT_CONFIRMING'].includes(competition.value?.status)) {
-    return '当前阶段不能发布排序轮。'
+    return '当前阶段不能发布排序轮'
   }
   return ''
 }
@@ -4727,14 +4723,14 @@ async function overrideRoundScoreConfirmation() {
     action: 'overrideRoundConfirmation',
     kicker: '强制确认',
     title: '确认跳过同桌确认？',
-    copy: '该操作会记录为强制确认，用于评审离场、设备异常等无法完成常规流程的情况。请填写原因，便于赛后追溯。',
+    copy: '该操作会记录为强制确认，用于评审离场、设备异常等无法完成常规流程的情况，请填写原因，便于赛后追溯',
     summary: [
       { label: '评审桌', value: roundScoreDetailTable.value.name || '-' },
       { label: '当前轮次', value: currentRound.value?.name || '-' },
       { label: '确认进度', value: roundScoreDetailConfirmationText.value },
     ],
     reasonLabel: '现场确认原因',
-    reasonPlaceholder: '例如：参与评审设备异常，现场已纸面确认。',
+    reasonPlaceholder: '例如：参与评审设备异常，现场已纸面确认',
     confirmText: '记录现场确认',
     loadingText: '记录中',
   })
@@ -4788,7 +4784,7 @@ async function deleteCurrentDraftRound() {
     action: 'deleteDraftRound',
     kicker: '草稿轮删除',
     title: `确认删除${currentRound.value.name || '草稿轮'}？`,
-    copy: '删除后，该轮的桌次、人员和酒款分配都会移除，需要重新创建本轮编排。',
+    copy: '删除后，该轮的桌次、人员和酒款分配都会移除，需要重新创建本轮编排',
     summary: [
       { label: '当前轮次', value: currentRound.value.name || '-' },
       { label: '桌数/酒款', value: `${currentRoundTables.value.length} 桌 / ${currentRoundEntryCount.value} 款` },
@@ -5082,7 +5078,7 @@ async function publishResultsAction() {
     action: 'publishResults',
     kicker: '结果发布',
     title: '确认发布到厂牌端？',
-    copy: '发布后，厂牌端和公开结果页将展示获奖名单、奖项信息和已上传奖状。请确认奖项结果已经核对完成。',
+    copy: '发布后，厂牌端和公开结果页将展示获奖名单、奖项信息和已上传奖状，请确认奖项结果已经核对完成',
     summary: competitionSummaryItems([
       { label: '奖项确认', value: `${resultChecks.value.filter((item) => item.done).length} / ${resultChecks.value.length}` },
       { label: '奖状 PDF', value: `${certificateUploadedCount.value} / ${certificateTotalCount.value}` },
@@ -5129,7 +5125,7 @@ function prepareJudgingAction() {
     action: 'prepareJudging',
     kicker: '评审准备',
     title: '确认进入评审准备中？',
-    copy: '进入后将开始按入库酒款和评审配置安排首轮。若发现仍需继续接收报名，需要先退回样品入库核对后再重新开放报名。',
+    copy: '进入后将开始按入库酒款和评审配置安排首轮，若发现仍需继续接收报名，需要先退回样品入库核对后再重新开放报名',
     summary: competitionSummaryItems([
       { label: '已入库酒款', value: `${competition.value?.entriesSummary?.stored ?? 0} 款` },
       { label: '评审桌', value: `${competition.value?.judgeTables?.length ?? 0} 张` },
@@ -5147,13 +5143,13 @@ function reopenRegistrationAction() {
     action: 'reopenRegistration',
     kicker: '报名恢复',
     title: '确认重新开放报名？',
-    copy: '重新开放后，厂牌端会恢复本场比赛的报名入口。请确认报名截止时间和现场安排仍然匹配。',
+    copy: '重新开放后，厂牌端会恢复本场比赛的报名入口，请确认报名截止时间和现场安排仍然匹配',
     summary: competitionSummaryItems([
       { label: '当前截止', value: oldDeadline ? formatDateTime(oldDeadline) : '未设置' },
       { label: '报名酒款', value: `${competition.value?.entriesSummary?.total ?? 0} 款` },
     ]),
     reasonLabel: '操作原因',
-    reasonPlaceholder: '例如：误点截止报名，现场确认继续开放。',
+    reasonPlaceholder: '例如：误点截止报名，现场确认继续开放',
     reasonMaxLength: 120,
     deadlineLabel: deadlineExpired ? '新的报名截止时间' : '新的报名截止时间（可选）',
     deadlineValue: deadlineExpired ? '' : toInputDateTime(oldDeadline),
@@ -5168,13 +5164,13 @@ function returnToSampleCheckAction() {
     action: 'returnToSampleCheck',
     kicker: '阶段退回',
     title: '确认退回样品入库核对？',
-    copy: '退回后，比赛回到报名截止后的核对状态；已有首轮草稿会保留，发布前请重新核对入库酒款和分桌。',
+    copy: '退回后，比赛回到报名截止后的核对状态；已有首轮草稿会保留，发布前请重新核对入库酒款和分桌',
     summary: competitionSummaryItems([
       { label: '已入库酒款', value: `${competition.value?.entriesSummary?.stored ?? 0} 款` },
       { label: '首轮草稿', value: firstRoundCreated.value ? '已保留' : '未创建' },
     ]),
     reasonLabel: '退回原因',
-    reasonPlaceholder: '例如：发现仍有样品入库状态需要核对。',
+    reasonPlaceholder: '例如：发现仍有样品入库状态需要核对',
     reasonMaxLength: 120,
     confirmText: '退回样品入库核对',
     loadingText: '退回中',
@@ -5209,7 +5205,7 @@ async function chooseAwardCertificate(award) {
       action: 'replaceCertificate',
       kicker: '奖状变更',
       title: '确认更换已发布奖状？',
-      copy: '更换后，厂牌端下载到的奖状会同步变化。请确认新文件已经核对无误。',
+      copy: '更换后，厂牌端下载到的奖状会同步变化，请确认新文件已经核对无误',
       summary: awardSummaryItems([
         { label: '奖项', value: award.awardName || formatAwardScope(award) },
         { label: '当前文件', value: award.certificateFilename || '已上传' },
@@ -5270,8 +5266,8 @@ async function previewAwardCertificate(award) {
 async function deleteAwardCertificateAction(award) {
   if (!award?.id) return
   const message = award.status === 'PUBLISHED'
-    ? '删除后，厂牌端将不能下载这份奖状。'
-    : '删除后，这个奖项将回到未上传奖状状态。'
+    ? '删除后，厂牌端将不能下载这份奖状'
+    : '删除后，这个奖项将回到未上传奖状状态'
   openBusinessConfirm({
     action: 'deleteCertificate',
     kicker: '奖状删除',
@@ -5340,8 +5336,8 @@ async function generateAwardsAction() {
     kicker: '奖项生成',
     title: awardDrafts.value.length ? '确认重新生成获奖名单？' : '确认生成获奖名单？',
     copy: awardDrafts.value.length
-      ? '系统会按已锁定的轮次结果重新生成奖项草稿，当前未确认的选择可能会被覆盖。生成后仍可在确认前调整。'
-      : '系统会按已锁定的轮次结果生成奖项草稿，生成后可在确认获奖名单前继续核对和调整。',
+      ? '系统会按已锁定的轮次结果重新生成奖项草稿，当前未确认的选择可能会被覆盖，生成后仍可在确认前调整'
+      : '系统会按已锁定的轮次结果生成奖项草稿，生成后可在确认获奖名单前继续核对和调整',
     summary: competitionSummaryItems([
       { label: '决赛轮', value: finalRoundLocked.value ? '已锁定' : '未锁定' },
       { label: '现有草稿', value: `${awardDrafts.value.length} 项` },
@@ -5363,7 +5359,7 @@ async function confirmAwardsAction() {
     action: 'confirmAwards',
     kicker: '奖项确认',
     title: '确认获奖名单？',
-    copy: '确认后，获奖名单将进入正式结果流程，并用于奖状上传和最终发布。请确认总冠军和组别奖项已经核对无误。',
+    copy: '确认后，获奖名单将进入正式结果流程，并用于奖状上传和最终发布，请确认总冠军和组别奖项已经核对无误',
     summary: awardSummaryItems([
       { label: '可确认奖项', value: `${confirmableAwardDrafts.value.length} 项` },
     ]),
@@ -5403,7 +5399,7 @@ async function markEntryStoredAction(entry) {
   if (isRefundedEntry(entry)) return
   try {
     await ElMessageBox.confirm(
-      `确认「${entry.name || entry.shortCode || entry.uuid}」样品已经到场并完成入库吗？确认后该酒款将进入后续分桌和评审准备流程。`,
+      `确认「${entry.name || entry.shortCode || entry.uuid}」样品已经到场并完成入库吗？确认后该酒款将进入后续分桌和评审准备流程`,
       '确认样品入库？',
       {
         confirmButtonText: '确认入库',
@@ -5860,8 +5856,8 @@ async function handleDeleteCompetition() {
   const title = draft ? '删除/归档草稿比赛' : '归档比赛'
   const confirmText = draft ? '删除/归档草稿' : '归档比赛'
   const message = draft
-    ? `如果「${competition.value.name}」尚未产生报名或轮次数据，将从管理台账中删除；如果已有业务数据，将改为归档并保留记录。`
-    : `归档后，「${competition.value.name}」将退出厂牌端和常用管理列表，报名、评分、轮次与结果记录会保留用于追溯。`
+    ? `如果「${competition.value.name}」尚未产生报名或轮次数据，将从管理台账中删除；如果已有业务数据，将改为归档并保留记录`
+    : `归档后，「${competition.value.name}」将退出厂牌端和常用管理列表，报名、评分、轮次与结果记录会保留用于追溯`
   openBusinessConfirm({
     action: 'deleteCompetition',
     kicker: draft ? '草稿处理' : '比赛归档',
@@ -6822,11 +6818,13 @@ svg {
 }
 
 :global(.entry-auto-assign-popper .el-select-dropdown__item.hover),
+:global(.entry-auto-assign-popper .el-select-dropdown__item.is-hovering),
 :global(.entry-auto-assign-popper .el-select-dropdown__item:hover) {
   background: rgba(216, 169, 53, 0.08);
 }
 
-:global(.entry-auto-assign-popper .el-select-dropdown__item.selected) {
+:global(.entry-auto-assign-popper .el-select-dropdown__item.selected),
+:global(.entry-auto-assign-popper .el-select-dropdown__item.is-selected) {
   color: #e0b84a;
   background: rgba(216, 169, 53, 0.11);
 }
@@ -6945,30 +6943,6 @@ svg {
   margin-top: 18px;
   display: flex;
   flex-direction: column;
-}
-
-.stage-hint-banner {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: min(100%, 1360px);
-  margin-bottom: 12px;
-  padding: 10px 12px;
-  color: #f2d274;
-  border: 1px solid rgba(224, 184, 74, 0.24);
-  border-radius: 8px;
-  background: rgba(224, 184, 74, 0.08);
-  font-size: 13px;
-  font-weight: 750;
-  line-height: 1.5;
-}
-
-.stage-hint-banner svg {
-  flex: 0 0 auto;
-}
-
-.stage-hint-banner p {
-  min-width: 0;
 }
 
 .detail-tabbar {
@@ -10132,11 +10106,13 @@ button.pyramid-placeholder-mark {
 }
 
 :global(.award-select-popper .el-select-dropdown__item.hover),
+:global(.award-select-popper .el-select-dropdown__item.is-hovering),
 :global(.award-select-popper .el-select-dropdown__item:hover) {
   background: rgba(216, 169, 53, 0.08);
 }
 
-:global(.award-select-popper .el-select-dropdown__item.selected) {
+:global(.award-select-popper .el-select-dropdown__item.selected),
+:global(.award-select-popper .el-select-dropdown__item.is-selected) {
   color: #e0b84a;
   background: rgba(216, 169, 53, 0.11);
 }
