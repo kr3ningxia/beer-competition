@@ -65,7 +65,7 @@ public class PortalPaymentController {
     }
 
     /**
-     * 提交银行转账付款批次。
+     * 提交单款酒的银行转账付款信息。
      */
     @PostMapping("/payment/bank-transfer")
     public Result<BankTransferVO> submitBankTransfer(@RequestBody @Valid PortalBankTransferSubmitRequest request) {
@@ -73,7 +73,7 @@ public class PortalPaymentController {
     }
 
     /**
-     * 查询当前厂商的银行转账批次详情。
+     * 查询当前厂商的银行转账记录详情。
      */
     @GetMapping("/payment/bank-transfer/{id}")
     public Result<BankTransferVO> bankTransferDetail(@PathVariable Long id) {
@@ -81,7 +81,7 @@ public class PortalPaymentController {
     }
 
     /**
-     * 当前厂商取消未审核的银行转账批次。
+     * 当前厂商取消未审核的银行转账记录。
      */
     @PostMapping("/payment/bank-transfer/{id}/cancel")
     public Result<BankTransferVO> cancelBankTransfer(@PathVariable Long id) {

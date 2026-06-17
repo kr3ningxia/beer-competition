@@ -5,7 +5,6 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.List;
 
 @Data
 @Builder
@@ -19,6 +18,12 @@ public class BankTransferVO {
     private Long breweryId;
     private String breweryName;
     private Long portalAccountId;
+    private Long entryId;
+    private Long paymentId;
+    private String entryName;
+    private String shortCode;
+    private String categoryName;
+    private String style;
     private BigDecimal amount;
     private Integer entryCount;
     private String payerName;
@@ -32,5 +37,4 @@ public class BankTransferVO {
     private String adminNote;
     private LocalDateTime submittedTime;
     private LocalDateTime processedTime;
-    private List<BankTransferEntryVO> entries;
 }

@@ -181,22 +181,14 @@
               </div>
 
               <section class="bank-entry-picker">
-                <strong>本次转账酒款</strong>
-                <el-checkbox-group v-model="bankTransferForm.entryIds">
-                  <el-checkbox
-                    v-for="entry in bankTransferCandidates"
-                    :key="entry.id"
-                    :label="entry.id"
-                  >
-                    {{ entry.name }} · {{ formatCurrency(entryPayAmount(entry)) }}
-                  </el-checkbox>
-                </el-checkbox-group>
+                <strong>当前酒款</strong>
+                <span>{{ selectedEntry.name }} · {{ formatCurrency(entryPayAmount(selectedEntry)) }}</span>
               </section>
 
               <el-form label-position="top" class="bank-transfer-form">
                 <div class="bank-form-grid">
                   <el-form-item label="应付金额">
-                    <div class="fixed-amount">{{ formatCurrency(bankTransferAmount) }}</div>
+                    <div class="fixed-amount">{{ formatCurrency(entryPayAmount(selectedEntry)) }}</div>
                   </el-form-item>
                   <el-form-item label="付款户名">
                     <el-input v-model.trim="bankTransferForm.payerName" placeholder="可填写公司账户名或付款人" />
@@ -230,9 +222,9 @@
                   <el-button
                     type="primary"
                     size="large"
-                    :disabled="!bankTransferAmount"
+                    :disabled="!selectedEntry"
                     :loading="submittingBankTransfer"
-                    @click="submitSelectedBankTransfer"
+                    @click="submitBankTransferForCurrentEntry"
                   >
                     提交转账信息
                   </el-button>
@@ -430,7 +422,6 @@ const deliveryForm = reactive({
   deliveryNote: '',
 })
 const bankTransferForm = reactive({
-  entryIds: [],
   payerName: '',
   transferTime: '',
   remark: '',
@@ -464,21 +455,6 @@ const showBankPending = computed(() => selectedEntry.value?.paymentStatus === 'P
 const paymentExpireText = computed(() => {
   if (!paymentOrder.value?.expireTime) return '请在页面提示时间内完成支付。'
   return `${formatDateTime(paymentOrder.value.expireTime)} 前完成支付。`
-})
-const bankTransferCandidates = computed(() => {
-  const entry = selectedEntry.value
-  if (!entry) return []
-  return entries.value.filter((item) => {
-    return item.competitionId === entry.competitionId
-      && item.paymentStatus === 'UNPAID'
-      && !isEntryRefunded(item)
-      && !isEntryRefundActive(item)
-  })
-})
-const bankTransferAmount = computed(() => {
-  return bankTransferCandidates.value
-    .filter((entry) => bankTransferForm.entryIds.includes(entry.id))
-    .reduce((total, entry) => total + Number(entryPayAmount(entry) || 0), 0)
 })
 const showLabelCard = computed(() => Boolean(selectedEntry.value?.canDownloadLabel))
 const showPreparationCards = computed(() => {
@@ -1014,12 +990,7 @@ async function ensureBankAccount() {
 }
 
 function syncBankTransferForm() {
-  if (!selectedEntry.value || showBankPending.value) {
-    bankTransferForm.entryIds = []
-    return
-  }
-  const candidateIds = bankTransferCandidates.value.map((entry) => entry.id)
-  bankTransferForm.entryIds = candidateIds.includes(selectedEntry.value.id) ? [selectedEntry.value.id] : []
+  if (!selectedEntry.value || showBankPending.value) return
   bankTransferForm.payerName = ''
   bankTransferForm.transferTime = ''
   bankTransferForm.remark = selectedEntry.value?.breweryCompanyName || ''
@@ -1044,9 +1015,9 @@ async function uploadBankVoucher(event) {
   }
 }
 
-async function submitSelectedBankTransfer() {
-  if (!bankTransferForm.entryIds.length) {
-    ElMessage.warning('请选择本次转账包含的酒款')
+async function submitBankTransferForCurrentEntry() {
+  if (!selectedEntry.value) {
+    ElMessage.warning('请先选择一款要付款的酒')
     return
   }
   if (!bankTransferForm.transferTime) {
@@ -1060,8 +1031,7 @@ async function submitSelectedBankTransfer() {
   submittingBankTransfer.value = true
   try {
     await submitPortalBankTransfer({
-      entryIds: bankTransferForm.entryIds,
-      amount: Number(bankTransferAmount.value.toFixed(2)),
+      entryId: selectedEntry.value.id,
       payerName: bankTransferForm.payerName || undefined,
       transferTime: bankTransferForm.transferTime,
       remark: bankTransferForm.remark,
@@ -1709,11 +1679,6 @@ function triggerDownload(objectUrl, fileName) {
   background: #fffdf8;
   border: 1px solid var(--line);
   border-radius: 8px;
-}
-
-.bank-entry-picker :deep(.el-checkbox-group) {
-  display: grid;
-  gap: 8px;
 }
 
 .bank-transfer-form {

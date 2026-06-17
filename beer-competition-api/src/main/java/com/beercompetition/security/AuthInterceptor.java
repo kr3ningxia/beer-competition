@@ -4,6 +4,8 @@ import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.context.SessionUser;
 import com.beercompetition.common.exception.ForbiddenException;
 import com.beercompetition.common.exception.UnauthorizedException;
+import com.beercompetition.mapper.AdminUserMapper;
+import com.beercompetition.pojo.po.AdminUser;
 import com.beercompetition.pojo.enums.UserRole;
 import com.beercompetition.properties.JwtProperties;
 import io.jsonwebtoken.Claims;
@@ -24,8 +26,10 @@ import org.springframework.web.servlet.HandlerInterceptor;
 public class AuthInterceptor implements HandlerInterceptor {
 
     private static final String BEARER_PREFIX = "Bearer ";
+    private static final int ADMIN_STATUS_ACTIVE = 1;
 
     private final JwtProperties jwtProperties;
+    private final AdminUserMapper adminUserMapper;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
@@ -59,6 +63,14 @@ public class AuthInterceptor implements HandlerInterceptor {
         String role = claims.get("role", String.class);
         if (!requiredRole.name().equals(role)) {
             throw new ForbiddenException("当前账号无权访问该资源");
+        }
+
+        if (requiredRole == UserRole.ADMIN) {
+            Long adminId = Long.valueOf(claims.get("uid").toString());
+            AdminUser adminUser = adminUserMapper.selectById(adminId);
+            if (adminUser == null || adminUser.getStatus() == null || adminUser.getStatus() != ADMIN_STATUS_ACTIVE) {
+                throw new UnauthorizedException("管理员账号已停用，请重新登录");
+            }
         }
 
         // 将用户信息写入当前线程上下文，后续 Controller/Service 通过 BaseContext 即可获取

@@ -50,6 +50,10 @@
     </section>
 
     <section v-if="competition" class="detail-shell">
+      <section v-if="preplanningNotice" class="stage-hint-banner">
+        <Warning />
+        <p>{{ preplanningNotice }}</p>
+      </section>
       <div class="detail-tabbar">
         <nav class="detail-tabs" aria-label="比赛详情导航">
           <button
@@ -1359,13 +1363,17 @@
           </div>
           <label v-if="businessConfirm.reasonLabel" class="confirm-reason">
             <span>{{ businessConfirm.reasonLabel }}</span>
-            <textarea v-model.trim="businessConfirm.reason" :placeholder="businessConfirm.reasonPlaceholder" maxlength="255"></textarea>
+            <textarea v-model.trim="businessConfirm.reason" :placeholder="businessConfirm.reasonPlaceholder" :maxlength="businessConfirm.reasonMaxLength"></textarea>
+          </label>
+          <label v-if="businessConfirm.deadlineLabel" class="confirm-reason confirm-date-field">
+            <span>{{ businessConfirm.deadlineLabel }}</span>
+            <input v-model="businessConfirm.deadlineValue" type="datetime-local" />
           </label>
           <footer>
             <button class="confirm-button ghost" type="button" :disabled="businessConfirm.loading" @click="closeBusinessConfirm">
               {{ businessConfirm.cancelText }}
             </button>
-            <button class="confirm-button primary" type="button" :disabled="businessConfirm.loading || businessConfirmReasonInvalid" @click="confirmBusinessAction">
+            <button class="confirm-button primary" type="button" :disabled="businessConfirm.loading || businessConfirmReasonInvalid || businessConfirmDeadlineInvalid" @click="confirmBusinessAction">
               {{ businessConfirm.loading ? businessConfirm.loadingText : businessConfirm.confirmText }}
               <Right />
             </button>
@@ -1700,6 +1708,8 @@ import {
   prepareCompetitionJudging,
   publishCompetitionResults,
   publishRound,
+  reopenCompetitionRegistration,
+  returnCompetitionToSampleCheck,
   saveRoundAllocation,
   syncRoundCandidates,
   updateCompetitionFeedbackComment,
@@ -1814,9 +1824,14 @@ const businessConfirm = reactive({
   reasonLabel: '',
   reasonPlaceholder: '',
   reason: '',
+  reasonMaxLength: 255,
+  deadlineLabel: '',
+  deadlineValue: '',
+  deadlineRequired: false,
   payload: null,
 })
 const businessConfirmReasonInvalid = computed(() => Boolean(businessConfirm.reasonLabel && !businessConfirm.reason.trim()))
+const businessConfirmDeadlineInvalid = computed(() => Boolean(businessConfirm.deadlineRequired && !businessConfirm.deadlineValue))
 
 const rounds = ref([])
 const roundEntryPool = ref([])
@@ -1953,6 +1968,10 @@ const currentRound = computed(() => rounds.value.find((round) => round.id === ac
 const currentRoundTables = computed(() => currentRound.value?.tables || [])
 const currentRoundIsTerminal = computed(() => isTerminalRound(currentRound.value))
 const firstRoundCreated = computed(() => rounds.value.some((round) => Number(round.roundNo) === 1))
+const canReturnToSampleCheck = computed(() => (
+  competition.value?.status === 'JUDGING_PREP'
+    && !rounds.value.some((round) => Number(round.roundNo) === 1 && round.status !== 'DRAFT')
+))
 const canEditBaseJudgeTables = computed(() => Boolean(editable.value.judgeTables) && !firstRoundCreated.value)
 const selectedRoundTable = computed(() => currentRoundTables.value.find((table) => table.id === selectedRoundTableId.value) || currentRoundTables.value[0])
 const roundScoreDetailTable = computed(() => currentRoundTables.value.find((table) => table.id === roundScoreDetailTableId.value) || null)
@@ -1965,6 +1984,9 @@ const advancedPool = computed(() => roundEntryPool.value.filter((entry) => entry
 const preplanningNotice = computed(() => {
   if (competition.value?.status === 'REGISTRATION_OPEN') {
     return '报名仍在进行，当前分桌和轮次会保留为预排草稿，不会发布给评审。新增或入库酒款后可继续调整。'
+  }
+  if (competition.value?.status === 'JUDGING_PREP' && currentRound.value?.status === 'DRAFT') {
+    return '当前处于评审准备，退回收样核对会保留第一轮草稿；发布前请重新核对入库酒款和分桌。'
   }
   return ''
 })
@@ -3169,6 +3191,20 @@ function resolveStageSecondaryActions() {
     { key: 'rounds', label: '进入轮次编排', handler: () => handleDetailTabChange('rounds') },
     { key: 'export', label: '导出数据', handler: () => downloadScoringData() },
   ]
+  if (competition.value?.status === 'REGISTRATION_CLOSED') {
+    actions.push({
+      key: 'reopenRegistration',
+      label: '重新开放报名',
+      handler: () => reopenRegistrationAction(),
+    })
+  }
+  if (canReturnToSampleCheck.value) {
+    actions.push({
+      key: 'returnToSampleCheck',
+      label: '退回收样核对',
+      handler: () => returnToSampleCheckAction(),
+    })
+  }
   if (competition.value?.status !== 'ARCHIVED') {
     actions.push({
       key: 'delete',
@@ -4969,6 +5005,10 @@ function openBusinessConfirm(config) {
     reasonLabel: '',
     reasonPlaceholder: '',
     reason: '',
+    reasonMaxLength: 255,
+    deadlineLabel: '',
+    deadlineValue: '',
+    deadlineRequired: false,
     payload: null,
     ...config,
   })
@@ -4997,7 +5037,7 @@ function awardSummaryItems(extra = []) {
 }
 
 async function confirmBusinessAction() {
-  if (!businessConfirm.action || businessConfirmReasonInvalid.value) return
+  if (!businessConfirm.action || businessConfirmReasonInvalid.value || businessConfirmDeadlineInvalid.value) return
   businessConfirm.loading = true
   try {
     if (businessConfirm.action === 'publishResults') await runPublishResults()
@@ -5006,6 +5046,9 @@ async function confirmBusinessAction() {
     if (businessConfirm.action === 'deleteCompetition') await runDeleteCompetition()
     if (businessConfirm.action === 'deleteDraftRound') await runDeleteCurrentDraftRound()
     if (businessConfirm.action === 'overrideRoundConfirmation') await runOverrideRoundScoreConfirmation()
+    if (businessConfirm.action === 'prepareJudging') await runPrepareJudging()
+    if (businessConfirm.action === 'reopenRegistration') await runReopenRegistration()
+    if (businessConfirm.action === 'returnToSampleCheck') await runReturnToSampleCheck()
     if (businessConfirm.action === 'replaceCertificate') runChooseAwardCertificate(businessConfirm.payload?.award)
     if (businessConfirm.action === 'deleteCertificate') await runDeleteAwardCertificate(businessConfirm.payload?.award)
     businessConfirm.open = false
@@ -5026,6 +5069,95 @@ async function publishResultsAction() {
     ]),
     confirmText: '发布结果',
     loadingText: '发布中',
+  })
+}
+
+async function runPrepareJudging() {
+  const detail = await prepareCompetitionJudging(competition.value.id)
+  competition.value = normalizeDetail(detail)
+  resetForms()
+  applyRoundState()
+  activeTab.value = 'judges'
+  ElMessage.success('已进入评审准备')
+}
+
+async function runReopenRegistration() {
+  const detail = await reopenCompetitionRegistration(competition.value.id, {
+    reason: businessConfirm.reason.trim(),
+    registrationDeadline: businessConfirm.deadlineValue ? toBackendDateTime(businessConfirm.deadlineValue) : null,
+  })
+  competition.value = normalizeDetail(detail)
+  resetForms()
+  applyRoundState()
+  activeTab.value = 'baseInfo'
+  ElMessage.success('报名窗口已恢复')
+}
+
+async function runReturnToSampleCheck() {
+  const detail = await returnCompetitionToSampleCheck(competition.value.id, {
+    reason: businessConfirm.reason.trim(),
+  })
+  competition.value = normalizeDetail(detail)
+  resetForms()
+  applyRoundState()
+  activeTab.value = 'entries'
+  ElMessage.success('已退回收样核对，请重新确认入库状态')
+}
+
+function prepareJudgingAction() {
+  openBusinessConfirm({
+    action: 'prepareJudging',
+    kicker: '评审准备',
+    title: '确认进入评审准备？',
+    copy: '进入后将开始按入库酒款和评审配置安排第一轮。若发现仍需继续接收报名，需要先退回收样核对后再重新开放报名。',
+    summary: competitionSummaryItems([
+      { label: '已入库酒款', value: `${competition.value?.entriesSummary?.stored ?? 0} 款` },
+      { label: '评审桌', value: `${competition.value?.judgeTables?.length ?? 0} 张` },
+      { label: '评分表', value: `${competition.value?.scoreConfigs?.length ?? 0} 套` },
+    ]),
+    confirmText: '进入评审准备',
+    loadingText: '处理中',
+  })
+}
+
+function reopenRegistrationAction() {
+  const oldDeadline = competition.value?.registrationDeadline
+  const deadlineExpired = !oldDeadline || (parseDateTime(oldDeadline) || 0) <= Date.now()
+  openBusinessConfirm({
+    action: 'reopenRegistration',
+    kicker: '报名恢复',
+    title: '确认重新开放报名？',
+    copy: '重新开放后，厂商端会恢复本场比赛的报名入口。请确认报名截止时间和现场安排仍然匹配。',
+    summary: competitionSummaryItems([
+      { label: '当前截止', value: oldDeadline ? formatDateTime(oldDeadline) : '未设置' },
+      { label: '报名酒款', value: `${competition.value?.entriesSummary?.total ?? 0} 款` },
+    ]),
+    reasonLabel: '操作原因',
+    reasonPlaceholder: '例如：误点截止报名，现场确认继续开放。',
+    reasonMaxLength: 120,
+    deadlineLabel: deadlineExpired ? '新的报名截止时间' : '新的报名截止时间（可选）',
+    deadlineValue: deadlineExpired ? '' : toInputDateTime(oldDeadline),
+    deadlineRequired: deadlineExpired,
+    confirmText: '重新开放报名',
+    loadingText: '恢复中',
+  })
+}
+
+function returnToSampleCheckAction() {
+  openBusinessConfirm({
+    action: 'returnToSampleCheck',
+    kicker: '阶段退回',
+    title: '确认退回收样核对？',
+    copy: '退回后，比赛回到报名截止后的核对状态；已有第一轮草稿会保留，发布前请重新核对入库酒款和分桌。',
+    summary: competitionSummaryItems([
+      { label: '已入库酒款', value: `${competition.value?.entriesSummary?.stored ?? 0} 款` },
+      { label: '第一轮草稿', value: firstRoundCreated.value ? '已保留' : '未创建' },
+    ]),
+    reasonLabel: '退回原因',
+    reasonPlaceholder: '例如：发现仍有样品入库状态需要核对。',
+    reasonMaxLength: 120,
+    confirmText: '退回收样核对',
+    loadingText: '退回中',
   })
 }
 
@@ -5741,12 +5873,7 @@ async function handleStageAction(action) {
     return
   }
   if (action === 'prepareJudging') {
-    const detail = await prepareCompetitionJudging(competition.value.id)
-    competition.value = normalizeDetail(detail)
-    resetForms()
-    applyRoundState()
-    activeTab.value = 'judges'
-    ElMessage.success('已进入评审准备')
+    prepareJudgingAction()
     return
   }
   if (action === 'goToRoundAllocation') {
@@ -6143,6 +6270,18 @@ svg {
   background: rgba(255, 255, 255, 0.035);
   font: inherit;
   line-height: 1.5;
+}
+
+.confirm-date-field input {
+  width: 100%;
+  min-height: 40px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  color: var(--confirm-text);
+  border: 1px solid var(--confirm-line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  font: inherit;
 }
 
 .stage-confirm-dialog footer {
@@ -6786,6 +6925,30 @@ svg {
   margin-top: 18px;
   display: flex;
   flex-direction: column;
+}
+
+.stage-hint-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(100%, 1360px);
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  color: #f2d274;
+  border: 1px solid rgba(224, 184, 74, 0.24);
+  border-radius: 8px;
+  background: rgba(224, 184, 74, 0.08);
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.5;
+}
+
+.stage-hint-banner svg {
+  flex: 0 0 auto;
+}
+
+.stage-hint-banner p {
+  min-width: 0;
 }
 
 .detail-tabbar {

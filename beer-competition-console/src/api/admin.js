@@ -115,6 +115,14 @@ export function prepareCompetitionJudging(id) {
   return request.post(`/api/admin/competitions/${id}/prepare-judging`, {}, { authScope: 'admin' })
 }
 
+export function reopenCompetitionRegistration(id, payload) {
+  return request.post(`/api/admin/competitions/${id}/reopen-registration`, payload, { authScope: 'admin' })
+}
+
+export function returnCompetitionToSampleCheck(id, payload) {
+  return request.post(`/api/admin/competitions/${id}/return-to-sample-check`, payload, { authScope: 'admin' })
+}
+
 export function fetchJudges(params = {}) {
   return request.get('/api/admin/judges', { params, authScope: 'admin' })
 }
@@ -273,4 +281,28 @@ export function rejectEntryRefund(refundId, payload = {}) {
 
 export function retryEntryRefund(refundId, payload = {}) {
   return request.post(`/api/admin/refunds/${refundId}/retry`, payload, { authScope: 'admin' })
+}
+
+export function fetchAdminUsers(params = {}) {
+  return request.get('/api/admin/accounts', { params, authScope: 'admin' })
+}
+
+export function createAdminUser(payload) {
+  return request.post('/api/admin/accounts', payload, { authScope: 'admin' })
+}
+
+export function updateAdminUser(id, payload) {
+  return request.put(`/api/admin/accounts/${id}`, payload, { authScope: 'admin' })
+}
+
+export function updateAdminUserStatus(id, payload) {
+  return request.patch(`/api/admin/accounts/${id}/status`, payload, { authScope: 'admin' })
+}
+
+export function resetAdminUserPassword(id, payload) {
+  return request.patch(`/api/admin/accounts/${id}/password`, payload, { authScope: 'admin' })
+}
+
+export function updateMyAdminPassword(payload) {
+  return request.patch('/api/admin/me/password', payload, { authScope: 'admin' })
 }

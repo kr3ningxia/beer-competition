@@ -57,13 +57,14 @@ import {
   Medal,
   SwitchButton,
   User,
+  UserFilled,
 } from '@element-plus/icons-vue'
 import { clearSession, getDisplayName } from '@/utils/auth'
 
 const router = useRouter()
 const route = useRoute()
 const displayName = getDisplayName('admin')
-const isDashboard = computed(() => ['/admin/dashboard', '/admin/judges', '/admin/entries', '/admin/bank-transfers', '/admin/style-libraries', '/admin/exports'].includes(route.path) || route.path.startsWith('/admin/competitions'))
+const isDashboard = computed(() => ['/admin/dashboard', '/admin/judges', '/admin/admin-users', '/admin/entries', '/admin/bank-transfers', '/admin/style-libraries', '/admin/exports'].includes(route.path) || route.path.startsWith('/admin/competitions'))
 
 const navItems = [
   { path: '/admin/dashboard', label: '首页', icon: House },
@@ -73,6 +74,7 @@ const navItems = [
   { path: '/admin/entries', label: '酒款管理', icon: Document },
   { path: '/admin/bank-transfers', label: '转账确认', icon: Document },
   { path: '/admin/style-libraries', label: '风格库管理', icon: Files },
+  { path: '/admin/admin-users', label: '管理员账号', icon: UserFilled },
   { path: '/admin/exports', label: '数据导出', icon: Download },
 ]
 

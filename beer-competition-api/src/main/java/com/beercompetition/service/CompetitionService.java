@@ -2,6 +2,8 @@ package com.beercompetition.service;
 
 import com.beercompetition.pojo.dto.CompetitionCreateRequest;
 import com.beercompetition.pojo.dto.CompetitionBaseInfoUpdateRequest;
+import com.beercompetition.pojo.dto.CompetitionReopenRegistrationRequest;
+import com.beercompetition.pojo.dto.CompetitionReturnToSampleCheckRequest;
 import com.beercompetition.pojo.dto.CompetitionStyleLibraryUpdateRequest;
 import com.beercompetition.pojo.dto.ConfigNameBatchUpdateRequest;
 import com.beercompetition.pojo.dto.EntryFieldBatchUpdateRequest;
@@ -49,6 +51,10 @@ public interface CompetitionService {
     CompetitionDetailVO closeRegistration(Long id);
 
     CompetitionDetailVO prepareJudging(Long id);
+
+    CompetitionDetailVO reopenRegistration(Long id, CompetitionReopenRegistrationRequest request);
+
+    CompetitionDetailVO returnToSampleCheck(Long id, CompetitionReturnToSampleCheckRequest request);
 
     List<ScoreConfigVO> getScoreConfigs(Long competitionId);
 

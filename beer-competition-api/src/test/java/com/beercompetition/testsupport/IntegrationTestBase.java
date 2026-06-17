@@ -52,11 +52,6 @@ public abstract class IntegrationTestBase {
 
     protected void cleanupByPrefix(String prefix) {
         jdbcTemplate.update("""
-                DELETE btpe FROM bank_transfer_payment_entry btpe
-                JOIN beer_entry be ON be.id = btpe.beer_entry_id
-                WHERE be.uuid LIKE ?
-                """, prefix + "%");
-        jdbcTemplate.update("""
                 DELETE btp FROM bank_transfer_payment btp
                 JOIN competition c ON c.id = btp.competition_id
                 WHERE c.code LIKE ?
@@ -167,6 +162,12 @@ public abstract class IntegrationTestBase {
                 DELETE csc FROM competition_score_config csc
                 JOIN competition c ON c.id = csc.competition_id
                 WHERE c.code LIKE ?
+                """, prefix + "%");
+        jdbcTemplate.update("""
+                DELETE aol FROM admin_operation_log aol
+                JOIN competition c ON aol.target_public_id = CAST(c.id AS CHAR)
+                WHERE aol.target_type = 'COMPETITION'
+                  AND c.code LIKE ?
                 """, prefix + "%");
         jdbcTemplate.update("""
                 DELETE cs FROM competition_style_config cs

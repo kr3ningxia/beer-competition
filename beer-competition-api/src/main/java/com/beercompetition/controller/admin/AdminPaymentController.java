@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 后台银行转账审核接口，处理厂商线下转账批次。
+ * 后台银行转账审核接口，处理厂商线下转账记录。
  */
 @RestController
 @RequiredArgsConstructor
@@ -28,7 +28,7 @@ public class AdminPaymentController {
     private final BankTransferPaymentService bankTransferPaymentService;
 
     /**
-     * 分页查询银行转账批次列表。
+     * 分页查询银行转账记录列表。
      */
     @GetMapping
     public Result<PageResult<BankTransferVO>> bankTransfers(@RequestParam(required = false) String status,
@@ -40,7 +40,7 @@ public class AdminPaymentController {
     }
 
     /**
-     * 查询银行转账批次详情。
+     * 查询银行转账记录详情。
      */
     @GetMapping("/{id}")
     public Result<BankTransferVO> bankTransferDetail(@PathVariable Long id) {
@@ -56,7 +56,7 @@ public class AdminPaymentController {
     }
 
     /**
-     * 审核通过银行转账批次。
+     * 审核通过银行转账记录。
      */
     @PostMapping("/{id}/confirm")
     public Result<BankTransferVO> confirmBankTransfer(@PathVariable Long id,
@@ -65,7 +65,7 @@ public class AdminPaymentController {
     }
 
     /**
-     * 驳回银行转账批次。
+     * 驳回银行转账记录。
      */
     @PostMapping("/{id}/reject")
     public Result<BankTransferVO> rejectBankTransfer(@PathVariable Long id,

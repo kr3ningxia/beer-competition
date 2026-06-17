@@ -206,6 +206,9 @@ public class AuthServiceImpl implements AuthService {
                 if (adminUser == null) {
                     throw new ResourceNotFoundException("管理员不存在");
                 }
+                if (adminUser.getStatus() == null || adminUser.getStatus() != 1) {
+                    throw new BaseException("管理员账号已停用，请重新登录");
+                }
                 yield CurrentUserResponse.builder()
                         .userId(adminUser.getId())
                         .role(role.name())

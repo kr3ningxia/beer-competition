@@ -24,6 +24,8 @@ public class BankTransferPayment {
     private Long breweryId;
     private Long portalAccountId;
     private Long competitionId;
+    private Long beerEntryId;
+    private Long entryPaymentId;
     private BigDecimal amount;
     private String payerName;
     private LocalDateTime transferTime;

@@ -22,7 +22,7 @@
         <span>关键词</span>
         <div>
           <Search />
-          <input v-model.trim="filters.keyword" placeholder="搜索厂牌、赛事、转账备注、批次号" @keyup.enter="applyFilters" />
+          <input v-model.trim="filters.keyword" placeholder="搜索厂牌、赛事、转账备注、转账单号" @keyup.enter="applyFilters" />
         </div>
       </label>
       <label class="field">
@@ -47,14 +47,14 @@
 
     <section class="table-card">
       <div class="table-title">
-        <h2>转账批次</h2>
+        <h2>转账记录</h2>
         <span>{{ transfers.length }} / {{ total }} 笔</span>
       </div>
       <div class="transfer-table">
         <div class="table-head">
           <span>厂牌</span>
           <span>赛事</span>
-          <span>批次号</span>
+          <span>转账单号</span>
           <span>金额 / 酒款</span>
           <span>转账信息</span>
           <span>状态</span>
@@ -77,7 +77,7 @@
             </div>
             <div class="soft-cell">
               <strong>{{ formatMoney(item.amount) }}</strong>
-              <small>{{ item.entryCount || 0 }} 款酒</small>
+              <small>{{ item.entryName || '当前酒款' }}</small>
             </div>
             <div class="soft-cell">
               <strong>{{ item.remark || '-' }}</strong>
@@ -91,7 +91,7 @@
             </div>
           </div>
           <div v-if="!loading && !transfers.length" class="empty-state">
-            <h2>暂无转账批次</h2>
+            <h2>暂无转账记录</h2>
             <p>厂商提交银行转账信息后会出现在这里。</p>
           </div>
         </div>
@@ -124,7 +124,7 @@
           <section class="summary-grid">
             <article><small>状态</small><strong>{{ statusLabel(detail.status) }}</strong></article>
             <article><small>金额</small><strong>{{ formatMoney(detail.amount) }}</strong></article>
-            <article><small>酒款数量</small><strong>{{ detail.entryCount || 0 }} 款</strong></article>
+            <article><small>酒款</small><strong>{{ detail.entryName || '-' }}</strong></article>
             <article><small>转账时间</small><strong>{{ formatTime(detail.transferTime) }}</strong></article>
           </section>
 
@@ -143,15 +143,15 @@
 
           <section class="info-card">
             <div class="section-title">
-              <strong>关联酒款</strong>
+              <strong>当前酒款</strong>
             </div>
             <div class="entry-list">
-              <article v-for="entry in detail.entries" :key="entry.entryId">
+              <article>
                 <div>
-                  <strong>{{ entry.entryName }}</strong>
-                  <small>{{ [entry.shortCode, entry.categoryName, entry.style].filter(Boolean).join(' · ') }}</small>
+                  <strong>{{ detail.entryName || '-' }}</strong>
+                  <small>{{ [detail.shortCode, detail.categoryName, detail.style].filter(Boolean).join(' · ') }}</small>
                 </div>
-                <b>{{ formatMoney(entry.amount) }}</b>
+                <b>{{ formatMoney(detail.amount) }}</b>
               </article>
             </div>
           </section>

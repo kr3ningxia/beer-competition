@@ -6,6 +6,7 @@ import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.mapper.BeerEntryMapper;
 import com.beercompetition.mapper.BeerEntryExtraFieldMapper;
+import com.beercompetition.mapper.AdminOperationLogMapper;
 import com.beercompetition.mapper.AwardResultMapper;
 import com.beercompetition.mapper.BreweryMapper;
 import com.beercompetition.mapper.CompetitionRoundMapper;
@@ -26,6 +27,8 @@ import com.beercompetition.mapper.RoundTableMemberMapper;
 import com.beercompetition.mapper.ScoreRecordMapper;
 import com.beercompetition.pojo.dto.CompetitionBaseInfoUpdateRequest;
 import com.beercompetition.pojo.dto.CompetitionCreateRequest;
+import com.beercompetition.pojo.dto.CompetitionReopenRegistrationRequest;
+import com.beercompetition.pojo.dto.CompetitionReturnToSampleCheckRequest;
 import com.beercompetition.pojo.dto.CompetitionStyleLibraryUpdateRequest;
 import com.beercompetition.pojo.dto.ConfigNameBatchUpdateRequest;
 import com.beercompetition.pojo.dto.ConfigNameItemRequest;
@@ -48,6 +51,7 @@ import com.beercompetition.pojo.enums.RoundTargetMode;
 import com.beercompetition.pojo.enums.RoundType;
 import com.beercompetition.pojo.po.BeerEntry;
 import com.beercompetition.pojo.po.BeerEntryExtraField;
+import com.beercompetition.pojo.po.AdminOperationLog;
 import com.beercompetition.pojo.po.AwardResult;
 import com.beercompetition.pojo.po.Brewery;
 import com.beercompetition.pojo.po.Competition;
@@ -98,6 +102,7 @@ import com.beercompetition.service.CompetitionService;
 import com.beercompetition.service.EntryScanLabelService;
 import com.beercompetition.service.RoundService;
 import com.beercompetition.service.StyleLibraryService;
+import com.beercompetition.common.context.BaseContext;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -168,11 +173,13 @@ public class CompetitionServiceImpl implements CompetitionService {
     private static final String COMPETITION_CODE_PREFIX = "BC";
     private static final String DEFAULT_DELIVERY_METHOD = "BOTH";
     private static final String DEFAULT_LOGISTICS_VISIBILITY = "PAYMENT_CONFIRMED";
+    private static final String LOG_TARGET_COMPETITION = "COMPETITION";
     private static final DateTimeFormatter COMPETITION_CODE_DATE_FORMAT = DateTimeFormatter.BASIC_ISO_DATE;
     private static final DateTimeFormatter EXPORT_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final Set<String> ENTRY_FIELD_TYPES = Set.of("text", "textarea", "number", "select", "multi_select");
 
     private final CompetitionMapper competitionMapper;
+    private final AdminOperationLogMapper adminOperationLogMapper;
     private final CompetitionCategoryMapper competitionCategoryMapper;
     private final CompetitionStyleConfigMapper competitionStyleConfigMapper;
     private final EntryFieldConfigMapper entryFieldConfigMapper;
@@ -518,8 +525,11 @@ public class CompetitionServiceImpl implements CompetitionService {
         }
 
         // 3) 更新比赛状态为报名中
+        CompetitionStatus oldStatus = status;
         competition.setStatus(CompetitionStatus.REGISTRATION_OPEN.name());
         competitionMapper.updateById(competition);
+        writeCompetitionStageLog("COMPETITION_OPEN_REGISTRATION", competition.getId(), oldStatus,
+                CompetitionStatus.REGISTRATION_OPEN, "开放报名", null, null, competition.getRegistrationDeadline());
 
         // 4) 重新计算配置检查并返回详情
         return getCompetitionDetail(id);
@@ -530,13 +540,17 @@ public class CompetitionServiceImpl implements CompetitionService {
     public CompetitionDetailVO closeRegistration(Long id) {
         // 1) 查询比赛并校验状态流转入口
         Competition competition = getCompetitionOrThrow(id);
-        if (parseStatus(competition) != CompetitionStatus.REGISTRATION_OPEN) {
+        CompetitionStatus oldStatus = parseStatus(competition);
+        if (oldStatus != CompetitionStatus.REGISTRATION_OPEN) {
             throw new BaseException("只有报名中的比赛可以截止报名");
         }
 
         // 2) 更新比赛状态为报名截止
         competition.setStatus(CompetitionStatus.REGISTRATION_CLOSED.name());
         competitionMapper.updateById(competition);
+        writeCompetitionStageLog("COMPETITION_CLOSE_REGISTRATION", competition.getId(), oldStatus,
+                CompetitionStatus.REGISTRATION_CLOSED, "截止报名", null, competition.getRegistrationDeadline(),
+                competition.getRegistrationDeadline());
 
         // 3) 重新计算配置检查并返回详情
         return getCompetitionDetail(id);
@@ -556,10 +570,75 @@ public class CompetitionServiceImpl implements CompetitionService {
         assertChecksDone(detail.getChecks(), Set.of("judgeTables", "scoreForms", "storedEntries"), "评审准备");
 
         // 3) 更新比赛状态为评审准备
+        CompetitionStatus oldStatus = parseStatus(competition);
         competition.setStatus(CompetitionStatus.JUDGING_PREP.name());
         competitionMapper.updateById(competition);
+        writeCompetitionStageLog("COMPETITION_PREPARE_JUDGING", competition.getId(), oldStatus,
+                CompetitionStatus.JUDGING_PREP, "进入评审准备", null, competition.getRegistrationDeadline(),
+                competition.getRegistrationDeadline());
 
         // 4) 重新计算配置检查并返回详情
+        return getCompetitionDetail(id);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public CompetitionDetailVO reopenRegistration(Long id, CompetitionReopenRegistrationRequest request) {
+        // 1) 查询比赛并校验恢复入口
+        Competition competition = getCompetitionOrThrow(id);
+        CompetitionStatus oldStatus = parseStatus(competition);
+        if (oldStatus != CompetitionStatus.REGISTRATION_CLOSED) {
+            throw new BaseException("只有已截止报名的比赛可以重新开放报名");
+        }
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime oldDeadline = competition.getRegistrationDeadline();
+        LocalDateTime nextDeadline = request.getRegistrationDeadline();
+        if ((oldDeadline == null || !oldDeadline.isAfter(now)) && nextDeadline == null) {
+            throw new BaseException("原报名截止时间已过，请设置新的报名截止时间");
+        }
+        if (nextDeadline != null) {
+            validateReopenRegistrationDeadline(competition, nextDeadline, now);
+        }
+
+        // 2) 更新报名窗口和比赛状态
+        if (nextDeadline != null) {
+            competition.setRegistrationDeadline(nextDeadline);
+        }
+        competition.setStatus(CompetitionStatus.REGISTRATION_OPEN.name());
+        competitionMapper.updateById(competition);
+
+        // 3) 写入阶段恢复审计并返回详情
+        writeCompetitionStageLog("COMPETITION_REOPEN_REGISTRATION", competition.getId(), oldStatus,
+                CompetitionStatus.REGISTRATION_OPEN, "重新开放报名", request.getReason(), oldDeadline,
+                competition.getRegistrationDeadline());
+        return getCompetitionDetail(id);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public CompetitionDetailVO returnToSampleCheck(Long id, CompetitionReturnToSampleCheckRequest request) {
+        // 1) 查询比赛并校验恢复入口
+        Competition competition = getCompetitionOrThrow(id);
+        CompetitionStatus oldStatus = parseStatus(competition);
+        if (oldStatus != CompetitionStatus.JUDGING_PREP) {
+            throw new BaseException("只有评审准备阶段可以退回收样核对");
+        }
+        CompetitionRound firstRound = competitionRoundMapper.selectOne(new LambdaQueryWrapper<CompetitionRound>()
+                .eq(CompetitionRound::getCompetitionId, id)
+                .eq(CompetitionRound::getRoundNo, 1)
+                .last("LIMIT 1"));
+        if (firstRound != null && !RoundStatus.DRAFT.name().equals(firstRound.getStatus())) {
+            throw new BaseException("第一轮已发布，不能退回收样核对");
+        }
+
+        // 2) 只回退比赛主状态，保留第一轮草稿和分桌草稿
+        competition.setStatus(CompetitionStatus.REGISTRATION_CLOSED.name());
+        competitionMapper.updateById(competition);
+
+        // 3) 写入阶段恢复审计并返回详情
+        writeCompetitionStageLog("COMPETITION_RETURN_TO_SAMPLE_CHECK", competition.getId(), oldStatus,
+                CompetitionStatus.REGISTRATION_CLOSED, "退回收样核对", request.getReason(),
+                competition.getRegistrationDeadline(), competition.getRegistrationDeadline());
         return getCompetitionDetail(id);
     }
 
@@ -2590,6 +2669,59 @@ public class CompetitionServiceImpl implements CompetitionService {
         if (!missing.isEmpty()) {
             throw new BaseException(actionName + "前还需要完成：" + String.join("、", missing));
         }
+    }
+
+    private void validateReopenRegistrationDeadline(Competition competition, LocalDateTime deadline, LocalDateTime now) {
+        if (deadline == null) {
+            return;
+        }
+        if (competition.getRegistrationStart() != null && !deadline.isAfter(competition.getRegistrationStart())) {
+            throw new BaseException("新的报名截止时间必须晚于报名开始时间");
+        }
+        if (!deadline.isAfter(now)) {
+            throw new BaseException("新的报名截止时间必须晚于当前时间");
+        }
+    }
+
+    private void writeCompetitionStageLog(String action,
+                                          Long competitionId,
+                                          CompetitionStatus fromStatus,
+                                          CompetitionStatus toStatus,
+                                          String actionLabel,
+                                          String reason,
+                                          LocalDateTime oldDeadline,
+                                          LocalDateTime newDeadline) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("action", actionLabel);
+        payload.put("fromStatus", fromStatus.name());
+        payload.put("toStatus", toStatus.name());
+        payload.put("reason", truncateNullable(reason, 120));
+        payload.put("oldRegistrationDeadline", oldDeadline == null ? null : oldDeadline.format(EXPORT_TIME_FORMAT));
+        payload.put("newRegistrationDeadline", newDeadline == null ? null : newDeadline.format(EXPORT_TIME_FORMAT));
+        adminOperationLogMapper.insert(AdminOperationLog.builder()
+                .adminUserId(BaseContext.getCurrentId())
+                .action(action)
+                .targetType(LOG_TARGET_COMPETITION)
+                .targetPublicId(String.valueOf(competitionId))
+                .summary(writeObjectJson(payload, "保存比赛阶段操作日志失败"))
+                .createTime(LocalDateTime.now())
+                .build());
+    }
+
+    private String writeObjectJson(Object payload, String errorMessage) {
+        try {
+            return objectMapper.writeValueAsString(payload);
+        } catch (JsonProcessingException ex) {
+            throw new BaseException(errorMessage);
+        }
+    }
+
+    private String truncateNullable(String value, int maxLength) {
+        String normalized = normalizeNullable(value);
+        if (normalized == null || normalized.length() <= maxLength) {
+            return normalized;
+        }
+        return normalized.substring(0, maxLength);
     }
 
     private BigDecimal getScoreTotal(List<DimensionRequest> dimensions) {

@@ -8,7 +8,6 @@ import com.beercompetition.common.exception.ForbiddenException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.common.result.PageResult;
 import com.beercompetition.mapper.AdminOperationLogMapper;
-import com.beercompetition.mapper.BankTransferPaymentEntryMapper;
 import com.beercompetition.mapper.BankTransferPaymentMapper;
 import com.beercompetition.mapper.BeerEntryMapper;
 import com.beercompetition.mapper.BreweryMapper;
@@ -27,7 +26,6 @@ import com.beercompetition.pojo.enums.EntryScanLabelStatus;
 import com.beercompetition.pojo.enums.EntryStatus;
 import com.beercompetition.pojo.po.AdminOperationLog;
 import com.beercompetition.pojo.po.BankTransferPayment;
-import com.beercompetition.pojo.po.BankTransferPaymentEntry;
 import com.beercompetition.pojo.po.BeerEntry;
 import com.beercompetition.pojo.po.Brewery;
 import com.beercompetition.pojo.po.Competition;
@@ -37,7 +35,6 @@ import com.beercompetition.pojo.po.EntryScanLabel;
 import com.beercompetition.pojo.po.FileAsset;
 import com.beercompetition.pojo.po.PortalAccount;
 import com.beercompetition.pojo.vo.BankTransferAccountVO;
-import com.beercompetition.pojo.vo.BankTransferEntryVO;
 import com.beercompetition.pojo.vo.BankTransferVO;
 import com.beercompetition.pojo.vo.BankTransferVoucherVO;
 import com.beercompetition.pojo.vo.FileDownloadVO;
@@ -52,18 +49,13 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -82,7 +74,6 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
 
     private final AdminOperationLogMapper adminOperationLogMapper;
     private final BankTransferPaymentMapper bankTransferPaymentMapper;
-    private final BankTransferPaymentEntryMapper bankTransferPaymentEntryMapper;
     private final BeerEntryMapper beerEntryMapper;
     private final BreweryMapper breweryMapper;
     private final CompetitionMapper competitionMapper;
@@ -144,30 +135,24 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
         // 1) 参数规范化与账号校验
         PortalAccount account = requirePortalAccount();
         Brewery brewery = requireBrewery(account.getBreweryId());
-        List<Long> entryIds = normalizeEntryIds(request.getEntryIds());
-        BigDecimal submittedAmount = normalizeAmount(request.getAmount());
+        Long entryId = request.getEntryId();
         String payerName = normalizeNullable(request.getPayerName());
         String remark = normalizeRequired(request.getRemark(), "请填写转账备注");
         FileAsset voucher = resolveVoucherAsset(request.getVoucherAssetId(), account.getId());
 
-        // 2) 读取并校验所选酒款与付款记录
-        List<BeerEntry> entries = requireOwnedPayableEntries(entryIds, brewery.getId());
-        Long competitionId = requireSingleCompetition(entries);
-        Map<Long, EntryPayment> paymentByEntryId = ensurePayments(entries);
-        BigDecimal expectedAmount = entries.stream()
-                .map(entry -> paymentByEntryId.get(entry.getId()).getAmount())
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        if (normalizeAmount(expectedAmount).compareTo(submittedAmount) != 0) {
-            throw new BaseException("转账金额需与所选酒款应付金额一致");
-        }
+        // 2) 读取并校验当前酒款与付款记录
+        BeerEntry entry = requireOwnedPayableEntry(entryId, brewery.getId());
+        EntryPayment payment = ensurePayment(entry);
 
-        // 3) 创建转账批次并锁定关联付款
+        // 3) 创建转账记录并锁定关联付款
         BankTransferPayment transfer = BankTransferPayment.builder()
                 .transferNo(generateTransferNo())
                 .breweryId(brewery.getId())
                 .portalAccountId(account.getId())
-                .competitionId(competitionId)
-                .amount(submittedAmount)
+                .competitionId(entry.getCompetitionId())
+                .beerEntryId(entry.getId())
+                .entryPaymentId(payment.getId())
+                .amount(payment.getAmount())
                 .payerName(payerName)
                 .transferTime(request.getTransferTime())
                 .remark(remark)
@@ -176,21 +161,12 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
                 .submittedTime(LocalDateTime.now())
                 .build();
         bankTransferPaymentMapper.insert(transfer);
-        for (BeerEntry entry : entries) {
-            EntryPayment payment = paymentByEntryId.get(entry.getId());
-            bankTransferPaymentEntryMapper.insert(BankTransferPaymentEntry.builder()
-                    .bankTransferPaymentId(transfer.getId())
-                    .beerEntryId(entry.getId())
-                    .entryPaymentId(payment.getId())
-                    .amount(payment.getAmount())
-                    .build());
-            payment.setStatus(EntryPaymentStatus.PENDING_CONFIRM.name());
-            payment.setPayMethod(EntryPayMethod.BANK_TRANSFER.name());
-            payment.setBankTransferId(transfer.getId());
-            entryPaymentMapper.updateById(payment);
-        }
+        payment.setStatus(EntryPaymentStatus.PENDING_CONFIRM.name());
+        payment.setPayMethod(EntryPayMethod.BANK_TRANSFER.name());
+        payment.setBankTransferId(transfer.getId());
+        entryPaymentMapper.updateById(payment);
 
-        // 4) 返回批次详情
+        // 4) 返回转账详情
         return toBankTransferVO(bankTransferPaymentMapper.selectById(transfer.getId()), true);
     }
 
@@ -203,14 +179,14 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
             throw new ForbiddenException("无权查看该转账记录");
         }
 
-        // 2) 返回批次详情
+        // 2) 返回转账详情
         return toBankTransferVO(transfer, true);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public BankTransferVO cancelPortalTransfer(Long id) {
-        // 1) 校验当前厂商归属和批次状态
+        // 1) 校验当前厂商归属和转账状态
         PortalAccount account = requirePortalAccount();
         BankTransferPayment transfer = requireTransfer(id);
         if (!Objects.equals(transfer.getPortalAccountId(), account.getId())) {
@@ -220,20 +196,20 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
             throw new BaseException("当前转账记录不能取消");
         }
 
-        // 2) 取消批次并释放关联付款
+        // 2) 取消转账并释放关联付款
         transfer.setStatus(BankTransferPaymentStatus.CANCELED.name());
         transfer.setProcessedTime(LocalDateTime.now());
         bankTransferPaymentMapper.updateById(transfer);
-        resetRelatedPayments(transfer.getId(), BankTransferPaymentStatus.CANCELED.name(), null);
+        resetRelatedPayment(transfer, BankTransferPaymentStatus.CANCELED.name(), null);
 
-        // 3) 返回批次详情
+        // 3) 返回转账详情
         return toBankTransferVO(bankTransferPaymentMapper.selectById(id), true);
     }
 
     @Override
     public PageResult<BankTransferVO> listAdminTransfers(String status, Long competitionId, String keyword,
                                                          Integer page, Integer pageSize) {
-        // 1) 参数规范化并查询批次
+        // 1) 参数规范化并查询转账记录
         int currentPage = Math.max(page == null ? 1 : page, 1);
         int currentPageSize = Math.min(Math.max(pageSize == null ? 30 : pageSize, 1), 100);
         String normalizedKeyword = normalizeNullable(keyword);
@@ -255,76 +231,73 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
 
     @Override
     public BankTransferVO getAdminTransfer(Long id) {
-        // 1) 查询批次详情
+        // 1) 查询转账详情
         return toBankTransferVO(requireTransfer(id), true);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public BankTransferVO confirmTransfer(Long id, AdminBankTransferProcessRequest request) {
-        // 1) 校验批次状态
+        // 1) 校验转账状态
         BankTransferPayment transfer = requireTransfer(id);
         if (!BankTransferPaymentStatus.SUBMITTED.name().equals(transfer.getStatus())) {
             throw new BaseException("只有待确认的转账可以确认到账");
         }
 
-        // 2) 推进批次、付款和报名状态
+        // 2) 推进转账、付款和报名状态
         LocalDateTime now = LocalDateTime.now();
         transfer.setStatus(BankTransferPaymentStatus.CONFIRMED.name());
         transfer.setAdminId(BaseContext.getCurrentId());
         transfer.setAdminNote(normalizeNullable(request == null ? null : request.getAdminNote()));
         transfer.setProcessedTime(now);
         bankTransferPaymentMapper.updateById(transfer);
-        List<BankTransferPaymentEntry> relations = listTransferEntries(id);
-        for (BankTransferPaymentEntry relation : relations) {
-            EntryPayment payment = entryPaymentMapper.selectById(relation.getEntryPaymentId());
-            BeerEntry entry = beerEntryMapper.selectById(relation.getBeerEntryId());
-            if (payment == null || entry == null) {
-                throw new BaseException("转账关联酒款数据异常");
-            }
-            payment.setStatus(EntryPaymentStatus.PAID.name());
-            payment.setPayMethod(EntryPayMethod.BANK_TRANSFER.name());
-            payment.setPaidAmount(payment.getAmount());
-            payment.setPaidTime(now);
-            payment.setConfirmedByAdminId(BaseContext.getCurrentId());
-            payment.setConfirmRemark(transfer.getAdminNote());
-            entryPaymentMapper.updateById(payment);
-            if (EntryStatus.PENDING_PAYMENT.name().equals(entry.getStatus())) {
-                entry.setStatus(EntryStatus.REGISTERED.name());
-                beerEntryMapper.updateById(entry);
-            }
-            writeEntryLog("ENTRY_BANK_TRANSFER_CONFIRM", entry.getUuid(), "银行转账确认到账");
+        EntryPayment payment = entryPaymentMapper.selectById(transfer.getEntryPaymentId());
+        BeerEntry entry = beerEntryMapper.selectById(transfer.getBeerEntryId());
+        if (payment == null || entry == null) {
+            throw new BaseException("转账关联酒款数据异常");
         }
+        payment.setStatus(EntryPaymentStatus.PAID.name());
+        payment.setPayMethod(EntryPayMethod.BANK_TRANSFER.name());
+        payment.setPaidAmount(payment.getAmount());
+        payment.setPaidTime(now);
+        payment.setConfirmedByAdminId(BaseContext.getCurrentId());
+        payment.setConfirmRemark(transfer.getAdminNote());
+        entryPaymentMapper.updateById(payment);
+        if (EntryStatus.PENDING_PAYMENT.name().equals(entry.getStatus())) {
+            entry.setStatus(EntryStatus.REGISTERED.name());
+            beerEntryMapper.updateById(entry);
+        }
+        writeEntryLog("ENTRY_BANK_TRANSFER_CONFIRM", entry.getUuid(), "银行转账确认到账");
 
-        // 3) 返回批次详情
+        // 3) 返回转账详情
         return toBankTransferVO(bankTransferPaymentMapper.selectById(id), true);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public BankTransferVO rejectTransfer(Long id, AdminBankTransferProcessRequest request) {
-        // 1) 校验批次状态
+        // 1) 校验转账状态
         BankTransferPayment transfer = requireTransfer(id);
         if (!BankTransferPaymentStatus.SUBMITTED.name().equals(transfer.getStatus())) {
             throw new BaseException("只有待确认的转账可以驳回");
         }
 
-        // 2) 驳回批次并释放关联付款
+        // 2) 驳回转账并释放关联付款
         String adminNote = normalizeRequired(request == null ? null : request.getAdminNote(), "请填写驳回原因");
         transfer.setStatus(BankTransferPaymentStatus.REJECTED.name());
         transfer.setAdminId(BaseContext.getCurrentId());
         transfer.setAdminNote(adminNote);
         transfer.setProcessedTime(LocalDateTime.now());
         bankTransferPaymentMapper.updateById(transfer);
-        resetRelatedPayments(id, BankTransferPaymentStatus.REJECTED.name(), adminNote);
+        resetRelatedPayment(transfer, BankTransferPaymentStatus.REJECTED.name(), adminNote);
 
-        // 3) 返回批次详情
+        // 3) 返回转账详情
         return toBankTransferVO(bankTransferPaymentMapper.selectById(id), true);
     }
 
     @Override
     public FileDownloadVO downloadVoucher(Long id) {
-        // 1) 查询批次与凭证资产
+        // 1) 查询转账与凭证资产
         BankTransferPayment transfer = requireTransfer(id);
         if (transfer.getVoucherAssetId() == null) {
             throw new ResourceNotFoundException("该转账记录没有上传凭证");
@@ -342,97 +315,64 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
                 .build();
     }
 
-    private void resetRelatedPayments(Long transferId, String actionStatus, String note) {
-        List<BankTransferPaymentEntry> relations = listTransferEntries(transferId);
-        for (BankTransferPaymentEntry relation : relations) {
-            EntryPayment payment = entryPaymentMapper.selectById(relation.getEntryPaymentId());
-            BeerEntry entry = beerEntryMapper.selectById(relation.getBeerEntryId());
-            if (payment != null && EntryPaymentStatus.PENDING_CONFIRM.name().equals(payment.getStatus())
-                    && Objects.equals(payment.getBankTransferId(), transferId)) {
-                entryPaymentMapper.update(null, new LambdaUpdateWrapper<EntryPayment>()
-                        .eq(EntryPayment::getId, payment.getId())
-                        .set(EntryPayment::getStatus, EntryPaymentStatus.UNPAID.name())
-                        .set(EntryPayment::getPayMethod, EntryPayMethod.MANUAL.name())
-                        .set(EntryPayment::getBankTransferId, null)
-                        .set(EntryPayment::getConfirmRemark, note));
-            }
-            if (entry != null && BankTransferPaymentStatus.REJECTED.name().equals(actionStatus)) {
-                writeEntryLog("ENTRY_BANK_TRANSFER_REJECT", entry.getUuid(), "银行转账被驳回");
-            }
+    private void resetRelatedPayment(BankTransferPayment transfer, String actionStatus, String note) {
+        EntryPayment payment = entryPaymentMapper.selectById(transfer.getEntryPaymentId());
+        BeerEntry entry = beerEntryMapper.selectById(transfer.getBeerEntryId());
+        if (payment != null && EntryPaymentStatus.PENDING_CONFIRM.name().equals(payment.getStatus())
+                && Objects.equals(payment.getBankTransferId(), transfer.getId())) {
+            entryPaymentMapper.update(null, new LambdaUpdateWrapper<EntryPayment>()
+                    .eq(EntryPayment::getId, payment.getId())
+                    .set(EntryPayment::getStatus, EntryPaymentStatus.UNPAID.name())
+                    .set(EntryPayment::getPayMethod, EntryPayMethod.MANUAL.name())
+                    .set(EntryPayment::getBankTransferId, null)
+                    .set(EntryPayment::getConfirmRemark, note));
+        }
+        if (entry != null && BankTransferPaymentStatus.REJECTED.name().equals(actionStatus)) {
+            writeEntryLog("ENTRY_BANK_TRANSFER_REJECT", entry.getUuid(), "银行转账被驳回");
         }
     }
 
-    private List<Long> normalizeEntryIds(List<Long> entryIds) {
-        if (entryIds == null || entryIds.isEmpty()) {
-            throw new BaseException("请选择需要付款的酒款");
+    private BeerEntry requireOwnedPayableEntry(Long entryId, Long breweryId) {
+        BeerEntry entry = beerEntryMapper.selectById(entryId);
+        if (entry == null || !Objects.equals(entry.getBreweryId(), breweryId)) {
+            throw new BaseException("酒款不存在或不属于当前厂牌");
         }
-        return entryIds.stream()
-                .filter(Objects::nonNull)
-                .collect(Collectors.toCollection(LinkedHashSet::new))
-                .stream()
-                .toList();
+        if (!EntryStatus.PENDING_PAYMENT.name().equals(entry.getStatus())) {
+            throw new BaseException("只有待付款酒款可以提交银行转账");
+        }
+        return entry;
     }
 
-    private List<BeerEntry> requireOwnedPayableEntries(List<Long> entryIds, Long breweryId) {
-        List<BeerEntry> entries = beerEntryMapper.selectList(new LambdaQueryWrapper<BeerEntry>()
-                .in(BeerEntry::getId, entryIds)
-                .eq(BeerEntry::getBreweryId, breweryId));
-        if (entries.size() != entryIds.size()) {
-            throw new BaseException("所选酒款不存在或不属于当前厂牌");
+    private EntryPayment ensurePayment(BeerEntry entry) {
+        EntryPayment payment = entryPaymentMapper.selectOne(new LambdaQueryWrapper<EntryPayment>()
+                .eq(EntryPayment::getBeerEntryId, entry.getId())
+                .last("LIMIT 1"));
+        if (payment == null) {
+            Competition competition = competitionMapper.selectById(entry.getCompetitionId());
+            payment = EntryPayment.builder()
+                    .beerEntryId(entry.getId())
+                    .amount(resolveEntryFee(competition, LocalDateTime.now()))
+                    .status(EntryPaymentStatus.UNPAID.name())
+                    .payMethod(EntryPayMethod.MANUAL.name())
+                    .build();
+            entryPaymentMapper.insert(payment);
         }
-        Map<Long, BeerEntry> entryById = entries.stream().collect(Collectors.toMap(BeerEntry::getId, Function.identity()));
-        return entryIds.stream()
-                .map(entryById::get)
-                .peek(entry -> {
-                    if (!EntryStatus.PENDING_PAYMENT.name().equals(entry.getStatus())) {
-                        throw new BaseException("只有待付款酒款可以提交银行转账");
-                    }
-                })
-                .toList();
+        if (!EntryPaymentStatus.UNPAID.name().equals(payment.getStatus())) {
+            throw new BaseException("这款酒已付款或正在等待转账确认");
+        }
+        return payment;
     }
 
-    private Long requireSingleCompetition(List<BeerEntry> entries) {
-        Set<Long> competitionIds = entries.stream().map(BeerEntry::getCompetitionId).collect(Collectors.toSet());
-        if (competitionIds.size() != 1) {
-            throw new BaseException("一次银行转账只能选择同一场赛事的酒款");
-        }
-        return competitionIds.iterator().next();
-    }
-
-    private Map<Long, EntryPayment> ensurePayments(List<BeerEntry> entries) {
-        List<Long> entryIds = entries.stream().map(BeerEntry::getId).toList();
-        Map<Long, EntryPayment> paymentByEntryId = entryPaymentMapper.selectList(new LambdaQueryWrapper<EntryPayment>()
-                        .in(EntryPayment::getBeerEntryId, entryIds))
-                .stream()
-                .collect(Collectors.toMap(EntryPayment::getBeerEntryId, Function.identity(), (left, right) -> left));
-        for (BeerEntry entry : entries) {
-            EntryPayment payment = paymentByEntryId.get(entry.getId());
-            if (payment == null) {
-                Competition competition = competitionMapper.selectById(entry.getCompetitionId());
-                payment = EntryPayment.builder()
-                        .beerEntryId(entry.getId())
-                        .amount(resolveEntryFee(competition, LocalDateTime.now()))
-                        .status(EntryPaymentStatus.UNPAID.name())
-                        .payMethod(EntryPayMethod.MANUAL.name())
-                        .build();
-                entryPaymentMapper.insert(payment);
-                paymentByEntryId.put(entry.getId(), payment);
-            }
-            if (!EntryPaymentStatus.UNPAID.name().equals(payment.getStatus())) {
-                throw new BaseException("所选酒款包含已付款或等待确认的记录");
-            }
-        }
-        return paymentByEntryId;
-    }
-
-    private BankTransferVO toBankTransferVO(BankTransferPayment transfer, boolean includeEntries) {
+    private BankTransferVO toBankTransferVO(BankTransferPayment transfer, boolean includeDetails) {
         Competition competition = competitionMapper.selectById(transfer.getCompetitionId());
         Brewery brewery = breweryMapper.selectById(transfer.getBreweryId());
         FileAsset voucher = transfer.getVoucherAssetId() == null ? null : fileAssetMapper.selectById(transfer.getVoucherAssetId());
-        List<BankTransferPaymentEntry> relations = listTransferEntries(transfer.getId());
-        List<BankTransferEntryVO> entries = includeEntries
-                ? relations.stream().map(this::toTransferEntryVO).filter(Objects::nonNull).toList()
-                : List.of();
+        BeerEntry entry = beerEntryMapper.selectById(transfer.getBeerEntryId());
+        CompetitionCategory category = !includeDetails || entry == null ? null : competitionCategoryMapper.selectById(entry.getCategoryId());
+        EntryScanLabel label = !includeDetails || entry == null ? null : entryScanLabelMapper.selectOne(new LambdaQueryWrapper<EntryScanLabel>()
+                .eq(EntryScanLabel::getBeerEntryId, entry.getId())
+                .eq(EntryScanLabel::getStatus, EntryScanLabelStatus.ACTIVE.name())
+                .last("LIMIT 1"));
         return BankTransferVO.builder()
                 .id(transfer.getId())
                 .transferNo(transfer.getTransferNo())
@@ -442,8 +382,14 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
                 .breweryId(transfer.getBreweryId())
                 .breweryName(brewery == null ? null : brewery.getCompanyName())
                 .portalAccountId(transfer.getPortalAccountId())
+                .entryId(transfer.getBeerEntryId())
+                .paymentId(transfer.getEntryPaymentId())
+                .entryName(entry == null ? null : entry.getName())
+                .shortCode(label == null ? null : label.getShortCode())
+                .categoryName(category == null ? null : category.getName())
+                .style(entry == null ? null : entry.getStyle())
                 .amount(transfer.getAmount())
-                .entryCount(relations.size())
+                .entryCount(1)
                 .payerName(transfer.getPayerName())
                 .transferTime(transfer.getTransferTime())
                 .remark(transfer.getRemark())
@@ -455,28 +401,6 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
                 .adminNote(transfer.getAdminNote())
                 .submittedTime(transfer.getSubmittedTime())
                 .processedTime(transfer.getProcessedTime())
-                .entries(entries)
-                .build();
-    }
-
-    private BankTransferEntryVO toTransferEntryVO(BankTransferPaymentEntry relation) {
-        BeerEntry entry = beerEntryMapper.selectById(relation.getBeerEntryId());
-        if (entry == null) {
-            return null;
-        }
-        CompetitionCategory category = competitionCategoryMapper.selectById(entry.getCategoryId());
-        EntryScanLabel label = entryScanLabelMapper.selectOne(new LambdaQueryWrapper<EntryScanLabel>()
-                .eq(EntryScanLabel::getBeerEntryId, entry.getId())
-                .eq(EntryScanLabel::getStatus, EntryScanLabelStatus.ACTIVE.name())
-                .last("LIMIT 1"));
-        return BankTransferEntryVO.builder()
-                .entryId(entry.getId())
-                .paymentId(relation.getEntryPaymentId())
-                .entryName(entry.getName())
-                .shortCode(label == null ? null : label.getShortCode())
-                .categoryName(category == null ? null : category.getName())
-                .style(entry.getStyle())
-                .amount(relation.getAmount())
                 .build();
     }
 
@@ -485,18 +409,13 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
         return contains(item.getTransferNo(), normalized)
                 || contains(item.getBreweryName(), normalized)
                 || contains(item.getCompetitionName(), normalized)
+                || contains(item.getEntryName(), normalized)
                 || contains(item.getRemark(), normalized)
                 || contains(item.getPayerName(), normalized);
     }
 
     private boolean contains(String value, String keyword) {
         return StringUtils.hasText(value) && value.toLowerCase(Locale.ROOT).contains(keyword);
-    }
-
-    private List<BankTransferPaymentEntry> listTransferEntries(Long transferId) {
-        return bankTransferPaymentEntryMapper.selectList(new LambdaQueryWrapper<BankTransferPaymentEntry>()
-                .eq(BankTransferPaymentEntry::getBankTransferPaymentId, transferId)
-                .orderByAsc(BankTransferPaymentEntry::getId));
     }
 
     private PortalAccount requirePortalAccount() {
@@ -607,13 +526,6 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
             return "image/webp";
         }
         return "image/jpeg";
-    }
-
-    private BigDecimal normalizeAmount(BigDecimal amount) {
-        if (amount == null) {
-            throw new BaseException("请填写转账金额");
-        }
-        return amount.setScale(2, RoundingMode.HALF_UP);
     }
 
     private String normalizeRequired(String value, String message) {

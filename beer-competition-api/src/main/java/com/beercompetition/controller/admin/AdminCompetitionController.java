@@ -3,6 +3,8 @@ package com.beercompetition.controller.admin;
 import com.beercompetition.common.result.Result;
 import com.beercompetition.pojo.dto.CompetitionBaseInfoUpdateRequest;
 import com.beercompetition.pojo.dto.CompetitionCreateRequest;
+import com.beercompetition.pojo.dto.CompetitionReopenRegistrationRequest;
+import com.beercompetition.pojo.dto.CompetitionReturnToSampleCheckRequest;
 import com.beercompetition.pojo.dto.CompetitionStyleLibraryUpdateRequest;
 import com.beercompetition.pojo.dto.ConfigNameBatchUpdateRequest;
 import com.beercompetition.pojo.dto.EntryFieldBatchUpdateRequest;
@@ -134,6 +136,24 @@ public class AdminCompetitionController {
     @PostMapping("/{id}/prepare-judging")
     public Result<CompetitionDetailVO> prepareJudging(@PathVariable Long id) {
         return Result.success(competitionService.prepareJudging(id));
+    }
+
+    /**
+     * 将误截止或临时延长的比赛重新开放报名。
+     */
+    @PostMapping("/{id}/reopen-registration")
+    public Result<CompetitionDetailVO> reopenRegistration(@PathVariable Long id,
+                                                          @RequestBody @Valid CompetitionReopenRegistrationRequest request) {
+        return Result.success(competitionService.reopenRegistration(id, request));
+    }
+
+    /**
+     * 将尚未发布第一轮的比赛退回收样核对阶段。
+     */
+    @PostMapping("/{id}/return-to-sample-check")
+    public Result<CompetitionDetailVO> returnToSampleCheck(@PathVariable Long id,
+                                                           @RequestBody @Valid CompetitionReturnToSampleCheckRequest request) {
+        return Result.success(competitionService.returnToSampleCheck(id, request));
     }
 
     /**

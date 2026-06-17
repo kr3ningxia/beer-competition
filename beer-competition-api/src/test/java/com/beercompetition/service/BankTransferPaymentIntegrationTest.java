@@ -7,6 +7,7 @@ import com.beercompetition.pojo.dto.PortalBankTransferSubmitRequest;
 import com.beercompetition.pojo.enums.BankTransferPaymentStatus;
 import com.beercompetition.pojo.enums.EntryPayMethod;
 import com.beercompetition.pojo.enums.EntryPaymentStatus;
+import com.beercompetition.pojo.enums.EntryRefundStatus;
 import com.beercompetition.pojo.enums.EntryStatus;
 import com.beercompetition.testsupport.BeerCompetitionTestData;
 import com.beercompetition.testsupport.IntegrationTestBase;
@@ -15,7 +16,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -28,22 +28,23 @@ class BankTransferPaymentIntegrationTest extends IntegrationTestBase {
     @Autowired
     private BankTransferPaymentService bankTransferPaymentService;
 
+    @Autowired
+    private EntryService entryService;
+
     @Test
-    void submitTransferLocksEntriesAndAdminConfirmRegistersThem() {
+    void submitTransferLocksEntryAndAdminConfirmRegistersIt() {
         BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
-        var entryA = createPendingEntry(fixture, "银行转账A");
-        var entryB = createPendingEntry(fixture, "银行转账B");
+        var entry = createPendingEntry(fixture, "银行转账");
 
         asPortal(fixture.portalA().account().getId());
         var submitted = bankTransferPaymentService.submitPortalTransfer(submitRequest(
-                List.of(entryA.getId(), entryB.getId()), "200.00", "测试付款户名", null));
+                entry.getId(), "测试付款户名", null));
 
         assertThat(submitted.getStatus()).isEqualTo(BankTransferPaymentStatus.SUBMITTED.name());
-        assertThat(submitted.getEntryCount()).isEqualTo(2);
-        assertPayment(entryA.getId(), EntryPaymentStatus.PENDING_CONFIRM, EntryPayMethod.BANK_TRANSFER,
-                submitted.getId());
-        assertPayment(entryB.getId(), EntryPaymentStatus.PENDING_CONFIRM, EntryPayMethod.BANK_TRANSFER,
-                submitted.getId());
+        assertThat(submitted.getEntryCount()).isEqualTo(1);
+        assertThat(submitted.getEntryId()).isEqualTo(entry.getId());
+        assertThat(submitted.getAmount()).isEqualByComparingTo("100.00");
+        assertPayment(entry.getId(), EntryPaymentStatus.PENDING_CONFIRM, EntryPayMethod.BANK_TRANSFER, submitted.getId());
 
         asAdmin(1L);
         AdminBankTransferProcessRequest processRequest = new AdminBankTransferProcessRequest();
@@ -51,14 +52,12 @@ class BankTransferPaymentIntegrationTest extends IntegrationTestBase {
         var confirmed = bankTransferPaymentService.confirmTransfer(submitted.getId(), processRequest);
 
         assertThat(confirmed.getStatus()).isEqualTo(BankTransferPaymentStatus.CONFIRMED.name());
-        assertThatEntryStatus(entryA.getId(), EntryStatus.REGISTERED);
-        assertThatEntryStatus(entryB.getId(), EntryStatus.REGISTERED);
-        assertPayment(entryA.getId(), EntryPaymentStatus.PAID, EntryPayMethod.BANK_TRANSFER, submitted.getId());
-        assertPayment(entryB.getId(), EntryPaymentStatus.PAID, EntryPayMethod.BANK_TRANSFER, submitted.getId());
+        assertThatEntryStatus(entry.getId(), EntryStatus.REGISTERED);
+        assertPayment(entry.getId(), EntryPaymentStatus.PAID, EntryPayMethod.BANK_TRANSFER, submitted.getId());
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT paid_amount FROM entry_payment WHERE beer_entry_id = ?",
                 BigDecimal.class,
-                entryA.getId())).isEqualByComparingTo("100.00");
+                entry.getId())).isEqualByComparingTo("100.00");
     }
 
     @Test
@@ -68,12 +67,12 @@ class BankTransferPaymentIntegrationTest extends IntegrationTestBase {
 
         asPortal(fixture.portalA().account().getId());
         bankTransferPaymentService.submitPortalTransfer(submitRequest(
-                List.of(entry.getId()), "100.00", "测试付款户名", null));
+                entry.getId(), "测试付款户名", null));
 
         assertThatThrownBy(() -> bankTransferPaymentService.submitPortalTransfer(submitRequest(
-                List.of(entry.getId()), "100.00", "测试付款户名", null)))
+                entry.getId(), "测试付款户名", null)))
                 .isInstanceOf(BaseException.class)
-                .hasMessageContaining("等待确认");
+                .hasMessageContaining("等待转账确认");
     }
 
     @Test
@@ -83,7 +82,7 @@ class BankTransferPaymentIntegrationTest extends IntegrationTestBase {
 
         asPortal(fixture.portalA().account().getId());
         var submitted = bankTransferPaymentService.submitPortalTransfer(submitRequest(
-                List.of(entry.getId()), "100.00", "测试付款户名", null));
+                entry.getId(), "测试付款户名", null));
 
         asAdmin(1L);
         AdminBankTransferProcessRequest rejectRequest = new AdminBankTransferProcessRequest();
@@ -96,7 +95,7 @@ class BankTransferPaymentIntegrationTest extends IntegrationTestBase {
 
         asPortal(fixture.portalA().account().getId());
         var retried = bankTransferPaymentService.submitPortalTransfer(submitRequest(
-                List.of(entry.getId()), "100.00", "测试付款户名", null));
+                entry.getId(), "测试付款户名", null));
         assertThat(retried.getStatus()).isEqualTo(BankTransferPaymentStatus.SUBMITTED.name());
     }
 
@@ -107,7 +106,7 @@ class BankTransferPaymentIntegrationTest extends IntegrationTestBase {
 
         asPortal(fixture.portalA().account().getId());
         var submitted = bankTransferPaymentService.submitPortalTransfer(submitRequest(
-                List.of(entry.getId()), "100.00", "测试付款户名", null));
+                entry.getId(), "测试付款户名", null));
 
         asPortal(fixture.portalB().account().getId());
         assertThatThrownBy(() -> bankTransferPaymentService.cancelPortalTransfer(submitted.getId()))
@@ -129,9 +128,41 @@ class BankTransferPaymentIntegrationTest extends IntegrationTestBase {
         asPortal(fixture.portalA().account().getId());
 
         assertThatThrownBy(() -> bankTransferPaymentService.submitPortalTransfer(submitRequest(
-                List.of(entry.getId()), "100.00", "测试付款户名", otherPortalVoucherId)))
+                entry.getId(), "测试付款户名", otherPortalVoucherId)))
                 .isInstanceOf(BaseException.class)
                 .hasMessageContaining("转账凭证不存在");
+    }
+
+    @Test
+    void bankTransferRefundIsCompletedAsManualRefundWithoutWechatRetry() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        var entry = createPendingEntry(fixture, "线下退款");
+
+        asPortal(fixture.portalA().account().getId());
+        var submitted = bankTransferPaymentService.submitPortalTransfer(submitRequest(entry.getId(), "测试付款户名", null));
+
+        asAdmin(1L);
+        bankTransferPaymentService.confirmTransfer(submitted.getId(), new AdminBankTransferProcessRequest());
+
+        Long paymentId = jdbcTemplate.queryForObject("SELECT id FROM entry_payment WHERE beer_entry_id = ?",
+                Long.class, entry.getId());
+        jdbcTemplate.update("""
+                INSERT INTO entry_refund
+                  (beer_entry_id, entry_payment_id, refund_no, amount, status, reason,
+                   requested_by_portal_id, requested_time)
+                VALUES (?, ?, ?, 100.00, 'REQUESTED', '测试退款', ?, NOW())
+                """, entry.getId(), paymentId, testRun + "-RF-BANK", fixture.portalA().account().getId());
+        Long refundId = jdbcTemplate.queryForObject("SELECT id FROM entry_refund WHERE refund_no = ?",
+                Long.class, testRun + "-RF-BANK");
+
+        entryService.approveRefund(refundId, null);
+
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM entry_refund WHERE id = ?",
+                String.class, refundId)).isEqualTo(EntryRefundStatus.SUCCESS.name());
+        assertThat(jdbcTemplate.queryForObject("SELECT wechat_refund_status FROM entry_refund WHERE id = ?",
+                String.class, refundId)).isEqualTo("MANUAL_SUCCESS");
+        assertPayment(entry.getId(), EntryPaymentStatus.REFUNDED, EntryPayMethod.BANK_TRANSFER, submitted.getId());
+        assertThatEntryStatus(entry.getId(), EntryStatus.CANCELED);
     }
 
     private com.beercompetition.pojo.po.BeerEntry createPendingEntry(BeerCompetitionTestData.Fixture fixture,
@@ -140,11 +171,9 @@ class BankTransferPaymentIntegrationTest extends IntegrationTestBase {
                 fixture.category().getId(), testRun + "-" + name, EntryStatus.PENDING_PAYMENT, false);
     }
 
-    private PortalBankTransferSubmitRequest submitRequest(List<Long> entryIds, String amount, String payerName,
-                                                          Long voucherAssetId) {
+    private PortalBankTransferSubmitRequest submitRequest(Long entryId, String payerName, Long voucherAssetId) {
         PortalBankTransferSubmitRequest request = new PortalBankTransferSubmitRequest();
-        request.setEntryIds(entryIds);
-        request.setAmount(new BigDecimal(amount));
+        request.setEntryId(entryId);
         request.setPayerName(payerName);
         request.setTransferTime(LocalDateTime.now().minusMinutes(5));
         request.setRemark(testRun + "-厂牌转账备注");
@@ -161,10 +190,6 @@ class BankTransferPaymentIntegrationTest extends IntegrationTestBase {
                 """, portalAccountId, filename, "uploads/BANK_TRANSFER_VOUCHER/" + filename,
                 "/uploads/BANK_TRANSFER_VOUCHER/" + filename);
         return jdbcTemplate.queryForObject("SELECT id FROM file_asset WHERE file_name = ?", Long.class, filename);
-    }
-
-    private void assertEntryStatus(Long entryId, EntryStatus expected) {
-        assertThatEntryStatus(entryId, expected);
     }
 
     private void assertThatEntryStatus(Long entryId, EntryStatus expected) {

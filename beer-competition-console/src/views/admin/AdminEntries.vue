@@ -285,6 +285,7 @@
               <p>{{ detail.refundReason || detail.refund?.reason || '未填写退款原因' }}</p>
               <dl>
                 <div><dt>退款状态</dt><dd>{{ refundStatusText(detail.refundStatus) }}</dd></div>
+                <div><dt>付款方式</dt><dd>{{ paymentMethodLabel(detail.payment?.payMethod) }}</dd></div>
                 <div><dt>金额</dt><dd>{{ formatMoney(detail.refund?.amount || detail.payment?.amount) }}</dd></div>
                 <div><dt>申请时间</dt><dd>{{ formatTime(detail.refundRequestedAt || detail.refund?.requestedTime) }}</dd></div>
                 <div><dt>处理时间</dt><dd>{{ formatTime(detail.refundProcessedAt || detail.refund?.processedTime) }}</dd></div>
@@ -295,9 +296,9 @@
               <textarea v-model.trim="statusReason" placeholder="可填写退款处理说明"></textarea>
             </label>
             <div class="status-actions">
-              <button type="button" :disabled="!detail.canApproveRefund" @click="runRefundAction('approve')">确认退款</button>
+              <button type="button" :disabled="!detail.canApproveRefund" @click="runRefundAction('approve')">{{ refundApproveButtonText(detail) }}</button>
               <button type="button" :disabled="!detail.canRejectRefund" @click="runRefundAction('reject')">驳回退款</button>
-              <button type="button" :disabled="detail.refundStatus !== 'FAILED'" @click="runRefundAction('retry')">重试退款</button>
+              <button type="button" :disabled="detail.refundStatus !== 'FAILED' || isManualRefundPayment(detail)" @click="runRefundAction('retry')">重试退款</button>
             </div>
           </section>
 
@@ -825,15 +826,16 @@ async function runRefundAction(type) {
     openEntryConfirm({
       action: 'refund',
       kicker: '退款处理',
-      title: type === 'retry' ? '确认重试退款？' : '确认退款？',
+      title: refundConfirmTitle(current, type),
       copy: type === 'retry'
-        ? '系统会重新发起退款处理。退款成功后，该酒款将取消报名并退出后续流程。'
-        : '确认后将进入退款处理流程；退款成功后，该酒款将取消报名并退出后续流程。',
+        ? '将重新提交微信退款。退款成功后，这款酒会取消报名并退出后续流程。'
+        : refundConfirmCopy(current),
       summary: entrySummaryItems(current, [
+        { label: '付款方式', value: paymentMethodLabel(current.payment?.payMethod) },
         { label: '退款状态', value: refundStatusText(current.refundStatus) },
         { label: '退款金额', value: formatMoney(current.refund?.amount || current.payment?.amount) },
       ]),
-      confirmText: type === 'retry' ? '重试退款' : '确认退款',
+      confirmText: type === 'retry' ? '重试退款' : refundApproveButtonText(current),
       loadingText: type === 'retry' ? '重试中' : '确认中',
       reasonLabel: '处理原因',
       reasonPlaceholder: '可填写退款处理说明。',
@@ -859,7 +861,8 @@ async function executeRefundAction(type, reason = statusReason.value) {
 }
 
 function refundActionLabel(type) {
-  return type === 'approve' ? '退款已确认' : type === 'reject' ? '退款已驳回' : '退款已重试'
+  if (type === 'approve') return isManualRefundPayment(detail.value) ? '线下退款已登记' : '退款已确认'
+  return type === 'reject' ? '退款已驳回' : '退款已重试'
 }
 
 function statusActionLabel(type) {
@@ -875,6 +878,10 @@ function entryStatusLabel(value) {
 
 function paymentLabel(value) {
   return { UNPAID: '待付款', PENDING_CONFIRM: '等待转账确认', PAID: '已付款', REFUNDED: '已退款', CANCELED: '已取消' }[value] || value || '-'
+}
+
+function paymentMethodLabel(value) {
+  return { WECHAT: '微信支付', BANK_TRANSFER: '银行转账', MANUAL: '人工确认', MOCK: '测试支付' }[value] || '未记录'
 }
 
 function refundStatusText(value) {
@@ -903,11 +910,31 @@ function paymentRefundLabel(entry) {
 function paymentRefundMeta(entry) {
   if (!entry?.refundStatus) return ''
   if (entry.refundStatus === 'REQUESTED') return '等待处理'
-  if (['APPROVED', 'PROCESSING'].includes(entry.refundStatus)) return '原路退回中'
+  if (['APPROVED', 'PROCESSING'].includes(entry.refundStatus)) return '退款处理中'
   if (entry.refundStatus === 'SUCCESS') return '报名已取消'
   if (entry.refundStatus === 'FAILED') return '需要重试'
   if (entry.refundStatus === 'REJECTED') return '付款仍有效'
   return ''
+}
+
+function isManualRefundPayment(entry) {
+  return ['BANK_TRANSFER', 'MANUAL'].includes(entry?.payment?.payMethod)
+}
+
+function refundApproveButtonText(entry) {
+  return isManualRefundPayment(entry) ? '确认线下退款完成' : '确认退款'
+}
+
+function refundConfirmTitle(entry, type) {
+  if (type === 'retry') return '确认重试退款？'
+  return isManualRefundPayment(entry) ? '确认线下退款已完成？' : '确认退款？'
+}
+
+function refundConfirmCopy(entry) {
+  if (isManualRefundPayment(entry)) {
+    return '请在完成实际转账退款后再确认。确认后，这款酒会取消报名并退出后续流程。'
+  }
+  return '确认后将提交退款处理。退款成功后，这款酒会取消报名并退出后续流程。'
 }
 
 function deliveryLabel(value) {
