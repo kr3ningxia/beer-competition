@@ -67,13 +67,13 @@
     <section v-if="rankingConfirmationVisible" :class="['card', 'confirmation-task-card', { done: rankingConfirmation?.mineConfirmed }]">
       <div class="split">
         <div>
-          <h2 class="section-title compact">{{ rankingConfirmation.mineConfirmed ? '本桌排序已确认' : '本桌排序待确认' }}</h2>
+          <h2 class="section-title compact">{{ rankingConfirmation.mineConfirmed ? '已确认本桌排序' : '请确认本桌排序' }}</h2>
           <p class="task-hint">{{ rankingConfirmationHint }}</p>
         </div>
         <span :class="['pill', rankingConfirmation.mineConfirmed ? 'status-ok' : 'status-warn']">{{ rankingConfirmationProgressText }}</span>
       </div>
       <button class="scan-button confirmation-button" type="button" @click="router.push(`/ranking-confirmation/${current.roundTableId}`)">
-        {{ rankingConfirmation.mineConfirmed ? '查看本桌排序' : '去确认本桌排序' }}
+        {{ rankingConfirmation.mineConfirmed ? '查看本桌排序' : '查看待确认排序' }}
       </button>
     </section>
 
@@ -113,13 +113,13 @@
     <section v-if="scoreConfirmationVisible" :class="['card', 'confirmation-task-card', { done: scoreConfirmation?.mineConfirmed }]">
       <div class="split">
         <div>
-          <h2 class="section-title compact">{{ scoreConfirmation.mineConfirmed ? '本桌结果已确认' : '本桌结果待确认' }}</h2>
+          <h2 class="section-title compact">{{ scoreConfirmation.mineConfirmed ? '已确认本桌结果' : '请确认本桌结果' }}</h2>
           <p class="task-hint">{{ scoreConfirmationHint }}</p>
         </div>
         <span :class="['pill', scoreConfirmation.mineConfirmed ? 'status-ok' : 'status-warn']">{{ confirmationProgressText }}</span>
       </div>
       <button class="scan-button confirmation-button" type="button" @click="router.push(`/score-confirmation/${current.roundTableId}`)">
-        {{ scoreConfirmation.mineConfirmed ? '查看本桌结果' : '去确认本桌结果' }}
+        {{ scoreConfirmation.mineConfirmed ? '查看本桌结果' : '查看待确认结果' }}
       </button>
     </section>
 
@@ -292,8 +292,8 @@ const rankingConfirmationVisible = computed(() => (
   && isRankingRound.value
   && Boolean(rankingConfirmation.value?.readyForConfirmation)
 ))
-const confirmationProgressText = computed(() => `${scoreConfirmation.value?.confirmedCount || 0}/${scoreConfirmation.value?.requiredCount || 0}`)
-const rankingConfirmationProgressText = computed(() => `${rankingConfirmation.value?.confirmedCount || 0}/${rankingConfirmation.value?.requiredCount || 0}`)
+const confirmationProgressText = computed(() => `确认 ${scoreConfirmation.value?.confirmedCount || 0}/${scoreConfirmation.value?.requiredCount || 0}`)
+const rankingConfirmationProgressText = computed(() => `确认 ${rankingConfirmation.value?.confirmedCount || 0}/${rankingConfirmation.value?.requiredCount || 0}`)
 const scoreConfirmationProgressLabel = computed(() => (
   scoreConfirmation.value?.mineConfirmed ? '已确认结果' : '待确认结果'
 ))
@@ -311,16 +311,26 @@ const myReviewStatsText = computed(() => ({
   comment: hasSubmittedReviewStats.value ? formatCount(myReviewStats.value?.averageCommentChars, '字') : '待提交',
   siteComment: hasSiteReviewStats.value ? `现场平均 ${formatCount(myReviewStats.value?.siteAverageCommentChars, '字')}` : '现场暂无参考',
 }))
-const rankingConfirmationHint = computed(() => (
-  rankingConfirmation.value?.mineConfirmed
-    ? '你已确认本桌排序，等待桌长最终提交。'
-    : '请核对本桌排序，确认后桌长才能最终提交。'
-))
-const scoreConfirmationHint = computed(() => (
-  scoreConfirmation.value?.mineConfirmed
-    ? '你已确认本桌结果，等待桌长最终提交。'
-    : '桌长已完成本桌结果，请核对共识分、评语和晋级名单。'
-))
+const rankingConfirmationHint = computed(() => {
+  if (!rankingConfirmation.value?.mineConfirmed) {
+    return '桌长已整理本桌排序，请核对顺序和候选酒款后确认。'
+  }
+  const confirmed = Number(rankingConfirmation.value?.confirmedCount || 0)
+  const required = Number(rankingConfirmation.value?.requiredCount || 0)
+  return required > 0 && confirmed >= required
+    ? '本桌确认已齐，等待桌长提交。'
+    : '你已完成确认，等待其他评审确认。'
+})
+const scoreConfirmationHint = computed(() => {
+  if (!scoreConfirmation.value?.mineConfirmed) {
+    return '桌长已整理共识分、综合评语和晋级结果，请核对后确认。'
+  }
+  const confirmed = Number(scoreConfirmation.value?.confirmedCount || 0)
+  const required = Number(scoreConfirmation.value?.requiredCount || 0)
+  return required > 0 && confirmed >= required
+    ? '本桌确认已齐，等待桌长提交。'
+    : '你已完成确认，等待其他评审确认。'
+})
 const progressLabel = computed(() => (isCaptain.value ? '我的评分' : '我的进度'))
 const progressCount = computed(() => (
   isCaptain.value

@@ -2151,6 +2151,8 @@ public class CompetitionServiceImpl implements CompetitionService {
                     .advanced(advanced)
                     .commentWarnings(0)
                     .averageReviewMinutes(0)
+                    .averageReviewSeconds(0)
+                    .averageCommentChars(0)
                     .build();
         }
         if (RoundType.RANKING.name().equals(currentRound.getRoundType())) {
@@ -2170,6 +2172,8 @@ public class CompetitionServiceImpl implements CompetitionService {
                     .commentWarnings(0)
                     .averageReviewMinutes(averageMinutes(currentRound.getPublishedTime(),
                             roundResults.stream().map(RoundResult::getSubmittedTime).toList()))
+                    .averageReviewSeconds(0)
+                    .averageCommentChars(0)
                     .build();
         }
         List<RoundTableEntry> roundEntries = roundTableEntryMapper.selectList(new LambdaQueryWrapper<RoundTableEntry>()
@@ -2184,6 +2188,10 @@ public class CompetitionServiceImpl implements CompetitionService {
                         .in(ScoreRecord::getBeerEntryId, entryIds));
         List<ScoreRecord> finalScores = roundScores.stream()
                 .filter(record -> Objects.equals(record.getFinalFlag(), 1))
+                .toList();
+        List<ScoreRecord> judgeScores = roundScores.stream()
+                .filter(record -> Objects.equals(record.getRoundId(), currentRound.getId()))
+                .filter(record -> Objects.equals(record.getFinalFlag(), 0))
                 .toList();
         int advanced = (int) finalScores.stream()
                 .filter(record -> Objects.equals(record.getAdvancedFlag(), 1))
@@ -2207,7 +2215,22 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .commentWarnings(commentWarnings)
                 .averageReviewMinutes(averageMinutes(currentRound.getPublishedTime(),
                         roundScores.stream().map(ScoreRecord::getCreateTime).toList()))
+                .averageReviewSeconds(averageInt(judgeScores.stream()
+                        .map(ScoreRecord::getDurationSeconds)
+                        .filter(Objects::nonNull)
+                        .toList()))
+                .averageCommentChars(averageInt(judgeScores.stream()
+                        .map(ScoreRecord::getCommentCharCount)
+                        .filter(Objects::nonNull)
+                        .toList()))
                 .build();
+    }
+
+    private int averageInt(List<Integer> values) {
+        if (values == null || values.isEmpty()) {
+            return 0;
+        }
+        return (int) Math.round(values.stream().mapToInt(Integer::intValue).average().orElse(0));
     }
 
     private int averageMinutes(LocalDateTime startTime, List<LocalDateTime> endTimes) {

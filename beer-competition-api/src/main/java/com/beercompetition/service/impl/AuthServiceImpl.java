@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
+import com.beercompetition.common.exception.UnauthorizedException;
 import com.beercompetition.common.util.PiiService;
 import com.beercompetition.common.util.Md5Util;
 import com.beercompetition.mapper.AdminUserMapper;
@@ -18,6 +19,7 @@ import com.beercompetition.mapper.RoundTableMapper;
 import com.beercompetition.mapper.RoundTableMemberMapper;
 import com.beercompetition.mapper.SmsCodeLogMapper;
 import com.beercompetition.pojo.dto.AdminLoginRequest;
+import com.beercompetition.pojo.dto.RefreshTokenRequest;
 import com.beercompetition.pojo.dto.SmsLoginRequest;
 import com.beercompetition.pojo.dto.SmsSendRequest;
 import com.beercompetition.pojo.enums.JudgeAccountStatus;
@@ -41,6 +43,7 @@ import com.beercompetition.pojo.vo.CurrentUserResponse;
 import com.beercompetition.pojo.vo.LoginResponse;
 import com.beercompetition.properties.JwtProperties;
 import com.beercompetition.properties.SmsProperties;
+import com.beercompetition.security.RefreshSession;
 import com.beercompetition.security.JwtUtil;
 import com.beercompetition.service.AuthService;
 import com.beercompetition.service.SmsAuthProvider;
@@ -51,6 +54,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.Duration;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -61,6 +69,12 @@ import java.util.UUID;
 public class AuthServiceImpl implements AuthService {
 
     private static final String PORTAL_PROFILE_PLACEHOLDER_PREFIX = "待完善";
+    private static final String REFRESH_KEY_PREFIX = "beer-competition:auth:refresh:";
+    private static final String REFRESH_TOKEN_SEPARATOR = ".";
+    private static final int REFRESH_SECRET_BYTES = 32;
+    private static final int ADMIN_STATUS_ACTIVE = 1;
+    private static final int PORTAL_STATUS_ACTIVE = 1;
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final AdminUserMapper adminUserMapper;
     private final PortalAccountMapper portalAccountMapper;
@@ -89,7 +103,8 @@ public class AuthServiceImpl implements AuthService {
         if (!Md5Util.encode(request.getPassword()).equals(adminUser.getPassword())) {
             throw new BaseException("用户名或密码错误");
         }
-        return buildLoginResponse(adminUser.getId(), adminUser.getName(), UserRole.ADMIN, jwtProperties.getAdminTtl());
+        return buildLoginResponse(adminUser.getId(), adminUser.getName(), UserRole.ADMIN,
+                jwtProperties.getAdminTtl(), jwtProperties.getAdminRefreshTtl());
     }
 
     @Override
@@ -141,7 +156,8 @@ public class AuthServiceImpl implements AuthService {
 
         // 3) 组装并返回登录态
         boolean profileComplete = isPortalProfileComplete(account);
-        LoginResponse response = buildLoginResponse(account.getId(), account.getDisplayName(), UserRole.PORTAL, jwtProperties.getPortalTtl());
+        LoginResponse response = buildLoginResponse(account.getId(), account.getDisplayName(), UserRole.PORTAL,
+                jwtProperties.getPortalTtl(), jwtProperties.getPortalRefreshTtl());
         response.setNewAccount(newAccount);
         response.setProfileComplete(profileComplete);
         response.setProfileRequired(!profileComplete);
@@ -207,6 +223,50 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    public LoginResponse refreshToken(RefreshTokenRequest request) {
+        // 1) 解析刷新凭证并读取 Redis 会话
+        String refreshToken = request.getRefreshToken();
+        String sessionId = parseRefreshSessionId(refreshToken);
+        String refreshKey = buildRefreshKey(sessionId);
+        RefreshSession session = readRefreshSession(refreshKey);
+        if (session == null || !tokenHashMatches(refreshToken, session.getTokenHash())) {
+            throw new UnauthorizedException("登录状态已失效，请重新登录");
+        }
+        if (session.getExpiresAtMillis() != null && session.getExpiresAtMillis() <= System.currentTimeMillis()) {
+            redisTemplate.delete(refreshKey);
+            throw new UnauthorizedException("登录状态已失效，请重新登录");
+        }
+
+        // 2) 校验账号状态并立刻作废旧刷新凭证
+        SessionSubject subject = validateRefreshSubject(session);
+        Boolean deleted = redisTemplate.delete(refreshKey);
+        if (!Boolean.TRUE.equals(deleted)) {
+            throw new UnauthorizedException("登录状态已失效，请重新登录");
+        }
+
+        // 3) 生成新的 access token 和新的 refresh token
+        return buildLoginResponse(subject.userId(), subject.displayName(), subject.role(),
+                accessTtlMillis(subject.role()), refreshTtlMillis(subject.role()));
+    }
+
+    @Override
+    public void logout(RefreshTokenRequest request) {
+        // 1) 解析刷新凭证
+        String refreshToken = request.getRefreshToken();
+        String sessionId = parseRefreshSessionId(refreshToken);
+        String refreshKey = buildRefreshKey(sessionId);
+        RefreshSession session = readRefreshSession(refreshKey);
+        if (session == null) {
+            return;
+        }
+
+        // 2) 仅注销与当前明文凭证匹配的 Redis 会话
+        if (tokenHashMatches(refreshToken, session.getTokenHash())) {
+            redisTemplate.delete(refreshKey);
+        }
+    }
+
+    @Override
     public CurrentUserResponse getCurrentUser(UserRole role) {
         Long currentId = BaseContext.getCurrentId();
         if (currentId == null) {
@@ -218,7 +278,7 @@ public class AuthServiceImpl implements AuthService {
                 if (adminUser == null) {
                     throw new ResourceNotFoundException("管理员不存在");
                 }
-                if (adminUser.getStatus() == null || adminUser.getStatus() != 1) {
+                if (adminUser.getStatus() == null || adminUser.getStatus() != ADMIN_STATUS_ACTIVE) {
                     throw new BaseException("管理员账号已停用，请重新登录");
                 }
                 yield CurrentUserResponse.builder()
@@ -302,15 +362,21 @@ public class AuthServiceImpl implements AuthService {
         return "beer-competition:sms-interval:" + bizType.name() + ":" + phoneHash;
     }
 
-    private LoginResponse buildLoginResponse(Long userId, String displayName, UserRole role, long ttlMillis) {
+    private LoginResponse buildLoginResponse(Long userId, String displayName, UserRole role, long accessTtlMillis, long refreshTtlMillis) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("uid", userId);
         claims.put("role", role.name());
         claims.put("scope", role.name().toLowerCase());
         claims.put("displayName", displayName);
-        String token = JwtUtil.createToken(jwtProperties.getSecretKey(), ttlMillis, claims);
+        claims.put("jti", UUID.randomUUID().toString().replace("-", ""));
+        String accessToken = JwtUtil.createToken(jwtProperties.getSecretKey(), accessTtlMillis, claims);
+        String refreshToken = createRefreshSession(userId, displayName, role, refreshTtlMillis);
         return LoginResponse.builder()
-                .token(token)
+                .token(accessToken)
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .expiresIn(accessTtlMillis / 1000)
+                .scope(role.name().toLowerCase())
                 .userId(userId)
                 .role(role.name())
                 .displayName(displayName)
@@ -355,11 +421,155 @@ public class AuthServiceImpl implements AuthService {
 
     private LoginResponse buildJudgeLoginResponse(JudgeAccount account) {
         JudgeAccountStatus status = JudgeAccountStatus.of(account.getStatus());
-        LoginResponse response = buildLoginResponse(account.getId(), resolveJudgeDisplayName(account), UserRole.JUDGE, jwtProperties.getJudgeTtl());
+        LoginResponse response = buildLoginResponse(account.getId(), resolveJudgeDisplayName(account), UserRole.JUDGE,
+                jwtProperties.getJudgeTtl(), jwtProperties.getJudgeRefreshTtl());
         response.setUserId(null);
         response.setStatus(status.getCode());
         response.setProfileRequired(status == JudgeAccountStatus.PROFILE_INCOMPLETE);
         return response;
+    }
+
+    private String createRefreshSession(Long userId, String displayName, UserRole role, long refreshTtlMillis) {
+        String sessionId = UUID.randomUUID().toString().replace("-", "");
+        String refreshToken = sessionId + REFRESH_TOKEN_SEPARATOR + randomTokenSecret();
+        long issuedAt = System.currentTimeMillis();
+        RefreshSession session = RefreshSession.builder()
+                .sessionId(sessionId)
+                .tokenHash(hashRefreshToken(refreshToken))
+                .userId(userId)
+                .role(role.name())
+                .scope(role.name().toLowerCase())
+                .displayName(displayName)
+                .issuedAtMillis(issuedAt)
+                .expiresAtMillis(issuedAt + refreshTtlMillis)
+                .build();
+        redisTemplate.opsForValue().set(buildRefreshKey(sessionId), session, Duration.ofMillis(refreshTtlMillis));
+        return refreshToken;
+    }
+
+    private RefreshSession readRefreshSession(String refreshKey) {
+        Object value = redisTemplate.opsForValue().get(refreshKey);
+        if (value instanceof RefreshSession session) {
+            return session;
+        }
+        if (value instanceof Map<?, ?> map) {
+            return RefreshSession.builder()
+                    .sessionId(stringValue(map.get("sessionId")))
+                    .tokenHash(stringValue(map.get("tokenHash")))
+                    .userId(longValue(map.get("userId")))
+                    .role(stringValue(map.get("role")))
+                    .scope(stringValue(map.get("scope")))
+                    .displayName(stringValue(map.get("displayName")))
+                    .issuedAtMillis(longValue(map.get("issuedAtMillis")))
+                    .expiresAtMillis(longValue(map.get("expiresAtMillis")))
+                    .build();
+        }
+        return null;
+    }
+
+    private SessionSubject validateRefreshSubject(RefreshSession session) {
+        UserRole role;
+        try {
+            role = UserRole.valueOf(session.getRole());
+        } catch (IllegalArgumentException | NullPointerException ex) {
+            throw new UnauthorizedException("登录状态已失效，请重新登录");
+        }
+        return switch (role) {
+            case ADMIN -> {
+                AdminUser adminUser = adminUserMapper.selectById(session.getUserId());
+                if (adminUser == null || adminUser.getStatus() == null || adminUser.getStatus() != ADMIN_STATUS_ACTIVE) {
+                    throw new UnauthorizedException("管理员账号已停用，请重新登录");
+                }
+                yield new SessionSubject(adminUser.getId(), adminUser.getName(), role);
+            }
+            case PORTAL -> {
+                PortalAccount account = portalAccountMapper.selectById(session.getUserId());
+                if (account == null || account.getStatus() == null || account.getStatus() != PORTAL_STATUS_ACTIVE) {
+                    throw new UnauthorizedException("厂牌账号已禁用，请重新登录");
+                }
+                yield new SessionSubject(account.getId(), account.getDisplayName(), role);
+            }
+            case JUDGE -> {
+                JudgeAccount account = judgeAccountMapper.selectById(session.getUserId());
+                if (account == null || !JudgeAccountStatus.of(account.getStatus()).canLogin()) {
+                    throw new UnauthorizedException("评审账号已停用，请重新登录");
+                }
+                yield new SessionSubject(account.getId(), resolveJudgeDisplayName(account), role);
+            }
+        };
+    }
+
+    private String parseRefreshSessionId(String refreshToken) {
+        if (!StringUtils.hasText(refreshToken)) {
+            throw new UnauthorizedException("登录状态已失效，请重新登录");
+        }
+        int separatorIndex = refreshToken.indexOf(REFRESH_TOKEN_SEPARATOR);
+        if (separatorIndex <= 0) {
+            throw new UnauthorizedException("登录状态已失效，请重新登录");
+        }
+        return refreshToken.substring(0, separatorIndex);
+    }
+
+    private String buildRefreshKey(String sessionId) {
+        return REFRESH_KEY_PREFIX + sessionId;
+    }
+
+    private String randomTokenSecret() {
+        byte[] bytes = new byte[REFRESH_SECRET_BYTES];
+        SECURE_RANDOM.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    private String hashRefreshToken(String refreshToken) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hashed = digest.digest(refreshToken.getBytes(StandardCharsets.UTF_8));
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(hashed);
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 algorithm unavailable", ex);
+        }
+    }
+
+    private boolean tokenHashMatches(String refreshToken, String expectedHash) {
+        if (!StringUtils.hasText(expectedHash)) {
+            return false;
+        }
+        byte[] actual = hashRefreshToken(refreshToken).getBytes(StandardCharsets.UTF_8);
+        byte[] expected = expectedHash.getBytes(StandardCharsets.UTF_8);
+        return MessageDigest.isEqual(actual, expected);
+    }
+
+    private long accessTtlMillis(UserRole role) {
+        return switch (role) {
+            case ADMIN -> jwtProperties.getAdminTtl();
+            case PORTAL -> jwtProperties.getPortalTtl();
+            case JUDGE -> jwtProperties.getJudgeTtl();
+        };
+    }
+
+    private long refreshTtlMillis(UserRole role) {
+        return switch (role) {
+            case ADMIN -> jwtProperties.getAdminRefreshTtl();
+            case PORTAL -> jwtProperties.getPortalRefreshTtl();
+            case JUDGE -> jwtProperties.getJudgeRefreshTtl();
+        };
+    }
+
+    private String stringValue(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
+
+    private Long longValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        return Long.valueOf(String.valueOf(value));
+    }
+
+    private record SessionSubject(Long userId, String displayName, UserRole role) {
     }
 
     private String resolveJudgeDisplayName(JudgeAccount account) {

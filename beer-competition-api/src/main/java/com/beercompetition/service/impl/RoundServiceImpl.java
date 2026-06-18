@@ -1212,6 +1212,9 @@ public class RoundServiceImpl implements RoundService {
                 .stream()
                 .filter(record -> entries.stream().anyMatch(entry -> entry.getBeerEntryId().equals(record.getBeerEntryId())))
                 .count();
+        List<ScoreRecord> tableJudgeScores = scoreRecordMapper.selectList(new LambdaQueryWrapper<ScoreRecord>()
+                .eq(ScoreRecord::getRoundTableId, table.getId())
+                .eq(ScoreRecord::getFinalFlag, FLAG_FALSE));
         return RoundTableVO.builder()
                 .id(table.getId())
                 .name(table.getTableName())
@@ -1233,6 +1236,14 @@ public class RoundServiceImpl implements RoundService {
                 .advancedCount(advancedCount)
                 .judgeProgress(resolveJudgeProgress(table, entries))
                 .captainProgress(entries.isEmpty() ? 0 : finalCount * FULL_PROGRESS / entries.size())
+                .averageDurationSeconds(averageInt(tableJudgeScores.stream()
+                        .map(ScoreRecord::getDurationSeconds)
+                        .filter(Objects::nonNull)
+                        .toList()))
+                .averageCommentChars(averageInt(tableJudgeScores.stream()
+                        .map(ScoreRecord::getCommentCharCount)
+                        .filter(Objects::nonNull)
+                        .toList()))
                 .resultVersion(currentResultVersion(table))
                 .confirmationConfirmedCount(RoundType.RANKING.name().equals(currentRound.getRoundType())
                         ? resolveRankingConfirmationConfirmedCount(table)
@@ -2230,6 +2241,13 @@ public class RoundServiceImpl implements RoundService {
 
     private int countMembers(List<RoundTableMember> members, String role) {
         return (int) members.stream().filter(member -> role.equals(member.getRole())).count();
+    }
+
+    private int averageInt(List<Integer> values) {
+        if (values == null || values.isEmpty()) {
+            return 0;
+        }
+        return (int) Math.round(values.stream().mapToInt(Integer::intValue).average().orElse(0));
     }
 
     private String roleLabel(String role) {

@@ -94,7 +94,7 @@ async function submit() {
   loading.value = true
   try {
     const data = await adminLogin(form)
-    setSession('admin', data.token, data.displayName)
+    setSession('admin', data)
     ElMessage.success('登录成功')
     router.push('/admin/dashboard')
   } finally {

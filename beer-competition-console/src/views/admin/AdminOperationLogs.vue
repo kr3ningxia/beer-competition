@@ -6,43 +6,78 @@
         <h1>操作日志</h1>
       </div>
       <div class="head-actions">
-        <button class="tool-button" type="button" @click="loadLogs">
+        <button class="tool-button" type="button" @click="resetFilters">
+          <RefreshLeft />
+          重置
+        </button>
+        <button class="tool-button primary" type="button" :disabled="loading" @click="loadLogs">
           <Refresh />
           刷新
         </button>
       </div>
     </section>
 
-    <section class="filter-panel">
-      <label class="field">
-        <span>开始时间</span>
-        <input v-model="filters.startTime" type="datetime-local" />
+    <section class="filter-panel" aria-label="操作日志筛选">
+      <label class="field time-field">
+        <span>时间范围</span>
+        <el-date-picker
+          v-model="timeRange"
+          class="audit-date-range"
+          type="datetimerange"
+          unlink-panels
+          start-placeholder="开始时间"
+          end-placeholder="结束时间"
+          format="YYYY-MM-DD HH:mm"
+          value-format="YYYY-MM-DD HH:mm:ss"
+          range-separator="至"
+          popper-class="operation-log-date-popper"
+          @change="applyFilters"
+        />
       </label>
-      <label class="field">
-        <span>结束时间</span>
-        <input v-model="filters.endTime" type="datetime-local" />
-      </label>
+
       <label class="field">
         <span>操作者</span>
-        <select v-model="filters.adminUserId">
-          <option value="">全部操作者</option>
-          <option v-for="item in adminOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-        </select>
+        <el-select
+          v-model="filters.adminUserId"
+          class="audit-select"
+          filterable
+          clearable
+          placeholder="全部操作者"
+          popper-class="operation-log-select-popper"
+          @change="applyFilters"
+        >
+          <el-option v-for="item in adminOptions" :key="item.value" :label="item.label" :value="item.value" />
+        </el-select>
       </label>
+
       <label class="field">
         <span>业务对象</span>
-        <select v-model="filters.targetType">
-          <option value="">全部对象</option>
-          <option v-for="item in targetTypeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-        </select>
+        <el-select
+          v-model="filters.targetType"
+          class="audit-select"
+          clearable
+          placeholder="全部对象"
+          popper-class="operation-log-select-popper"
+          @change="applyFilters"
+        >
+          <el-option v-for="item in targetTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
+        </el-select>
       </label>
+
       <label class="field">
         <span>操作类型</span>
-        <select v-model="filters.actionGroup">
-          <option value="">全部类型</option>
-          <option v-for="item in actionGroupOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-        </select>
+        <el-select
+          v-model="filters.actionGroup"
+          class="audit-select"
+          clearable
+          placeholder="全部类型"
+          popper-class="operation-log-select-popper"
+          @change="applyFilters"
+        >
+          <el-option v-for="item in actionGroupOptions" :key="item.value" :label="item.label" :value="item.value" />
+        </el-select>
       </label>
+
       <label class="field search-field">
         <span>关键词</span>
         <div>
@@ -54,20 +89,27 @@
           />
         </div>
       </label>
+
       <div class="filter-actions">
-        <button class="tool-button" type="button" @click="resetFilters">重置筛选</button>
-        <button class="tool-button primary" type="button" @click="applyFilters">查询</button>
+        <button class="tool-button subtle" type="button" @click="resetFilters">清空</button>
+        <button class="tool-button primary" type="button" :disabled="loading" @click="applyFilters">查询</button>
       </div>
     </section>
 
+    <section v-if="activeFilterTags.length" class="filter-tags" aria-label="当前筛选条件">
+      <span v-for="tag in activeFilterTags" :key="tag.key">{{ tag.label }}</span>
+    </section>
+
     <section class="table-card">
-      <div class="table-headline">
+      <div class="table-title">
         <div>
           <h2>日志明细</h2>
-          <span>{{ logs.length }} / {{ total }} 条</span>
+          <span>当前 {{ logs.length }} 条，共 {{ total }} 条</span>
         </div>
-        <strong v-if="loading">加载中</strong>
-        <strong v-else-if="hasActiveFilters">已筛选</strong>
+        <div class="audit-summary">
+          <strong v-if="loading">加载中</strong>
+          <strong v-else>{{ riskSummaryText }}</strong>
+        </div>
       </div>
 
       <div class="log-table">
@@ -80,61 +122,57 @@
           <span>风险</span>
           <span>操作</span>
         </div>
+
         <div class="table-body">
-          <div v-for="item in logs" :key="item.id" class="table-row">
-            <div class="time-cell">{{ formatTime(item.createTime) }}</div>
+          <div v-for="item in logs" :key="item.id" :class="['table-row', riskTone(item.riskLevel)]">
+            <div class="time-cell">
+              <strong>{{ formatDate(item.createTime) }}</strong>
+              <small>{{ formatClock(item.createTime) }}</small>
+            </div>
             <div class="actor-cell">
               <strong>{{ displayAdminName(item) }}</strong>
               <small>{{ item.adminUsername || item.adminUserId || '-' }}</small>
             </div>
             <div class="action-cell">
-              <span class="action-pill">{{ item.actionLabel || item.action }}</span>
-              <small>{{ item.actionGroup || '-' }}</small>
+              <span>{{ item.actionLabel || item.action }}</span>
+              <small>{{ actionGroupLabel(item.actionGroup) }}</small>
             </div>
             <div class="target-cell">
               <strong>{{ item.targetLabel || item.targetType || '-' }}</strong>
-              <small>{{ item.targetName || item.targetPublicId || '-' }}</small>
+              <small :title="item.targetName || item.targetPublicId || ''">{{ item.targetName || item.targetPublicId || '-' }}</small>
             </div>
             <div class="summary-cell">
-              <strong>{{ item.summaryText || '-' }}</strong>
-              <small v-if="item.detailText">{{ item.detailText }}</small>
+              <strong :title="item.summaryText || ''">{{ item.summaryText || '-' }}</strong>
+              <small v-if="item.detailText" :title="item.detailText">{{ item.detailText }}</small>
             </div>
             <span :class="['risk-badge', item.riskLevel || 'normal']">{{ riskLabel(item.riskLevel) }}</span>
             <div class="row-actions">
-              <button class="row-action" type="button" @click="openDetail(item)">查看详情</button>
-              <button v-if="item.targetRoute" class="row-action" type="button" @click="openTarget(item)">打开对象</button>
+              <button class="row-action" type="button" @click="openDetail(item)">详情</button>
+              <button v-if="item.targetRoute" class="row-action primary-action" type="button" @click="openTarget(item)">
+                {{ targetActionLabel(item) }}
+              </button>
             </div>
           </div>
+
           <div v-if="!loading && logs.length === 0" class="empty-state">
-            <h2>没有符合条件的操作记录</h2>
-            <p>调整筛选条件后再查看</p>
+            <h2>{{ emptyTitle }}</h2>
+            <p>{{ emptyDescription }}</p>
+            <button v-if="hasActiveFilters" class="tool-button primary" type="button" @click="resetFilters">查看全部日志</button>
           </div>
         </div>
       </div>
 
       <footer class="pagination-bar">
-        <span>共 {{ total }} 条</span>
-        <div class="pager-buttons">
-          <button type="button" :disabled="pagination.page <= 1" @click="changePage(pagination.page - 1)">上一页</button>
-          <button
-            v-for="page in visiblePages"
-            :key="page"
-            :class="{ active: pagination.page === page }"
-            type="button"
-            @click="changePage(page)"
-          >
-            {{ page }}
-          </button>
-          <button type="button" :disabled="pagination.page >= totalPages" @click="changePage(pagination.page + 1)">下一页</button>
-        </div>
-        <label>
-          <span>每页</span>
-          <select v-model.number="pagination.pageSize" @change="changePageSize">
-            <option :value="30">30</option>
-            <option :value="50">50</option>
-            <option :value="100">100</option>
-          </select>
-        </label>
+        <el-pagination
+          v-model:current-page="pagination.page"
+          v-model:page-size="pagination.pageSize"
+          background
+          :page-sizes="[20, 30, 50, 100]"
+          :total="total"
+          layout="total, sizes, prev, pager, next, jumper"
+          @size-change="changePageSize"
+          @current-change="changePage"
+        />
       </footer>
     </section>
 
@@ -148,12 +186,15 @@
           </div>
           <button type="button" @click="closeDetail">关闭</button>
         </header>
+
         <div class="drawer-grid">
           <div><span>操作者</span><strong>{{ displayAdminName(detailItem) }}</strong></div>
+          <div><span>风险等级</span><strong>{{ riskLabel(detailItem?.riskLevel) }}</strong></div>
           <div><span>原始动作</span><strong>{{ detailItem?.action || '-' }}</strong></div>
-          <div><span>对象类型</span><strong>{{ detailItem?.targetLabel || detailItem?.targetType || '-' }}</strong></div>
-          <div><span>对象编号</span><strong>{{ detailItem?.targetPublicId || '-' }}</strong></div>
+          <div><span>业务对象</span><strong>{{ detailItem?.targetLabel || detailItem?.targetType || '-' }}</strong></div>
+          <div class="wide"><span>对象编号</span><strong>{{ detailItem?.targetPublicId || '-' }}</strong></div>
         </div>
+
         <section class="drawer-block">
           <span>可读摘要</span>
           <strong>{{ detailItem?.summaryText || '-' }}</strong>
@@ -164,7 +205,9 @@
           <pre>{{ detailItem?.summary || '-' }}</pre>
         </section>
         <footer class="drawer-actions">
-          <button v-if="detailItem?.targetRoute" class="tool-button primary" type="button" @click="openTarget(detailItem)">打开对象</button>
+          <button v-if="detailItem?.targetRoute" class="tool-button primary" type="button" @click="openTarget(detailItem)">
+            {{ targetActionLabel(detailItem) }}
+          </button>
         </footer>
       </aside>
     </div>
@@ -174,7 +217,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Search, Refresh } from '@element-plus/icons-vue'
+import { Refresh, RefreshLeft, Search } from '@element-plus/icons-vue'
 import { fetchAdminOperationLogs, fetchAdminUsers } from '@/api/admin'
 
 const router = useRouter()
@@ -184,10 +227,9 @@ const total = ref(0)
 const loading = ref(false)
 const detailOpen = ref(false)
 const detailItem = ref(null)
+const timeRange = ref([])
 
 const filters = reactive({
-  startTime: '',
-  endTime: '',
   adminUserId: '',
   targetType: '',
   actionGroup: '',
@@ -223,15 +265,35 @@ const actionGroupOptions = [
   { value: 'score', label: '评分' },
 ]
 
-const totalPages = computed(() => Math.max(Math.ceil(total.value / pagination.pageSize), 1))
-const visiblePages = computed(() => {
-  const pages = []
-  const start = Math.max(1, pagination.page - 2)
-  const end = Math.min(totalPages.value, start + 4)
-  for (let page = start; page <= end; page += 1) pages.push(page)
-  return pages
+const hasActiveFilters = computed(() => Boolean(
+  timeRange.value?.length
+  || filters.adminUserId
+  || filters.targetType
+  || filters.actionGroup
+  || filters.keyword,
+))
+
+const activeFilterTags = computed(() => {
+  const tags = []
+  if (timeRange.value?.length === 2) tags.push({ key: 'time', label: `${timeRange.value[0]} 至 ${timeRange.value[1]}` })
+  const admin = adminOptions.value.find((item) => item.value === filters.adminUserId)
+  if (admin) tags.push({ key: 'admin', label: `操作者：${admin.label}` })
+  const target = targetTypeOptions.find((item) => item.value === filters.targetType)
+  if (target) tags.push({ key: 'target', label: `对象：${target.label}` })
+  const action = actionGroupOptions.find((item) => item.value === filters.actionGroup)
+  if (action) tags.push({ key: 'action', label: `类型：${action.label}` })
+  if (filters.keyword) tags.push({ key: 'keyword', label: `关键词：${filters.keyword}` })
+  return tags
 })
-const hasActiveFilters = computed(() => Boolean(filters.startTime || filters.endTime || filters.adminUserId || filters.targetType || filters.actionGroup || filters.keyword))
+
+const criticalCount = computed(() => logs.value.filter((item) => item.riskLevel === 'critical').length)
+const warningCount = computed(() => logs.value.filter((item) => item.riskLevel === 'warning').length)
+const riskSummaryText = computed(() => {
+  if (!logs.value.length) return '当前页无记录'
+  return `关键 ${criticalCount.value} · 关注 ${warningCount.value}`
+})
+const emptyTitle = computed(() => (hasActiveFilters.value ? '没有符合条件的操作记录' : '暂无操作日志'))
+const emptyDescription = computed(() => (hasActiveFilters.value ? '调整时间、对象或关键词后再查询' : '关键业务操作发生后会显示在这里'))
 
 onMounted(async () => {
   await Promise.all([loadAdminUsers(), loadLogs()])
@@ -245,8 +307,8 @@ async function loadLogs() {
   loading.value = true
   try {
     const data = await fetchAdminOperationLogs({
-      startTime: normalizeInputTime(filters.startTime),
-      endTime: normalizeInputTime(filters.endTime),
+      startTime: timeRange.value?.[0] || undefined,
+      endTime: timeRange.value?.[1] || undefined,
       adminUserId: filters.adminUserId || undefined,
       targetType: filters.targetType || undefined,
       actionGroup: filters.actionGroup || undefined,
@@ -267,23 +329,22 @@ function applyFilters() {
 }
 
 function resetFilters() {
-  filters.startTime = ''
-  filters.endTime = ''
+  timeRange.value = []
   filters.adminUserId = ''
   filters.targetType = ''
   filters.actionGroup = ''
   filters.keyword = ''
-  applyFilters()
-}
-
-function changePage(page) {
-  const next = Math.min(Math.max(page, 1), totalPages.value)
-  if (next === pagination.page) return
-  pagination.page = next
+  pagination.page = 1
   loadLogs()
 }
 
-function changePageSize() {
+function changePage(page) {
+  pagination.page = page
+  loadLogs()
+}
+
+function changePageSize(pageSize) {
+  pagination.pageSize = pageSize
   pagination.page = 1
   loadLogs()
 }
@@ -325,391 +386,791 @@ function riskLabel(level) {
   return map[level] || '普通'
 }
 
-function formatTime(value) {
-  if (!value) return '-'
-  const text = String(value)
-  return text.includes('T') ? text.replace('T', ' ').slice(0, 19) : text.slice(0, 19)
+function riskTone(level) {
+  if (level === 'critical') return 'is-critical'
+  if (level === 'warning') return 'is-warning'
+  return 'is-normal'
 }
 
-function normalizeInputTime(value) {
-  if (!value) return ''
-  return String(value).replace('T', ' ')
+function actionGroupLabel(value) {
+  return actionGroupOptions.find((item) => item.value === value)?.label || value || '-'
+}
+
+function targetActionLabel(item) {
+  const map = {
+    BEER_ENTRY: '打开酒款',
+    JUDGE: '打开评审',
+    COMPETITION: '打开比赛',
+    ADMIN_USER: '打开账号',
+    SCORE_RECORD: '查看评分',
+  }
+  return map[item?.targetType] || '打开对象'
+}
+
+function formatTime(value) {
+  if (!value) return '-'
+  const text = String(value).replace('T', ' ')
+  return text.slice(0, 19)
+}
+
+function formatDate(value) {
+  const text = formatTime(value)
+  if (text === '-') return '-'
+  return text.slice(0, 10)
+}
+
+function formatClock(value) {
+  const text = formatTime(value)
+  if (text === '-') return '-'
+  return text.slice(11, 19)
 }
 </script>
 
 <style scoped>
 .operation-logs-page {
-  display: grid;
-  gap: 16px;
-}
-
-.page-head,
-.filter-panel,
-.table-card,
-.detail-drawer {
-  border: 1px solid rgba(218, 231, 236, 0.1);
-  border-radius: 8px;
-  background: rgba(22, 32, 36, 0.84);
-}
-
-.page-head {
+  --panel: rgba(18, 29, 34, 0.91);
+  --panel-strong: rgba(13, 22, 26, 0.95);
+  --line: rgba(218, 232, 237, 0.1);
+  --line-strong: rgba(218, 232, 237, 0.16);
+  --text: #eaf3f6;
+  --muted: #8ea4ad;
+  --faint: #637984;
+  --gold: #e0b84a;
+  --gold-soft: rgba(216, 169, 53, 0.12);
+  --danger: #ff9f98;
+  --warning: #ffcf6b;
+  --green: #83df95;
+  box-sizing: border-box;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 24px;
-  color: #e6edf0;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  padding: 28px 28px 18px;
+  overflow: hidden;
+  color: var(--text);
+  background:
+    linear-gradient(rgba(218, 232, 237, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(218, 232, 237, 0.035) 1px, transparent 1px),
+    radial-gradient(circle at 18% 8%, rgba(216, 169, 53, 0.12), transparent 20rem),
+    #0b1216;
+  background-size: 68px 68px, 68px 68px, auto, auto;
 }
 
-.page-head h1,
-.page-head span,
-.table-headline h2,
-.table-headline span,
-.table-headline strong,
-.drawer-grid span,
-.drawer-block span {
+h1,
+h2,
+p {
   margin: 0;
 }
 
+button,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.46;
+}
+
+.page-head {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: center;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.page-head span {
+  color: var(--gold);
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .page-head h1 {
-  font-size: 32px;
+  margin-top: 5px;
+  font-size: 30px;
+  line-height: 1.12;
+}
+
+.head-actions,
+.filter-actions,
+.row-actions,
+.drawer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.tool-button,
+.row-action,
+.detail-drawer header button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: max-content;
+  min-height: 38px;
+  padding: 0 13px;
+  color: #dce8ec;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.tool-button svg {
+  width: 17px;
+  height: 17px;
+}
+
+.tool-button.primary,
+.row-action.primary-action {
+  color: var(--gold);
+  border-color: rgba(216, 169, 53, 0.34);
+  background: var(--gold-soft);
+}
+
+.tool-button.subtle {
+  color: #a8bac2;
 }
 
 .filter-panel {
+  flex: 0 0 auto;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-  padding: 18px;
+  grid-template-columns: minmax(360px, 1.45fr) minmax(190px, 0.8fr) minmax(150px, 0.65fr) minmax(150px, 0.65fr) minmax(260px, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.18);
 }
 
 .field {
   display: grid;
-  gap: 8px;
+  gap: 7px;
+  min-width: 0;
 }
 
-.field span,
+.field > span,
 .drawer-grid span,
 .drawer-block span {
-  color: #9fb1b9;
+  color: var(--muted);
   font-size: 12px;
-  font-weight: 700;
-}
-
-.field input,
-.field select {
-  width: 100%;
-  min-height: 42px;
-  padding: 0 12px;
-  color: #dce9ed;
-  border: 1px solid rgba(218, 231, 236, 0.16);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
+  font-weight: 800;
 }
 
 .search-field > div {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 12px;
-  border: 1px solid rgba(218, 231, 236, 0.16);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
+  position: relative;
 }
 
 .search-field svg {
-  width: 16px;
-  height: 16px;
-  color: #9fb1b9;
+  position: absolute;
+  left: 11px;
+  top: 10px;
+  width: 18px;
+  height: 18px;
+  color: #7f949d;
 }
 
 .search-field input {
-  border: 0;
-  background: transparent;
-}
-
-.filter-actions {
-  display: flex;
-  gap: 10px;
-  align-items: end;
-}
-
-.head-actions,
-.tool-button,
-.row-action,
-.pager-buttons button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border: 1px solid rgba(218, 231, 236, 0.16);
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px 0 38px;
+  color: var(--text);
+  border: 1px solid var(--line-strong);
   border-radius: 8px;
-  color: #dce9ed;
-  background: rgba(255, 255, 255, 0.04);
-  font-weight: 700;
+  outline: none;
+  background: #0d161a;
 }
 
-.tool-button {
-  min-height: 42px;
-  padding: 0 14px;
+.search-field input::placeholder {
+  color: var(--faint);
 }
 
-.tool-button.primary {
-  color: #1b1408;
-  border-color: rgba(216, 169, 53, 0.38);
-  background: #d8a935;
-}
-
-.tool-button svg {
-  width: 16px;
-  height: 16px;
-}
-
-.row-action {
-  min-height: 32px;
-  padding: 0 10px;
-  color: #f3cf7b;
-}
-
-.pager-buttons {
+.filter-tags {
+  flex: 0 0 auto;
   display: flex;
-  gap: 8px;
   flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
 }
 
-.pager-buttons button {
-  min-width: 36px;
-  min-height: 32px;
-  padding: 0 10px;
-}
-
-.pager-buttons button.active {
-  color: #1b1408;
-  background: #d8a935;
-}
-
-.pagination-bar select {
-  min-height: 32px;
-  color: #dce9ed;
-  border: 1px solid rgba(218, 231, 236, 0.16);
+.filter-tags span {
+  max-width: min(420px, 100%);
+  overflow: hidden;
+  padding: 6px 10px;
+  color: #cddbe0;
+  border: 1px solid rgba(218, 232, 237, 0.11);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.035);
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table-card,
+.detail-drawer {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
 }
 
 .table-card {
-  padding: 18px;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  margin-top: 12px;
+  padding: 16px;
+  overflow: hidden;
 }
 
-.table-headline {
+.table-title {
+  flex: 0 0 auto;
   display: flex;
   justify-content: space-between;
+  gap: 14px;
   align-items: center;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
+}
+
+.table-title h2 {
+  font-size: 18px;
+}
+
+.table-title span,
+.audit-summary {
+  color: var(--muted);
+}
+
+.audit-summary strong {
+  color: var(--gold);
+  font-size: 13px;
 }
 
 .log-table {
-  display: grid;
-  gap: 10px;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-gutter: stable;
 }
 
 .table-head,
 .table-row {
   display: grid;
-  grid-template-columns: 140px 140px 160px 180px minmax(220px, 1fr) 96px 160px;
+  grid-template-columns: 126px minmax(120px, 0.7fr) minmax(150px, 0.8fr) minmax(180px, 1fr) minmax(300px, 1.7fr) 74px 150px;
   gap: 12px;
   align-items: center;
+  min-width: 1220px;
 }
 
 .table-head {
-  color: #738791;
-  font-size: 12px;
+  flex: 0 0 auto;
+  padding: 0 12px 10px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.table-body {
+  flex: 1 1 auto;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 1220px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+  scrollbar-gutter: stable;
+}
+
+.log-table::-webkit-scrollbar,
+.table-body::-webkit-scrollbar,
+.detail-drawer::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+.log-table::-webkit-scrollbar-track,
+.table-body::-webkit-scrollbar-track,
+.detail-drawer::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.log-table::-webkit-scrollbar-thumb,
+.table-body::-webkit-scrollbar-thumb,
+.detail-drawer::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(216, 169, 53, 0.32);
 }
 
 .table-row {
-  min-height: 58px;
-  padding: 12px;
-  border: 1px solid rgba(218, 231, 236, 0.08);
+  min-height: 68px;
+  padding: 10px 12px;
+  border: 1px solid rgba(218, 232, 237, 0.08);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.035);
+  background: rgba(255, 255, 255, 0.03);
+  transition: border-color 0.16s ease, background 0.16s ease;
+}
+
+.table-row:hover {
+  border-color: rgba(216, 169, 53, 0.2);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.table-row.is-critical {
+  border-color: rgba(255, 116, 108, 0.24);
+  background: rgba(255, 116, 108, 0.045);
+}
+
+.table-row.is-warning {
+  border-color: rgba(224, 184, 74, 0.2);
 }
 
 .time-cell,
-.actor-cell,
-.action-cell,
-.target-cell,
-.summary-cell {
-  min-width: 0;
-}
-
 .actor-cell,
 .action-cell,
 .target-cell,
 .summary-cell {
   display: grid;
   gap: 4px;
+  min-width: 0;
 }
 
-.time-cell,
+.time-cell strong,
 .actor-cell strong,
-.action-cell span,
 .target-cell strong,
 .summary-cell strong {
-  color: #dce9ed;
-}
-
-.actor-cell small,
-.action-cell small,
-.target-cell small,
-.summary-cell small {
-  color: #9fb1b9;
   overflow: hidden;
+  color: var(--text);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.action-pill {
-  display: inline-flex;
-  align-items: center;
+.time-cell small,
+.actor-cell small,
+.action-cell small,
+.target-cell small,
+.summary-cell small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.action-cell span {
+  overflow: hidden;
   width: fit-content;
-  min-height: 24px;
-  padding: 0 8px;
-  border-radius: 999px;
-  background: rgba(216, 169, 53, 0.14);
-  color: #f3cf7b;
+  max-width: 100%;
+  min-height: 26px;
+  padding: 5px 9px;
+  color: var(--gold);
+  border-radius: 8px;
+  background: var(--gold-soft);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.summary-cell strong {
+  line-height: 1.35;
 }
 
 .risk-badge {
-  justify-self: start;
-  min-width: 64px;
-  padding: 6px 10px;
-  border-radius: 999px;
+  width: fit-content;
+  min-width: 56px;
+  padding: 6px 9px;
+  border-radius: 8px;
   text-align: center;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 900;
 }
 
 .risk-badge.critical {
-  color: #ff8d8d;
-  background: rgba(255, 98, 98, 0.12);
+  color: var(--danger);
+  background: rgba(255, 116, 108, 0.13);
 }
 
 .risk-badge.warning {
-  color: #f5b56e;
-  background: rgba(245, 181, 110, 0.12);
+  color: var(--warning);
+  background: rgba(224, 184, 74, 0.12);
 }
 
 .risk-badge.normal {
-  color: #87d68d;
-  background: rgba(92, 189, 102, 0.12);
+  color: var(--green);
+  background: rgba(91, 191, 112, 0.11);
 }
 
-.row-actions,
-.drawer-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+.row-actions {
+  flex-wrap: nowrap;
+}
+
+.row-action {
+  min-height: 32px;
+  padding: 0 10px;
+  color: #d5e2e7;
+  font-size: 12px;
 }
 
 .empty-state {
-  grid-column: 1 / -1;
-  padding: 28px 0 10px;
+  display: grid;
+  place-items: center;
+  gap: 10px;
+  min-height: 240px;
+  padding: 40px;
+  color: var(--muted);
   text-align: center;
-  color: #9fb1b9;
+}
+
+.empty-state h2 {
+  color: var(--text);
+  font-size: 20px;
 }
 
 .pagination-bar {
+  flex: 0 0 auto;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  margin-top: 16px;
-  color: #9fb1b9;
+  justify-content: flex-end;
+  min-height: 48px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
 }
 
 .drawer-mask {
   position: fixed;
   inset: 0;
-  display: grid;
-  justify-items: end;
-  background: rgba(6, 10, 13, 0.5);
+  z-index: 40;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(3, 8, 10, 0.58);
+  backdrop-filter: blur(4px);
 }
 
 .detail-drawer {
-  width: min(680px, 92vw);
+  width: min(720px, 100vw);
   height: 100vh;
-  padding: 20px;
-  overflow: auto;
+  padding: 22px;
+  overflow-y: auto;
+  border-radius: 0;
+  border-right: 0;
 }
 
 .detail-drawer header {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
   margin-bottom: 18px;
 }
 
+.detail-drawer header span,
+.detail-drawer header small {
+  color: var(--muted);
+}
+
 .detail-drawer h2 {
-  margin: 0;
-  color: #e6edf0;
+  margin: 4px 0;
+  font-size: 26px;
 }
 
 .drawer-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .drawer-grid div,
 .drawer-block {
   display: grid;
-  gap: 6px;
-  padding: 12px;
-  border: 1px solid rgba(218, 231, 236, 0.08);
+  gap: 7px;
+  padding: 13px;
+  border: 1px solid rgba(218, 232, 237, 0.09);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.drawer-grid .wide {
+  grid-column: 1 / -1;
 }
 
 .drawer-grid strong,
 .drawer-block strong,
+.drawer-block p,
 .drawer-block pre {
+  min-width: 0;
   margin: 0;
-  color: #dce9ed;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  line-height: 1.55;
   white-space: pre-wrap;
-  word-break: break-word;
 }
 
 .drawer-block + .drawer-block {
   margin-top: 12px;
 }
 
-@media (max-width: 1100px) {
+.drawer-actions {
+  margin-top: 16px;
+}
+
+.audit-select,
+.audit-date-range {
+  width: 100%;
+}
+
+.audit-date-range:deep(.el-date-editor.el-input__wrapper),
+.audit-date-range:deep(.el-range-editor.el-input__wrapper),
+.audit-select :deep(.el-select__wrapper),
+.audit-date-range :deep(.el-input__wrapper),
+.audit-date-range :deep(.el-range-editor.el-input__wrapper) {
+  min-height: 40px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: #0d161a;
+  box-shadow: none;
+}
+
+.audit-select :deep(.el-select__wrapper:hover),
+.audit-select :deep(.el-select__wrapper.is-focused),
+.audit-date-range :deep(.el-input__wrapper:hover),
+.audit-date-range :deep(.el-range-editor.el-input__wrapper.is-active) {
+  border-color: rgba(216, 169, 53, 0.36);
+  box-shadow: none;
+}
+
+.audit-select :deep(.el-select__selected-item),
+.audit-select :deep(.el-select__placeholder),
+.audit-date-range :deep(.el-range-input),
+.audit-date-range :deep(.el-range-separator) {
+  color: var(--text);
+}
+
+.audit-select :deep(.el-select__placeholder.is-transparent),
+.audit-date-range :deep(.el-range-input::placeholder) {
+  color: var(--faint);
+}
+
+.audit-select :deep(.el-select__caret),
+.audit-date-range :deep(.el-range__icon),
+.audit-date-range :deep(.el-range__close-icon) {
+  color: var(--muted);
+}
+
+.pagination-bar :deep(.el-pagination) {
+  --el-pagination-bg-color: rgba(255, 255, 255, 0.035);
+  --el-pagination-button-color: #dce8ec;
+  --el-pagination-button-disabled-bg-color: rgba(255, 255, 255, 0.02);
+  --el-pagination-button-disabled-color: #617681;
+  --el-pagination-hover-color: var(--gold);
+  --el-color-primary: #d8a935;
+  --el-text-color-regular: #dce8ec;
+  --el-text-color-primary: #eaf3f6;
+  --el-fill-color-blank: rgba(255, 255, 255, 0.035);
+  --el-border-color: rgba(218, 232, 237, 0.14);
+  --el-border-color-light: rgba(218, 232, 237, 0.1);
+  --el-input-bg-color: rgba(255, 255, 255, 0.035);
+  --el-input-text-color: #eaf3f6;
+}
+
+.pagination-bar :deep(.el-pager li),
+.pagination-bar :deep(.btn-prev),
+.pagination-bar :deep(.btn-next),
+.pagination-bar :deep(.el-input__wrapper) {
+  color: #dce8ec !important;
+  border: 1px solid rgba(218, 232, 237, 0.14) !important;
+  background: rgba(255, 255, 255, 0.035) !important;
+  box-shadow: none !important;
+}
+
+.pagination-bar :deep(.el-pager li.is-active) {
+  color: #11180c !important;
+  border-color: rgba(216, 169, 53, 0.6) !important;
+  background: #d8a935 !important;
+}
+
+.pagination-bar :deep(.el-pager li.is-disabled),
+.pagination-bar :deep(.btn-prev.is-disabled),
+.pagination-bar :deep(.btn-next.is-disabled) {
+  color: #617681 !important;
+  background: rgba(255, 255, 255, 0.025) !important;
+}
+
+.pagination-bar :deep(.el-input__inner) {
+  color: #eaf3f6 !important;
+}
+
+@media (max-width: 1360px) {
   .filter-panel {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .table-head,
-  .table-row {
-    grid-template-columns: 120px 120px 140px 140px minmax(180px, 1fr) 84px 140px;
+  .filter-actions {
+    justify-content: flex-end;
   }
 }
 
-@media (max-width: 820px) {
+@media (max-width: 900px) {
+  .operation-logs-page {
+    height: auto;
+    min-height: 100%;
+    padding: 22px 16px;
+    overflow: visible;
+  }
+
+  .page-head,
+  .table-title {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   .filter-panel,
   .drawer-grid {
     grid-template-columns: 1fr;
+  }
+
+  .table-card {
+    overflow: visible;
+  }
+
+  .log-table,
+  .table-body {
+    overflow: visible;
   }
 
   .table-head {
     display: none;
   }
 
+  .table-head,
+  .table-row,
+  .table-body {
+    min-width: 0;
+  }
+
   .table-row {
     grid-template-columns: 1fr;
-    gap: 8px;
+    align-items: stretch;
   }
 
   .pagination-bar {
-    flex-direction: column;
-    align-items: stretch;
+    justify-content: flex-start;
+    overflow-x: auto;
   }
+}
+</style>
+
+<style>
+.operation-logs-page .audit-date-range.el-date-editor.el-input__wrapper,
+.operation-logs-page .audit-date-range.el-range-editor.el-input__wrapper {
+  border: 1px solid rgba(218, 232, 237, 0.16) !important;
+  border-radius: 8px !important;
+  background: #0d161a !important;
+  box-shadow: none !important;
+}
+
+.operation-logs-page .audit-date-range.el-date-editor.el-input__wrapper:hover,
+.operation-logs-page .audit-date-range.el-range-editor.el-input__wrapper.is-active {
+  border-color: rgba(216, 169, 53, 0.36) !important;
+}
+
+.operation-logs-page .audit-date-range .el-range-input,
+.operation-logs-page .audit-date-range .el-range-separator {
+  color: #eaf3f6 !important;
+}
+
+.operation-logs-page .audit-date-range .el-range-input::placeholder,
+.operation-logs-page .audit-date-range .el-range__icon,
+.operation-logs-page .audit-date-range .el-range__close-icon {
+  color: #637984 !important;
+}
+
+.operation-log-select-popper,
+.operation-log-date-popper {
+  --el-bg-color-overlay: #111c20;
+  --el-border-color-light: rgba(218, 232, 237, 0.14);
+  --el-text-color-primary: #eaf3f6;
+  --el-text-color-regular: #c7d6dc;
+  --el-fill-color-light: rgba(216, 169, 53, 0.1);
+  --el-color-primary: #d8a935;
+  border: 1px solid rgba(218, 232, 237, 0.14) !important;
+  background: #111c20 !important;
+  box-shadow: 0 18px 52px rgba(0, 0, 0, 0.38) !important;
+}
+
+.operation-log-select-popper .el-select-dropdown,
+.operation-log-select-popper .el-select-dropdown__list {
+  background: #111c20;
+}
+
+.operation-log-select-popper .el-select-dropdown__item {
+  color: #c7d6dc;
+}
+
+.operation-log-select-popper .el-select-dropdown__item.hover,
+.operation-log-select-popper .el-select-dropdown__item.is-hovering,
+.operation-log-select-popper .el-select-dropdown__item:hover {
+  color: #ffdc73;
+  background: rgba(216, 169, 53, 0.1);
+}
+
+.operation-log-select-popper .el-select-dropdown__item.selected,
+.operation-log-select-popper .el-select-dropdown__item.is-selected {
+  color: #ffdc73;
+  font-weight: 800;
+}
+
+.operation-log-select-popper .el-select-dropdown__item.is-disabled {
+  color: #5e737c;
+}
+
+.operation-log-date-popper .el-picker-panel,
+.operation-log-date-popper .el-picker-panel__body,
+.operation-log-date-popper .el-picker-panel__footer {
+  color: #c7d6dc;
+  border-color: rgba(218, 232, 237, 0.12);
+  background: #111c20;
+}
+
+.operation-log-date-popper .el-date-table th,
+.operation-log-date-popper .el-picker-panel__icon-btn,
+.operation-log-date-popper .el-date-range-picker__time-header,
+.operation-log-date-popper .el-date-range-picker__content.is-left {
+  color: #8ea4ad;
+  border-color: rgba(218, 232, 237, 0.12);
+}
+
+.operation-log-date-popper .el-date-table td.in-range .el-date-table-cell,
+.operation-log-date-popper .el-date-table td.in-range .el-date-table-cell:hover {
+  background: rgba(216, 169, 53, 0.1);
+}
+
+.operation-log-date-popper .el-input__wrapper {
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: 0 0 0 1px rgba(218, 232, 237, 0.12) inset;
+}
+
+.operation-log-date-popper .el-input__inner {
+  color: #eaf3f6;
 }
 </style>

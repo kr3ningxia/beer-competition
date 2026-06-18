@@ -1,14 +1,20 @@
 import axios from 'axios'
 import router from '@/router'
 import { BASE_URL } from '@/config'
-import { clearSession, getToken } from '@/utils/auth'
+import { clearSession, getRefreshToken, getToken, setSession } from '@/utils/auth'
 
 const service = axios.create({
   baseURL: BASE_URL,
   timeout: 10000,
 })
 
+const refreshClient = axios.create({
+  baseURL: BASE_URL,
+  timeout: 10000,
+})
+
 let toastTimer = null
+let refreshPromise = null
 
 function showRequestError(message) {
   if (typeof document === 'undefined') return
@@ -47,6 +53,30 @@ function extractErrorMessage(error) {
   return error.response?.data?.msg || error.message || '操作失败，请稍后重试'
 }
 
+async function refreshSession() {
+  if (refreshPromise) {
+    return refreshPromise
+  }
+  const refreshToken = getRefreshToken()
+  if (!refreshToken) {
+    throw new Error('登录状态已失效')
+  }
+  refreshPromise = refreshClient
+    .post('/api/public/auth/refresh', { refreshToken })
+    .then((response) => {
+      const payload = response.data
+      if (payload.code !== 1 || !payload.data?.accessToken) {
+        throw new Error(payload.msg || '登录状态已失效')
+      }
+      setSession(payload.data)
+      return payload.data
+    })
+    .finally(() => {
+      refreshPromise = null
+    })
+  return refreshPromise
+}
+
 service.interceptors.request.use((config) => {
   const token = getToken()
   if (token) {
@@ -65,8 +95,22 @@ service.interceptors.response.use(
     showRequestError(error.message)
     return Promise.reject(error)
   },
-  (error) => {
-    if (error.response?.status === 401) {
+  async (error) => {
+    const config = error.config || {}
+    if (error.response?.status === 401 && !config._retry) {
+      try {
+        const session = await refreshSession()
+        config._retry = true
+        config.headers = {
+          ...(config.headers || {}),
+          Authorization: `Bearer ${session.accessToken || session.token}`,
+        }
+        return service(config)
+      } catch (refreshError) {
+        clearSession()
+        router.push('/login')
+      }
+    } else if (error.response?.status === 401) {
       clearSession()
       router.push('/login')
     }

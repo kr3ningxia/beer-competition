@@ -47,7 +47,7 @@ async function send() {
 
 async function submit() {
   const data = await login(form)
-  setSession(data.token, data.displayName)
+  setSession(data)
   if (data.profileRequired) {
     router.push('/profile/edit')
     return

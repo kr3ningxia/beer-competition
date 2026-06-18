@@ -2,12 +2,43 @@ import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import router from '@/router'
 import { BASE_URL } from '@/config'
-import { clearSession, getToken } from '@/utils/auth'
+import { clearSession, getRefreshToken, getToken, setSession } from '@/utils/auth'
 
 const service = axios.create({
   baseURL: BASE_URL,
   timeout: 10000,
 })
+
+const refreshClient = axios.create({
+  baseURL: BASE_URL,
+  timeout: 10000,
+})
+
+const refreshPromises = {}
+
+async function refreshSession(scope) {
+  if (refreshPromises[scope]) {
+    return refreshPromises[scope]
+  }
+  const refreshToken = getRefreshToken(scope)
+  if (!refreshToken) {
+    throw new Error('登录状态已失效')
+  }
+  refreshPromises[scope] = refreshClient
+    .post('/api/public/auth/refresh', { refreshToken })
+    .then((response) => {
+      const payload = response.data
+      if (payload.code !== 1 || !payload.data?.accessToken) {
+        throw new Error(payload.msg || '登录状态已失效')
+      }
+      setSession(scope, payload.data)
+      return payload.data
+    })
+    .finally(() => {
+      delete refreshPromises[scope]
+    })
+  return refreshPromises[scope]
+}
 
 service.interceptors.request.use((config) => {
   const scope = config.authScope
@@ -32,10 +63,24 @@ service.interceptors.response.use(
     ElMessage.error(payload.msg || '操作失败')
     return Promise.reject(new Error(payload.msg || '操作失败'))
   },
-  (error) => {
+  async (error) => {
     const status = error.response?.status
-    const scope = error.config?.authScope
-    if (status === 401 && scope) {
+    const config = error.config || {}
+    const scope = config.authScope
+    if (status === 401 && scope && !config._retry) {
+      try {
+        const session = await refreshSession(scope)
+        config._retry = true
+        config.headers = {
+          ...(config.headers || {}),
+          Authorization: `Bearer ${session.accessToken || session.token}`,
+        }
+        return service(config)
+      } catch (refreshError) {
+        clearSession(scope)
+        router.push(scope === 'admin' ? '/admin/login' : '/portal/login')
+      }
+    } else if (status === 401 && scope) {
       clearSession(scope)
       router.push(scope === 'admin' ? '/admin/login' : '/portal/login')
     }

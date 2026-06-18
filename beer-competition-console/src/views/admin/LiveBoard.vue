@@ -29,26 +29,28 @@
     <section class="scoreboard-stage" aria-label="评审进度总览">
       <section class="hero-panel">
         <div class="progress-copy">
-          <span class="eyebrow">{{ board.progress.eyebrow }}</span>
+          <div class="progress-kicker">
+            <span class="eyebrow">{{ board.progress.eyebrow }}</span>
+            <em>{{ board.statusText }}</em>
+          </div>
           <strong>{{ board.progress.done }} / {{ board.progress.total }}</strong>
           <p>{{ board.progress.label }}</p>
-          <div class="progress-track" aria-hidden="true">
-            <span :style="{ width: `${board.progress.percent}%` }" />
-          </div>
         </div>
 
         <div class="beer-hero" aria-hidden="true">
-          <div class="glass-halo" />
-          <div class="beer-glass-large">
-            <span class="glass-shine" />
-            <span class="beer-liquid" :style="{ height: `${board.progress.liquidPercent}%` }">
-              <i />
-              <i />
-              <i />
-            </span>
-            <span class="foam-line" :style="{ bottom: `${board.progress.foamBottom}%` }" />
-            <strong>{{ board.progress.percent }}%</strong>
+          <div class="glass-visual">
+            <div class="glass-halo" />
+            <div class="beer-glass-large">
+              <span class="glass-shine" />
+              <span class="beer-liquid" :style="{ height: `${board.progress.liquidPercent}%` }">
+                <i />
+                <i />
+                <i />
+              </span>
+              <span class="foam-line" :style="{ bottom: `${board.progress.foamBottom}%` }" />
+            </div>
           </div>
+          <strong class="glass-percent">{{ board.progress.percent }}%</strong>
         </div>
       </section>
 
@@ -122,6 +124,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { fetchCompetitionProgress, fetchCompetitions } from '@/api/admin'
 
 const REFRESH_SECONDS = 10
+const STAT_PENDING_TEXT = '统计中'
 const EVENT_TITLE = '首届中国拉格大赛'
 const EVENT_SUBTITLE = 'The 1st Chinese Lager Awards'
 const PARTNERS = [
@@ -255,7 +258,7 @@ function buildProgress(round, tables, progress = {}) {
       percent,
       liquidPercent: 100 - percent,
       foamBottom: normalizeFoamBottom(percent),
-      label: total ? `已提交 ${done} 桌，剩余 ${Math.max(total - done, 0)} 桌` : '等待排序轮发布',
+      label: total ? `已提交 ${done} 桌 · 剩余 ${Math.max(total - done, 0)} 桌` : '等待排序轮发布',
     }
   }
 
@@ -271,7 +274,7 @@ function buildProgress(round, tables, progress = {}) {
     percent,
     liquidPercent: 100 - percent,
     foamBottom: normalizeFoamBottom(percent),
-    label: total ? `已完成 ${done} 款，剩余 ${Math.max(total - done, 0)} 款` : '等待首轮酒款发布',
+    label: total ? `已完成 ${done} 款 · 剩余 ${Math.max(total - done, 0)} 款` : '等待首轮酒款发布',
   }
 }
 
@@ -282,7 +285,7 @@ function buildMetrics(round, tables, progress = {}, competitionEntryCount = 0, r
     { label: '参赛酒款', value: competitionEntryCount || '-', unit: competitionEntryCount ? '款' : '', tone: 'neutral' },
     { label: isRanking ? '本轮桌数' : '本轮酒款', value: progressData.total || '-', unit: isRanking ? '桌' : '款', tone: 'neutral' },
     { label: isRanking ? '本轮已排' : '本轮已评', value: progressData.total ? `${progressData.done}/${progressData.total}` : '-', unit: '', tone: progressData.percent >= 100 ? 'success' : 'gold' },
-    { label: '平均用时', value: formatMinutes(progress.averageReviewMinutes), unit: '', tone: 'neutral' },
+    { label: '平均用时', value: formatAverageReviewTime(progress), unit: '', tone: 'neutral' },
     { label: '平均评语', value: formatCommentChars(progress.averageCommentChars || progress.siteAverageCommentChars), unit: '', tone: 'neutral' },
   ]
 }
@@ -409,7 +412,7 @@ function countCompetitionEntries(data, fallback = 0) {
 
 function formatMinutes(value) {
   const minutes = Number(value || 0)
-  if (minutes <= 0) return '-'
+  if (minutes <= 0) return STAT_PENDING_TEXT
   if (minutes < 60) return `${minutes}分钟`
   const hours = Math.floor(minutes / 60)
   const rest = minutes % 60
@@ -418,7 +421,12 @@ function formatMinutes(value) {
 
 function formatCommentChars(value) {
   const chars = Number(value || 0)
-  return chars > 0 ? `${chars}字` : '-'
+  return chars > 0 ? `${chars}字` : STAT_PENDING_TEXT
+}
+
+function formatAverageReviewTime(progress = {}) {
+  const secondsText = formatDurationSeconds(progress.averageReviewSeconds)
+  return secondsText === STAT_PENDING_TEXT ? formatMinutes(progress.averageReviewMinutes) : secondsText
 }
 
 function resolveTableAverageTime(table) {
@@ -433,7 +441,7 @@ function resolveTableAverageComment(table) {
 
 function formatDurationSeconds(secondsValue) {
   const seconds = Number(secondsValue || 0)
-  if (seconds <= 0) return '-'
+  if (seconds <= 0) return STAT_PENDING_TEXT
   const minutes = Math.floor(seconds / 60)
   const secondsRest = seconds % 60
   if (!minutes) return `${secondsRest}秒`
@@ -732,12 +740,12 @@ function normalizeFoamBottom(percent) {
 .hero-panel {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(230px, 30%);
-  align-items: stretch;
-  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 28%);
+  align-items: center;
+  gap: 26px;
   min-width: 0;
   min-height: 0;
-  padding: 18px 34px;
+  padding: 18px 34px 20px;
   overflow: hidden;
   border: 1px solid rgba(225, 178, 91, 0.24);
   border-radius: 8px;
@@ -761,6 +769,13 @@ function normalizeFoamBottom(percent) {
   min-width: 0;
 }
 
+.progress-kicker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
 .eyebrow {
   display: inline-flex;
   align-items: center;
@@ -774,9 +789,36 @@ function normalizeFoamBottom(percent) {
   font-weight: 950;
 }
 
+.progress-kicker em {
+  display: inline-flex;
+  align-items: center;
+  min-height: 31px;
+  padding: 0 12px;
+  overflow: hidden;
+  color: var(--green);
+  border: 1px solid rgba(184, 217, 134, 0.22);
+  border-radius: 999px;
+  background: rgba(184, 217, 134, 0.08);
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 950;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.progress-kicker em::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  margin-right: 7px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 14px currentColor;
+}
+
 .progress-copy strong {
   display: block;
-  margin-top: 16px;
+  margin-top: 14px;
   color: var(--text);
   font-size: clamp(62px, 7vw, 124px);
   line-height: 0.92;
@@ -785,37 +827,22 @@ function normalizeFoamBottom(percent) {
 }
 
 .progress-copy p {
-  margin: 12px 0 18px;
+  margin: 12px 0 0;
   color: #d7c8aa;
   font-size: clamp(19px, 1.75vw, 30px);
   line-height: 1.12;
   font-weight: 900;
 }
 
-.progress-track {
-  position: relative;
-  width: min(680px, 100%);
-  height: 12px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.progress-track span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--lager), var(--gold-soft), var(--teal));
-  box-shadow: 0 0 22px rgba(220, 166, 76, 0.46);
-  transition: width 0.35s ease;
-}
-
 .beer-hero {
   position: relative;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto auto;
   align-items: center;
   justify-content: center;
   align-self: stretch;
+  grid-column: 2;
+  gap: 18px;
   box-sizing: border-box;
   min-width: 0;
   height: auto;
@@ -823,22 +850,39 @@ function normalizeFoamBottom(percent) {
   padding: 0;
 }
 
+.glass-visual {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  width: clamp(150px, 11vw, 210px);
+  aspect-ratio: 1;
+}
+
 .glass-halo {
   position: absolute;
-  top: 50%;
-  width: min(230px, 82%);
+  inset: 0;
+  width: 100%;
   aspect-ratio: 1;
-  transform: translateY(-50%);
   border: 1px solid rgba(225, 178, 91, 0.22);
   border-radius: 50%;
   background: radial-gradient(circle, rgba(220, 166, 76, 0.22), transparent 62%);
   filter: blur(1px);
 }
 
+.glass-percent {
+  color: var(--gold-soft);
+  font-size: clamp(24px, 2.4vw, 38px);
+  line-height: 1;
+  font-weight: 950;
+  text-align: left;
+  text-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+}
+
 .beer-glass-large {
   position: relative;
-  width: clamp(96px, 6.8vw, 128px);
-  height: clamp(126px, 16vh, 160px);
+  width: clamp(108px, 7.6vw, 142px);
+  height: clamp(136px, 17vh, 172px);
   overflow: hidden;
   border: 8px solid rgba(255, 248, 232, 0.7);
   border-top-width: 10px;
@@ -924,21 +968,6 @@ function normalizeFoamBottom(percent) {
   background: rgba(255, 250, 229, 0.88);
   box-shadow: 0 0 18px rgba(255, 240, 190, 0.3);
   transition: bottom 0.45s ease;
-}
-
-.beer-glass-large > strong {
-  position: absolute;
-  left: 50%;
-  bottom: 10px;
-  z-index: 3;
-  transform: translateX(-50%);
-  margin: 0;
-  color: #fff8e8;
-  font-size: clamp(18px, 1.8vw, 28px);
-  line-height: 1;
-  font-weight: 950;
-  text-align: center;
-  text-shadow: 0 3px 10px rgba(55, 27, 0, 0.82);
 }
 
 .metric-panel {

@@ -5,6 +5,11 @@ const TOKEN_KEYS = {
   portal: 'portal_token',
 }
 
+const REFRESH_TOKEN_KEYS = {
+  admin: 'admin_refresh_token',
+  portal: 'portal_refresh_token',
+}
+
 const USERNAME_KEYS = {
   admin: 'admin_display_name',
   portal: 'portal_display_name',
@@ -17,9 +22,21 @@ export function getToken(scope) {
   return localStorage.getItem(TOKEN_KEYS[scope])
 }
 
-export function setSession(scope, token, displayName) {
-  localStorage.setItem(TOKEN_KEYS[scope], token)
-  setDisplayName(scope, displayName)
+export function getRefreshToken(scope) {
+  return localStorage.getItem(REFRESH_TOKEN_KEYS[scope])
+}
+
+export function setSession(scope, session, displayName) {
+  const accessToken = typeof session === 'string' ? session : session?.accessToken || session?.token
+  const refreshToken = typeof session === 'string' ? null : session?.refreshToken
+  const resolvedDisplayName = typeof session === 'string' ? displayName : session?.displayName ?? displayName
+  if (accessToken) {
+    localStorage.setItem(TOKEN_KEYS[scope], accessToken)
+  }
+  if (refreshToken) {
+    localStorage.setItem(REFRESH_TOKEN_KEYS[scope], refreshToken)
+  }
+  setDisplayName(scope, resolvedDisplayName)
 }
 
 export function setDisplayName(scope, displayName) {
@@ -45,6 +62,7 @@ export function createLocalSessionToken(scope, displayName) {
 
 export function clearSession(scope) {
   localStorage.removeItem(TOKEN_KEYS[scope])
+  localStorage.removeItem(REFRESH_TOKEN_KEYS[scope])
   localStorage.removeItem(USERNAME_KEYS[scope])
   notifySessionUpdated(scope)
 }
@@ -52,7 +70,7 @@ export function clearSession(scope) {
 export function isLoggedIn(scope) {
   sessionRevision.value
   const token = getToken(scope)
-  return Boolean(token && isTokenUsable(token, scope))
+  return Boolean((token && isTokenUsable(token, scope)) || getRefreshToken(scope))
 }
 
 export function getDisplayName(scope) {

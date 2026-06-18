@@ -25,6 +25,8 @@ public class RoundTableVO {
     private Integer advancedCount;
     private Integer judgeProgress;
     private Integer captainProgress;
+    private Integer averageDurationSeconds;
+    private Integer averageCommentChars;
     private Integer resultVersion;
     private Integer confirmationConfirmedCount;
     private Integer confirmationRequiredCount;

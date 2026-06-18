@@ -43,7 +43,7 @@ async function send() {
 
 async function submit() {
   const data = await register(form)
-  setSession(data.token, data.displayName)
+  setSession(data)
   router.push('/profile/edit')
 }
 </script>

@@ -2,6 +2,7 @@ package com.beercompetition.controller.publicapi;
 
 import com.beercompetition.common.result.Result;
 import com.beercompetition.pojo.dto.AdminLoginRequest;
+import com.beercompetition.pojo.dto.RefreshTokenRequest;
 import com.beercompetition.pojo.dto.SmsLoginRequest;
 import com.beercompetition.pojo.dto.SmsSendRequest;
 import com.beercompetition.pojo.vo.LoginResponse;
@@ -62,5 +63,22 @@ public class PublicAuthController {
     @PostMapping("/judge/register")
     public Result<LoginResponse> judgeRegister(@RequestBody @Valid SmsLoginRequest request) {
         return Result.success(authService.judgeRegister(request));
+    }
+
+    /**
+     * 使用刷新凭证换取新的登录态。
+     */
+    @PostMapping("/auth/refresh")
+    public Result<LoginResponse> refreshToken(@RequestBody @Valid RefreshTokenRequest request) {
+        return Result.success(authService.refreshToken(request));
+    }
+
+    /**
+     * 注销当前刷新凭证。
+     */
+    @PostMapping("/auth/logout")
+    public Result<String> logout(@RequestBody @Valid RefreshTokenRequest request) {
+        authService.logout(request);
+        return Result.success("已退出登录");
     }
 }

@@ -12,4 +12,7 @@ public class JwtProperties {
     private long adminTtl;
     private long portalTtl;
     private long judgeTtl;
+    private long adminRefreshTtl;
+    private long portalRefreshTtl;
+    private long judgeRefreshTtl;
 }

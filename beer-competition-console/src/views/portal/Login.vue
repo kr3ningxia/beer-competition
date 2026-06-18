@@ -101,7 +101,7 @@ async function submit() {
   submitting.value = true
   try {
     const data = await portalLogin({ phone: form.phone, code: form.code })
-    setSession('portal', data.token, data.displayName)
+    setSession('portal', data)
     ElMessage.success(data.newAccount ? '账号已创建' : '已登录')
     if (data.newAccount || data.profileRequired || data.profileComplete === false) {
       router.push({ path: '/portal/profile', query: { next: postProfilePath.value } })
