@@ -20,12 +20,25 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
     env:
       APP_DB_HOST: 127.0.0.1
       APP_DB_PORT: 3306
       APP_DB_NAME: beer_competition
       APP_DB_USERNAME: root
       APP_DB_PASSWORD: 0d000721
+      APP_REDIS_HOST: 127.0.0.1
+      APP_REDIS_PORT: 6379
+      APP_REDIS_PASSWORD: ''
+      APP_REDIS_DATABASE: 0
       APP_SMS_MOCK_ENABLED: true
 
     steps:
