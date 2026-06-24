@@ -2,7 +2,7 @@ package com.beercompetition.pay;
 
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.properties.WechatPayProperties;
-import com.wechat.pay.java.core.RSAAutoCertificateConfig;
+import com.wechat.pay.java.core.RSAPublicKeyConfig;
 import com.wechat.pay.java.core.notification.NotificationParser;
 import com.wechat.pay.java.core.notification.RequestParam;
 import com.wechat.pay.java.service.payments.model.Transaction;
@@ -196,11 +196,13 @@ public class WechatSdkPayClient implements WechatPayClient {
         return notificationParser;
     }
 
-    private RSAAutoCertificateConfig config() {
-        return new RSAAutoCertificateConfig.Builder()
+    private RSAPublicKeyConfig config() {
+        return new RSAPublicKeyConfig.Builder()
                 .merchantId(required(properties.getMchId(), "微信支付商户号未配置"))
                 .privateKeyFromPath(required(properties.getPrivateKeyPath(), "微信支付商户私钥路径未配置"))
                 .merchantSerialNumber(required(properties.getMerchantSerialNo(), "微信支付商户证书序列号未配置"))
+                .publicKeyId(required(properties.getPublicKeyId(), "微信支付公钥 ID 未配置"))
+                .publicKeyFromPath(required(properties.getPublicKeyPath(), "微信支付公钥路径未配置"))
                 .apiV3Key(required(properties.getApiV3Key(), "微信支付 API v3 密钥未配置"))
                 .build();
     }

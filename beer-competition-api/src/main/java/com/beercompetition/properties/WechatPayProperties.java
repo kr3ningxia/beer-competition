@@ -13,6 +13,8 @@ public class WechatPayProperties {
     private String merchantSerialNo;
     private String apiV3Key;
     private String privateKeyPath;
+    private String publicKeyId;
+    private String publicKeyPath;
     private String notifyBaseUrl;
 
     public boolean isWechatMode() {
