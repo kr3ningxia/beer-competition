@@ -31,6 +31,7 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 
 @Component
 @RequiredArgsConstructor
@@ -234,7 +235,9 @@ public class WechatSdkPayClient implements WechatPayClient {
     }
 
     private String toWechatTime(LocalDateTime time) {
-        return time.atZone(CHINA_ZONE).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+        return time.truncatedTo(ChronoUnit.SECONDS)
+                .atZone(CHINA_ZONE)
+                .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
     }
 
     private LocalDateTime parseWechatTime(String value) {
