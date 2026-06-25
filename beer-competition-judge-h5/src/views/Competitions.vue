@@ -28,7 +28,7 @@
         <template v-if="isScoreRoundCaptain">
         <span>我的评分 <strong>{{ myScoredCount }}/{{ entries.length }}</strong></span>
         <span>本桌汇总 <strong>{{ finalizedCount }}/{{ entries.length }}</strong></span>
-        <span v-if="advanceTargetCount > 0">晋级 <strong>{{ advancedCount }}/{{ advanceTargetCount }}</strong></span>
+        <span v-if="!isFeedbackOnlyCompetition && advanceTargetCount > 0">晋级 <strong>{{ advancedCount }}/{{ advanceTargetCount }}</strong></span>
         </template>
         <template v-else-if="isRankingRound">
         <span>候选 <strong>{{ entries.length }}款</strong></span>
@@ -259,6 +259,11 @@ let syncingTasks = false
 const isCaptain = computed(() => me.value?.role === 'CAPTAIN')
 const isScoreRoundCaptain = computed(() => isCaptain.value && current.value?.taskType === 'CAPTAIN_FINALIZE')
 const isRankingRound = computed(() => isRankingTaskType(current.value?.taskType))
+const isFeedbackOnlyCompetition = computed(() => (
+  current.value?.competitionType === 'FEEDBACK_ONLY'
+  || captainBoard.value?.competition?.competitionType === 'FEEDBACK_ONLY'
+  || currentRoundTable.value?.competitionType === 'FEEDBACK_ONLY'
+))
 const canSubmitRanking = computed(() => (
   current.value?.taskType === 'RANKING_ROUND'
   && currentRoundTable.value?.canSubmitRanking !== false
@@ -323,7 +328,9 @@ const rankingConfirmationHint = computed(() => {
 })
 const scoreConfirmationHint = computed(() => {
   if (!scoreConfirmation.value?.mineConfirmed) {
-    return '桌长已整理共识分、综合评语和晋级结果，请核对后确认。'
+    return isFeedbackOnlyCompetition.value
+      ? '桌长已整理共识分和综合评语，请核对后确认。'
+      : '桌长已整理共识分、综合评语和晋级结果，请核对后确认。'
   }
   const confirmed = Number(scoreConfirmation.value?.confirmedCount || 0)
   const required = Number(scoreConfirmation.value?.requiredCount || 0)
@@ -345,6 +352,7 @@ const taskSectionHint = computed(() => (
 ))
 const tableReadyForReview = computed(() => {
   if (!entries.value.length) return false
+  if (isFeedbackOnlyCompetition.value) return finalizedCount.value === entries.value.length
   const targetOk = advanceTargetCount.value <= 0 || advancedCount.value === advanceTargetCount.value
   return finalizedCount.value === entries.value.length && targetOk
 })
@@ -373,6 +381,9 @@ const tableCheckoutText = computed(() => {
   }
   if (pendingTableScoreCount.value > 0) {
     return `还差 ${pendingTableScoreCount.value} 份同桌评分，齐全后再填写桌长意见。`
+  }
+  if (isFeedbackOnlyCompetition.value) {
+    return '酒款诊断意见已齐，请核对无误后提交本桌结果。'
   }
   if (advanceTargetCount.value > 0 && advancedCount.value !== advanceTargetCount.value) {
     return `酒款意见已完成，还需按本桌目标确认 ${advanceTargetCount.value} 款晋级酒。`
@@ -479,6 +490,7 @@ function formatCount(value, unit) {
 
 function entryStatus(entry) {
   if (entry.finalized) {
+    if (isFeedbackOnlyCompetition.value) return { label: '已诊断', className: 'status-lock' }
     return entry.advanced
       ? { label: '已晋级', className: 'status-ok' }
       : { label: '已确认', className: 'status-lock' }

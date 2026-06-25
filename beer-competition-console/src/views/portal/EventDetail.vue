@@ -189,13 +189,18 @@ const arrivalWindowText = computed(() => {
   if (deadline !== '-') return `${deadline} 前送达`
   return '以组委会通知为准'
 })
-const processSteps = [
+const processSteps = computed(() => [
   { title: '提交资料', text: '填写酒名、组别、基础风格、ABV 和补充字段' },
   { title: '支付报名费', text: '支付成功后报名完成，并开放标签相关操作' },
   { title: '下载标签', text: '将现场标签贴在酒瓶或外箱，便于组委会核对' },
   { title: '送样入库', text: '按送样时间寄送或现场交样，并跟进入库状态' },
-  { title: '查看结果', text: '结果发布后查看评分、评语、奖项和证书' },
-]
+  {
+    title: '查看结果',
+    text: competition.value.competitionType === 'FEEDBACK_ONLY'
+      ? '结果发布后查看评分、评语和诊断'
+      : '结果发布后查看评分、评语、奖项和证书',
+  },
+])
 
 onMounted(async () => {
   competition.value = await fetchPortalCompetitionDetail(route.params.id)

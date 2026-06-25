@@ -35,6 +35,7 @@ import com.beercompetition.pojo.dto.RoundAllocationRequest;
 import com.beercompetition.pojo.dto.RoundTableAllocationRequest;
 import com.beercompetition.pojo.dto.RoundTableMemberAllocationRequest;
 import com.beercompetition.pojo.enums.CompetitionStatus;
+import com.beercompetition.pojo.enums.CompetitionType;
 import com.beercompetition.pojo.enums.EntryStatus;
 import com.beercompetition.pojo.enums.EntryPaymentStatus;
 import com.beercompetition.pojo.enums.JudgeAccountStatus;
@@ -549,6 +550,10 @@ public class RoundServiceImpl implements RoundService {
         if (!RoundType.SCORE.name().equals(round.getRoundType())) {
             throw new BaseException("只有首轮评分制轮次可以执行此操作");
         }
+        if (resolveCompetitionType(competition) == CompetitionType.FEEDBACK_ONLY) {
+            completeFeedbackOnlyFirstRound(competitionId, roundId, round);
+            return;
+        }
         List<RoundTableEntry> entries = roundQuerySupport.listRoundEntries(roundId);
         if (entries.isEmpty()) {
             throw new BaseException("首轮没有酒款分配");
@@ -614,6 +619,9 @@ public class RoundServiceImpl implements RoundService {
     public void createNextRound(Long competitionId, NextRoundCreateRequest request) {
         // 1) 查询来源轮次和晋级候选
         Competition competition = roundQuerySupport.requireCompetition(competitionId);
+        if (resolveCompetitionType(competition) == CompetitionType.FEEDBACK_ONLY) {
+            throw new BaseException("风格对齐会不创建后续轮");
+        }
         CompetitionStatus competitionStatus = roundValidationPolicy.parseCompetitionStatus(competition);
         RoundTargetMode targetMode = RoundTargetMode.of(request.getTargetMode());
         boolean creatingChampionRound = targetMode == RoundTargetMode.CHAMPION && competitionStatus == CompetitionStatus.RESULT_CONFIRMING;
@@ -732,6 +740,10 @@ public class RoundServiceImpl implements RoundService {
     public void publishResults(Long competitionId) {
         // 1) 校验比赛和正式奖项
         Competition competition = roundQuerySupport.requireCompetition(competitionId);
+        if (resolveCompetitionType(competition) == CompetitionType.FEEDBACK_ONLY) {
+            publishFeedbackOnlyResults(competitionId, competition);
+            return;
+        }
         if (roundValidationPolicy.parseCompetitionStatus(competition) != CompetitionStatus.RESULT_CONFIRMING) {
             throw new BaseException("请先完成评审并确认奖项，再发布结果");
         }
@@ -744,6 +756,114 @@ public class RoundServiceImpl implements RoundService {
         // 2) 发布比赛状态
         competition.setStatus(CompetitionStatus.PUBLISHED.name());
         competitionMapper.updateById(competition);
+    }
+
+    private void completeFeedbackOnlyFirstRound(Long competitionId, Long roundId, CompetitionRound round) {
+        // 1) 校验首轮桌长汇总和同桌确认
+        List<RoundTableEntry> entries = roundQuerySupport.listRoundEntries(roundId);
+        if (entries.isEmpty()) {
+            throw new BaseException("首轮没有酒款分配");
+        }
+        List<RoundTable> tables = roundQuerySupport.listRoundTables(roundId);
+        Map<Long, RoundTable> tableById = tables.stream().collect(Collectors.toMap(RoundTable::getId, Function.identity()));
+        Map<Long, ScoreRecord> finalScoreByEntry = scoreRecordMapper.selectList(new LambdaQueryWrapper<ScoreRecord>()
+                        .eq(ScoreRecord::getCompetitionId, competitionId)
+                        .eq(ScoreRecord::getFinalFlag, FLAG_TRUE))
+                .stream()
+                .collect(Collectors.toMap(ScoreRecord::getBeerEntryId, Function.identity(), (left, right) -> right));
+        Map<Long, List<RoundTableEntry>> entriesByTable = entries.stream().collect(Collectors.groupingBy(RoundTableEntry::getRoundTableId));
+        for (RoundTable table : tables) {
+            List<RoundTableEntry> tableEntries = entriesByTable.getOrDefault(table.getId(), List.of());
+            List<Long> missing = tableEntries.stream()
+                    .map(RoundTableEntry::getBeerEntryId)
+                    .filter(entryId -> !finalScoreByEntry.containsKey(entryId))
+                    .toList();
+            if (!missing.isEmpty()) {
+                throw new BaseException(table.getTableName() + "还有酒款未完成桌长汇总");
+            }
+            validateScoreRoundTableConfirmations(table);
+        }
+
+        // 2) 写入中性诊断结果
+        roundResultMapper.delete(new LambdaQueryWrapper<RoundResult>().eq(RoundResult::getRoundId, roundId));
+        for (RoundTableEntry entry : entries) {
+            ScoreRecord finalScore = finalScoreByEntry.get(entry.getBeerEntryId());
+            RoundTable table = tableById.get(entry.getRoundTableId());
+            entry.setStatus(RoundEntryStatus.ASSIGNED.name());
+            roundTableEntryMapper.updateById(entry);
+            roundResultMapper.insert(RoundResult.builder()
+                    .competitionId(competitionId)
+                    .roundId(roundId)
+                    .roundTableId(entry.getRoundTableId())
+                    .beerEntryId(entry.getBeerEntryId())
+                    .resultType(RoundResultType.EVALUATED.name())
+                    .rankNo(null)
+                    .slotLabel("已完成诊断")
+                    .submittedBy(finalScore.getJudgeAccountId())
+                    .submittedTime(LocalDateTime.now())
+                    .lockedFlag(FLAG_TRUE)
+                    .build());
+        }
+
+        // 3) 锁定首轮
+        lockRoundAndTables(round);
+    }
+
+    private void publishFeedbackOnlyResults(Long competitionId, Competition competition) {
+        // 1) 校验诊断发布条件
+        if (roundValidationPolicy.parseCompetitionStatus(competition) != CompetitionStatus.JUDGING) {
+            throw new BaseException("请先完成首轮评审，再发布诊断结果");
+        }
+        CompetitionRound scoreRound = findLockedScoreRound(competitionId);
+        if (scoreRound == null) {
+            throw new BaseException("首轮评审尚未锁定，暂不能发布诊断结果");
+        }
+        List<RoundTableEntry> entries = roundQuerySupport.listRoundEntries(scoreRound.getId());
+        if (entries.isEmpty()) {
+            throw new BaseException("首轮没有酒款分配");
+        }
+        Set<Long> entryIds = entries.stream().map(RoundTableEntry::getBeerEntryId).collect(Collectors.toSet());
+        Set<Long> finalScoreEntryIds = scoreRecordMapper.selectList(new LambdaQueryWrapper<ScoreRecord>()
+                        .eq(ScoreRecord::getCompetitionId, competitionId)
+                        .eq(ScoreRecord::getFinalFlag, FLAG_TRUE)
+                        .in(ScoreRecord::getBeerEntryId, entryIds))
+                .stream()
+                .map(ScoreRecord::getBeerEntryId)
+                .collect(Collectors.toSet());
+        if (!finalScoreEntryIds.containsAll(entryIds)) {
+            throw new BaseException("还有酒款未完成桌长汇总，暂不能发布诊断结果");
+        }
+        long evaluatedCount = roundResultMapper.selectCount(new LambdaQueryWrapper<RoundResult>()
+                .eq(RoundResult::getCompetitionId, competitionId)
+                .eq(RoundResult::getRoundId, scoreRound.getId())
+                .eq(RoundResult::getResultType, RoundResultType.EVALUATED.name())
+                .in(RoundResult::getBeerEntryId, entryIds));
+        if (evaluatedCount < entryIds.size()) {
+            throw new BaseException("诊断结果尚未生成，请先完成首轮评审");
+        }
+
+        // 2) 发布比赛与酒款结果
+        competition.setStatus(CompetitionStatus.PUBLISHED.name());
+        competitionMapper.updateById(competition);
+        beerEntryMapper.selectList(new LambdaQueryWrapper<BeerEntry>()
+                        .eq(BeerEntry::getCompetitionId, competitionId)
+                        .ne(BeerEntry::getStatus, EntryStatus.CANCELED.name()))
+                .forEach(entry -> {
+                    entry.setStatus(EntryStatus.RESULT_PUBLISHED.name());
+                    beerEntryMapper.updateById(entry);
+                });
+    }
+
+    private CompetitionRound findLockedScoreRound(Long competitionId) {
+        return competitionRoundMapper.selectList(new LambdaQueryWrapper<CompetitionRound>()
+                        .eq(CompetitionRound::getCompetitionId, competitionId)
+                        .eq(CompetitionRound::getRoundType, RoundType.SCORE.name())
+                        .eq(CompetitionRound::getStatus, RoundStatus.LOCKED.name())
+                        .orderByDesc(CompetitionRound::getRoundNo)
+                        .orderByDesc(CompetitionRound::getId))
+                .stream()
+                .findFirst()
+                .orElse(null);
     }
 
     @Override
@@ -784,6 +904,7 @@ public class RoundServiceImpl implements RoundService {
             throw new BaseException("当前排序轮次未发布或已锁定");
         }
         assertCompetitionNotArchived(table.getCompetitionId());
+        Competition competition = roundQuerySupport.requireCompetition(table.getCompetitionId());
         RoundTableMember member = requireRoundTableMember(roundTableId, judgeId);
         Map<Long, String> categoryNameById = roundQuerySupport.listCategoryNames(table.getCompetitionId());
         Map<String, CompetitionStyleConfig> styleByName = roundQuerySupport.listStyleSnapshot(table.getCompetitionId());
@@ -803,6 +924,7 @@ public class RoundServiceImpl implements RoundService {
                 .roundId(round.getId())
                 .roundName(round.getRoundName())
                 .roundType(round.getRoundType())
+                .competitionType(resolveCompetitionType(competition).name())
                 .tableName(table.getTableName())
                 .targetCount(table.getTargetCount())
                 .expectedJudgeCount(resolveExpectedJudgeCount(table.getId()))
@@ -1416,7 +1538,7 @@ public class RoundServiceImpl implements RoundService {
                 .trackingNo(delivery == null ? null : delivery.getTrackingNo())
                 .deliverySubmittedAt(delivery == null ? null : delivery.getSubmittedTime())
                 .stored(Objects.equals(entry.getStoredFlag(), FLAG_TRUE))
-                .advanced(latestResult != null)
+                .advanced(latestResult != null && !RoundResultType.EVALUATED.name().equals(latestResult.getResultType()))
                 .canConfirmPayment(canConfirmPayment)
                 .canMarkStored(canMarkStored)
                 .canCancel(canCancel)
@@ -1680,6 +1802,7 @@ public class RoundServiceImpl implements RoundService {
                 .taskType(taskType)
                 .competitionId(round.getCompetitionId())
                 .competitionName(competition == null ? null : competition.getName())
+                .competitionType(resolveCompetitionType(competition).name())
                 .roundId(round.getId())
                 .roundName(round.getRoundName())
                 .roundTableId(table.getId())
@@ -1842,6 +1965,7 @@ public class RoundServiceImpl implements RoundService {
                 .toList();
         return ScoreConfirmationVO.builder()
                 .roundTableId(table.getId())
+                .competitionType(resolveCompetitionType(competitionMapper.selectById(table.getCompetitionId())).name())
                 .tableName(table.getTableName())
                 .status(table.getStatus())
                 .resultVersion(version)
@@ -1962,6 +2086,9 @@ public class RoundServiceImpl implements RoundService {
                 .toList();
         if (!missing.isEmpty()) {
             throw new BaseException("还有酒款未完成桌长汇总");
+        }
+        if (isFeedbackOnlyCompetition(table.getCompetitionId())) {
+            return;
         }
         long advancedCount = finalScoreByEntry.values().stream()
                 .filter(score -> Objects.equals(score.getAdvancedFlag(), FLAG_TRUE))
@@ -2088,6 +2215,9 @@ public class RoundServiceImpl implements RoundService {
                 .collect(Collectors.toMap(ScoreRecord::getBeerEntryId, Function.identity(), (left, right) -> right));
         if (entryIds.stream().anyMatch(entryId -> !finalScoreByEntry.containsKey(entryId))) {
             return false;
+        }
+        if (isFeedbackOnlyCompetition(table.getCompetitionId())) {
+            return true;
         }
         long advancedCount = finalScoreByEntry.values().stream()
                 .filter(score -> Objects.equals(score.getAdvancedFlag(), FLAG_TRUE))
@@ -2277,6 +2407,14 @@ public class RoundServiceImpl implements RoundService {
             return "参与评审";
         }
         return roleLabel(member);
+    }
+
+    private CompetitionType resolveCompetitionType(Competition competition) {
+        return CompetitionType.of(competition == null ? null : competition.getCompetitionType());
+    }
+
+    private boolean isFeedbackOnlyCompetition(Long competitionId) {
+        return resolveCompetitionType(competitionMapper.selectById(competitionId)) == CompetitionType.FEEDBACK_ONLY;
     }
 
     private <T> List<T> safeList(List<T> source) {

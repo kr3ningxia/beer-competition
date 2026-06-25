@@ -22,6 +22,8 @@ public class CompetitionCreateRequest {
     @NotNull(message = "比赛日期不能为空")
     private LocalDate competitionDate;
 
+    private String competitionType;
+
     @NotNull(message = "报名开始时间不能为空")
     private LocalDateTime registrationStart;
 

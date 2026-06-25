@@ -11,6 +11,7 @@ import java.util.List;
 public class ScoreConfirmationVO {
 
     private Long roundTableId;
+    private String competitionType;
     private String tableName;
     private String status;
     private Integer resultVersion;

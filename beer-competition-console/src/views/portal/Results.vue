@@ -9,7 +9,7 @@
       <div class="result-stats">
         <span><small>参赛酒款</small><b>{{ results.length }}</b></span>
         <span><small>已发布</small><b>{{ publishedEntries.length }}</b></span>
-        <span><small>已获奖</small><b>{{ awardedEntries.length }}</b></span>
+        <span><small>{{ resultStatsThirdLabel }}</small><b>{{ resultStatsThirdValue }}</b></span>
       </div>
     </section>
 
@@ -69,6 +69,7 @@
 
               <div class="result-actions">
                 <button
+                  v-if="!isFeedbackOnlySelectedEntry"
                   class="primary-action"
                   type="button"
                   :disabled="!selectedEntry.certificateAvailable"
@@ -80,16 +81,16 @@
               </div>
             </div>
 
-            <div class="result-outcome-grid">
+            <div :class="['result-outcome-grid', { 'feedback-only': isFeedbackOnlySelectedEntry }]">
               <section class="outcome-card">
-                <small>最终结果</small>
+                <small>{{ isFeedbackOnlySelectedEntry ? '诊断结果' : '最终结果' }}</small>
                 <strong>{{ resultOutcome }}</strong>
               </section>
               <section>
                 <small>综合得分</small>
                 <strong>{{ finalScoreText }}</strong>
               </section>
-              <section>
+              <section v-if="!isFeedbackOnlySelectedEntry">
                 <small>证书状态</small>
                 <strong>{{ certificateStatusText }}</strong>
               </section>
@@ -148,7 +149,7 @@
 
           <section v-if="resultDetail.roundResults.length" class="round-result-card brewer-card">
             <div class="section-heading">
-              <h2 class="portal-section-title">晋级与奖项记录</h2>
+              <h2 class="portal-section-title">{{ isFeedbackOnlySelectedEntry ? '诊断记录' : '晋级与奖项记录' }}</h2>
               <span>{{ resultDetail.roundResults.length }} 条</span>
             </div>
             <div class="round-result-list">
@@ -164,7 +165,7 @@
         <section v-else-if="selectedEntry" class="locked-card brewer-card">
           <span :class="['label-chip', `tone-${resultTone(selectedEntry)}`]">{{ resultStatusLabel(selectedEntry) }}</span>
           <h2>{{ selectedEntry.entryName }}</h2>
-          <p>{{ selectedEntry.lockReason || '组委会确认并发布结果后，这里会显示评分、评语和奖项信息' }}</p>
+          <p>{{ selectedEntry.lockReason || lockedResultHint }}</p>
           <dl class="entry-meta locked-meta">
             <div>
               <dt>赛事</dt>
@@ -228,26 +229,41 @@ const keyword = ref('')
 const statusFilter = ref('all')
 const resultDetail = ref({ summary: null, scores: [], roundResults: [] })
 
-const filterOptions = [
-  { label: '全部', value: 'all' },
-  { label: '已发布', value: 'published' },
-  { label: '待发布', value: 'locked' },
-  { label: '已获奖', value: 'awarded' },
-]
-
 const selectedEntry = computed(() => resultDetail.value.summary || results.value.find((entry) => entry.entryId === selectedId.value))
+const hasOnlyFeedbackResults = computed(() => results.value.length > 0 && results.value.every((entry) => isFeedbackOnlyEntry(entry)))
+const filterOptions = computed(() => {
+  const options = [
+    { label: '全部', value: 'all' },
+    { label: '已发布', value: 'published' },
+    { label: '待发布', value: 'locked' },
+  ]
+  if (!hasOnlyFeedbackResults.value) options.push({ label: '已获奖', value: 'awarded' })
+  return options
+})
 const publishedEntries = computed(() => results.value.filter((entry) => isEntryResultPublished(entry)))
 const awardedEntries = computed(() => results.value.filter((entry) => isEntryAwarded(entry)))
+const isFeedbackOnlySelectedEntry = computed(() => isFeedbackOnlyEntry(selectedEntry.value))
 const captainScore = computed(() => resultDetail.value.scores.find((score) => score.finalScore) || null)
 const judgeScores = computed(() => resultDetail.value.scores.filter((score) => !score.finalScore))
 const finalScore = computed(() => captainScore.value?.consensusScore || captainScore.value?.totalScore || null)
 const finalScoreMax = computed(() => scoreMax(captainScore.value) || 50)
 const awardTitle = computed(() => selectedEntry.value?.awardName || selectedEntry.value?.roundResult?.awardName || selectedEntry.value?.roundResult?.slotLabel || '')
-const resultOutcome = computed(() => awardTitle.value || '未获奖')
+const resultOutcome = computed(() => {
+  if (isFeedbackOnlySelectedEntry.value) return '诊断完成'
+  return awardTitle.value || '未获奖'
+})
+const resultStatsThirdLabel = computed(() => (hasOnlyFeedbackResults.value ? '诊断发布' : '已获奖'))
+const resultStatsThirdValue = computed(() => (hasOnlyFeedbackResults.value ? publishedEntries.value.length : awardedEntries.value.length))
 const resultHeroText = computed(() => {
   if (!results.value.length) return '提交报名后，比赛结果会在发布后显示'
+  if (hasOnlyFeedbackResults.value) return `已发布 ${publishedEntries.value.length} 款，待发布 ${results.value.length - publishedEntries.value.length} 款`
   return `已发布 ${publishedEntries.value.length} 款，已获奖 ${awardedEntries.value.length} 款，待发布 ${results.value.length - publishedEntries.value.length} 款`
 })
+const lockedResultHint = computed(() => (
+  isFeedbackOnlySelectedEntry.value
+    ? '组委会发布诊断结果后，这里会显示评分、评语和桌长综合意见'
+    : '组委会确认并发布结果后，这里会显示评分、评语和奖项信息'
+))
 const categoryEntryCountText = computed(() => {
   const count = Number(selectedEntry.value?.categoryEntryCount || 0)
   return count ? `${count} 款参赛酒` : '待确认'
@@ -311,6 +327,12 @@ watch(() => route.query, () => {
   }
 })
 
+watch(hasOnlyFeedbackResults, (onlyFeedback) => {
+  if (onlyFeedback && statusFilter.value === 'awarded') {
+    statusFilter.value = 'all'
+  }
+})
+
 function resolveInitialEntryId() {
   const queryEntryId = Number(route.query.entryId || 0)
   if (queryEntryId && results.value.some((entry) => entry.entryId === queryEntryId)) {
@@ -332,6 +354,11 @@ function selectEntry(entryId) {
 }
 
 function resultStatusLabel(entry) {
+  if (isFeedbackOnlyEntry(entry)) {
+    if (isEntryResultPublished(entry)) return '诊断已发布'
+    if (entry.status === 'STORED') return '待发布'
+    return entryStatusMeta[entry.status]?.label || '待发布'
+  }
   if (isEntryAwarded(entry)) return '已获奖'
   if (isEntryResultPublished(entry)) return '未获奖'
   if (entry.status === 'STORED') return '待发布'
@@ -339,6 +366,11 @@ function resultStatusLabel(entry) {
 }
 
 function resultTone(entry) {
+  if (isFeedbackOnlyEntry(entry)) {
+    if (isEntryResultPublished(entry)) return 'green'
+    if (entry.status === 'STORED') return 'blue'
+    return entryStatusMeta[entry.status]?.tone || 'muted'
+  }
   if (isEntryAwarded(entry)) return 'gold'
   if (isEntryResultPublished(entry)) return 'green'
   if (entry.status === 'STORED') return 'blue'
@@ -346,6 +378,10 @@ function resultTone(entry) {
 }
 
 function resultBrief(entry) {
+  if (isFeedbackOnlyEntry(entry)) {
+    if (isEntryResultPublished(entry)) return '评分和诊断已开放'
+    return entry.lockReason || '等待组委会发布诊断结果'
+  }
   if (isEntryAwarded(entry)) return entry.awardName || entry.roundResult?.awardName || '获奖结果已发布'
   if (isEntryResultPublished(entry)) return '评分和评语已开放'
   return entry.lockReason || '等待组委会发布结果'
@@ -353,12 +389,17 @@ function resultBrief(entry) {
 
 function resultTypeLabel(type) {
   const labels = {
+    EVALUATED: '诊断完成',
     ADVANCE: '晋级',
     RANK: '排序',
     MEDAL: '组别奖项',
     CHAMPION: '总冠军',
   }
   return labels[type] || '晋级与奖项'
+}
+
+function isFeedbackOnlyEntry(entry) {
+  return entry?.competitionType === 'FEEDBACK_ONLY'
 }
 
 function scoreRoleLabel(role) {
@@ -665,6 +706,10 @@ async function downloadCertificate() {
   display: grid;
   grid-template-columns: minmax(220px, 1.25fr) repeat(2, minmax(170px, 0.75fr));
   gap: 12px;
+}
+
+.result-outcome-grid.feedback-only {
+  grid-template-columns: minmax(220px, 1.25fr) minmax(170px, 0.75fr);
 }
 
 .result-outcome-grid section {

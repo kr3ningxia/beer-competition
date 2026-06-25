@@ -164,7 +164,9 @@ function competitionProgressText(competition) {
     return '送样信息已提交，等待组委会确认入库'
   }
   if (item.result > 0) {
-    return '结果已发布，结果页展示本场评分、评语和奖项'
+    return isFeedbackOnlyCompetition(competition)
+      ? '结果已发布，结果页展示本场评分、评语和诊断'
+      : '结果已发布，结果页展示本场评分、评语和奖项'
   }
   if (item.stored > 0) {
     return '样品已入库，等待组委会发布评审结果'
@@ -252,7 +254,9 @@ function entryStatusText(entry) {
     return hasEntryDeliveryProgress(entry) ? '送样信息已提交，等待组委会确认入库' : '请办理送样，并按赛事要求贴好现场标签'
   }
   if (isEntryResultPublished(entry)) {
-    return '结果已发布，结果页展示评分、评语和奖项'
+    return isFeedbackOnlyEntry(entry)
+      ? '结果已发布，结果页展示评分、评语和诊断'
+      : '结果已发布，结果页展示评分、评语和奖项'
   }
   if (entry.status === 'STORED') {
     return '样品已入库，等待组委会发布评审结果'
@@ -266,6 +270,15 @@ function showShortCode(entry) {
 
 function competitionName(competitionId) {
   return competitions.value.find((competition) => competition.id === competitionId)?.name || '未关联赛事'
+}
+
+function isFeedbackOnlyCompetition(competition) {
+  if (competition?.competitionType === 'FEEDBACK_ONLY') return true
+  return entries.value.some((entry) => entry.competitionId === competition?.id && isFeedbackOnlyEntry(entry))
+}
+
+function isFeedbackOnlyEntry(entry) {
+  return entry?.competitionType === 'FEEDBACK_ONLY'
 }
 
 onMounted(async () => {

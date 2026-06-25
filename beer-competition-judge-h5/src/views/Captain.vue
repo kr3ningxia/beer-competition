@@ -9,7 +9,7 @@
           <span>已确认</span>
           <strong>{{ initialBoardLoading ? '- / -' : `${finalizedCount} / ${boardEntries.length}` }}</strong>
         </div>
-        <div>
+        <div v-if="!isFeedbackOnlyCompetition">
           <span>已选晋级</span>
           <strong>{{ initialBoardLoading ? '- / -' : `${advancedUuids.length} / ${advanceTargetCount}` }}</strong>
         </div>
@@ -27,7 +27,7 @@
             <h2 class="section-title compact">{{ captainSummaryTitle }}</h2>
             <p class="captain-check-text">{{ tableCheckText }}</p>
           </div>
-          <span :class="['pill', tableReadyForReview ? 'status-ok' : 'status-warn']">{{ advancedUuids.length }} / {{ advanceTargetCount }}</span>
+          <span :class="['pill', tableReadyForReview ? 'status-ok' : 'status-warn']">{{ tableReviewProgressText }}</span>
         </div>
         <div v-if="captainSummaryBadges.length" class="check-blockers">
           <span v-for="item in captainSummaryBadges" :key="item">{{ item }}</span>
@@ -69,7 +69,7 @@
                 {{ boardEntryStatusText(entry) }}
               </em>
             </button>
-            <span :class="['advance-check', { disabled: !entry.finalized }]">
+            <span v-if="!isFeedbackOnlyCompetition" :class="['advance-check', { disabled: !entry.finalized }]">
               {{ entry.advanced ? '已加入晋级名单' : '晋级候选' }}
             </span>
           </article>
@@ -132,7 +132,7 @@
       <section class="card final-card">
         <div class="final-head">
           <h2 class="section-title compact">本桌最终意见</h2>
-          <span class="final-count">晋级 {{ advancedUuids.length }} / {{ advanceTargetCount }}</span>
+          <span class="final-count">{{ finalCountText }}</span>
         </div>
         <div v-if="scoreStats" class="score-reference-grid">
           <button type="button" :disabled="tableLocked" @click="fillConsensusScore(scoreStats.average)">
@@ -159,14 +159,14 @@
             v-model.trim="form.comments"
             class="textarea"
             :disabled="tableLocked"
-            placeholder="请写下本桌讨论后的综合意见，作为参赛方最终可见反馈。"
+            :placeholder="finalCommentPlaceholder"
           />
         </label>
-        <label :class="['advance-line', 'final-advance', { active: form.advanced }]">
+        <label v-if="!isFeedbackOnlyCompetition" :class="['advance-line', 'final-advance', { active: form.advanced }]">
           <input :checked="form.advanced" type="checkbox" :disabled="tableLocked" @change="handleAdvanceToggle" />
           <span>加入晋级名单</span>
         </label>
-        <p class="caption">本桌需晋级 {{ advanceTargetCount }} 款，当前已选 {{ previewAdvancedCount }} 款。</p>
+        <p v-if="!isFeedbackOnlyCompetition" class="caption">本桌需晋级 {{ advanceTargetCount }} 款，当前已选 {{ previewAdvancedCount }} 款。</p>
         <button class="button primary full" type="button" :disabled="!canFinalize" @click="submitFinal">
           {{ finalButtonText }}
         </button>
@@ -224,6 +224,7 @@ const form = reactive({
 })
 
 const boardEntries = computed(() => board.value?.entries || [])
+const isFeedbackOnlyCompetition = computed(() => board.value?.competition?.competitionType === 'FEEDBACK_ONLY')
 const normalScores = computed(() => tableScores.value.filter((score) => !score.finalFlag))
 const finalScore = computed(() => tableScores.value.find((score) => score.finalFlag) || null)
 const myPersonalScore = computed(() => normalScores.value.find((score) => score.mine) || null)
@@ -258,9 +259,15 @@ const previewAdvancedCount = computed(() => {
 })
 const tableReadyForReview = computed(() => {
   if (!boardEntries.value.length) return false
+  if (isFeedbackOnlyCompetition.value) return finalizedCount.value === boardEntries.value.length
   const targetOk = numericAdvanceTarget.value <= 0 || advancedUuids.value.length === numericAdvanceTarget.value
   return finalizedCount.value === boardEntries.value.length && targetOk
 })
+const tableReviewProgressText = computed(() => (
+  isFeedbackOnlyCompetition.value
+    ? `${finalizedCount.value} / ${boardEntries.value.length}`
+    : `${advancedUuids.value.length} / ${advanceTargetCount.value}`
+))
 const captainSummaryState = computed(() => {
   if (initialBoardLoading.value) return 'loading'
   if (!boardEntries.value.length) return 'empty'
@@ -273,8 +280,8 @@ const captainSummaryState = computed(() => {
 })
 const captainSummaryTitle = computed(() => {
   if (captainSummaryState.value === 'loading') return '正在载入本桌任务'
-  if (captainSummaryState.value === 'ready-review') return '本桌结果可核对'
-  if (captainSummaryState.value === 'advance-check') return '晋级名单待核对'
+  if (captainSummaryState.value === 'ready-review') return isFeedbackOnlyCompetition.value ? '本桌诊断可核对' : '本桌结果可核对'
+  if (captainSummaryState.value === 'advance-check') return isFeedbackOnlyCompetition.value ? '诊断意见待核对' : '晋级名单待核对'
   if (captainSummaryState.value === 'mixed-todos') return '处理本桌待办'
   if (captainSummaryState.value === 'ready-finalize') return '有酒款待汇总'
   if (captainSummaryState.value === 'waiting-peer') return '等待同桌评分完成'
@@ -311,7 +318,7 @@ const captainSummaryBadges = computed(() => {
   const badges = [
     `待汇总 ${unfinalizedCount.value} 款`,
   ]
-  if (numericAdvanceTarget.value > 0 && finalizedCount.value === boardEntries.value.length && advancedUuids.value.length !== numericAdvanceTarget.value) {
+  if (!isFeedbackOnlyCompetition.value && numericAdvanceTarget.value > 0 && finalizedCount.value === boardEntries.value.length && advancedUuids.value.length !== numericAdvanceTarget.value) {
     badges.push(`晋级需 ${numericAdvanceTarget.value} 款`)
   }
   return badges
@@ -319,8 +326,8 @@ const captainSummaryBadges = computed(() => {
 const tableCheckText = computed(() => {
   if (captainSummaryState.value === 'loading') return '正在同步本轮酒款和评分进度。'
   if (!boardEntries.value.length) return '请联系现场工作人员确认本轮评审桌和酒款配置。'
-  if (tableReadyForReview.value) return '酒款意见和晋级名单已齐，请核对无误后提交本桌结果。'
-  if (captainSummaryState.value === 'advance-check') return '酒款意见已完成，还需按本桌目标确认晋级名单。'
+  if (tableReadyForReview.value) return isFeedbackOnlyCompetition.value ? '酒款诊断意见已齐，请核对无误后提交本桌结果。' : '酒款意见和晋级名单已齐，请核对无误后提交本桌结果。'
+  if (captainSummaryState.value === 'advance-check') return isFeedbackOnlyCompetition.value ? '酒款诊断意见已完成，请核对后提交本桌结果。' : '酒款意见已完成，还需按本桌目标确认晋级名单。'
   if (captainSummaryState.value === 'mixed-todos') return `${readyFinalizeCount.value} 款可汇总，另有 ${myPendingScoreCount.value} 款个人评分待提交。`
   if (captainSummaryState.value === 'ready-finalize') return '同桌评分已齐，请填写桌长意见。'
   if (captainSummaryState.value === 'need-score') {
@@ -340,7 +347,7 @@ const nextActionEntry = computed(() => (
 const captainSummaryActionLabel = computed(() => {
   if (captainSummaryState.value === 'loading') return '请稍候'
   if (captainSummaryState.value === 'ready-review') return '核对本桌结果'
-  if (captainSummaryState.value === 'advance-check') return '核对晋级名单'
+  if (captainSummaryState.value === 'advance-check') return isFeedbackOnlyCompetition.value ? '核对诊断意见' : '核对晋级名单'
   if (captainSummaryState.value === 'mixed-todos') return '处理可汇总酒款'
   if (captainSummaryState.value === 'ready-finalize') return '处理可汇总酒款'
   if (captainSummaryState.value === 'need-score') return '去扫码评分'
@@ -374,7 +381,7 @@ const canSubmitTableResult = computed(() => (
 const tableSubmitButtonText = computed(() => {
   if (tableSubmitted.value) return '本桌结果已提交'
   if (submittingTable.value) return '提交中...'
-  return '提交本桌结果'
+  return isFeedbackOnlyCompetition.value ? '提交本桌诊断' : '提交本桌结果'
 })
 const tableSubmitHint = computed(() => {
   if (tableSubmitted.value) return '本桌结果已提交，等待主办方确认轮次。'
@@ -405,6 +412,16 @@ const scoreReference = computed(() => {
 const minFinalCommentLength = computed(() => Number(captainConfig.value?.commentMinLength ?? captainConfig.value?.minCommentLength ?? 0))
 const captainScoreMax = computed(() => Number(captainConfig.value?.dimensions?.[0]?.maxScore || 50))
 const finalCommentLength = computed(() => countEffectiveChars(form.comments))
+const finalCountText = computed(() => (
+  isFeedbackOnlyCompetition.value
+    ? '诊断意见'
+    : `晋级 ${advancedUuids.value.length} / ${advanceTargetCount.value}`
+))
+const finalCommentPlaceholder = computed(() => (
+  isFeedbackOnlyCompetition.value
+    ? '请填写是否适合原投报组别、主要风格偏差、建议投报组别、报名信息补充建议和产品改进建议。'
+    : '请写下本桌讨论后的综合意见，作为参赛方最终可见反馈。'
+))
 const consensusScoreValid = computed(() => (
   Number.isInteger(Number(form.consensusScore))
   && Number(form.consensusScore) >= 0
@@ -466,7 +483,7 @@ async function redirectRankingTaskIfNeeded() {
 async function submitFinal() {
   if (!canFinalize.value) return
   const captainDimension = captainConfig.value?.dimensions?.[0] || { key: 'consensus', label: '共识分', maxScore: captainScoreMax.value }
-  await finalizeTableScore(uuid.value, {
+  const payload = {
     dimensions: [{
       key: captainDimension.key,
       label: captainDimension.label,
@@ -477,8 +494,11 @@ async function submitFinal() {
     }],
     consensusScore: Math.round(Number(form.consensusScore)),
     comments: form.comments,
-    advanced: form.advanced,
-  })
+  }
+  if (!isFeedbackOnlyCompetition.value) {
+    payload.advanced = form.advanced
+  }
+  await finalizeTableScore(uuid.value, payload)
   message.value = '桌长意见已保存'
   window.setTimeout(() => router.push('/captain'), 420)
 }

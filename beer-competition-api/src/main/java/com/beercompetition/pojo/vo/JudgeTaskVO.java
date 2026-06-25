@@ -10,6 +10,7 @@ public class JudgeTaskVO {
     private String taskType;
     private Long competitionId;
     private String competitionName;
+    private String competitionType;
     private Long roundId;
     private String roundName;
     private Long roundTableId;

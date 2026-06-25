@@ -89,12 +89,12 @@
             <article class="metric-card">
               <small>当前轮次桌数</small>
               <strong>{{ currentRoundTables.length }} 桌</strong>
-              <p>{{ currentRoundEntryCount }} 款酒 · 目标 {{ currentRoundTargetCount }} 款</p>
+              <p>{{ isFeedbackOnlyCompetition ? `${currentRoundEntryCount} 款酒` : `${currentRoundEntryCount} 款酒 · 目标 ${currentRoundTargetCount} 款` }}</p>
             </article>
             <article class="metric-card">
-              <small>{{ currentRoundIsTerminal ? '结果确认' : '晋级名单' }}</small>
-              <strong>{{ currentRoundIsTerminal ? (canPublishResults ? '可发布' : '待确认') : advancedPool.length }}</strong>
-              <p>{{ currentRoundIsTerminal ? '确认奖项后发布结果' : '锁定上一轮后用于创建下一轮' }}</p>
+              <small>{{ isFeedbackOnlyCompetition ? '诊断发布' : (currentRoundIsTerminal ? '结果确认' : '晋级名单') }}</small>
+              <strong>{{ isFeedbackOnlyCompetition ? (canPublishResults ? '可发布' : feedbackFinalizedCount) : (currentRoundIsTerminal ? (canPublishResults ? '可发布' : '待确认') : advancedPool.length) }}</strong>
+              <p>{{ isFeedbackOnlyCompetition ? '首轮锁定后发布诊断结果' : (currentRoundIsTerminal ? '确认奖项后发布结果' : '锁定上一轮后用于创建下一轮') }}</p>
             </article>
           </div>
 
@@ -406,7 +406,7 @@
             <article class="metric-card"><small>全部</small><strong>{{ competition.entriesSummary.total }}</strong><p>已报名酒款</p></article>
             <article class="metric-card"><small>待支付</small><strong>{{ competition.entriesSummary.pendingPayment }}</strong><p>需跟进支付</p></article>
             <article class="metric-card"><small>已入库</small><strong>{{ competition.entriesSummary.stored }}</strong><p>现场已确认</p></article>
-            <article class="metric-card"><small>晋级轨迹</small><strong>{{ roundEntryPool.length }}</strong><p>真实轮次分配</p></article>
+            <article class="metric-card"><small>{{ isFeedbackOnlyCompetition ? '评审轨迹' : '晋级轨迹' }}</small><strong>{{ roundEntryPool.length }}</strong><p>真实轮次分配</p></article>
           </div>
           <article class="panel-card">
             <div class="panel-heading">
@@ -496,6 +496,7 @@
             :round-validation-issues="roundValidationIssues"
             :publish-disabled-reason="roundPublishDisabledReason"
             :can-publish="canPublishCurrentRound"
+            :competition-type="competition?.competitionType || 'AWARD'"
             :get-judge="getJudge"
             :get-judge-initial="getJudgeInitial"
             :get-judge-assignment-summary="getJudgeAssignmentSummary"
@@ -547,8 +548,8 @@
           <div v-if="preplanningNotice" class="edit-banner preplanning-banner">
             <span>{{ preplanningNotice }}</span>
           </div>
-          <section class="round-planning-shell">
-            <aside class="round-pyramid-panel" aria-label="晋级路径">
+          <section :class="['round-planning-shell', { 'feedback-only-rounds': isFeedbackOnlyCompetition }]">
+            <aside v-if="!isFeedbackOnlyCompetition" class="round-pyramid-panel" aria-label="晋级路径">
               <header class="round-pyramid-head">
                 <h2>晋级路径</h2>
               </header>
@@ -889,7 +890,7 @@
                           <div class="captain-opinion-meta">
                             <span>桌长 <strong>{{ selectedFeedbackEntry.captainOpinion.captainName || '未知桌长' }}</strong></span>
                             <span>共识分 <strong class="score-highlight">{{ selectedFeedbackEntry.captainOpinion.consensusScore }}</strong> / {{ selectedFeedbackEntry.captainOpinion.maxConsensus || 50 }}</span>
-                            <em :class="{ advanced: selectedFeedbackEntry.captainOpinion.advanced }">{{ selectedFeedbackEntry.captainOpinion.advanced ? '已晋级' : '未晋级' }}</em>
+                            <em v-if="!isFeedbackOnlyCompetition" :class="{ advanced: selectedFeedbackEntry.captainOpinion.advanced }">{{ selectedFeedbackEntry.captainOpinion.advanced ? '已晋级' : '未晋级' }}</em>
                             <small>提交于 {{ formatFeedbackTime(selectedFeedbackEntry.captainOpinion.submittedAt) }}</small>
                             <small>评语 {{ formatCommentCount(selectedFeedbackEntry.captainOpinion.commentCharCount) }}</small>
                           </div>
@@ -965,7 +966,7 @@
 
         <section v-if="activeTab === 'results'" class="tab-panel">
           <div class="results-workbench">
-            <article class="panel-card award-table-card">
+            <article v-if="!isFeedbackOnlyCompetition" class="panel-card award-table-card">
               <div class="panel-heading">
                 <h2>获奖名单</h2>
                 <span>{{ awardDrafts.length }} 项</span>
@@ -1057,6 +1058,16 @@
               <input ref="awardCertificateInput" class="file-input" type="file" accept="application/pdf,.pdf" @change="handleAwardCertificateSelected" />
             </article>
 
+            <article v-else class="panel-card result-check-card feedback-result-card">
+              <div class="panel-heading">
+                <h2>诊断结果</h2>
+                <span>{{ feedbackFinalizedCount }} / {{ feedbackEntryCount }} 款</span>
+              </div>
+              <div class="diagnosis-summary">
+                <strong>{{ feedbackPublishSummary }}</strong>
+              </div>
+            </article>
+
             <article class="panel-card result-check-card">
               <div class="panel-heading">
                 <h2>发布前检查</h2>
@@ -1069,7 +1080,7 @@
                   <span>{{ check.label }}</span>
                   <strong>{{ check.done ? '通过' : '待处理' }}</strong>
                 </div>
-                <div :class="['check-item', certificateCheck.done ? 'done' : 'pending', 'optional']">
+                <div v-if="!isFeedbackOnlyCompetition" :class="['check-item', certificateCheck.done ? 'done' : 'pending', 'optional']">
                   <CircleCheck v-if="certificateCheck.done" />
                   <Warning v-else />
                   <span>{{ certificateCheck.label }}</span>
@@ -1107,7 +1118,7 @@
                   :title="publishResultsDisabledReason"
                   @click="publishResultsAction"
                 >
-                  发布到厂牌端
+                  {{ isFeedbackOnlyCompetition ? '发布诊断结果' : '发布到厂牌端' }}
                 </button>
                 <p v-if="!showGenerateAwardsAction && !showConfirmAwardsAction && !showPublishResultsAction">
                   结果已发布，当前只需要按获奖名单补充奖状
@@ -1116,7 +1127,7 @@
             </article>
           </div>
 
-          <article class="panel-card path-audit-card">
+          <article v-if="!isFeedbackOnlyCompetition" class="panel-card path-audit-card">
             <div class="panel-heading">
               <div>
                 <h2>晋级路径核验</h2>
@@ -1321,14 +1332,14 @@
             <h2 id="first-round-complete-title">确认首轮完成？</h2>
           </header>
           <p class="confirm-copy">
-            确认后将锁定首轮，并生成晋级酒款，请确认所有评分和桌长汇总已经核对无误
+            {{ isFeedbackOnlyCompetition ? '确认后将锁定首轮诊断结果，请确认所有评分和桌长综合评语已经核对无误' : '确认后将锁定首轮，并生成晋级酒款，请确认所有评分和桌长汇总已经核对无误' }}
           </p>
           <div class="confirm-summary">
             <span>
               <small>当前轮次</small>
               <strong>{{ currentRound?.name || '首轮' }}</strong>
             </span>
-            <span>
+            <span v-if="!isFeedbackOnlyCompetition">
               <small>晋级酒款</small>
               <strong>{{ firstRoundCompletionStatus.advancedCount }} 款</strong>
             </span>
@@ -1537,7 +1548,7 @@
             <small>桌长共识</small>
             <strong>{{ roundScoreDetailCaptainStats.consensus.submitted }} / {{ roundScoreDetailCaptainStats.consensus.total }}</strong>
           </span>
-          <span>
+          <span v-if="!isFeedbackOnlyCompetition">
             <small>选择晋级</small>
             <strong>{{ roundScoreDetailCaptainStats.advance.submitted }} / {{ roundScoreDetailCaptainStats.advance.total }}</strong>
           </span>
@@ -1885,6 +1896,7 @@ const detailTabs = computed(() => tabs.map((tab) => {
   const disabledReason = resolveDetailTabDisabledReason(tab.key)
   return {
     ...tab,
+    label: tab.key === 'results' && isFeedbackOnlyCompetition.value ? '诊断发布' : tab.label,
     enabled: !disabledReason,
     disabledReason,
   }
@@ -2149,6 +2161,9 @@ const roundLockConfirmTitle = computed(() => {
   return `确认锁定${currentRound.value.name || '当前轮次'}？`
 })
 const roundLockConfirmCopy = computed(() => {
+  if (isFeedbackOnlyCompetition.value) {
+    return '锁定后，本轮评分、桌长汇总和综合评语将固定，请确认所有评审桌结果已经核对无误'
+  }
   if (currentRoundIsTerminal.value) {
     return '锁定后，总冠军排序将固定，后续进入奖项确认和结果发布，请确认决赛桌提交内容已经核对无误'
   }
@@ -2169,7 +2184,7 @@ const roundReadinessTitle = computed(() => {
   if (currentRound.value.status === 'PUBLISHED') return `${currentRound.value.name}已发布给${currentRoundPublishTarget.value}`
   if (currentRound.value.status === 'IN_PROGRESS') return '本轮排序进行中'
   if (currentRound.value.status === 'SUBMITTED') return currentRoundIsTerminal.value ? '决赛轮已提交，等待确认' : (currentRound.value.type === 'SCORE' ? '首轮已提交，等待确认' : '排序已提交，等待确认')
-  if (currentRound.value.status === 'LOCKED') return currentRoundIsTerminal.value ? '决赛轮已锁定' : `${currentRound.value.name}已锁定`
+  if (currentRound.value.status === 'LOCKED') return isFeedbackOnlyCompetition.value ? '首轮诊断已锁定' : (currentRoundIsTerminal.value ? '决赛轮已锁定' : `${currentRound.value.name}已锁定`)
   return currentRoundStatusText.value
 })
 const roundReadinessDetail = computed(() => {
@@ -2187,7 +2202,9 @@ const roundReadinessDetail = computed(() => {
   if (currentRound.value.status === 'SUBMITTED') return currentRoundIsTerminal.value
     ? '确认总冠军结果无误后锁定，锁定后确认奖项'
     : (currentRound.value.type === 'SCORE' ? '桌长汇总已提交，确认无误后可以锁定本轮' : '排序结果已提交，确认无误后可以锁定本轮')
-  if (currentRound.value.status === 'LOCKED') return currentRoundIsTerminal.value
+  if (currentRound.value.status === 'LOCKED') return isFeedbackOnlyCompetition.value
+    ? (canPublishResults.value ? '可以发布诊断结果' : '诊断结果已固定')
+    : currentRoundIsTerminal.value
     ? '总冠军结果已固定，请确认奖项并发布结果'
     : (isMedalRound(currentRound.value) ? '组别奖项已生成，下一步创建决赛轮' : (canCreateNextRound.value ? `可以创建${nextRoundName.value}` : '本轮结果已固定'))
   return roundNextStepText.value
@@ -2202,12 +2219,15 @@ const roundNextStepText = computed(() => {
   if (currentRound.value.status === 'PUBLISHED') return '等待评审评分完成，再由桌长汇总首轮结果'
   if (currentRound.value.status === 'IN_PROGRESS') return '等待桌长提交排序'
   if (currentRound.value.status === 'SUBMITTED') return currentRoundIsTerminal.value ? '确认总冠军后锁定决赛轮' : (canCreateNextRound.value ? `可先创建${nextRoundName.value}草稿安排桌次和人员` : '确认本轮无误后锁定')
-  if (currentRound.value.status === 'LOCKED') return currentRoundIsTerminal.value
+  if (currentRound.value.status === 'LOCKED') return isFeedbackOnlyCompetition.value
+    ? (canPublishResults.value ? '进入结果发布页发布诊断结果' : '本轮诊断已锁定')
+    : currentRoundIsTerminal.value
     ? '进入结果发布页确认奖项'
     : (advancedPool.value.length ? '晋级酒款已准备好，可创建下一轮' : '本轮已锁定')
   return '继续推进当前轮次'
 })
 const canCreateNextRound = computed(() => {
+  if (isFeedbackOnlyCompetition.value) return false
   const lastRound = rounds.value[rounds.value.length - 1]
   if (!lastRound || isTerminalRound(lastRound)) return false
   if (lastRound.status === 'SUBMITTED') return true
@@ -2288,6 +2308,7 @@ const entryAutoAssignStats = computed(() => {
   }
 })
 const roundRestructureText = computed(() => rounds.value.map((round) => `${round.name} ${round.tables.length}桌`).join(' -> '))
+const isFeedbackOnlyCompetition = computed(() => competition.value?.competitionType === 'FEEDBACK_ONLY')
 const awardDrafts = computed(() => competition.value?.awardResults || [])
 const championAwards = computed(() => awardDrafts.value.filter((award) => award.awardType === 'CHAMPION'))
 const medalAwards = computed(() => awardDrafts.value.filter((award) => award.awardType !== 'CHAMPION'))
@@ -2298,10 +2319,10 @@ const resultsPublished = computed(() => Boolean(competition.value?.resultSetup?.
 const hasConfirmedAwardResults = computed(() => awardDrafts.value.some((award) => isAwardConfirmedOrPublished(award)))
 const awardsConfirmed = computed(() => awardDrafts.value.length > 0 && awardDrafts.value.every((award) => isAwardConfirmedOrPublished(award)))
 const hasEditableAwardResults = computed(() => awardDrafts.value.some((award) => canEditAwardSelection(award)))
-const showGenerateAwardsAction = computed(() => !awardsConfirmed.value && !resultsPublished.value)
-const showConfirmAwardsAction = computed(() => !awardsConfirmed.value && !resultsPublished.value)
+const showGenerateAwardsAction = computed(() => !isFeedbackOnlyCompetition.value && !awardsConfirmed.value && !resultsPublished.value)
+const showConfirmAwardsAction = computed(() => !isFeedbackOnlyCompetition.value && !awardsConfirmed.value && !resultsPublished.value)
 const showPublishResultsAction = computed(() => !resultsPublished.value)
-const canGenerateAwards = computed(() => terminalRoundLocked.value && !hasConfirmedAwardResults.value && !resultsPublished.value)
+const canGenerateAwards = computed(() => !isFeedbackOnlyCompetition.value && terminalRoundLocked.value && !hasConfirmedAwardResults.value && !resultsPublished.value)
 const generateAwardsDisabledReason = computed(() => {
   if (!terminalRoundLocked.value) return '请先锁定决赛轮'
   if (resultsPublished.value) return '结果已发布，不能重新生成奖项'
@@ -2309,7 +2330,8 @@ const generateAwardsDisabledReason = computed(() => {
   return ''
 })
 const canConfirmAwards = computed(() => (
-  competition.value?.status === 'RESULT_CONFIRMING'
+  !isFeedbackOnlyCompetition.value
+  && competition.value?.status === 'RESULT_CONFIRMING'
   && !resultsPublished.value
   && awardDrafts.value.length > 0
   && confirmableAwardDrafts.value.some((award) => award.awardType === 'MEDAL' && Number(award.rankNo) >= 1 && Number(award.rankNo) <= 3)
@@ -2344,11 +2366,29 @@ const certificateCheck = computed(() => ({
   status: certificateTotalCount.value === 0 || certificateUploadedCount.value === certificateTotalCount.value ? '完成' : '可后补',
 }))
 const resultPathEntries = computed(() => roundEntryPool.value.filter((entry) => entry.advanced || getEntryAward(entry.uuid)).slice(0, 8))
-const resultChecks = computed(() => [
-  { label: '组别奖项已确认', done: medalsConfirmed.value },
-  { label: '总冠军已确认', done: championConfirmed.value },
-  { label: '决赛轮已锁定', done: finalRoundLocked.value },
-])
+const feedbackEntryCount = computed(() => currentRound.value?.type === 'SCORE' ? currentRoundEntryCount.value : roundEntryPool.value.filter((entry) => entry.stored).length)
+const feedbackFinalizedCount = computed(() => currentRound.value?.type === 'SCORE'
+  ? currentRoundTables.value.reduce((sum, table) => sum + Number(table.finalCount || 0), 0)
+  : Number(competition.value?.progressSummary?.finalized || 0))
+const feedbackPublishSummary = computed(() => {
+  if (resultsPublished.value) return '诊断结果已发布'
+  if (!finalRoundLocked.value) return '等待首轮评审锁定'
+  return canPublishResults.value ? '可以发布给厂牌端' : '还有酒款待完成'
+})
+const resultChecks = computed(() => {
+  if (isFeedbackOnlyCompetition.value) {
+    return [
+      { label: '首轮评审已锁定', done: finalRoundLocked.value },
+      { label: '桌长诊断已完成', done: feedbackEntryCount.value > 0 && feedbackFinalizedCount.value >= feedbackEntryCount.value },
+      { label: '诊断结果可发布', done: canPublishResults.value || resultsPublished.value },
+    ]
+  }
+  return [
+    { label: '组别奖项已确认', done: medalsConfirmed.value },
+    { label: '总冠军已确认', done: championConfirmed.value },
+    { label: '决赛轮已锁定', done: finalRoundLocked.value },
+  ]
+})
 
 const selectedTable = computed(() => judgeTableForm.find((table) => table.localId === selectedTableLocalId.value))
 const selectedRoleLabel = computed(() => roleOptions.find((role) => role.value === selectedRole.value)?.label || '角色')
@@ -2427,7 +2467,7 @@ const selectedFeedbackEntry = computed(() => {
 const selectedFeedbackIssues = computed(() => buildFeedbackIssues(selectedFeedbackEntry.value))
 const feedbackEditorTitle = computed(() => (feedbackEditor.type === 'captain' ? '编辑桌长综合评语' : '编辑评审评语'))
 const feedbackEditorSubtitle = computed(() => {
-  if (feedbackEditor.type === 'captain') return '只修改文字，不调整共识分和晋级状态'
+  if (feedbackEditor.type === 'captain') return isFeedbackOnlyCompetition.value ? '只修改文字，不调整共识分' : '只修改文字，不调整共识分和晋级状态'
   return '只修改维度备注，不调整评分'
 })
 const feedbackEditorEffectiveText = computed(() => {
@@ -3247,6 +3287,7 @@ function buildOverviewActionItems() {
 }
 
 function buildFutureStageTasks() {
+  const feedbackOnly = isFeedbackOnlyCompetition.value
   const tasks = [
     { key: 'storedEntries', label: '样品入库', targetTab: 'entries', detail: '报名酒款到场后确认入库状态', state: 'done', statusText: '已完成' },
   ]
@@ -3256,7 +3297,9 @@ function buildFutureStageTasks() {
       label: `${round.name}编排`,
       targetTab: 'rounds',
       roundId: round.id,
-      detail: round.type === 'SCORE' ? '确认桌次、酒款和晋级数量' : '确认桌长、酒款和排序名额',
+      detail: round.type === 'SCORE'
+        ? (feedbackOnly ? '确认桌次、酒款和诊断任务' : '确认桌次、酒款和晋级数量')
+        : '确认桌长、酒款和排序名额',
       state: round.status === 'LOCKED' ? 'done' : 'pending',
       statusText: roundStatusLabels[round.status] || round.status,
     })
@@ -3285,9 +3328,9 @@ function buildFutureStageTasks() {
   }
   tasks.push({
     key: 'resultSetup',
-    label: '奖项确认',
+    label: feedbackOnly ? '诊断发布' : '奖项确认',
     targetTab: 'results',
-    detail: '确认组别奖项和发布反馈',
+    detail: feedbackOnly ? '发布评分和桌长综合诊断' : '确认组别奖项和发布反馈',
     state: resultChecks.value.every((item) => item.done) ? 'done' : 'pending',
     statusText: resultChecks.value.every((item) => item.done) ? '可发布' : '待确认',
   })
@@ -3453,6 +3496,7 @@ function buildFirstRoundCompletionStatus() {
   if (scoringPending) return { ...base, hint: `${scoringPending} 桌还在评分` }
   const captainPending = tables.filter((table) => normalizeProgress(table.captainProgress) < 100).length
   if (captainPending) return { ...base, hint: `${captainPending} 桌还未汇总` }
+  if (isFeedbackOnlyCompetition.value) return { ...base, ready: true, hint: '全部桌次已完成诊断' }
   const advancePending = tables.filter((table) => {
     const target = Number(table.targetCount || 0)
     return target <= 0 || Number(table.advancedCount || 0) !== target
@@ -3466,20 +3510,29 @@ function buildCurrentRoundMetrics() {
     return [
       { label: '桌数', value: '0' },
       { label: '酒款', value: '0' },
-      { label: '晋级', value: '-' },
+      { label: isFeedbackOnlyCompetition.value ? '诊断' : '晋级', value: '-' },
       { label: '问题', value: '-' },
     ]
   }
   if (currentRound.value.status === 'DRAFT') {
-    return [
+    const base = [
       { label: '桌数', value: currentRoundTables.value.length },
       { label: '酒款', value: `${currentRoundEntryCount.value} / ${currentPoolEntries.value.length}` },
-      { label: currentRoundTargetLabel.value, value: currentRoundTargetDisplay.value },
-      { label: '问题', value: roundValidationIssues.value.length },
     ]
+    if (!isFeedbackOnlyCompetition.value) base.push({ label: currentRoundTargetLabel.value, value: currentRoundTargetDisplay.value })
+    base.push({ label: '问题', value: roundValidationIssues.value.length })
+    return base
   }
   if (currentRound.value.status === 'LOCKED') {
     const unlockedCount = currentRoundTables.value.filter((table) => table.status !== 'LOCKED').length
+    if (isFeedbackOnlyCompetition.value) {
+      return [
+        { label: '诊断酒款', value: `${currentRoundEntryCount.value} 款` },
+        { label: '桌长汇总', value: `${feedbackFinalizedCount.value} / ${feedbackEntryCount.value}` },
+        { label: '未锁定', value: `${unlockedCount} 桌` },
+        { label: '结果', value: canPublishResults.value ? '可发布' : '已固定' },
+      ]
+    }
     if (currentRoundIsTerminal.value) {
       return [
         { label: '决赛桌', value: currentRoundTables.value.length },
@@ -3635,11 +3688,13 @@ function areMedalAwardsConfirmedLocally() {
 function getRoundNodeDetail(round) {
   const entryCount = countRoundEntries(round)
   const targetCount = countRoundTarget(round)
+  if (isFeedbackOnlyCompetition.value && round.type === 'SCORE') return `${entryCount} 款`
   if (round.type === 'SCORE') return `${entryCount} 款 · 晋级 ${targetCount} 款`
   return `${entryCount} 款 · ${formatRoundNodeTargetDisplay(round)}`
 }
 
 function getRoundNodeHint(round) {
+  if (isFeedbackOnlyCompetition.value && round.type === 'SCORE') return '评审评分，桌长填写诊断意见'
   if (round.type === 'SCORE') return '评审评分，桌长从本桌酒款中选择晋级'
   return '桌长从晋级酒款中选择并排序'
 }
@@ -3662,10 +3717,10 @@ function buildRoundTableSummary(table) {
     secondaryProgressLabel: progress.secondaryLabel,
     secondaryProgress: progress.secondaryValue,
     confirmationProgress: `${Number(table.confirmationConfirmedCount || 0)} / ${Number(table.confirmationRequiredCount || 0)}`,
-    targetLabel: isRankingRound ? resolveTableTargetLabel(table) : '晋级',
+    targetLabel: isFeedbackOnlyCompetition.value && !isRankingRound ? '诊断' : (isRankingRound ? resolveTableTargetLabel(table) : '晋级'),
     targetDisplay: isRankingRound && table.targetMode === 'CHAMPION'
       ? (filledCount ? '已选择' : '待选择')
-      : (isRankingRound ? `${filledCount} / ${table.targetCount}` : `${table.targetCount} 款`),
+      : (isFeedbackOnlyCompetition.value && !isRankingRound ? '首轮反馈' : (isRankingRound ? `${filledCount} / ${table.targetCount}` : `${table.targetCount} 款`)),
     statusText,
     tone: issues.length ? 'warning' : table.status === 'LOCKED' ? 'done' : 'ok',
   }
@@ -3914,7 +3969,8 @@ function buildJudgeDetailTasks(judge) {
       key: 'consensus',
       label: '共识打分',
       ...captainStats.consensus,
-    }, {
+    })
+    if (!isFeedbackOnlyCompetition.value) tasks.push({
       key: 'advance',
       label: '选择晋级',
       ...captainStats.advance,
@@ -4021,6 +4077,14 @@ function buildRoundTodoHint() {
     }
   }
   if (currentRound.value.status === 'LOCKED') {
+    if (isFeedbackOnlyCompetition.value) {
+      return {
+        tone: canPublishResults.value ? 'ready' : 'done',
+        title: '首轮诊断已固定',
+        detail: canPublishResults.value ? '可以发布诊断结果' : '诊断结果已固定',
+        action: canPublishResults.value ? 'goToResults' : '',
+      }
+    }
     if (currentRoundIsTerminal.value) {
       return {
         tone: 'done',
@@ -4087,6 +4151,7 @@ function countRoundTarget(round) {
 }
 
 function resolveRoundTargetLabel(round) {
+  if (isFeedbackOnlyCompetition.value && round?.type === 'SCORE') return '诊断'
   if (round?.type === 'SCORE') return '晋级'
   const modes = new Set((round?.tables || []).map((table) => table.targetMode).filter(Boolean))
   if (modes.size === 1 && modes.has('MEDALS')) return '奖项名额'
@@ -4095,6 +4160,7 @@ function resolveRoundTargetLabel(round) {
 }
 
 function formatRoundTargetDisplay(round) {
+  if (isFeedbackOnlyCompetition.value && round?.type === 'SCORE') return '首轮诊断'
   const total = countRoundTarget(round)
   const targets = [...new Set((round?.tables || []).map((table) => Number(table.targetCount || 0)).filter(Boolean))]
   if ((round?.tables || []).every((table) => table.targetMode === 'MEDALS')) {
@@ -4107,6 +4173,7 @@ function formatRoundTargetDisplay(round) {
 }
 
 function formatRoundNodeTargetDisplay(round) {
+  if (isFeedbackOnlyCompetition.value && round?.type === 'SCORE') return '诊断'
   const tableCount = round?.tables?.length || 0
   const targetCount = countRoundTarget(round)
   if ((round?.tables || []).every((table) => table.targetMode === 'MEDALS')) {
@@ -4165,6 +4232,7 @@ function getRoundTableIssues(table) {
   const targetLabel = resolveTableTargetLabel(table)
   if (!table.captainPublicId) issues.push(`${table.name}缺少桌长`)
   if (!table.entryUuids.length) issues.push(`${table.name}尚未分配酒款`)
+  if (isFeedbackOnlyCompetition.value && currentRound.value?.type === 'SCORE') return issues
   if (!Number(table.targetCount || 0)) issues.push(`${table.name}${targetLabel}不能为空`)
   if (table.targetMode !== 'MEDALS' && Number(table.targetCount || 0) > table.entryUuids.length) issues.push(`${table.name}${targetLabel}超过候选酒款数`)
   if (table.targetMode === 'MEDALS' && Number(table.targetCount || 0) !== 3) issues.push(`${table.name}奖牌轮固定为金、银、铜 3 个名额`)
@@ -4711,7 +4779,7 @@ async function confirmCompleteFirstRound() {
     resetForms()
     applyRoundState(targetRoundId)
     firstRoundCompleteConfirmOpen.value = false
-    ElMessage.success('首轮已完成，晋级名单已生成')
+    ElMessage.success(isFeedbackOnlyCompetition.value ? '首轮已完成，评审结果已锁定' : '首轮已完成，晋级名单已生成')
   } finally {
     firstRoundCompleteLoading.value = false
   }
@@ -4991,7 +5059,10 @@ function getEntryPath(uuid) {
     const table = round.tables.find((item) => item.entryUuids.includes(uuid))
     if (!table) return
     if (round.type === 'SCORE') {
-      parts.push(`${round.name} ${table.name} ${roundEntryPool.value.find((entry) => entry.uuid === uuid)?.advanced ? '晋级' : '待定'}`)
+      const scoreResult = isFeedbackOnlyCompetition.value
+        ? '诊断'
+        : (roundEntryPool.value.find((entry) => entry.uuid === uuid)?.advanced ? '晋级' : '待定')
+      parts.push(`${round.name} ${table.name} ${scoreResult}`)
     } else {
       const slot = getRankingSlots(table).find((item) => item.uuid === uuid)
       parts.push(`${round.name} ${table.name}${slot ? ` ${slot.label}` : ''}`)
@@ -5074,16 +5145,24 @@ async function confirmBusinessAction() {
 }
 
 async function publishResultsAction() {
+  const feedbackOnly = isFeedbackOnlyCompetition.value
   openBusinessConfirm({
     action: 'publishResults',
-    kicker: '结果发布',
-    title: '确认发布到厂牌端？',
-    copy: '发布后，厂牌端和公开结果页将展示获奖名单、奖项信息和已上传奖状，请确认奖项结果已经核对完成',
-    summary: competitionSummaryItems([
-      { label: '奖项确认', value: `${resultChecks.value.filter((item) => item.done).length} / ${resultChecks.value.length}` },
-      { label: '奖状 PDF', value: `${certificateUploadedCount.value} / ${certificateTotalCount.value}` },
-    ]),
-    confirmText: '发布结果',
+    kicker: feedbackOnly ? '诊断发布' : '结果发布',
+    title: feedbackOnly ? '确认发布诊断结果？' : '确认发布到厂牌端？',
+    copy: feedbackOnly
+      ? '发布后，厂牌端可查看评分、评语和桌长综合诊断，请确认首轮结果已经核对完成'
+      : '发布后，厂牌端和公开结果页将展示获奖名单、奖项信息和已上传奖状，请确认奖项结果已经核对完成',
+    summary: feedbackOnly
+      ? competitionSummaryItems([
+        { label: '首轮诊断', value: `${feedbackFinalizedCount.value} / ${feedbackEntryCount.value} 款` },
+        { label: '发布检查', value: `${resultChecks.value.filter((item) => item.done).length} / ${resultChecks.value.length}` },
+      ])
+      : competitionSummaryItems([
+        { label: '奖项确认', value: `${resultChecks.value.filter((item) => item.done).length} / ${resultChecks.value.length}` },
+        { label: '奖状 PDF', value: `${certificateUploadedCount.value} / ${certificateTotalCount.value}` },
+      ]),
+    confirmText: feedbackOnly ? '发布诊断结果' : '发布结果',
     loadingText: '发布中',
   })
 }
@@ -5182,7 +5261,7 @@ async function runPublishResults() {
   competition.value = normalizeDetail(detail)
   resetForms()
   applyRoundState()
-  ElMessage.success('结果已发布')
+  ElMessage.success(isFeedbackOnlyCompetition.value ? '诊断结果已发布' : '结果已发布')
 }
 
 async function downloadScoringData() {
@@ -8061,6 +8140,10 @@ input[type="checkbox"] {
   width: min(100%, 1500px);
 }
 
+.round-planning-shell.feedback-only-rounds {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .round-pyramid-panel,
 .round-current-card,
 .round-table-overview,
@@ -9878,6 +9961,21 @@ button.pyramid-placeholder-mark {
 
 .award-result-table :deep(.el-select__caret) {
   color: var(--muted);
+}
+
+.feedback-result-card .diagnosis-summary {
+  min-height: 92px;
+  display: flex;
+  align-items: center;
+  padding: 18px;
+  border: 1px solid rgba(219, 232, 237, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.feedback-result-card .diagnosis-summary strong {
+  color: #eef7f7;
+  font-size: 18px;
 }
 
 .award-status-pill {

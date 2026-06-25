@@ -22,6 +22,5 @@ public class TableScoreFinalizeRequest {
     @NotBlank(message = "桌长总结不能为空")
     private String comments;
 
-    @NotNull(message = "请标记是否晋级")
     private Boolean advanced;
 }

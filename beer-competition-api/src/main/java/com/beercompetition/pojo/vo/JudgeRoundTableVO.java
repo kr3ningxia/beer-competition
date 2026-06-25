@@ -13,6 +13,7 @@ public class JudgeRoundTableVO {
     private Long roundId;
     private String roundName;
     private String roundType;
+    private String competitionType;
     private String tableName;
     private Integer targetCount;
     private Integer expectedJudgeCount;

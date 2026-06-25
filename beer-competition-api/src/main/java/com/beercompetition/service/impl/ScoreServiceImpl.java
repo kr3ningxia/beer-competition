@@ -29,6 +29,7 @@ import com.beercompetition.pojo.dto.TableScoreFinalizeRequest;
 import com.beercompetition.pojo.enums.JudgeAccountStatus;
 import com.beercompetition.pojo.enums.JudgeRoleType;
 import com.beercompetition.pojo.enums.CompetitionStatus;
+import com.beercompetition.pojo.enums.CompetitionType;
 import com.beercompetition.pojo.enums.EntryScanLabelStatus;
 import com.beercompetition.pojo.enums.RoundEntryStatus;
 import com.beercompetition.pojo.enums.RoundResultType;
@@ -275,6 +276,11 @@ public class ScoreServiceImpl implements ScoreService {
         BeerEntry entry = requireEntry(uuid);
         validateConsensusRequest(request.getDimensions(), request.getConsensusScore());
         applyCaptainScoreConfig(entry.getCompetitionId(), request.getDimensions(), request.getConsensusScore(), request.getComments());
+        Competition competition = competitionMapper.selectById(entry.getCompetitionId());
+        boolean feedbackOnly = resolveCompetitionType(competition) == CompetitionType.FEEDBACK_ONLY;
+        if (!feedbackOnly && request.getAdvanced() == null) {
+            throw new BaseException("请标记是否晋级");
+        }
         JudgeAssignment captainAssignment = requireCaptainAssignment(entry.getCompetitionId());
         RoundTableEntry roundEntry = requireScoreRoundTask(entry.getId(), JudgeRoleType.CAPTAIN.name(), true);
         requireCaptainPersonalScoreSubmitted(roundEntry, BaseContext.getCurrentId());
@@ -302,7 +308,7 @@ public class ScoreServiceImpl implements ScoreService {
         finalRecord.setTotalScore(request.getConsensusScore());
         finalRecord.setConsensusScore(request.getConsensusScore());
         finalRecord.setComments(request.getComments());
-        finalRecord.setAdvancedFlag(Boolean.TRUE.equals(request.getAdvanced()) ? 1 : 0);
+        finalRecord.setAdvancedFlag(!feedbackOnly && Boolean.TRUE.equals(request.getAdvanced()) ? 1 : 0);
         finalRecord.setRoundId(roundEntry.getRoundId());
         finalRecord.setRoundTableId(roundEntry.getRoundTableId());
         finalRecord.setCommentCharCount(commentCharCount);
@@ -318,7 +324,9 @@ public class ScoreServiceImpl implements ScoreService {
         }
 
         // 3) 同步第一轮晋级状态
-        syncFirstRoundAdvance(roundEntry, finalRecord);
+        if (!feedbackOnly) {
+            syncFirstRoundAdvance(roundEntry, finalRecord);
+        }
         if (changed) {
             bumpRoundTableResultVersion(roundEntry.getRoundTableId());
         }
@@ -547,6 +555,10 @@ public class ScoreServiceImpl implements ScoreService {
                     .lockedFlag(0)
                     .build());
         }
+    }
+
+    private CompetitionType resolveCompetitionType(Competition competition) {
+        return CompetitionType.of(competition == null ? null : competition.getCompetitionType());
     }
 
     private void rejectNormalScoreAfterFinal(Long beerEntryId) {

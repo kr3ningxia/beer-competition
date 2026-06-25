@@ -20,6 +20,7 @@ import com.beercompetition.mapper.RoundTableMapper;
 import com.beercompetition.mapper.RoundTableMemberMapper;
 import com.beercompetition.pojo.enums.CompetitionDeliveryMethod;
 import com.beercompetition.pojo.enums.CompetitionStatus;
+import com.beercompetition.pojo.enums.CompetitionType;
 import com.beercompetition.pojo.enums.EntryDeliveryStatus;
 import com.beercompetition.pojo.enums.EntryPaymentStatus;
 import com.beercompetition.pojo.enums.EntryPayMethod;
@@ -119,6 +120,7 @@ public class BeerCompetitionTestData {
                 .registrationStart(LocalDateTime.now().minusDays(1))
                 .registrationDeadline(LocalDateTime.now().plusDays(10))
                 .status(status.name())
+                .competitionType(CompetitionType.AWARD.name())
                 .entryFee(new BigDecimal("100.00"))
                 .description("测试比赛")
                 .styleLibraryVersion(prefix + "-LIB")

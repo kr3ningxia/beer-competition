@@ -492,7 +492,7 @@
                 </option>
               </select>
             </label>
-            <label class="inline-target compact-target" @click.stop>
+            <label v-if="!isFeedbackOnlyScoreRound" class="inline-target compact-target" @click.stop>
               <span class="target-label">
                 <span>{{ getTargetCountLabel(table) }}</span>
                 <select
@@ -688,7 +688,7 @@
                 <div class="overview-card-meta">
                   <span>{{ getOverviewJudgeItems(table).length }} 名成员</span>
                   <span>{{ table.entryUuids.length }} 款酒</span>
-                  <span>{{ getTargetCountLabel(table) }} {{ table.targetCount }}</span>
+                  <span v-if="!isFeedbackOnlyScoreRound">{{ getTargetCountLabel(table) }} {{ table.targetCount }}</span>
                 </div>
               </div>
               <em :class="getOverviewTableIssues(table).length ? 'warning' : 'ok'">
@@ -786,6 +786,7 @@ const props = defineProps({
   roundValidationIssues: { type: Array, required: true },
   publishDisabledReason: { type: String, default: '' },
   canPublish: Boolean,
+  competitionType: { type: String, default: 'AWARD' },
   getJudge: { type: Function, required: true },
   getJudgeInitial: { type: Function, required: true },
   getJudgeAssignmentSummary: { type: Function, required: true },
@@ -852,6 +853,7 @@ const scoreRoundMemberRoles = [
   { value: 'CROSS', label: '跨界评审' },
 ]
 const firstRoundExists = computed(() => props.rounds.some((round) => round.roundNo === 1))
+const isFeedbackOnlyScoreRound = computed(() => props.competitionType === 'FEEDBACK_ONLY' && props.currentRound?.type === 'SCORE')
 const usesRoundJudgeEditor = computed(() => props.currentRound?.type === 'RANKING'
   || (props.currentRound?.type === 'SCORE' && !props.currentRound?.isPreparationDraft))
 const displayRounds = computed(() => {
@@ -1088,6 +1090,7 @@ function formatEntryState(entry) {
 }
 
 function getTargetCountLabel(table) {
+  if (isFeedbackOnlyScoreRound.value) return '诊断'
   if (props.currentRound?.type === 'SCORE') return '晋级数量'
   if (table?.targetMode === 'MEDALS') return '奖项名额'
   if (table?.targetMode === 'CHAMPION') return '总冠军'

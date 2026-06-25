@@ -41,6 +41,7 @@ import com.beercompetition.pojo.dto.ScoreConfigBatchUpdateRequest;
 import com.beercompetition.pojo.dto.ScoreConfigItemRequest;
 import com.beercompetition.pojo.enums.CompetitionDeliveryMethod;
 import com.beercompetition.pojo.enums.CompetitionStatus;
+import com.beercompetition.pojo.enums.CompetitionType;
 import com.beercompetition.pojo.enums.EntryStatus;
 import com.beercompetition.pojo.enums.AwardResultStatus;
 import com.beercompetition.pojo.enums.AwardType;
@@ -312,6 +313,7 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .registrationStart(request.getRegistrationStart())
                 .registrationDeadline(request.getRegistrationDeadline())
                 .status(CompetitionStatus.DRAFT.name())
+                .competitionType(CompetitionType.of(request.getCompetitionType()).name())
                 .entryFee(request.getEntryFee())
                 .earlyBirdFee(request.getEarlyBirdFee())
                 .earlyBirdDeadline(request.getEarlyBirdDeadline())
@@ -1644,6 +1646,7 @@ public class CompetitionServiceImpl implements CompetitionService {
         }
         validateEarlyBirdConfig(request.getEarlyBirdFee(), request.getEarlyBirdDeadline(),
                 request.getEntryFee(), request.getRegistrationStart(), request.getRegistrationDeadline());
+        CompetitionType.of(request.getCompetitionType());
         normalizeRulesUrl(request.getRulesUrl());
         if (!StringUtils.hasText(request.getStyleLibraryVersion())) {
             throw new BaseException("基础风格库不能为空");
@@ -1731,6 +1734,7 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .id(competition.getId())
                 .code(competition.getCode())
                 .name(competition.getName())
+                .competitionType(resolveCompetitionType(competition).name())
                 .competitionDate(competition.getCompetitionDate())
                 .registrationStart(competition.getRegistrationStart())
                 .registrationDeadline(competition.getRegistrationDeadline())
@@ -1776,6 +1780,7 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .id(competition.getId())
                 .code(competition.getCode())
                 .name(competition.getName())
+                .competitionType(resolveCompetitionType(competition).name())
                 .competitionDate(competition.getCompetitionDate())
                 .registrationStart(competition.getRegistrationStart())
                 .registrationDeadline(competition.getRegistrationDeadline())
@@ -1806,6 +1811,7 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .id(competition.getId())
                 .code(competition.getCode())
                 .name(competition.getName())
+                .competitionType(resolveCompetitionType(competition).name())
                 .competitionDate(competition.getCompetitionDate())
                 .registrationStart(competition.getRegistrationStart())
                 .registrationDeadline(competition.getRegistrationDeadline())
@@ -2251,6 +2257,17 @@ public class CompetitionServiceImpl implements CompetitionService {
     private ResultSetupVO buildResultSetup(Competition competition) {
         CompetitionStatus status = parseStatus(competition);
         boolean published = status == CompetitionStatus.PUBLISHED || status == CompetitionStatus.ARCHIVED;
+        if (resolveCompetitionType(competition) == CompetitionType.FEEDBACK_ONLY) {
+            boolean firstRoundLocked = hasLockedScoreRound(competition.getId());
+            return ResultSetupVO.builder()
+                    .awardsReady(firstRoundLocked || published)
+                    .published(published)
+                    .championReady(published)
+                    .medalsReady(published)
+                    .terminalRoundLocked(firstRoundLocked || published)
+                    .canPublishResults(!published && status == CompetitionStatus.JUDGING && firstRoundLocked)
+                    .build();
+        }
         List<AwardResultVO> awardResults = awardService.listAwardResults(competition.getId());
         boolean medalsReady = areMedalAwardsReady(competition.getId(), awardResults);
         boolean championReady = awardResults.stream().anyMatch(result -> Boolean.TRUE.equals(result.getChampion())
@@ -2280,6 +2297,13 @@ public class CompetitionServiceImpl implements CompetitionService {
                         .anyMatch(table -> RoundTargetMode.CHAMPION.name().equals(table.getTargetMode())));
     }
 
+    private boolean hasLockedScoreRound(Long competitionId) {
+        return competitionRoundMapper.selectCount(new LambdaQueryWrapper<CompetitionRound>()
+                .eq(CompetitionRound::getCompetitionId, competitionId)
+                .eq(CompetitionRound::getRoundType, RoundType.SCORE.name())
+                .eq(CompetitionRound::getStatus, RoundStatus.LOCKED.name())) > 0;
+    }
+
     private boolean areMedalAwardsReady(Long competitionId, List<AwardResultVO> awardResults) {
         return awardResults.stream()
                 .filter(result -> AwardType.MEDAL.name().equals(result.getAwardType()))
@@ -2306,7 +2330,8 @@ public class CompetitionServiceImpl implements CompetitionService {
         checks.add(check("scoreForms", "评分表", isScoreFormsReady(scoreConfigs), "跨界、专业、桌长三类评分表都必须为 50 分"));
         checks.add(check("storedEntries", "酒款入库", entriesSummary.getRegistered() > 0
                 && entriesSummary.getStored() >= entriesSummary.getRegistered(), "报名酒款需要完成入库确认"));
-        checks.add(check("resultSetup", "结果发布", Boolean.TRUE.equals(resultSetup.getPublished()), "奖项确认后才能发布结果"));
+        checks.add(check("resultSetup", "结果发布", Boolean.TRUE.equals(resultSetup.getPublished()),
+                resolveCompetitionType(competition) == CompetitionType.FEEDBACK_ONLY ? "首轮锁定后可发布诊断结果" : "奖项确认后才能发布结果"));
 
         if (!buildEditableScopes(competition).get("entryStructure")) {
             markLocked(checks, Set.of("categories", "styleLibrary", "entryFields"), "报名已开放，报名结构已锁定");
@@ -2854,6 +2879,10 @@ public class CompetitionServiceImpl implements CompetitionService {
         } catch (IllegalArgumentException ex) {
             throw new BaseException("比赛状态不合法：" + competition.getStatus());
         }
+    }
+
+    private CompetitionType resolveCompetitionType(Competition competition) {
+        return CompetitionType.of(competition == null ? null : competition.getCompetitionType());
     }
 
     private boolean isBaseInfoReady(Competition competition) {

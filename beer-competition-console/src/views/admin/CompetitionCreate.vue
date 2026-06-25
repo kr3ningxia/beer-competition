@@ -40,6 +40,18 @@
 
             <section class="form-subgroup">
               <h3>赛事属性</h3>
+              <div class="competition-type-switch">
+                <button
+                  v-for="option in competitionTypeOptions"
+                  :key="option.value"
+                  type="button"
+                  :class="{ active: draft.competitionType === option.value }"
+                  @click="draft.competitionType = option.value"
+                >
+                  <strong>{{ option.label }}</strong>
+                  <span>{{ option.description }}</span>
+                </button>
+              </div>
               <div class="form-grid two">
                 <label>
                   <span>比赛日期</span>
@@ -343,7 +355,7 @@
               </span>
               <div>
                 <h3>{{ reviewBlockingItems.length ? `还有 ${reviewBlockingItems.length} 项需要处理` : '可以保存草稿' }}</h3>
-                <p>{{ reviewBlockingItems.length ? reviewBlockingText : '保存后进入工作台继续配置评审桌、轮次和奖项' }}</p>
+                <p>{{ reviewBlockingItems.length ? reviewBlockingText : reviewReadyText }}</p>
               </div>
             </div>
             <div class="section-actions inline-actions">
@@ -376,6 +388,10 @@
                 <div>
                   <dt>比赛名称</dt>
                   <dd>{{ draft.name || '-' }}</dd>
+                </div>
+                <div>
+                  <dt>比赛类型</dt>
+                  <dd>{{ competitionTypeLabel }}</dd>
                 </div>
                 <div>
                   <dt>比赛日期</dt>
@@ -462,6 +478,11 @@ const logisticsVisibilityOptions = [
   { label: '公开显示完整地址', value: 'PUBLIC' },
 ]
 
+const competitionTypeOptions = [
+  { label: '正式评奖比赛', value: 'AWARD', description: '晋级、排序、奖项和证书' },
+  { label: '风格对齐会', value: 'FEEDBACK_ONLY', description: '首轮评审后发布诊断结果' },
+]
+
 const fieldTypeOptions = [
   { label: '短文本', value: 'text' },
   { label: '长文本', value: 'textarea' },
@@ -472,6 +493,7 @@ const fieldTypeOptions = [
 
 const draft = reactive({
   name: '2026 新建精酿啤酒赛',
+  competitionType: 'AWARD',
   date: '2026-08-20',
   registrationStart: '2026-06-10T10:00',
   registrationDeadline: '2026-07-30T18:00',
@@ -521,6 +543,12 @@ const selectedStyleLibrary = computed(() => getStyleLibrary(draft.styleLibraryVe
 const reviewItems = computed(() => buildReviewItems(draft))
 const reviewBlockingItems = computed(() => reviewItems.value.filter((item) => item.status !== 'done'))
 const reviewBlockingText = computed(() => `请先处理：${reviewBlockingItems.value.map((item) => item.label).join('、')}`)
+const competitionTypeLabel = computed(() => competitionTypeOptions.find((item) => item.value === draft.competitionType)?.label || '正式评奖比赛')
+const reviewReadyText = computed(() => (
+  draft.competitionType === 'FEEDBACK_ONLY'
+    ? '保存后进入工作台配置评审桌、首轮评审和诊断发布'
+    : '保存后进入工作台继续配置评审桌、轮次和奖项'
+))
 const sectionIssueMap = computed(() => reviewBlockingItems.value.reduce((map, item) => ({ ...map, [item.target]: true }), {}))
 const categorySummary = computed(() => summarizeList(getCategoryNames(draft), '未配置'))
 const judgeVisibleFieldSummary = computed(() => summarizeList(getJudgeVisibleFields(draft), '无'))
@@ -573,6 +601,7 @@ async function submitDraft() {
   try {
     const created = await createCompetition({
       name: draft.name,
+      competitionType: draft.competitionType,
       competitionDate: draft.date,
       registrationStart: toBackendDateTime(draft.registrationStart),
       registrationDeadline: toBackendDateTime(draft.registrationDeadline),
@@ -712,6 +741,7 @@ function getIncompleteEntryFields(source) {
 function toDraftSnapshot(source) {
   return {
     name: source.name,
+    competitionType: source.competitionType,
     date: source.date,
     registrationStart: source.registrationStart,
     registrationDeadline: source.registrationDeadline,
@@ -1227,6 +1257,46 @@ h1 {
   color: #c7d5db;
   font-size: 13px;
   line-height: 1.2;
+}
+
+.competition-type-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  gap: 10px;
+  max-width: 620px;
+}
+
+.competition-type-switch button {
+  display: grid;
+  gap: 4px;
+  min-height: 66px;
+  padding: 12px 14px;
+  text-align: left;
+  color: #c7d5db;
+  border: 1px solid rgba(219, 232, 237, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  cursor: pointer;
+}
+
+.competition-type-switch button.active {
+  color: #10191d;
+  border-color: rgba(224, 184, 74, 0.78);
+  background: #e0b84a;
+}
+
+.competition-type-switch strong,
+.competition-type-switch span {
+  overflow-wrap: anywhere;
+}
+
+.competition-type-switch strong {
+  font-size: 14px;
+}
+
+.competition-type-switch span {
+  font-size: 12px;
+  opacity: 0.78;
 }
 
 .form-grid.two {

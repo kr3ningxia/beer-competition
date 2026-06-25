@@ -4,7 +4,7 @@
       <div>
         <small>首轮</small>
         <h2>把已入库酒款分到评审桌</h2>
-        <p>首轮会发给评审评分，桌长最后汇总并选择晋级酒款</p>
+        <p>{{ heroText }}</p>
       </div>
       <button class="primary-action" type="button" :disabled="!canPublish" @click="$emit('publishCurrentRound')">
         {{ publishText }}
@@ -15,7 +15,7 @@
       <span>桌数 <strong>{{ currentRoundTables.length }}</strong></span>
       <span>已分配 <strong>{{ assignedCount }}</strong></span>
       <span>未分配 <strong>{{ unassignedCount }}</strong></span>
-      <span>晋级目标 <strong>{{ targetCount }}</strong></span>
+      <span v-if="!isFeedbackOnly">晋级目标 <strong>{{ targetCount }}</strong></span>
       <span>状态 <strong>{{ statusText }}</strong></span>
     </div>
 
@@ -63,7 +63,7 @@
           <div class="table-meta">
             <span>桌长 <strong>{{ getJudge(table.captainPublicId)?.name || '未指定' }}</strong></span>
             <span>酒款 <strong>{{ table.entryUuids.length }}</strong></span>
-            <span>晋级 <strong>{{ table.targetCount }}</strong></span>
+            <span v-if="!isFeedbackOnly">晋级 <strong>{{ table.targetCount }}</strong></span>
           </div>
           <div class="member-line">
             <span>评审</span>
@@ -85,7 +85,7 @@
 
       <RoundCheckPanel
         title="首轮发布检查"
-        target-label="晋级数量"
+        :target-label="isFeedbackOnly ? '诊断' : '晋级数量'"
         success-text="首轮可以发布给评审"
         :selected-round-table="selectedRoundTable"
         :captain-candidates="captainCandidates"
@@ -123,6 +123,7 @@ const props = defineProps({
   captainCandidates: { type: Array, required: true },
   roundValidationIssues: { type: Array, required: true },
   canPublish: Boolean,
+  competitionType: { type: String, default: 'AWARD' },
   unassignedCount: { type: Number, default: 0 },
   roundStatusLabels: { type: Object, required: true },
   getJudge: { type: Function, required: true },
@@ -153,7 +154,13 @@ defineEmits([
 ])
 
 const assignedCount = computed(() => new Set(props.currentRoundTables.flatMap((table) => table.entryUuids)).size)
+const isFeedbackOnly = computed(() => props.competitionType === 'FEEDBACK_ONLY')
 const targetCount = computed(() => props.currentRoundTables.reduce((sum, table) => sum + Number(table.targetCount || 0), 0))
+const heroText = computed(() => (
+  isFeedbackOnly.value
+    ? '首轮会发给评审评分，桌长最后汇总诊断意见'
+    : '首轮会发给评审评分，桌长最后汇总并选择晋级酒款'
+))
 const statusText = computed(() => props.roundStatusLabels[props.currentRound?.status] || props.currentRound?.status || '-')
 const publishText = computed(() => {
   if (props.currentRound?.status === 'PUBLISHED') return '已发布'

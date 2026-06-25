@@ -16,6 +16,7 @@ public class CompetitionDetailVO {
     private Long id;
     private String code;
     private String name;
+    private String competitionType;
     private LocalDate competitionDate;
     private LocalDateTime registrationStart;
     private LocalDateTime registrationDeadline;

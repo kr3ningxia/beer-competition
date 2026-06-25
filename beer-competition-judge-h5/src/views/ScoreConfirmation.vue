@@ -23,7 +23,7 @@
       </div>
 
       <div class="confirmation-list">
-        <article v-for="entry in entries" :key="entry.beerEntryId" :class="['confirmation-entry', { advanced: entry.advanced }]">
+        <article v-for="entry in entries" :key="entry.beerEntryId" :class="['confirmation-entry', { advanced: !isFeedbackOnlyCompetition && entry.advanced }]">
           <div class="entry-main">
             <strong>{{ displayShortCode(entry) }}</strong>
             <span>{{ entry.categoryName || '-' }} · {{ entry.style || '-' }}</span>
@@ -33,7 +33,7 @@
             <strong>{{ entry.consensusScore ?? '-' }} 分</strong>
           </div>
           <p v-if="entry.comments" class="entry-comment">{{ entry.comments }}</p>
-          <em>{{ entry.advanced ? '晋级' : '未晋级' }}</em>
+          <em v-if="!isFeedbackOnlyCompetition">{{ entry.advanced ? '晋级' : '未晋级' }}</em>
         </article>
       </div>
 
@@ -64,11 +64,14 @@ const confirmedCount = computed(() => Number(confirmation.value?.confirmedCount 
 const requiredCount = computed(() => Number(confirmation.value?.requiredCount || 0))
 const mineConfirmed = computed(() => Boolean(confirmation.value?.mineConfirmed))
 const readyForConfirmation = computed(() => Boolean(confirmation.value?.readyForConfirmation))
+const isFeedbackOnlyCompetition = computed(() => confirmation.value?.competitionType === 'FEEDBACK_ONLY')
 const canConfirm = computed(() => readyForConfirmation.value && !mineConfirmed.value && !submitting.value)
 const stateText = computed(() => {
   if (!readyForConfirmation.value) return '桌长最终意见还未完成，请稍后再核对。'
   if (mineConfirmed.value) return '你已确认本桌结果，等待桌长最终提交。'
-  return '请核对共识分、综合评语和晋级结果，确认后桌长才能最终提交。'
+  return isFeedbackOnlyCompetition.value
+    ? '请核对共识分和综合评语，确认后桌长才能最终提交。'
+    : '请核对共识分、综合评语和晋级结果，确认后桌长才能最终提交。'
 })
 const confirmButtonText = computed(() => {
   if (submitting.value) return '确认中...'

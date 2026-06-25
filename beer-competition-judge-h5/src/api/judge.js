@@ -245,6 +245,7 @@ export async function fetchCaptainBoard(roundTableId) {
     competition: {
       name: task.competitionName,
       competitionId: task.competitionId,
+      competitionType: task.competitionType || table.competitionType || 'AWARD',
       flightName: task.roundName,
       tableName: task.tableName,
       taskType: task.taskType,

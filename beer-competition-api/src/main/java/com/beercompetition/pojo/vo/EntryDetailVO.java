@@ -18,6 +18,7 @@ public class EntryDetailVO {
     private String shortCode;
     private String scanToken;
     private Long competitionId;
+    private String competitionType;
     private String competitionCode;
     private String name;
     private String style;

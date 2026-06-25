@@ -36,6 +36,7 @@ import com.beercompetition.pojo.dto.PortalEntryRefundRequest;
 import com.beercompetition.pojo.dto.PortalEntrySubmitRequest;
 import com.beercompetition.pojo.dto.PortalProfileUpdateRequest;
 import com.beercompetition.pojo.enums.CompetitionStatus;
+import com.beercompetition.pojo.enums.CompetitionType;
 import com.beercompetition.pojo.enums.AwardResultStatus;
 import com.beercompetition.pojo.enums.EntryDeliveryMethod;
 import com.beercompetition.pojo.enums.EntryDeliveryStatus;
@@ -48,6 +49,7 @@ import com.beercompetition.pojo.enums.JudgeRoleType;
 import com.beercompetition.pojo.enums.JudgeTaskType;
 import com.beercompetition.pojo.enums.LogisticsVisibility;
 import com.beercompetition.pojo.enums.RoundStatus;
+import com.beercompetition.pojo.enums.RoundResultType;
 import com.beercompetition.pojo.enums.RoundType;
 import com.beercompetition.pojo.po.AdminOperationLog;
 import com.beercompetition.pojo.po.BeerEntry;
@@ -1215,6 +1217,7 @@ public class EntryServiceImpl implements EntryService {
                 .shortCode(label.getShortCode())
                 .scanToken(label.getScanToken())
                 .competitionId(entry.getCompetitionId())
+                .competitionType(resolveCompetitionType(competition).name())
                 .competitionCode(competition == null ? null : competition.getCode())
                 .name(entry.getName())
                 .style(entry.getStyle())
@@ -1267,6 +1270,7 @@ public class EntryServiceImpl implements EntryService {
                 .shortCode(label.getShortCode())
                 .scanToken(label.getScanToken())
                 .competitionId(entry.getCompetitionId())
+                .competitionType(resolveCompetitionType(competition).name())
                 .competitionCode(competition == null ? null : competition.getCode())
                 .name(entry.getName())
                 .competitionName(competition == null ? null : competition.getName())
@@ -1345,6 +1349,7 @@ public class EntryServiceImpl implements EntryService {
                 .entryName(entry.getName())
                 .competitionId(entry.getCompetitionId())
                 .competitionName(competition == null ? null : competition.getName())
+                .competitionType(resolveCompetitionType(competition).name())
                 .categoryName(category == null ? null : category.getName())
                 .categoryEntryCount(resolveCategoryEntryCount(entry))
                 .style(entry.getStyle())
@@ -1397,7 +1402,7 @@ public class EntryServiceImpl implements EntryService {
                 .map(result -> PortalRoundResultVO.builder()
                         .resultType(result.getResultType())
                         .rankNo(result.getRankNo())
-                        .slotLabel(result.getSlotLabel())
+                        .slotLabel(RoundResultType.EVALUATED.name().equals(result.getResultType()) ? "诊断完成" : result.getSlotLabel())
                         .locked(Objects.equals(result.getLockedFlag(), 1))
                         .build())
                 .toList();
@@ -2282,6 +2287,10 @@ public class EntryServiceImpl implements EntryService {
     private boolean isResultPublished(Competition competition, BeerEntry entry) {
         return EntryStatus.RESULT_PUBLISHED.name().equals(entry.getStatus())
                 || (competition != null && CompetitionStatus.PUBLISHED.name().equals(competition.getStatus()));
+    }
+
+    private CompetitionType resolveCompetitionType(Competition competition) {
+        return CompetitionType.of(competition == null ? null : competition.getCompetitionType());
     }
 
     private boolean isCompetitionArchived(Long competitionId) {
