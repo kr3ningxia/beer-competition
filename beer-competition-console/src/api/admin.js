@@ -16,6 +16,10 @@ export function fetchCompetitionProgress(id) {
   return request.get(`/api/admin/competitions/${id}/progress`, { authScope: 'admin' })
 }
 
+export function fetchCompetitionAnalytics(id) {
+  return request.get(`/api/admin/competitions/${id}/analytics`, { authScope: 'admin' })
+}
+
 export function fetchCompetitionFeedbackReview(id) {
   return request.get(`/api/admin/competitions/${id}/feedback-review`, { authScope: 'admin' })
 }

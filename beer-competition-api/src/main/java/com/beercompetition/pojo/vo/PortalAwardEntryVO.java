@@ -9,6 +9,9 @@ public class PortalAwardEntryVO {
 
     private Long id;
     private Long awardResultId;
+    private Long roundResultId;
+    private String resultType;
+    private String slotLabel;
     private String awardType;
     private String awardName;
     private Integer rankNo;

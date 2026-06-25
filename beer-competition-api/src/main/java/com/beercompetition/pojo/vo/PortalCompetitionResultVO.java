@@ -14,6 +14,7 @@ public class PortalCompetitionResultVO {
     private Long id;
     private String code;
     private String name;
+    private String competitionType;
     private LocalDate matchDate;
     private LocalDateTime publishedAt;
     private List<PortalResultGroupVO> groups;

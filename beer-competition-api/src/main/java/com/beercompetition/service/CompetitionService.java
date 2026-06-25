@@ -12,6 +12,7 @@ import com.beercompetition.pojo.dto.ScoreConfigBatchUpdateRequest;
 import com.beercompetition.pojo.vo.CompetitionDetailVO;
 import com.beercompetition.pojo.vo.CompetitionVO;
 import com.beercompetition.pojo.vo.AdminFeedbackReviewEntryVO;
+import com.beercompetition.pojo.vo.CompetitionAnalyticsVO;
 import com.beercompetition.pojo.vo.PortalCompetitionVO;
 import com.beercompetition.pojo.vo.PortalHomeVO;
 import com.beercompetition.pojo.vo.ScoreConfigVO;
@@ -55,6 +56,8 @@ public interface CompetitionService {
     CompetitionDetailVO reopenRegistration(Long id, CompetitionReopenRegistrationRequest request);
 
     CompetitionDetailVO returnToSampleCheck(Long id, CompetitionReturnToSampleCheckRequest request);
+
+    CompetitionAnalyticsVO getCompetitionAnalytics(Long competitionId);
 
     List<ScoreConfigVO> getScoreConfigs(Long competitionId);
 

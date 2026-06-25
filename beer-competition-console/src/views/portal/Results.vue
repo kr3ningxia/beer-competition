@@ -106,8 +106,8 @@
                 <dd>{{ selectedEntry.style || '风格待确认' }}</dd>
               </div>
               <div>
-                <dt>组内规模</dt>
-                <dd>{{ categoryEntryCountText }}</dd>
+                <dt>{{ isFeedbackOnlySelectedEntry ? '诊断状态' : '组内规模' }}</dt>
+                <dd>{{ isFeedbackOnlySelectedEntry ? diagnosisStatusText : categoryEntryCountText }}</dd>
               </div>
             </dl>
           </section>
@@ -249,7 +249,7 @@ const finalScore = computed(() => captainScore.value?.consensusScore || captainS
 const finalScoreMax = computed(() => scoreMax(captainScore.value) || 50)
 const awardTitle = computed(() => selectedEntry.value?.awardName || selectedEntry.value?.roundResult?.awardName || selectedEntry.value?.roundResult?.slotLabel || '')
 const resultOutcome = computed(() => {
-  if (isFeedbackOnlySelectedEntry.value) return '诊断完成'
+  if (isFeedbackOnlySelectedEntry.value) return '风格诊断'
   return awardTitle.value || '未获奖'
 })
 const resultStatsThirdLabel = computed(() => (hasOnlyFeedbackResults.value ? '诊断发布' : '已获奖'))
@@ -268,6 +268,7 @@ const categoryEntryCountText = computed(() => {
   const count = Number(selectedEntry.value?.categoryEntryCount || 0)
   return count ? `${count} 款参赛酒` : '待确认'
 })
+const diagnosisStatusText = computed(() => (selectedEntry.value?.published ? '已发布' : '待发布'))
 const finalScoreText = computed(() => {
   if (finalScore.value === null || finalScore.value === undefined || finalScore.value === '') return '待确认'
   return `${formatScore(finalScore.value)} / ${formatScore(finalScoreMax.value)}`
@@ -389,7 +390,7 @@ function resultBrief(entry) {
 
 function resultTypeLabel(type) {
   const labels = {
-    EVALUATED: '诊断完成',
+    EVALUATED: '风格诊断',
     ADVANCE: '晋级',
     RANK: '排序',
     MEDAL: '组别奖项',

@@ -9,6 +9,7 @@ import com.beercompetition.pojo.dto.CompetitionStyleLibraryUpdateRequest;
 import com.beercompetition.pojo.dto.ConfigNameBatchUpdateRequest;
 import com.beercompetition.pojo.dto.EntryFieldBatchUpdateRequest;
 import com.beercompetition.pojo.dto.JudgeTableBatchUpdateRequest;
+import com.beercompetition.pojo.vo.CompetitionAnalyticsVO;
 import com.beercompetition.pojo.vo.CompetitionDetailVO;
 import com.beercompetition.pojo.vo.CompetitionVO;
 import com.beercompetition.service.CompetitionService;
@@ -162,5 +163,13 @@ public class AdminCompetitionController {
     @GetMapping("/{id}/progress")
     public Result<CompetitionDetailVO> progress(@PathVariable Long id) {
         return Result.success(competitionService.getCompetitionDetail(id));
+    }
+
+    /**
+     * 查询比赛数据分析结果。
+     */
+    @GetMapping("/{id}/analytics")
+    public Result<CompetitionAnalyticsVO> analytics(@PathVariable Long id) {
+        return Result.success(competitionService.getCompetitionAnalytics(id));
     }
 }

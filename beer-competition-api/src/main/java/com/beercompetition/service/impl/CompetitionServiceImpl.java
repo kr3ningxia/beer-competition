@@ -48,6 +48,7 @@ import com.beercompetition.pojo.enums.AwardType;
 import com.beercompetition.pojo.enums.JudgeRoleType;
 import com.beercompetition.pojo.enums.LogisticsVisibility;
 import com.beercompetition.pojo.enums.RoundStatus;
+import com.beercompetition.pojo.enums.RoundResultType;
 import com.beercompetition.pojo.enums.RoundTargetMode;
 import com.beercompetition.pojo.enums.RoundType;
 import com.beercompetition.pojo.po.BeerEntry;
@@ -76,6 +77,7 @@ import com.beercompetition.pojo.vo.AdminFeedbackCaptainOpinionVO;
 import com.beercompetition.pojo.vo.AdminFeedbackJudgeScoreVO;
 import com.beercompetition.pojo.vo.AdminFeedbackReviewEntryVO;
 import com.beercompetition.pojo.vo.CompetitionAlertVO;
+import com.beercompetition.pojo.vo.CompetitionAnalyticsVO;
 import com.beercompetition.pojo.vo.CompetitionCheckVO;
 import com.beercompetition.pojo.vo.CompetitionConfigNameVO;
 import com.beercompetition.pojo.vo.CompetitionDetailVO;
@@ -204,6 +206,7 @@ public class CompetitionServiceImpl implements CompetitionService {
     private final EntryScanLabelService entryScanLabelService;
     private final RoundService roundService;
     private final AwardService awardService;
+    private final CompetitionAnalyticsService competitionAnalyticsService;
     private final ObjectMapper objectMapper;
 
     private record ExportSheet(String name, List<List<String>> rows) {
@@ -345,6 +348,12 @@ public class CompetitionServiceImpl implements CompetitionService {
 
         // 3) 查询并聚合关联配置
         return buildDetail(competition);
+    }
+
+    @Override
+    public CompetitionAnalyticsVO getCompetitionAnalytics(Long competitionId) {
+        getCompetitionOrThrow(competitionId);
+        return competitionAnalyticsService.buildAnalytics(competitionId);
     }
 
     @Override
@@ -2258,14 +2267,49 @@ public class CompetitionServiceImpl implements CompetitionService {
         CompetitionStatus status = parseStatus(competition);
         boolean published = status == CompetitionStatus.PUBLISHED || status == CompetitionStatus.ARCHIVED;
         if (resolveCompetitionType(competition) == CompetitionType.FEEDBACK_ONLY) {
-            boolean firstRoundLocked = hasLockedScoreRound(competition.getId());
+            CompetitionRound lockedScoreRound = findLockedScoreRound(competition.getId());
+            boolean firstRoundLocked = lockedScoreRound != null;
+            int entryCount = 0;
+            int finalizedCount = 0;
+            int evaluatedCount = 0;
+            if (lockedScoreRound != null) {
+                List<RoundTableEntry> entries = roundTableEntryMapper.selectList(new LambdaQueryWrapper<RoundTableEntry>()
+                        .eq(RoundTableEntry::getRoundId, lockedScoreRound.getId()));
+                Set<Long> entryIds = entries.stream()
+                        .map(RoundTableEntry::getBeerEntryId)
+                        .collect(Collectors.toSet());
+                entryCount = entryIds.size();
+                if (!entryIds.isEmpty()) {
+                    finalizedCount = scoreRecordMapper.selectList(new LambdaQueryWrapper<ScoreRecord>()
+                                    .eq(ScoreRecord::getCompetitionId, competition.getId())
+                                    .eq(ScoreRecord::getFinalFlag, 1)
+                                    .in(ScoreRecord::getBeerEntryId, entryIds))
+                            .stream()
+                            .map(ScoreRecord::getBeerEntryId)
+                            .collect(Collectors.toSet())
+                            .size();
+                    evaluatedCount = roundResultMapper.selectList(new LambdaQueryWrapper<RoundResult>()
+                                    .eq(RoundResult::getCompetitionId, competition.getId())
+                                    .eq(RoundResult::getRoundId, lockedScoreRound.getId())
+                                    .eq(RoundResult::getResultType, RoundResultType.EVALUATED.name())
+                                    .in(RoundResult::getBeerEntryId, entryIds))
+                            .stream()
+                            .map(RoundResult::getBeerEntryId)
+                            .collect(Collectors.toSet())
+                            .size();
+                }
+            }
+            boolean feedbackReady = entryCount > 0 && finalizedCount >= entryCount && evaluatedCount >= entryCount;
             return ResultSetupVO.builder()
                     .awardsReady(firstRoundLocked || published)
                     .published(published)
                     .championReady(published)
                     .medalsReady(published)
                     .terminalRoundLocked(firstRoundLocked || published)
-                    .canPublishResults(!published && status == CompetitionStatus.JUDGING && firstRoundLocked)
+                    .canPublishResults(!published && status == CompetitionStatus.JUDGING && firstRoundLocked && feedbackReady)
+                    .feedbackEntryCount(entryCount)
+                    .feedbackFinalizedCount(finalizedCount)
+                    .feedbackEvaluatedCount(evaluatedCount)
                     .build();
         }
         List<AwardResultVO> awardResults = awardService.listAwardResults(competition.getId());
@@ -2297,11 +2341,16 @@ public class CompetitionServiceImpl implements CompetitionService {
                         .anyMatch(table -> RoundTargetMode.CHAMPION.name().equals(table.getTargetMode())));
     }
 
-    private boolean hasLockedScoreRound(Long competitionId) {
-        return competitionRoundMapper.selectCount(new LambdaQueryWrapper<CompetitionRound>()
-                .eq(CompetitionRound::getCompetitionId, competitionId)
-                .eq(CompetitionRound::getRoundType, RoundType.SCORE.name())
-                .eq(CompetitionRound::getStatus, RoundStatus.LOCKED.name())) > 0;
+    private CompetitionRound findLockedScoreRound(Long competitionId) {
+        return competitionRoundMapper.selectList(new LambdaQueryWrapper<CompetitionRound>()
+                        .eq(CompetitionRound::getCompetitionId, competitionId)
+                        .eq(CompetitionRound::getRoundType, RoundType.SCORE.name())
+                        .eq(CompetitionRound::getStatus, RoundStatus.LOCKED.name())
+                        .orderByDesc(CompetitionRound::getRoundNo)
+                        .orderByDesc(CompetitionRound::getId))
+                .stream()
+                .findFirst()
+                .orElse(null);
     }
 
     private boolean areMedalAwardsReady(Long competitionId, List<AwardResultVO> awardResults) {

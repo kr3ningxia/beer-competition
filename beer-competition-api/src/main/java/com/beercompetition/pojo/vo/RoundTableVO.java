@@ -23,6 +23,8 @@ public class RoundTableVO {
     private String status;
     private List<String> entryUuids;
     private Integer advancedCount;
+    private Integer finalCount;
+    private Integer evaluatedCount;
     private Integer judgeProgress;
     private Integer captainProgress;
     private Integer averageDurationSeconds;

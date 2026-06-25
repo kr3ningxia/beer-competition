@@ -5,8 +5,8 @@
       <div class="hero-shade" aria-hidden="true"></div>
       <div class="hero-copy">
         <span class="label-chip tone-gold">赛事结果</span>
-        <h1>比赛结果</h1>
-        <p>本届大赛各奖项获奖名单</p>
+        <h1>赛事结果</h1>
+        <p>已发布赛事结果与诊断名单</p>
       </div>
     </section>
 
@@ -33,7 +33,7 @@
               <h2>{{ competition.name }}</h2>
               <div class="facts">
                 <span><Calendar aria-hidden="true" />比赛日期 {{ formatDate(competition.matchDate) }}</span>
-                <span><Trophy aria-hidden="true" />获奖 {{ awardCount(competition) }} 项</span>
+                <span><Trophy aria-hidden="true" />{{ resultCountLabel(competition) }}</span>
                 <span><Files aria-hidden="true" />{{ groupCount(competition) }} 个投递组别</span>
               </div>
               <p>结果发布时间 {{ formatDateTime(competition.publishedAt) }}</p>
@@ -46,23 +46,33 @@
 
           <div v-if="previewEntries(competition).length" class="award-preview">
             <div class="preview-head">
-              <strong>获奖预览</strong>
+              <strong>{{ isFeedbackOnlyCompetition(competition) ? '诊断名单预览' : '获奖预览' }}</strong>
               <RouterLink
-                v-if="awardCount(competition) > previewEntries(competition).length"
+                v-if="resultCount(competition) > previewEntries(competition).length"
                 :to="`/portal/competition-results/${competition.id}`"
               >
-                查看全部 {{ awardCount(competition) }} 项
+                查看全部 {{ resultCount(competition) }} {{ isFeedbackOnlyCompetition(competition) ? '款' : '项' }}
               </RouterLink>
             </div>
             <ul>
-              <li v-for="entry in previewEntries(competition)" :key="entry.awardResultId || entry.id">
-                <span :class="['award-badge', awardTone(entry)]">
+              <li v-for="entry in previewEntries(competition)" :key="entry.roundResultId || entry.awardResultId || entry.id">
+                <span v-if="isFeedbackOnlyCompetition(competition)" class="diagnosis-marker" aria-label="诊断结果">
                   <Medal aria-hidden="true" />
-                  {{ awardLabel(entry) }}
+                </span>
+                <span v-else :class="['award-badge', resultTone(entry)]">
+                  <Medal aria-hidden="true" />
+                  {{ resultLabel(entry) }}
                 </span>
                 <div>
-                  <strong>{{ entry.beerName || '获奖酒款' }}</strong>
-                  <p>{{ entry.breweryName || '获奖厂牌' }} · {{ entry.groupName || '投递组别' }} · {{ entry.style || '基础风格' }}</p>
+                  <div class="entry-title-row">
+                    <strong>{{ entry.beerName || (isFeedbackOnlyCompetition(competition) ? '诊断酒款' : '获奖酒款') }}</strong>
+                    <span v-if="isFeedbackOnlyCompetition(competition)" class="group-chip">{{ entry.groupName || '投递组别' }}</span>
+                  </div>
+                  <p>
+                    {{ entry.breweryName || '厂牌' }}
+                    <template v-if="!isFeedbackOnlyCompetition(competition)"> · {{ entry.groupName || '投递组别' }}</template>
+                    · {{ entry.style || '基础风格' }}
+                  </p>
                 </div>
               </li>
             </ul>
@@ -72,7 +82,7 @@
 
       <div v-else class="empty-state brewer-card">
         <strong>暂无已发布结果</strong>
-        <p>结果发布后会在这里展示获奖名单</p>
+        <p>结果发布后会在这里展示获奖名单和诊断名单</p>
       </div>
     </section>
   </div>
@@ -100,7 +110,7 @@ const filteredCompetitions = computed(() => {
         entry.breweryName,
         entry.groupName,
         entry.style,
-        awardLabel(entry),
+        resultLabel(entry),
       ]),
     ].filter(Boolean).join(' ').toLowerCase()
     return haystack.includes(query)
@@ -121,11 +131,21 @@ onMounted(async () => {
 })
 
 function previewEntries(competition) {
-  return sortEntries((competition.entries || []).filter((entry) => !entry.champion)).slice(0, 4)
+  const entries = isFeedbackOnlyCompetition(competition)
+    ? (competition.entries || [])
+    : (competition.entries || []).filter((entry) => !entry.champion)
+  return sortEntries(entries).slice(0, 4)
 }
 
-function awardCount(competition) {
+function resultCount(competition) {
+  if (isFeedbackOnlyCompetition(competition)) return (competition.entries || []).length
   return (competition.entries || []).filter((entry) => !entry.champion).length
+}
+
+function resultCountLabel(competition) {
+  return isFeedbackOnlyCompetition(competition)
+    ? `诊断 ${resultCount(competition)} 款`
+    : `获奖 ${resultCount(competition)} 项`
 }
 
 function groupCount(competition) {
@@ -143,13 +163,15 @@ function sortEntries(entries) {
 
 function awardOrder(entry) {
   if (entry.champion || entry.awardType === 'CHAMPION') return 0
-  if (awardLabel(entry) === '金奖') return 1
-  if (awardLabel(entry) === '银奖') return 2
-  if (awardLabel(entry) === '铜奖') return 3
+  if (entry?.resultType === 'EVALUATED') return 1
+  if (resultLabel(entry) === '金奖') return 1
+  if (resultLabel(entry) === '银奖') return 2
+  if (resultLabel(entry) === '铜奖') return 3
   return 9
 }
 
-function awardLabel(entry) {
+function resultLabel(entry) {
+  if (entry?.resultType === 'EVALUATED') return entry.slotLabel || '风格诊断'
   if (entry?.champion || entry?.awardType === 'CHAMPION') return '总冠军'
   if (entry?.rankNo === 1) return '金奖'
   if (entry?.rankNo === 2) return '银奖'
@@ -158,12 +180,17 @@ function awardLabel(entry) {
   return '奖项'
 }
 
-function awardTone(entry) {
-  const label = awardLabel(entry)
+function resultTone(entry) {
+  const label = resultLabel(entry)
+  if (entry?.resultType === 'EVALUATED') return 'evaluated'
   if (label === '金奖') return 'gold'
   if (label === '银奖') return 'silver'
   if (label === '铜奖') return 'bronze'
   return 'champion'
+}
+
+function isFeedbackOnlyCompetition(competition) {
+  return competition?.competitionType === 'FEEDBACK_ONLY'
 }
 
 function formatDate(value) {
@@ -339,7 +366,8 @@ function formatDateTime(value) {
 
 .facts svg,
 .detail-button svg,
-.award-badge svg {
+.award-badge svg,
+.diagnosis-marker svg {
   width: 16px;
   height: 16px;
 }
@@ -402,18 +430,29 @@ function formatDateTime(value) {
 }
 
 .award-preview li > div {
+  display: grid;
+  gap: 4px;
   min-width: 0;
 }
 
-.award-preview li strong,
+.entry-title-row,
 .award-preview li p {
-  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.entry-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .award-preview li strong {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 14px;
 }
 
@@ -450,6 +489,39 @@ function formatDateTime(value) {
 .award-badge.bronze {
   color: #6d4526;
   background: #ead6c0;
+}
+
+.award-badge.evaluated {
+  color: #1f6b55;
+  background: #dff4ea;
+}
+
+.diagnosis-marker {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  color: #1f6b55;
+  background: #dff4ea;
+  border: 1px solid rgba(31, 107, 85, 0.16);
+  border-radius: 50%;
+}
+
+.group-chip {
+  flex: 0 0 auto;
+  max-width: 120px;
+  overflow: hidden;
+  padding: 3px 8px;
+  color: #8a6428;
+  background: rgba(216, 144, 33, 0.12);
+  border: 1px solid rgba(216, 144, 33, 0.18);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .empty-state {

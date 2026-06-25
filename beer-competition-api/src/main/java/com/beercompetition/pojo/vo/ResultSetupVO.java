@@ -13,4 +13,7 @@ public class ResultSetupVO {
     private Boolean medalsReady;
     private Boolean terminalRoundLocked;
     private Boolean canPublishResults;
+    private Integer feedbackEntryCount;
+    private Integer feedbackFinalizedCount;
+    private Integer feedbackEvaluatedCount;
 }

@@ -7,6 +7,8 @@ import com.beercompetition.pojo.enums.CompetitionType;
 import com.beercompetition.pojo.enums.EntryStatus;
 import com.beercompetition.pojo.enums.RoundResultType;
 import com.beercompetition.pojo.enums.RoundStatus;
+import com.beercompetition.pojo.vo.CompetitionDetailVO;
+import com.beercompetition.pojo.vo.PortalCompetitionResultVO;
 import com.beercompetition.testsupport.BeerCompetitionTestData;
 import com.beercompetition.testsupport.IntegrationTestBase;
 import org.junit.jupiter.api.Test;
@@ -26,6 +28,12 @@ class FeedbackOnlyCompetitionIntegrationTest extends IntegrationTestBase {
 
     @Autowired
     private RoundService roundService;
+
+    @Autowired
+    private CompetitionService competitionService;
+
+    @Autowired
+    private EntryService entryService;
 
     @Test
     void feedbackOnlyFirstRoundLocksEvaluatedResultsAndPublishesWithoutAwards() {
@@ -58,6 +66,13 @@ class FeedbackOnlyCompetitionIntegrationTest extends IntegrationTestBase {
                 SELECT COUNT(*) FROM round_result
                 WHERE competition_id = ? AND result_type = ?
                 """, Integer.class, fixture.competition().getId(), RoundResultType.ADVANCE.name())).isZero();
+        CompetitionDetailVO lockedDetail = competitionService.getCompetitionDetail(fixture.competition().getId());
+        assertThat(lockedDetail.getResultSetup().getFeedbackEntryCount()).isEqualTo(2);
+        assertThat(lockedDetail.getResultSetup().getFeedbackFinalizedCount()).isEqualTo(2);
+        assertThat(lockedDetail.getResultSetup().getFeedbackEvaluatedCount()).isEqualTo(2);
+        assertThat(lockedDetail.getResultSetup().getCanPublishResults()).isTrue();
+        assertThat(lockedDetail.getRounds().get(0).getTables().get(0).getFinalCount()).isEqualTo(2);
+        assertThat(lockedDetail.getRounds().get(0).getTables().get(0).getEvaluatedCount()).isEqualTo(2);
 
         NextRoundCreateRequest request = new NextRoundCreateRequest();
         request.setSourceRoundId(scoreRound.round().getId());
@@ -74,6 +89,22 @@ class FeedbackOnlyCompetitionIntegrationTest extends IntegrationTestBase {
                 String.class, fixture.entryA1().getId())).isEqualTo(EntryStatus.RESULT_PUBLISHED.name());
         assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM award_result WHERE competition_id = ?",
                 Integer.class, fixture.competition().getId())).isZero();
+
+        PortalCompetitionResultVO publicResult = entryService.getPublishedCompetitionResult(fixture.competition().getId());
+        assertThat(publicResult.getCompetitionType()).isEqualTo(CompetitionType.FEEDBACK_ONLY.name());
+        assertThat(publicResult.getEntries()).hasSize(2);
+        assertThat(publicResult.getEntries())
+                .allSatisfy(entry -> {
+                    assertThat(entry.getResultType()).isEqualTo(RoundResultType.EVALUATED.name());
+                    assertThat(entry.getSlotLabel()).isEqualTo("风格诊断");
+                    assertThat(entry.getAwardName()).isNull();
+                    assertThat(entry.getChampion()).isFalse();
+                });
+        assertThat(entryService.listPublishedCompetitionResults())
+                .anySatisfy(result -> {
+                    assertThat(result.getId()).isEqualTo(fixture.competition().getId());
+                    assertThat(result.getCompetitionType()).isEqualTo(CompetitionType.FEEDBACK_ONLY.name());
+                });
     }
 
     private void insertFinalScore(BeerCompetitionTestData.Fixture fixture,

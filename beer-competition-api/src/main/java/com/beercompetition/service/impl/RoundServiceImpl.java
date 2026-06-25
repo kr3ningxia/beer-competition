@@ -1334,6 +1334,9 @@ public class RoundServiceImpl implements RoundService {
                 .stream()
                 .filter(record -> entries.stream().anyMatch(entry -> entry.getBeerEntryId().equals(record.getBeerEntryId())))
                 .count();
+        int evaluatedCount = (int) results.stream()
+                .filter(result -> RoundResultType.EVALUATED.name().equals(result.getResultType()))
+                .count();
         List<ScoreRecord> tableJudgeScores = scoreRecordMapper.selectList(new LambdaQueryWrapper<ScoreRecord>()
                 .eq(ScoreRecord::getRoundTableId, table.getId())
                 .eq(ScoreRecord::getFinalFlag, FLAG_FALSE));
@@ -1356,6 +1359,8 @@ public class RoundServiceImpl implements RoundService {
                         .map(BeerEntry::getUuid)
                         .toList())
                 .advancedCount(advancedCount)
+                .finalCount(finalCount)
+                .evaluatedCount(evaluatedCount)
                 .judgeProgress(resolveJudgeProgress(table, entries))
                 .captainProgress(entries.isEmpty() ? 0 : finalCount * FULL_PROGRESS / entries.size())
                 .averageDurationSeconds(averageInt(tableJudgeScores.stream()

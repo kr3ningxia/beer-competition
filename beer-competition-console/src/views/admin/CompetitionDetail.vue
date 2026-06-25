@@ -154,6 +154,14 @@
           </article>
         </section>
 
+        <section v-if="activeTab === 'analysis'" class="tab-panel analysis-panel">
+          <CompetitionAnalyticsPanel
+            :analytics="competitionAnalytics"
+            :competition-name="competition.name"
+            :loading="competitionAnalyticsLoading"
+          />
+        </section>
+
         <section v-if="activeTab === 'baseInfo'" class="tab-panel base-info-panel">
           <div v-if="!editable.baseInfo" class="edit-banner locked">
             <Lock />
@@ -1684,6 +1692,7 @@ import {
   Search,
   Setting,
   Tickets,
+  TrendCharts,
   Warning,
 } from '@element-plus/icons-vue'
 import {
@@ -1706,6 +1715,7 @@ import {
   deleteCompetition,
   downloadAwardCertificate,
   exportCompetitionScoringData,
+  fetchCompetitionAnalytics,
   fetchCompetitionFeedbackReview,
   fetchCompetitionDetail,
   fetchJudges,
@@ -1734,15 +1744,19 @@ import {
 } from '@/api/admin'
 import { fallbackStyleLibraries, getStyleLibrary, normalizeStyleLibraries } from './styleLibraries'
 import CreateRoundWizard from './components/competition-detail/CreateRoundWizard.vue'
+import CompetitionAnalyticsPanel from './components/competition-detail/CompetitionAnalyticsPanel.vue'
 import TableAllocationWorkbench from './components/competition-detail/TableAllocationWorkbench.vue'
 
 const route = useRoute()
 const router = useRouter()
-const detailTabKeys = new Set(['overview', 'baseInfo', 'entryConfig', 'entries', 'judges', 'rounds', 'score', 'feedback', 'results'])
+const detailTabKeys = new Set(['overview', 'analysis', 'baseInfo', 'entryConfig', 'entries', 'judges', 'rounds', 'score', 'feedback', 'results'])
 const roundProgressPollIntervalMs = 8000
 const activeTab = ref(normalizeDetailTab(route.query.tab))
 const loading = ref(false)
 const competition = ref(null)
+const competitionAnalytics = ref(null)
+const competitionAnalyticsLoading = ref(false)
+const competitionAnalyticsCompetitionId = ref(null)
 let roundProgressPollTimer = null
 let roundProgressRefreshing = false
 const categoryForm = reactive([])
@@ -1882,6 +1896,7 @@ let styleDistributionResizeObserver = null
 
 const tabs = [
   { key: 'overview', label: '概览', icon: DataAnalysis },
+  { key: 'analysis', label: '数据分析', icon: TrendCharts },
   { key: 'baseInfo', label: '基础信息', icon: Setting },
   { key: 'entryConfig', label: '报名配置', icon: Setting },
   { key: 'score', label: '评分表', icon: Finished },
@@ -2366,21 +2381,50 @@ const certificateCheck = computed(() => ({
   status: certificateTotalCount.value === 0 || certificateUploadedCount.value === certificateTotalCount.value ? '完成' : '可后补',
 }))
 const resultPathEntries = computed(() => roundEntryPool.value.filter((entry) => entry.advanced || getEntryAward(entry.uuid)).slice(0, 8))
-const feedbackEntryCount = computed(() => currentRound.value?.type === 'SCORE' ? currentRoundEntryCount.value : roundEntryPool.value.filter((entry) => entry.stored).length)
-const feedbackFinalizedCount = computed(() => currentRound.value?.type === 'SCORE'
-  ? currentRoundTables.value.reduce((sum, table) => sum + Number(table.finalCount || 0), 0)
-  : Number(competition.value?.progressSummary?.finalized || 0))
+const feedbackEntryCount = computed(() => {
+  const setupCount = Number(competition.value?.resultSetup?.feedbackEntryCount)
+  if (Number.isFinite(setupCount) && setupCount > 0) return setupCount
+  return currentRound.value?.type === 'SCORE'
+    ? currentRoundEntryCount.value
+    : roundEntryPool.value.filter((entry) => entry.stored).length
+})
+const feedbackFinalScoreCount = computed(() => {
+  const setupCount = Number(competition.value?.resultSetup?.feedbackFinalizedCount)
+  if (Number.isFinite(setupCount)) return Math.min(setupCount, feedbackEntryCount.value)
+  if (currentRound.value?.type === 'SCORE') {
+    return currentRoundTables.value.reduce((sum, table) => {
+      const explicitCount = Number(table.finalCount)
+      if (Number.isFinite(explicitCount)) return sum + Math.min(explicitCount, table.entryUuids?.length || 0)
+      return sum + buildCountProgressFromPercent(table.captainProgress, table.entryUuids?.length || 0).submitted
+    }, 0)
+  }
+  return Number(competition.value?.progressSummary?.finalized || 0)
+})
+const feedbackEvaluatedCount = computed(() => {
+  const setupCount = Number(competition.value?.resultSetup?.feedbackEvaluatedCount)
+  if (Number.isFinite(setupCount)) return Math.min(setupCount, feedbackEntryCount.value)
+  if (currentRound.value?.type === 'SCORE') {
+    return currentRoundTables.value.reduce((sum, table) => sum + Math.min(Number(table.evaluatedCount || 0), table.entryUuids?.length || 0), 0)
+  }
+  return 0
+})
+const feedbackFinalizedCount = computed(() => (
+  finalRoundLocked.value || resultsPublished.value
+    ? feedbackEvaluatedCount.value
+    : feedbackFinalScoreCount.value
+))
 const feedbackPublishSummary = computed(() => {
   if (resultsPublished.value) return '诊断结果已发布'
   if (!finalRoundLocked.value) return '等待首轮评审锁定'
-  return canPublishResults.value ? '可以发布给厂牌端' : '还有酒款待完成'
+  return canPublishResults.value ? '可以发布给厂商和公开结果页' : '还有诊断记录待生成'
 })
 const resultChecks = computed(() => {
   if (isFeedbackOnlyCompetition.value) {
+    const diagnosisGenerated = feedbackEntryCount.value > 0 && feedbackEvaluatedCount.value >= feedbackEntryCount.value
     return [
       { label: '首轮评审已锁定', done: finalRoundLocked.value },
-      { label: '桌长诊断已完成', done: feedbackEntryCount.value > 0 && feedbackFinalizedCount.value >= feedbackEntryCount.value },
-      { label: '诊断结果可发布', done: canPublishResults.value || resultsPublished.value },
+      { label: '诊断记录已生成', done: diagnosisGenerated },
+      { label: '可发布给厂商和公开结果页', done: (finalRoundLocked.value && diagnosisGenerated && canPublishResults.value) || resultsPublished.value },
     ]
   }
   return [
@@ -2505,9 +2549,11 @@ watch(activeTab, (tab) => {
   syncActiveTabQuery(tab)
   if (tab === 'rounds') refreshRoundProgress()
   if (tab === 'feedback') loadFeedbackReview()
+  if (tab === 'analysis') loadCompetitionAnalytics()
 }, { immediate: true })
 watch(() => competition.value?.id, () => {
   if (activeTab.value === 'feedback') loadFeedbackReview()
+  if (activeTab.value === 'analysis') loadCompetitionAnalytics(true)
 })
 watch(() => currentRound.value?.status, () => {
   if (activeTab.value === 'rounds') refreshRoundProgress()
@@ -2547,9 +2593,14 @@ async function loadDetail() {
   try {
     const data = await fetchCompetitionDetail(route.params.id)
     competition.value = normalizeDetail(data)
+    competitionAnalytics.value = null
+    competitionAnalyticsCompetitionId.value = null
     resetForms()
     applyRoundState()
     ensureActiveTabAvailable()
+    if (activeTab.value === 'analysis') {
+      await loadCompetitionAnalytics(true)
+    }
   } finally {
     loading.value = false
   }
@@ -2625,6 +2676,24 @@ async function loadFeedbackReview(force = false) {
     ElMessage.error('反馈数据加载失败')
   } finally {
     feedbackReviewLoading.value = false
+  }
+}
+
+async function loadCompetitionAnalytics(force = false) {
+  const competitionId = competition.value?.id || route.params.id
+  if (!competitionId) return
+  if (!force && competitionAnalyticsCompetitionId.value === competitionId && competitionAnalytics.value) return
+  if (competitionAnalyticsLoading.value) return
+  competitionAnalyticsLoading.value = true
+  try {
+    const data = await fetchCompetitionAnalytics(competitionId)
+    competitionAnalytics.value = data || null
+    competitionAnalyticsCompetitionId.value = competitionId
+  } catch {
+    competitionAnalytics.value = null
+    ElMessage.error('数据分析加载失败')
+  } finally {
+    competitionAnalyticsLoading.value = false
   }
 }
 
@@ -3390,6 +3459,10 @@ function resolveDetailTabDisabledReason(tabKey) {
     return ''
   }
   if (tabKey === 'results') {
+    if (isFeedbackOnlyCompetition.value) {
+      if (['PUBLISHED', 'ARCHIVED'].includes(status) || finalRoundLocked.value || canPublishResults.value) return ''
+      return '首轮锁定后才能发布诊断结果'
+    }
     if (!['RESULT_CONFIRMING', 'PUBLISHED', 'ARCHIVED'].includes(status) && !hasAwards) {
       return '结果发布需等评审轮次锁定并进入结果确认阶段'
     }
@@ -3528,7 +3601,7 @@ function buildCurrentRoundMetrics() {
     if (isFeedbackOnlyCompetition.value) {
       return [
         { label: '诊断酒款', value: `${currentRoundEntryCount.value} 款` },
-        { label: '桌长汇总', value: `${feedbackFinalizedCount.value} / ${feedbackEntryCount.value}` },
+        { label: '诊断完成', value: `${feedbackFinalizedCount.value} / ${feedbackEntryCount.value}` },
         { label: '未锁定', value: `${unlockedCount} 桌` },
         { label: '结果', value: canPublishResults.value ? '可发布' : '已固定' },
       ]
@@ -4081,7 +4154,7 @@ function buildRoundTodoHint() {
       return {
         tone: canPublishResults.value ? 'ready' : 'done',
         title: '首轮诊断已固定',
-        detail: canPublishResults.value ? '可以发布诊断结果' : '诊断结果已固定',
+        detail: canPublishResults.value ? '可以发布给厂商和公开结果页' : '诊断结果已固定',
         action: canPublishResults.value ? 'goToResults' : '',
       }
     }
@@ -5151,11 +5224,11 @@ async function publishResultsAction() {
     kicker: feedbackOnly ? '诊断发布' : '结果发布',
     title: feedbackOnly ? '确认发布诊断结果？' : '确认发布到厂牌端？',
     copy: feedbackOnly
-      ? '发布后，厂牌端可查看评分、评语和桌长综合诊断，请确认首轮结果已经核对完成'
+      ? '发布后，厂商可查看评分、评语和桌长综合诊断，公开结果页会展示诊断名单。请确认首轮结果已经核对完成'
       : '发布后，厂牌端和公开结果页将展示获奖名单、奖项信息和已上传奖状，请确认奖项结果已经核对完成',
     summary: feedbackOnly
       ? competitionSummaryItems([
-        { label: '首轮诊断', value: `${feedbackFinalizedCount.value} / ${feedbackEntryCount.value} 款` },
+        { label: '诊断记录', value: `${feedbackFinalizedCount.value} / ${feedbackEntryCount.value} 款` },
         { label: '发布检查', value: `${resultChecks.value.filter((item) => item.done).length} / ${resultChecks.value.length}` },
       ])
       : competitionSummaryItems([
