@@ -40,11 +40,47 @@
         <strong>{{ activeCompetition ? '赛事信息' : '等待赛事开放' }}</strong>
         <dl>
           <div><dt>报名窗口</dt><dd>{{ registrationWindowText(activeCompetition) }}</dd></div>
-          <div><dt>参赛组别</dt><dd>{{ categoryNamesText(activeCompetition) }}</dd></div>
+          <div>
+            <dt>参赛组别</dt>
+            <dd class="category-summary-row">
+              <span class="category-summary">{{ categorySummaryText(activeCompetition) }}</span>
+              <button
+                v-if="activeCategoryNames.length > summaryCategoryLimit"
+                class="category-expand"
+                type="button"
+                @click="categoryDialogOpen = true"
+              >
+                查看全部
+              </button>
+            </dd>
+          </div>
           <div><dt>参赛费用</dt><dd>{{ entryFeeText(activeCompetition) }}</dd></div>
         </dl>
       </aside>
     </section>
+
+    <Teleport to="body">
+      <div v-if="categoryDialogOpen" class="category-modal-backdrop" @click.self="categoryDialogOpen = false">
+        <section class="category-modal" role="dialog" aria-modal="true" aria-labelledby="category-modal-title">
+          <header class="category-modal-head">
+            <div>
+              <span>参赛组别</span>
+              <h2 id="category-modal-title">全部参赛组别</h2>
+            </div>
+            <button class="category-modal-close" type="button" aria-label="关闭" @click="categoryDialogOpen = false">
+              ×
+            </button>
+          </header>
+          <div class="category-modal-meta">
+            <strong>{{ activeCategoryNames.length }} 个组别</strong>
+            <span>{{ activeCompetition?.name || '赛事信息' }}</span>
+          </div>
+          <ul class="category-modal-list">
+            <li v-for="name in activeCategoryNames" :key="name">{{ name }}</li>
+          </ul>
+        </section>
+      </div>
+    </Teleport>
 
     <section class="section-block">
       <div class="section-head">
@@ -147,8 +183,11 @@ const loggedIn = computed(() => isLoggedIn('portal'))
 const homeData = ref({ activeCompetition: null, openCompetitions: [], competitions: [] })
 const entries = ref([])
 const results = ref([])
+const categoryDialogOpen = ref(false)
+const summaryCategoryLimit = 3
 const activeCompetition = computed(() => homeData.value.activeCompetition)
 const openCompetitions = computed(() => homeData.value.openCompetitions || [])
+const activeCategoryNames = computed(() => categoryNames(activeCompetition.value))
 const pendingCount = computed(() => entries.value.filter((entry) => isEntryVendorActionPending(entry)).length)
 const publishedResultCount = computed(() => results.value.filter((entry) => isEntryResultPublished(entry)).length)
 const heroPrimaryAction = computed(() => {
@@ -214,9 +253,20 @@ function registrationWindowText(competition) {
   return '待公布'
 }
 
+function categoryNames(competition) {
+  return competition?.categories?.map((item) => item.name).filter(Boolean) || []
+}
+
 function categoryNamesText(competition) {
-  const names = competition?.categories?.map((item) => item.name).filter(Boolean) || []
+  const names = categoryNames(competition)
   return names.length ? names.join(' / ') : '待公布'
+}
+
+function categorySummaryText(competition) {
+  const names = categoryNames(competition)
+  if (!names.length) return '待公布'
+  if (names.length <= summaryCategoryLimit) return names.join('、')
+  return `${names.slice(0, summaryCategoryLimit).join('、')} 等 ${names.length} 个组别`
 }
 
 function entryFeeText(competition) {
@@ -378,6 +428,130 @@ function earlyBirdDeadlineText(competition) {
   margin-top: 18px;
   font-size: 25px;
   line-height: 1.2;
+}
+
+.category-summary-row {
+  display: grid;
+  gap: 7px;
+}
+
+.category-summary {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.category-expand {
+  justify-self: start;
+  padding: 0;
+  color: #8b5c19;
+  background: transparent;
+  border: 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.category-expand:hover,
+.category-expand:focus-visible {
+  color: #2b1d10;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.category-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(31, 21, 14, 0.58);
+}
+
+.category-modal {
+  width: min(560px, 100%);
+  max-height: min(680px, calc(100vh - 48px));
+  overflow: auto;
+  padding: 24px;
+  color: #2b1d10;
+  background: #fffaf0;
+  border: 1px solid rgba(87, 58, 26, 0.16);
+  border-radius: 8px;
+  box-shadow: 0 28px 80px rgba(31, 21, 14, 0.32);
+}
+
+.category-modal-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.category-modal-head span {
+  color: #8b5c19;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.category-modal-head h2 {
+  margin: 8px 0 0;
+  font-size: 26px;
+  line-height: 1.2;
+}
+
+.category-modal-close {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  color: #6b4710;
+  background: #fff3d8;
+  border: 1px solid rgba(87, 58, 26, 0.14);
+  border-radius: 50%;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.category-modal-meta {
+  display: grid;
+  gap: 4px;
+  margin-top: 18px;
+  padding: 14px 0;
+  border-top: 1px dashed rgba(87, 58, 26, 0.18);
+  border-bottom: 1px dashed rgba(87, 58, 26, 0.18);
+}
+
+.category-modal-meta strong {
+  font-size: 18px;
+}
+
+.category-modal-meta span {
+  color: #746a5f;
+  line-height: 1.5;
+}
+
+.category-modal-list {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.category-modal-list li {
+  padding: 12px 14px;
+  background: #fff7e6;
+  border: 1px solid rgba(87, 58, 26, 0.1);
+  border-radius: 8px;
+  font-weight: 800;
+  line-height: 1.45;
 }
 
 .section-block,
@@ -693,6 +867,15 @@ details p {
 
   .hero-copy h1 {
     font-size: 42px;
+  }
+
+  .category-modal-backdrop {
+    place-items: end center;
+    padding: 18px;
+  }
+
+  .category-modal {
+    max-height: min(78vh, 620px);
   }
 
   .section-head,

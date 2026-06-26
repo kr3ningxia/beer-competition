@@ -50,7 +50,23 @@
       <article class="brewer-card info-panel">
         <h2 class="portal-section-title">赛事关键信息</h2>
         <dl class="key-info-list">
-          <div><dt>投递组别</dt><dd>{{ categoryNamesText }}</dd></div>
+          <div :class="['category-info-item', { 'is-expanded': categoryListExpanded }]">
+            <dt>投递组别</dt>
+            <dd class="category-info-content">
+              <span>{{ categorySummaryText }}</span>
+              <button
+                v-if="showCategorySummaryExpand"
+                class="category-toggle"
+                type="button"
+                @click="categoryListExpanded = !categoryListExpanded"
+              >
+                {{ categoryListExpanded ? '收起组别' : '查看全部组别' }}
+              </button>
+              <ul v-if="categoryListExpanded" class="category-list">
+                <li v-for="name in categoryNames" :key="name">{{ name }}</li>
+              </ul>
+            </dd>
+          </div>
           <div><dt>比赛日期</dt><dd>{{ formatDate(competition.competitionDate) }}</dd></div>
           <div><dt>报名截止</dt><dd>{{ formatDateTime(competition.registrationDeadline) }}</dd></div>
           <div><dt>当前应付</dt><dd>{{ feeText }}</dd></div>
@@ -151,6 +167,9 @@ const route = useRoute()
 const loggedIn = computed(() => isLoggedIn('portal'))
 const competition = ref({ categories: [], styles: [], entryFields: [] })
 const entries = ref([])
+const categoryListExpanded = ref(false)
+const categorySummaryLimit = 4
+const categoryPreviewLimit = 3
 
 const logistics = computed(() => competition.value.logistics || {})
 const eventEntries = computed(() => entries.value.filter((entry) => entry.competitionId === competition.value.id))
@@ -160,9 +179,13 @@ const feeText = computed(() => formatCompetitionFee(competition.value))
 const earlyBirdDeadlineText = computed(() => (isEarlyBirdActive(competition.value) ? formatDateTime(competition.value.earlyBirdDeadline) : ''))
 const showNormalFee = computed(() => isEarlyBirdActive(competition.value) && competition.value.entryFee !== undefined && competition.value.entryFee !== null)
 const stageLabel = computed(() => (isCompetitionResultPublished(competition.value) ? '结果已发布' : competition.value.currentStageLabel) || '赛事详情')
-const categoryNamesText = computed(() => {
-  const names = competition.value.categories?.map((item) => item.name).filter(Boolean) || []
-  return names.length ? names.join(' / ') : '暂未配置'
+const categoryNames = computed(() => competition.value.categories?.map((item) => item.name).filter(Boolean) || [])
+const showCategorySummaryExpand = computed(() => categoryNames.value.length > categorySummaryLimit)
+const categorySummaryText = computed(() => {
+  const names = categoryNames.value
+  if (!names.length) return '暂未配置'
+  if (names.length <= categorySummaryLimit) return names.join('、')
+  return `${names.slice(0, categoryPreviewLimit).join('、')} 等 ${names.length} 个组别`
 })
 const fullDescription = computed(() => {
   return competition.value.description || '组委会暂未填写赛事简介，请以参赛细则和后续通知为准'
@@ -566,6 +589,7 @@ dt,
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
+  align-items: start;
 }
 
 dl {
@@ -594,6 +618,53 @@ dd {
   overflow-wrap: anywhere;
   font-weight: 800;
   line-height: 1.55;
+}
+
+.category-info-item.is-expanded {
+  grid-column: 1 / -1;
+}
+
+.category-info-content {
+  display: grid;
+  gap: 8px;
+}
+
+.category-toggle {
+  justify-self: start;
+  padding: 0;
+  color: #8b5c19;
+  background: transparent;
+  border: 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.category-toggle:hover,
+.category-toggle:focus-visible {
+  color: #2b1d10;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.category-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.category-list li {
+  padding: 10px 12px;
+  background: #fff7e6;
+  border: 1px solid rgba(87, 58, 26, 0.1);
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.45;
 }
 
 .card-link {
@@ -657,6 +728,7 @@ dd {
 
   .brief-stats,
   .key-info-list,
+  .category-list,
   .requirement-list,
   .process-strip {
     grid-template-columns: 1fr;
