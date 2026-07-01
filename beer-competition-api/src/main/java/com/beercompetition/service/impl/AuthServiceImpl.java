@@ -636,8 +636,7 @@ public class AuthServiceImpl implements AuthService {
 
     private CurrentJudgeContext findCurrentVisibleTaskContext(Long judgeAccountId) {
         List<RoundTableMember> members = roundTableMemberMapper.selectList(new LambdaQueryWrapper<RoundTableMember>()
-                .eq(RoundTableMember::getJudgeAccountId, judgeAccountId)
-                .eq(RoundTableMember::getSystemTaskRequired, 1));
+                .eq(RoundTableMember::getJudgeAccountId, judgeAccountId));
         CurrentJudgeContext bestContext = null;
         Long bestRoundId = null;
         Long bestTableId = null;

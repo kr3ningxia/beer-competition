@@ -256,7 +256,8 @@ let qrReader = null
 let scanLocked = false
 let syncingTasks = false
 
-const isCaptain = computed(() => me.value?.role === 'CAPTAIN')
+const currentTaskRole = computed(() => current.value?.role || current.value?.judgeRoleType || me.value?.role)
+const isCaptain = computed(() => currentTaskRole.value === 'CAPTAIN')
 const isScoreRoundCaptain = computed(() => isCaptain.value && current.value?.taskType === 'CAPTAIN_FINALIZE')
 const isRankingRound = computed(() => isRankingTaskType(current.value?.taskType))
 const isFeedbackOnlyCompetition = computed(() => (
