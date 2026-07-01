@@ -36,7 +36,7 @@
             <span v-if="selectedCompetition">{{ currentFeeText }}</span>
           </div>
           <el-form-item label="酒款名称" prop="name" class="full-field">
-            <el-input v-model.trim="form.name" placeholder="例如：浅色拉格" />
+            <el-input v-model.trim="form.name" placeholder="请填写酒款名称" />
           </el-form-item>
         </section>
 
@@ -70,7 +70,7 @@
                 <el-input
                   v-model.trim="form.abv"
                   inputmode="decimal"
-                  placeholder="例如：5.35"
+                  placeholder="请填写酒精度"
                   @blur="form.abv = normalizeAbvInput(form.abv)"
                 >
                   <template #suffix>

@@ -840,7 +840,7 @@ function createScoreConfigs() {
     整体感受: '描述第一印象、愉悦度和整体完成度',
     适饮性: '描述是否易饮、是否愿意继续饮用',
     记忆点: '描述最容易被记住的风味或体验',
-    共识评分: '桌长讨论后填写独立共识分',
+    共识分: '桌长讨论后填写独立共识分',
   }
   return defaultScoreConfigs().map((config) => ({
     ...config,

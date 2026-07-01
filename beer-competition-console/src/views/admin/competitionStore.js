@@ -71,7 +71,7 @@ export const competitions = reactive([
     scoreConfigs: [
       { role: 'CROSS', dimensions: [{ label: '整体感受', maxScore: 20 }, { label: '适饮性', maxScore: 20 }, { label: '记忆点', maxScore: 10 }] },
       { role: 'PROFESSIONAL', dimensions: [{ label: '香气', maxScore: 12 }, { label: '外观', maxScore: 3 }, { label: '味道', maxScore: 20 }, { label: '口感', maxScore: 5 }, { label: '整体印象', maxScore: 10 }] },
-      { role: 'CAPTAIN', dimensions: [{ label: '共识评分', maxScore: 50 }] },
+      { role: 'CAPTAIN', dimensions: [{ label: '共识分', maxScore: 50 }] },
     ],
     entriesSummary: { total: 286, pendingPayment: 14, registered: 268, stored: 238, canceled: 4, resultPublished: 0 },
     entries: [
@@ -118,7 +118,7 @@ export const competitions = reactive([
     scoreConfigs: [
       { role: 'CROSS', dimensions: [{ label: '清爽度', maxScore: 20 }, { label: '风味记忆点', maxScore: 20 }, { label: '适饮性', maxScore: 10 }] },
       { role: 'PROFESSIONAL', dimensions: [{ label: '香气', maxScore: 12 }, { label: '外观', maxScore: 3 }, { label: '味道', maxScore: 20 }, { label: '口感', maxScore: 5 }, { label: '整体印象', maxScore: 10 }] },
-      { role: 'CAPTAIN', dimensions: [{ label: '共识评分', maxScore: 50 }] },
+      { role: 'CAPTAIN', dimensions: [{ label: '共识分', maxScore: 50 }] },
     ],
     entriesSummary: { total: 96, pendingPayment: 12, registered: 72, stored: 0, canceled: 3, resultPublished: 0 },
     entries: [
@@ -251,7 +251,7 @@ export function defaultScoreConfigs() {
   return [
     { role: 'CROSS', dimensions: [{ label: '整体感受', maxScore: 20 }, { label: '适饮性', maxScore: 20 }, { label: '记忆点', maxScore: 10 }] },
     { role: 'PROFESSIONAL', dimensions: [{ label: '香气', maxScore: 12 }, { label: '外观', maxScore: 3 }, { label: '味道', maxScore: 20 }, { label: '口感', maxScore: 5 }, { label: '整体印象', maxScore: 10 }] },
-    { role: 'CAPTAIN', dimensions: [{ label: '共识评分', maxScore: 50 }] },
+    { role: 'CAPTAIN', dimensions: [{ label: '共识分', maxScore: 50 }] },
   ]
 }
 

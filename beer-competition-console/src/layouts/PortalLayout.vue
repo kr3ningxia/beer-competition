@@ -8,7 +8,7 @@
           </span>
           <span>
             <strong>啤酒事务局</strong>
-            <small>参赛平台</small>
+            <small>赛事平台</small>
           </span>
         </RouterLink>
 

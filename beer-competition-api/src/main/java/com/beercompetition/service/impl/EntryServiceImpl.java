@@ -2276,8 +2276,7 @@ public class EntryServiceImpl implements EntryService {
             throw new ForbiddenException("评审账号未启用，不能查看酒款");
         }
         List<RoundTableMember> members = roundTableMemberMapper.selectList(new LambdaQueryWrapper<RoundTableMember>()
-                .eq(RoundTableMember::getJudgeAccountId, account.getId())
-                .eq(RoundTableMember::getSystemTaskRequired, 1));
+                .eq(RoundTableMember::getJudgeAccountId, account.getId()));
         if (members.isEmpty()) {
             throw new ForbiddenException("当前评审没有可查看的评审任务");
         }
@@ -2313,6 +2312,10 @@ public class EntryServiceImpl implements EntryService {
             return false;
         }
         if (RoundType.SCORE.name().equals(round.getRoundType())) {
+            if (!JudgeRoleType.CAPTAIN.name().equals(member.getRole())
+                    && !Objects.equals(member.getSystemTaskRequired(), 1)) {
+                return false;
+            }
             if (RoundStatus.PUBLISHED.name().equals(round.getStatus())) {
                 return RoundStatus.PUBLISHED.name().equals(table.getStatus())
                         || JudgeRoleType.CAPTAIN.name().equals(member.getRole());
@@ -2344,6 +2347,9 @@ public class EntryServiceImpl implements EntryService {
         if (RoundType.RANKING.name().equals(round.getRoundType()) && JudgeRoleType.CAPTAIN.name().equals(member.getRole())) {
             return JudgeTaskType.RANKING_ROUND.name();
         }
+        if (RoundType.RANKING.name().equals(round.getRoundType())) {
+            return JudgeTaskType.RANKING_PARTICIPANT.name();
+        }
         return null;
     }
 
@@ -2351,7 +2357,8 @@ public class EntryServiceImpl implements EntryService {
         if (JudgeTaskType.CAPTAIN_FINALIZE.name().equals(taskType)) {
             return "CAPTAIN";
         }
-        if (JudgeTaskType.RANKING_ROUND.name().equals(taskType)) {
+        if (JudgeTaskType.RANKING_ROUND.name().equals(taskType)
+                || JudgeTaskType.RANKING_PARTICIPANT.name().equals(taskType)) {
             return "RANKING";
         }
         return "SCORE";
