@@ -1,10 +1,14 @@
 package com.beercompetition.service;
 
 import com.beercompetition.common.exception.BaseException;
+import com.beercompetition.pojo.dto.FirstRoundCreateRequest;
 import com.beercompetition.pojo.dto.NextRoundCreateRequest;
+import com.beercompetition.pojo.dto.RoundTableAllocationRequest;
+import com.beercompetition.pojo.dto.RoundTableMemberAllocationRequest;
 import com.beercompetition.pojo.enums.CompetitionStatus;
 import com.beercompetition.pojo.enums.CompetitionType;
 import com.beercompetition.pojo.enums.EntryStatus;
+import com.beercompetition.pojo.enums.JudgeRoleType;
 import com.beercompetition.pojo.enums.RoundResultType;
 import com.beercompetition.pojo.enums.RoundStatus;
 import com.beercompetition.pojo.vo.CompetitionDetailVO;
@@ -34,6 +38,43 @@ class FeedbackOnlyCompetitionIntegrationTest extends IntegrationTestBase {
 
     @Autowired
     private EntryService entryService;
+
+    @Test
+    void feedbackOnlyScoreRoundPublishesWhenTargetCountExceedsEntryCount() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        jdbcTemplate.update("UPDATE competition SET competition_type = ?, status = ? WHERE id = ?",
+                CompetitionType.FEEDBACK_ONLY.name(), CompetitionStatus.JUDGING_PREP.name(), fixture.competition().getId());
+
+        FirstRoundCreateRequest request = new FirstRoundCreateRequest();
+        request.setDefaultTargetCount(3);
+        RoundTableAllocationRequest table = new RoundTableAllocationRequest();
+        table.setName("A桌");
+        table.setCaptainPublicId(fixture.captain().getPublicId());
+        table.setCategoryId(fixture.category().getId());
+        table.setCategoryMode("CATEGORY");
+        table.setTargetCount(3);
+        table.setTargetMode("ADVANCE_COUNT");
+        RoundTableMemberAllocationRequest member = new RoundTableMemberAllocationRequest();
+        member.setJudgePublicId(fixture.professional().getPublicId());
+        member.setRole(JudgeRoleType.PROFESSIONAL.name());
+        table.setMembers(List.of(member));
+        table.setEntryUuids(List.of(fixture.entryA1().getUuid()));
+        request.setTables(List.of(table));
+
+        asAdmin(1L);
+        roundService.createFirstRound(fixture.competition().getId(), request);
+        Long roundId = jdbcTemplate.queryForObject("""
+                SELECT id FROM competition_round
+                WHERE competition_id = ? AND round_no = 1
+                """, Long.class, fixture.competition().getId());
+
+        roundService.publishRound(fixture.competition().getId(), roundId);
+
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM competition_round WHERE id = ?",
+                String.class, roundId)).isEqualTo(RoundStatus.PUBLISHED.name());
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM competition WHERE id = ?",
+                String.class, fixture.competition().getId())).isEqualTo(CompetitionStatus.JUDGING.name());
+    }
 
     @Test
     void feedbackOnlyFirstRoundLocksEvaluatedResultsAndPublishesWithoutAwards() {

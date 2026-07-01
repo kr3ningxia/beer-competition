@@ -11,6 +11,7 @@ import com.beercompetition.pojo.dto.RoundAllocationRequest;
 import com.beercompetition.pojo.dto.RoundTableAllocationRequest;
 import com.beercompetition.pojo.dto.RoundTableMemberAllocationRequest;
 import com.beercompetition.pojo.enums.CompetitionStatus;
+import com.beercompetition.pojo.enums.CompetitionType;
 import com.beercompetition.pojo.enums.EntryStatus;
 import com.beercompetition.pojo.enums.JudgeRoleType;
 import com.beercompetition.pojo.enums.RoundStatus;
@@ -198,11 +199,12 @@ public class RoundValidationPolicy {
     /**
      * 发布轮次前的完整性校验，覆盖评分表、候选池、桌长和目标数量。
      */
-    public void validateRoundReady(CompetitionRound round) {
+    public void validateRoundReady(Competition competition, CompetitionRound round) {
         List<RoundTable> tables = roundQuerySupport.listRoundTables(round.getId());
         if (tables.isEmpty()) {
             throw new BaseException("当前轮次至少需要 1 张桌");
         }
+        boolean feedbackOnlyScoreRound = isFeedbackOnlyScoreRound(competition, round);
         if (RoundType.SCORE.name().equals(round.getRoundType())) {
             validateScoreFormsReady(round.getCompetitionId());
         } else {
@@ -227,16 +229,24 @@ public class RoundValidationPolicy {
                 throw new BaseException(table.getTableName() + "尚未分配酒款");
             }
             boolean allowEmptyMedalSlots = RoundTargetMode.MEDALS.name().equals(table.getTargetMode());
-            if (table.getTargetCount() == null || table.getTargetCount() <= 0
-                    || (!allowEmptyMedalSlots && table.getTargetCount() > entries.size())) {
-                throw new BaseException(table.getTableName() + "目标数量不合法");
+            if (!feedbackOnlyScoreRound) {
+                if (table.getTargetCount() == null || table.getTargetCount() <= 0
+                        || (!allowEmptyMedalSlots && table.getTargetCount() > entries.size())) {
+                    throw new BaseException(table.getTableName() + "目标数量不合法");
+                }
+                validateTargetCountForMode(table.getTableName(), table.getTargetMode(), table.getTargetCount());
             }
-            validateTargetCountForMode(table.getTableName(), table.getTargetMode(), table.getTargetCount());
             if (RoundTargetMode.MEDALS.name().equals(table.getTargetMode())
                     && (table.getCategoryId() == null || !RoundConstants.CATEGORY_MODE_CATEGORY.equals(table.getCategoryMode()))) {
                 throw new BaseException(table.getTableName() + "奖牌轮必须只包含一个投递组别");
             }
         }
+    }
+
+    private boolean isFeedbackOnlyScoreRound(Competition competition, CompetitionRound round) {
+        return competition != null
+                && CompetitionType.FEEDBACK_ONLY.name().equals(competition.getCompetitionType())
+                && RoundType.SCORE.name().equals(round.getRoundType());
     }
 
     public void validateTargetCountForMode(String tableName, String targetMode, Integer targetCount) {

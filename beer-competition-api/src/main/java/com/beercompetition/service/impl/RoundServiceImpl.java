@@ -521,7 +521,7 @@ public class RoundServiceImpl implements RoundService {
             throw new BaseException("只有草稿轮次可以发布");
         }
         roundValidationPolicy.validateCompetitionStageForRoundPublish(competition, round);
-        roundValidationPolicy.validateRoundReady(round);
+        roundValidationPolicy.validateRoundReady(competition, round);
 
         // 2) 更新轮次和桌任务状态
         String nextStatus = RoundType.SCORE.name().equals(round.getRoundType()) ? RoundStatus.PUBLISHED.name() : RoundStatus.IN_PROGRESS.name();
