@@ -30,7 +30,7 @@
           <span :class="['label-chip', `tone-${entryStatusMeta[entry.status].tone}`]">
             {{ entryStatusMeta[entry.status].label }}
           </span>
-          <span class="abv">{{ entry.abv }}</span>
+          <span class="abv">{{ formatAbvValue(entry.abv) }}</span>
         </div>
         <div class="competition-line">{{ competitionName(entry.competitionId) }}</div>
         <h3>{{ entry.name }}</h3>
@@ -38,7 +38,7 @@
         <div class="meta-grid">
           <span>
             <small>ABV</small>
-            <strong>{{ entry.abv }}%</strong>
+            <strong>{{ formatAbvWithUnit(entry.abv) }}</strong>
           </span>
           <span>
             <small>报名费</small>
@@ -107,7 +107,7 @@
           <dl>
             <div><dt>投递组别</dt><dd>{{ selectedEntry.categoryName }}</dd></div>
             <div><dt>基础风格</dt><dd>{{ selectedEntry.style }}</dd></div>
-            <div><dt>ABV</dt><dd>{{ selectedEntry.abv }}%</dd></div>
+            <div><dt>ABV</dt><dd>{{ formatAbvWithUnit(selectedEntry.abv) }}</dd></div>
             <div><dt>现场短编号</dt><dd>{{ selectedEntry.shortCode }}</dd></div>
             <div><dt>提交时间</dt><dd>{{ selectedEntry.submittedAt }}</dd></div>
             <div><dt>支付状态</dt><dd>{{ paymentStatusText(selectedEntry) }}</dd></div>
@@ -120,7 +120,7 @@
           <h3>评审可见信息预览</h3>
           <div class="anonymous-preview">
             <strong>{{ selectedEntry.categoryName }} · {{ selectedEntry.style }}</strong>
-            <p>{{ selectedEntry.categoryName }} · {{ selectedEntry.style }} · {{ selectedEntry.abv }}</p>
+            <p>{{ selectedEntry.categoryName }} · {{ selectedEntry.style }} · {{ formatAbvWithUnit(selectedEntry.abv) }}</p>
             <ul>
               <li v-for="field in selectedEntry.extraFields || []" :key="field.label">
                 <span>{{ field.label }}</span>
@@ -174,6 +174,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { fetchPortalCompetitions, fetchPortalEntries, fetchPortalEntryDetail, requestPortalEntryRefund } from '@/api/portal'
+import { formatAbvValue, formatAbvWithUnit } from '@/utils/formatters'
 import { canSubmitEntry, entryPayAmount, entryPrimaryAction, entryResultPath, entryStatusMeta, isEntryRefundActive, isEntryRefunded, isEntryResultPublished } from './portalViewModels'
 
 const router = useRouter()

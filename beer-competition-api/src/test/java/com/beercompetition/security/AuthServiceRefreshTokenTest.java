@@ -1,5 +1,6 @@
 package com.beercompetition.security;
 
+import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.UnauthorizedException;
 import com.beercompetition.common.util.Md5Util;
 import com.beercompetition.mapper.AdminUserMapper;
@@ -39,6 +40,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -95,12 +97,20 @@ class AuthServiceRefreshTokenTest {
         jwtProperties.setJudgeRefreshTtl(86_400_000);
 
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-        doAnswer(invocation -> {
+        lenient().doAnswer(invocation -> {
             redisStore.put(invocation.getArgument(0), invocation.getArgument(1));
             return null;
         }).when(valueOperations).set(anyString(), any(), any(Duration.class));
-        when(valueOperations.get(anyString())).thenAnswer(invocation -> redisStore.get(invocation.getArgument(0)));
-        when(redisTemplate.delete(anyString())).thenAnswer(invocation -> redisStore.remove(invocation.getArgument(0)) != null);
+        when(valueOperations.increment(anyString())).thenAnswer(invocation -> {
+            String key = invocation.getArgument(0);
+            Object value = redisStore.get(key);
+            Long nextValue = value instanceof Number number ? number.longValue() + 1 : 1L;
+            redisStore.put(key, nextValue);
+            return nextValue;
+        });
+        when(redisTemplate.expire(anyString(), any(Duration.class))).thenReturn(true);
+        lenient().when(valueOperations.get(anyString())).thenAnswer(invocation -> redisStore.get(invocation.getArgument(0)));
+        lenient().when(redisTemplate.delete(anyString())).thenAnswer(invocation -> redisStore.remove(invocation.getArgument(0)) != null);
 
         authService = new AuthServiceImpl(
                 adminUserMapper,
@@ -148,6 +158,30 @@ class AuthServiceRefreshTokenTest {
         assertThat(redisStore).containsKey(refreshKey(refreshResponse.getRefreshToken()));
         assertThatThrownBy(() -> authService.refreshToken(refreshRequest(oldRefreshToken)))
                 .isInstanceOf(UnauthorizedException.class);
+    }
+
+    @Test
+    void adminLoginRejectsMoreThanFiveAttemptsWithinOneMinute() {
+        AdminUser adminUser = AdminUser.builder()
+                .id(1L)
+                .username("admin")
+                .password(Md5Util.encode("123456"))
+                .name("测试管理员")
+                .status(1)
+                .build();
+        when(adminUserMapper.selectOne(any())).thenReturn(adminUser);
+
+        AdminLoginRequest request = loginRequest();
+        request.setPassword("wrong-password");
+        for (int i = 0; i < 5; i++) {
+            assertThatThrownBy(() -> authService.adminLogin(request))
+                    .isInstanceOf(BaseException.class)
+                    .hasMessage("用户名或密码错误");
+        }
+
+        assertThatThrownBy(() -> authService.adminLogin(request))
+                .isInstanceOf(BaseException.class)
+                .hasMessage("登录尝试过于频繁，请1分钟后再试");
     }
 
     private AdminLoginRequest loginRequest() {

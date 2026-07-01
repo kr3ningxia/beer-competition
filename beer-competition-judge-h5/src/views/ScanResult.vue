@@ -121,6 +121,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { fetchCompetitions, fetchEntry, fetchMe, resolveScanEntry } from '@/api/judge'
 import JudgeBottomNav from '@/components/JudgeBottomNav.vue'
+import { formatAbvWithUnit } from '@/utils/formatters'
 import { isRankingTaskType, selectCurrentTask } from '@/utils/judgeTasks'
 
 const route = useRoute()
@@ -159,9 +160,7 @@ function styleCategoryText(source) {
 }
 
 function abvText(source) {
-  if (source?.abv === null || source?.abv === undefined || source?.abv === '') return '-'
-  const value = String(source.abv)
-  return value.includes('%') ? value : `${value}%`
+  return formatAbvWithUnit(source?.abv)
 }
 
 function shortCodeText(source) {

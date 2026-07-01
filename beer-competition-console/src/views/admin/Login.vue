@@ -86,7 +86,7 @@ import { adminLogin } from '@/api/auth'
 import { setSession } from '@/utils/auth'
 
 const router = useRouter()
-const form = reactive({ username: 'admin', password: '123456' })
+const form = reactive({ username: '', password: '' })
 const loading = ref(false)
 
 async function submit() {
@@ -454,6 +454,20 @@ h2 {
 
 :deep(.el-input__inner) {
   color: var(--text);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  caret-color: var(--gold-soft);
+}
+
+:deep(.el-input__inner:-webkit-autofill),
+:deep(.el-input__inner:-webkit-autofill:hover),
+:deep(.el-input__inner:-webkit-autofill:focus),
+:deep(.el-input__inner:-webkit-autofill:active) {
+  -webkit-text-fill-color: var(--text);
+  caret-color: var(--gold-soft);
+  box-shadow: 0 0 0 1000px #182226 inset;
+  transition: background-color 9999s ease-out;
 }
 
 :deep(.el-input__prefix),

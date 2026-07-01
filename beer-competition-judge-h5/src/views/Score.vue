@@ -27,7 +27,7 @@
             </div>
             <div class="entry-side">
               <em>编号： <strong>{{ displayPlainShortCode(entry) }}</strong></em>
-              <span>ABV {{ entry.abv }}</span>
+              <span>ABV {{ formatAbvWithUnit(entry.abv) }}</span>
             </div>
           </div>
 
@@ -137,6 +137,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { createScore, fetchEntry, fetchMe, fetchMyScore, fetchScoreConfig, startScore, updateScore } from '@/api/judge'
+import { formatAbvWithUnit } from '@/utils/formatters'
 
 const route = useRoute()
 const router = useRouter()

@@ -65,10 +65,18 @@
                 />
               </el-select>
             </el-form-item>
-            <el-form-item label="ABV" prop="abv">
-              <div class="number-field">
-                <el-input-number v-model="form.abv" :min="0" :max="20" :precision="1" :step="0.1" controls-position="right" />
-                <span>%</span>
+            <el-form-item label="ABV" prop="abv" class="abv-field">
+              <div class="abv-input-row">
+                <el-input
+                  v-model.trim="form.abv"
+                  inputmode="decimal"
+                  placeholder="例如：5.35"
+                  @blur="form.abv = normalizeAbvInput(form.abv)"
+                >
+                  <template #suffix>
+                    <span class="abv-input-suffix">%</span>
+                  </template>
+                </el-input>
               </div>
             </el-form-item>
           </div>
@@ -173,8 +181,9 @@
               <h3 id="entry-payment-title">选择付款方式</h3>
             </div>
             <div class="payment-method-amount">
-              <span>本款应付</span>
+              <span>{{ earlyBirdActive ? '早鸟价' : '本款应付' }}</span>
               <strong>{{ entryFeeLabel }}</strong>
+              <del v-if="showEarlyBirdOriginalFee">报名费 {{ standardEntryFeeLabel }}</del>
             </div>
           </div>
           <div class="payment-method-options" role="radiogroup" aria-label="选择付款方式">
@@ -303,9 +312,9 @@
             <dt>基础风格</dt>
             <dd>{{ form.style }}</dd>
           </div>
-          <div v-if="form.abv !== null && form.abv !== undefined">
+          <div v-if="form.abv !== null && form.abv !== undefined && form.abv !== ''">
             <dt>ABV</dt>
-            <dd>{{ form.abv }}%</dd>
+            <dd>{{ formatAbvWithUnit(form.abv) }}</dd>
           </div>
           <div
             v-for="field in configuredFields"
@@ -329,6 +338,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import QRCode from 'qrcode'
+import { formatAbvWithUnit, isValidAbvInput, normalizeAbvInput } from '@/utils/formatters'
 import {
   createPortalEntryWechatNativePayment,
   fetchPortalCompetitionDetail,
@@ -365,7 +375,7 @@ const form = reactive({
   name: '',
   categoryId: null,
   style: '',
-  abv: null,
+  abv: '',
   extraFields: {},
   confirmed: false,
   rulesAccepted: false,
@@ -385,6 +395,12 @@ const currentFeeText = computed(() => formatCompetitionFee(selectedCompetition.v
 const entryFeeLabel = computed(() => formatCurrency(currentEntryFee(selectedCompetition.value)))
 const earlyBirdActive = computed(() => isEarlyBirdActive(selectedCompetition.value))
 const earlyBirdDeadlineText = computed(() => formatMonthDayTime(selectedCompetition.value?.earlyBirdDeadline))
+const standardEntryFeeLabel = computed(() => formatCurrency(selectedCompetition.value?.entryFee))
+const showEarlyBirdOriginalFee = computed(() => {
+  const competition = selectedCompetition.value
+  if (!earlyBirdActive.value || competition?.entryFee === null || competition?.entryFee === undefined) return false
+  return Number(competition.entryFee) > Number(currentEntryFee(competition))
+})
 const submitHint = computed(() => {
   if (Number(currentEntryFee(selectedCompetition.value)) <= 0) {
     return '本款无需支付报名费，提交后直接办理标签和送样'
@@ -423,7 +439,18 @@ const formRules = computed(() => {
     name: [{ required: true, message: '请填写酒款名称', trigger: 'blur' }],
     categoryId: [{ required: true, message: '请选择投递组别', trigger: 'change' }],
     style: [{ required: true, message: '请选择基础风格', trigger: 'change' }],
-    abv: [{ required: true, message: '请填写 ABV', trigger: 'change' }],
+    abv: [
+      {
+        validator: (_rule, value, callback) => {
+          if (isValidAbvInput(value)) {
+            callback()
+            return
+          }
+          callback(new Error('请填写 0-99.99 之间的 ABV，最多两位小数'))
+        },
+        trigger: ['blur', 'change'],
+      },
+    ],
     confirmed: [
       {
         validator: (_rule, value, callback) => {
@@ -491,7 +518,7 @@ function syncCompetitionDefaults() {
   if (!selectedCompetition.value) {
     form.categoryId = null
     form.style = ''
-    form.abv = null
+    form.abv = ''
     form.confirmed = false
     form.rulesAccepted = false
     form.extraFields = {}
@@ -499,7 +526,7 @@ function syncCompetitionDefaults() {
   }
   form.categoryId = null
   form.style = ''
-  form.abv = null
+  form.abv = ''
   form.confirmed = false
   form.rulesAccepted = false
   form.extraFields = Object.fromEntries(configuredFields.value.map((field) => [field.fieldKey, getEmptyFieldValue(field)]))
@@ -522,7 +549,7 @@ async function submitEntry() {
       name: form.name,
       categoryId: form.categoryId,
       style: form.style,
-      abv: form.abv,
+      abv: Number(normalizeAbvInput(form.abv)),
       extraFields: form.extraFields,
       rulesAccepted: hasRulesUrl.value ? form.rulesAccepted : undefined,
     })
@@ -812,24 +839,22 @@ function styleLabel(item) {
 
 .form-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.15fr) minmax(150px, 0.72fr);
   gap: 6px 18px;
+  align-items: start;
 }
 
 .full-field {
   max-width: none;
 }
 
-.number-field {
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) auto;
-  gap: 8px;
-  align-items: center;
-  max-width: 360px;
+.abv-input-row {
+  width: 100%;
+  max-width: 190px;
 }
 
-.number-field span {
-  color: #746a5f;
+.abv-input-suffix {
+  color: #5f4d3d;
   font-weight: 800;
 }
 
@@ -970,6 +995,16 @@ function styleLabel(item) {
   color: #8b5c19;
   font-size: 24px;
   line-height: 1.15;
+  white-space: nowrap;
+}
+
+.payment-method-amount del {
+  color: #8d7b69;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+  text-decoration-thickness: 2px;
+  text-decoration-color: rgba(132, 87, 27, 0.55);
   white-space: nowrap;
 }
 
@@ -1345,7 +1380,7 @@ function styleLabel(item) {
     display: grid;
   }
 
-  .number-field {
+  .abv-input-row {
     max-width: none;
   }
 }

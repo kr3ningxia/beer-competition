@@ -230,7 +230,13 @@
               </label>
               <label>
                 <span>ABV</span>
-                <input v-model.trim="editForm.abv" :disabled="!detail.canEdit" inputmode="decimal" />
+                <input
+                  v-model.trim="editForm.abv"
+                  :disabled="!detail.canEdit"
+                  inputmode="decimal"
+                  placeholder="例如：5.35"
+                  @blur="editForm.abv = normalizeAbvInput(editForm.abv)"
+                />
               </label>
             </div>
             <section class="extra-fields">
@@ -384,6 +390,7 @@ import {
   updateAdminEntry,
 } from '@/api/admin'
 import { JUDGE_H5_BASE_URL } from '@/config'
+import { formatAbvWithUnit, isValidAbvInput, normalizeAbvInput } from '@/utils/formatters'
 
 const route = useRoute()
 const router = useRouter()
@@ -661,6 +668,10 @@ async function saveProfile() {
     ElMessage.warning('请填写修改原因')
     return
   }
+  if (!isValidAbvInput(editForm.abv)) {
+    ElMessage.warning('请填写 0-99.99 之间的 ABV，最多两位小数')
+    return
+  }
   if (detail.value.assigned) {
     try {
       await ElMessageBox.confirm('这款酒已经分桌，保存后请核对分桌、晋级和奖项归属', '确认修改？', {
@@ -682,7 +693,7 @@ async function saveProfile() {
       name: editForm.name,
       categoryId: Number(editForm.categoryId),
       style: editForm.style,
-      abv: Number(editForm.abv),
+      abv: Number(normalizeAbvInput(editForm.abv)),
       extraFields,
       reason: editForm.reason,
     })
@@ -1032,7 +1043,7 @@ function buildAdminLabelSvg(label) {
 
   const category = escapeXml(label.categoryName || '组别待确认')
   const style = escapeXml(label.style || 'Style Pending')
-  const abv = label.abv !== '' && label.abv !== null && label.abv !== undefined ? `${label.abv}%` : 'ABV Pending'
+  const abv = label.abv !== '' && label.abv !== null && label.abv !== undefined ? formatAbvWithUnit(label.abv) : 'ABV Pending'
   const code = escapeXml(label.shortCode || 'PENDING')
 
   return `

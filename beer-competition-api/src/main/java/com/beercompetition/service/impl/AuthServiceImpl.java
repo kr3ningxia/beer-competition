@@ -71,9 +71,12 @@ public class AuthServiceImpl implements AuthService {
     private static final String PORTAL_PROFILE_PLACEHOLDER_PREFIX = "待完善";
     private static final String REFRESH_KEY_PREFIX = "beer-competition:auth:refresh:";
     private static final String REFRESH_TOKEN_SEPARATOR = ".";
+    private static final String ADMIN_LOGIN_RETRY_KEY_PREFIX = "beer-competition:auth:admin-login-retry:";
     private static final int REFRESH_SECRET_BYTES = 32;
     private static final int ADMIN_STATUS_ACTIVE = 1;
     private static final int PORTAL_STATUS_ACTIVE = 1;
+    private static final int ADMIN_LOGIN_RETRY_LIMIT = 5;
+    private static final Duration ADMIN_LOGIN_RETRY_WINDOW = Duration.ofMinutes(1);
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final AdminUserMapper adminUserMapper;
@@ -95,14 +98,21 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public LoginResponse adminLogin(AdminLoginRequest request) {
+        // 1) 参数规范化与登录频控
+        String username = request.getUsername().trim();
+        ensureAdminLoginRetryAvailable(username);
+
+        // 2) 查询账号并校验密码
         AdminUser adminUser = adminUserMapper.selectOne(new LambdaQueryWrapper<AdminUser>()
-                .eq(AdminUser::getUsername, request.getUsername()));
+                .eq(AdminUser::getUsername, username));
         if (adminUser == null || adminUser.getStatus() == null || adminUser.getStatus() != 1) {
             throw new BaseException("管理员账号不存在或已禁用");
         }
         if (!Md5Util.encode(request.getPassword()).equals(adminUser.getPassword())) {
             throw new BaseException("用户名或密码错误");
         }
+
+        // 3) 组装并返回登录态
         return buildLoginResponse(adminUser.getId(), adminUser.getName(), UserRole.ADMIN,
                 jwtProperties.getAdminTtl(), jwtProperties.getAdminRefreshTtl());
     }
@@ -351,6 +361,31 @@ public class AuthServiceImpl implements AuthService {
         Object intervalFlag = redisTemplate.opsForValue().get(buildSmsIntervalKey(bizType, phoneHash));
         if (intervalFlag != null) {
             throw new BaseException("验证码发送过于频繁，请稍后再试");
+        }
+    }
+
+    private void ensureAdminLoginRetryAvailable(String username) {
+        String retryKey = buildAdminLoginRetryKey(username);
+        Long retryCount = redisTemplate.opsForValue().increment(retryKey);
+        if (retryCount != null && retryCount == 1) {
+            redisTemplate.expire(retryKey, ADMIN_LOGIN_RETRY_WINDOW);
+        }
+        if (retryCount != null && retryCount > ADMIN_LOGIN_RETRY_LIMIT) {
+            throw new BaseException("登录尝试过于频繁，请1分钟后再试");
+        }
+    }
+
+    private String buildAdminLoginRetryKey(String username) {
+        return ADMIN_LOGIN_RETRY_KEY_PREFIX + hashAdminLoginRetrySubject(username);
+    }
+
+    private String hashAdminLoginRetrySubject(String username) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hashed = digest.digest(username.toLowerCase().getBytes(StandardCharsets.UTF_8));
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(hashed);
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 algorithm unavailable", ex);
         }
     }
 

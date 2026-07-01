@@ -1,6 +1,8 @@
 package com.beercompetition.pojo.dto;
 
+import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -24,7 +26,9 @@ public class AdminEntryUpdateRequest {
     private String style;
 
     @NotNull(message = "ABV不能为空")
-    @DecimalMin(value = "0.0", inclusive = false, message = "ABV必须大于0")
+    @DecimalMin(value = "0.0", message = "ABV不能小于0")
+    @DecimalMax(value = "99.99", message = "ABV不能大于99.99")
+    @Digits(integer = 2, fraction = 2, message = "ABV最多支持两位整数和两位小数")
     private BigDecimal abv;
 
     private Map<String, Object> extraFields;

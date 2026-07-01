@@ -235,7 +235,7 @@ CREATE TABLE `beer_entry` (
   `category_id` bigint NOT NULL COMMENT '投递组别ID',
   `name` varchar(128) NOT NULL COMMENT '参赛酒款名称',
   `style` varchar(128) NOT NULL COMMENT '报名选择的基础风格',
-  `abv` decimal(4,1) NOT NULL COMMENT '酒精度ABV',
+  `abv` decimal(4,2) NOT NULL COMMENT '酒精度ABV',
   `extra_fields_json` json DEFAULT NULL COMMENT '补充报名字段快照JSON',
   `status` varchar(32) NOT NULL COMMENT '酒款报名状态',
   `stored_flag` tinyint NOT NULL DEFAULT '0' COMMENT '是否已入库',

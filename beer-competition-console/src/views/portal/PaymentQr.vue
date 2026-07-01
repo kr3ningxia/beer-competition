@@ -485,6 +485,7 @@ import {
   uploadPortalBankTransferVoucher,
 } from '@/api/portal'
 import { JUDGE_H5_BASE_URL } from '@/config'
+import { formatAbvWithUnit } from '@/utils/formatters'
 import { entryPayAmount, isEntryRefundActive, isEntryRefunded } from './portalViewModels'
 
 const route = useRoute()
@@ -786,7 +787,7 @@ function competitionLabel(entry) {
 function entryMetaLine(entry) {
   const parts = [entry.competitionName || competitionName(entry.competitionId), entry.categoryName]
   if (entry.style) parts.push(entry.style)
-  if (entry.abv !== null && entry.abv !== undefined && entry.abv !== '') parts.push(`${entry.abv}%`)
+  if (entry.abv !== null && entry.abv !== undefined && entry.abv !== '') parts.push(formatAbvWithUnit(entry.abv))
   return parts.filter(Boolean).join(' · ')
 }
 
@@ -1298,7 +1299,7 @@ function buildLabelSvg(label) {
 
   const category = escapeXml(label.categoryName || '组别待确认')
   const style = escapeXml(label.style || 'Style Pending')
-  const abv = label.abv !== '' && label.abv !== null && label.abv !== undefined ? `${label.abv}%` : 'ABV Pending'
+  const abv = label.abv !== '' && label.abv !== null && label.abv !== undefined ? formatAbvWithUnit(label.abv) : 'ABV Pending'
   const code = escapeXml(label.shortCode || 'PENDING')
 
   return `

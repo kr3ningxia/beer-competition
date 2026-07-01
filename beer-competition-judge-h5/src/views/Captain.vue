@@ -81,7 +81,7 @@
       <section class="card">
         <div v-if="entry" class="entry-summary">
           <span>{{ entry.categoryName }}</span>
-          <strong>{{ styleDisplayName(entry) }} · {{ entry.abv }}</strong>
+          <strong>{{ styleDisplayName(entry) }} · {{ formatAbvWithUnit(entry.abv) }}</strong>
         </div>
         <div v-if="entry?.styleCategoryName || entry?.styleDescription" class="style-reference">
           <div>
@@ -201,6 +201,7 @@ import {
   submitScoreRoundTable,
 } from '@/api/judge'
 import JudgeBottomNav from '@/components/JudgeBottomNav.vue'
+import { formatAbvWithUnit } from '@/utils/formatters'
 import { isRankingTaskType, selectCurrentTask } from '@/utils/judgeTasks'
 
 const route = useRoute()

@@ -3,22 +3,43 @@
     <section class="login-card">
       <p class="eyebrow dark-text">评审注册</p>
       <h1>创建评审账号</h1>
-      <p class="login-note">先验证手机号，下一步填写姓名和资质信息。</p>
 
       <label class="field">
         手机号
-        <input v-model="form.phone" class="input" inputmode="tel" placeholder="请输入手机号" />
+        <input
+          v-model="form.phone"
+          class="input"
+          inputmode="tel"
+          maxlength="11"
+          placeholder="请输入手机号"
+          @input="normalizePhone"
+        />
       </label>
 
       <label class="field">
         验证码
         <div class="code-row">
-          <input v-model="form.code" class="input" inputmode="numeric" placeholder="请输入验证码" />
-          <button type="button" class="button secondary" @click="send">获取验证码</button>
+          <input
+            v-model="form.code"
+            class="input"
+            inputmode="numeric"
+            maxlength="6"
+            placeholder="请输入验证码"
+            @input="normalizeCode"
+          />
+          <button
+            type="button"
+            class="button secondary code-button"
+            :class="{ 'is-counting': countdown > 0 }"
+            :disabled="sendDisabled"
+            @click="send"
+          >
+            {{ sendButtonText }}
+          </button>
         </div>
       </label>
 
-      <button class="button primary full submit-button" :disabled="!canSubmit" @click="submit">继续填写资料</button>
+      <button class="button primary full submit-button" :disabled="!canSubmit" @click="submit">创建账号并填写资料</button>
       <button class="button secondary full login-link" type="button" @click="router.push('/login')">已有账号，去登录</button>
       <p v-if="message" class="form-message">{{ message }}</p>
     </section>
@@ -30,21 +51,43 @@ import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { register, sendSmsCode } from '@/api/judge'
 import { setSession } from '@/utils/auth'
+import { useSmsCodeCooldown } from '@/utils/useSmsCodeCooldown'
 
 const router = useRouter()
 const message = ref('')
+const { countdown, sending, sendButtonText, startCountdown } = useSmsCodeCooldown()
 const form = reactive({ phone: '', code: '' })
-const canSubmit = computed(() => form.phone.length >= 11 && form.code.length >= 4)
+const phoneValid = computed(() => /^1\d{10}$/.test(form.phone))
+const canSubmit = computed(() => phoneValid.value && form.code.length >= 4)
+const sendDisabled = computed(() => sending.value || countdown.value > 0 || !phoneValid.value)
 
 async function send() {
-  await sendSmsCode({ phone: form.phone, bizType: 'JUDGE_REGISTER' })
-  message.value = '验证码已发送，请查看手机短信'
+  if (!phoneValid.value) {
+    message.value = '请输入正确手机号后再获取验证码'
+    return
+  }
+  sending.value = true
+  try {
+    await sendSmsCode({ phone: form.phone, bizType: 'JUDGE_REGISTER' })
+    message.value = '验证码已发送，请查看手机短信'
+    startCountdown()
+  } finally {
+    sending.value = false
+  }
 }
 
 async function submit() {
   const data = await register(form)
   setSession(data)
   router.push('/profile/edit')
+}
+
+function normalizePhone(event) {
+  form.phone = String(event.target.value || '').replace(/\D/g, '').slice(0, 11)
+}
+
+function normalizeCode(event) {
+  form.code = String(event.target.value || '').replace(/\D/g, '').slice(0, 6)
 }
 </script>
 
@@ -80,16 +123,31 @@ h1 {
   letter-spacing: 0;
 }
 
-.login-note {
-  margin: 8px 0 18px;
-  color: #667085;
-  line-height: 1.5;
-}
-
 .code-row {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) max-content;
   gap: 8px;
+  margin-top: 8px;
+}
+
+.code-row .input {
+  min-width: 0;
+  margin-top: 0;
+}
+
+.code-row .button {
+  white-space: nowrap;
+}
+
+.code-button {
+  min-width: 112px;
+}
+
+.code-button.is-counting,
+.code-button.is-counting:disabled {
+  color: #8a4b13;
+  background: #f4e7d8;
+  opacity: 1;
 }
 
 .submit-button {
