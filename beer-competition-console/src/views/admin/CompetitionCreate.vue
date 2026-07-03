@@ -35,7 +35,7 @@
           <div class="base-info-groups">
             <label class="wide-field">
               <span>比赛名称</span>
-              <input v-model.trim="draft.name" placeholder="例如 2026 中国精酿啤酒大赛" />
+              <input v-model.trim="draft.name" placeholder="请输入赛事名称" />
             </label>
 
             <section class="form-subgroup">
@@ -492,7 +492,7 @@ const fieldTypeOptions = [
 ]
 
 const draft = reactive({
-  name: '2026 新建精酿啤酒赛',
+  name: '',
   competitionType: 'AWARD',
   date: '2026-08-20',
   registrationStart: '2026-06-10T10:00',

@@ -109,6 +109,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -458,6 +460,9 @@ public class EntryServiceImpl implements EntryService {
                 .requestedTime(LocalDateTime.now())
                 .build();
         entryRefundMapper.insert(refund);
+        if (EntryPayMethod.WECHAT.name().equals(payment.getPayMethod())) {
+            scheduleWechatRefundAutoApproval(refund.getId());
+        }
 
         // 3) 返回最新酒款详情
         return toEntryDetailVO(beerEntryMapper.selectById(entry.getId()));
@@ -1916,7 +1921,7 @@ public class EntryServiceImpl implements EntryService {
         if (Objects.equals(entry.getStoredFlag(), 1) || hasRoundAssignment(entry.getId()) || resultPublished) {
             return false;
         }
-        return refund == null || !ACTIVE_REFUND_STATUSES.contains(refund.getStatus());
+        return refund == null || EntryRefundStatus.REJECTED.name().equals(refund.getStatus());
     }
 
     private String resolveRefundUnavailableReason(BeerEntry entry, Competition competition, EntryPayment payment,
@@ -1945,7 +1950,30 @@ public class EntryServiceImpl implements EntryService {
         if (refund != null && ACTIVE_REFUND_STATUSES.contains(refund.getStatus())) {
             return "退款正在处理中，请勿重复申请";
         }
+        if (refund != null && EntryRefundStatus.FAILED.name().equals(refund.getStatus())) {
+            return "退款暂未成功，请等待组委会处理或联系确认";
+        }
+        if (refund != null && !EntryRefundStatus.REJECTED.name().equals(refund.getStatus())) {
+            return "这款酒已有退款记录，请勿重复申请";
+        }
         return "当前酒款不能申请退款";
+    }
+
+    private void scheduleWechatRefundAutoApproval(Long refundId) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    try {
+                        wechatPaymentService.autoApproveWechatRefund(refundId, "报名截止前自动受理");
+                    } catch (RuntimeException ignored) {
+                        // 退款申请已保存，自动受理失败时由后台退款列表继续处理。
+                    }
+                }
+            });
+            return;
+        }
+        wechatPaymentService.autoApproveWechatRefund(refundId, "报名截止前自动受理");
     }
 
     private EntryDelivery findEntryDelivery(Long beerEntryId) {

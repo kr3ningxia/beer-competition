@@ -3,7 +3,6 @@
     <section class="form-card brewer-card">
       <div class="form-header">
         <h2 class="portal-section-title">提交参赛酒款</h2>
-        <p>填写酒款资料后，选择付款方式并提交报名；付款确认后开放标签下载和送样信息填写</p>
       </div>
 
       <section v-if="selectedCompetition" class="competition-banner">
@@ -292,7 +291,6 @@
 
     <aside v-if="selectedCompetition" class="preview-card">
       <div class="preview-label">
-        <span>报名确认</span>
         <h3>报名确认</h3>
         <div class="receipt-line" />
         <dl>
@@ -420,7 +418,7 @@ const submitButtonLabel = computed(() => {
   if (payMode.value === 'BANK_TRANSFER') {
     return `提交报名并填写转账信息 ${entryFeeLabel.value}`
   }
-  return `提交报名并生成微信支付码 ${entryFeeLabel.value}`
+  return `提交报名并支付 ${entryFeeLabel.value}`
 })
 const receiptStatusText = computed(() => {
   if (!submittedEntry.value) return '下一步：选择付款方式'

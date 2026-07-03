@@ -2,8 +2,10 @@ package com.beercompetition.service;
 
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.pay.WechatPayClient;
+import com.beercompetition.pojo.dto.PortalEntryRefundRequest;
 import com.beercompetition.pojo.enums.EntryPayMethod;
 import com.beercompetition.pojo.enums.EntryPaymentStatus;
+import com.beercompetition.pojo.enums.EntryRefundStatus;
 import com.beercompetition.pojo.enums.EntryStatus;
 import com.beercompetition.testsupport.BeerCompetitionTestData;
 import com.beercompetition.testsupport.IntegrationTestBase;
@@ -20,6 +22,9 @@ class WechatPaymentIntegrationTest extends IntegrationTestBase {
 
     @Autowired
     private WechatPaymentService wechatPaymentService;
+
+    @Autowired
+    private EntryService entryService;
 
     @Test
     void mockNativePaymentSuccessNotifyRegistersEntryAndIsIdempotent() {
@@ -47,6 +52,37 @@ class WechatPaymentIntegrationTest extends IntegrationTestBase {
                 "SELECT COUNT(*) FROM wechat_pay_notify WHERE notify_id = ?",
                 Integer.class,
                 testRun + "-WX-NOTIFY")).isEqualTo(1);
+    }
+
+    @Test
+    void wechatPaidEntryRefundsAutomaticallyBeforeRegistrationDeadline() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        var entry = createPendingEntry(fixture, "微信自动退款");
+
+        asPortal(fixture.portalA().account().getId());
+        var order = wechatPaymentService.createNativePayment(entry.getId());
+        String body = """
+                {"id":"%s-WX-AUTO-REFUND-PAY","event_type":"TRANSACTION.SUCCESS","out_trade_no":"%s","transaction_id":"MOCK-TX-%s","trade_state":"SUCCESS","amount":{"total":10000}}
+                """.formatted(testRun, order.getOutTradeNo(), order.getOutTradeNo());
+        wechatPaymentService.handlePaymentNotify(new WechatPayClient.WechatNotifyRequest(null, null, null, null, body));
+
+        PortalEntryRefundRequest request = new PortalEntryRefundRequest();
+        request.setReason("报名调整");
+        entryService.requestPortalEntryRefund(entry.getId(), request);
+
+        assertEntryStatus(entry.getId(), EntryStatus.CANCELED);
+        assertPayment(entry.getId(), EntryPaymentStatus.REFUNDED, EntryPayMethod.WECHAT);
+        var refund = jdbcTemplate.queryForMap("""
+                SELECT status, amount, out_refund_no, wechat_refund_status
+                FROM entry_refund
+                WHERE beer_entry_id = ?
+                ORDER BY id DESC
+                LIMIT 1
+                """, entry.getId());
+        assertThat(refund.get("status")).isEqualTo(EntryRefundStatus.SUCCESS.name());
+        assertThat(refund.get("amount").toString()).isEqualTo("100.00");
+        assertThat((String) refund.get("out_refund_no")).startsWith("WRF");
+        assertThat(refund.get("wechat_refund_status")).isEqualTo("SUCCESS");
     }
 
     @Test

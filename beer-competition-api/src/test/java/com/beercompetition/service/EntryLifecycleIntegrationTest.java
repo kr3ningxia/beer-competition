@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -109,5 +110,45 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
         assertThat(entryStatus).isEqualTo(EntryStatus.CANCELED.name());
         assertThat(paymentStatus).isEqualTo(EntryPaymentStatus.REFUNDED.name());
         assertThat(refundStatus).isEqualTo(EntryRefundStatus.SUCCESS.name());
+    }
+
+    @Test
+    void refundRequestIsRejectedAfterRegistrationDeadline() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        var refundable = testData.createEntry(testRun, fixture.competition().getId(), fixture.portalA().brewery().getId(),
+                fixture.category().getId(), testRun + "-截止后退款", EntryStatus.REGISTERED, true);
+        jdbcTemplate.update("UPDATE competition SET registration_deadline = ? WHERE id = ?",
+                LocalDateTime.now().minusDays(1), fixture.competition().getId());
+
+        asPortal(fixture.portalA().account().getId());
+        PortalEntryRefundRequest request = new PortalEntryRefundRequest();
+        request.setReason("测试退款");
+
+        assertThatThrownBy(() -> entryService.requestPortalEntryRefund(refundable.getId(), request))
+                .isInstanceOf(BaseException.class)
+                .hasMessageContaining("报名截止后不能申请退款");
+    }
+
+    @Test
+    void failedRefundCannotCreateDuplicatePortalRefundRequest() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        var refundable = testData.createEntry(testRun, fixture.competition().getId(), fixture.portalA().brewery().getId(),
+                fixture.category().getId(), testRun + "-失败退款", EntryStatus.REGISTERED, true);
+        Long paymentId = jdbcTemplate.queryForObject("SELECT id FROM entry_payment WHERE beer_entry_id = ?",
+                Long.class, refundable.getId());
+        jdbcTemplate.update("""
+                INSERT INTO entry_refund
+                  (beer_entry_id, entry_payment_id, refund_no, amount, status, reason,
+                   requested_by_portal_id, requested_time)
+                VALUES (?, ?, ?, 100.00, 'FAILED', '测试退款失败', ?, NOW())
+                """, refundable.getId(), paymentId, testRun + "-RF-FAILED", fixture.portalA().account().getId());
+
+        asPortal(fixture.portalA().account().getId());
+        PortalEntryRefundRequest request = new PortalEntryRefundRequest();
+        request.setReason("再次退款");
+
+        assertThatThrownBy(() -> entryService.requestPortalEntryRefund(refundable.getId(), request))
+                .isInstanceOf(BaseException.class)
+                .hasMessageContaining("退款暂未成功");
     }
 }

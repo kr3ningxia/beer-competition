@@ -1495,7 +1495,7 @@ small,
 .category-list {
   display: grid;
   align-content: start;
-  gap: 3px;
+  gap: 6px;
   min-height: 0;
   margin-top: 10px;
   overflow: auto;
@@ -1505,10 +1505,10 @@ small,
 .category-list button {
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr) auto;
-  gap: 7px;
+  column-gap: 8px;
   align-items: center;
-  min-height: 36px;
-  padding: 7px 8px;
+  min-height: 44px;
+  padding: 9px 8px;
   color: rgba(237, 244, 246, 0.82);
   text-align: left;
   border: 0;
@@ -1531,7 +1531,7 @@ small,
   display: -webkit-box;
   min-width: 0;
   overflow: hidden;
-  line-height: 1.18;
+  line-height: 1.38;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }

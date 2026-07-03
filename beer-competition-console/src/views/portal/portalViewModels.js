@@ -197,7 +197,7 @@ export function entryTimeline(entry) {
     items.splice(2, 0, {
       label: isEntryRefunded(entry) ? '退款完成' : '退款申请',
       done: isEntryRefunded(entry),
-      hint: isEntryRefunded(entry) ? '报名费已退款，报名已取消' : '退款申请已提交，等待组委会处理',
+      hint: isEntryRefunded(entry) ? '报名费已退款，报名已取消' : '退款申请已提交，等待退款结果',
     })
   }
   return items

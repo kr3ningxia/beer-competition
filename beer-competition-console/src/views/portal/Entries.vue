@@ -315,7 +315,7 @@ function timeline(entry) {
   if (entry.refundStatus) {
     items.splice(2, 0, {
       label: isEntryRefunded(entry) ? '退款完成' : '退款申请',
-      hint: isEntryRefunded(entry) ? '报名已取消' : '等待组委会处理',
+      hint: isEntryRefunded(entry) ? '报名已取消' : '等待退款结果',
       time: entry.refundProcessedAt || entry.refundRequestedAt,
       done: isEntryRefunded(entry),
     })
@@ -364,7 +364,7 @@ async function submitRefundRequest(entry) {
   }
   try {
     const { value } = await ElMessageBox.prompt(
-      '退款成功后，这款酒将退出本场比赛，现场标签和送样操作会停止使用',
+      '提交后，这款酒将退出本场比赛；微信支付将原路退回，银行转账由组委会联系处理',
       '申请退款',
       {
         confirmButtonText: '提交退款申请',

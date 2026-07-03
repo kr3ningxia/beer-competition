@@ -639,7 +639,7 @@ const currentAction = computed(() => {
   if (isEntryRefundActive(entry)) {
     return {
       title: '退款申请已提交',
-      description: '组委会确认后，报名费将按原支付方式退回',
+      description: '微信支付将原路退回；银行转账由组委会联系处理',
     }
   }
 
@@ -855,7 +855,7 @@ const refundCardDescription = computed(() => {
   if (isEntryRefunded(selectedEntry.value)) return '报名费已完成退款，这款酒不会继续进入本场比赛流程'
   if (selectedEntry.value?.refundStatus === 'REJECTED') return '组委会未通过本次退款申请，标签和送样操作已恢复'
   if (selectedEntry.value?.refundStatus === 'FAILED') return '退款处理失败，请等待组委会重新处理或联系确认'
-  return '组委会确认后，报名费将按原支付方式退回'
+  return '微信支付将原路退回；银行转账由组委会联系处理'
 })
 
 function refundStatusText(status) {
@@ -1018,7 +1018,7 @@ async function submitRefundRequest() {
   if (!selectedEntry.value?.canRequestRefund) return
   try {
     const { value } = await ElMessageBox.prompt(
-      '退款成功后，这款酒将退出本场比赛，现场标签和送样操作会停止使用',
+      '提交后，这款酒将退出本场比赛；微信支付将原路退回，银行转账由组委会联系处理',
       '申请退款',
       {
         confirmButtonText: '提交退款申请',

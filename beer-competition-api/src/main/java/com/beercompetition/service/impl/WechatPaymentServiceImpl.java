@@ -209,6 +209,31 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
     }
 
     @Override
+    public void autoApproveWechatRefund(Long refundId, String reason) {
+        // 1) 自动受理仅处理微信支付退款
+        RefundContext context = transactionTemplate.execute(status -> prepareWechatAutoRefund(refundId, reason));
+        if (context == null) {
+            return;
+        }
+
+        // 2) 调用微信原路退款，失败时登记为可后台重试
+        try {
+            WechatPayClient.RefundResult result = wechatPayClient.createRefund(new WechatPayClient.RefundRequest(
+                    context.payment().getOutTradeNo(),
+                    context.payment().getWechatTransactionId(),
+                    context.refund().getOutRefundNo(),
+                    context.refund().getReason(),
+                    context.refund().getAmount(),
+                    context.payment().getAmount()
+            ));
+            transactionTemplate.executeWithoutResult(status -> applyRefundResult(result.outRefundNo(), result.refundId(),
+                    result.refundStatus(), result.successTime(), null));
+        } catch (RuntimeException ex) {
+            transactionTemplate.executeWithoutResult(status -> markAutoRefundFailed(refundId, ex));
+        }
+    }
+
+    @Override
     public void retryRefund(Long refundId, String reason, Long adminId) {
         EntryRefund refund = requireRefund(refundId);
         if (!EntryRefundStatus.FAILED.name().equals(refund.getStatus())) {
@@ -325,6 +350,44 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
         return new RefundContext(refund, payment, entry);
     }
 
+    private RefundContext prepareWechatAutoRefund(Long refundId, String reason) {
+        EntryRefund refund = requireRefund(refundId);
+        if (!EntryRefundStatus.REQUESTED.name().equals(refund.getStatus())) {
+            throw new BaseException("当前退款状态不能自动受理");
+        }
+        BeerEntry entry = requireEntry(refund.getBeerEntryId());
+        EntryPayment payment = findPayment(entry.getId());
+        if (payment == null || !EntryPaymentStatus.PAID.name().equals(payment.getStatus())) {
+            throw new BaseException("只有已支付报名可以退款");
+        }
+        if (!EntryPayMethod.WECHAT.name().equals(payment.getPayMethod())) {
+            throw new BaseException("只有微信支付可以自动退款");
+        }
+        if (!StringUtils.hasText(payment.getOutTradeNo())) {
+            throw new BaseException("缺少支付订单号，无法发起微信退款");
+        }
+        if (!StringUtils.hasText(refund.getOutRefundNo())) {
+            refund.setOutRefundNo(generateOutRefundNo());
+        }
+        refund.setStatus(EntryRefundStatus.PROCESSING.name());
+        refund.setProcessedByAdminId(null);
+        refund.setProcessedTime(LocalDateTime.now());
+        refund.setFailReason(null);
+        entryRefundMapper.updateById(refund);
+        return new RefundContext(refund, payment, entry);
+    }
+
+    private void markAutoRefundFailed(Long refundId, RuntimeException ex) {
+        EntryRefund refund = requireRefund(refundId);
+        if (EntryRefundStatus.SUCCESS.name().equals(refund.getStatus())) {
+            return;
+        }
+        refund.setStatus(EntryRefundStatus.FAILED.name());
+        refund.setFailReason(limitFailReason("微信退款发起失败：" + (ex.getMessage() == null ? "请稍后重试" : ex.getMessage())));
+        refund.setLastQueryTime(LocalDateTime.now());
+        entryRefundMapper.updateById(refund);
+    }
+
     private void applyManualRefundSuccess(Long refundId, Long adminId) {
         EntryRefund refund = requireRefund(refundId);
         EntryPayment payment = entryPaymentMapper.selectById(refund.getEntryPaymentId());
@@ -385,6 +448,13 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
         refund.setStatus(EntryRefundStatus.FAILED.name());
         refund.setFailReason("微信退款状态：" + (StringUtils.hasText(refundStatus) ? refundStatus : "UNKNOWN"));
         entryRefundMapper.updateById(refund);
+    }
+
+    private String limitFailReason(String failReason) {
+        if (!StringUtils.hasText(failReason)) {
+            return null;
+        }
+        return failReason.length() <= 300 ? failReason : failReason.substring(0, 300);
     }
 
     private boolean canReusePaymentQr(EntryPayment payment, LocalDateTime now) {

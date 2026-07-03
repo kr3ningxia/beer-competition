@@ -16,5 +16,7 @@ public interface WechatPaymentService {
 
     void approveRefund(Long refundId, String reason, Long adminId);
 
+    void autoApproveWechatRefund(Long refundId, String reason);
+
     void retryRefund(Long refundId, String reason, Long adminId);
 }
