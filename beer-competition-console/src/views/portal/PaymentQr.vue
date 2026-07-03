@@ -360,7 +360,7 @@
 
           <el-form v-else label-position="top" class="delivery-form">
             <div class="delivery-grid">
-              <el-form-item label="送样方式">
+              <el-form-item label="送样方式" class="delivery-method-field">
                 <div v-if="fixedDeliveryMethod" class="fixed-delivery-method">
                   {{ deliveryMethodText(fixedDeliveryMethod) }}
                 </div>
@@ -370,11 +370,11 @@
                 </el-radio-group>
               </el-form-item>
 
-              <el-form-item v-if="deliveryForm.deliveryMethod === 'EXPRESS'" label="快递公司">
+              <el-form-item v-if="deliveryForm.deliveryMethod === 'EXPRESS'" label="快递公司" class="delivery-carrier-field">
                 <el-input v-model.trim="deliveryForm.carrier" placeholder="例如：顺丰、京东快递" />
               </el-form-item>
 
-              <el-form-item v-if="deliveryForm.deliveryMethod === 'EXPRESS'" label="快递单号">
+              <el-form-item v-if="deliveryForm.deliveryMethod === 'EXPRESS'" label="快递单号" class="delivery-tracking-field">
                 <el-input v-model.trim="deliveryForm.trackingNo" placeholder="填写本次送样的快递单号" />
               </el-form-item>
 
@@ -390,7 +390,7 @@
               </el-form-item>
             </div>
 
-            <div class="button-row">
+            <div class="button-row delivery-form-actions">
               <el-button type="primary" :loading="savingDelivery" @click="saveDelivery">
                 保存并提交送样信息
               </el-button>
@@ -1298,8 +1298,6 @@ function buildLabelSvg(label) {
   }
 
   const category = escapeXml(label.categoryName || '组别待确认')
-  const style = escapeXml(label.style || 'Style Pending')
-  const abv = label.abv !== '' && label.abv !== null && label.abv !== undefined ? formatAbvWithUnit(label.abv) : 'ABV Pending'
   const code = escapeXml(label.shortCode || 'PENDING')
 
   return `
@@ -1309,9 +1307,9 @@ function buildLabelSvg(label) {
       <text x="130" y="44" text-anchor="middle" font-size="12" font-weight="700" letter-spacing="1.4" fill="#8c6330">现场评审标签</text>
       <rect x="28" y="64" width="204" height="204" rx="18" fill="#f7ecd8" stroke="#3a2818" stroke-width="10"/>
       ${cells.join('')}
-      <text x="130" y="292" text-anchor="middle" font-size="12" font-weight="700" fill="#8c6330">现场短编号</text>
+      <text x="130" y="292" text-anchor="middle" font-size="12" font-weight="700" fill="#8c6330">参赛编号</text>
       <text x="130" y="318" text-anchor="middle" font-size="28" font-weight="900" fill="#24170f">${code}</text>
-      <text x="130" y="340" text-anchor="middle" font-size="13" fill="#665647">${category} · ${style} · ${abv}</text>
+      <text x="130" y="340" text-anchor="middle" font-size="13" fill="#665647">组别：${category}</text>
     </svg>
   `
 }
@@ -2085,6 +2083,10 @@ dd {
   margin-top: 16px;
 }
 
+.delivery-form-actions {
+  margin-top: 18px;
+}
+
 .delivery-refresh-button {
   width: 34px;
   min-width: 34px;
@@ -2122,8 +2124,26 @@ dd {
 
 .delivery-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 16px;
+  grid-template-columns: minmax(180px, 1fr) minmax(300px, 1.75fr);
+  align-items: start;
+  gap: 18px 16px;
+}
+
+.delivery-grid :deep(.el-form-item) {
+  margin-bottom: 0;
+}
+
+.delivery-method-field {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.delivery-carrier-field {
+  min-width: 0;
+}
+
+.delivery-tracking-field {
+  min-width: 0;
 }
 
 .full-width {
