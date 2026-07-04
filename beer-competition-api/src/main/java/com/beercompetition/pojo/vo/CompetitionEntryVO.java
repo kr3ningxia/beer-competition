@@ -3,7 +3,9 @@ package com.beercompetition.pojo.vo;
 import lombok.Builder;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @Builder
@@ -23,6 +25,8 @@ public class CompetitionEntryVO {
     private String styleCategoryName;
     private String styleCode;
     private String styleDescription;
+    private BigDecimal abv;
+    private List<EntryExtraFieldVO> extraFields;
     private String status;
     private String paymentStatus;
     private LocalDateTime paidTime;

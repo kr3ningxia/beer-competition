@@ -12,7 +12,9 @@ import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.CompetitionRoundMapper;
 import com.beercompetition.mapper.CompetitionScoreConfigMapper;
 import com.beercompetition.mapper.CompetitionStyleConfigMapper;
+import com.beercompetition.mapper.BeerEntryExtraFieldMapper;
 import com.beercompetition.mapper.EntryDeliveryMapper;
+import com.beercompetition.mapper.EntryFieldConfigMapper;
 import com.beercompetition.mapper.EntryPaymentMapper;
 import com.beercompetition.mapper.EntryRefundMapper;
 import com.beercompetition.mapper.JudgeAccountMapper;
@@ -49,6 +51,7 @@ import com.beercompetition.pojo.enums.RoundStatus;
 import com.beercompetition.pojo.enums.RoundTargetMode;
 import com.beercompetition.pojo.enums.RoundType;
 import com.beercompetition.pojo.po.BeerEntry;
+import com.beercompetition.pojo.po.BeerEntryExtraField;
 import com.beercompetition.pojo.po.Brewery;
 import com.beercompetition.pojo.po.Competition;
 import com.beercompetition.pojo.po.CompetitionCategory;
@@ -56,6 +59,7 @@ import com.beercompetition.pojo.po.CompetitionRound;
 import com.beercompetition.pojo.po.CompetitionScoreConfig;
 import com.beercompetition.pojo.po.CompetitionStyleConfig;
 import com.beercompetition.pojo.po.EntryDelivery;
+import com.beercompetition.pojo.po.EntryFieldConfig;
 import com.beercompetition.pojo.po.EntryPayment;
 import com.beercompetition.pojo.po.EntryRefund;
 import com.beercompetition.pojo.po.EntryScanLabel;
@@ -71,6 +75,7 @@ import com.beercompetition.pojo.po.RoundTableMember;
 import com.beercompetition.pojo.po.ScoreRecord;
 import com.beercompetition.pojo.vo.CompetitionEntryVO;
 import com.beercompetition.pojo.vo.CompetitionRoundVO;
+import com.beercompetition.pojo.vo.EntryExtraFieldVO;
 import com.beercompetition.pojo.vo.JudgeRoundTableVO;
 import com.beercompetition.pojo.vo.JudgeTaskVO;
 import com.beercompetition.pojo.vo.RankingConfirmationSlotVO;
@@ -137,6 +142,8 @@ public class RoundServiceImpl implements RoundService {
     private final JudgeAssignmentMapper judgeAssignmentMapper;
     private final JudgeAccountMapper judgeAccountMapper;
     private final BeerEntryMapper beerEntryMapper;
+    private final BeerEntryExtraFieldMapper beerEntryExtraFieldMapper;
+    private final EntryFieldConfigMapper entryFieldConfigMapper;
     private final ScoreRecordMapper scoreRecordMapper;
     private final CompetitionRoundMapper competitionRoundMapper;
     private final RoundTableMapper roundTableMapper;
@@ -1543,6 +1550,8 @@ public class RoundServiceImpl implements RoundService {
                 .styleCategoryName(style == null ? null : style.getCategoryName())
                 .styleCode(style == null ? null : style.getStyleCode())
                 .styleDescription(style == null ? null : style.getDescription())
+                .abv(entry.getAbv())
+                .extraFields(listJudgeVisibleExtraFields(entry))
                 .status(entry.getStatus())
                 .paymentStatus(payment == null ? EntryPaymentStatus.UNPAID.name() : payment.getStatus())
                 .paidTime(payment == null ? null : payment.getPaidTime())
@@ -1563,6 +1572,37 @@ public class RoundServiceImpl implements RoundService {
                 .sourceTable(latestResult == null || tableById.get(latestResult.getRoundTableId()) == null ? "" : tableById.get(latestResult.getRoundTableId()).getTableName())
                 .sourceResult(latestResult == null ? "" : resolveSlotLabel(latestResult))
                 .build();
+    }
+
+    private List<EntryExtraFieldVO> listJudgeVisibleExtraFields(BeerEntry entry) {
+        Set<String> visibleKeys = listEntryFieldConfigs(entry.getCompetitionId()).stream()
+                .filter(item -> Objects.equals(item.getVisibleToJudges(), FLAG_TRUE))
+                .map(EntryFieldConfig::getFieldKey)
+                .collect(Collectors.toSet());
+        if (visibleKeys.isEmpty()) {
+            return List.of();
+        }
+        return beerEntryExtraFieldMapper.selectList(new LambdaQueryWrapper<BeerEntryExtraField>()
+                        .eq(BeerEntryExtraField::getBeerEntryId, entry.getId()))
+                .stream()
+                .filter(item -> visibleKeys.contains(item.getFieldKey()))
+                .map(this::toEntryExtraFieldVO)
+                .toList();
+    }
+
+    private EntryExtraFieldVO toEntryExtraFieldVO(BeerEntryExtraField item) {
+        return EntryExtraFieldVO.builder()
+                .key(item.getFieldKey())
+                .label(item.getFieldLabel())
+                .value(item.getFieldValue())
+                .build();
+    }
+
+    private List<EntryFieldConfig> listEntryFieldConfigs(Long competitionId) {
+        return entryFieldConfigMapper.selectList(new LambdaQueryWrapper<EntryFieldConfig>()
+                .eq(EntryFieldConfig::getCompetitionId, competitionId)
+                .orderByAsc(EntryFieldConfig::getSortOrder)
+                .orderByAsc(EntryFieldConfig::getId));
     }
 
     private Long resolveCategoryId(RoundTableAllocationRequest table, Map<String, BeerEntry> entryMap) {

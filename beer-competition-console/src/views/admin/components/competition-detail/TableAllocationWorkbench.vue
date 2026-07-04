@@ -217,6 +217,14 @@
             新增桌
           </button>
           <button
+            v-if="canSyncRoundCandidates"
+            class="main-action"
+            type="button"
+            @click="$emit('syncRoundCandidates')"
+          >
+            同步候选酒款
+          </button>
+          <button
             :class="['main-action', { blocked: !canRunPrimaryRoundAction }]"
             type="button"
             :aria-disabled="!canRunPrimaryRoundAction"
@@ -624,6 +632,14 @@
             新增桌
           </button>
           <button
+            v-if="canSyncRoundCandidates"
+            class="main-action"
+            type="button"
+            @click="$emit('syncRoundCandidates')"
+          >
+            同步候选酒款
+          </button>
+          <button
             v-if="currentRound"
             :class="['main-action', { blocked: !canRunPrimaryRoundAction }]"
             type="button"
@@ -909,6 +925,12 @@ const displayRounds = computed(() => {
 const canRunPrimaryRoundAction = computed(() => {
   return props.canPublish
 })
+const canSyncRoundCandidates = computed(() => (
+  props.currentRound?.type === 'RANKING'
+    && props.currentRound?.status === 'DRAFT'
+    && props.currentRound?.sourceLocked
+    && !props.currentRound?.candidatesSynced
+))
 const primaryRoundActionLabel = computed(() => {
   return props.currentRound?.type === 'SCORE' ? '发布给评审' : '发布给桌长和参与评审'
 })

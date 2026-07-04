@@ -80,6 +80,9 @@
                 {{ displayEntryOption(entry) }}
               </option>
             </select>
+            <div v-if="findEntryById(slot.beerEntryId)" class="slot-entry-summary">
+              {{ entrySupplementLine(findEntryById(slot.beerEntryId), 1) }}
+            </div>
           </template>
         </article>
       </div>
@@ -118,10 +121,61 @@
           @pointermove="movePointerDrag($event)"
           @pointerup="endPointerDrag($event)"
           @pointercancel="cancelPointerDrag"
-          @click="handleEntryClick"
+          @click="handleEntryClick(entry, $event)"
         >
-          <strong>{{ displayShortCode(entry) }}</strong>
-          <small>{{ entryMeta(entry) }}</small>
+          <div class="entry-row-head">
+            <div class="entry-main">
+              <strong>{{ displayShortCode(entry) }}</strong>
+              <small>{{ entryMeta(entry) }}</small>
+            </div>
+            <div class="entry-row-actions">
+              <span v-if="isEntryUsed(entry.id)" class="entry-used-tag">已选</span>
+              <button
+                class="entry-expand-button"
+                type="button"
+                :aria-label="`${displayShortCode(entry)}详情`"
+                :aria-expanded="expandedEntryId === entry.id"
+                @click.stop="toggleEntryDetail(entry)"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          <p class="entry-supplement">{{ entrySupplementLine(entry) }}</p>
+
+          <section v-if="expandedEntryId === entry.id" class="entry-detail-panel" @click.stop>
+            <dl class="entry-detail-grid">
+              <div>
+                <dt>投递组别</dt>
+                <dd>{{ entry.categoryName || '-' }}</dd>
+              </div>
+              <div>
+                <dt>基础风格</dt>
+                <dd>{{ entry.style || '-' }}</dd>
+              </div>
+              <div>
+                <dt>ABV</dt>
+                <dd>{{ abvText(entry) }}</dd>
+              </div>
+            </dl>
+
+            <div v-if="visibleExtraFields(entry).length" class="entry-extra-list">
+              <div v-for="field in visibleExtraFields(entry)" :key="field.key" class="entry-extra-row">
+                <span>{{ field.label }}</span>
+                <strong>{{ field.value }}</strong>
+              </div>
+            </div>
+
+            <button
+              class="style-detail-link"
+              type="button"
+              @click.stop="openStyleDetail(entry)"
+            >
+              查看风格说明
+            </button>
+          </section>
         </article>
       </div>
     </section>
@@ -177,6 +231,43 @@
       <strong>{{ displayShortCode(dragGhost.entry) }}</strong>
       <small>{{ entryMeta(dragGhost.entry) }}</small>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="styleDetailEntry"
+        class="style-detail-backdrop"
+        role="presentation"
+        @click.self="closeStyleDetail"
+      >
+        <section
+          class="style-detail-sheet"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="ranking-style-detail-title"
+        >
+          <header class="style-detail-head">
+            <div>
+              <span>风格说明</span>
+              <h2 id="ranking-style-detail-title">{{ styleCategoryText(styleDetailEntry) }}</h2>
+              <p>{{ styleDetailEntry.style || '基础风格' }}</p>
+            </div>
+            <button class="style-detail-close" type="button" aria-label="关闭风格说明" @click="closeStyleDetail">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 6l12 12M18 6 6 18" />
+              </svg>
+            </button>
+          </header>
+
+          <div class="style-detail-body">
+            <p>{{ styleDetailText.main }}</p>
+            <section v-if="styleDetailText.metrics" class="style-metrics-panel">
+              <span>指标范围</span>
+              <p>{{ styleDetailText.metrics }}</p>
+            </section>
+          </div>
+        </section>
+      </div>
+    </Teleport>
   </main>
 </template>
 
@@ -185,6 +276,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Html5Qrcode } from 'html5-qrcode'
 import { fetchRoundTable, saveRankingDraft, submitRanking } from '@/api/judge'
+import { formatAbvWithUnit } from '@/utils/formatters'
 
 const route = useRoute()
 const router = useRouter()
@@ -211,6 +303,8 @@ const pointerStart = ref(null)
 const pointerDragging = ref(false)
 const dragGhost = ref(null)
 const suppressEntryClick = ref(false)
+const expandedEntryId = ref(null)
+const styleDetailEntry = ref(null)
 let qrReader = null
 let scanLocked = false
 
@@ -290,6 +384,7 @@ const submitButtonText = computed(() => {
   return submitted.value ? '重新提交同桌确认' : '提交同桌确认'
 })
 const confirmTitle = computed(() => '提交同桌确认')
+const styleDetailText = computed(() => splitStyleDescription(styleDetailEntry.value?.styleDescription))
 
 function displayShortCode(entry) {
   return entry?.shortCode || '编号'
@@ -301,11 +396,40 @@ function displaySlotLabel(slot) {
 }
 
 function displayEntryOption(entry) {
-  return [displayShortCode(entry), entry?.categoryName, entry?.style].filter(Boolean).join(' · ')
+  return [displayShortCode(entry), entry?.categoryName, entry?.style, abvText(entry, '')].filter(Boolean).join(' · ')
 }
 
 function entryMeta(entry) {
   return [entry?.categoryName, entry?.style].filter(Boolean).join(' · ') || '-'
+}
+
+function abvText(entry, emptyText = '-') {
+  return formatAbvWithUnit(entry?.abv, emptyText)
+}
+
+function visibleExtraFields(entry) {
+  return (entry?.extraFields || []).filter((field) => String(field?.value || '').trim())
+}
+
+function entrySupplementLine(entry, maxExtraCount = 2) {
+  const parts = []
+  const abv = abvText(entry, '')
+  if (abv) parts.push(`ABV ${abv}`)
+  const fields = visibleExtraFields(entry)
+  fields.slice(0, maxExtraCount).forEach((field) => {
+    parts.push(`${field.label}：${field.value}`)
+  })
+  const remaining = fields.length - maxExtraCount
+  if (remaining > 0) parts.push(`+${remaining} 项`)
+  return parts.join(' · ') || '暂无补充信息'
+}
+
+function toggleEntryDetail(entry) {
+  expandedEntryId.value = expandedEntryId.value === entry.id ? null : entry.id
+}
+
+function styleCategoryText(entry) {
+  return entry?.styleCategoryName || entry?.categoryName || '-'
 }
 
 function findEntryById(id) {
@@ -316,11 +440,34 @@ function isEntryUsed(entryId) {
   return slots.value.some((slot) => String(slot.beerEntryId) === String(entryId))
 }
 
-function handleEntryClick(event) {
-  if (!suppressEntryClick.value) return
-  event.preventDefault()
-  event.stopPropagation()
-  suppressEntryClick.value = false
+function handleEntryClick(entry, event) {
+  if (suppressEntryClick.value) {
+    event.preventDefault()
+    event.stopPropagation()
+    suppressEntryClick.value = false
+    return
+  }
+  toggleEntryDetail(entry)
+}
+
+function openStyleDetail(entry) {
+  styleDetailEntry.value = entry
+}
+
+function closeStyleDetail() {
+  styleDetailEntry.value = null
+}
+
+function splitStyleDescription(description) {
+  const text = String(description || '').trim()
+  if (!text) return { main: '暂无风格说明。', metrics: '' }
+  const marker = '指标范围：'
+  const markerIndex = text.indexOf(marker)
+  if (markerIndex < 0) return { main: text, metrics: '' }
+  return {
+    main: text.slice(0, markerIndex).trim(),
+    metrics: text.slice(markerIndex + marker.length).trim(),
+  }
 }
 
 function dragEntry(entry, event) {
@@ -749,6 +896,15 @@ onBeforeUnmount(() => {
   background-color: #f9fafb;
 }
 
+.slot-entry-summary {
+  margin-top: 7px;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .slot-clear-button {
   border: 0;
   border-radius: 999px;
@@ -824,14 +980,163 @@ onBeforeUnmount(() => {
   transition: border-color 0.18s ease, background-color 0.18s ease, transform 0.18s ease;
 }
 
-.entry-row strong,
-.entry-row small {
-  display: block;
+.entry-row-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
 }
 
-.entry-row small {
+.entry-main {
+  min-width: 0;
+}
+
+.entry-main strong,
+.entry-main small {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.entry-main small {
   margin-top: 5px;
   color: #667085;
+}
+
+.entry-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 0 auto;
+}
+
+.entry-used-tag {
+  border-radius: 999px;
+  padding: 4px 7px;
+  color: #667085;
+  background: #eef2f6;
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1;
+}
+
+.entry-expand-button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+  color: #475467;
+  background: #fff;
+}
+
+.entry-expand-button svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.18s ease;
+}
+
+.entry-expand-button[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
+.entry-supplement {
+  margin: 8px 0 0;
+  color: #667085;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.entry-detail-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  border-top: 1px solid #edf0f3;
+  padding-top: 12px;
+}
+
+.entry-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.entry-detail-grid div {
+  min-width: 0;
+  border-radius: 8px;
+  padding: 9px;
+  background: #f8fafc;
+}
+
+.entry-detail-grid dt,
+.entry-detail-grid dd {
+  margin: 0;
+}
+
+.entry-detail-grid dt {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.entry-detail-grid dd {
+  margin-top: 4px;
+  color: #18222f;
+  font-size: 13px;
+  font-weight: 850;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.entry-extra-list {
+  display: grid;
+  gap: 7px;
+}
+
+.entry-extra-row {
+  display: grid;
+  grid-template-columns: minmax(80px, 0.36fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  border: 1px solid #edf0f3;
+  border-radius: 8px;
+  padding: 8px 9px;
+  background: #fff;
+}
+
+.entry-extra-row span {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.entry-extra-row strong {
+  min-width: 0;
+  color: #18222f;
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.style-detail-link {
+  justify-self: start;
+  border: 1px solid #d0d5dd;
+  border-radius: 999px;
+  padding: 8px 12px;
+  color: #344054;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 850;
+  line-height: 1;
 }
 
 .entry-row.dragging {
@@ -1082,8 +1387,126 @@ onBeforeUnmount(() => {
   min-width: 74px;
 }
 
+.style-detail-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  padding: 18px;
+  background: rgba(16, 24, 32, 0.54);
+}
+
+.style-detail-sheet {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(100%, 520px);
+  max-height: min(78dvh, 720px);
+  overflow: hidden;
+  border-radius: 14px;
+  color: #18222f;
+  background: #fff;
+  box-shadow: 0 20px 52px rgba(15, 23, 42, 0.28);
+}
+
+.style-detail-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  border-bottom: 1px solid #edf0f3;
+  padding: 16px 16px 14px;
+}
+
+.style-detail-head span,
+.style-metrics-panel span {
+  color: #9a5b26;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.style-detail-head h2,
+.style-detail-head p,
+.style-detail-body p,
+.style-metrics-panel p {
+  margin: 0;
+}
+
+.style-detail-head h2 {
+  margin-top: 4px;
+  font-size: 19px;
+  line-height: 1.25;
+}
+
+.style-detail-head p {
+  margin-top: 4px;
+  color: #667085;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.style-detail-close {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+  color: #344054;
+  background: #fff;
+}
+
+.style-detail-close svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
+.style-detail-body {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.style-detail-body > p {
+  color: #344054;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.75;
+  white-space: pre-wrap;
+}
+
+.style-metrics-panel {
+  border: 1px solid #f3d49b;
+  border-radius: 8px;
+  padding: 11px 12px;
+  background: #fffaf0;
+}
+
+.style-metrics-panel p {
+  margin-top: 5px;
+  color: #344054;
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
 @media (max-width: 380px) {
   .confirm-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .entry-detail-grid,
+  .entry-extra-row {
     grid-template-columns: minmax(0, 1fr);
   }
 }
