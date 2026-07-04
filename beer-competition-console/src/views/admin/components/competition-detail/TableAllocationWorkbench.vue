@@ -12,7 +12,7 @@
             v-for="judge in filteredJudgePool"
             :key="judge.publicId"
             :class="['resource-card', { assigned: isRoundJudgeAssigned(judge.publicId), disabled: !isJudgeActive(judge) }]"
-            :draggable="currentRound?.status === 'DRAFT' && isJudgeActive(judge)"
+            :draggable="currentRound?.status === 'DRAFT' && isJudgeActive(judge) && !isRoundJudgeAssigned(judge.publicId)"
             @dragstart="$emit('startJudgeDrag', judge)"
             @dragend="$emit('clearDrag')"
           >
@@ -25,11 +25,15 @@
               <small class="judge-qualification" :data-full="formatJudgeQualification(judge.qualification)">
                 {{ formatJudgeQualification(judge.qualification) }}
               </small>
-              <em v-if="getRoundJudgeAssignmentSummary(judge.publicId)">{{ getRoundJudgeAssignmentSummary(judge.publicId) }}</em>
+              <em v-if="getRoundJudgeAssignmentSummary(judge.publicId)" class="assignment-status">{{ getRoundJudgeAssignmentSummary(judge.publicId) }}</em>
             </div>
             <div class="resource-card-actions">
-              <button type="button" :disabled="!isJudgeActive(judge) || !selectedRoundTableId || currentRound?.status !== 'DRAFT'" @click="addJudgeToRankingTarget(judge)">
-                加入
+              <button
+                type="button"
+                :disabled="!canAddRoundJudge(judge)"
+                @click="addJudgeToRankingTarget(judge)"
+              >
+                {{ getRoundJudgeActionLabel(judge) }}
               </button>
             </div>
           </article>
@@ -275,10 +279,10 @@
               <small class="judge-qualification" :data-full="formatJudgeQualification(judge.qualification)">
                 {{ formatJudgeQualification(judge.qualification) }}
               </small>
-              <em v-if="getJudgeAssignmentSummary(judge.publicId)">{{ getJudgeAssignmentSummary(judge.publicId) }}</em>
+              <em v-if="getJudgeAssignmentSummary(judge.publicId)" class="assignment-status">{{ getJudgeAssignmentSummary(judge.publicId) }}</em>
             </div>
             <button type="button" :disabled="!editableJudges || !isJudgeActive(judge)" @click="$emit('addJudgeToTarget', judge)">
-              {{ isAssigned(judge.publicId) ? '调整' : '加入' }}
+              {{ isAssigned(judge.publicId) ? '调整到当前' : '加入' }}
             </button>
           </article>
         </div>
@@ -427,19 +431,30 @@
             v-for="entry in filteredRoundPool"
             :key="entry.uuid"
             :class="['resource-card entry', { assigned: getRoundEntryAssignment(entry.uuid), selected: selectedEntryUuids.includes(entry.uuid) }]"
-            draggable="true"
+            :draggable="currentRound?.status === 'DRAFT' && !getRoundEntryAssignment(entry.uuid)"
             @dragstart="$emit('startEntryDrag', entry.uuid)"
             @dragend="$emit('clearDrag')"
           >
-            <input type="checkbox" :checked="selectedEntryUuids.includes(entry.uuid)" @change="$emit('toggleEntrySelection', entry.uuid)" />
+            <input
+              type="checkbox"
+              :checked="selectedEntryUuids.includes(entry.uuid)"
+              :disabled="Boolean(getRoundEntryAssignment(entry.uuid))"
+              @change="$emit('toggleEntrySelection', entry.uuid)"
+            />
             <div>
               <strong>{{ formatEntryName(entry) }}</strong>
               <span class="entry-meta-line">
                 <small>{{ entry.shortCode }} · {{ entry.categoryName }} · {{ entry.style }}</small>
-                <em :class="{ pending: !getRoundEntryAssignment(entry.uuid) }">{{ getRoundEntryAssignment(entry.uuid) || '未分配' }}</em>
+                <em :class="{ pending: !getRoundEntryAssignment(entry.uuid) }">{{ getRoundEntryStatusLabel(entry.uuid) }}</em>
               </span>
             </div>
-            <button type="button" :disabled="!selectedRoundTableId" @click="$emit('addEntryToSelectedTable', entry.uuid)">加入</button>
+            <button
+              type="button"
+              :disabled="!selectedRoundTableId || Boolean(getRoundEntryAssignment(entry.uuid))"
+              @click="$emit('addEntryToSelectedTable', entry.uuid)"
+            >
+              {{ getRoundEntryActionLabel(entry.uuid) }}
+            </button>
           </article>
           <p v-if="!filteredRoundPool.length" class="resource-empty">暂无可分配酒款</p>
         </div>
@@ -702,16 +717,7 @@
           >
             <header class="overview-card-header">
               <div class="overview-title-block">
-                <input
-                  v-if="isRoundTableNameEditable(table)"
-                  class="round-table-name-input overview-name-input"
-                  :value="table.name"
-                  aria-label="评审桌名称"
-                  @input="updateRoundTableName(table, $event.target.value)"
-                  @blur="commitRoundTableName(table, $event.target.value)"
-                  @keydown.enter.prevent="$event.target.blur()"
-                />
-                <h3 v-else>{{ table.name }}</h3>
+                <h3>{{ table.name }}</h3>
                 <div class="overview-card-meta">
                   <span>{{ getOverviewJudgeItems(table).length }} 名成员</span>
                   <span>{{ table.entryUuids.length }} 款酒</span>
@@ -739,7 +745,6 @@
                     <div>
                       <strong>{{ judge.name }}</strong>
                       <small v-if="judge.breweryConflict" class="judge-conflict-line" :data-full="judge.breweryConflict">{{ judge.breweryConflict }}</small>
-                      <small class="judge-qualification" :data-full="judge.qualification">{{ judge.qualification }}</small>
                     </div>
                   </li>
                 </ul>
@@ -759,7 +764,6 @@
                   >
                     <strong>{{ entry.code }}</strong>
                     <div>
-                      <span>{{ entry.name }}</span>
                       <small>{{ entry.categoryName }} · {{ entry.style }}</small>
                     </div>
                   </li>
@@ -1058,9 +1062,31 @@ function getRoundJudgeAssignmentSummary(judgePublicId) {
       || getRoundMembers(item).some((member) => member.judgePublicId === judgePublicId)
   ))
   if (!table) return ''
-  if (table.captainPublicId === judgePublicId) return `${table.name} · 桌长`
+  if (table.captainPublicId === judgePublicId) return `已在 ${table.name} · 桌长`
   const member = getRoundMembers(table).find((item) => item.judgePublicId === judgePublicId)
-  return `${table.name} · ${props.currentRound?.type === 'SCORE' ? formatRoundMemberRole(member?.role) : '参与评审'}`
+  return `已在 ${table.name} · ${props.currentRound?.type === 'SCORE' ? formatRoundMemberRole(member?.role) : '参与评审'}`
+}
+
+function canAddRoundJudge(judge) {
+  return props.currentRound?.status === 'DRAFT'
+    && props.selectedRoundTableId
+    && props.isJudgeActive(judge)
+    && !isRoundJudgeAssigned(judge.publicId)
+}
+
+function getRoundJudgeActionLabel(judge) {
+  if (!props.isJudgeActive(judge)) return '已停用'
+  if (isRoundJudgeAssigned(judge.publicId)) return '已分配'
+  return '加入'
+}
+
+function getRoundEntryStatusLabel(uuid) {
+  const tableName = props.getRoundEntryAssignment(uuid)
+  return tableName ? `已分配到 ${tableName}` : '未分配'
+}
+
+function getRoundEntryActionLabel(uuid) {
+  return props.getRoundEntryAssignment(uuid) ? '已分配' : '加入'
 }
 
 function resolveRoundMemberRole(judge) {
@@ -1209,7 +1235,6 @@ function getOverviewJudgeItems(roundTable) {
     return {
       key: assignment.localId || `${assignment.judgePublicId || 'judge'}-${role}-${index}`,
       name: judge?.name || '未知评审',
-      qualification: formatJudgeQualification(judge?.qualification),
       breweryConflict: formatJudgeBreweryConflict(judge),
       initial: props.getJudgeInitial(judge?.name),
       role,
@@ -1250,7 +1275,6 @@ function getOverviewEntryItems(roundTable) {
     return {
       uuid,
       code: entry?.shortCode || uuid,
-      name: formatEntryName(entry),
       categoryName: entry?.categoryName || '未归类',
       style: entry?.style || '未填写风格',
     }
@@ -1533,6 +1557,8 @@ button:disabled {
 
 .desk-header-actions {
   flex: 0 0 auto;
+  align-self: start;
+  align-items: flex-start;
   gap: 8px;
 }
 
@@ -1641,14 +1667,51 @@ dt,
 }
 
 .resource-card.assigned {
-  border-color: rgba(219, 232, 237, 0.1);
-  background: rgba(255, 255, 255, 0.02);
+  border-color: rgba(219, 232, 237, 0.075);
+  background: rgba(255, 255, 255, 0.014);
 }
 
 .resource-card.assigned .avatar,
 .resource-card.assigned strong,
 .resource-card.assigned small {
-  opacity: 0.88;
+  opacity: 0.48;
+}
+
+.resource-card.assigned button,
+.resource-card.assigned input[type='checkbox'] {
+  opacity: 0.55;
+}
+
+.resource-card.assigned .assignment-status,
+.resource-card.assigned .entry-meta-line em {
+  opacity: 1;
+}
+
+.assignment-status,
+.entry-meta-line em {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 22px;
+  padding: 0 7px;
+  border: 1px solid rgba(111, 207, 122, 0.22);
+  border-radius: 999px;
+  background: rgba(111, 207, 122, 0.08);
+  color: #7ee08a;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entry-meta-line em.pending {
+  color: #8da1aa;
+  border-color: rgba(219, 232, 237, 0.1);
+  background: rgba(255, 255, 255, 0.026);
 }
 
 .resource-body {
@@ -1750,15 +1813,20 @@ dt,
 
 .entry-meta-line em {
   flex: 0 0 auto;
-  max-width: 86px;
-  padding: 2px 6px;
-  color: #6fcf7a;
-  border: 1px solid rgba(111, 207, 122, 0.18);
+  max-width: 132px;
+  min-height: 22px;
+  padding: 0 7px;
+  color: #7ee08a;
+  border: 1px solid rgba(111, 207, 122, 0.22);
   border-radius: 999px;
-  background: rgba(111, 207, 122, 0.06);
+  background: rgba(111, 207, 122, 0.08);
   font-size: 12px;
   font-style: normal;
-  line-height: 1.2;
+  font-weight: 800;
+  line-height: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .entry-meta-line em.pending {
@@ -1911,10 +1979,14 @@ p {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
+  align-items: start;
 }
 
 .role-lane {
   display: grid;
+  grid-auto-rows: max-content;
+  align-content: start;
+  align-self: start;
   gap: 6px;
   min-height: 0;
   padding: 8px;
@@ -1930,7 +2002,9 @@ p {
 .mini-card {
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
   gap: 6px;
+  min-height: 52px;
   padding: 6px 8px;
   border: 1px solid rgba(219, 232, 237, 0.1);
   border-radius: 8px;
@@ -1998,7 +2072,9 @@ p {
 }
 
 .role-empty {
-  padding: 6px 2px 2px;
+  min-height: 52px;
+  box-sizing: border-box;
+  padding: 10px 2px 2px;
   color: #6f848d;
   font-size: 12px;
   line-height: 1.5;
@@ -2093,7 +2169,7 @@ p {
   display: grid !important;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
-  align-items: center;
+  align-items: start;
 }
 
 .entry-desk-title {
@@ -2516,10 +2592,6 @@ p {
   line-height: 1;
 }
 
-.overview-name-input {
-  font-size: 20px;
-}
-
 .overview-card-meta {
   flex-wrap: wrap;
   gap: 6px;
@@ -2590,9 +2662,14 @@ p {
 
 .overview-content-grid {
   display: grid;
-  grid-template-columns: minmax(180px, 0.58fr) minmax(280px, 1fr);
-  gap: 14px;
+  grid-template-columns: minmax(230px, 0.42fr) minmax(360px, 1fr);
+  gap: 18px;
   padding: 11px 12px 12px;
+}
+
+.overview-entries {
+  padding-left: 18px;
+  border-left: 1px solid rgba(219, 232, 237, 0.1);
 }
 
 .overview-toolbar {
@@ -2636,7 +2713,9 @@ p {
 }
 
 .overview-entry-list {
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 14px;
+  row-gap: 5px;
 }
 
 .overview-member-card {
@@ -2645,7 +2724,7 @@ p {
   gap: 8px;
   align-items: center;
   min-width: 0;
-  min-height: 31px;
+  min-height: 30px;
   padding: 5px 0;
   border-top: 1px solid rgba(219, 232, 237, 0.08);
 }
@@ -2658,14 +2737,13 @@ p {
 }
 
 .overview-member-card strong,
-.overview-entry-card span {
+.overview-entry-card small {
   color: #e6edf0;
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
 
 .overview-member-card small,
-.overview-entry-card small,
 .overview-block-head small {
   line-height: 1.35;
   overflow-wrap: anywhere;
@@ -2706,16 +2784,17 @@ p {
 
 .overview-entry-card {
   display: grid;
-  grid-template-columns: minmax(54px, auto) minmax(0, 1fr);
+  grid-template-columns: minmax(62px, auto) minmax(0, 1fr);
+  align-items: center;
   gap: 8px;
   min-width: 0;
-  min-height: 34px;
+  min-height: 30px;
   padding: 5px 0;
   border-top: 1px solid rgba(219, 232, 237, 0.08);
 }
 
 .overview-entry-card > strong {
-  min-width: 54px;
+  min-width: 62px;
   max-width: 92px;
   color: #e0b84a;
   font-size: 14px;
@@ -2752,6 +2831,11 @@ p {
   .overview-content-grid,
   .role-grid {
     grid-template-columns: 1fr;
+  }
+
+  .overview-entries {
+    padding-left: 0;
+    border-left: 0;
   }
 
   .check-panel {

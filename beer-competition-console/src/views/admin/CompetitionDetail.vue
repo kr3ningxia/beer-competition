@@ -4928,7 +4928,7 @@ async function overrideRoundScoreConfirmation() {
     action: 'overrideRoundConfirmation',
     kicker: '强制确认',
     title: '确认跳过同桌确认？',
-    copy: '该操作会记录为强制确认，用于评审离场、设备异常等无法完成常规流程的情况，请填写原因，便于赛后追溯',
+    copy: '该操作会记录为强制确认，并自动提交本桌结果。用于评审离场、设备异常等无法完成常规流程的情况，请填写原因，便于赛后追溯',
     summary: [
       { label: '评审桌', value: roundScoreDetailTable.value.name || '-' },
       { label: '当前轮次', value: currentRound.value?.name || '-' },
@@ -4936,7 +4936,7 @@ async function overrideRoundScoreConfirmation() {
     ],
     reasonLabel: '现场确认原因',
     reasonPlaceholder: '例如：参与评审设备异常，现场已纸面确认',
-    confirmText: '记录现场确认',
+    confirmText: '确认并提交本桌',
     loadingText: '记录中',
   })
 }
@@ -4948,7 +4948,7 @@ async function runOverrideRoundScoreConfirmation() {
   competition.value = normalizeDetail(detail)
   resetForms()
   applyRoundState(currentRound.value?.id, { preferredTableId: roundScoreDetailTable.value.id })
-  ElMessage.success('已记录现场确认')
+  ElMessage.success('已记录现场确认，本桌结果已提交')
 }
 
 async function lockCurrentRound() {

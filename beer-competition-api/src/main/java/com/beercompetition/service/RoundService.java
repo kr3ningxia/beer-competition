@@ -6,6 +6,7 @@ import com.beercompetition.pojo.dto.AdminConfirmationOverrideRequest;
 import com.beercompetition.pojo.dto.RankingDraftSaveRequest;
 import com.beercompetition.pojo.dto.RankingSubmitRequest;
 import com.beercompetition.pojo.dto.RoundAllocationRequest;
+import com.beercompetition.pojo.dto.RoundTableConfirmationRequest;
 import com.beercompetition.pojo.vo.CompetitionEntryVO;
 import com.beercompetition.pojo.vo.CompetitionRoundVO;
 import com.beercompetition.pojo.vo.JudgeRoundTableVO;
@@ -50,13 +51,13 @@ public interface RoundService {
 
     ScoreConfirmationVO getScoreConfirmation(Long roundTableId);
 
-    ScoreConfirmationVO confirmScoreRoundTable(Long roundTableId);
+    ScoreConfirmationVO confirmScoreRoundTable(Long roundTableId, RoundTableConfirmationRequest request);
 
     void submitRanking(Long roundTableId, RankingSubmitRequest request);
 
     RankingConfirmationVO getRankingConfirmation(Long roundTableId);
 
-    RankingConfirmationVO confirmRankingRoundTable(Long roundTableId);
+    RankingConfirmationVO confirmRankingRoundTable(Long roundTableId, RoundTableConfirmationRequest request);
 
     void finalizeRanking(Long roundTableId);
 

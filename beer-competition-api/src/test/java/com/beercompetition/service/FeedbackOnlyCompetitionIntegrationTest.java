@@ -3,6 +3,7 @@ package com.beercompetition.service;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.pojo.dto.FirstRoundCreateRequest;
 import com.beercompetition.pojo.dto.NextRoundCreateRequest;
+import com.beercompetition.pojo.dto.RoundTableConfirmationRequest;
 import com.beercompetition.pojo.dto.RoundTableAllocationRequest;
 import com.beercompetition.pojo.dto.RoundTableMemberAllocationRequest;
 import com.beercompetition.pojo.enums.CompetitionStatus;
@@ -88,9 +89,12 @@ class FeedbackOnlyCompetitionIntegrationTest extends IntegrationTestBase {
         insertFinalScore(fixture, scoreRound, fixture.entryA2().getId(), 44);
 
         asJudge(fixture.professional().getId());
-        roundService.confirmScoreRoundTable(scoreRound.table().getId());
+        roundService.confirmScoreRoundTable(scoreRound.table().getId(), confirmationRequest(scoreRound.table().getResultVersion()));
         asJudge(fixture.cross().getId());
-        roundService.confirmScoreRoundTable(scoreRound.table().getId());
+        roundService.confirmScoreRoundTable(scoreRound.table().getId(), confirmationRequest(scoreRound.table().getResultVersion()));
+
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM round_table WHERE id = ?",
+                String.class, scoreRound.table().getId())).isEqualTo(RoundStatus.SUBMITTED.name());
 
         asAdmin(1L);
         roundService.completeFirstRound(fixture.competition().getId(), scoreRound.round().getId());
@@ -173,5 +177,11 @@ class FeedbackOnlyCompetitionIntegrationTest extends IntegrationTestBase {
                 18,
                 LocalDateTime.now(),
                 LocalDateTime.now());
+    }
+
+    private RoundTableConfirmationRequest confirmationRequest(Integer resultVersion) {
+        RoundTableConfirmationRequest request = new RoundTableConfirmationRequest();
+        request.setResultVersion(resultVersion);
+        return request;
     }
 }

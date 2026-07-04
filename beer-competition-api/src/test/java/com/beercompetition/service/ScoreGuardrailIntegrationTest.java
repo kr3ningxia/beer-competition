@@ -6,9 +6,13 @@ import com.beercompetition.pojo.dto.DimensionRequest;
 import com.beercompetition.pojo.dto.JudgeScoreSaveRequest;
 import com.beercompetition.pojo.dto.JudgeScoreStartRequest;
 import com.beercompetition.pojo.dto.JudgeScoreUpdateRequest;
+import com.beercompetition.pojo.dto.AdminConfirmationOverrideRequest;
+import com.beercompetition.pojo.dto.RoundTableConfirmationRequest;
 import com.beercompetition.pojo.dto.TableScoreFinalizeRequest;
 import com.beercompetition.pojo.enums.JudgeRoleType;
+import com.beercompetition.pojo.enums.RoundStatus;
 import com.beercompetition.pojo.enums.UserRole;
+import com.beercompetition.pojo.vo.ScoreConfirmationVO;
 import com.beercompetition.testsupport.BeerCompetitionTestData;
 import com.beercompetition.testsupport.IntegrationTestBase;
 import org.junit.jupiter.api.Test;
@@ -27,6 +31,9 @@ class ScoreGuardrailIntegrationTest extends IntegrationTestBase {
 
     @Autowired
     private ScoreService scoreService;
+
+    @Autowired
+    private RoundService roundService;
 
     @Autowired
     private AuthService authService;
@@ -160,6 +167,78 @@ class ScoreGuardrailIntegrationTest extends IntegrationTestBase {
                 .hasMessageContaining("同桌评分未完成");
     }
 
+    @Test
+    void awardScoreRoundAutoSubmitsAfterAllPeersConfirmCurrentVersion() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        BeerCompetitionTestData.ScoreRound scoreRound = testData.createPublishedScoreRound(fixture, List.of(fixture.entryA1()), 1);
+
+        asJudge(fixture.professional().getId());
+        scoreService.createScore(professionalScoreRequest(fixture.entryA1().getUuid(), 18, 27));
+        asJudge(fixture.cross().getId());
+        scoreService.createScore(crossScoreRequest(fixture.entryA1().getUuid(), 44));
+        asJudge(fixture.captain().getId());
+        scoreService.createScore(professionalScoreRequest(fixture.entryA1().getUuid(), 17, 28));
+        scoreService.finalizeTableScore(fixture.entryA1().getUuid(), finalizeRequest(46, true));
+
+        asJudge(fixture.professional().getId());
+        ScoreConfirmationVO confirmation = roundService.getScoreConfirmation(scoreRound.table().getId());
+        roundService.confirmScoreRoundTable(scoreRound.table().getId(), confirmationRequest(confirmation.getResultVersion()));
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM round_table WHERE id = ?",
+                String.class, scoreRound.table().getId())).isEqualTo(RoundStatus.PUBLISHED.name());
+
+        asJudge(fixture.cross().getId());
+        confirmation = roundService.getScoreConfirmation(scoreRound.table().getId());
+        roundService.confirmScoreRoundTable(scoreRound.table().getId(), confirmationRequest(confirmation.getResultVersion()));
+
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM round_table WHERE id = ?",
+                String.class, scoreRound.table().getId())).isEqualTo(RoundStatus.SUBMITTED.name());
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM competition_round WHERE id = ?",
+                String.class, scoreRound.round().getId())).isEqualTo(RoundStatus.SUBMITTED.name());
+    }
+
+    @Test
+    void staleScoreConfirmationVersionIsRejectedAfterCaptainUpdate() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        BeerCompetitionTestData.ScoreRound scoreRound = testData.createPublishedScoreRound(fixture, List.of(fixture.entryA1()), 1);
+
+        asJudge(fixture.professional().getId());
+        scoreService.createScore(professionalScoreRequest(fixture.entryA1().getUuid(), 18, 27));
+        ScoreConfirmationVO staleConfirmation = roundService.getScoreConfirmation(scoreRound.table().getId());
+        asJudge(fixture.cross().getId());
+        scoreService.createScore(crossScoreRequest(fixture.entryA1().getUuid(), 44));
+        asJudge(fixture.captain().getId());
+        scoreService.createScore(professionalScoreRequest(fixture.entryA1().getUuid(), 17, 28));
+        scoreService.finalizeTableScore(fixture.entryA1().getUuid(), finalizeRequest(46, true));
+        scoreService.finalizeTableScore(fixture.entryA1().getUuid(), finalizeRequest(45, true));
+
+        asJudge(fixture.professional().getId());
+        assertThatThrownBy(() -> roundService.confirmScoreRoundTable(scoreRound.table().getId(), confirmationRequest(staleConfirmation.getResultVersion())))
+                .isInstanceOf(BaseException.class)
+                .hasMessageContaining("已更新");
+    }
+
+    @Test
+    void adminOverrideAutoSubmitsScoreRoundTable() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        BeerCompetitionTestData.ScoreRound scoreRound = testData.createPublishedScoreRound(fixture, List.of(fixture.entryA1()), 1);
+
+        asJudge(fixture.professional().getId());
+        scoreService.createScore(professionalScoreRequest(fixture.entryA1().getUuid(), 18, 27));
+        asJudge(fixture.cross().getId());
+        scoreService.createScore(crossScoreRequest(fixture.entryA1().getUuid(), 44));
+        asJudge(fixture.captain().getId());
+        scoreService.createScore(professionalScoreRequest(fixture.entryA1().getUuid(), 17, 28));
+        scoreService.finalizeTableScore(fixture.entryA1().getUuid(), finalizeRequest(46, true));
+
+        AdminConfirmationOverrideRequest request = new AdminConfirmationOverrideRequest();
+        request.setReason("现场纸面确认");
+        asAdmin(1L);
+        roundService.overrideScoreConfirmation(fixture.competition().getId(), scoreRound.table().getId(), request);
+
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM round_table WHERE id = ?",
+                String.class, scoreRound.table().getId())).isEqualTo(RoundStatus.SUBMITTED.name());
+    }
+
     private JudgeScoreSaveRequest professionalScoreRequest(String uuid, int aroma, int taste) {
         JudgeScoreSaveRequest request = new JudgeScoreSaveRequest();
         request.setBeerUuid(uuid);
@@ -193,6 +272,12 @@ class ScoreGuardrailIntegrationTest extends IntegrationTestBase {
         request.setConsensusScore(new BigDecimal(score));
         request.setComments("桌长总结");
         request.setAdvanced(advanced);
+        return request;
+    }
+
+    private RoundTableConfirmationRequest confirmationRequest(Integer resultVersion) {
+        RoundTableConfirmationRequest request = new RoundTableConfirmationRequest();
+        request.setResultVersion(resultVersion);
         return request;
     }
 

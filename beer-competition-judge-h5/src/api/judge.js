@@ -123,12 +123,8 @@ export function fetchRankingConfirmation(roundTableId) {
   return request.get(`/api/judge/round-tables/${roundTableId}/ranking-confirmation`)
 }
 
-export function confirmRankingRoundTable(roundTableId) {
-  return request.post(`/api/judge/round-tables/${roundTableId}/ranking-confirmation`)
-}
-
-export function finalizeRanking(roundTableId) {
-  return request.post(`/api/judge/round-tables/${roundTableId}/ranking-final-submit`)
+export function confirmRankingRoundTable(roundTableId, payload) {
+  return request.post(`/api/judge/round-tables/${roundTableId}/ranking-confirmation`, payload)
 }
 
 export function saveRankingDraft(roundTableId, payload) {
@@ -139,8 +135,8 @@ export function fetchScoreConfirmation(roundTableId) {
   return request.get(`/api/judge/round-tables/${roundTableId}/score-confirmation`)
 }
 
-export function confirmScoreRoundTable(roundTableId) {
-  return request.post(`/api/judge/round-tables/${roundTableId}/score-confirmation`)
+export function confirmScoreRoundTable(roundTableId, payload) {
+  return request.post(`/api/judge/round-tables/${roundTableId}/score-confirmation`, payload)
 }
 
 export async function fetchEntry(uuid) {
@@ -180,10 +176,6 @@ export async function fetchScoreConfig(role, competitionId) {
 
 export function startScore(payload) {
   return request.post('/api/judge/scores/start', payload)
-}
-
-export function submitScoreRoundTable(roundTableId) {
-  return request.post(`/api/judge/round-tables/${roundTableId}/score-submit`)
 }
 
 export async function fetchMyScores() {

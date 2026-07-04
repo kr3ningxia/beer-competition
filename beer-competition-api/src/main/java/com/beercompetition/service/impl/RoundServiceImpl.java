@@ -32,6 +32,7 @@ import com.beercompetition.pojo.dto.RankingDraftSaveRequest;
 import com.beercompetition.pojo.dto.RankingResultItemRequest;
 import com.beercompetition.pojo.dto.RankingSubmitRequest;
 import com.beercompetition.pojo.dto.RoundAllocationRequest;
+import com.beercompetition.pojo.dto.RoundTableConfirmationRequest;
 import com.beercompetition.pojo.dto.RoundTableAllocationRequest;
 import com.beercompetition.pojo.dto.RoundTableMemberAllocationRequest;
 import com.beercompetition.pojo.enums.CompetitionStatus;
@@ -567,6 +568,9 @@ public class RoundServiceImpl implements RoundService {
                 .collect(Collectors.toMap(ScoreRecord::getBeerEntryId, Function.identity(), (left, right) -> right));
         Map<Long, List<RoundTableEntry>> entriesByTable = entries.stream().collect(Collectors.groupingBy(RoundTableEntry::getRoundTableId));
         for (RoundTable table : tables) {
+            if (!RoundStatus.SUBMITTED.name().equals(table.getStatus())) {
+                throw new BaseException(table.getTableName() + "本桌结果尚未提交");
+            }
             List<RoundTableEntry> tableEntries = entriesByTable.getOrDefault(table.getId(), List.of());
             List<Long> missing = tableEntries.stream()
                     .map(RoundTableEntry::getBeerEntryId)
@@ -773,6 +777,9 @@ public class RoundServiceImpl implements RoundService {
                 .collect(Collectors.toMap(ScoreRecord::getBeerEntryId, Function.identity(), (left, right) -> right));
         Map<Long, List<RoundTableEntry>> entriesByTable = entries.stream().collect(Collectors.groupingBy(RoundTableEntry::getRoundTableId));
         for (RoundTable table : tables) {
+            if (!RoundStatus.SUBMITTED.name().equals(table.getStatus())) {
+                throw new BaseException(table.getTableName() + "本桌诊断尚未提交");
+            }
             List<RoundTableEntry> tableEntries = entriesByTable.getOrDefault(table.getId(), List.of());
             List<Long> missing = tableEntries.stream()
                     .map(RoundTableEntry::getBeerEntryId)
@@ -1004,7 +1011,7 @@ public class RoundServiceImpl implements RoundService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public ScoreConfirmationVO confirmScoreRoundTable(Long roundTableId) {
+    public ScoreConfirmationVO confirmScoreRoundTable(Long roundTableId, RoundTableConfirmationRequest request) {
         // 1) 校验非桌长评审的确认权限
         Long judgeId = BaseContext.getCurrentId();
         roundQuerySupport.requireActiveJudge(judgeId);
@@ -1023,6 +1030,7 @@ public class RoundServiceImpl implements RoundService {
         }
         validateScoreRoundTableReady(table);
         int version = currentResultVersion(table);
+        validateConfirmationVersion(request, version);
 
         // 2) 按结果版本幂等写入确认记录
         RoundTableConfirmation existing = roundTableConfirmationMapper.selectOne(new LambdaQueryWrapper<RoundTableConfirmation>()
@@ -1039,7 +1047,8 @@ public class RoundServiceImpl implements RoundService {
                     .build());
         }
 
-        // 3) 返回最新确认进度
+        // 3) 当前版本确认完成后自动提交本桌结果
+        autoSubmitRoundTableIfReady(roundTableMapper.selectById(roundTableId), round);
         return buildScoreConfirmation(roundTableMapper.selectById(roundTableId), member);
     }
 
@@ -1061,8 +1070,8 @@ public class RoundServiceImpl implements RoundService {
         if (!RoundType.RANKING.name().equals(round.getRoundType()) || !isRankingEditableStatus(round.getStatus())) {
             throw new BaseException("当前轮次不能提交排序");
         }
-        if (RoundStatus.LOCKED.name().equals(table.getStatus())) {
-            throw new BaseException("本桌排序已锁定，不能调整");
+        if (RoundStatus.SUBMITTED.name().equals(table.getStatus()) || RoundStatus.LOCKED.name().equals(table.getStatus())) {
+            throw new BaseException("本桌排序已提交或已锁定，不能调整");
         }
         assertCompetitionNotArchived(table.getCompetitionId());
         requireRankingCaptainMember(roundTableId, judgeId);
@@ -1106,6 +1115,7 @@ public class RoundServiceImpl implements RoundService {
             round.setSubmittedTime(null);
             competitionRoundMapper.updateById(round);
         }
+        autoSubmitRoundTableIfReady(roundTableMapper.selectById(roundTableId), competitionRoundMapper.selectById(round.getId()));
     }
 
     @Override
@@ -1127,7 +1137,7 @@ public class RoundServiceImpl implements RoundService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public RankingConfirmationVO confirmRankingRoundTable(Long roundTableId) {
+    public RankingConfirmationVO confirmRankingRoundTable(Long roundTableId, RoundTableConfirmationRequest request) {
         // 1) 查询排序桌并校验评委确认权限
         Long judgeId = BaseContext.getCurrentId();
         roundQuerySupport.requireActiveJudge(judgeId);
@@ -1148,6 +1158,7 @@ public class RoundServiceImpl implements RoundService {
 
         // 2) 写入当前版本确认记录
         int version = currentResultVersion(table);
+        validateConfirmationVersion(request, version);
         RoundTableConfirmation existing = roundTableConfirmationMapper.selectOne(new LambdaQueryWrapper<RoundTableConfirmation>()
                 .eq(RoundTableConfirmation::getRoundTableId, roundTableId)
                 .eq(RoundTableConfirmation::getJudgeAccountId, judgeId)
@@ -1162,7 +1173,8 @@ public class RoundServiceImpl implements RoundService {
                     .build());
         }
 
-        // 3) 返回最新确认状态
+        // 3) 当前版本确认完成后自动提交本桌排序
+        autoSubmitRoundTableIfReady(roundTableMapper.selectById(roundTableId), round);
         return buildRankingConfirmation(roundTableMapper.selectById(roundTableId), member);
     }
 
@@ -1248,12 +1260,13 @@ public class RoundServiceImpl implements RoundService {
             roundValidationPolicy.validateRankingRoundTableReady(table);
         }
 
-        // 2) 记录人工确认原因，后续确认进度按覆盖标记处理
+        // 2) 记录人工确认原因并自动提交本桌结果
         table.setConfirmationOverrideFlag(FLAG_TRUE);
         table.setConfirmationOverrideReason(request.getReason().trim());
         table.setConfirmationOverrideBy(BaseContext.getCurrentId());
         table.setConfirmationOverrideTime(LocalDateTime.now());
         roundTableMapper.updateById(table);
+        autoSubmitRoundTableIfReady(roundTableMapper.selectById(roundTableId), round);
     }
 
     private CompetitionRoundVO toRoundVO(CompetitionRound round,
@@ -1881,6 +1894,7 @@ public class RoundServiceImpl implements RoundService {
     private boolean canSubmitRanking(RoundTableMember member, CompetitionRound round, RoundTable table) {
         return RoundType.RANKING.name().equals(round.getRoundType())
                 && isRankingEditableStatus(round.getStatus())
+                && !RoundStatus.SUBMITTED.name().equals(table.getStatus())
                 && !RoundStatus.LOCKED.name().equals(table.getStatus())
                 && JudgeRoleType.CAPTAIN.name().equals(member.getRole())
                 && Objects.equals(member.getSystemTaskRequired(), FLAG_TRUE);
@@ -2177,6 +2191,41 @@ public class RoundServiceImpl implements RoundService {
         int confirmed = resolveRankingConfirmationConfirmedCount(table);
         if (confirmed < required) {
             throw new BaseException("同桌评审确认未完成，暂不能提交本桌排序");
+        }
+    }
+
+    private void validateConfirmationVersion(RoundTableConfirmationRequest request, int currentVersion) {
+        if (request == null || request.getResultVersion() == null || !Objects.equals(request.getResultVersion(), currentVersion)) {
+            throw new BaseException("本桌结果已更新，请重新核对后确认");
+        }
+    }
+
+    private void autoSubmitRoundTableIfReady(RoundTable table, CompetitionRound round) {
+        if (table == null || round == null) {
+            return;
+        }
+        if (RoundStatus.SUBMITTED.name().equals(table.getStatus()) || RoundStatus.LOCKED.name().equals(table.getStatus())) {
+            return;
+        }
+        if (RoundType.SCORE.name().equals(round.getRoundType())) {
+            validateScoreRoundTableReady(table);
+            if (!isScoreConfirmationReady(table)) {
+                return;
+            }
+        } else if (RoundType.RANKING.name().equals(round.getRoundType())) {
+            roundValidationPolicy.validateRankingRoundTableReady(table);
+            if (!isRankingConfirmationReady(table)) {
+                return;
+            }
+        } else {
+            return;
+        }
+        table.setStatus(RoundStatus.SUBMITTED.name());
+        roundTableMapper.updateById(table);
+        if (roundQuerySupport.listRoundTables(round.getId()).stream().allMatch(item -> RoundStatus.SUBMITTED.name().equals(item.getStatus()))) {
+            round.setStatus(RoundStatus.SUBMITTED.name());
+            round.setSubmittedTime(LocalDateTime.now());
+            competitionRoundMapper.updateById(round);
         }
     }
 

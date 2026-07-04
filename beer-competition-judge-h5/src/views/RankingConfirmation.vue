@@ -59,15 +59,18 @@ const confirmedCount = computed(() => Number(confirmation.value?.confirmedCount 
 const requiredCount = computed(() => Number(confirmation.value?.requiredCount || 0))
 const mineConfirmed = computed(() => Boolean(confirmation.value?.mineConfirmed))
 const readyForConfirmation = computed(() => Boolean(confirmation.value?.readyForConfirmation))
-const canConfirm = computed(() => readyForConfirmation.value && !mineConfirmed.value && !submitting.value)
+const tableSubmitted = computed(() => ['SUBMITTED', 'LOCKED'].includes(confirmation.value?.status))
+const canConfirm = computed(() => readyForConfirmation.value && !mineConfirmed.value && !tableSubmitted.value && !submitting.value)
 const isMedalMode = computed(() => confirmation.value?.targetMode === 'MEDALS')
 const stateText = computed(() => {
+  if (tableSubmitted.value) return '本桌排序已提交，等待主办方确认轮次。'
   if (!readyForConfirmation.value) return '桌长还未提交排序结果，请稍后再核对。'
-  if (mineConfirmed.value) return '你已确认本桌排序，等待桌长最终提交。'
-  return '请核对本桌排序，确认后桌长才能最终提交。'
+  if (mineConfirmed.value) return '你已确认本桌排序，等待同桌确认完成。'
+  return '请核对本桌排序，确认完成后系统将自动提交本桌排序。'
 })
 const confirmButtonText = computed(() => {
   if (submitting.value) return '确认中...'
+  if (tableSubmitted.value) return '本桌排序已提交'
   if (!readyForConfirmation.value) return '等待桌长提交排序'
   if (mineConfirmed.value) return '已确认本桌排序'
   return '确认同意本桌排序'
@@ -93,10 +96,13 @@ async function submitConfirm() {
   submitting.value = true
   message.value = ''
   try {
-    confirmation.value = await confirmRankingRoundTable(route.params.roundTableId)
-    message.value = '已确认本桌排序'
-  } catch {
-    message.value = '确认失败，请刷新后再试。'
+    confirmation.value = await confirmRankingRoundTable(route.params.roundTableId, {
+      resultVersion: confirmation.value?.resultVersion,
+    })
+    message.value = confirmation.value?.status === 'SUBMITTED' ? '本桌排序已自动提交' : '已确认本桌排序'
+  } catch (error) {
+    await loadConfirmation()
+    message.value = error?.response?.data?.message || error?.message || '确认失败，请重新核对后再试。'
   } finally {
     submitting.value = false
   }

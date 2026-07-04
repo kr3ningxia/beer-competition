@@ -64,17 +64,20 @@ const confirmedCount = computed(() => Number(confirmation.value?.confirmedCount 
 const requiredCount = computed(() => Number(confirmation.value?.requiredCount || 0))
 const mineConfirmed = computed(() => Boolean(confirmation.value?.mineConfirmed))
 const readyForConfirmation = computed(() => Boolean(confirmation.value?.readyForConfirmation))
+const tableSubmitted = computed(() => ['SUBMITTED', 'LOCKED'].includes(confirmation.value?.status))
 const isFeedbackOnlyCompetition = computed(() => confirmation.value?.competitionType === 'FEEDBACK_ONLY')
-const canConfirm = computed(() => readyForConfirmation.value && !mineConfirmed.value && !submitting.value)
+const canConfirm = computed(() => readyForConfirmation.value && !mineConfirmed.value && !tableSubmitted.value && !submitting.value)
 const stateText = computed(() => {
+  if (tableSubmitted.value) return '本桌结果已提交，等待主办方确认轮次。'
   if (!readyForConfirmation.value) return '桌长最终意见还未完成，请稍后再核对。'
-  if (mineConfirmed.value) return '你已确认本桌结果，等待桌长最终提交。'
+  if (mineConfirmed.value) return '你已确认本桌结果，等待同桌确认完成。'
   return isFeedbackOnlyCompetition.value
-    ? '请核对共识分和综合评语，确认后桌长才能最终提交。'
-    : '请核对共识分、综合评语和晋级结果，确认后桌长才能最终提交。'
+    ? '请核对共识分和综合评语，确认完成后系统将自动提交本桌结果。'
+    : '请核对共识分、综合评语和晋级结果，确认完成后系统将自动提交本桌结果。'
 })
 const confirmButtonText = computed(() => {
   if (submitting.value) return '确认中...'
+  if (tableSubmitted.value) return '本桌结果已提交'
   if (!readyForConfirmation.value) return '等待桌长完成结果'
   if (mineConfirmed.value) return '已确认本桌结果'
   return '确认同意本桌结果'
@@ -93,10 +96,13 @@ async function submitConfirm() {
   submitting.value = true
   message.value = ''
   try {
-    confirmation.value = await confirmScoreRoundTable(route.params.roundTableId)
-    message.value = '已确认本桌结果'
-  } catch {
-    message.value = '确认失败，请刷新后再试。'
+    confirmation.value = await confirmScoreRoundTable(route.params.roundTableId, {
+      resultVersion: confirmation.value?.resultVersion,
+    })
+    message.value = confirmation.value?.status === 'SUBMITTED' ? '本桌结果已自动提交' : '已确认本桌结果'
+  } catch (error) {
+    await loadConfirmation()
+    message.value = error?.response?.data?.message || error?.message || '确认失败，请重新核对后再试。'
   } finally {
     submitting.value = false
   }

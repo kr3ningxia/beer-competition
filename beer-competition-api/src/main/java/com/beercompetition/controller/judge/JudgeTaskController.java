@@ -3,6 +3,7 @@ package com.beercompetition.controller.judge;
 import com.beercompetition.common.result.Result;
 import com.beercompetition.pojo.dto.RankingDraftSaveRequest;
 import com.beercompetition.pojo.dto.RankingSubmitRequest;
+import com.beercompetition.pojo.dto.RoundTableConfirmationRequest;
 import com.beercompetition.pojo.vo.JudgeRoundTableVO;
 import com.beercompetition.pojo.vo.JudgeTaskVO;
 import com.beercompetition.pojo.vo.RankingConfirmationVO;
@@ -66,8 +67,9 @@ public class JudgeTaskController {
      * 当前评委确认评分桌结果。
      */
     @PostMapping("/round-tables/{roundTableId}/score-confirmation")
-    public Result<ScoreConfirmationVO> confirmScoreRoundTable(@PathVariable Long roundTableId) {
-        return Result.success(roundService.confirmScoreRoundTable(roundTableId));
+    public Result<ScoreConfirmationVO> confirmScoreRoundTable(@PathVariable Long roundTableId,
+                                                              @RequestBody @Valid RoundTableConfirmationRequest request) {
+        return Result.success(roundService.confirmScoreRoundTable(roundTableId, request));
     }
 
     /**
@@ -92,8 +94,9 @@ public class JudgeTaskController {
      * 当前评委确认排序轮结果。
      */
     @PostMapping("/round-tables/{roundTableId}/ranking-confirmation")
-    public Result<RankingConfirmationVO> confirmRankingRoundTable(@PathVariable Long roundTableId) {
-        return Result.success(roundService.confirmRankingRoundTable(roundTableId));
+    public Result<RankingConfirmationVO> confirmRankingRoundTable(@PathVariable Long roundTableId,
+                                                                  @RequestBody @Valid RoundTableConfirmationRequest request) {
+        return Result.success(roundService.confirmRankingRoundTable(roundTableId, request));
     }
 
     /**

@@ -43,12 +43,11 @@
         </button>
         <button
           v-else
-          class="button primary full check-action"
+          class="button secondary full check-action"
           type="button"
-          :disabled="!canSubmitTableResult"
-          @click="submitTableResult"
+          disabled
         >
-          {{ tableSubmitButtonText }}
+          {{ tableReviewStateText }}
         </button>
         <p v-if="tableSubmitHint" class="submit-hint">{{ tableSubmitHint }}</p>
       </section>
@@ -198,7 +197,6 @@ import {
   fetchScoreConfig,
   fetchTableScores,
   finalizeTableScore,
-  submitScoreRoundTable,
 } from '@/api/judge'
 import JudgeBottomNav from '@/components/JudgeBottomNav.vue'
 import { formatAbvWithUnit } from '@/utils/formatters'
@@ -215,7 +213,6 @@ const captainConfig = ref(null)
 const advancedUuids = ref([])
 const expandedCommentIds = ref(new Set())
 const message = ref('')
-const submittingTable = ref(false)
 const loadingBoard = ref(false)
 const advanceLimitDialogOpen = ref(false)
 const form = reactive({
@@ -370,25 +367,21 @@ const canOpenNextAction = computed(() => (
   || Boolean(nextActionEntry.value?.uuid))
 ))
 const currentBoardEntry = computed(() => boardEntries.value.find((item) => item.uuid === uuid.value) || null)
-const tableSubmitted = computed(() => ['SUBMITTED', 'LOCKED'].includes(board.value?.roundTable?.status))
-const tableLocked = computed(() => board.value?.roundTable?.status === 'LOCKED')
-const canSubmitTableResult = computed(() => (
-  tableReadyForReview.value
-  && !tableSubmitted.value
-  && Boolean(board.value?.roundTable?.canSubmitTableScore)
-  && confirmationReady.value
-  && !submittingTable.value
-))
-const tableSubmitButtonText = computed(() => {
+const tableSubmitted = computed(() => board.value?.roundTable?.status === 'SUBMITTED')
+const tableLocked = computed(() => ['SUBMITTED', 'LOCKED'].includes(board.value?.roundTable?.status))
+const tableReviewStateText = computed(() => {
   if (tableSubmitted.value) return '本桌结果已提交'
-  if (submittingTable.value) return '提交中...'
-  return isFeedbackOnlyCompetition.value ? '提交本桌诊断' : '提交本桌结果'
+  if (board.value?.roundTable?.status === 'LOCKED') return '本桌结果已锁定'
+  if (confirmationReady.value) return '确认已齐，正在同步提交'
+  return '等待同桌确认'
 })
 const tableSubmitHint = computed(() => {
   if (tableSubmitted.value) return '本桌结果已提交，等待主办方确认轮次。'
-  if (tableReadyForReview.value && !confirmationReady.value) return `等待同桌评审确认（${confirmationProgressText.value}）。`
-  if (tableReadyForReview.value && (scoreConfirmation.value?.overrideFlag || board.value?.roundTable?.confirmationOverrideFlag)) return '现场确认通过，可提交。'
+  if (board.value?.roundTable?.status === 'LOCKED') return '本桌结果已锁定。'
+  if (tableReadyForReview.value && !confirmationReady.value) return `等待同桌评审确认（${confirmationProgressText.value}），确认完成后自动提交。`
+  if (tableReadyForReview.value && (scoreConfirmation.value?.overrideFlag || board.value?.roundTable?.confirmationOverrideFlag)) return '现场确认通过后将自动提交。'
   if (tableReadyForReview.value && !board.value?.roundTable?.canSubmitTableScore) return '当前账号不能提交本桌结果。'
+  if (tableReadyForReview.value) return '确认完成后系统将自动提交本桌结果。'
   return ''
 })
 const currentSubmittedCount = computed(() => Number(currentBoardEntry.value?.submittedCount || normalScores.value.length || 0))
@@ -435,7 +428,7 @@ const canFinalize = computed(() => (
   && finalCommentLength.value >= minFinalCommentLength.value
 ))
 const finalizeHint = computed(() => {
-  if (tableLocked.value) return '本桌结果已锁定，不能继续修改。'
+  if (tableLocked.value) return tableSubmitted.value ? '本桌结果已提交，不能继续修改。' : '本桌结果已锁定，不能继续修改。'
   if (!tableScoresReady.value) {
     const expectedText = currentExpectedCount.value > 0 ? currentExpectedCount.value : '-'
     return `同桌评分未完成（${currentSubmittedCount.value}/${expectedText}），暂不能保存桌长意见。`
@@ -444,7 +437,10 @@ const finalizeHint = computed(() => {
   if (finalCommentLength.value < minFinalCommentLength.value) return `综合评语还差 ${minFinalCommentLength.value - finalCommentLength.value} 字。`
   return ''
 })
-const finalButtonText = computed(() => (tableLocked.value ? '本桌结果已锁定' : '保存这款酒的桌长意见'))
+const finalButtonText = computed(() => {
+  if (!tableLocked.value) return '保存这款酒的桌长意见'
+  return tableSubmitted.value ? '本桌结果已提交' : '本桌结果已锁定'
+})
 
 async function loadBoard() {
   loadingBoard.value = true
@@ -506,18 +502,6 @@ async function submitFinal() {
 
 function countEffectiveChars(text) {
   return String(text || '').replace(/\s+/g, '').length
-}
-
-async function submitTableResult() {
-  if (!canSubmitTableResult.value) return
-  submittingTable.value = true
-  try {
-    await submitScoreRoundTable(board.value.roundTable.roundTableId)
-    message.value = '本桌结果已提交'
-    await loadBoard()
-  } finally {
-    submittingTable.value = false
-  }
 }
 
 function openNextAction() {

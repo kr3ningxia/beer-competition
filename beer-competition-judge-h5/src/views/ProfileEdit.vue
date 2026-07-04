@@ -11,12 +11,12 @@
         <input v-model.trim="form.phone" class="input readonly" inputmode="tel" readonly />
       </label>
       <label class="field">
-        姓名
-        <input v-model.trim="form.name" class="input" placeholder="请输入真实姓名" />
+        姓名或称呼
+        <input v-model.trim="form.name" class="input" placeholder="请输入真实姓名或行业熟知的称呼" />
       </label>
       <label class="field">
         微信号
-        <input v-model.trim="form.wechat" class="input" placeholder="便于现场工作人员联系" />
+        <input v-model.trim="form.wechat" class="input" placeholder="便于工作人员联系" />
       </label>
       <label class="field">
         资质信息
@@ -92,7 +92,7 @@ onMounted(async () => {
 async function save() {
   error.value = ''
   if (!form.name || !form.qualification) {
-    error.value = '请填写姓名和资质信息。'
+    error.value = '请填写姓名或称呼，并补充资质信息。'
     return
   }
   if (form.breweryConflictFlag && !form.breweryConflictText) {

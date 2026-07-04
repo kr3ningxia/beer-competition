@@ -6,11 +6,13 @@ import com.beercompetition.pojo.dto.AwardConfirmItemRequest;
 import com.beercompetition.pojo.dto.AwardConfirmRequest;
 import com.beercompetition.pojo.dto.RankingResultItemRequest;
 import com.beercompetition.pojo.dto.RankingSubmitRequest;
+import com.beercompetition.pojo.dto.RoundTableConfirmationRequest;
 import com.beercompetition.pojo.enums.AwardType;
 import com.beercompetition.pojo.enums.CompetitionStatus;
 import com.beercompetition.pojo.enums.EntryStatus;
 import com.beercompetition.pojo.enums.RoundStatus;
 import com.beercompetition.pojo.enums.RoundTargetMode;
+import com.beercompetition.pojo.vo.RankingConfirmationVO;
 import com.beercompetition.testsupport.BeerCompetitionTestData;
 import com.beercompetition.testsupport.IntegrationTestBase;
 import org.junit.jupiter.api.Test;
@@ -62,6 +64,48 @@ class RankingAndAwardGuardrailIntegrationTest extends IntegrationTestBase {
         assertThatThrownBy(() -> roundService.finalizeRanking(rankingRound.table().getId()))
                 .isInstanceOf(BaseException.class)
                 .hasMessageContaining("确认未完成");
+    }
+
+    @Test
+    void rankingAutoSubmitsWhenAllPeersConfirmCurrentVersion() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        BeerCompetitionTestData.RankingRound rankingRound = testData.createRankingRound(
+                fixture, List.of(fixture.entryA1(), fixture.entryA2()), RoundTargetMode.TOP_N, 1, RoundStatus.IN_PROGRESS, 1);
+
+        asJudge(fixture.captain().getId());
+        roundService.submitRanking(rankingRound.table().getId(), rankingRequest(result(fixture.entryA1().getId(), 1)));
+
+        asJudge(fixture.professional().getId());
+        RankingConfirmationVO confirmation = roundService.getRankingConfirmation(rankingRound.table().getId());
+        roundService.confirmRankingRoundTable(rankingRound.table().getId(), confirmationRequest(confirmation.getResultVersion()));
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM round_table WHERE id = ?",
+                String.class, rankingRound.table().getId())).isEqualTo(RoundStatus.IN_PROGRESS.name());
+
+        asJudge(fixture.cross().getId());
+        confirmation = roundService.getRankingConfirmation(rankingRound.table().getId());
+        roundService.confirmRankingRoundTable(rankingRound.table().getId(), confirmationRequest(confirmation.getResultVersion()));
+
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM round_table WHERE id = ?",
+                String.class, rankingRound.table().getId())).isEqualTo(RoundStatus.SUBMITTED.name());
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM competition_round WHERE id = ?",
+                String.class, rankingRound.round().getId())).isEqualTo(RoundStatus.SUBMITTED.name());
+    }
+
+    @Test
+    void staleRankingConfirmationVersionIsRejected() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        BeerCompetitionTestData.RankingRound rankingRound = testData.createRankingRound(
+                fixture, List.of(fixture.entryA1(), fixture.entryA2()), RoundTargetMode.TOP_N, 1, RoundStatus.IN_PROGRESS, 1);
+
+        asJudge(fixture.captain().getId());
+        roundService.submitRanking(rankingRound.table().getId(), rankingRequest(result(fixture.entryA1().getId(), 1)));
+        Integer staleVersion = roundService.getRankingConfirmation(rankingRound.table().getId()).getResultVersion();
+        roundService.submitRanking(rankingRound.table().getId(), rankingRequest(result(fixture.entryA2().getId(), 1)));
+
+        asJudge(fixture.professional().getId());
+        assertThatThrownBy(() -> roundService.confirmRankingRoundTable(rankingRound.table().getId(), confirmationRequest(staleVersion)))
+                .isInstanceOf(BaseException.class)
+                .hasMessageContaining("已更新");
     }
 
     @Test
@@ -121,6 +165,12 @@ class RankingAndAwardGuardrailIntegrationTest extends IntegrationTestBase {
     private RankingSubmitRequest rankingRequest(RankingResultItemRequest... results) {
         RankingSubmitRequest request = new RankingSubmitRequest();
         request.setResults(List.of(results));
+        return request;
+    }
+
+    private RoundTableConfirmationRequest confirmationRequest(Integer resultVersion) {
+        RoundTableConfirmationRequest request = new RoundTableConfirmationRequest();
+        request.setResultVersion(resultVersion);
         return request;
     }
 

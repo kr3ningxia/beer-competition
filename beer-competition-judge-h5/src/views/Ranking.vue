@@ -184,7 +184,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Html5Qrcode } from 'html5-qrcode'
-import { fetchRoundTable, finalizeRanking, saveRankingDraft, submitRanking } from '@/api/judge'
+import { fetchRoundTable, saveRankingDraft, submitRanking } from '@/api/judge'
 
 const route = useRoute()
 const router = useRouter()
@@ -215,21 +215,16 @@ let qrReader = null
 let scanLocked = false
 
 const canSubmitFinal = computed(() => Boolean(table.value?.canSubmitRanking))
-const canEdit = computed(() => table.value?.status !== 'LOCKED' && !submitting.value && !savingDraft.value)
+const canEdit = computed(() => !['SUBMITTED', 'LOCKED'].includes(table.value?.status) && !submitting.value && !savingDraft.value)
 const isMedalMode = computed(() => table.value?.targetMode === 'MEDALS')
 const isDraggingEntry = computed(() => Boolean(draggedEntryId.value || pointerDragging.value))
 const rankingConfirmation = computed(() => table.value?.rankingConfirmation || null)
 const readyForFinalSubmit = computed(() => Boolean(rankingConfirmation.value?.readyForFinalSubmit))
 const filledCount = computed(() => slots.value.filter((slot) => slot.beerEntryId).length)
-const canFinalizeRanking = computed(() => (
-  readyForFinalSubmit.value
-  && !hasLocalChanges.value
-  && !['SUBMITTED', 'LOCKED'].includes(table.value?.status)
-))
 const canSubmit = computed(() => {
   if (!canSubmitFinal.value || !canEdit.value || !slots.value.length) return false
   if (waitingForConfirmations.value) return false
-  if (table.value?.status === 'SUBMITTED' && !hasLocalChanges.value) return false
+  if (submitted.value && !hasLocalChanges.value) return false
   return isMedalMode.value ? filledCount.value > 0 : filledCount.value === slots.value.length
 })
 const waitingForConfirmations = computed(() => (
@@ -243,8 +238,9 @@ const submitBlockedReason = computed(() => {
   if (waitingForConfirmations.value) {
     return `同桌确认未完成，当前 ${rankingConfirmation.value?.confirmedCount || 0}/${rankingConfirmation.value?.requiredCount || 0}。`
   }
+  if (readyForFinalSubmit.value && submitted.value && !hasLocalChanges.value) return '同桌确认已完成，系统将自动提交本桌排序。'
   if (!canEdit.value) return readonlyText.value
-  if (table.value?.status === 'SUBMITTED' && !hasLocalChanges.value) return '排序已提交，如需调整请先修改本桌排序。'
+  if (submitted.value && !hasLocalChanges.value) return '排序已提交确认，等待同桌评审确认。'
   if (!slots.value.length) return '当前没有可提交的排序槽位。'
   if (isMedalMode.value && filledCount.value <= 0) return '请先选择至少一款酒。'
   if (!isMedalMode.value && filledCount.value < slots.value.length) return '请先补齐本桌排序。'
@@ -253,7 +249,7 @@ const submitBlockedReason = computed(() => {
 const rankingStatusText = computed(() => {
   if (table.value?.status === 'LOCKED') return '已锁定'
   if (table.value?.status === 'SUBMITTED') return '已提交'
-  if (canSubmitFinal.value && readyForFinalSubmit.value) return '可提交'
+  if (canSubmitFinal.value && readyForFinalSubmit.value) return '确认已齐'
   if (canSubmitFinal.value && submitted.value) return `待确认 ${rankingConfirmation.value?.confirmedCount || 0}/${rankingConfirmation.value?.requiredCount || 0}`
   if (!canSubmitFinal.value && draftSaved.value) return '已保存'
   return `${filledCount.value}/${slots.value.length}`
@@ -288,14 +284,12 @@ const rankingModeText = computed(() => {
   return '记录自己的排序，仅供本人参考'
 })
 const submitButtonText = computed(() => {
-  if (canFinalizeRanking.value) return '最终提交本桌排序'
-  if (waitingForConfirmations.value) return '最终提交本桌排序'
-  if (table.value?.status === 'SUBMITTED' && !hasLocalChanges.value) return '修改后可重新提交确认'
+  if (table.value?.status === 'SUBMITTED' && !hasLocalChanges.value) return '本桌排序已提交'
+  if (readyForFinalSubmit.value && submitted.value && !hasLocalChanges.value) return '等待自动提交'
+  if (waitingForConfirmations.value) return '等待同桌确认'
   return submitted.value ? '重新提交同桌确认' : '提交同桌确认'
 })
-const confirmTitle = computed(() => (
-  canFinalizeRanking.value ? '最终提交本桌排序' : '提交同桌确认'
-))
+const confirmTitle = computed(() => '提交同桌确认')
 
 function displayShortCode(entry) {
   return entry?.shortCode || '编号'
@@ -543,15 +537,10 @@ async function confirmSubmit() {
   if (!canSubmit.value || submitting.value) return
   submitting.value = true
   try {
-    if (canFinalizeRanking.value) {
-      await finalizeRanking(route.params.roundTableId)
-      message.value = '本桌排序已提交'
-    } else {
-      await submitRanking(route.params.roundTableId, {
-        results: submitResults.value,
-      })
-      message.value = '排序已提交，等待同桌评审确认'
-    }
+    await submitRanking(route.params.roundTableId, {
+      results: submitResults.value,
+    })
+    message.value = '排序已提交，等待同桌评审确认'
     confirmOpen.value = false
     submitted.value = true
     await loadTable()

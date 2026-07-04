@@ -71,6 +71,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -283,6 +284,7 @@ public class ScoreServiceImpl implements ScoreService {
         }
         JudgeAssignment captainAssignment = requireCaptainAssignment(entry.getCompetitionId());
         RoundTableEntry roundEntry = requireScoreRoundTask(entry.getId(), JudgeRoleType.CAPTAIN.name(), true);
+        rejectCaptainFinalAfterSubmitted(roundEntry);
         requireCaptainPersonalScoreSubmitted(roundEntry, BaseContext.getCurrentId());
         requireAllTableScoresSubmitted(roundEntry);
         int commentCharCount = countDimensionNotes(request.getDimensions());
@@ -330,6 +332,7 @@ public class ScoreServiceImpl implements ScoreService {
         if (changed) {
             bumpRoundTableResultVersion(roundEntry.getRoundTableId());
         }
+        autoSubmitScoreRoundTableIfNoRequiredConfirmations(roundEntry.getRoundTableId());
         reviewStatsService.evictReviewStats(roundEntry.getRoundId(), roundEntry.getRoundTableId(), BaseContext.getCurrentId(), JudgeRoleType.CAPTAIN.name());
         return toScoreRecordVO(scoreRecordMapper.selectById(finalRecord.getId()));
     }
@@ -389,6 +392,63 @@ public class ScoreServiceImpl implements ScoreService {
                 || compareDecimal(current.getTotalScore(), request.getConsensusScore()) != 0
                 || !Objects.equals(String.valueOf(current.getComments() == null ? "" : current.getComments()).trim(), request.getComments().trim())
                 || !Objects.equals(Objects.equals(current.getAdvancedFlag(), FLAG_TRUE), Boolean.TRUE.equals(request.getAdvanced()));
+    }
+
+    private void rejectCaptainFinalAfterSubmitted(RoundTableEntry roundEntry) {
+        RoundTable table = roundTableMapper.selectById(roundEntry.getRoundTableId());
+        if (table != null && (RoundStatus.SUBMITTED.name().equals(table.getStatus()) || RoundStatus.LOCKED.name().equals(table.getStatus()))) {
+            throw new BaseException("本桌结果已提交，需主办方重新开放后才能修改");
+        }
+    }
+
+    private void autoSubmitScoreRoundTableIfNoRequiredConfirmations(Long roundTableId) {
+        RoundTable table = roundTableMapper.selectById(roundTableId);
+        if (table == null || !RoundStatus.PUBLISHED.name().equals(table.getStatus())) {
+            return;
+        }
+        long requiredConfirmations = roundTableMemberMapper.selectCount(new LambdaQueryWrapper<RoundTableMember>()
+                .eq(RoundTableMember::getRoundTableId, roundTableId)
+                .eq(RoundTableMember::getSystemTaskRequired, FLAG_TRUE)
+                .ne(RoundTableMember::getRole, JudgeRoleType.CAPTAIN.name()));
+        if (requiredConfirmations > 0 || !isScoreRoundTableReadyForSubmit(table)) {
+            return;
+        }
+        table.setStatus(RoundStatus.SUBMITTED.name());
+        roundTableMapper.updateById(table);
+        CompetitionRound round = competitionRoundMapper.selectById(table.getRoundId());
+        if (round != null && roundTableMapper.selectList(new LambdaQueryWrapper<RoundTable>()
+                .eq(RoundTable::getRoundId, round.getId()))
+                .stream()
+                .allMatch(item -> RoundStatus.SUBMITTED.name().equals(item.getStatus()))) {
+            round.setStatus(RoundStatus.SUBMITTED.name());
+            round.setSubmittedTime(LocalDateTime.now());
+            competitionRoundMapper.updateById(round);
+        }
+    }
+
+    private boolean isScoreRoundTableReadyForSubmit(RoundTable table) {
+        List<RoundTableEntry> tableEntries = roundTableEntryMapper.selectList(new LambdaQueryWrapper<RoundTableEntry>()
+                .eq(RoundTableEntry::getRoundTableId, table.getId()));
+        if (tableEntries.isEmpty()) {
+            return false;
+        }
+        Set<Long> entryIds = tableEntries.stream().map(RoundTableEntry::getBeerEntryId).collect(Collectors.toSet());
+        Map<Long, ScoreRecord> finalScoreByEntry = scoreRecordMapper.selectList(new LambdaQueryWrapper<ScoreRecord>()
+                        .eq(ScoreRecord::getCompetitionId, table.getCompetitionId())
+                        .in(ScoreRecord::getBeerEntryId, entryIds)
+                        .eq(ScoreRecord::getFinalFlag, FLAG_TRUE))
+                .stream()
+                .collect(Collectors.toMap(ScoreRecord::getBeerEntryId, Function.identity(), (left, right) -> right));
+        if (!finalScoreByEntry.keySet().containsAll(entryIds)) {
+            return false;
+        }
+        if (resolveCompetitionType(competitionMapper.selectById(table.getCompetitionId())) == CompetitionType.FEEDBACK_ONLY) {
+            return true;
+        }
+        long advancedCount = finalScoreByEntry.values().stream()
+                .filter(score -> Objects.equals(score.getAdvancedFlag(), FLAG_TRUE))
+                .count();
+        return advancedCount == (table.getTargetCount() == null ? 0 : table.getTargetCount());
     }
 
     private int compareDecimal(BigDecimal left, BigDecimal right) {
