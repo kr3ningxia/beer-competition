@@ -66,7 +66,7 @@ const stateText = computed(() => {
   if (tableSubmitted.value) return '本桌排序已提交，等待主办方确认轮次。'
   if (!readyForConfirmation.value) return '桌长还未提交排序结果，请稍后再核对。'
   if (mineConfirmed.value) return '你已确认本桌排序，等待同桌确认完成。'
-  return '请核对本桌排序，确认完成后系统将自动提交本桌排序。'
+  return '请核对本桌排序后确认。'
 })
 const confirmButtonText = computed(() => {
   if (submitting.value) return '确认中...'
@@ -99,7 +99,7 @@ async function submitConfirm() {
     confirmation.value = await confirmRankingRoundTable(route.params.roundTableId, {
       resultVersion: confirmation.value?.resultVersion,
     })
-    message.value = confirmation.value?.status === 'SUBMITTED' ? '本桌排序已自动提交' : '已确认本桌排序'
+    message.value = confirmation.value?.status === 'SUBMITTED' ? '本桌排序已提交' : '已确认本桌排序'
   } catch (error) {
     await loadConfirmation()
     message.value = error?.response?.data?.message || error?.message || '确认失败，请重新核对后再试。'

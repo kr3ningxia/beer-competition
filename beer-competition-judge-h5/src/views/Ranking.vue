@@ -238,7 +238,7 @@ const submitBlockedReason = computed(() => {
   if (waitingForConfirmations.value) {
     return `同桌确认未完成，当前 ${rankingConfirmation.value?.confirmedCount || 0}/${rankingConfirmation.value?.requiredCount || 0}。`
   }
-  if (readyForFinalSubmit.value && submitted.value && !hasLocalChanges.value) return '同桌确认已完成，系统将自动提交本桌排序。'
+  if (readyForFinalSubmit.value && submitted.value && !hasLocalChanges.value) return '同桌确认已完成，等待主办方确认。'
   if (!canEdit.value) return readonlyText.value
   if (submitted.value && !hasLocalChanges.value) return '排序已提交确认，等待同桌评审确认。'
   if (!slots.value.length) return '当前没有可提交的排序槽位。'
@@ -285,7 +285,7 @@ const rankingModeText = computed(() => {
 })
 const submitButtonText = computed(() => {
   if (table.value?.status === 'SUBMITTED' && !hasLocalChanges.value) return '本桌排序已提交'
-  if (readyForFinalSubmit.value && submitted.value && !hasLocalChanges.value) return '等待自动提交'
+  if (readyForFinalSubmit.value && submitted.value && !hasLocalChanges.value) return '确认已齐'
   if (waitingForConfirmations.value) return '等待同桌确认'
   return submitted.value ? '重新提交同桌确认' : '提交同桌确认'
 })

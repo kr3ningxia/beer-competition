@@ -1649,7 +1649,7 @@
           type="button"
           @click="overrideRoundScoreConfirmation"
         >
-          强制确认
+          现场确认
         </button>
 
         <section v-if="!isRoundScoreDetailRanking" class="score-detail-progress-list">
@@ -2321,11 +2321,15 @@ const canCreateNextRound = computed(() => {
   if (isFeedbackOnlyCompetition.value) return false
   const lastRound = rounds.value[rounds.value.length - 1]
   if (!lastRound || isTerminalRound(lastRound)) return false
-  if (lastRound.status === 'SUBMITTED') return true
+  if (['PUBLISHED', 'IN_PROGRESS', 'SUBMITTED'].includes(lastRound.status)) return true
+  if (lastRound.status !== 'LOCKED') return false
   const hasPendingRound = rounds.value.some((round) => ['DRAFT', 'PUBLISHED', 'IN_PROGRESS', 'SUBMITTED'].includes(round.status))
-  return Boolean(lastRound.status === 'LOCKED' && !hasPendingRound)
+  return !hasPendingRound
 })
-const createNextRoundIsEarlyDraft = computed(() => rounds.value[rounds.value.length - 1]?.status === 'SUBMITTED')
+const createNextRoundIsEarlyDraft = computed(() => {
+  const lastRound = rounds.value[rounds.value.length - 1]
+  return Boolean(lastRound && lastRound.status !== 'LOCKED')
+})
 const createNextRoundButtonText = computed(() => (createNextRoundIsEarlyDraft.value ? `提前创建${nextRoundName.value}草稿` : `创建${nextRoundName.value}`))
 const nextRoundNumber = computed(() => rounds.value.length + 1)
 const nextRoundName = computed(() => {
@@ -3399,7 +3403,7 @@ function resolveStagePrimaryAction() {
     return { text: '去确认结果', enabled: true, action: 'goToResults' }
   }
   if (canCreateNextRound.value) {
-    return { text: `创建${nextRoundName.value}`, enabled: true, action: 'createNextRound' }
+    return { text: createNextRoundButtonText.value, enabled: true, action: 'createNextRound' }
   }
   return { text: '打开投屏看板', enabled: true, action: 'openLiveDashboard' }
 }
@@ -3478,13 +3482,16 @@ function buildFutureStageTasks() {
   if (canCreateNextRound.value) {
     const lastRound = rounds.value[rounds.value.length - 1]
     const creatingFinal = isMedalRound(lastRound)
+    const earlyDraft = createNextRoundIsEarlyDraft.value
     tasks.push({
       key: 'createNextRound',
-      label: `创建${nextRoundName.value}`,
+      label: earlyDraft ? `提前创建${nextRoundName.value}草稿` : `创建${nextRoundName.value}`,
       targetTab: 'rounds',
-      detail: creatingFinal ? '使用各组别金奖创建决赛桌' : '使用晋级酒款创建空草稿桌',
+      detail: creatingFinal
+        ? '使用各组别金奖创建决赛桌'
+        : (earlyDraft ? '先安排下一轮桌次和人员，候选酒款锁定后同步' : '使用晋级酒款创建排序草稿'),
       state: 'pending',
-      statusText: creatingFinal ? '总冠军 1 名' : `${advancedPool.value.length} 款`,
+      statusText: creatingFinal ? '总冠军 1 名' : (earlyDraft && !advancedPool.value.length ? '候选待同步' : `${advancedPool.value.length} 款`),
       action: 'createNextRound',
     })
   }
@@ -3770,16 +3777,18 @@ function buildRoundPyramidNodes() {
   if (rounds.value.length > 0 && canCreateNextRound.value) {
     const lastRound = rounds.value[rounds.value.length - 1]
     const creatingFinal = isMedalRound(lastRound)
+    const earlyDraft = createNextRoundIsEarlyDraft.value
+    const nextRoundCandidateText = earlyDraft && !advancedPool.value.length ? '候选待同步' : `${advancedPool.value.length} 款晋级酒`
     nodes.push({
       key: 'next-round',
       kind: 'placeholder',
       label: creatingFinal ? '决赛轮' : nextRoundName.value,
-      subtitle: creatingFinal ? '各组别金奖' : `${advancedPool.value.length} 款晋级酒`,
+      subtitle: creatingFinal ? '各组别金奖' : nextRoundCandidateText,
       statusText: '可创建',
-      summary: creatingFinal ? '总冠军 1 名' : `${advancedPool.value.length} 款晋级酒`,
-      note: creatingFinal ? '点击创建决赛轮' : `点击创建${nextRoundName.value}`,
+      summary: creatingFinal ? '总冠军 1 名' : nextRoundCandidateText,
+      note: creatingFinal ? '点击创建决赛轮' : (earlyDraft ? `提前创建${nextRoundName.value}草稿` : `点击创建${nextRoundName.value}`),
       placeholderText: '创建',
-      hint: creatingFinal ? '创建决赛轮' : `创建${nextRoundName.value}`,
+      hint: creatingFinal ? '创建决赛轮' : (earlyDraft ? '先排桌次和人员' : `创建${nextRoundName.value}`),
       tableChips: [],
       extraTableCount: 0,
       width: 58,
@@ -5016,9 +5025,9 @@ async function overrideRoundScoreConfirmation() {
   if (!competition.value?.id || !roundScoreDetailTable.value?.id) return
   openBusinessConfirm({
     action: 'overrideRoundConfirmation',
-    kicker: '强制确认',
+    kicker: '现场确认',
     title: '确认跳过同桌确认？',
-    copy: '该操作会记录为强制确认，并自动提交本桌结果。用于评审离场、设备异常等无法完成常规流程的情况，请填写原因，便于赛后追溯',
+    copy: '该操作会记录为现场确认，并提交本桌结果。适用于评审离场、设备异常等无法完成常规确认的情况，请填写原因，便于赛后追溯',
     summary: [
       { label: '评审桌', value: roundScoreDetailTable.value.name || '-' },
       { label: '当前轮次', value: currentRound.value?.name || '-' },
@@ -5642,8 +5651,8 @@ async function generateAwardsAction() {
     kicker: '奖项生成',
     title: awardDrafts.value.length ? '确认重新生成获奖名单？' : '确认生成获奖名单？',
     copy: awardDrafts.value.length
-      ? '系统会按已锁定的轮次结果重新生成奖项草稿，当前未确认的选择可能会被覆盖，生成后仍可在确认前调整'
-      : '系统会按已锁定的轮次结果生成奖项草稿，生成后可在确认获奖名单前继续核对和调整',
+      ? '将按已锁定的轮次结果重新生成奖项草稿，当前未确认的选择可能会被覆盖，生成后仍可在确认前调整'
+      : '将按已锁定的轮次结果生成奖项草稿，生成后可在确认获奖名单前继续核对和调整',
     summary: competitionSummaryItems([
       { label: '决赛轮', value: finalRoundLocked.value ? '已锁定' : '未锁定' },
       { label: '现有草稿', value: `${awardDrafts.value.length} 项` },

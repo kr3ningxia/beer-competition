@@ -324,7 +324,7 @@ const rankingConfirmationHint = computed(() => {
   const confirmed = Number(rankingConfirmation.value?.confirmedCount || 0)
   const required = Number(rankingConfirmation.value?.requiredCount || 0)
   return required > 0 && confirmed >= required
-    ? '本桌确认已齐，等待桌长提交。'
+    ? '本桌确认已齐，等待主办方确认轮次。'
     : '你已完成确认，等待其他评审确认。'
 })
 const scoreConfirmationHint = computed(() => {
@@ -336,7 +336,7 @@ const scoreConfirmationHint = computed(() => {
   const confirmed = Number(scoreConfirmation.value?.confirmedCount || 0)
   const required = Number(scoreConfirmation.value?.requiredCount || 0)
   return required > 0 && confirmed >= required
-    ? '本桌确认已齐，等待桌长提交。'
+    ? '本桌确认已齐，等待主办方确认轮次。'
     : '你已完成确认，等待其他评审确认。'
 })
 const progressLabel = computed(() => (isCaptain.value ? '我的评分' : '我的进度'))
@@ -357,9 +357,14 @@ const tableReadyForReview = computed(() => {
   const targetOk = advanceTargetCount.value <= 0 || advancedCount.value === advanceTargetCount.value
   return finalizedCount.value === entries.value.length && targetOk
 })
+const tableSubmitted = computed(() => (
+  captainBoard.value?.roundTable?.status === 'SUBMITTED'
+  || currentRoundTable.value?.status === 'SUBMITTED'
+))
 const tableCheckoutTitle = computed(() => {
   if (!entries.value.length) return ''
-  if (tableReadyForReview.value) return '本桌可提交'
+  if (tableSubmitted.value) return '本桌已提交'
+  if (tableReadyForReview.value) return '等待同桌确认'
   if (readyFinalizeCount.value > 0 && myPendingScoreCount.value > 0) return '处理本桌待办'
   if (readyFinalizeCount.value > 0) return '有酒款可汇总'
   if (myPendingScoreCount.value > 0) return '先完成个人评分'
@@ -368,6 +373,7 @@ const tableCheckoutTitle = computed(() => {
 })
 const tableCheckoutText = computed(() => {
   if (!entries.value.length) return ''
+  if (tableSubmitted.value) return '等待主办方确认轮次。'
   if (readyFinalizeCount.value > 0 && myPendingScoreCount.value > 0) {
     return `${readyFinalizeCount.value} 款可汇总，另有 ${myPendingScoreCount.value} 款个人评分待提交。`
   }
@@ -384,14 +390,15 @@ const tableCheckoutText = computed(() => {
     return `还差 ${pendingTableScoreCount.value} 份同桌评分，齐全后再填写桌长意见。`
   }
   if (isFeedbackOnlyCompetition.value) {
-    return '酒款诊断意见已齐，请核对无误后提交本桌结果。'
+    return '酒款诊断意见已齐，等待同桌确认。'
   }
   if (advanceTargetCount.value > 0 && advancedCount.value !== advanceTargetCount.value) {
     return `酒款意见已完成，还需按本桌目标确认 ${advanceTargetCount.value} 款晋级酒。`
   }
-  return '酒款意见和晋级名单已齐，请核对无误后提交本桌结果。'
+  return '酒款意见和晋级名单已齐，等待同桌确认。'
 })
 const tableCheckoutActionLabel = computed(() => {
+  if (tableSubmitted.value) return '查看'
   if (tableReadyForReview.value) return '核对'
   if (readyFinalizeCount.value > 0) return '去汇总'
   if (myPendingScoreCount.value > 0) return '去评分'
@@ -400,14 +407,14 @@ const tableCheckoutActionLabel = computed(() => {
 const canOpenTableWorkbench = computed(() => Boolean(entries.value.length))
 const emptyStateTitle = computed(() => {
   if (loadingTasks.value) return '正在载入本桌酒款'
-  if (!current.value?.roundTableId) return '当前账号还没有绑定评审桌'
+  if (!current.value?.roundTableId) return '你还没有加入本轮评审桌'
   if (current.value?.taskType !== 'CAPTAIN_FINALIZE') return '当前轮次不是第一轮汇总任务'
   return '本桌还没有酒款'
 })
 const emptyStateMessage = computed(() => {
   if (loadingTasks.value) return '正在同步本轮酒款和评分进度。'
   if (!current.value?.roundTableId) return '请现场工作人员先把你加入本轮评审桌。'
-  if (current.value?.taskType !== 'CAPTAIN_FINALIZE') return '请确认后台是否已经发布第一轮评分任务。'
+  if (current.value?.taskType !== 'CAPTAIN_FINALIZE') return '请联系现场工作人员确认第一轮评分任务。'
   return '请现场工作人员确认本轮、评审桌和酒款分配。'
 })
 const emptyStateChecks = computed(() => (

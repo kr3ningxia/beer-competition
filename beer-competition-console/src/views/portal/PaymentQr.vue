@@ -200,7 +200,7 @@
                 <img v-if="paymentQrDataUrl" :src="paymentQrDataUrl" alt="微信支付二维码" />
                 <div>
                   <strong>微信扫码支付</strong>
-                  <span>{{ paymentExpireText }} 页面会自动更新报名状态</span>
+                  <span>{{ paymentExpireText }} 付款成功后可继续下载标签和填写送样信息</span>
                 </div>
               </div>
               <el-button
@@ -915,7 +915,7 @@ const deliveryCardTitle = computed(() => {
 })
 
 const deliveryCardDescription = computed(() => {
-  if (!selectedEntry.value?.canDownloadLabel) return '支付成功后这里会自动开放'
+  if (!selectedEntry.value?.canDownloadLabel) return '支付成功后可下载标签'
   if (showDeliverySummary.value) return selectedEntry.value.deliveryStatus === 'RECEIVED' ? '组委会已经确认样品入库，这里保留本次提交内容' : '快递信息已提交，请保留单号并持续关注签收进度'
   return '寄出后请尽快提交快递信息，避免组委会无法及时核对来样'
 })

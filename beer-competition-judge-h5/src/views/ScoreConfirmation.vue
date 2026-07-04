@@ -99,7 +99,7 @@ async function submitConfirm() {
     confirmation.value = await confirmScoreRoundTable(route.params.roundTableId, {
       resultVersion: confirmation.value?.resultVersion,
     })
-    message.value = confirmation.value?.status === 'SUBMITTED' ? '本桌结果已自动提交' : '已确认本桌结果'
+    message.value = confirmation.value?.status === 'SUBMITTED' ? '本桌结果已提交' : '已确认本桌结果'
   } catch (error) {
     await loadConfirmation()
     message.value = error?.response?.data?.message || error?.message || '确认失败，请重新核对后再试。'

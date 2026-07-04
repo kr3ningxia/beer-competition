@@ -225,7 +225,7 @@
           <div>
             <span>报名支付</span>
             <h3>{{ paymentPaid ? '报名已完成' : '完成报名付款' }}</h3>
-            <p>{{ paymentPaid ? '请下载标签，并填写这款酒的送样信息' : '请使用微信扫码支付本款报名费，付款成功后，页面会自动更新报名状态' }}</p>
+            <p>{{ paymentPaid ? '请下载标签，并填写这款酒的送样信息' : '请使用微信扫码支付本款报名费，付款成功后可继续下载标签和填写送样信息' }}</p>
           </div>
           <strong>{{ formatCurrency(paymentAmount) }}</strong>
         </div>

@@ -288,7 +288,8 @@ const captainSummaryState = computed(() => {
 })
 const captainSummaryTitle = computed(() => {
   if (captainSummaryState.value === 'loading') return '正在载入本桌任务'
-  if (captainSummaryState.value === 'ready-review') return isFeedbackOnlyCompetition.value ? '本桌诊断可核对' : '本桌结果可核对'
+  if (tableSubmitted.value) return '本桌结果已提交'
+  if (captainSummaryState.value === 'ready-review') return '等待同桌确认'
   if (captainSummaryState.value === 'advance-check') return isFeedbackOnlyCompetition.value ? '诊断意见待核对' : '晋级名单待核对'
   if (captainSummaryState.value === 'mixed-todos') return '处理本桌待办'
   if (captainSummaryState.value === 'ready-finalize') return '有酒款待汇总'
@@ -334,8 +335,9 @@ const captainSummaryBadges = computed(() => {
 const tableCheckText = computed(() => {
   if (captainSummaryState.value === 'loading') return '正在同步本轮酒款和评分进度。'
   if (!boardEntries.value.length) return '请联系现场工作人员确认本轮评审桌和酒款配置。'
-  if (tableReadyForReview.value) return isFeedbackOnlyCompetition.value ? '酒款诊断意见已齐，请核对无误后提交本桌结果。' : '酒款意见和晋级名单已齐，请核对无误后提交本桌结果。'
-  if (captainSummaryState.value === 'advance-check') return isFeedbackOnlyCompetition.value ? '酒款诊断意见已完成，请核对后提交本桌结果。' : '酒款意见已完成，还需按本桌目标确认晋级名单。'
+  if (tableSubmitted.value) return '等待主办方确认轮次。'
+  if (tableReadyForReview.value) return isFeedbackOnlyCompetition.value ? '酒款诊断意见已齐，等待同桌确认。' : '酒款意见和晋级名单已齐，等待同桌确认。'
+  if (captainSummaryState.value === 'advance-check') return isFeedbackOnlyCompetition.value ? '酒款诊断意见已完成，等待同桌确认。' : '酒款意见已完成，还需按本桌目标确认晋级名单。'
   if (captainSummaryState.value === 'mixed-todos') return `${readyFinalizeCount.value} 款可汇总，另有 ${myPendingScoreCount.value} 款个人评分待提交。`
   if (captainSummaryState.value === 'ready-finalize') return '同桌评分已齐，请填写桌长意见。'
   if (captainSummaryState.value === 'need-score') {
@@ -382,15 +384,15 @@ const tableLocked = computed(() => ['SUBMITTED', 'LOCKED'].includes(board.value?
 const tableReviewStateText = computed(() => {
   if (tableSubmitted.value) return '本桌结果已提交'
   if (board.value?.roundTable?.status === 'LOCKED') return '本桌结果已锁定'
-  if (confirmationReady.value) return '确认已齐，正在同步提交'
+  if (confirmationReady.value) return '确认已齐'
   return '等待同桌确认'
 })
 const tableSubmitHint = computed(() => {
   if (tableSubmitted.value) return '本桌结果已提交，等待主办方确认轮次。'
   if (board.value?.roundTable?.status === 'LOCKED') return '本桌结果已锁定。'
   if (tableReadyForReview.value && !confirmationReady.value) return `等待同桌评审确认（${confirmationProgressText.value}），可修改评价，修改后需重新确认。`
-  if (tableReadyForReview.value && (scoreConfirmation.value?.overrideFlag || board.value?.roundTable?.confirmationOverrideFlag)) return '现场确认通过后将提交本桌结果。'
-  if (tableReadyForReview.value && !board.value?.roundTable?.canSubmitTableScore) return '当前账号不能提交本桌结果。'
+  if (tableReadyForReview.value && (scoreConfirmation.value?.overrideFlag || board.value?.roundTable?.confirmationOverrideFlag)) return '现场确认通过后将进入主办方确认轮次。'
+  if (tableReadyForReview.value && !board.value?.roundTable?.canSubmitTableScore) return '本桌结果请由桌长处理。'
   if (tableReadyForReview.value) return '可修改评价，修改后需重新确认。'
   return ''
 })
@@ -438,10 +440,10 @@ const canFinalize = computed(() => (
   && finalCommentLength.value >= minFinalCommentLength.value
 ))
 const finalizeHint = computed(() => {
-  if (tableLocked.value) return tableSubmitted.value ? '本桌结果已提交，不能继续修改。' : '本桌结果已锁定，不能继续修改。'
+  if (tableLocked.value) return tableSubmitted.value ? '本桌结果已提交，暂不可修改。' : '本桌结果已锁定，暂不可修改。'
   if (!tableScoresReady.value) {
     const expectedText = currentExpectedCount.value > 0 ? currentExpectedCount.value : '-'
-    return `同桌评分未完成（${currentSubmittedCount.value}/${expectedText}），暂不能保存桌长意见。`
+    return `同桌评分未完成（${currentSubmittedCount.value}/${expectedText}），齐全后再填写桌长意见。`
   }
   if (!consensusScoreValid.value) return `请填写 1-${captainScoreMax.value} 的共识分。`
   if (finalCommentLength.value < minFinalCommentLength.value) return `综合评语还差 ${minFinalCommentLength.value - finalCommentLength.value} 字。`
