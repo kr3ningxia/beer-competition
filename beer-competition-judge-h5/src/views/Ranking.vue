@@ -232,42 +232,14 @@
       <small>{{ entryMeta(dragGhost.entry) }}</small>
     </div>
 
-    <Teleport to="body">
-      <div
-        v-if="styleDetailEntry"
-        class="style-detail-backdrop"
-        role="presentation"
-        @click.self="closeStyleDetail"
-      >
-        <section
-          class="style-detail-sheet"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="ranking-style-detail-title"
-        >
-          <header class="style-detail-head">
-            <div>
-              <span>风格说明</span>
-              <h2 id="ranking-style-detail-title">{{ styleCategoryText(styleDetailEntry) }}</h2>
-              <p>{{ styleDetailEntry.style || '基础风格' }}</p>
-            </div>
-            <button class="style-detail-close" type="button" aria-label="关闭风格说明" @click="closeStyleDetail">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M6 6l12 12M18 6 6 18" />
-              </svg>
-            </button>
-          </header>
-
-          <div class="style-detail-body">
-            <p>{{ styleDetailText.main }}</p>
-            <section v-if="styleDetailText.metrics" class="style-metrics-panel">
-              <span>指标范围</span>
-              <p>{{ styleDetailText.metrics }}</p>
-            </section>
-          </div>
-        </section>
-      </div>
-    </Teleport>
+    <StyleDetailDialog
+      :open="Boolean(styleDetailEntry)"
+      :entry="styleDetailEntry"
+      title-id="ranking-style-detail-title"
+      close-label="关闭风格说明"
+      empty-text="暂无风格说明。"
+      @close="closeStyleDetail"
+    />
   </main>
 </template>
 
@@ -276,6 +248,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Html5Qrcode } from 'html5-qrcode'
 import { fetchRoundTable, saveRankingDraft, submitRanking } from '@/api/judge'
+import StyleDetailDialog from '@/components/StyleDetailDialog.vue'
 import { formatAbvWithUnit } from '@/utils/formatters'
 
 const route = useRoute()
@@ -384,7 +357,6 @@ const submitButtonText = computed(() => {
   return submitted.value ? '重新提交同桌确认' : '提交同桌确认'
 })
 const confirmTitle = computed(() => '提交同桌确认')
-const styleDetailText = computed(() => splitStyleDescription(styleDetailEntry.value?.styleDescription))
 
 function displayShortCode(entry) {
   return entry?.shortCode || '编号'
@@ -456,18 +428,6 @@ function openStyleDetail(entry) {
 
 function closeStyleDetail() {
   styleDetailEntry.value = null
-}
-
-function splitStyleDescription(description) {
-  const text = String(description || '').trim()
-  if (!text) return { main: '暂无风格说明。', metrics: '' }
-  const marker = '指标范围：'
-  const markerIndex = text.indexOf(marker)
-  if (markerIndex < 0) return { main: text, metrics: '' }
-  return {
-    main: text.slice(0, markerIndex).trim(),
-    metrics: text.slice(markerIndex + marker.length).trim(),
-  }
 }
 
 function dragEntry(entry, event) {
@@ -1385,119 +1345,6 @@ onBeforeUnmount(() => {
 
 .scanner-manual .button {
   min-width: 74px;
-}
-
-.style-detail-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 70;
-  display: flex;
-  justify-content: center;
-  align-items: flex-end;
-  padding: 18px;
-  background: rgba(16, 24, 32, 0.54);
-}
-
-.style-detail-sheet {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  width: min(100%, 520px);
-  max-height: min(78dvh, 720px);
-  overflow: hidden;
-  border-radius: 14px;
-  color: #18222f;
-  background: #fff;
-  box-shadow: 0 20px 52px rgba(15, 23, 42, 0.28);
-}
-
-.style-detail-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 14px;
-  border-bottom: 1px solid #edf0f3;
-  padding: 16px 16px 14px;
-}
-
-.style-detail-head span,
-.style-metrics-panel span {
-  color: #9a5b26;
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.style-detail-head h2,
-.style-detail-head p,
-.style-detail-body p,
-.style-metrics-panel p {
-  margin: 0;
-}
-
-.style-detail-head h2 {
-  margin-top: 4px;
-  font-size: 19px;
-  line-height: 1.25;
-}
-
-.style-detail-head p {
-  margin-top: 4px;
-  color: #667085;
-  font-size: 13px;
-  font-weight: 750;
-}
-
-.style-detail-close {
-  display: grid;
-  flex: 0 0 auto;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  border: 1px solid #e4e7ec;
-  border-radius: 8px;
-  color: #344054;
-  background: #fff;
-}
-
-.style-detail-close svg {
-  width: 18px;
-  height: 18px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2.2;
-  stroke-linecap: round;
-}
-
-.style-detail-body {
-  display: grid;
-  align-content: start;
-  gap: 12px;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 16px;
-}
-
-.style-detail-body > p {
-  color: #344054;
-  font-size: 14px;
-  font-weight: 650;
-  line-height: 1.75;
-  white-space: pre-wrap;
-}
-
-.style-metrics-panel {
-  border: 1px solid #f3d49b;
-  border-radius: 8px;
-  padding: 11px 12px;
-  background: #fffaf0;
-}
-
-.style-metrics-panel p {
-  margin-top: 5px;
-  color: #344054;
-  font-size: 13px;
-  font-weight: 750;
-  line-height: 1.6;
-  white-space: pre-wrap;
 }
 
 @media (max-width: 380px) {

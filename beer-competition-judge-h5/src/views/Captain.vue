@@ -93,11 +93,18 @@
           <strong>{{ styleDisplayName(entry) }} · {{ formatAbvWithUnit(entry.abv) }}</strong>
         </div>
         <div v-if="entry?.styleCategoryName || entry?.styleDescription" class="style-reference">
-          <div>
+          <button
+            class="style-reference-row"
+            type="button"
+            :aria-expanded="styleDetailOpen"
+            @click="openStyleDetail"
+          >
             <span>风格分类</span>
-            <strong>{{ entry.styleCategoryName || entry.categoryName }}</strong>
-          </div>
-          <p v-if="entry.styleDescription">{{ entry.styleDescription }}</p>
+            <strong>{{ styleCategoryText(entry) }}</strong>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m9 18 6-6-6-6" />
+            </svg>
+          </button>
         </div>
 
         <div v-if="!myScoreSubmitted" class="captain-alert">
@@ -192,6 +199,8 @@
       </div>
     </section>
 
+    <StyleDetailDialog :open="styleDetailOpen" :entry="entry" @close="closeStyleDetail" />
+
     <JudgeBottomNav :role="me?.role || 'CAPTAIN'" />
   </main>
 </template>
@@ -209,6 +218,7 @@ import {
   finalizeTableScore,
 } from '@/api/judge'
 import JudgeBottomNav from '@/components/JudgeBottomNav.vue'
+import StyleDetailDialog from '@/components/StyleDetailDialog.vue'
 import { formatAbvWithUnit } from '@/utils/formatters'
 import { isRankingTaskType, selectCurrentTask } from '@/utils/judgeTasks'
 
@@ -225,6 +235,7 @@ const expandedCommentIds = ref(new Set())
 const message = ref('')
 const loadingBoard = ref(false)
 const advanceLimitDialogOpen = ref(false)
+const styleDetailOpen = ref(false)
 const form = reactive({
   consensusScore: '',
   comments: '',
@@ -603,12 +614,26 @@ function styleDisplayName(source) {
   return [source?.styleCode, source?.style].filter(Boolean).join(' ')
 }
 
+function styleCategoryText(source) {
+  return source?.styleCategoryName || source?.categoryName || '-'
+}
+
+function openStyleDetail() {
+  if (!entry.value) return
+  styleDetailOpen.value = true
+}
+
+function closeStyleDetail() {
+  styleDetailOpen.value = false
+}
+
 function displayShortCode(source) {
   return source?.shortCode ? `编号： ${source.shortCode}` : '编号'
 }
 
 watch(uuid, async () => {
   message.value = ''
+  styleDetailOpen.value = false
   if (uuid.value) await loadDetail()
   else await loadBoard()
 })
@@ -812,21 +837,29 @@ onMounted(async () => {
 }
 
 .style-reference {
-  display: grid;
-  gap: 8px;
   margin-top: 10px;
   border: 1px solid #e4e7ec;
   border-radius: 8px;
-  padding: 10px 12px;
   background: #fff;
+  overflow: hidden;
 }
 
-.style-reference div {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
+.style-reference-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
   align-items: center;
-  min-width: 0;
+  width: 100%;
+  border: 0;
+  padding: 12px;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+  appearance: none;
+}
+
+.style-reference-row:active {
+  background: #fbfaf7;
 }
 
 .style-reference span {
@@ -842,12 +875,14 @@ onMounted(async () => {
   text-align: right;
 }
 
-.style-reference p {
-  margin: 0;
-  color: #344054;
-  line-height: 1.55;
-  font-size: 14px;
-  overflow-wrap: anywhere;
+.style-reference-row svg {
+  width: 19px;
+  height: 19px;
+  stroke: #667085;
+  stroke-width: 2.2;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .score-title {

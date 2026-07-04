@@ -1960,7 +1960,7 @@ const roundCategoryFilter = ref('全部')
 const selectedEntryUuids = ref([])
 const createRoundDialogOpen = ref(false)
 const createRoundForm = reactive({
-  targetMode: 'TOP_N',
+  targetMode: 'MEDALS',
   targetCount: 3,
   tableCount: 1,
 })
@@ -5203,8 +5203,8 @@ async function finishCreateRound() {
 }
 
 function resetCreateRoundForm() {
-  const defaultOption = createRoundTargetOptions.value[0]
-  updateCreateRoundTargetMode(defaultOption?.value || 'TOP_N')
+  const defaultOption = createRoundTargetOptions.value.find((item) => item.value === 'MEDALS') || createRoundTargetOptions.value[0]
+  updateCreateRoundTargetMode(defaultOption?.value || 'MEDALS')
 }
 
 function updateCreateRoundTargetMode(mode) {
