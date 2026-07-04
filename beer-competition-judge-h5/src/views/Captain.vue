@@ -149,7 +149,7 @@
         </div>
         <label class="field score-field">
           共识分
-          <input v-model="form.consensusScore" class="input" type="number" inputmode="numeric" min="0" :max="captainScoreMax" step="1" :disabled="tableLocked" />
+          <input v-model="form.consensusScore" class="input" type="number" inputmode="numeric" min="1" :max="captainScoreMax" step="1" :disabled="tableLocked" />
         </label>
         <label class="field">
           综合评语
@@ -418,7 +418,7 @@ const finalCommentPlaceholder = computed(() => (
 ))
 const consensusScoreValid = computed(() => (
   Number.isInteger(Number(form.consensusScore))
-  && Number(form.consensusScore) >= 0
+  && Number(form.consensusScore) > 0
   && Number(form.consensusScore) <= captainScoreMax.value
 ))
 const canFinalize = computed(() => (
@@ -433,7 +433,7 @@ const finalizeHint = computed(() => {
     const expectedText = currentExpectedCount.value > 0 ? currentExpectedCount.value : '-'
     return `同桌评分未完成（${currentSubmittedCount.value}/${expectedText}），暂不能保存桌长意见。`
   }
-  if (!consensusScoreValid.value) return `请填写 0-${captainScoreMax.value} 的共识分。`
+  if (!consensusScoreValid.value) return `请填写 1-${captainScoreMax.value} 的共识分。`
   if (finalCommentLength.value < minFinalCommentLength.value) return `综合评语还差 ${minFinalCommentLength.value - finalCommentLength.value} 字。`
   return ''
 })

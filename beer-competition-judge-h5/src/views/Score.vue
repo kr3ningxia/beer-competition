@@ -52,43 +52,57 @@
                   <p v-if="item.description">{{ item.description }}</p>
                 </div>
                 <div class="score-stepper" :aria-label="`${item.label}分数`">
-                  <button type="button" :disabled="entry.locked || Number(item.score || 0) <= 0" @click="adjustScore(item, -1)">-</button>
+                  <button type="button" :disabled="entry.locked || !hasScore(item) || Number(item.score) <= 1" @click="adjustScore(item, -1)">-</button>
                   <input
-                    v-model.number="item.score"
+                    :value="scoreInputValue(item)"
                     class="score-input"
                     type="number"
                     inputmode="numeric"
-                    min="0"
+                    min="1"
                     :max="item.maxScore"
                     step="1"
                     :disabled="entry.locked"
-                    @blur="clampScore(item)"
+                    placeholder="未评"
+                    @input="setScoreFromInput(item, $event.target.value)"
+                    @blur="normalizeScoreInput(item)"
                   />
                   <button type="button" :disabled="entry.locked || Number(item.score || 0) >= item.maxScore" @click="adjustScore(item, 1)">+</button>
                 </div>
               </div>
-              <div class="range-wrap" :style="{ '--range-progress': `${rangePercent(item)}%` }">
+              <div v-if="isSegmentedScale(item)" class="score-options" :aria-label="`${item.label}分数选项`">
+                <button
+                  v-for="score in scoreOptions(item)"
+                  :key="score"
+                  type="button"
+                  :class="{ active: Number(item.score) === score }"
+                  :disabled="entry.locked"
+                  @click="setScore(item, score)"
+                >
+                  {{ score }}
+                </button>
+              </div>
+              <div v-else class="range-wrap" :class="{ unscored: !hasScore(item) }" :style="{ '--range-progress': `${rangePercent(item)}%` }">
                 <div class="range-rail" aria-hidden="true">
                   <span class="range-fill"></span>
                   <span
                     v-for="tick in tickValues(item)"
                     :key="tick.value"
                     class="range-tick"
-                    :class="{ active: Number(item.score || 0) >= tick.value, major: tick.label }"
+                    :class="{ active: hasScore(item) && Number(item.score) >= tick.value, major: tick.label }"
                     :style="{ left: `${tick.percent}%` }"
                   >
                     <i></i>
                   </span>
                 </div>
                 <input
-                  v-model.number="item.score"
+                  :value="rangeInputValue(item)"
                   class="range"
                   type="range"
-                  min="0"
+                  min="1"
                   :max="item.maxScore"
                   step="1"
                   :disabled="entry.locked"
-                  @input="clampScore(item)"
+                  @input="setScoreFromInput(item, $event.target.value)"
                 />
                 <div class="range-labels" aria-hidden="true">
                   <span
@@ -165,30 +179,31 @@ const notesLength = computed(() => (
 const minNoteLength = computed(() => Number(config.value?.commentMinLength ?? config.value?.minCommentLength ?? 0))
 const commentReady = computed(() => notesLength.value >= minNoteLength.value)
 const remainingNotes = computed(() => Math.max(0, minNoteLength.value - notesLength.value))
+const unscoredDimensions = computed(() => form.dimensions.filter((item) => !hasScore(item)))
+const zeroScoreDimensions = computed(() => form.dimensions.filter((item) => Number(item.score) === 0))
 const canSubmit = computed(() => (
   !entry.value?.locked
   && !submitting.value
   && form.dimensions.length > 0
-  && form.dimensions.every((item) => (
-    item.score !== ''
-    && Number.isInteger(Number(item.score))
-    && Number(item.score) >= 0
-    && Number(item.score) <= item.maxScore
-  ))
+  && form.dimensions.every(isScoreComplete)
   && commentReady.value
 ))
 const submitHint = computed(() => {
   if (submitting.value) return ''
   if (entry.value?.locked) return '本桌结果已确认，评分不可修改。'
-  if (remainingNotes.value > 0) return `备注还差 ${remainingNotes.value} 字`
   if (!form.dimensions.length) return ''
+  if (unscoredDimensions.value.length) return `还有 ${unscoredDimensions.value.length} 项未评分`
+  if (zeroScoreDimensions.value.length) return `${zeroScoreDimensions.value.map((item) => item.label).join('、')}不能为 0 分`
   const invalid = form.dimensions.some((item) => (
-    item.score === ''
+    item.score === null
+    || item.score === ''
     || !Number.isInteger(Number(item.score))
-    || Number(item.score) < 0
+    || Number(item.score) < 1
     || Number(item.score) > item.maxScore
   ))
-  return invalid ? '请检查各项分数，必须为整数且不超过满分。' : ''
+  if (invalid) return '请检查各项分数，必须为 1 到满分之间的整数。'
+  if (remainingNotes.value > 0) return `备注还差 ${remainingNotes.value} 字`
+  return ''
 })
 const submitButtonText = computed(() => {
   if (entry.value?.locked) return '本桌结果已确认'
@@ -197,37 +212,91 @@ const submitButtonText = computed(() => {
 })
 
 function clampScore(item) {
-  const value = Number(item.score || 0)
-  item.score = Math.min(Number(item.maxScore), Math.max(0, Math.round(value)))
+  if (!hasScore(item)) return
+  const value = Number(item.score)
+  if (!Number.isFinite(value)) {
+    item.score = null
+    return
+  }
+  item.score = Math.min(Number(item.maxScore), Math.max(1, Math.round(value)))
 }
 
 function adjustScore(item, delta) {
-  item.score = Number(item.score || 0) + delta
+  item.score = (hasScore(item) ? Number(item.score) : 0) + delta
   clampScore(item)
+}
+
+function hasScore(item) {
+  return item.score !== null && item.score !== '' && item.score !== undefined
+}
+
+function isScoreComplete(item) {
+  return hasScore(item)
+    && Number.isInteger(Number(item.score))
+    && Number(item.score) > 0
+    && Number(item.score) <= Number(item.maxScore)
+}
+
+function scoreInputValue(item) {
+  return hasScore(item) ? item.score : ''
+}
+
+function rangeInputValue(item) {
+  return hasScore(item) ? item.score : 1
+}
+
+function setScore(item, score) {
+  item.score = score
+  clampScore(item)
+}
+
+function setScoreFromInput(item, rawValue) {
+  item.score = rawValue === '' ? null : Number(rawValue)
+}
+
+function normalizeScoreInput(item) {
+  if (!hasScore(item)) return
+  const value = Number(item.score)
+  if (!Number.isFinite(value)) {
+    item.score = null
+    return
+  }
+  const rounded = Math.round(value)
+  if (rounded > Number(item.maxScore)) {
+    item.score = Number(item.maxScore)
+    return
+  }
+  item.score = Math.max(0, rounded)
+}
+
+function isSegmentedScale(item) {
+  return Number(item.maxScore || 0) <= 5
+}
+
+function scoreOptions(item) {
+  const maxScore = Number(item.maxScore || 0)
+  return Array.from({ length: maxScore }, (_, index) => index + 1)
 }
 
 function tickValues(item) {
   const maxScore = Number(item.maxScore || 0)
   if (!maxScore) return []
 
-  const values = maxScore <= 5
-    ? Array.from({ length: maxScore + 1 }, (_, index) => index)
-    : [0, 0.25, 0.5, 0.75, 1].map((ratio) => Math.round(maxScore * ratio))
-
-  return Array.from(new Set(values))
-    .filter((value) => value >= 0 && value <= maxScore)
+  const majorValues = new Set([1, Math.round(maxScore * 0.25), Math.round(maxScore * 0.5), Math.round(maxScore * 0.75), maxScore])
+  return Array.from({ length: maxScore }, (_, index) => index + 1)
     .sort((a, b) => a - b)
     .map((value) => ({
       value,
-      percent: (value / maxScore) * 100,
-      label: value === 0 || value === maxScore || (maxScore >= 10 && value === Math.round(maxScore / 2)) ? value : '',
+      percent: maxScore === 1 ? 0 : ((value - 1) / (maxScore - 1)) * 100,
+      label: majorValues.has(value) ? value : '',
     }))
 }
 
 function rangePercent(item) {
   const maxScore = Number(item.maxScore || 0)
-  if (!maxScore) return 0
-  return Math.min(100, Math.max(0, (Number(item.score || 0) / maxScore) * 100))
+  if (!maxScore || !hasScore(item)) return 0
+  if (maxScore === 1) return 100
+  return Math.min(100, Math.max(0, ((Number(item.score) - 1) / (maxScore - 1)) * 100))
 }
 
 function styleDisplayName(source) {
@@ -269,7 +338,7 @@ function buildDimensionPayload(item) {
   return {
     key: item.key,
     label: item.label,
-    score: Number(item.score || 0),
+    score: Number(item.score),
     maxScore: item.maxScore,
     notePrompt: item.notePrompt,
     note: String(item.note || '').trim(),
@@ -285,9 +354,10 @@ function buildDimensionForm(configDimensions, savedDimensions = [], savedComment
   const savedByLabel = parseCommentNotes(savedComments)
   return configDimensions.map((item) => {
     const saved = savedByKey.get(item.key) || {}
+    const hasSavedScore = Object.prototype.hasOwnProperty.call(saved, 'score') && saved.score !== null && saved.score !== ''
     return {
       ...item,
-      score: Number.isFinite(Number(saved.score)) ? Math.round(Number(saved.score)) : 0,
+      score: hasSavedScore && Number.isFinite(Number(saved.score)) ? Math.round(Number(saved.score)) : null,
       note: saved.note || savedByLabel.get(item.label) || '',
     }
   })
@@ -618,10 +688,39 @@ onMounted(async () => {
   appearance: textfield;
 }
 
+.score-input::placeholder {
+  color: #98a2b3;
+  font-size: 14px;
+  font-weight: 750;
+}
+
 .score-input::-webkit-outer-spin-button,
 .score-input::-webkit-inner-spin-button {
   margin: 0;
   appearance: none;
+}
+
+.score-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(52px, 1fr));
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.score-options button {
+  min-height: 44px;
+  border: 1px solid var(--score-border);
+  border-radius: 12px;
+  color: #344054;
+  background: #fff;
+  font-size: 18px;
+  font-weight: 850;
+}
+
+.score-options button.active {
+  border-color: var(--score-primary);
+  color: #fff;
+  background: var(--score-primary);
 }
 
 .range {
@@ -657,6 +756,11 @@ onMounted(async () => {
   box-shadow: none;
 }
 
+.range-wrap.unscored .range::-webkit-slider-thumb {
+  border: 2px solid #98a2b3;
+  background: #fff;
+}
+
 .range::-moz-range-track {
   height: 6px;
   border: 0;
@@ -671,6 +775,11 @@ onMounted(async () => {
   border-radius: 999px;
   background: var(--score-primary);
   box-shadow: none;
+}
+
+.range-wrap.unscored .range::-moz-range-thumb {
+  border: 2px solid #98a2b3;
+  background: #fff;
 }
 
 .range-wrap {
@@ -710,15 +819,19 @@ onMounted(async () => {
 }
 
 .range-tick i {
-  display: none;
+  display: block;
+  width: 1px;
+  height: 6px;
+  background: rgba(11, 22, 40, 0.18);
 }
 
 .range-tick.major i {
-  display: none;
+  width: 2px;
+  background: rgba(11, 22, 40, 0.32);
 }
 
 .range-tick.active i {
-  display: none;
+  background: rgba(255, 255, 255, 0.62);
 }
 
 .range-labels {

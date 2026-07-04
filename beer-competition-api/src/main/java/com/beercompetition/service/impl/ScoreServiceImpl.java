@@ -891,8 +891,8 @@ public class ScoreServiceImpl implements ScoreService {
             if (!isIntegerScore(score)) {
                 throw new BaseException(configured.getLabel() + "必须填写整数分");
             }
-            if (score.compareTo(BigDecimal.ZERO) < 0 || score.compareTo(maxScore) > 0) {
-                throw new BaseException(configured.getLabel() + "分值必须在 0-" + maxScore.stripTrailingZeros().toPlainString() + " 之间");
+            if (score.compareTo(BigDecimal.ZERO) <= 0 || score.compareTo(maxScore) > 0) {
+                throw new BaseException(configured.getLabel() + "分值必须在 1-" + maxScore.stripTrailingZeros().toPlainString() + " 之间");
             }
             item.setLabel(configured.getLabel());
             item.setMaxScore(maxScore);
@@ -920,8 +920,8 @@ public class ScoreServiceImpl implements ScoreService {
         if (consensusScore == null || !isIntegerScore(consensusScore)) {
             throw new BaseException("共识分必须填写整数分");
         }
-        if (consensusScore.compareTo(BigDecimal.ZERO) < 0 || consensusScore.compareTo(SCORE_TOTAL) > 0) {
-            throw new BaseException("共识分必须在 0-50 分之间");
+        if (consensusScore.compareTo(BigDecimal.ZERO) <= 0 || consensusScore.compareTo(SCORE_TOTAL) > 0) {
+            throw new BaseException("共识分必须在 1-50 分之间");
         }
         BigDecimal dimensionScore = dimensions.get(0).getScore();
         if (dimensionScore == null || dimensionScore.compareTo(consensusScore) != 0) {
@@ -953,8 +953,8 @@ public class ScoreServiceImpl implements ScoreService {
             throw new BaseException("桌长综合评语至少 " + minCommentLength + " 字");
         }
         DimensionRequest dimension = dimensions.get(0);
-        if (consensusScore.compareTo(configured.getMaxScore()) > 0) {
-            throw new BaseException("共识分必须在 0-" + configured.getMaxScore().stripTrailingZeros().toPlainString() + " 分之间");
+        if (consensusScore.compareTo(BigDecimal.ZERO) <= 0 || consensusScore.compareTo(configured.getMaxScore()) > 0) {
+            throw new BaseException("共识分必须在 1-" + configured.getMaxScore().stripTrailingZeros().toPlainString() + " 分之间");
         }
         dimension.setKey(configured.getKey());
         dimension.setLabel(configured.getLabel());
