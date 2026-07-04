@@ -59,7 +59,7 @@
         </div>
         <div class="board-list">
           <article v-for="entry in boardEntries" :key="entry.uuid" class="board-row">
-            <button type="button" @click="$router.push(`/captain/${entry.uuid}`)">
+            <button class="board-entry-main" type="button" @click="$router.push(`/captain/${entry.uuid}`)">
               <span>
                 <strong>{{ displayShortCode(entry) }}</strong>
                 <small>{{ entry.categoryName }} · {{ styleDisplayName(entry) }}</small>
@@ -68,9 +68,19 @@
                 {{ boardEntryStatusText(entry) }}
               </em>
             </button>
-            <span v-if="!isFeedbackOnlyCompetition" :class="['advance-check', { disabled: !entry.finalized }]">
-              {{ entry.advanced ? '已加入晋级名单' : '晋级候选' }}
-            </span>
+            <div v-if="canModifyFinalOpinion(entry) || !isFeedbackOnlyCompetition" class="board-row-footer">
+              <span v-if="!isFeedbackOnlyCompetition" :class="['advance-check', { disabled: !entry.finalized }]">
+                {{ entry.advanced ? '已加入晋级名单' : '晋级候选' }}
+              </span>
+              <button
+                v-if="canModifyFinalOpinion(entry)"
+                class="board-modify-button"
+                type="button"
+                @click="$router.push(`/captain/${entry.uuid}`)"
+              >
+                修改
+              </button>
+            </div>
           </article>
         </div>
       </section>
@@ -378,10 +388,10 @@ const tableReviewStateText = computed(() => {
 const tableSubmitHint = computed(() => {
   if (tableSubmitted.value) return '本桌结果已提交，等待主办方确认轮次。'
   if (board.value?.roundTable?.status === 'LOCKED') return '本桌结果已锁定。'
-  if (tableReadyForReview.value && !confirmationReady.value) return `等待同桌评审确认（${confirmationProgressText.value}），确认完成后自动提交。`
-  if (tableReadyForReview.value && (scoreConfirmation.value?.overrideFlag || board.value?.roundTable?.confirmationOverrideFlag)) return '现场确认通过后将自动提交。'
+  if (tableReadyForReview.value && !confirmationReady.value) return `等待同桌评审确认（${confirmationProgressText.value}），可修改评价，修改后需重新确认。`
+  if (tableReadyForReview.value && (scoreConfirmation.value?.overrideFlag || board.value?.roundTable?.confirmationOverrideFlag)) return '现场确认通过后将提交本桌结果。'
   if (tableReadyForReview.value && !board.value?.roundTable?.canSubmitTableScore) return '当前账号不能提交本桌结果。'
-  if (tableReadyForReview.value) return '确认完成后系统将自动提交本桌结果。'
+  if (tableReadyForReview.value) return '可修改评价，修改后需重新确认。'
   return ''
 })
 const currentSubmittedCount = computed(() => Number(currentBoardEntry.value?.submittedCount || normalScores.value.length || 0))
@@ -517,6 +527,10 @@ function readyForFinalize(item) {
   const expected = Number(item.expectedCount || 0)
   const submitted = Number(item.submittedCount || 0)
   return Boolean(item.scored && !item.finalized && submitted >= expected)
+}
+
+function canModifyFinalOpinion(item) {
+  return Boolean(item.finalized && !tableLocked.value)
 }
 
 function tableScoresComplete(item) {
@@ -707,7 +721,7 @@ onMounted(async () => {
   background: #fff;
 }
 
-.board-row button {
+.board-entry-main {
   display: flex;
   gap: 10px;
   justify-content: space-between;
@@ -719,6 +733,27 @@ onMounted(async () => {
   color: #18222f;
   background: transparent;
   text-align: left;
+}
+
+.board-row-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 12px 0 14px;
+}
+
+.board-modify-button {
+  flex: 0 0 auto;
+  border: 1px solid #fedf89;
+  border-radius: 999px;
+  padding: 7px 14px;
+  color: #a75517;
+  background: #fffaeb;
+  font-size: 13px;
+  font-weight: 850;
+  line-height: 1;
 }
 
 .board-row strong,
@@ -741,9 +776,15 @@ onMounted(async () => {
   display: flex;
   gap: 8px;
   align-items: center;
-  padding: 12px;
+  min-width: 0;
+  padding: 12px 0;
   color: #344054;
   font-weight: 750;
+}
+
+.board-row-footer .advance-check {
+  margin-right: auto;
+  overflow-wrap: anywhere;
 }
 
 .advance-check.disabled {

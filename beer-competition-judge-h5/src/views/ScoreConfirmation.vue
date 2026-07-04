@@ -19,7 +19,7 @@
           <h2 class="section-title compact">本桌最终结果</h2>
           <p class="confirmation-hint">{{ stateText }}</p>
         </div>
-        <span :class="['pill', mineConfirmed ? 'status-ok' : 'status-warn']">{{ mineConfirmed ? '已确认' : '待确认' }}</span>
+        <span :class="['pill', 'confirmation-state-pill', mineConfirmed ? 'status-ok' : 'status-warn']">{{ mineConfirmed ? '已确认' : '待确认' }}</span>
       </div>
 
       <div class="confirmation-list">
@@ -72,8 +72,8 @@ const stateText = computed(() => {
   if (!readyForConfirmation.value) return '桌长最终意见还未完成，请稍后再核对。'
   if (mineConfirmed.value) return '你已确认本桌结果，等待同桌确认完成。'
   return isFeedbackOnlyCompetition.value
-    ? '请核对共识分和综合评语，确认完成后系统将自动提交本桌结果。'
-    : '请核对共识分、综合评语和晋级结果，确认完成后系统将自动提交本桌结果。'
+    ? '请核对共识分和综合评语。'
+    : '请核对共识分、综合评语和晋级结果。'
 })
 const confirmButtonText = computed(() => {
   if (submitting.value) return '确认中...'
@@ -169,6 +169,15 @@ onMounted(async () => {
   font-size: 13px;
   line-height: 1.45;
   font-weight: 700;
+}
+
+.confirmation-state-pill {
+  flex: 0 0 auto;
+  min-width: 58px;
+  padding-right: 11px;
+  padding-left: 11px;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .confirmation-list {
