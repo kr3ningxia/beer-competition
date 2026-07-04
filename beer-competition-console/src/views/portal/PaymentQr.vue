@@ -308,11 +308,11 @@
             <div class="label-preview" v-html="labelSvg" />
           </div>
           <div class="label-actions">
-            <el-button type="primary" :disabled="!selectedEntry.canDownloadLabel" @click="downloadLabelPng">
-              下载 PNG
+            <el-button type="primary" :disabled="!selectedEntry.canDownloadLabel" :loading="labelPdfDownloading" @click="downloadLabelPdf">
+              下载 PDF
             </el-button>
-            <el-button :disabled="!selectedEntry.canDownloadLabel" @click="openPrintLabel">
-              打印标签 / 保存 PDF
+            <el-button :disabled="!selectedEntry.canDownloadLabel" @click="downloadLabelPng">
+              下载 PNG
             </el-button>
           </div>
         </section>
@@ -627,6 +627,7 @@ import QRCode from 'qrcode'
 import {
   cancelPortalEntry,
   createPortalEntryWechatNativePayment,
+  downloadPortalEntryLabelPdf,
   fetchPortalCompetitionDetail,
   fetchPortalBankTransferAccount,
   fetchPortalBankTransfer,
@@ -651,6 +652,7 @@ const route = useRoute()
 const entries = ref([])
 const selectedEntry = ref(null)
 const labelData = ref(null)
+const labelPdfDownloading = ref(false)
 const editingDelivery = ref(false)
 const savingDelivery = ref(false)
 const simulatingPayment = ref(false)
@@ -1686,72 +1688,29 @@ async function downloadLabelPng() {
   }
 }
 
-function openPrintLabel() {
+async function downloadLabelPdf() {
   if (!selectedEntry.value?.canDownloadLabel) return
 
-  const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=900,height=1200')
-  if (!printWindow) {
-    ElMessage.warning('浏览器拦截了新窗口，请允许弹窗后重试')
-    return
+  labelPdfDownloading.value = true
+  try {
+    const blob = await downloadPortalEntryLabelPdf(selectedEntry.value.id)
+    triggerDownload(URL.createObjectURL(blob), buildLabelPdfFilename(selectedEntry.value))
+    ElMessage.success('现场参赛标签 PDF 已开始下载')
+  } catch {
+    ElMessage.error('PDF 下载失败，请稍后重试')
+  } finally {
+    labelPdfDownloading.value = false
   }
+}
 
-  printWindow.document.write(`
-    <!doctype html>
-    <html lang="zh-CN">
-      <head>
-        <meta charset="utf-8" />
-        <title>打印标签</title>
-        <style>
-          body {
-            margin: 0;
-            padding: 24px;
-            background: #f3ead8;
-            font-family: "Microsoft YaHei", sans-serif;
-          }
-          .sheet {
-            width: 420px;
-            margin: 0 auto;
-            padding: 24px;
-            background: #fffdf9;
-            border-radius: 16px;
-          }
-          .hint {
-            margin-top: 16px;
-            color: #6f5a44;
-            font-size: 13px;
-            line-height: 1.6;
-            text-align: center;
-          }
-          @media print {
-            body {
-              padding: 0;
-              background: #fff;
-            }
-            .sheet {
-              width: auto;
-              padding: 0;
-              box-shadow: none;
-            }
-            .hint {
-              display: none;
-            }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="sheet">
-          ${labelSvg.value}
-          <p class="hint">可直接打印，也可在打印面板中选择“另存为 PDF”</p>
-        </div>
-        <script>
-          window.onload = function () {
-            window.print();
-          };
-        <\/script>
-      </body>
-    </html>
-  `)
-  printWindow.document.close()
+function buildLabelPdfFilename(entry) {
+  const entryName = safeDownloadFilename(entry?.name || entry?.uuid || 'entry-label')
+  const shortCode = safeDownloadFilename(entry?.shortCode || entry?.uuid || 'entry-label')
+  return `${entryName}-${shortCode}-现场参赛标签.pdf`
+}
+
+function safeDownloadFilename(value) {
+  return String(value || 'entry-label').trim().replace(/[\\/:*?"<>|]/g, '_') || 'entry-label'
 }
 
 function triggerDownload(objectUrl, fileName) {

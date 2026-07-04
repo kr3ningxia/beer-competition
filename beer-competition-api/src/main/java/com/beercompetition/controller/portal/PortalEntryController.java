@@ -1,6 +1,7 @@
 package com.beercompetition.controller.portal;
 
 import com.beercompetition.common.result.Result;
+import com.beercompetition.controller.support.FileResponseHelper;
 import com.beercompetition.pojo.dto.PortalEntryDeliverySubmitRequest;
 import com.beercompetition.pojo.dto.PortalEntryRefundRequest;
 import com.beercompetition.pojo.dto.PortalEntrySubmitRequest;
@@ -12,6 +13,7 @@ import com.beercompetition.pojo.vo.PortalMyParticipationVO;
 import com.beercompetition.service.EntryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -106,6 +108,14 @@ public class PortalEntryController {
     @GetMapping("/entries/{id}/label")
     public Result<PortalEntryLabelVO> entryLabel(@PathVariable Long id) {
         return Result.success(entryService.getPortalEntryLabel(id));
+    }
+
+    /**
+     * 下载报名酒款的 A4 四联参赛标签 PDF。
+     */
+    @GetMapping("/entries/{id}/label/pdf")
+    public ResponseEntity<byte[]> entryLabelPdf(@PathVariable Long id) {
+        return FileResponseHelper.attachment(entryService.downloadPortalEntryLabelPdf(id));
     }
 
     /**

@@ -70,8 +70,9 @@ public class AdminExportController {
                                                @RequestParam(required = false) String paymentStatus,
                                                @RequestParam(required = false) String deliveryStatus,
                                                @RequestParam(required = false) String keyword,
-                                               @RequestParam(required = false) Integer copies) {
+                                               @RequestParam(required = false) Integer copies,
+                                               @RequestParam(required = false) String format) {
         return FileResponseHelper.attachment(adminExportService.exportLabels(
-                id, categoryId, entryStatus, paymentStatus, deliveryStatus, keyword, copies));
+                id, categoryId, entryStatus, paymentStatus, deliveryStatus, keyword, copies, format));
     }
 }

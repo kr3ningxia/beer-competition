@@ -538,6 +538,7 @@
             @drop-entry-on-round-table="dropEntryOnRoundTable"
             @remove-entry-from-round-table="removeEntryFromRoundTable"
             @update-table-captain="updateRoundTableCaptain"
+            @update-round-table-name="updateRoundTableName"
             @update-table-scope="updateRoundTableScope"
             @update-table-target="updateRoundTableTarget"
             @set-round-captain="setRoundCaptainForSelectedTable"
@@ -1759,6 +1760,7 @@ const competitionAnalyticsLoading = ref(false)
 const competitionAnalyticsCompetitionId = ref(null)
 let roundProgressPollTimer = null
 let roundProgressRefreshing = false
+let roundTableNameAutoSaveTimer = null
 const categoryForm = reactive([])
 const baseForm = reactive({
   name: '',
@@ -2536,6 +2538,7 @@ onMounted(() => {
 })
 onUnmounted(() => {
   if (roundProgressPollTimer) window.clearInterval(roundProgressPollTimer)
+  clearRoundTableNameAutoSave()
   if (styleDistributionResizeObserver) styleDistributionResizeObserver.disconnect()
 })
 watch(() => route.params.id, loadDetail)
@@ -4274,6 +4277,10 @@ function buildRoundValidationIssues(round) {
   const issues = []
   if (round.type === 'RANKING' && round.sourceLocked === false) issues.push('等待上一轮结果固定后再分配酒款')
   if (!round.tables.length) issues.push(`${round.name}至少需要 1 张桌`)
+  const tableNames = round.tables.map((table) => table.name?.trim() || '')
+  const duplicateTableNames = tableNames.filter((name, index, list) => name && list.indexOf(name) !== index)
+  if (tableNames.some((name) => !name)) issues.push('评审桌名称不能为空')
+  if (duplicateTableNames.length) issues.push(`轮次桌名称不能重复：${duplicateTableNames[0]}`)
   const assigned = round.tables.flatMap((table) => table.entryUuids)
   if (!assigned.length) issues.push(`${round.name}尚未分配酒款`)
   const pool = getPoolEntriesForRound(round)
@@ -4303,14 +4310,16 @@ function getRoundPublishStageIssue(round) {
 function getRoundTableIssues(table) {
   const issues = []
   const targetLabel = resolveTableTargetLabel(table)
-  if (!table.captainPublicId) issues.push(`${table.name}缺少桌长`)
-  if (!table.entryUuids.length) issues.push(`${table.name}尚未分配酒款`)
+  const tableName = table.name?.trim() || '未命名评审桌'
+  if (!table.name?.trim()) issues.push('评审桌名称不能为空')
+  if (!table.captainPublicId) issues.push(`${tableName}缺少桌长`)
+  if (!table.entryUuids.length) issues.push(`${tableName}尚未分配酒款`)
   if (isFeedbackOnlyCompetition.value && currentRound.value?.type === 'SCORE') return issues
-  if (!Number(table.targetCount || 0)) issues.push(`${table.name}${targetLabel}不能为空`)
-  if (table.targetMode !== 'MEDALS' && Number(table.targetCount || 0) > table.entryUuids.length) issues.push(`${table.name}${targetLabel}超过候选酒款数`)
-  if (table.targetMode === 'MEDALS' && Number(table.targetCount || 0) !== 3) issues.push(`${table.name}奖牌轮固定为金、银、铜 3 个名额`)
-  if (table.targetMode === 'MEDALS' && table.categoryMode !== 'CATEGORY') issues.push(`${table.name}奖牌轮只能包含一个投递组别`)
-  if (table.targetMode === 'CHAMPION' && Number(table.targetCount || 0) !== 1) issues.push(`${table.name}决赛轮固定为总冠军 1 名`)
+  if (!Number(table.targetCount || 0)) issues.push(`${tableName}${targetLabel}不能为空`)
+  if (table.targetMode !== 'MEDALS' && Number(table.targetCount || 0) > table.entryUuids.length) issues.push(`${tableName}${targetLabel}超过候选酒款数`)
+  if (table.targetMode === 'MEDALS' && Number(table.targetCount || 0) !== 3) issues.push(`${tableName}奖牌轮固定为金、银、铜 3 个名额`)
+  if (table.targetMode === 'MEDALS' && table.categoryMode !== 'CATEGORY') issues.push(`${tableName}奖牌轮只能包含一个投递组别`)
+  if (table.targetMode === 'CHAMPION' && Number(table.targetCount || 0) !== 1) issues.push(`${tableName}决赛轮固定为总冠军 1 名`)
   return issues
 }
 
@@ -4533,6 +4542,61 @@ function updateRoundTableCaptain(tableId, judgePublicId) {
   table.participantPublicIds = getTableParticipantPublicIds(table)
 }
 
+function updateRoundTableName(tableId, value, options = {}) {
+  if (!currentRound.value || currentRound.value.status !== 'DRAFT') return
+  const table = currentRoundTables.value.find((item) => item.id === tableId)
+  if (!table) return
+  const nextName = String(value ?? '')
+  if (table.name === nextName && !options.commit) return
+  table.name = options.commit ? nextName.trim() : nextName
+  if (currentRound.value.isPreparationDraft) {
+    const baseTable = findBaseJudgeTableForDraftRoundTable(tableId)
+    if (baseTable) baseTable.tableName = table.name
+  }
+  if (options.commit) {
+    scheduleRoundTableNameAutoSave()
+  } else {
+    clearRoundTableNameAutoSave()
+  }
+}
+
+function findBaseJudgeTableForDraftRoundTable(tableId) {
+  const prefix = 'draft-table-'
+  if (typeof tableId !== 'string' || !tableId.startsWith(prefix)) return null
+  const localId = tableId.slice(prefix.length)
+  return judgeTableForm.find((table) => table.localId === localId) || null
+}
+
+function clearRoundTableNameAutoSave() {
+  if (!roundTableNameAutoSaveTimer) return
+  window.clearTimeout(roundTableNameAutoSaveTimer)
+  roundTableNameAutoSaveTimer = null
+}
+
+function scheduleRoundTableNameAutoSave() {
+  clearRoundTableNameAutoSave()
+  roundTableNameAutoSaveTimer = window.setTimeout(async () => {
+    roundTableNameAutoSaveTimer = null
+    if (!currentRound.value || currentRound.value.status !== 'DRAFT') return
+    if (hasRoundTableNameIssues(currentRound.value)) return
+    try {
+      if (currentRound.value.isPreparationDraft) {
+        syncFirstRoundDraftTables()
+        if (canEditBaseJudgeTables.value) await saveJudgeDraft({ silent: true, allowIncomplete: true })
+      } else {
+        await persistCurrentRoundAllocation()
+      }
+    } catch {
+      ElMessage.error('桌名自动保存失败，请稍后重试')
+    }
+  }, 900)
+}
+
+function hasRoundTableNameIssues(round) {
+  const names = (round?.tables || []).map((table) => table.name?.trim() || '')
+  return names.some((name) => !name) || new Set(names).size !== names.length
+}
+
 function setRoundCaptainForSelectedTable(judgePublicId) {
   const table = selectedRoundTable.value
   if (!table || currentRound.value?.status !== 'DRAFT') return
@@ -4722,7 +4786,7 @@ function buildRoundAllocationPayload(round) {
   return {
     tables: round.tables.map((table, index) => ({
       id: Number.isFinite(Number(table.id)) ? Number(table.id) : undefined,
-      name: table.name,
+      name: table.name?.trim() || '',
       captainPublicId: table.captainPublicId,
       categoryId: table.categoryId ?? undefined,
       categoryMode: table.categoryMode || (table.categoryId != null ? 'CATEGORY' : 'EMPTY'),

@@ -103,6 +103,8 @@ import com.beercompetition.service.CompetitionService;
 import com.beercompetition.service.EntryService;
 import com.beercompetition.service.EntryScanLabelService;
 import com.beercompetition.service.WechatPaymentService;
+import com.beercompetition.service.support.EntryLabelFileGenerator;
+import com.beercompetition.service.support.EntryLabelFileGenerator.LabelRenderItem;
 import com.beercompetition.storage.FileStorageService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -182,6 +184,7 @@ public class EntryServiceImpl implements EntryService {
     private final CompetitionService competitionService;
     private final EntryScanLabelService entryScanLabelService;
     private final WechatPaymentService wechatPaymentService;
+    private final EntryLabelFileGenerator entryLabelFileGenerator;
     private final ObjectMapper objectMapper;
     private final FileStorageService fileStorageService;
     private final StorageProperties storageProperties;
@@ -514,12 +517,7 @@ public class EntryServiceImpl implements EntryService {
         // 1) 查询并校验作品归属
         PortalAccount account = requirePortalAccount();
         BeerEntry entry = requireOwnedEntry(entryId, account.getBreweryId());
-        if (!LABEL_ALLOWED_STATUSES.contains(entry.getStatus())) {
-            throw new BaseException("支付成功后才能下载现场标签");
-        }
-        if (hasActiveRefund(entry.getId())) {
-            throw new BaseException("退款处理中，不能下载现场标签");
-        }
+        assertCanDownloadPortalLabel(entry);
 
         // 2) 组装标签数据
         Competition competition = competitionMapper.selectById(entry.getCompetitionId());
@@ -537,6 +535,27 @@ public class EntryServiceImpl implements EntryService {
                 .categoryName(category == null ? null : category.getName())
                 .style(entry.getStyle())
                 .abv(entry.getAbv())
+                .build();
+    }
+
+    @Override
+    public FileDownloadVO downloadPortalEntryLabelPdf(Long entryId) {
+        // 1) 查询并校验作品归属与标签下载状态
+        PortalAccount account = requirePortalAccount();
+        BeerEntry entry = requireOwnedEntry(entryId, account.getBreweryId());
+        assertCanDownloadPortalLabel(entry);
+
+        // 2) 查询标签上下文并生成 A4 四联 PDF
+        CompetitionCategory category = competitionCategoryMapper.selectById(entry.getCategoryId());
+        EntryScanLabel label = entryScanLabelService.requireActiveLabel(entry.getId());
+        LabelRenderItem item = toLabelRenderItem(entry, label, category == null ? null : category.getName());
+        byte[] content = entryLabelFileGenerator.buildFourUpPdf(List.of(item, item, item, item));
+
+        // 3) 返回下载文件
+        return FileDownloadVO.builder()
+                .fileName(buildPortalLabelPdfFilename(entry, label))
+                .contentType(EntryLabelFileGenerator.CONTENT_TYPE_PDF)
+                .content(content)
                 .build();
     }
 
@@ -1913,6 +1932,25 @@ public class EntryServiceImpl implements EntryService {
         return isActiveRefund(findLatestRefund(beerEntryId));
     }
 
+    private void assertCanDownloadPortalLabel(BeerEntry entry) {
+        if (!LABEL_ALLOWED_STATUSES.contains(entry.getStatus())) {
+            throw new BaseException("支付成功后才能下载现场参赛标签");
+        }
+        if (hasActiveRefund(entry.getId())) {
+            throw new BaseException("退款处理中，不能下载现场参赛标签");
+        }
+    }
+
+    private LabelRenderItem toLabelRenderItem(BeerEntry entry, EntryScanLabel label, String categoryName) {
+        return new LabelRenderItem(
+                entry.getUuid(),
+                label.getLabelCode(),
+                label.getShortCode(),
+                label.getScanToken(),
+                categoryName
+        );
+    }
+
     private boolean isActiveRefund(EntryRefund refund) {
         return refund != null && ACTIVE_REFUND_STATUSES.contains(refund.getStatus());
     }
@@ -2687,6 +2725,17 @@ public class EntryServiceImpl implements EntryService {
 
     private String firstText(String value, String fallback) {
         return StringUtils.hasText(value) ? value : fallback;
+    }
+
+    private String safeDownloadFilename(String value) {
+        String filename = StringUtils.hasText(value) ? value.trim() : "entry-label";
+        return filename.replaceAll("[\\\\/:*?\"<>|]", "_");
+    }
+
+    private String buildPortalLabelPdfFilename(BeerEntry entry, EntryScanLabel label) {
+        String entryName = safeDownloadFilename(firstText(entry.getName(), entry.getUuid()));
+        String shortCode = safeDownloadFilename(firstText(label.getShortCode(), entry.getUuid()));
+        return entryName + "-" + shortCode + "-现场参赛标签.pdf";
     }
 
     private List<String> readOptions(String json) {

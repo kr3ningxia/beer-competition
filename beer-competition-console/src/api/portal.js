@@ -94,6 +94,13 @@ export function fetchPortalEntryLabel(id) {
   return request.get(`/api/portal/entries/${id}/label`, { authScope: 'portal' })
 }
 
+export function downloadPortalEntryLabelPdf(id) {
+  return request.get(`/api/portal/entries/${id}/label/pdf`, {
+    authScope: 'portal',
+    responseType: 'blob',
+  })
+}
+
 export function fetchPortalProfile() {
   return request.get('/api/portal/profile', { authScope: 'portal' })
 }

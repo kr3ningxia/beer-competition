@@ -45,7 +45,16 @@
         >
           <header class="desk-summary">
             <div class="desk-summary-main">
-              <h3>{{ table.name }}</h3>
+              <input
+                v-if="isRoundTableNameEditable(table)"
+                class="round-table-name-input"
+                :value="table.name"
+                aria-label="评审桌名称"
+                @input="updateRoundTableName(table, $event.target.value)"
+                @blur="commitRoundTableName(table, $event.target.value)"
+                @keydown.enter.prevent="$event.target.blur()"
+              />
+              <h3 v-else>{{ table.name }}</h3>
             </div>
             <div class="desk-summary-side">
               <em :class="['desk-status', getRoundTableIssues(table).length ? 'warning' : 'ok']">
@@ -447,7 +456,16 @@
         >
           <header class="entry-desk-header">
             <div class="entry-desk-title">
-              <h3>{{ table.name }}</h3>
+              <input
+                v-if="isRoundTableNameEditable(table)"
+                class="round-table-name-input"
+                :value="table.name"
+                aria-label="评审桌名称"
+                @input="updateRoundTableName(table, $event.target.value)"
+                @blur="commitRoundTableName(table, $event.target.value)"
+                @keydown.enter.prevent="$event.target.blur()"
+              />
+              <h3 v-else>{{ table.name }}</h3>
               <span>{{ table.entryUuids.length }} 款</span>
               <span>桌长 {{ getJudge(table.captainPublicId)?.name || '未指定' }}</span>
             </div>
@@ -684,7 +702,16 @@
           >
             <header class="overview-card-header">
               <div class="overview-title-block">
-                <h3>{{ table.name }}</h3>
+                <input
+                  v-if="isRoundTableNameEditable(table)"
+                  class="round-table-name-input overview-name-input"
+                  :value="table.name"
+                  aria-label="评审桌名称"
+                  @input="updateRoundTableName(table, $event.target.value)"
+                  @blur="commitRoundTableName(table, $event.target.value)"
+                  @keydown.enter.prevent="$event.target.blur()"
+                />
+                <h3 v-else>{{ table.name }}</h3>
                 <div class="overview-card-meta">
                   <span>{{ getOverviewJudgeItems(table).length }} 名成员</span>
                   <span>{{ table.entryUuids.length }} 款酒</span>
@@ -825,6 +852,7 @@ const emit = defineEmits([
   'dropEntryOnRoundTable',
   'removeEntryFromRoundTable',
   'updateTableCaptain',
+  'updateRoundTableName',
   'updateTableScope',
   'updateTableTarget',
   'setRoundCaptain',
@@ -846,6 +874,20 @@ const roundKeywordModel = computed({
   get: () => props.roundKeyword,
   set: (value) => emit('update:roundKeyword', value),
 })
+
+function isRoundTableNameEditable(table) {
+  return Boolean(table && props.currentRound?.status === 'DRAFT')
+}
+
+function updateRoundTableName(table, value) {
+  if (!isRoundTableNameEditable(table)) return
+  emit('updateRoundTableName', table.id, value)
+}
+
+function commitRoundTableName(table, value) {
+  if (!isRoundTableNameEditable(table)) return
+  emit('updateRoundTableName', table.id, value.trim(), { commit: true })
+}
 
 const selectedRankingRole = ref(null)
 const scoreRoundMemberRoles = [
@@ -1827,6 +1869,44 @@ p {
   margin: 0;
 }
 
+.desk-card .round-table-name-input,
+.overview-card .round-table-name-input {
+  width: min(220px, 100%);
+  max-width: 220px;
+  min-width: 96px;
+  min-height: 34px;
+  box-sizing: border-box;
+  padding: 0 9px;
+  color: #f4f7f5;
+  border: 1px solid rgba(216, 169, 53, 0.18);
+  border-radius: 8px;
+  outline: 0;
+  background: rgba(7, 14, 17, 0.28);
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.desk-card .round-table-name-input:hover,
+.overview-card .round-table-name-input:hover {
+  border-color: rgba(216, 169, 53, 0.34);
+  background: rgba(7, 14, 17, 0.46);
+}
+
+.desk-card .round-table-name-input:focus,
+.overview-card .round-table-name-input:focus {
+  color: #fff8dc;
+  border-color: rgba(224, 184, 74, 0.72);
+  background: rgba(7, 14, 17, 0.68);
+  box-shadow: 0 0 0 3px rgba(216, 169, 53, 0.12);
+}
+
+.desk-card .round-table-name-input::placeholder,
+.overview-card .round-table-name-input::placeholder {
+  color: #6f848d;
+}
+
 .role-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2028,6 +2108,10 @@ p {
   flex: 0 0 auto;
   font-size: 22px;
   line-height: 1;
+}
+
+.entry-desk-title .round-table-name-input {
+  flex: 0 1 220px;
 }
 
 .entry-desk-title > span {
@@ -2430,6 +2514,10 @@ p {
 .overview-title-block h3 {
   font-size: 20px;
   line-height: 1;
+}
+
+.overview-name-input {
+  font-size: 20px;
 }
 
 .overview-card-meta {

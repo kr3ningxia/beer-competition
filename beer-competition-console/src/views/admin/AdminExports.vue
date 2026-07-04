@@ -213,12 +213,12 @@ const exportTemplates = [
   },
   {
     key: 'labels',
-    title: '批量现场标签',
+    title: '批量参赛标签',
     stage: '贴瓶打印',
-    description: '导出可打印标签包，标签只包含二维码、短编号、组别、风格和 ABV',
-    fileType: 'ZIP',
-    scope: '已支付且已生成现场标签',
-    action: '下载瓶贴包',
+    description: '导出 A4 打印版参赛标签，每页 4 张，标签包含二维码、参赛编号和组别',
+    fileType: 'PDF',
+    scope: '已支付且已生成参赛标签',
+    action: '下载 PDF',
     icon: Printer,
     tone: 'gold',
   },
@@ -326,8 +326,8 @@ async function runExport(type) {
       fallbackName = `${selectedCompetition.value?.name || '比赛'}-样品入库清单.xlsx`
     }
     if (type === 'labels') {
-      blob = await exportCompetitionLabels(selectedCompetitionId.value, { ...params, copies: normalizedCopies() })
-      fallbackName = `${selectedCompetition.value?.name || '比赛'}-批量瓶贴.zip`
+      blob = await exportCompetitionLabels(selectedCompetitionId.value, { ...params, copies: normalizedCopies(), format: 'pdf' })
+      fallbackName = `${selectedCompetition.value?.name || '比赛'}-批量参赛标签.pdf`
     }
     if (type === 'scoring') {
       blob = await exportCompetitionScoringData(selectedCompetitionId.value)

@@ -11,7 +11,7 @@ public interface AdminExportService {
                                   String deliveryStatus, String keyword);
 
     FileDownloadVO exportLabels(Long competitionId, Long categoryId, String entryStatus, String paymentStatus,
-                                String deliveryStatus, String keyword, Integer copies);
+                                String deliveryStatus, String keyword, Integer copies, String format);
 
     void logScoringExport(Long competitionId);
 }

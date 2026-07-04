@@ -390,7 +390,7 @@ import {
   updateAdminEntry,
 } from '@/api/admin'
 import { JUDGE_H5_BASE_URL } from '@/config'
-import { formatAbvWithUnit, isValidAbvInput, normalizeAbvInput } from '@/utils/formatters'
+import { isValidAbvInput, normalizeAbvInput } from '@/utils/formatters'
 
 const route = useRoute()
 const router = useRouter()
@@ -1042,8 +1042,6 @@ function buildAdminLabelSvg(label) {
   }
 
   const category = escapeXml(label.categoryName || '组别待确认')
-  const style = escapeXml(label.style || 'Style Pending')
-  const abv = label.abv !== '' && label.abv !== null && label.abv !== undefined ? formatAbvWithUnit(label.abv) : 'ABV Pending'
   const code = escapeXml(label.shortCode || 'PENDING')
 
   return `
@@ -1053,9 +1051,9 @@ function buildAdminLabelSvg(label) {
       <text x="130" y="44" text-anchor="middle" font-size="12" font-weight="700" letter-spacing="1.4" fill="#8c6330">现场评审标签</text>
       <rect x="28" y="64" width="204" height="204" rx="18" fill="#f7ecd8" stroke="#3a2818" stroke-width="10"/>
       ${cells.join('')}
-      <text x="130" y="292" text-anchor="middle" font-size="12" font-weight="700" fill="#8c6330">现场短编号</text>
+      <text x="130" y="292" text-anchor="middle" font-size="12" font-weight="700" fill="#8c6330">参赛编号</text>
       <text x="130" y="318" text-anchor="middle" font-size="28" font-weight="900" fill="#24170f">${code}</text>
-      <text x="130" y="340" text-anchor="middle" font-size="13" fill="#665647">${category} · ${style} · ${abv}</text>
+      <text x="130" y="340" text-anchor="middle" font-size="13" fill="#665647">组别：${category}</text>
     </svg>
   `
 }

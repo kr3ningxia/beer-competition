@@ -27,26 +27,14 @@ import com.beercompetition.pojo.po.EntryDelivery;
 import com.beercompetition.pojo.po.EntryPayment;
 import com.beercompetition.pojo.po.EntryScanLabel;
 import com.beercompetition.pojo.vo.FileDownloadVO;
-import com.beercompetition.properties.ExportProperties;
 import com.beercompetition.service.AdminExportService;
 import com.beercompetition.service.EntryScanLabelService;
-import com.google.zxing.BarcodeFormat;
-import com.google.zxing.EncodeHintType;
-import com.google.zxing.qrcode.QRCodeWriter;
-import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
+import com.beercompetition.service.support.EntryLabelFileGenerator;
+import com.beercompetition.service.support.EntryLabelFileGenerator.LabelRenderItem;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-import javax.imageio.ImageIO;
-import java.awt.BasicStroke;
-import java.awt.Color;
-import java.awt.Font;
-import java.awt.FontMetrics;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
-import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -58,7 +46,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.EnumSet;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -78,6 +65,7 @@ public class AdminExportServiceImpl implements AdminExportService {
     private static final int LABEL_COPY_DEFAULT = 2;
     private static final int LABEL_COPY_MIN = 1;
     private static final int LABEL_COPY_MAX = 6;
+    private static final String LABEL_EXPORT_FORMAT_PDF = "pdf";
     private static final Set<EntryStatus> LABEL_ALLOWED_ENTRY_STATUSES = EnumSet.of(
             EntryStatus.REGISTERED,
             EntryStatus.STORED,
@@ -93,7 +81,7 @@ public class AdminExportServiceImpl implements AdminExportService {
     private final EntryDeliveryMapper entryDeliveryMapper;
     private final AdminOperationLogMapper adminOperationLogMapper;
     private final EntryScanLabelService entryScanLabelService;
-    private final ExportProperties exportProperties;
+    private final EntryLabelFileGenerator entryLabelFileGenerator;
 
     @Override
     public FileDownloadVO exportEntries(Long competitionId, Long categoryId, String entryStatus, String paymentStatus,
@@ -190,7 +178,7 @@ public class AdminExportServiceImpl implements AdminExportService {
 
     @Override
     public FileDownloadVO exportLabels(Long competitionId, Long categoryId, String entryStatus, String paymentStatus,
-                                       String deliveryStatus, String keyword, Integer copies) {
+                                       String deliveryStatus, String keyword, Integer copies, String format) {
         // 1) 查询比赛与瓶贴候选数据
         int normalizedCopies = Math.min(Math.max(copies == null ? LABEL_COPY_DEFAULT : copies, LABEL_COPY_MIN), LABEL_COPY_MAX);
         ExportContext context = loadContext(competitionId, categoryId, entryStatus, paymentStatus, deliveryStatus, keyword);
@@ -202,27 +190,40 @@ public class AdminExportServiceImpl implements AdminExportService {
             throw new BaseException("这场比赛还没有生成现场标签");
         }
 
-        // 2) 生成标签清单、单张 PNG 和打印 HTML
+        // 2) 组装标签渲染数据
+        List<LabelItem> labelItems = new ArrayList<>();
+        for (BeerEntry entry : labelEntries) {
+            EntryScanLabel label = context.labelsByEntryId().get(entry.getId());
+            String categoryName = categoryName(context.categoriesById().get(entry.getCategoryId()));
+            labelItems.add(new LabelItem(entry, label, categoryName, normalizedCopies));
+        }
+
+        // 3) 按格式生成 PDF 或兼容的图片文件包
+        if (LABEL_EXPORT_FORMAT_PDF.equalsIgnoreCase(value(format))) {
+            byte[] content = entryLabelFileGenerator.buildFourUpPdf(expandLabelRenderItems(labelItems));
+            logExport("EXPORT_LABELS", context.competition(), context.filters() + ", copies=" + normalizedCopies + ", format=pdf", labelEntries.size());
+            return FileDownloadVO.builder()
+                    .fileName(safeFilename(context.competition().getName()) + "-批量参赛标签.pdf")
+                    .contentType(EntryLabelFileGenerator.CONTENT_TYPE_PDF)
+                    .content(content)
+                    .build();
+        }
+
         try {
             ByteArrayOutputStream output = new ByteArrayOutputStream();
             try (ZipOutputStream zip = new ZipOutputStream(output, StandardCharsets.UTF_8)) {
-                List<LabelItem> labelItems = new ArrayList<>();
-                for (BeerEntry entry : labelEntries) {
-                    EntryScanLabel label = context.labelsByEntryId().get(entry.getId());
-                    String categoryName = categoryName(context.categoriesById().get(entry.getCategoryId()));
-                    LabelItem item = new LabelItem(entry, label, categoryName, normalizedCopies);
-                    labelItems.add(item);
+                for (LabelItem item : labelItems) {
                     for (int index = 1; index <= normalizedCopies; index++) {
-                        String name = "labels/" + safeFilename(label.getShortCode()) + "-" + index + ".png";
-                        SimpleXlsxBuilder.writeZipEntry(zip, name, buildLabelPng(item));
+                        String name = "labels/" + safeFilename(item.label().getShortCode()) + "-" + index + ".png";
+                        SimpleXlsxBuilder.writeZipEntry(zip, name, entryLabelFileGenerator.buildLabelPng(toLabelRenderItem(item)));
                     }
                 }
                 SimpleXlsxBuilder.writeZipEntry(zip, "labels.html", buildLabelsHtml(labelItems));
                 SimpleXlsxBuilder.writeZipEntry(zip, "标签清单.xlsx", buildLabelLedger(context, labelItems));
             }
-            logExport("EXPORT_LABELS", context.competition(), context.filters() + ", copies=" + normalizedCopies, labelEntries.size());
+            logExport("EXPORT_LABELS", context.competition(), context.filters() + ", copies=" + normalizedCopies + ", format=zip", labelEntries.size());
             return FileDownloadVO.builder()
-                    .fileName(safeFilename(context.competition().getName()) + "-批量瓶贴.zip")
+                    .fileName(safeFilename(context.competition().getName()) + "-批量参赛标签.zip")
                     .contentType("application/zip")
                     .content(output.toByteArray())
                     .build();
@@ -353,7 +354,7 @@ public class AdminExportServiceImpl implements AdminExportService {
 
     private byte[] buildLabelLedger(ExportContext context, List<LabelItem> labelItems) {
         List<List<String>> rows = new ArrayList<>();
-        rows.add(List.of("短编号", "标签编码", "酒款 UUID", "组别", "风格", "ABV", "标签张数"));
+        rows.add(List.of("参赛编号", "标签编码", "酒款 UUID", "组别", "风格", "ABV", "标签张数"));
         for (LabelItem item : labelItems) {
             rows.add(List.of(
                     item.label().getShortCode(),
@@ -368,58 +369,6 @@ public class AdminExportServiceImpl implements AdminExportService {
         return SimpleXlsxBuilder.build(List.of(new SimpleXlsxBuilder.Sheet(context.competition().getName() + "瓶贴清单", rows)));
     }
 
-    private byte[] buildLabelPng(LabelItem item) {
-        try {
-            int width = 1040;
-            int height = 1440;
-            BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
-            Graphics2D g = image.createGraphics();
-            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-            g.setColor(new Color(0xfff8ec));
-            g.fillRect(0, 0, width, height);
-            g.setColor(new Color(0xfffdf9));
-            g.fillRoundRect(56, 56, 928, 1328, 72, 72);
-            g.setColor(new Color(0xd4bf9f));
-            g.setStroke(new BasicStroke(4));
-            g.drawRoundRect(56, 56, 928, 1328, 72, 72);
-
-            drawCenteredText(g, "现场评审标签", new Font("Microsoft YaHei", Font.BOLD, 48), new Color(0x8c6330), 520, 176);
-            g.setColor(new Color(0xf7ecd8));
-            g.fillRoundRect(112, 256, 816, 816, 72, 72);
-            g.setColor(new Color(0x3a2818));
-            g.setStroke(new BasicStroke(40));
-            g.drawRoundRect(112, 256, 816, 816, 72, 72);
-
-            BufferedImage qr = buildQrImage(scanUrl(item.label()), 704);
-            g.drawImage(qr, 168, 312, null);
-            drawCenteredText(g, "现场短编号", new Font("Microsoft YaHei", Font.BOLD, 48), new Color(0x8c6330), 520, 1168);
-            drawCenteredText(g, value(item.label().getShortCode()), new Font("Microsoft YaHei", Font.BOLD, 112), new Color(0x24170f), 520, 1272);
-            drawCenteredText(g, fitMetaLine(item), new Font("Microsoft YaHei", Font.PLAIN, 44), new Color(0x665647), 520, 1360);
-            g.dispose();
-
-            ByteArrayOutputStream output = new ByteArrayOutputStream();
-            ImageIO.write(image, "png", output);
-            return output.toByteArray();
-        } catch (Exception ex) {
-            throw new BaseException("标签图片生成失败");
-        }
-    }
-
-    private BufferedImage buildQrImage(String text, int size) throws Exception {
-        Map<EncodeHintType, Object> hints = new HashMap<>();
-        hints.put(EncodeHintType.ERROR_CORRECTION, ErrorCorrectionLevel.M);
-        hints.put(EncodeHintType.MARGIN, 0);
-        var matrix = new QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, size, size, hints);
-        BufferedImage image = new BufferedImage(size, size, BufferedImage.TYPE_INT_RGB);
-        for (int y = 0; y < size; y++) {
-            for (int x = 0; x < size; x++) {
-                image.setRGB(x, y, matrix.get(x, y) ? 0x2e2014 : 0xf7ecd8);
-            }
-        }
-        return image;
-    }
-
     private String buildLabelsHtml(List<LabelItem> labelItems) {
         StringBuilder html = new StringBuilder();
         html.append("""
@@ -430,12 +379,12 @@ public class AdminExportServiceImpl implements AdminExportService {
                     <title>批量打印现场评审标签</title>
                     <style>
                       * { box-sizing: border-box; }
-                      body { margin: 0; padding: 16px; font-family: "Microsoft YaHei", sans-serif; background: #f5ead9; }
-                      .sheet { display: grid; grid-template-columns: repeat(3, 64mm); gap: 8mm 6mm; align-items: start; }
+                      body { margin: 0; padding: 10mm; font-family: "Microsoft YaHei", sans-serif; background: #fff; }
+                      .sheet { display: grid; grid-template-columns: repeat(2, 90mm); gap: 10mm; align-items: start; }
                       .label { page-break-inside: avoid; break-inside: avoid; padding: 0; background: #fffdf9; }
-                      .label img { display: block; width: 64mm; height: auto; }
+                      .label img { display: block; width: 90mm; height: auto; }
                       @page { size: A4; margin: 10mm; }
-                      @media print { body { padding: 0; background: #fff; } .sheet { gap: 6mm; } }
+                      @media print { body { padding: 0; } }
                     </style>
                   </head>
                   <body>
@@ -459,13 +408,25 @@ public class AdminExportServiceImpl implements AdminExportService {
         return html.toString();
     }
 
-    private String scanUrl(EntryScanLabel label) {
-        String baseUrl = exportProperties.getJudgeH5BaseUrl();
-        if (!StringUtils.hasText(baseUrl)) {
-            baseUrl = "http://localhost:5174";
+    private List<LabelRenderItem> expandLabelRenderItems(List<LabelItem> labelItems) {
+        List<LabelRenderItem> items = new ArrayList<>();
+        for (LabelItem item : labelItems) {
+            LabelRenderItem renderItem = toLabelRenderItem(item);
+            for (int index = 0; index < item.copies(); index++) {
+                items.add(renderItem);
+            }
         }
-        String normalizedBase = baseUrl.replaceAll("/+$", "");
-        return normalizedBase + "/q/" + URLEncoder.encode(label.getScanToken(), StandardCharsets.UTF_8);
+        return items;
+    }
+
+    private LabelRenderItem toLabelRenderItem(LabelItem item) {
+        return new LabelRenderItem(
+                item.entry().getUuid(),
+                item.label().getLabelCode(),
+                item.label().getShortCode(),
+                item.label().getScanToken(),
+                item.categoryName()
+        );
     }
 
     private void logExport(String action, Competition competition, String filters, int count) {
@@ -518,22 +479,6 @@ public class AdminExportServiceImpl implements AdminExportService {
                 .sorted(Comparator.comparing(BeerEntryExtraField::getId))
                 .map(field -> value(field.getFieldLabel()) + "：" + value(field.getFieldValue()))
                 .collect(Collectors.joining("；"));
-    }
-
-    private void drawCenteredText(Graphics2D g, String text, Font font, Color color, int centerX, int baselineY) {
-        g.setFont(font);
-        g.setColor(color);
-        FontMetrics metrics = g.getFontMetrics();
-        int x = centerX - metrics.stringWidth(text) / 2;
-        g.drawString(text, x, baselineY);
-    }
-
-    private String fitMetaLine(LabelItem item) {
-        String category = StringUtils.hasText(item.categoryName()) ? item.categoryName() : "待确认组别";
-        String style = StringUtils.hasText(item.entry().getStyle()) ? item.entry().getStyle() : "Style Pending";
-        String abv = item.entry().getAbv() == null ? "ABV Pending" : decimal(item.entry().getAbv()) + "%";
-        String text = category + " · " + style + " · " + abv;
-        return text.length() > 28 ? text.substring(0, 27) + "…" : text;
     }
 
     private String entryStatusLabel(String status) {
