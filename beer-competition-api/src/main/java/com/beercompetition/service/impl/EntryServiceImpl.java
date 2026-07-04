@@ -34,6 +34,7 @@ import com.beercompetition.pojo.dto.AdminEntryUpdateRequest;
 import com.beercompetition.pojo.dto.PortalEntryDeliverySubmitRequest;
 import com.beercompetition.pojo.dto.PortalEntryRefundRequest;
 import com.beercompetition.pojo.dto.PortalEntrySubmitRequest;
+import com.beercompetition.pojo.dto.PortalEntryUpdateRequest;
 import com.beercompetition.pojo.dto.PortalProfileUpdateRequest;
 import com.beercompetition.pojo.enums.CompetitionStatus;
 import com.beercompetition.pojo.enums.CompetitionType;
@@ -144,6 +145,10 @@ public class EntryServiceImpl implements EntryService {
             EntryRefundStatus.REQUESTED.name(),
             EntryRefundStatus.APPROVED.name(),
             EntryRefundStatus.PROCESSING.name()
+    );
+    private static final Set<String> PORTAL_ENTRY_UPDATE_STATUSES = Set.of(
+            EntryStatus.PENDING_PAYMENT.name(),
+            EntryStatus.REGISTERED.name()
     );
     private static final Set<String> OPTION_FIELD_TYPES = Set.of("select", "multi_select");
     private static final Set<String> AVATAR_CONTENT_TYPES = Set.of("image/jpeg", "image/png", "image/webp");
@@ -381,6 +386,44 @@ public class EntryServiceImpl implements EntryService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public EntryDetailVO updatePortalEntry(Long entryId, PortalEntryUpdateRequest request) {
+        // 1) 查询厂商酒款并校验自助修改窗口
+        PortalAccount account = requirePortalAccount();
+        BeerEntry entry = requireOwnedEntry(entryId, account.getBreweryId());
+        Competition competition = competitionMapper.selectById(entry.getCompetitionId());
+        assertCanUpdatePortalEntryInfo(entry, competition);
+
+        // 2) 校验可变字段，投递组别和现场标签不参与修改
+        requireCompetitionStyle(entry.getCompetitionId(), request.getStyle());
+        List<EntryFieldConfig> fieldConfigs = listEntryFieldConfigs(entry.getCompetitionId());
+        Map<String, String> normalizedExtraFields = normalizeExtraFields(fieldConfigs, request.getExtraFields());
+        String nextName = normalizeRequired(request.getName(), "酒款名称不能为空");
+        String nextStyle = normalizeRequired(request.getStyle(), "基础风格不能为空");
+
+        List<Map<String, String>> changes = new ArrayList<>();
+        addChange(changes, "酒名", entry.getName(), nextName);
+        addChange(changes, "基础风格", entry.getStyle(), nextStyle);
+        addChange(changes, "ABV", entry.getAbv() == null ? null : entry.getAbv().stripTrailingZeros().toPlainString(),
+                request.getAbv() == null ? null : request.getAbv().stripTrailingZeros().toPlainString());
+        addExtraFieldChanges(changes, entry.getId(), fieldConfigs, normalizedExtraFields);
+
+        // 3) 更新酒款资料，保留原投递组别、参赛编号和二维码
+        entry.setName(nextName);
+        entry.setStyle(nextStyle);
+        entry.setAbv(request.getAbv());
+        entry.setExtraFieldsJson(writeJson(normalizedExtraFields));
+        beerEntryMapper.updateById(entry);
+        rewriteEntryExtraFields(entry.getId(), fieldConfigs, normalizedExtraFields);
+
+        // 4) 写入操作记录并返回最新详情
+        if (!changes.isEmpty()) {
+            writeEntryLog("ENTRY_PORTAL_UPDATE", entry.getUuid(), buildPortalEntryUpdateLogSummary(changes));
+        }
+        return toEntryDetailVO(beerEntryMapper.selectById(entry.getId()));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public EntryDetailVO submitPortalEntryDelivery(Long entryId, PortalEntryDeliverySubmitRequest request) {
         // 1) 参数规范化与前置校验
         PortalAccount account = requirePortalAccount();
@@ -460,9 +503,7 @@ public class EntryServiceImpl implements EntryService {
                 .requestedTime(LocalDateTime.now())
                 .build();
         entryRefundMapper.insert(refund);
-        if (EntryPayMethod.WECHAT.name().equals(payment.getPayMethod())) {
-            scheduleWechatRefundAutoApproval(refund.getId());
-        }
+        scheduleRefundAutoApproval(refund.getId());
 
         // 3) 返回最新酒款详情
         return toEntryDetailVO(beerEntryMapper.selectById(entry.getId()));
@@ -1334,6 +1375,7 @@ public class EntryServiceImpl implements EntryService {
         EntryScanLabel label = entryScanLabelService.requireActiveLabel(entry.getId());
         boolean activeRefund = isActiveRefund(refund);
         boolean resultPublished = isResultPublished(competition, entry);
+        boolean canUpdateInfo = canUpdatePortalEntryInfo(entry, competition, refund, resultPublished);
         return EntryDetailVO.builder()
                 .id(entry.getId())
                 .uuid(entry.getUuid())
@@ -1364,6 +1406,8 @@ public class EntryServiceImpl implements EntryService {
                 .refundRequestedAt(refund == null ? null : refund.getRequestedTime())
                 .refundProcessedAt(refund == null ? null : refund.getProcessedTime())
                 .canRequestRefund(canRequestRefund(entry, competition, payment, refund, resultPublished))
+                .canUpdateInfo(canUpdateInfo)
+                .updateInfoDisabledReason(canUpdateInfo ? null : resolvePortalEntryUpdateUnavailableReason(entry, competition))
                 .delivery(toEntryDeliveryVO(delivery))
                 .deliveryMethod(delivery == null ? null : delivery.getDeliveryMethod())
                 .deliveryStatus(resolveDeliveryStatus(delivery))
@@ -1387,6 +1431,7 @@ public class EntryServiceImpl implements EntryService {
         EntryScanLabel label = entryScanLabelService.requireActiveLabel(entry.getId());
         boolean activeRefund = isActiveRefund(refund);
         boolean resultPublished = isResultPublished(competition, entry);
+        boolean canUpdateInfo = canUpdatePortalEntryInfo(entry, competition, refund, resultPublished);
         return EntrySummaryVO.builder()
                 .id(entry.getId())
                 .uuid(entry.getUuid())
@@ -1415,6 +1460,8 @@ public class EntryServiceImpl implements EntryService {
                 .refundRequestedAt(refund == null ? null : refund.getRequestedTime())
                 .refundProcessedAt(refund == null ? null : refund.getProcessedTime())
                 .canRequestRefund(canRequestRefund(entry, competition, payment, refund, resultPublished))
+                .canUpdateInfo(canUpdateInfo)
+                .updateInfoDisabledReason(canUpdateInfo ? null : resolvePortalEntryUpdateUnavailableReason(entry, competition))
                 .delivery(toEntryDeliveryVO(delivery))
                 .deliveryMethod(delivery == null ? null : delivery.getDeliveryMethod())
                 .deliveryStatus(resolveDeliveryStatus(delivery))
@@ -1782,11 +1829,38 @@ public class EntryServiceImpl implements EntryService {
         }
     }
 
+    private void rewriteEntryExtraFields(Long beerEntryId, List<EntryFieldConfig> fieldConfigs,
+                                         Map<String, String> normalizedExtraFields) {
+        beerEntryExtraFieldMapper.delete(new LambdaQueryWrapper<BeerEntryExtraField>()
+                .eq(BeerEntryExtraField::getBeerEntryId, beerEntryId));
+        for (EntryFieldConfig fieldConfig : fieldConfigs) {
+            String value = normalizedExtraFields.get(fieldConfig.getFieldKey());
+            if (!StringUtils.hasText(value)) {
+                continue;
+            }
+            beerEntryExtraFieldMapper.insert(BeerEntryExtraField.builder()
+                    .beerEntryId(beerEntryId)
+                    .fieldKey(fieldConfig.getFieldKey())
+                    .fieldLabel(fieldConfig.getFieldLabel())
+                    .fieldValue(value)
+                    .build());
+        }
+    }
+
     private String buildEntryLogSummary(String reason, List<Map<String, String>> changes) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("reason", reason);
         payload.put("changes", changes);
         return writeObjectJson(payload, "保存修改记录失败");
+    }
+
+    private String buildPortalEntryUpdateLogSummary(List<Map<String, String>> changes) {
+        String fields = changes.stream()
+                .map(change -> change.get("field"))
+                .filter(StringUtils::hasText)
+                .distinct()
+                .collect(Collectors.joining("、"));
+        return StringUtils.hasText(fields) ? "厂商自助修改报名资料：" + fields : "厂商自助修改报名资料";
     }
 
     private String buildStatusLogSummary(String action, String reason) {
@@ -1896,6 +1970,59 @@ public class EntryServiceImpl implements EntryService {
                 .eq(AwardResult::getBeerEntryId, beerEntryId)) > 0;
     }
 
+    private void assertCanUpdatePortalEntryInfo(BeerEntry entry, Competition competition) {
+        if (!canUpdatePortalEntryInfo(entry, competition, findLatestRefund(entry.getId()),
+                competition != null && isResultPublished(competition, entry))) {
+            throw new BaseException(resolvePortalEntryUpdateUnavailableReason(entry, competition));
+        }
+    }
+
+    private boolean canUpdatePortalEntryInfo(BeerEntry entry, Competition competition, EntryRefund refund,
+                                             boolean resultPublished) {
+        if (entry == null || competition == null) {
+            return false;
+        }
+        if (!PORTAL_ENTRY_UPDATE_STATUSES.contains(entry.getStatus())) {
+            return false;
+        }
+        if (competition.getRegistrationDeadline() != null
+                && LocalDateTime.now().isAfter(competition.getRegistrationDeadline())) {
+            return false;
+        }
+        if (Objects.equals(entry.getStoredFlag(), 1) || isActiveRefund(refund) || resultPublished) {
+            return false;
+        }
+        return !hasRoundAssignment(entry.getId())
+                && !hasScoreRecord(entry.getId())
+                && !hasRoundResult(entry.getId())
+                && !hasAwardResult(entry.getId());
+    }
+
+    private String resolvePortalEntryUpdateUnavailableReason(BeerEntry entry, Competition competition) {
+        if (entry == null || competition == null) {
+            return "当前酒款不能修改资料";
+        }
+        if (Objects.equals(entry.getStoredFlag(), 1)) {
+            return "样品已入库，不能自助修改报名资料";
+        }
+        if (!PORTAL_ENTRY_UPDATE_STATUSES.contains(entry.getStatus())) {
+            return "当前状态不能修改报名资料";
+        }
+        if (competition.getRegistrationDeadline() != null && LocalDateTime.now().isAfter(competition.getRegistrationDeadline())) {
+            return "报名截止后不能修改报名资料";
+        }
+        if (hasActiveRefund(entry.getId())) {
+            return "退款处理中，不能修改报名资料";
+        }
+        if (hasRoundAssignment(entry.getId()) || hasScoreRecord(entry.getId()) || hasRoundResult(entry.getId()) || hasAwardResult(entry.getId())) {
+            return "酒款已进入评审流程，不能自助修改报名资料";
+        }
+        if (isResultPublished(competition, entry)) {
+            return "结果已发布，不能修改报名资料";
+        }
+        return "当前酒款不能修改资料";
+    }
+
     private void assertCanRequestRefund(BeerEntry entry, Competition competition, EntryPayment payment) {
         boolean resultPublished = isResultPublished(competition, entry);
         EntryRefund latestRefund = findLatestRefund(entry.getId());
@@ -1909,16 +2036,13 @@ public class EntryServiceImpl implements EntryService {
         if (entry == null || competition == null || payment == null) {
             return false;
         }
-        if (!EntryStatus.REGISTERED.name().equals(entry.getStatus())) {
+        if (!LABEL_ALLOWED_STATUSES.contains(entry.getStatus())) {
             return false;
         }
         if (!EntryPaymentStatus.PAID.name().equals(payment.getStatus())) {
             return false;
         }
         if (competition.getRegistrationDeadline() != null && LocalDateTime.now().isAfter(competition.getRegistrationDeadline())) {
-            return false;
-        }
-        if (Objects.equals(entry.getStoredFlag(), 1) || hasRoundAssignment(entry.getId()) || resultPublished) {
             return false;
         }
         return refund == null || EntryRefundStatus.REJECTED.name().equals(refund.getStatus());
@@ -1929,7 +2053,7 @@ public class EntryServiceImpl implements EntryService {
         if (entry == null || competition == null || payment == null) {
             return "当前酒款不能申请退款";
         }
-        if (!EntryStatus.REGISTERED.name().equals(entry.getStatus())) {
+        if (!LABEL_ALLOWED_STATUSES.contains(entry.getStatus())) {
             return "只有报名成功的酒款可以申请退款";
         }
         if (!EntryPaymentStatus.PAID.name().equals(payment.getStatus())) {
@@ -1937,15 +2061,6 @@ public class EntryServiceImpl implements EntryService {
         }
         if (competition.getRegistrationDeadline() != null && LocalDateTime.now().isAfter(competition.getRegistrationDeadline())) {
             return "报名截止后不能申请退款";
-        }
-        if (Objects.equals(entry.getStoredFlag(), 1)) {
-            return "样品已入库，不能申请退款";
-        }
-        if (hasRoundAssignment(entry.getId())) {
-            return "酒款已进入评审编排，不能申请退款";
-        }
-        if (resultPublished) {
-            return "结果已发布，不能申请退款";
         }
         if (refund != null && ACTIVE_REFUND_STATUSES.contains(refund.getStatus())) {
             return "退款正在处理中，请勿重复申请";
@@ -1959,13 +2074,13 @@ public class EntryServiceImpl implements EntryService {
         return "当前酒款不能申请退款";
     }
 
-    private void scheduleWechatRefundAutoApproval(Long refundId) {
+    private void scheduleRefundAutoApproval(Long refundId) {
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
                     try {
-                        wechatPaymentService.autoApproveWechatRefund(refundId, "报名截止前自动受理");
+                        wechatPaymentService.autoApproveRefund(refundId, "报名截止前自动受理");
                     } catch (RuntimeException ignored) {
                         // 退款申请已保存，自动受理失败时由后台退款列表继续处理。
                     }
@@ -1973,7 +2088,7 @@ public class EntryServiceImpl implements EntryService {
             });
             return;
         }
-        wechatPaymentService.autoApproveWechatRefund(refundId, "报名截止前自动受理");
+        wechatPaymentService.autoApproveRefund(refundId, "报名截止前自动受理");
     }
 
     private EntryDelivery findEntryDelivery(Long beerEntryId) {

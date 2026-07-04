@@ -37,6 +37,8 @@ public class EntrySummaryVO {
     private LocalDateTime refundRequestedAt;
     private LocalDateTime refundProcessedAt;
     private Boolean canRequestRefund;
+    private Boolean canUpdateInfo;
+    private String updateInfoDisabledReason;
     private EntryDeliveryVO delivery;
     private String deliveryMethod;
     private String deliveryStatus;

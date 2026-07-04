@@ -9,6 +9,7 @@ import com.aliyun.dypnsapi20170525.models.SendSmsVerifyCodeResponse;
 import com.aliyun.dypnsapi20170525.models.SendSmsVerifyCodeResponseBody;
 import com.aliyun.teaopenapi.models.Config;
 import com.beercompetition.common.exception.BaseException;
+import com.beercompetition.common.util.SmsMessageUtils;
 import com.beercompetition.pojo.enums.SmsBizType;
 import com.beercompetition.properties.SmsProperties;
 import com.beercompetition.service.SmsAuthProvider;
@@ -20,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -30,6 +32,7 @@ public class AliyunSmsAuthProvider implements SmsAuthProvider {
 
     private static final String SUCCESS_CODE = "OK";
     private static final String VERIFY_PASS = "PASS";
+    private static final String FREQUENCY_KEYWORD = "frequency";
 
     private final SmsProperties smsProperties;
     private final ObjectMapper objectMapper;
@@ -58,7 +61,7 @@ public class AliyunSmsAuthProvider implements SmsAuthProvider {
                 String message = body == null ? "短信验证码发送失败" : body.getMessage();
                 log.warn("阿里云短信发送失败 phone={}, code={}, message={}", maskPhone(phone),
                         body == null ? null : body.getCode(), message);
-                throw new BaseException(StringUtils.hasText(message) ? message : "短信验证码发送失败");
+                throw new BaseException(resolveSendFailureMessage(body == null ? null : body.getCode(), message));
             }
             log.info("阿里云短信发送成功 phone={}, requestId={}", maskPhone(phone), body.getRequestId());
         } catch (BaseException ex) {
@@ -119,6 +122,21 @@ public class AliyunSmsAuthProvider implements SmsAuthProvider {
 
     private boolean isSuccess(String code, Boolean success) {
         return SUCCESS_CODE.equals(code) && Boolean.TRUE.equals(success);
+    }
+
+    private String resolveSendFailureMessage(String code, String message) {
+        if (isFrequencyFailure(code, message)) {
+            return SmsMessageUtils.buildFrequencyMessage(smsProperties.getSendIntervalSeconds());
+        }
+        return StringUtils.hasText(message) ? message : "短信验证码发送失败";
+    }
+
+    private boolean isFrequencyFailure(String code, String message) {
+        return containsFrequencyKeyword(code) || containsFrequencyKeyword(message);
+    }
+
+    private boolean containsFrequencyKeyword(String value) {
+        return StringUtils.hasText(value) && value.toLowerCase(Locale.ROOT).contains(FREQUENCY_KEYWORD);
     }
 
     private void ensureConfigured() {

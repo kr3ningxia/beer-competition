@@ -71,7 +71,7 @@
               </el-button>
               <template #dropdown>
                 <el-dropdown-menu>
-                  <el-dropdown-item command="refresh">更新状态</el-dropdown-item>
+                  <el-dropdown-item command="edit-entry" :disabled="!selectedEntry.canUpdateInfo">修改报名资料</el-dropdown-item>
                   <el-dropdown-item v-if="canCancelSelectedEntry" command="cancel-entry">取消报名</el-dropdown-item>
                   <el-dropdown-item v-if="selectedEntry.canRequestRefund" command="refund">申请退款</el-dropdown-item>
                 </el-dropdown-menu>
@@ -459,11 +459,167 @@
         </template>
       </aside>
     </section>
+
+    <el-dialog
+      v-model="editDialogVisible"
+      title="修改报名资料"
+      width="640px"
+      class="entry-edit-dialog"
+      :close-on-click-modal="!savingEdit"
+    >
+      <el-form
+        ref="editFormRef"
+        :model="editForm"
+        :rules="editFormRules"
+        :disabled="savingEdit"
+        label-position="top"
+        class="entry-edit-form"
+      >
+        <section class="locked-category">
+          <span>投递组别</span>
+          <strong>{{ selectedEntry?.categoryName || '-' }}</strong>
+          <p>组别不可修改</p>
+        </section>
+
+        <el-form-item label="酒款名称" prop="name">
+          <el-input v-model.trim="editForm.name" placeholder="请填写酒款名称" />
+        </el-form-item>
+
+        <div class="edit-form-grid">
+          <el-form-item label="基础风格" prop="style">
+            <el-select v-model="editForm.style" filterable placeholder="请选择或搜索基础风格">
+              <el-option
+                v-for="item in editCompetition?.styles || []"
+                :key="item.id || item.name"
+                :label="styleLabel(item)"
+                :value="item.name"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="ABV" prop="abv">
+            <el-input
+              v-model.trim="editForm.abv"
+              inputmode="decimal"
+              placeholder="请填写酒精度"
+              @blur="editForm.abv = normalizeAbvInput(editForm.abv)"
+            >
+              <template #suffix>
+                <span class="abv-input-suffix">%</span>
+              </template>
+            </el-input>
+          </el-form-item>
+        </div>
+
+        <section v-if="editConfiguredFields.length" class="edit-extra-section">
+          <h4>补充信息</h4>
+          <div class="edit-extra-grid">
+            <el-form-item
+              v-for="field in editConfiguredFields"
+              :key="field.fieldKey"
+              :label="field.fieldLabel"
+              :prop="`extraFields.${field.fieldKey}`"
+              class="edit-extra-field"
+            >
+              <template #label>
+                <span class="field-label">
+                  <span>{{ field.fieldLabel }}</span>
+                  <em v-if="field.required">必填</em>
+                </span>
+              </template>
+
+              <el-input
+                v-if="field.fieldType === 'textarea'"
+                v-model.trim="editForm.extraFields[field.fieldKey]"
+                type="textarea"
+                :rows="4"
+                maxlength="255"
+                show-word-limit
+                placeholder="选填"
+              />
+              <el-input-number
+                v-else-if="field.fieldType === 'number'"
+                v-model="editForm.extraFields[field.fieldKey]"
+                :min="0"
+                controls-position="right"
+                placeholder="请输入数字"
+              />
+              <el-select
+                v-else-if="field.fieldType === 'select'"
+                v-model="editForm.extraFields[field.fieldKey]"
+                placeholder="请选择"
+              >
+                <el-option v-for="option in field.options" :key="option" :label="option" :value="option" />
+              </el-select>
+              <el-select
+                v-else-if="field.fieldType === 'multi_select'"
+                v-model="editForm.extraFields[field.fieldKey]"
+                multiple
+                collapse-tags
+                collapse-tags-tooltip
+                placeholder="请选择，可多选"
+              >
+                <el-option v-for="option in field.options" :key="option" :label="option" :value="option" />
+              </el-select>
+              <el-input
+                v-else
+                v-model.trim="editForm.extraFields[field.fieldKey]"
+                maxlength="255"
+                show-word-limit
+                :placeholder="field.helpText || '请填写'"
+              />
+              <p v-if="field.helpText" class="field-help">{{ field.helpText }}</p>
+            </el-form-item>
+          </div>
+        </section>
+      </el-form>
+
+      <template #footer>
+        <div class="edit-dialog-actions">
+          <el-button :disabled="savingEdit" @click="editDialogVisible = false">取消</el-button>
+          <el-button type="primary" :loading="savingEdit" @click="saveEntryEdit">保存修改</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="refundDialogVisible"
+      title="退赛退款"
+      width="520px"
+      class="refund-confirm-dialog"
+      align-center
+      :close-on-click-modal="!refunding"
+    >
+      <div class="refund-confirm-body">
+        <p>
+          点击确定退款按钮，这款酒将退出比赛，酒标同时作废。如需修改酒款信息，您可以直接点击“修改信息”。您确定要退款吗？
+        </p>
+        <el-input
+          v-model.trim="refundForm.reason"
+          class="refund-reason-input"
+          placeholder="退款原因（选填）"
+          maxlength="200"
+          clearable
+        />
+      </div>
+      <template #footer>
+        <div class="refund-dialog-actions">
+          <el-button :disabled="refunding" @click="refundDialogVisible = false">取消退款</el-button>
+          <el-button
+            class="refund-edit-button"
+            :disabled="refunding || !selectedEntry?.canUpdateInfo"
+            @click="editEntryFromRefundDialog"
+          >
+            修改酒款信息
+          </el-button>
+          <el-button class="refund-confirm-button" :loading="refunding" @click="confirmRefundRequest">确定退款</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
@@ -471,6 +627,7 @@ import QRCode from 'qrcode'
 import {
   cancelPortalEntry,
   createPortalEntryWechatNativePayment,
+  fetchPortalCompetitionDetail,
   fetchPortalBankTransferAccount,
   fetchPortalBankTransfer,
   fetchPortalEntryPaymentStatus,
@@ -481,11 +638,12 @@ import {
   simulatePortalEntryPayment,
   submitPortalBankTransfer,
   submitPortalEntryDelivery,
+  updatePortalEntry,
   updatePortalBankTransfer,
   uploadPortalBankTransferVoucher,
 } from '@/api/portal'
 import { JUDGE_H5_BASE_URL } from '@/config'
-import { formatAbvWithUnit } from '@/utils/formatters'
+import { formatAbvWithUnit, isValidAbvInput, normalizeAbvInput } from '@/utils/formatters'
 import { entryPayAmount, isEntryRefundActive, isEntryRefunded } from './portalViewModels'
 
 const route = useRoute()
@@ -508,8 +666,15 @@ const bankVoucherInputRef = ref(null)
 const uploadingBankVoucher = ref(false)
 const submittingBankTransfer = ref(false)
 const cancelingBankTransfer = ref(false)
+const editDialogVisible = ref(false)
+const editFormRef = ref(null)
+const editCompetition = ref(null)
+const savingEdit = ref(false)
+const refundDialogVisible = ref(false)
+const refunding = ref(false)
 let paymentPollingTimer = null
 let paymentPollingCount = 0
+const DEFAULT_REFUND_REASON = '退赛退款'
 const deliveryForm = reactive({
   deliveryMethod: 'EXPRESS',
   carrier: '',
@@ -523,6 +688,15 @@ const bankTransferForm = reactive({
   voucherAssetId: null,
   voucherFileName: '',
 })
+const refundForm = reactive({
+  reason: '',
+})
+const editForm = reactive({
+  name: '',
+  style: '',
+  abv: '',
+  extraFields: {},
+})
 
 const currencyFormatter = new Intl.NumberFormat('zh-CN', {
   style: 'currency',
@@ -535,6 +709,41 @@ const payableEntries = computed(() => {
   return [...entries.value].sort((a, b) => entrySortWeight(a) - entrySortWeight(b) || b.id - a.id)
 })
 const selectedLogistics = computed(() => selectedEntry.value?.competitionLogistics || {})
+const editConfiguredFields = computed(() => normalizeEntryFields(editCompetition.value?.entryFields || []))
+const editFormRules = computed(() => {
+  const rules = {
+    name: [{ required: true, message: '请填写酒款名称', trigger: 'blur' }],
+    style: [{ required: true, message: '请选择基础风格', trigger: 'change' }],
+    abv: [
+      {
+        validator: (_rule, value, callback) => {
+          if (isValidAbvInput(value)) {
+            callback()
+            return
+          }
+          callback(new Error('请填写 0-99.99 之间的 ABV，最多两位小数'))
+        },
+        trigger: ['blur', 'change'],
+      },
+    ],
+  }
+  editConfiguredFields.value.forEach((field) => {
+    if (!field.required) return
+    rules[`extraFields.${field.fieldKey}`] = [
+      {
+        validator: (_rule, value, callback) => {
+          if (hasFieldValue(value)) {
+            callback()
+            return
+          }
+          callback(new Error(`请填写${field.fieldLabel}`))
+        },
+        trigger: field.fieldType === 'text' || field.fieldType === 'textarea' ? 'blur' : 'change',
+      },
+    ]
+  })
+  return rules
+})
 const fixedDeliveryMethod = computed(() => {
   if (selectedLogistics.value.deliveryMethod === 'EXPRESS') return 'EXPRESS'
   if (selectedLogistics.value.deliveryMethod === 'ONSITE') return 'ONSITE'
@@ -844,6 +1053,46 @@ function hasDeliveryProgress(entry) {
   return ['SUBMITTED', 'RECEIVED'].includes(entry.deliveryStatus) || Boolean(entry.deliverySubmittedAt || entry.trackingNo || entry.deliveryMethod)
 }
 
+function normalizeEntryFields(fields = []) {
+  return fields
+    .map((field, index) => {
+      if (typeof field === 'string') {
+        return {
+          fieldKey: `legacy_${index}`,
+          fieldLabel: field,
+          fieldType: 'text',
+          helpText: '',
+          options: [],
+          required: false,
+          visibleToJudges: true,
+          sortOrder: index,
+        }
+      }
+      return {
+        fieldKey: field.fieldKey || `custom_${index}`,
+        fieldLabel: field.fieldLabel || field.label || `补充字段 ${index + 1}`,
+        fieldType: field.fieldType || field.type || 'text',
+        helpText: field.helpText || '',
+        options: Array.isArray(field.options) ? field.options : [],
+        required: Boolean(field.required),
+        visibleToJudges: field.visibleToJudges !== false,
+        sortOrder: Number(field.sortOrder ?? index),
+      }
+    })
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+}
+
+function hasFieldValue(value) {
+  if (Array.isArray(value)) {
+    return value.length > 0
+  }
+  return value !== null && value !== undefined && String(value).trim() !== ''
+}
+
+function styleLabel(item) {
+  return item?.styleCode ? `${item.styleCode} ${item.name}` : item?.name
+}
+
 const refundCardTitle = computed(() => {
   if (isEntryRefunded(selectedEntry.value)) return '退款已完成'
   if (selectedEntry.value?.refundStatus === 'REJECTED') return '退款申请已驳回'
@@ -959,14 +1208,80 @@ async function refreshEntries(targetId = selectedEntry.value?.id) {
 }
 
 function handleMoreCommand(command) {
-  if (command === 'refresh') {
-    refreshEntries(selectedEntry.value?.id)
+  if (command === 'edit-entry') {
+    openSelectedEntryEdit()
   }
   if (command === 'cancel-entry') {
     cancelSelectedEntry()
   }
   if (command === 'refund') {
     submitRefundRequest()
+  }
+}
+
+async function openSelectedEntryEdit() {
+  if (!selectedEntry.value?.canUpdateInfo) {
+    ElMessage.warning(selectedEntry.value?.updateInfoDisabledReason || '当前酒款不能修改资料')
+    return
+  }
+  try {
+    editCompetition.value = await fetchPortalCompetitionDetail(selectedEntry.value.competitionId)
+    resetEditForm(selectedEntry.value)
+    editDialogVisible.value = true
+    await nextTick()
+    editFormRef.value?.clearValidate()
+  } catch (error) {
+    ElMessage.warning(error?.message || '报名配置加载失败')
+  }
+}
+
+function resetEditForm(entry) {
+  editForm.name = entry?.name || ''
+  editForm.style = entry?.style || ''
+  editForm.abv = entry?.abv === null || entry?.abv === undefined ? '' : String(entry.abv)
+  const valueByKey = new Map((entry?.extraFields || []).map((field) => [field.key, field.value]))
+  editForm.extraFields = Object.fromEntries(editConfiguredFields.value.map((field) => {
+    const rawValue = valueByKey.get(field.fieldKey)
+    return [field.fieldKey, normalizeExistingFieldValue(field, rawValue)]
+  }))
+}
+
+function normalizeExistingFieldValue(field, value) {
+  if (field.fieldType === 'multi_select') {
+    if (Array.isArray(value)) return value
+    if (!hasFieldValue(value)) return []
+    return String(value).split('、').map((item) => item.trim()).filter(Boolean)
+  }
+  if (field.fieldType === 'number') {
+    if (!hasFieldValue(value)) return null
+    const number = Number(value)
+    return Number.isNaN(number) ? null : number
+  }
+  return value ?? ''
+}
+
+async function saveEntryEdit() {
+  if (!selectedEntry.value || savingEdit.value) return
+  const valid = await editFormRef.value?.validate().catch(() => false)
+  if (!valid) {
+    ElMessage.warning('请先补全报名资料')
+    return
+  }
+  savingEdit.value = true
+  try {
+    await updatePortalEntry(selectedEntry.value.id, {
+      name: editForm.name,
+      style: editForm.style,
+      abv: Number(normalizeAbvInput(editForm.abv)),
+      extraFields: editForm.extraFields,
+    })
+    editDialogVisible.value = false
+    ElMessage.success('报名资料已更新')
+    await refreshEntries(selectedEntry.value.id)
+  } catch (error) {
+    ElMessage.warning(error?.message || '报名资料保存失败')
+  } finally {
+    savingEdit.value = false
   }
 }
 
@@ -1016,26 +1331,29 @@ async function saveDelivery() {
 
 async function submitRefundRequest() {
   if (!selectedEntry.value?.canRequestRefund) return
+  refundForm.reason = ''
+  refundDialogVisible.value = true
+}
+
+function editEntryFromRefundDialog() {
+  refundDialogVisible.value = false
+  openSelectedEntryEdit()
+}
+
+async function confirmRefundRequest() {
+  if (!selectedEntry.value?.canRequestRefund || refunding.value) return
+  refunding.value = true
   try {
-    const { value } = await ElMessageBox.prompt(
-      '提交后，这款酒将退出本场比赛；微信支付将原路退回，银行转账由组委会联系处理',
-      '申请退款',
-      {
-        confirmButtonText: '提交退款申请',
-        cancelButtonText: '取消',
-        inputPlaceholder: '请填写退款原因',
-        inputPattern: /.+/,
-        inputErrorMessage: '请填写退款原因',
-        type: 'warning',
-      },
-    )
-    selectedEntry.value = await requestPortalEntryRefund(selectedEntry.value.id, { reason: value.trim() })
+    const reason = refundForm.reason.trim() || DEFAULT_REFUND_REASON
+    selectedEntry.value = await requestPortalEntryRefund(selectedEntry.value.id, { reason })
+    refundDialogVisible.value = false
     labelData.value = null
     ElMessage.success('退款申请已提交')
     await refreshEntries(selectedEntry.value.id)
   } catch (error) {
-    if (error === 'cancel' || error === 'close') return
     ElMessage.warning(error?.message || '退款申请提交失败')
+  } finally {
+    refunding.value = false
   }
 }
 
@@ -2229,6 +2547,216 @@ dd {
   margin: 6px 0 0;
 }
 
+.entry-edit-dialog :deep(.el-dialog) {
+  background: #fffaf0;
+  border-radius: 8px;
+}
+
+.entry-edit-dialog :deep(.el-dialog__header) {
+  padding: 22px 24px 8px;
+}
+
+.entry-edit-dialog :deep(.el-dialog__title) {
+  color: var(--ink);
+  font-size: 21px;
+  font-weight: 900;
+}
+
+.entry-edit-dialog :deep(.el-dialog__body) {
+  padding: 12px 24px 6px;
+}
+
+.entry-edit-form {
+  display: grid;
+  gap: 14px;
+}
+
+.entry-edit-form :deep(.el-input__wrapper),
+.entry-edit-form :deep(.el-textarea__inner),
+.entry-edit-form :deep(.el-select__wrapper),
+.entry-edit-form :deep(.el-input-number) {
+  width: 100%;
+  background: #fffdf7;
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px rgba(87, 58, 26, 0.14) inset;
+}
+
+.entry-edit-form :deep(.el-form-item) {
+  margin-bottom: 0;
+}
+
+.entry-edit-form :deep(.el-form-item__label) {
+  color: #514338;
+  font-weight: 800;
+}
+
+.locked-category {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  background: #fff7e6;
+  border: 1px solid rgba(87, 58, 26, 0.13);
+  border-radius: 8px;
+}
+
+.locked-category span {
+  color: var(--accent-deep);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.locked-category strong {
+  color: var(--ink);
+  font-size: 18px;
+}
+
+.locked-category p,
+.field-help {
+  margin: 0;
+  color: var(--subtle-ink);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.edit-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(150px, 0.65fr);
+  gap: 14px;
+}
+
+.abv-input-suffix {
+  color: #5f4d3d;
+  font-weight: 800;
+}
+
+.edit-extra-section {
+  display: grid;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.edit-extra-section h4 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 16px;
+}
+
+.edit-extra-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.edit-extra-field:has(textarea) {
+  grid-column: 1 / -1;
+}
+
+.field-label {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+}
+
+.field-label em {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 7px;
+  color: #8f5100;
+  background: #ffe3a6;
+  border-radius: 999px;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.field-help {
+  margin-top: 7px;
+  font-size: 12px;
+}
+
+.edit-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.edit-dialog-actions :deep(.el-button--primary) {
+  border: 0;
+  background: linear-gradient(180deg, #d99a30, #a86514);
+  font-weight: 900;
+}
+
+.refund-confirm-dialog :deep(.el-dialog) {
+  background: #fffaf0;
+  border-radius: 8px;
+}
+
+.refund-confirm-dialog :deep(.el-dialog__header) {
+  padding: 22px 24px 8px;
+}
+
+.refund-confirm-dialog :deep(.el-dialog__title) {
+  color: var(--ink);
+  font-size: 21px;
+  font-weight: 900;
+}
+
+.refund-confirm-dialog :deep(.el-dialog__body) {
+  padding: 12px 24px 6px;
+}
+
+.refund-confirm-body {
+  display: grid;
+  gap: 14px;
+}
+
+.refund-confirm-body p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.75;
+}
+
+.refund-reason-input :deep(.el-input__wrapper) {
+  background: #fffdf7;
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px rgba(87, 58, 26, 0.14) inset;
+}
+
+.refund-reason-input :deep(.el-input__inner::placeholder) {
+  color: #a99b89;
+}
+
+.refund-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.refund-edit-button {
+  color: #2b1d10;
+  background: #e1a23d;
+  border-color: #d69328;
+  font-weight: 900;
+}
+
+.refund-confirm-button {
+  color: #8b7b67;
+  background: rgba(255, 253, 248, 0.72);
+  border-color: rgba(87, 58, 26, 0.12);
+  font-weight: 900;
+}
+
+.refund-confirm-button:hover,
+.refund-confirm-button:focus {
+  color: #6f6252;
+  background: #fffdf8;
+  border-color: rgba(87, 58, 26, 0.18);
+}
+
 @media (max-width: 1180px) {
   .delivery-workbench {
     grid-template-columns: 260px minmax(0, 1fr);
@@ -2253,6 +2781,11 @@ dd {
   .payment-method-options,
   .bank-account-actions,
   .flow-steps {
+    grid-template-columns: 1fr;
+  }
+
+  .edit-form-grid,
+  .edit-extra-grid {
     grid-template-columns: 1fr;
   }
 

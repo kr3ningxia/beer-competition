@@ -5,8 +5,9 @@ import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.common.exception.UnauthorizedException;
-import com.beercompetition.common.util.PiiService;
 import com.beercompetition.common.util.Md5Util;
+import com.beercompetition.common.util.PiiService;
+import com.beercompetition.common.util.SmsMessageUtils;
 import com.beercompetition.mapper.AdminUserMapper;
 import com.beercompetition.mapper.BreweryMapper;
 import com.beercompetition.mapper.CompetitionMapper;
@@ -63,6 +64,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
@@ -358,10 +360,19 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private void ensureSmsSendAvailable(SmsBizType bizType, String phoneHash) {
-        Object intervalFlag = redisTemplate.opsForValue().get(buildSmsIntervalKey(bizType, phoneHash));
+        String intervalKey = buildSmsIntervalKey(bizType, phoneHash);
+        Object intervalFlag = redisTemplate.opsForValue().get(intervalKey);
         if (intervalFlag != null) {
-            throw new BaseException("验证码发送过于频繁，请稍后再试");
+            Long remainingSeconds = redisTemplate.getExpire(intervalKey, TimeUnit.SECONDS);
+            throw new BaseException(buildSmsFrequencyMessage(remainingSeconds));
         }
+    }
+
+    private String buildSmsFrequencyMessage(Long remainingSeconds) {
+        long waitSeconds = remainingSeconds == null || remainingSeconds <= 0
+                ? smsProperties.getSendIntervalSeconds()
+                : remainingSeconds;
+        return SmsMessageUtils.buildFrequencyMessage(waitSeconds);
     }
 
     private void ensureAdminLoginRetryAvailable(String username) {

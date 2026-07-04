@@ -209,10 +209,14 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
     }
 
     @Override
-    public void autoApproveWechatRefund(Long refundId, String reason) {
-        // 1) 自动受理仅处理微信支付退款
-        RefundContext context = transactionTemplate.execute(status -> prepareWechatAutoRefund(refundId, reason));
+    public void autoApproveRefund(Long refundId, String reason) {
+        // 1) 自动受理报名截止前的退款申请
+        RefundContext context = transactionTemplate.execute(status -> prepareAutoRefund(refundId, reason));
         if (context == null) {
+            return;
+        }
+        if (isManualRefundPayment(context.payment())) {
+            transactionTemplate.executeWithoutResult(status -> applyManualRefundSuccess(context.refund().getId(), null));
             return;
         }
 
@@ -350,7 +354,7 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
         return new RefundContext(refund, payment, entry);
     }
 
-    private RefundContext prepareWechatAutoRefund(Long refundId, String reason) {
+    private RefundContext prepareAutoRefund(Long refundId, String reason) {
         EntryRefund refund = requireRefund(refundId);
         if (!EntryRefundStatus.REQUESTED.name().equals(refund.getStatus())) {
             throw new BaseException("当前退款状态不能自动受理");
@@ -360,13 +364,10 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
         if (payment == null || !EntryPaymentStatus.PAID.name().equals(payment.getStatus())) {
             throw new BaseException("只有已支付报名可以退款");
         }
-        if (!EntryPayMethod.WECHAT.name().equals(payment.getPayMethod())) {
-            throw new BaseException("只有微信支付可以自动退款");
-        }
-        if (!StringUtils.hasText(payment.getOutTradeNo())) {
+        if (!isManualRefundPayment(payment) && !StringUtils.hasText(payment.getOutTradeNo())) {
             throw new BaseException("缺少支付订单号，无法发起微信退款");
         }
-        if (!StringUtils.hasText(refund.getOutRefundNo())) {
+        if (!isManualRefundPayment(payment) && !StringUtils.hasText(refund.getOutRefundNo())) {
             refund.setOutRefundNo(generateOutRefundNo());
         }
         refund.setStatus(EntryRefundStatus.PROCESSING.name());

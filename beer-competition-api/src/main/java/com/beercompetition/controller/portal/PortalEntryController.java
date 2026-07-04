@@ -4,6 +4,7 @@ import com.beercompetition.common.result.Result;
 import com.beercompetition.pojo.dto.PortalEntryDeliverySubmitRequest;
 import com.beercompetition.pojo.dto.PortalEntryRefundRequest;
 import com.beercompetition.pojo.dto.PortalEntrySubmitRequest;
+import com.beercompetition.pojo.dto.PortalEntryUpdateRequest;
 import com.beercompetition.pojo.vo.EntryDetailVO;
 import com.beercompetition.pojo.vo.EntrySummaryVO;
 import com.beercompetition.pojo.vo.PortalEntryLabelVO;
@@ -14,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -44,6 +46,15 @@ public class PortalEntryController {
     @GetMapping("/entries/{id}")
     public Result<EntryDetailVO> entryDetail(@PathVariable Long id) {
         return Result.success(entryService.getPortalEntry(id));
+    }
+
+    /**
+     * 当前厂商在报名截止前修改酒款资料，投递组别和现场标签保持不变。
+     */
+    @PutMapping("/entries/{id}")
+    public Result<EntryDetailVO> updateEntry(@PathVariable Long id,
+                                             @RequestBody @Valid PortalEntryUpdateRequest request) {
+        return Result.success(entryService.updatePortalEntry(id, request));
     }
 
     /**

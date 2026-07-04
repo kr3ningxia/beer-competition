@@ -6,6 +6,7 @@ import com.beercompetition.pojo.dto.AdminEntryUpdateRequest;
 import com.beercompetition.pojo.dto.PortalEntrySubmitRequest;
 import com.beercompetition.pojo.dto.PortalEntryDeliverySubmitRequest;
 import com.beercompetition.pojo.dto.PortalEntryRefundRequest;
+import com.beercompetition.pojo.dto.PortalEntryUpdateRequest;
 import com.beercompetition.pojo.dto.PortalProfileUpdateRequest;
 import com.beercompetition.pojo.vo.AdminEntryDetailVO;
 import com.beercompetition.pojo.vo.AdminEntryVO;
@@ -38,6 +39,8 @@ public interface EntryService {
     EntryDetailVO getPortalEntry(Long entryId);
 
     EntryDetailVO submitPortalEntry(Long competitionId, PortalEntrySubmitRequest request);
+
+    EntryDetailVO updatePortalEntry(Long entryId, PortalEntryUpdateRequest request);
 
     EntryDetailVO submitPortalEntryDelivery(Long entryId, PortalEntryDeliverySubmitRequest request);
 

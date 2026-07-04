@@ -36,6 +36,10 @@ export function submitPortalEntry(competitionId, data) {
   return request.post(`/api/portal/competitions/${competitionId}/entries`, data, { authScope: 'portal' })
 }
 
+export function updatePortalEntry(entryId, data) {
+  return request.put(`/api/portal/entries/${entryId}`, data, { authScope: 'portal' })
+}
+
 export function submitPortalEntryDelivery(entryId, data) {
   return request.post(`/api/portal/entries/${entryId}/delivery`, data, { authScope: 'portal' })
 }

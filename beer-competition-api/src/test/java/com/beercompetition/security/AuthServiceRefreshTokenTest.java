@@ -16,6 +16,8 @@ import com.beercompetition.mapper.RoundTableMemberMapper;
 import com.beercompetition.mapper.SmsCodeLogMapper;
 import com.beercompetition.pojo.dto.AdminLoginRequest;
 import com.beercompetition.pojo.dto.RefreshTokenRequest;
+import com.beercompetition.pojo.dto.SmsSendRequest;
+import com.beercompetition.pojo.enums.SmsBizType;
 import com.beercompetition.pojo.po.AdminUser;
 import com.beercompetition.pojo.vo.LoginResponse;
 import com.beercompetition.properties.JwtProperties;
@@ -34,6 +36,7 @@ import org.springframework.data.redis.core.ValueOperations;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -101,16 +104,17 @@ class AuthServiceRefreshTokenTest {
             redisStore.put(invocation.getArgument(0), invocation.getArgument(1));
             return null;
         }).when(valueOperations).set(anyString(), any(), any(Duration.class));
-        when(valueOperations.increment(anyString())).thenAnswer(invocation -> {
+        lenient().when(valueOperations.increment(anyString())).thenAnswer(invocation -> {
             String key = invocation.getArgument(0);
             Object value = redisStore.get(key);
             Long nextValue = value instanceof Number number ? number.longValue() + 1 : 1L;
             redisStore.put(key, nextValue);
             return nextValue;
         });
-        when(redisTemplate.expire(anyString(), any(Duration.class))).thenReturn(true);
+        lenient().when(redisTemplate.expire(anyString(), any(Duration.class))).thenReturn(true);
         lenient().when(valueOperations.get(anyString())).thenAnswer(invocation -> redisStore.get(invocation.getArgument(0)));
         lenient().when(redisTemplate.delete(anyString())).thenAnswer(invocation -> redisStore.remove(invocation.getArgument(0)) != null);
+        lenient().when(redisTemplate.getExpire(anyString(), any(TimeUnit.class))).thenReturn(42L);
 
         authService = new AuthServiceImpl(
                 adminUserMapper,
@@ -182,6 +186,24 @@ class AuthServiceRefreshTokenTest {
         assertThatThrownBy(() -> authService.adminLogin(request))
                 .isInstanceOf(BaseException.class)
                 .hasMessage("登录尝试过于频繁，请1分钟后再试");
+    }
+
+    @Test
+    void sendSmsCodeRejectsFrequentRequestWithRemainingSeconds() {
+        when(piiService.normalizePhone("13800000000")).thenReturn("13800000000");
+        when(piiService.hashPhone("13800000000")).thenReturn("phone-hash");
+        when(piiService.maskPhone("13800000000")).thenReturn("138****0000");
+        when(smsProperties.getSendIntervalSeconds()).thenReturn(60L);
+
+        SmsSendRequest request = new SmsSendRequest();
+        request.setPhone("13800000000");
+        request.setBizType(SmsBizType.PORTAL_LOGIN);
+
+        authService.sendSmsCode(request);
+
+        assertThatThrownBy(() -> authService.sendSmsCode(request))
+                .isInstanceOf(BaseException.class)
+                .hasMessage("验证码发送过于频繁，请42秒后再试");
     }
 
     private AdminLoginRequest loginRequest() {
