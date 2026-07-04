@@ -5,14 +5,20 @@ import com.beercompetition.pojo.dto.CompetitionBaseInfoUpdateRequest;
 import com.beercompetition.pojo.dto.CompetitionCreateRequest;
 import com.beercompetition.pojo.dto.CompetitionReopenRegistrationRequest;
 import com.beercompetition.pojo.dto.CompetitionReturnToSampleCheckRequest;
+import com.beercompetition.pojo.dto.CompetitionSponsorBatchUpdateRequest;
 import com.beercompetition.pojo.dto.CompetitionStyleLibraryUpdateRequest;
 import com.beercompetition.pojo.dto.ConfigNameBatchUpdateRequest;
 import com.beercompetition.pojo.dto.EntryFieldBatchUpdateRequest;
 import com.beercompetition.pojo.dto.JudgeTableBatchUpdateRequest;
 import com.beercompetition.pojo.vo.CompetitionAnalyticsVO;
 import com.beercompetition.pojo.vo.CompetitionDetailVO;
+import com.beercompetition.pojo.vo.CompetitionLiveBoardVO;
+import com.beercompetition.pojo.vo.CompetitionSponsorLogoVO;
+import com.beercompetition.pojo.vo.CompetitionSponsorVO;
 import com.beercompetition.pojo.vo.CompetitionVO;
+import com.beercompetition.service.CompetitionSponsorService;
 import com.beercompetition.service.CompetitionService;
+import com.beercompetition.service.LiveBoardService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -24,6 +30,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -36,6 +43,8 @@ import java.util.List;
 public class AdminCompetitionController {
 
     private final CompetitionService competitionService;
+    private final CompetitionSponsorService competitionSponsorService;
+    private final LiveBoardService liveBoardService;
 
     /**
      * 查询后台比赛列表。
@@ -163,6 +172,40 @@ public class AdminCompetitionController {
     @GetMapping("/{id}/progress")
     public Result<CompetitionDetailVO> progress(@PathVariable Long id) {
         return Result.success(competitionService.getCompetitionDetail(id));
+    }
+
+    /**
+     * 查询公开投屏看板数据。
+     */
+    @GetMapping("/{id}/live-board")
+    public Result<CompetitionLiveBoardVO> liveBoard(@PathVariable Long id) {
+        return Result.success(liveBoardService.getCompetitionLiveBoard(id));
+    }
+
+    /**
+     * 查询本场比赛赞助商配置。
+     */
+    @GetMapping("/{id}/sponsors")
+    public Result<List<CompetitionSponsorVO>> sponsors(@PathVariable Long id) {
+        return Result.success(competitionSponsorService.listSponsors(id));
+    }
+
+    /**
+     * 整体保存本场比赛赞助商配置。
+     */
+    @PutMapping("/{id}/sponsors")
+    public Result<List<CompetitionSponsorVO>> updateSponsors(@PathVariable Long id,
+                                                             @RequestBody @Valid CompetitionSponsorBatchUpdateRequest request) {
+        return Result.success(competitionSponsorService.updateSponsors(id, request));
+    }
+
+    /**
+     * 上传本场比赛赞助商 Logo。
+     */
+    @PostMapping("/{id}/sponsors/logo")
+    public Result<CompetitionSponsorLogoVO> uploadSponsorLogo(@PathVariable Long id,
+                                                              @RequestParam("file") MultipartFile file) {
+        return Result.success(competitionSponsorService.uploadSponsorLogo(id, file));
     }
 
     /**

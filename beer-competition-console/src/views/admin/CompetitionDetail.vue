@@ -296,6 +296,71 @@
           </article>
         </section>
 
+        <section v-if="activeTab === 'sponsors'" class="tab-panel sponsor-panel">
+          <article class="panel-card sponsor-config-card">
+            <div class="panel-heading">
+              <div>
+                <h2>投屏赞助商</h2>
+                <span>公开看板只展示赞助等级、品牌名称和 Logo</span>
+              </div>
+              <button class="tool-button" type="button" @click="addSponsor">
+                <Plus />
+                添加赞助商
+              </button>
+            </div>
+
+            <div v-if="sponsorForm.length" class="sponsor-editor-list">
+              <article v-for="(sponsor, index) in sponsorForm" :key="sponsor.localId" class="sponsor-editor-row">
+                <div class="sponsor-logo-box">
+                  <img v-if="sponsor.logoUrl" :src="sponsor.logoUrl" :alt="sponsor.sponsorName || '赞助商 Logo'" />
+                  <span v-else>{{ sponsor.sponsorName?.slice(0, 2) || 'Logo' }}</span>
+                </div>
+                <div class="sponsor-fields">
+                  <label>
+                    <span>赞助等级</span>
+                    <input v-model.trim="sponsor.tierLabel" placeholder="例如 主办方、首席赞助、行业赞助" />
+                  </label>
+                  <label>
+                    <span>品牌名称</span>
+                    <input v-model.trim="sponsor.sponsorName" placeholder="公开展示名称" />
+                  </label>
+                  <label>
+                    <span>排序</span>
+                    <input v-model.number="sponsor.sortOrder" min="0" type="number" />
+                  </label>
+                </div>
+                <div class="sponsor-controls">
+                  <label class="inline-check">
+                    <input v-model="sponsor.featured" type="checkbox" />
+                    重点展示
+                  </label>
+                  <label class="inline-check">
+                    <input v-model="sponsor.enabled" type="checkbox" />
+                    启用
+                  </label>
+                  <input
+                    :ref="(el) => setSponsorLogoInputRef(el, sponsor.localId)"
+                    accept="image/jpeg,image/png,image/webp"
+                    class="hidden-file-input"
+                    type="file"
+                    @change="handleSponsorLogoChange($event, sponsor)"
+                  />
+                  <button class="tool-button" type="button" :disabled="sponsor.uploading" @click="triggerSponsorLogoInput(sponsor.localId)">
+                    {{ sponsor.uploading ? '上传中' : '上传 Logo' }}
+                  </button>
+                  <button class="icon-button danger" type="button" @click="removeSponsor(index)">
+                    <Delete />
+                  </button>
+                </div>
+              </article>
+            </div>
+            <div v-else class="empty-state sponsor-empty">
+              <strong>还没有赞助商配置</strong>
+              <span>添加后会显示在公开投屏看板顶部区域</span>
+            </div>
+          </article>
+        </section>
+
         <section v-if="activeTab === 'entryConfig'" class="tab-panel entry-config-panel">
           <div v-if="!editable.entryStructure" class="edit-banner locked">
             <Lock />
@@ -1719,6 +1784,7 @@ import {
   fetchCompetitionAnalytics,
   fetchCompetitionFeedbackReview,
   fetchCompetitionDetail,
+  fetchCompetitionSponsors,
   fetchJudges,
   fetchStyleLibraries,
   generateCompetitionAwards,
@@ -1739,9 +1805,11 @@ import {
   updateCompetitionEntryFields,
   updateCompetitionJudgeAssignments,
   updateCompetitionJudgeTables,
+  updateCompetitionSponsors,
   updateCompetitionStyles,
   updateScoreConfigs,
   uploadAwardCertificate,
+  uploadCompetitionSponsorLogo,
 } from '@/api/admin'
 import { fallbackStyleLibraries, getStyleLibrary, normalizeStyleLibraries } from './styleLibraries'
 import CreateRoundWizard from './components/competition-detail/CreateRoundWizard.vue'
@@ -1750,7 +1818,7 @@ import TableAllocationWorkbench from './components/competition-detail/TableAlloc
 
 const route = useRoute()
 const router = useRouter()
-const detailTabKeys = new Set(['overview', 'analysis', 'baseInfo', 'entryConfig', 'entries', 'judges', 'rounds', 'score', 'feedback', 'results'])
+const detailTabKeys = new Set(['overview', 'analysis', 'baseInfo', 'sponsors', 'entryConfig', 'entries', 'judges', 'rounds', 'score', 'feedback', 'results'])
 const roundProgressPollIntervalMs = 8000
 const activeTab = ref(normalizeDetailTab(route.query.tab))
 const loading = ref(false)
@@ -1783,6 +1851,8 @@ const baseForm = reactive({
   deliveryNote: '',
   logisticsVisibility: 'PAYMENT_CONFIRMED',
 })
+const sponsorForm = reactive([])
+const sponsorLogoInputRefs = new Map()
 const entryFieldForm = reactive([])
 const judgeTableForm = reactive([])
 const judgeAssignmentForm = reactive([])
@@ -1900,6 +1970,7 @@ const tabs = [
   { key: 'overview', label: '概览', icon: DataAnalysis },
   { key: 'analysis', label: '数据分析', icon: TrendCharts },
   { key: 'baseInfo', label: '基础信息', icon: Setting },
+  { key: 'sponsors', label: '赞助商', icon: Medal },
   { key: 'entryConfig', label: '报名配置', icon: Setting },
   { key: 'score', label: '评分表', icon: Finished },
   { key: 'entries', label: '参赛酒款', icon: Tickets },
@@ -1988,6 +2059,9 @@ const tabSaveAction = computed(() => {
   }
   if (activeTab.value === 'score' && editable.value.scoreConfigs) {
     return { label: '保存评分表', handler: saveScoreConfigs }
+  }
+  if (activeTab.value === 'sponsors') {
+    return { label: '保存赞助商', handler: saveSponsors }
   }
   return null
 })
@@ -2594,8 +2668,11 @@ watch(feedbackFilteredEntries, (entries) => {
 async function loadDetail() {
   loading.value = true
   try {
-    const data = await fetchCompetitionDetail(route.params.id)
-    competition.value = normalizeDetail(data)
+    const [data, sponsors] = await Promise.all([
+      fetchCompetitionDetail(route.params.id),
+      fetchCompetitionSponsors(route.params.id),
+    ])
+    competition.value = normalizeDetail({ ...data, sponsors })
     competitionAnalytics.value = null
     competitionAnalyticsCompetitionId.value = null
     resetForms()
@@ -2617,7 +2694,7 @@ async function refreshRoundProgress() {
   const preferredTableId = selectedRoundTableId.value
   try {
     const data = await fetchCompetitionDetail(route.params.id)
-    competition.value = normalizeDetail(data)
+    competition.value = normalizeDetail({ ...data, sponsors: competition.value?.sponsors || [] })
     resetForms()
     applyRoundState(preferredRoundId, { preferredTableId, keepEntrySelection: true })
     ensureActiveTabAvailable()
@@ -2897,6 +2974,7 @@ function normalizeDetail(data) {
     resultDrafts: data.resultDrafts || [],
     awardRules: data.awardRules || [],
     awardResults: data.awardResults || [],
+    sponsors: data.sponsors || [],
     editableScopes: data.editableScopes || {},
     entriesSummary: data.entriesSummary || { total: 0, pendingPayment: 0, registered: 0, stored: 0, canceled: 0, resultPublished: 0 },
     progressSummary: data.progressSummary || { finalized: 0, total: 0, advanced: 0, commentWarnings: 0 },
@@ -2927,6 +3005,18 @@ function resetForms() {
     deliveryNote: logistics.deliveryNote || '',
     logisticsVisibility: logistics.logisticsVisibility || 'PAYMENT_CONFIRMED',
   })
+  sponsorForm.splice(0, sponsorForm.length, ...(competition.value.sponsors || []).map((item, index) => ({
+    ...item,
+    localId: item.id ? `sponsor-${item.id}` : `sponsor-new-${index}`,
+    tierLabel: item.tierLabel || '',
+    sponsorName: item.sponsorName || '',
+    logoAssetId: item.logoAssetId || null,
+    logoUrl: item.logoUrl || '',
+    sortOrder: Number(item.sortOrder ?? index),
+    featured: Boolean(item.featured),
+    enabled: item.enabled !== false,
+    uploading: false,
+  })))
   selectedStyleLibraryVersion.value = competition.value.styleLibraryVersion || ''
   categoryForm.splice(0, categoryForm.length, ...competition.value.categories.map((item) => item.name))
   entryFieldForm.splice(0, entryFieldForm.length, ...competition.value.entryFields.map((item, index) => ({
@@ -5887,6 +5977,80 @@ async function saveBaseInfo() {
   resetForms()
   applyRoundState()
   ElMessage.success('基础信息已保存')
+}
+
+function addSponsor() {
+  const index = sponsorForm.length
+  sponsorForm.push({
+    localId: `sponsor-new-${Date.now()}-${index}`,
+    tierLabel: index === 0 ? '主办方' : '赞助商',
+    sponsorName: '',
+    logoAssetId: null,
+    logoUrl: '',
+    sortOrder: index,
+    featured: index < 2,
+    enabled: true,
+    uploading: false,
+  })
+}
+
+function removeSponsor(index) {
+  sponsorForm.splice(index, 1)
+}
+
+function setSponsorLogoInputRef(el, localId) {
+  if (!localId) return
+  if (el) sponsorLogoInputRefs.set(localId, el)
+  else sponsorLogoInputRefs.delete(localId)
+}
+
+function triggerSponsorLogoInput(localId) {
+  sponsorLogoInputRefs.get(localId)?.click()
+}
+
+async function handleSponsorLogoChange(event, sponsor) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file || !competition.value?.id) return
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    ElMessage.warning('Logo 仅支持 JPG、PNG、WebP 图片')
+    return
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    ElMessage.warning('Logo 图片不能超过 5MB')
+    return
+  }
+  sponsor.uploading = true
+  try {
+    const uploaded = await uploadCompetitionSponsorLogo(competition.value.id, file)
+    sponsor.logoAssetId = uploaded.fileAssetId
+    sponsor.logoUrl = uploaded.publicUrl
+    ElMessage.success('Logo 已上传')
+  } finally {
+    sponsor.uploading = false
+  }
+}
+
+async function saveSponsors() {
+  const invalid = sponsorForm.find((sponsor) => !sponsor.tierLabel || !sponsor.sponsorName)
+  if (invalid) {
+    ElMessage.warning('请补齐赞助等级和品牌名称')
+    return
+  }
+  const sponsors = await updateCompetitionSponsors(competition.value.id, {
+    items: sponsorForm.map((sponsor, index) => ({
+      id: sponsor.id || null,
+      tierLabel: sponsor.tierLabel,
+      sponsorName: sponsor.sponsorName,
+      logoAssetId: sponsor.logoAssetId || null,
+      sortOrder: Number.isFinite(Number(sponsor.sortOrder)) ? Number(sponsor.sortOrder) : index,
+      featured: Boolean(sponsor.featured),
+      enabled: sponsor.enabled !== false,
+    })),
+  })
+  competition.value = normalizeDetail({ ...competition.value, sponsors })
+  resetForms()
+  ElMessage.success('赞助商配置已保存')
 }
 
 async function saveEntryConfig() {
@@ -10528,6 +10692,85 @@ button.pyramid-placeholder-mark {
   line-height: 1.5;
 }
 
+.sponsor-config-card {
+  display: grid;
+  gap: 16px;
+}
+
+.sponsor-editor-list {
+  display: grid;
+  gap: 12px;
+}
+
+.sponsor-editor-row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.026);
+}
+
+.sponsor-logo-box {
+  display: grid;
+  place-items: center;
+  width: 96px;
+  aspect-ratio: 1.6;
+  overflow: hidden;
+  border: 1px solid rgba(216, 169, 53, 0.2);
+  border-radius: 8px;
+  background: rgba(4, 9, 12, 0.58);
+}
+
+.sponsor-logo-box img {
+  max-width: 88%;
+  max-height: 76%;
+  object-fit: contain;
+}
+
+.sponsor-logo-box span {
+  color: var(--gold-soft);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.sponsor-fields {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.7fr) minmax(220px, 1fr) 90px;
+  gap: 10px;
+  min-width: 0;
+}
+
+.sponsor-fields label {
+  min-width: 0;
+}
+
+.sponsor-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.hidden-file-input {
+  display: none;
+}
+
+.sponsor-empty {
+  min-height: 160px;
+}
+
 .not-found {
   display: grid;
   place-content: center;
@@ -10553,8 +10796,15 @@ button.pyramid-placeholder-mark {
   }
 
   .future-task-list,
-  .overview-grid {
+  .overview-grid,
+  .sponsor-editor-row,
+  .sponsor-fields {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sponsor-logo-box,
+  .sponsor-controls {
+    grid-column: 1 / -1;
   }
 }
 

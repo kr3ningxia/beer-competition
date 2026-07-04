@@ -21,7 +21,12 @@
       <section class="partner-wall" aria-label="赛事合作方">
         <article v-for="group in board.partners" :key="group.label" :class="{ featured: group.featured }">
           <span>{{ group.label }}</span>
-          <strong>{{ group.names.join(' / ') }}</strong>
+          <div class="partner-logos">
+            <div v-for="sponsor in group.sponsors" :key="sponsor.name" class="partner-logo-item">
+              <img v-if="sponsor.logoUrl" :src="sponsor.logoUrl" :alt="sponsor.name" />
+              <strong>{{ sponsor.name }}</strong>
+            </div>
+          </div>
         </article>
       </section>
     </header>
@@ -77,24 +82,24 @@
       <div class="desk-table" role="table">
         <div class="desk-row desk-row-head" role="row">
           <span role="columnheader">评审桌</span>
-          <span role="columnheader">{{ board.tableColumns.done }}</span>
-          <span role="columnheader">{{ board.tableColumns.pending }}</span>
+          <span role="columnheader">{{ board.tableColumns.personal }}</span>
+          <span role="columnheader">{{ board.tableColumns.captain }}</span>
+          <span role="columnheader">{{ board.tableColumns.confirmation }}</span>
           <span role="columnheader">完成率</span>
-          <span role="columnheader">平均用时</span>
-          <span role="columnheader">平均评语</span>
+          <span role="columnheader">{{ board.tableColumns.comment }}</span>
           <span role="columnheader">状态</span>
         </div>
 
         <div v-for="table in board.tables" :key="table.id" :class="['desk-row', table.tone]" role="row">
           <strong role="cell">{{ table.displayName }}</strong>
-          <span role="cell">{{ table.doneCount }}</span>
-          <span role="cell">{{ table.pendingCount }}</span>
+          <span role="cell">{{ table.personalProgress }}</span>
+          <span role="cell">{{ table.captainProgress }}</span>
+          <span role="cell">{{ table.confirmationProgress }}</span>
           <span role="cell">
-            <b>{{ table.visualPercent }}%</b>
-            <i class="mini-track" aria-hidden="true"><i :style="{ width: `${table.visualPercent}%` }" /></i>
+            <b>{{ table.completionPercent }}%</b>
+            <i class="mini-track" aria-hidden="true"><i :style="{ width: `${table.completionPercent}%` }" /></i>
           </span>
-          <span role="cell">{{ table.averageTime }}</span>
-          <span role="cell">{{ table.averageComment }}</span>
+          <span role="cell">{{ table.averageCommentText }}</span>
           <span role="cell"><em>{{ table.statusText }}</em></span>
         </div>
 
@@ -121,18 +126,12 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { fetchCompetitionProgress, fetchCompetitions } from '@/api/admin'
+import { fetchCompetitionLiveBoard, fetchCompetitions } from '@/api/admin'
 
 const REFRESH_SECONDS = 10
-const STAT_PENDING_TEXT = '统计中'
-const EVENT_TITLE = '首届中国拉格大赛'
-const EVENT_SUBTITLE = 'The 1st Chinese Lager Awards'
-const PARTNERS = [
-  { label: '主办方', names: ['啤酒事务局'], featured: true },
-  { label: '首席赞助', names: ['臻麦'], featured: true },
-  { label: '行业赞助', names: ['迈拓设备', 'Fermentis', 'Kegland'] },
-  { label: '协办', names: ['力波1987精酿'] },
-]
+const DEFAULT_TITLE = '首届中国拉格大赛'
+const DEFAULT_SUBTITLE = 'The 1st Chinese Lager Awards'
+const DEFAULT_SPONSOR_GROUPS = [{ label: '主办方', featured: true, sponsors: [{ name: '啤酒事务局', logoUrl: '' }] }]
 
 const route = useRoute()
 const router = useRouter()
@@ -178,7 +177,7 @@ async function refreshBoard() {
   if (!selectedCompetitionId.value || loading.value) return
   loading.value = true
   try {
-    detail.value = normalizeDetail(await fetchCompetitionProgress(selectedCompetitionId.value))
+    detail.value = normalizeDetail(await fetchCompetitionLiveBoard(selectedCompetitionId.value))
   } finally {
     loading.value = false
   }
@@ -187,289 +186,143 @@ async function refreshBoard() {
 function normalizeDetail(data) {
   return {
     ...data,
-    date: data?.competitionDate || data?.date || '',
-    entryPool: data?.entryPool || data?.entries || [],
-    rounds: data?.rounds || [],
-    progressSummary: data?.progressSummary || {},
+    metrics: data?.metrics || [],
+    tables: data?.tables || [],
+    sponsorGroups: data?.sponsorGroups || [],
+    summary: data?.summary || {},
   }
 }
 
 function buildBoard(data) {
   if (!data) return buildEmptyBoard()
-  const rounds = data.rounds || []
-  const currentRound = data.currentRound || rounds.find((round) => ['PUBLISHED', 'IN_PROGRESS', 'SUBMITTED'].includes(round.status))
-    || rounds[rounds.length - 1]
-    || rounds[0]
-  const progressSummary = data.progressSummary || {}
-  const isRanking = currentRound?.type === 'RANKING'
-  const tables = (currentRound?.tables || []).slice(0, 8).map((table) => buildTableTile(currentRound, table, progressSummary))
-  const progress = buildProgress(currentRound, tables, progressSummary)
-  const totalEntryCount = countCompetitionEntries(data, progress.total)
+  const isRanking = data.roundType === 'RANKING'
+  const tables = (data.tables || []).map((table) => ({
+    ...table,
+    tone: table.tone || 'neutral',
+    done: ['本桌完成', '本轮待确认', '本轮已锁定'].includes(table.statusText),
+  }))
+  const progress = buildProgressFromSummary(data.summary)
 
   return {
-    title: EVENT_TITLE,
-    subtitle: EVENT_SUBTITLE,
-    roundName: currentRound?.name || '未创建轮次',
-    roundTypeText: isRanking ? '排序轮' : '评分制',
-    statusText: resolveStatusText(data.status, currentRound),
-    partners: PARTNERS,
+    title: data.competitionName || DEFAULT_TITLE,
+    subtitle: data.subtitle || DEFAULT_SUBTITLE,
+    roundName: data.roundName || '未创建轮次',
+    roundTypeText: data.roundTypeText || (isRanking ? '排序轮' : '评分制'),
+    statusText: data.statusText || '现场整理中',
+    partners: buildPartnerGroups(data.sponsorGroups),
     progress,
-    metrics: buildMetrics(currentRound, tables, progressSummary, totalEntryCount, progress),
+    metrics: buildMetricCards(data.metrics),
     tables,
-    notice: collectNotice(currentRound, tables),
+    notice: collectNotice(data, tables),
     deskTitle: isRanking ? '排序轮桌次进度' : '首轮桌次评审进度',
-    deskHint: isRanking ? '按桌次查看排序提交状态' : '按桌次查看已评审、待评审与反馈效率',
-    tableColumns: isRanking
-      ? { done: '已排序', pending: '待排序' }
-      : { done: '已评审', pending: '待评审' },
-    roundSteps: buildRoundSteps(rounds, currentRound),
+    deskHint: isRanking ? '公开展示各桌排序提交状态' : '公开展示各桌评分、汇总与确认进度',
+    tableColumns: buildTableColumns(isRanking),
+    roundSteps: buildRoundStepsFromLiveBoard(data),
   }
 }
 
 function buildEmptyBoard() {
-  const progress = buildProgress(null, [], {})
+  const progress = buildProgressFromSummary({})
   return {
-    title: EVENT_TITLE,
-    subtitle: EVENT_SUBTITLE,
+    title: DEFAULT_TITLE,
+    subtitle: DEFAULT_SUBTITLE,
     roundName: '未创建轮次',
     roundTypeText: '等待发布',
     statusText: '现场准备中',
-    partners: PARTNERS,
+    partners: DEFAULT_SPONSOR_GROUPS,
     progress,
-    metrics: buildMetrics(null, [], {}, 0, progress),
+    metrics: buildMetricCards([]),
     tables: [],
     notice: { title: '等待轮次', text: '当前比赛还没有发布可投屏的评审轮次', tone: 'warning' },
     deskTitle: '首轮桌次评审进度',
     deskHint: '轮次发布后自动更新',
-    tableColumns: { done: '已评审', pending: '待评审' },
-    roundSteps: buildRoundSteps([], null),
+    tableColumns: buildTableColumns(false),
+    roundSteps: buildRoundStepsFromLiveBoard({}),
   }
 }
 
-function buildProgress(round, tables, progress = {}) {
-  if (round?.type === 'RANKING') {
-    const done = normalizeCount(progress.finalized, tables.filter((table) => table.done).length)
-    const total = normalizeCount(progress.total, tables.length)
-    const percent = total ? normalizePercent(done * 100 / total) : 0
-    return {
-      eyebrow: '排序进度',
-      done,
-      total,
-      percent,
-      liquidPercent: 100 - percent,
-      foamBottom: normalizeFoamBottom(percent),
-      label: total ? `已提交 ${done} 桌 · 剩余 ${Math.max(total - done, 0)} 桌` : '等待排序轮发布',
-    }
-  }
-
-  const fallbackTotal = tables.reduce((sum, table) => sum + table.submittedTotal, 0)
-  const fallbackDone = tables.reduce((sum, table) => sum + table.doneCount, 0)
-  const total = normalizeCount(progress.total, fallbackTotal)
-  const done = Math.min(normalizeCount(progress.finalized, fallbackDone), total || fallbackDone)
-  const percent = total ? normalizePercent(done * 100 / total) : 0
+function buildProgressFromSummary(summary = {}) {
+  const done = normalizeCount(summary.done, 0)
+  const total = normalizeCount(summary.total, 0)
+  const percent = normalizePercent(summary.percent ?? (total ? done * 100 / total : 0))
   return {
-    eyebrow: '本轮已评',
+    eyebrow: summary.eyebrow || '现场进程',
     done,
     total,
     percent,
     liquidPercent: 100 - percent,
     foamBottom: normalizeFoamBottom(percent),
-    label: total ? `已完成 ${done} 款 · 剩余 ${Math.max(total - done, 0)} 款` : '等待首轮酒款发布',
+    label: summary.label || '等待轮次发布',
   }
 }
 
-function buildMetrics(round, tables, progress = {}, competitionEntryCount = 0, roundProgress = null) {
-  const isRanking = round?.type === 'RANKING'
-  const progressData = roundProgress || buildProgress(round, tables, progress)
-  return [
-    { label: '参赛酒款', value: competitionEntryCount || '-', unit: competitionEntryCount ? '款' : '', tone: 'neutral' },
-    { label: isRanking ? '本轮桌数' : '本轮酒款', value: progressData.total || '-', unit: isRanking ? '桌' : '款', tone: 'neutral' },
-    { label: isRanking ? '本轮已排' : '本轮已评', value: progressData.total ? `${progressData.done}/${progressData.total}` : '-', unit: '', tone: progressData.percent >= 100 ? 'success' : 'gold' },
-    { label: '平均用时', value: formatAverageReviewTime(progress), unit: '', tone: 'neutral' },
-    { label: '平均评语', value: formatCommentChars(progress.averageCommentChars || progress.siteAverageCommentChars), unit: '', tone: 'neutral' },
-  ]
+function buildMetricCards(metrics = []) {
+  if (!metrics.length) {
+    return [
+      { label: '参赛酒款', value: '-', unit: '', tone: 'neutral' },
+      { label: '本轮酒款', value: '-', unit: '', tone: 'neutral' },
+      { label: '个人评分', value: '-', unit: '', tone: 'neutral' },
+      { label: '待桌长汇总', value: '-', unit: '', tone: 'neutral' },
+      { label: '待同桌确认', value: '-', unit: '', tone: 'neutral' },
+    ]
+  }
+  return metrics.slice(0, 6).map((metric) => ({
+    label: metric.label,
+    value: metric.value || '-',
+    unit: metric.unit || '',
+    tone: metric.tone || 'neutral',
+  }))
 }
 
-function buildTableTile(round, table, progress = {}) {
-  const entryCount = table.entryUuids?.length || 0
-  const targetCount = Number(table.targetCount || 0)
-  const displayName = table.name || '未命名桌'
-  const averageTime = resolveTableAverageTime(table)
-  const averageComment = resolveTableAverageComment(table)
+function buildPartnerGroups(groups = []) {
+  if (!groups.length) return DEFAULT_SPONSOR_GROUPS
+  return groups.map((group) => ({
+    label: group.tierLabel || '赞助商',
+    featured: Boolean(group.featured),
+    sponsors: (group.sponsors || []).map((sponsor) => ({
+      name: sponsor.sponsorName || sponsor.name || '赞助商',
+      logoUrl: sponsor.logoUrl || '',
+    })),
+  })).filter((group) => group.sponsors.length)
+}
 
-  if (round?.type === 'RANKING') {
-    const selectedCount = (table.rankings || []).filter((slot) => slot.uuid).length
-    const isChampion = table.targetMode === 'CHAMPION'
-    const isMedals = table.targetMode === 'MEDALS'
-    const issueText = getTableIssue(table)
-    const submitted = ['SUBMITTED', 'LOCKED'].includes(table.status)
-    const done = !issueText && (isMedals ? submitted : selectedCount >= targetCount && targetCount > 0)
-    const visualPercent = targetCount ? normalizePercent(selectedCount * 100 / targetCount) : (done ? 100 : 0)
-    const pendingCount = Math.max(targetCount - selectedCount, 0)
-    const statusText = issueText ? '需处理' : done ? (isChampion ? '已提交' : '已完成') : selectedCount ? '排序中' : '待排序'
+function buildTableColumns(isRanking) {
+  return isRanking
+    ? { personal: '排序进度', captain: '提交状态', confirmation: '同桌确认', comment: '评语统计' }
+    : { personal: '个人评分', captain: '桌长汇总', confirmation: '同桌确认', comment: '平均评语' }
+}
+
+function collectNotice(data, tables) {
+  if (!data?.roundId) return { title: '等待轮次', text: '当前比赛还没有发布可投屏的评审轮次', tone: 'warning' }
+  if (!tables.length) return { title: '现场整理中', text: '当前轮次正在整理评审桌信息', tone: 'warning' }
+  if (data.roundStatus === 'LOCKED') return { title: '本轮已锁定', text: '本轮公开进度已完成，等待赛事后续安排', tone: 'success' }
+  if (data.roundStatus === 'SUBMITTED') return { title: '本轮待确认', text: '本轮结果已进入确认阶段', tone: 'warning' }
+
+  const active = tables.find((table) => ['评审中', '汇总中', '确认中'].includes(table.statusText))
+  if (active) {
     return {
-      id: table.id || displayName,
-      displayName,
-      entryCount,
-      targetCount,
-      selectedCount,
-      submittedCount: selectedCount,
-      submittedTotal: Math.max(targetCount, 0),
-      doneCount: selectedCount,
-      pendingCount,
-      visualPercent,
-      averageTime,
-      averageComment,
-      statusText,
-      done,
-      issueText,
-      tone: issueText ? 'danger' : done ? 'success' : selectedCount ? 'active' : 'warning',
+      title: active.statusText,
+      text: `${active.displayName}正在推进，桌次进度会自动刷新`,
+      tone: active.statusText === '评审中' ? 'gold' : 'warning',
     }
   }
-
-  const judgeProgress = normalizePercent(table.judgeProgress)
-  const captainProgress = normalizePercent(table.captainProgress)
-  const submittedTotal = entryCount
-  const submittedCount = estimateCount(submittedTotal, judgeProgress)
-  const captainConfirmedCount = estimateCount(entryCount, captainProgress)
-  const issueText = getTableIssue(table)
-  const done = !issueText && captainProgress >= 100
-  let statusText = '等待评分'
-  let tone = 'idle'
-  if (issueText) {
-    statusText = '需处理'
-    tone = 'danger'
-  } else if (done) {
-    statusText = '已完成'
-    tone = 'success'
-  } else if (captainProgress > 0) {
-    statusText = '确认中'
-    tone = 'warning'
-  } else if (judgeProgress >= 100) {
-    statusText = '待确认'
-    tone = 'warning'
-  } else if (judgeProgress > 0) {
-    statusText = '评分中'
-    tone = 'active'
+  if (tables.every((table) => table.done)) {
+    return { title: '本桌完成', text: '各评审桌已完成本轮公开流程', tone: 'success' }
   }
-
-  return {
-    id: table.id || displayName,
-    displayName,
-    entryCount,
-    targetCount,
-    selectedCount: Number(table.advancedCount || 0),
-    submittedCount,
-    submittedTotal,
-    doneCount: submittedCount,
-    pendingCount: Math.max(submittedTotal - submittedCount, 0),
-    captainConfirmedCount,
-    visualPercent: judgeProgress,
-    averageTime,
-    averageComment,
-    statusText,
-    done,
-    issueText,
-    tone,
-  }
+  return { title: '现场整理中', text: '评审现场进度正在同步整理', tone: 'warning' }
 }
 
-function getTableIssue(table) {
-  if (!table.captainPublicId && !table.captainName && !table.captain?.name) return '桌长未指定'
-  if (!(table.entryUuids || []).length) return '尚未分配酒款'
-  if (!Number(table.targetCount || 0)) return table.targetMode === 'CHAMPION' ? '总冠军名额未设置' : '排序目标未设置'
-  return ''
-}
-
-function collectNotice(round, tables) {
-  if (!round) return { title: '等待轮次', text: '当前比赛还没有发布可投屏的评审轮次', tone: 'warning' }
-  const issue = tables.find((table) => table.issueText)
-  if (issue) return { title: '需现场处理', text: `${issue.displayName}${issue.issueText}，请工作人员处理`, tone: 'danger' }
-
-  const active = tables.find((table) => ['评分中', '排序中', '确认中', '待确认'].includes(table.statusText))
-  if (active) return { title: active.statusText, text: `${active.displayName}正在推进，请关注桌次进度`, tone: active.tone === 'active' ? 'gold' : 'warning' }
-  if (tables.length && tables.every((table) => table.done)) {
-    return { title: '本轮已完成', text: '所有评审桌已完成，请等待组委会确认本轮结果', tone: 'success' }
-  }
-  if (!tables.length) return { title: '等待分桌', text: '当前轮次还没有评审桌', tone: 'warning' }
-  return { title: '现场正常', text: '评审桌状态正常，现场进度会自动刷新', tone: 'success' }
-}
-
-function resolveStatusText(status, round) {
-  if (round?.status === 'PUBLISHED') return '评审进行中'
-  if (round?.status === 'IN_PROGRESS') return '处理中'
-  if (round?.status === 'SUBMITTED') return '等待确认'
-  if (round?.status === 'LOCKED') return '本轮已锁定'
-  if (status === 'JUDGING') return '评审进行中'
-  return '现场准备中'
-}
-
-function countCompetitionEntries(data, fallback = 0) {
-  const entryPoolCount = Array.isArray(data?.entryPool) ? data.entryPool.length : 0
-  const entriesSummaryCount = Number(data?.entriesSummary?.registered || data?.entrySummary?.registered || 0)
-  return entryPoolCount || entriesSummaryCount || fallback || 0
-}
-
-function formatMinutes(value) {
-  const minutes = Number(value || 0)
-  if (minutes <= 0) return STAT_PENDING_TEXT
-  if (minutes < 60) return `${minutes}分钟`
-  const hours = Math.floor(minutes / 60)
-  const rest = minutes % 60
-  return rest ? `${hours}小时${rest}分钟` : `${hours}小时`
-}
-
-function formatCommentChars(value) {
-  const chars = Number(value || 0)
-  return chars > 0 ? `${chars}字` : STAT_PENDING_TEXT
-}
-
-function formatAverageReviewTime(progress = {}) {
-  const secondsText = formatDurationSeconds(progress.averageReviewSeconds)
-  return secondsText === STAT_PENDING_TEXT ? formatMinutes(progress.averageReviewMinutes) : secondsText
-}
-
-function resolveTableAverageTime(table) {
-  const seconds = Number(table.averageDurationSeconds || table.reviewStats?.averageDurationSeconds || 0)
-  if (seconds > 0) return formatDurationSeconds(seconds)
-  return formatMinutes(table.averageReviewMinutes)
-}
-
-function resolveTableAverageComment(table) {
-  return formatCommentChars(table.averageCommentChars || table.reviewStats?.averageCommentChars)
-}
-
-function formatDurationSeconds(secondsValue) {
-  const seconds = Number(secondsValue || 0)
-  if (seconds <= 0) return STAT_PENDING_TEXT
-  const minutes = Math.floor(seconds / 60)
-  const secondsRest = seconds % 60
-  if (!minutes) return `${secondsRest}秒`
-  return secondsRest ? `${minutes}分${secondsRest}秒` : `${minutes}分钟`
-}
-
-function buildRoundSteps(rounds, currentRound) {
-  const currentIndex = Math.max(rounds.findIndex((round) => round.id === currentRound?.id), 0)
-  const nextRound = rounds[currentIndex + 1]
-  const terminal = currentRound?.tables?.some((table) => table.targetMode === 'CHAMPION')
+function buildRoundStepsFromLiveBoard(data = {}) {
+  const currentStatus = data.statusText || '现场整理中'
+  const confirmStatus = data.roundStatus === 'LOCKED'
+    ? '本轮已锁定'
+    : data.roundStatus === 'SUBMITTED'
+      ? '本轮待确认'
+      : '现场整理中'
   return [
-    { label: currentRound?.name || '首轮', status: resolveShortRoundStatus(currentRound), current: true },
-    ...(terminal ? [] : [{ label: nextRound?.name || '下一轮', status: nextRound ? resolveShortRoundStatus(nextRound) : '待创建', muted: !nextRound }]),
-    { label: '结果确认', status: currentRound?.status === 'LOCKED' && terminal ? '待发布' : '待确认', muted: true },
+    { label: data.roundName || '当前轮次', status: currentStatus, current: true },
+    { label: '结果确认', status: confirmStatus, muted: data.roundStatus !== 'SUBMITTED' && data.roundStatus !== 'LOCKED' },
   ]
-}
-
-function resolveShortRoundStatus(round) {
-  if (!round) return '待创建'
-  if (round.status === 'LOCKED') return '已锁定'
-  if (round.status === 'SUBMITTED') return '待确认'
-  if (['PUBLISHED', 'IN_PROGRESS'].includes(round.status)) return '评审中'
-  return '待发布'
-}
-
-function estimateCount(total, percent) {
-  if (!total) return 0
-  return Math.min(total, Math.round(total * normalizePercent(percent) / 100))
 }
 
 function normalizeCount(value, fallback = 0) {
@@ -511,7 +364,7 @@ function normalizeFoamBottom(percent) {
   position: fixed;
   inset: 0;
   display: grid;
-  grid-template-rows: auto minmax(220px, 27vh) minmax(300px, 1fr) auto;
+  grid-template-rows: auto minmax(292px, 31vh) minmax(270px, 1fr) auto;
   gap: 16px;
   padding: 28px 34px 18px;
   overflow: hidden;
@@ -552,8 +405,8 @@ function normalizeFoamBottom(percent) {
 
 .board-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(480px, 38%);
-  gap: 36px;
+  grid-template-columns: minmax(0, 1fr) minmax(520px, 31%);
+  gap: 28px;
   align-items: end;
   min-height: 132px;
   padding-bottom: 10px;
@@ -719,6 +572,32 @@ function normalizeFoamBottom(percent) {
   font-weight: 900;
 }
 
+.partner-logos {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.partner-logo-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.partner-logo-item img {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+}
+
 .partner-wall strong {
   overflow: hidden;
   color: var(--text);
@@ -732,7 +611,7 @@ function normalizeFoamBottom(percent) {
 
 .scoreboard-stage {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(430px, 28%);
+  grid-template-columns: minmax(520px, 0.96fr) minmax(620px, 1.04fr);
   gap: 16px;
   min-height: 0;
 }
@@ -740,12 +619,12 @@ function normalizeFoamBottom(percent) {
 .hero-panel {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 28%);
+  grid-template-columns: minmax(0, 1fr) minmax(210px, 34%);
   align-items: center;
-  gap: 26px;
+  gap: 18px;
   min-width: 0;
   min-height: 0;
-  padding: 18px 34px 20px;
+  padding: 22px 30px 24px;
   overflow: hidden;
   border: 1px solid rgba(225, 178, 91, 0.24);
   border-radius: 8px;
@@ -818,16 +697,16 @@ function normalizeFoamBottom(percent) {
 
 .progress-copy strong {
   display: block;
-  margin-top: 14px;
+  margin-top: 18px;
   color: var(--text);
-  font-size: clamp(62px, 7vw, 124px);
+  font-size: clamp(76px, 6.8vw, 132px);
   line-height: 0.92;
   font-weight: 950;
   text-shadow: 0 18px 44px rgba(0, 0, 0, 0.58);
 }
 
 .progress-copy p {
-  margin: 12px 0 0;
+  margin: 14px 0 0;
   color: #d7c8aa;
   font-size: clamp(19px, 1.75vw, 30px);
   line-height: 1.12;
@@ -842,7 +721,7 @@ function normalizeFoamBottom(percent) {
   justify-content: center;
   align-self: stretch;
   grid-column: 2;
-  gap: 18px;
+  gap: 14px;
   box-sizing: border-box;
   min-width: 0;
   height: auto;
@@ -855,7 +734,7 @@ function normalizeFoamBottom(percent) {
   display: grid;
   place-items: center;
   min-width: 0;
-  width: clamp(150px, 11vw, 210px);
+  width: clamp(142px, 9.5vw, 190px);
   aspect-ratio: 1;
 }
 
@@ -872,7 +751,7 @@ function normalizeFoamBottom(percent) {
 
 .glass-percent {
   color: var(--gold-soft);
-  font-size: clamp(24px, 2.4vw, 38px);
+  font-size: clamp(30px, 2.3vw, 44px);
   line-height: 1;
   font-weight: 950;
   text-align: left;
@@ -881,8 +760,8 @@ function normalizeFoamBottom(percent) {
 
 .beer-glass-large {
   position: relative;
-  width: clamp(108px, 7.6vw, 142px);
-  height: clamp(136px, 17vh, 172px);
+  width: clamp(104px, 6.6vw, 132px);
+  height: clamp(132px, 15vh, 166px);
   overflow: hidden;
   border: 8px solid rgba(255, 248, 232, 0.7);
   border-top-width: 10px;
@@ -972,8 +851,8 @@ function normalizeFoamBottom(percent) {
 
 .metric-panel {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-rows: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(92px, 1fr)) minmax(62px, auto);
   gap: 12px;
   min-width: 0;
   min-height: 0;
@@ -983,11 +862,11 @@ function normalizeFoamBottom(percent) {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   grid-template-rows: auto auto;
-  align-content: center;
-  gap: 7px 8px;
+  align-content: space-between;
+  gap: 12px 8px;
   min-width: 0;
   min-height: 0;
-  padding: 11px 16px;
+  padding: 14px 16px 15px;
   overflow: hidden;
   border: 1px solid rgba(225, 178, 91, 0.18);
   border-radius: 8px;
@@ -999,8 +878,8 @@ function normalizeFoamBottom(percent) {
   grid-column: 1 / 3;
   overflow: hidden;
   color: #aaa18e;
-  font-size: 14px;
-  line-height: 1;
+  font-size: 15px;
+  line-height: 1.15;
   font-weight: 900;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -1010,18 +889,19 @@ function normalizeFoamBottom(percent) {
   min-width: 0;
   overflow: hidden;
   color: var(--text);
-  font-size: clamp(22px, 1.9vw, 32px);
-  line-height: 1.05;
+  font-size: clamp(34px, 2.65vw, 56px);
+  line-height: 0.98;
   font-weight: 950;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
 .metric-card small {
-  align-self: center;
+  align-self: end;
   color: #887f70;
-  font-size: 14px;
-  line-height: 1.1;
+  padding-bottom: 4px;
+  font-size: 15px;
+  line-height: 1;
   font-weight: 900;
 }
 
@@ -1034,13 +914,13 @@ function normalizeFoamBottom(percent) {
 }
 
 .notice-panel {
-  grid-column: auto;
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   gap: 12px;
   min-width: 0;
   min-height: 0;
-  padding: 10px 14px;
+  padding: 12px 18px;
   border: 1px solid rgba(225, 178, 91, 0.2);
   border-radius: 8px;
   background: rgba(18, 19, 17, 0.72);
@@ -1060,12 +940,12 @@ function normalizeFoamBottom(percent) {
   margin: 0;
   overflow: hidden;
   color: #d5c8ae;
-  font-size: 14px;
+  font-size: 17px;
   line-height: 1.25;
   font-weight: 850;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   white-space: normal;
   text-overflow: ellipsis;
 }
@@ -1123,7 +1003,7 @@ function normalizeFoamBottom(percent) {
 .live-board.tables-2 .desk-board,
 .live-board.tables-3 .desk-board,
 .live-board.tables-4 .desk-board {
-  align-self: start;
+  align-self: stretch;
   min-height: 0;
 }
 
@@ -1131,7 +1011,50 @@ function normalizeFoamBottom(percent) {
 .live-board.tables-2 .desk-table,
 .live-board.tables-3 .desk-table,
 .live-board.tables-4 .desk-table {
-  min-height: auto;
+  min-height: 0;
+}
+
+.live-board.tables-1 .desk-table {
+  grid-template-rows: 42px minmax(150px, 1fr);
+}
+
+.live-board.tables-2 .desk-table {
+  grid-template-rows: 42px repeat(2, minmax(88px, 1fr));
+}
+
+.live-board.tables-3 .desk-table {
+  grid-template-rows: 42px repeat(3, minmax(66px, 1fr));
+}
+
+.live-board.tables-4 .desk-table {
+  grid-template-rows: 42px repeat(4, minmax(54px, 1fr));
+}
+
+.live-board.tables-5 .desk-table {
+  grid-template-rows: 38px repeat(5, minmax(40px, 1fr));
+}
+
+.live-board.tables-6 .desk-table {
+  grid-template-rows: 38px repeat(6, minmax(36px, 1fr));
+}
+
+.live-board.tables-7 .desk-table {
+  grid-template-rows: 38px repeat(7, minmax(33px, 1fr));
+}
+
+.live-board.tables-8 .desk-table {
+  grid-template-rows: 38px repeat(8, minmax(31px, 1fr));
+}
+
+.live-board.tables-1 .desk-row:not(.desk-row-head),
+.live-board.tables-2 .desk-row:not(.desk-row-head),
+.live-board.tables-3 .desk-row:not(.desk-row-head),
+.live-board.tables-4 .desk-row:not(.desk-row-head),
+.live-board.tables-5 .desk-row:not(.desk-row-head),
+.live-board.tables-6 .desk-row:not(.desk-row-head),
+.live-board.tables-7 .desk-row:not(.desk-row-head),
+.live-board.tables-8 .desk-row:not(.desk-row-head) {
+  min-height: 0;
 }
 
 .desk-board-head {
@@ -1369,7 +1292,7 @@ function normalizeFoamBottom(percent) {
 .live-board.tables-7,
 .live-board.tables-8 {
   gap: 12px;
-  grid-template-rows: auto minmax(210px, 25vh) minmax(330px, 1fr) auto;
+  grid-template-rows: auto minmax(276px, 30vh) minmax(315px, 1fr) auto;
 }
 
 .tables-5 .desk-row,
@@ -1413,11 +1336,11 @@ function normalizeFoamBottom(percent) {
   .live-board {
     gap: 12px;
     padding: 20px 26px 14px;
-    grid-template-rows: auto minmax(214px, 27vh) minmax(300px, 1fr) auto;
+    grid-template-rows: auto minmax(270px, 31vh) minmax(286px, 1fr) auto;
   }
 
   .board-header {
-    grid-template-columns: minmax(0, 1fr) minmax(410px, 38%);
+    grid-template-columns: minmax(0, 1fr) minmax(390px, 31%);
     gap: 26px;
     min-height: 128px;
     padding-bottom: 10px;
@@ -1429,20 +1352,29 @@ function normalizeFoamBottom(percent) {
   }
 
   .scoreboard-stage {
-    grid-template-columns: minmax(0, 1fr) minmax(360px, 29%);
+    grid-template-columns: minmax(460px, 0.96fr) minmax(540px, 1.04fr);
     gap: 12px;
   }
 
   .hero-panel {
-    padding: 22px 30px;
+    padding: 20px 26px;
   }
 
   .metric-panel {
     gap: 9px;
+    grid-template-rows: repeat(2, minmax(84px, 1fr)) minmax(58px, auto);
   }
 
   .metric-card {
-    padding: 13px 14px;
+    padding: 12px 14px 13px;
+  }
+
+  .metric-card strong {
+    font-size: clamp(30px, 2.5vw, 48px);
+  }
+
+  .notice-panel p {
+    font-size: 15px;
   }
 
   .desk-row {

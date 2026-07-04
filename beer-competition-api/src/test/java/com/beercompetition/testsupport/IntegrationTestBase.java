@@ -64,6 +64,13 @@ public abstract class IntegrationTestBase {
                   AND pa.display_name LIKE ?
                 """, prefix + "%");
         jdbcTemplate.update("""
+                DELETE fa FROM file_asset fa
+                JOIN competition c ON c.id = fa.owner_id
+                WHERE fa.business_type = 'COMPETITION_SPONSOR_LOGO'
+                  AND fa.owner_type = 'COMPETITION'
+                  AND c.code LIKE ?
+                """, prefix + "%");
+        jdbcTemplate.update("""
                 DELETE wpn FROM wechat_pay_notify wpn
                 JOIN entry_payment ep ON ep.out_trade_no = wpn.out_trade_no
                 JOIN beer_entry be ON be.id = ep.beer_entry_id
@@ -166,6 +173,11 @@ public abstract class IntegrationTestBase {
         jdbcTemplate.update("""
                 DELETE csc FROM competition_score_config csc
                 JOIN competition c ON c.id = csc.competition_id
+                WHERE c.code LIKE ?
+                """, prefix + "%");
+        jdbcTemplate.update("""
+                DELETE cs FROM competition_sponsor cs
+                JOIN competition c ON c.id = cs.competition_id
                 WHERE c.code LIKE ?
                 """, prefix + "%");
         jdbcTemplate.update("""

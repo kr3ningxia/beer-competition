@@ -16,8 +16,26 @@ export function fetchCompetitionProgress(id) {
   return request.get(`/api/admin/competitions/${id}/progress`, { authScope: 'admin' })
 }
 
+export function fetchCompetitionLiveBoard(id) {
+  return request.get(`/api/admin/competitions/${id}/live-board`, { authScope: 'admin' })
+}
+
 export function fetchCompetitionAnalytics(id) {
   return request.get(`/api/admin/competitions/${id}/analytics`, { authScope: 'admin' })
+}
+
+export function fetchCompetitionSponsors(id) {
+  return request.get(`/api/admin/competitions/${id}/sponsors`, { authScope: 'admin' })
+}
+
+export function updateCompetitionSponsors(id, payload) {
+  return request.put(`/api/admin/competitions/${id}/sponsors`, payload, { authScope: 'admin' })
+}
+
+export function uploadCompetitionSponsorLogo(id, file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post(`/api/admin/competitions/${id}/sponsors/logo`, formData, { authScope: 'admin' })
 }
 
 export function fetchCompetitionFeedbackReview(id) {
