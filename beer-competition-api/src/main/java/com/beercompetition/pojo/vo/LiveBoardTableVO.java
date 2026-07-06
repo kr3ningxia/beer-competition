@@ -12,6 +12,8 @@ public class LiveBoardTableVO {
     private String personalProgress;
     private String captainProgress;
     private String confirmationProgress;
+    private Integer reviewedCount;
+    private Integer pendingCount;
     private Integer completionPercent;
     private Integer averageCommentChars;
     private String averageCommentText;

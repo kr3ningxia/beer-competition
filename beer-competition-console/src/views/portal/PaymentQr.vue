@@ -478,7 +478,7 @@
         <section class="locked-category">
           <span>投递组别</span>
           <strong>{{ selectedEntry?.categoryName || '-' }}</strong>
-          <p>组别不可修改</p>
+          <p>组别不支持修改。如需修改，请退款后重新报名。</p>
         </section>
 
         <el-form-item label="酒款名称" prop="name">
@@ -603,7 +603,7 @@
       </div>
       <template #footer>
         <div class="refund-dialog-actions">
-          <el-button :disabled="refunding" @click="refundDialogVisible = false">取消退款</el-button>
+          <el-button class="refund-cancel-button" :disabled="refunding" @click="refundDialogVisible = false">取消退款</el-button>
           <el-button
             class="refund-edit-button"
             :disabled="refunding || !selectedEntry?.canUpdateInfo"
@@ -2695,13 +2695,14 @@ dd {
   gap: 10px;
 }
 
-.refund-edit-button {
+.refund-cancel-button {
   color: #2b1d10;
   background: #e1a23d;
   border-color: #d69328;
   font-weight: 900;
 }
 
+.refund-edit-button,
 .refund-confirm-button {
   color: #8b7b67;
   background: rgba(255, 253, 248, 0.72);

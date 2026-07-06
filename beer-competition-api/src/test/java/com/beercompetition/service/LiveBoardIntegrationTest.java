@@ -63,17 +63,18 @@ class LiveBoardIntegrationTest extends IntegrationTestBase {
         CompetitionLiveBoardVO judging = liveBoardService.getCompetitionLiveBoard(fixture.competition().getId());
         assertThat(judging.getTables()).hasSize(1);
         assertThat(judging.getTables().get(0).getStatusText()).isEqualTo("评审中");
-        assertThat(findMetric(judging, "pendingFinalize").getValue()).isEqualTo("2");
+        assertThat(findMetric(judging, "pendingReview").getValue()).isEqualTo("2");
 
         insertPersonalScores(fixture, scoreRound);
         CompetitionLiveBoardVO finalizing = liveBoardService.getCompetitionLiveBoard(fixture.competition().getId());
         assertThat(finalizing.getTables().get(0).getStatusText()).isEqualTo("汇总中");
-        assertThat(findMetric(finalizing, "personalRate").getValue()).isEqualTo("100%");
+        assertThat(findMetric(finalizing, "completionRate").getValue()).isEqualTo("0%");
 
         insertFinalScores(fixture, scoreRound);
         CompetitionLiveBoardVO confirming = liveBoardService.getCompetitionLiveBoard(fixture.competition().getId());
         assertThat(confirming.getTables().get(0).getStatusText()).isEqualTo("确认中");
-        assertThat(confirming.getSummary().getDone()).isEqualTo(2);
+        assertThat(confirming.getSummary().getEyebrow()).isEqualTo("评审完成");
+        assertThat(confirming.getSummary().getDone()).isZero();
         assertThat(confirming.getSummary().getTotal()).isEqualTo(2);
 
         insertConfirmation(scoreRound.table().getId(), fixture.professional().getId(), scoreRound.table().getResultVersion());
@@ -81,6 +82,10 @@ class LiveBoardIntegrationTest extends IntegrationTestBase {
         CompetitionLiveBoardVO completed = liveBoardService.getCompetitionLiveBoard(fixture.competition().getId());
         assertThat(completed.getTables().get(0).getStatusText()).isEqualTo("本桌完成");
         assertThat(completed.getTables().get(0).getConfirmationProgress()).isEqualTo("2/2");
+        assertThat(completed.getTables().get(0).getReviewedCount()).isEqualTo(2);
+        assertThat(completed.getTables().get(0).getPendingCount()).isZero();
+        assertThat(completed.getSummary().getDone()).isEqualTo(2);
+        assertThat(findMetric(completed, "reviewed").getValue()).isEqualTo("2");
         assertThat(completed.getTables().get(0).getAverageCommentText()).endsWith("字");
 
         String publicJson = objectMapper.writeValueAsString(completed);
@@ -136,8 +141,8 @@ class LiveBoardIntegrationTest extends IntegrationTestBase {
         assertThat(board.getTables().get(0).getPersonalProgress()).isEqualTo("1/1");
         assertThat(board.getTables().get(0).getCaptainProgress()).isEqualTo("已提交");
         assertThat(board.getTables().get(0).getStatusText()).isEqualTo("确认中");
-        assertThat(findMetric(board, "personalRate").getLabel()).isEqualTo("排序提交");
-        assertThat(findMetric(board, "pendingFinalize").getLabel()).isEqualTo("待提交桌次");
+        assertThat(findMetric(board, "reviewed").getLabel()).isEqualTo("已评审");
+        assertThat(findMetric(board, "pendingReview").getLabel()).isEqualTo("待评审");
     }
 
     private LiveBoardMetricVO findMetric(CompetitionLiveBoardVO board, String key) {

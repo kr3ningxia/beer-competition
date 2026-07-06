@@ -54,6 +54,7 @@ public class LiveBoardServiceImpl implements LiveBoardService {
     private static final int FLAG_FALSE = 0;
     private static final String CONFIRMATION_STATUS_AGREED = "AGREED";
     private static final String DEFAULT_SUBTITLE = "The Chinese Lager Awards";
+    private static final Set<String> TABLE_REVIEWED_STATUS = Set.of("本桌完成", "本轮待确认", "本轮已锁定");
 
     private final BeerEntryMapper beerEntryMapper;
     private final CompetitionMapper competitionMapper;
@@ -121,11 +122,9 @@ public class LiveBoardServiceImpl implements LiveBoardService {
                         .label("轮次发布后显示评审进度")
                         .build())
                 .metrics(List.of(
-                        buildMetric("entries", "参赛酒款", String.valueOf(countCompetitionEntries(competition.getId())), "款", "neutral"),
-                        buildMetric("roundEntries", "本轮酒款", "-", "", "neutral"),
-                        buildMetric("personalRate", "个人评分", "-", "", "neutral"),
-                        buildMetric("pendingFinalize", "待桌长汇总", "-", "", "neutral"),
-                        buildMetric("pendingConfirm", "待同桌确认", "-", "", "neutral"),
+                        buildMetric("reviewed", "已评审", "-", "", "neutral"),
+                        buildMetric("pendingReview", "待评审", "-", "", "neutral"),
+                        buildMetric("completionRate", "完成率", "-", "", "neutral"),
                         buildMetric("averageComment", "平均评语", "-", "", "neutral")
                 ))
                 .tables(List.of())
@@ -201,11 +200,11 @@ public class LiveBoardServiceImpl implements LiveBoardService {
         int confirmationDone = resolveConfirmationDone(table, members, confirmations, round);
         int rankingDone = results.size();
         int rankingTarget = Math.max(NumberUtils.safeInt(table.getTargetCount()), 0);
-        int completionPercent = RoundType.RANKING.name().equals(round.getRoundType())
-                ? percent(rankingDone, rankingTarget)
-                : percent(captainDone, entryCount);
         String statusText = resolveTableStatus(round, table, entryCount, personalDone, personalTotal,
                 captainDone, confirmationDone, confirmationRequired, rankingDone, rankingTarget);
+        int reviewedCount = TABLE_REVIEWED_STATUS.contains(statusText) ? entryCount : 0;
+        int pendingCount = Math.max(entryCount - reviewedCount, 0);
+        int completionPercent = percent(reviewedCount, entryCount);
         boolean rankingRound = RoundType.RANKING.name().equals(round.getRoundType());
         return new TableStats(
                 table.getId(),
@@ -216,6 +215,8 @@ public class LiveBoardServiceImpl implements LiveBoardService {
                 entryCount,
                 confirmationDone,
                 confirmationRequired,
+                reviewedCount,
+                pendingCount,
                 completionPercent,
                 averageCommentChars(judgeScores),
                 statusText,
@@ -345,7 +346,7 @@ public class LiveBoardServiceImpl implements LiveBoardService {
     private LiveBoardSummaryVO buildSummary(CompetitionRound round, List<TableStats> tableStats) {
         if (RoundType.RANKING.name().equals(round.getRoundType())) {
             int done = (int) tableStats.stream()
-                    .filter(stats -> Set.of("本轮待确认", "本轮已锁定", "本桌完成").contains(stats.statusText()))
+                    .filter(stats -> TABLE_REVIEWED_STATUS.contains(stats.statusText()))
                     .count();
             int total = tableStats.size();
             return LiveBoardSummaryVO.builder()
@@ -353,45 +354,37 @@ public class LiveBoardServiceImpl implements LiveBoardService {
                     .done(done)
                     .total(total)
                     .percent(percent(done, total))
-                    .label(total > 0 ? "已提交 " + done + " 桌 · 剩余 " + Math.max(total - done, 0) + " 桌" : "等待排序轮发布")
+                    .label(total > 0 ? "已评审 " + done + " 桌 · 待评审 " + Math.max(total - done, 0) + " 桌" : "等待排序轮发布")
                     .build();
         }
-        int done = tableStats.stream().mapToInt(TableStats::captainDone).sum();
+        int done = tableStats.stream().mapToInt(TableStats::reviewedCount).sum();
         int total = tableStats.stream().mapToInt(TableStats::entryCount).sum();
         return LiveBoardSummaryVO.builder()
-                .eyebrow("桌长汇总")
+                .eyebrow("评审完成")
                 .done(done)
                 .total(total)
                 .percent(percent(done, total))
-                .label(total > 0 ? "已汇总 " + done + " 款 · 剩余 " + Math.max(total - done, 0) + " 款" : "等待首轮酒款发布")
+                .label(total > 0 ? "已评审 " + done + " 款 · 待评审 " + Math.max(total - done, 0) + " 款" : "等待首轮酒款发布")
                 .build();
     }
 
     private List<LiveBoardMetricVO> buildMetrics(CompetitionRound round, LiveBoardData data, List<TableStats> tableStats) {
         boolean rankingRound = RoundType.RANKING.name().equals(round.getRoundType());
         int roundEntries = tableStats.stream().mapToInt(TableStats::entryCount).sum();
-        int personalDone = tableStats.stream().mapToInt(TableStats::personalDone).sum();
-        int personalTotal = tableStats.stream().mapToInt(TableStats::personalTotal).sum();
-        int rankingSubmittedTables = (int) tableStats.stream()
-                .filter(stats -> Set.of("本轮待确认", "本轮已锁定", "本桌完成").contains(stats.statusText()))
-                .count();
-        int pendingFinalize = !rankingRound
-                ? tableStats.stream().mapToInt(stats -> Math.max(stats.entryCount() - stats.captainDone(), 0)).sum()
-                : Math.max(tableStats.size() - rankingSubmittedTables, 0);
-        int pendingConfirm = (int) tableStats.stream()
-                .filter(stats -> stats.confirmationRequired() > 0 && stats.confirmationDone() < stats.confirmationRequired())
-                .count();
+        int reviewed = rankingRound
+                ? (int) tableStats.stream().filter(stats -> TABLE_REVIEWED_STATUS.contains(stats.statusText())).count()
+                : tableStats.stream().mapToInt(TableStats::reviewedCount).sum();
+        int total = rankingRound ? tableStats.size() : roundEntries;
+        int pendingReview = Math.max(total - reviewed, 0);
         int averageComment = averageInt(data.judgeScoresByTable().values().stream()
                 .flatMap(List::stream)
                 .map(ScoreRecord::getCommentCharCount)
                 .filter(Objects::nonNull)
                 .toList());
         return List.of(
-                buildMetric("entries", "参赛酒款", String.valueOf(data.competitionEntryCount()), "款", "neutral"),
-                buildMetric("roundEntries", rankingRound ? "本轮候选" : "本轮酒款", String.valueOf(roundEntries), rankingRound ? "款" : "款", "neutral"),
-                buildMetric("personalRate", rankingRound ? "排序提交" : "个人评分", rankingRound ? percent(rankingSubmittedTables, tableStats.size()) + "%" : percent(personalDone, personalTotal) + "%", "", resolveProgressTone(rankingRound ? rankingSubmittedTables : personalDone, rankingRound ? tableStats.size() : personalTotal)),
-                buildMetric("pendingFinalize", rankingRound ? "待提交桌次" : "待桌长汇总", String.valueOf(pendingFinalize), rankingRound ? "桌" : "款", pendingFinalize > 0 ? "warning" : "success"),
-                buildMetric("pendingConfirm", "待同桌确认", String.valueOf(pendingConfirm), "桌", pendingConfirm > 0 ? "warning" : "success"),
+                buildMetric("reviewed", "已评审", String.valueOf(reviewed), rankingRound ? "桌" : "款", reviewed > 0 ? "success" : "neutral"),
+                buildMetric("pendingReview", "待评审", String.valueOf(pendingReview), rankingRound ? "桌" : "款", pendingReview > 0 ? "warning" : "success"),
+                buildMetric("completionRate", "完成率", percent(reviewed, total) + "%", "", resolveProgressTone(reviewed, total)),
                 buildMetric("averageComment", "平均评语", averageComment > 0 ? String.valueOf(averageComment) : "-", averageComment > 0 ? "字" : "", "neutral")
         );
     }
@@ -494,6 +487,8 @@ public class LiveBoardServiceImpl implements LiveBoardService {
                               int entryCount,
                               int confirmationDone,
                               int confirmationRequired,
+                              int reviewedCount,
+                              int pendingCount,
                               int completionPercent,
                               int averageCommentChars,
                               String statusText,
@@ -509,6 +504,8 @@ public class LiveBoardServiceImpl implements LiveBoardService {
                     .personalProgress(personalProgressText)
                     .captainProgress(captainProgressText)
                     .confirmationProgress(confirmationProgressText)
+                    .reviewedCount(reviewedCount)
+                    .pendingCount(pendingCount)
                     .completionPercent(completionPercent)
                     .averageCommentChars(averageCommentChars)
                     .averageCommentText(averageCommentChars > 0 ? averageCommentChars + "字" : "统计中")

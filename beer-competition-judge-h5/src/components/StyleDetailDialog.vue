@@ -15,8 +15,8 @@
         <header class="style-detail-head">
           <div>
             <span>{{ label }}</span>
-            <h2 :id="titleId">{{ styleCategoryText }}</h2>
-            <p>{{ baseStyleText }}</p>
+            <h2 :id="titleId">{{ baseStyleText }}</h2>
+            <p>{{ styleCategoryText }}</p>
           </div>
           <button class="style-detail-close" type="button" :aria-label="closeLabel" @click="$emit('close')">
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -51,7 +51,7 @@ const props = defineProps({
   },
   label: {
     type: String,
-    default: '风格分类',
+    default: '基础风格',
   },
   titleId: {
     type: String,
@@ -73,7 +73,7 @@ const styleCategoryText = computed(() => (
   props.entry?.styleCategoryName || props.entry?.categoryName || '-'
 ))
 const baseStyleText = computed(() => (
-  [props.entry?.styleCode, props.entry?.style].filter(Boolean).join(' ') || '基础风格'
+  props.entry?.style || '基础风格'
 ))
 const detailText = computed(() => splitStyleDescription(props.entry?.styleDescription))
 
@@ -133,7 +133,7 @@ function splitStyleDescription(description) {
 .style-detail-head h2 {
   margin: 0;
   color: #07111f;
-  font-size: 21px;
+  font-size: 23px;
   line-height: 1.22;
   font-weight: 900;
   overflow-wrap: anywhere;
@@ -142,9 +142,9 @@ function splitStyleDescription(description) {
 .style-detail-head p {
   margin: 7px 0 0;
   color: #687280;
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.45;
-  font-weight: 650;
+  font-weight: 500;
   overflow-wrap: anywhere;
 }
 
@@ -228,7 +228,7 @@ function splitStyleDescription(description) {
   }
 
   .style-detail-head h2 {
-    font-size: 19px;
+    font-size: 21px;
   }
 
   .style-detail-body {

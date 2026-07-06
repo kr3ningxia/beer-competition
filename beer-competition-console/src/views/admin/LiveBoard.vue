@@ -82,25 +82,21 @@
       <div class="desk-table" role="table">
         <div class="desk-row desk-row-head" role="row">
           <span role="columnheader">评审桌</span>
-          <span role="columnheader">{{ board.tableColumns.personal }}</span>
-          <span role="columnheader">{{ board.tableColumns.captain }}</span>
-          <span role="columnheader">{{ board.tableColumns.confirmation }}</span>
+          <span role="columnheader">已评审</span>
+          <span role="columnheader">待评审</span>
           <span role="columnheader">完成率</span>
           <span role="columnheader">{{ board.tableColumns.comment }}</span>
-          <span role="columnheader">状态</span>
         </div>
 
         <div v-for="table in board.tables" :key="table.id" :class="['desk-row', table.tone]" role="row">
           <strong role="cell">{{ table.displayName }}</strong>
-          <span role="cell">{{ table.personalProgress }}</span>
-          <span role="cell">{{ table.captainProgress }}</span>
-          <span role="cell">{{ table.confirmationProgress }}</span>
+          <span role="cell">{{ formatTableCount(table.reviewedCount) }}</span>
+          <span role="cell">{{ formatTableCount(table.pendingCount) }}</span>
           <span role="cell">
             <b>{{ table.completionPercent }}%</b>
             <i class="mini-track" aria-hidden="true"><i :style="{ width: `${table.completionPercent}%` }" /></i>
           </span>
           <span role="cell">{{ table.averageCommentText }}</span>
-          <span role="cell"><em>{{ table.statusText }}</em></span>
         </div>
 
         <div v-if="!board.tables.length" class="desk-empty">
@@ -215,7 +211,7 @@ function buildBoard(data) {
     tables,
     notice: collectNotice(data, tables),
     deskTitle: isRanking ? '排序轮桌次进度' : '首轮桌次评审进度',
-    deskHint: isRanking ? '公开展示各桌排序提交状态' : '公开展示各桌评分、汇总与确认进度',
+    deskHint: isRanking ? '按同桌确认后的完成结果展示' : '按同桌确认后的完成酒款展示',
     tableColumns: buildTableColumns(isRanking),
     roundSteps: buildRoundStepsFromLiveBoard(data),
   }
@@ -259,14 +255,13 @@ function buildProgressFromSummary(summary = {}) {
 function buildMetricCards(metrics = []) {
   if (!metrics.length) {
     return [
-      { label: '参赛酒款', value: '-', unit: '', tone: 'neutral' },
-      { label: '本轮酒款', value: '-', unit: '', tone: 'neutral' },
-      { label: '个人评分', value: '-', unit: '', tone: 'neutral' },
-      { label: '待桌长汇总', value: '-', unit: '', tone: 'neutral' },
-      { label: '待同桌确认', value: '-', unit: '', tone: 'neutral' },
+      { label: '已评审', value: '-', unit: '', tone: 'neutral' },
+      { label: '待评审', value: '-', unit: '', tone: 'neutral' },
+      { label: '完成率', value: '-', unit: '', tone: 'neutral' },
+      { label: '平均评语', value: '-', unit: '', tone: 'neutral' },
     ]
   }
-  return metrics.slice(0, 6).map((metric) => ({
+  return metrics.slice(0, 4).map((metric) => ({
     label: metric.label,
     value: metric.value || '-',
     unit: metric.unit || '',
@@ -288,8 +283,13 @@ function buildPartnerGroups(groups = []) {
 
 function buildTableColumns(isRanking) {
   return isRanking
-    ? { personal: '排序进度', captain: '提交状态', confirmation: '同桌确认', comment: '评语统计' }
-    : { personal: '个人评分', captain: '桌长汇总', confirmation: '同桌确认', comment: '平均评语' }
+    ? { comment: '评语统计' }
+    : { comment: '平均评语' }
+}
+
+function formatTableCount(value) {
+  const number = Number(value)
+  return Number.isFinite(number) ? `${Math.max(0, Math.round(number))}款` : '-'
 }
 
 function collectNotice(data, tables) {
@@ -851,8 +851,8 @@ function normalizeFoamBottom(percent) {
 
 .metric-panel {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-template-rows: repeat(2, minmax(92px, 1fr)) minmax(62px, auto);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: minmax(116px, 1fr) minmax(62px, auto);
   gap: 12px;
   min-width: 0;
   min-height: 0;
@@ -1091,7 +1091,7 @@ function normalizeFoamBottom(percent) {
 
 .desk-row {
   display: grid;
-  grid-template-columns: minmax(130px, 1.1fr) 0.72fr 0.72fr 1.15fr 0.9fr 0.9fr 0.86fr;
+  grid-template-columns: minmax(130px, 1.35fr) 0.8fr 0.8fr 1fr 0.9fr;
   align-items: center;
   gap: 12px;
   min-height: 38px;
@@ -1362,7 +1362,7 @@ function normalizeFoamBottom(percent) {
 
   .metric-panel {
     gap: 9px;
-    grid-template-rows: repeat(2, minmax(84px, 1fr)) minmax(58px, auto);
+    grid-template-rows: minmax(96px, 1fr) minmax(58px, auto);
   }
 
   .metric-card {
