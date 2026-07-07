@@ -590,11 +590,13 @@ function normalizeFoamBottom(percent) {
 
 .partner-logo-item img {
   flex: 0 0 auto;
-  width: 34px;
-  height: 34px;
+  width: clamp(48px, 3.8vw, 76px);
+  height: clamp(48px, 3.8vw, 76px);
   object-fit: contain;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.92);
+  padding: 6px;
+  border: 1px solid rgba(225, 178, 91, 0.2);
+  border-radius: 8px;
+  background: #fff;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
 }
 

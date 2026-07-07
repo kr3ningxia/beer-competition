@@ -73,7 +73,6 @@ public class CompetitionCreateRequest {
     private String logisticsVisibility;
 
     @Valid
-    @NotEmpty(message = "投递组别不能为空")
     private List<ConfigNameItemRequest> categories;
 
     @Valid

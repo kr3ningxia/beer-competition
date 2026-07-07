@@ -303,10 +303,10 @@ public class CompetitionServiceImpl implements CompetitionService {
     public CompetitionVO createCompetition(CompetitionCreateRequest request) {
         // 1) 参数规范化与完整性校验
         validateCreateRequest(request);
-        List<ConfigNameItemRequest> categories = normalizeNameItems(request.getCategories(), "投递组别");
         List<EntryFieldItemRequest> entryFields = normalizeEntryFields(request.getEntryFields() == null ? List.of() : request.getEntryFields());
         String styleLibraryVersion = normalizeRequired(request.getStyleLibraryVersion(), "基础风格库不能为空");
         List<StyleItemVO> snapshotStyles = styleLibraryService.listEnabledStyles(styleLibraryVersion);
+        List<ConfigNameItemRequest> categories = normalizeNameItems(resolveCreateCategories(request.getCategories(), snapshotStyles), "投递组别");
         validateScoreConfigs(request.getScoreConfigs());
 
         // 2) 构造草稿比赛主记录
@@ -463,6 +463,22 @@ public class CompetitionServiceImpl implements CompetitionService {
                     .sortOrder(sort++)
                     .build());
         }
+    }
+
+    private List<ConfigNameItemRequest> resolveCreateCategories(List<ConfigNameItemRequest> categories,
+                                                                List<StyleItemVO> snapshotStyles) {
+        if (categories != null && categories.stream().anyMatch(item -> StringUtils.hasText(item.getName()))) {
+            return categories;
+        }
+        List<ConfigNameItemRequest> generated = new ArrayList<>();
+        for (int index = 0; index < snapshotStyles.size(); index++) {
+            StyleItemVO style = snapshotStyles.get(index);
+            ConfigNameItemRequest item = new ConfigNameItemRequest();
+            item.setName(style.getName());
+            item.setSortOrder(resolveSort(style.getSortOrder(), index));
+            generated.add(item);
+        }
+        return generated;
     }
 
     @Override

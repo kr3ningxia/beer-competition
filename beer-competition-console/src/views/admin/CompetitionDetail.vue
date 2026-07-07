@@ -359,6 +359,51 @@
               <span>添加后会显示在公开投屏看板顶部区域</span>
             </div>
           </article>
+
+          <div v-if="sponsorLogoCrop.open" class="sponsor-logo-crop-mask" @click.self="cancelSponsorLogoCrop">
+            <section class="sponsor-logo-crop-dialog" role="dialog" aria-modal="true" aria-label="调整 Logo">
+              <header>
+                <div>
+                  <h3>调整 Logo</h3>
+                  <span>拖动图片调整位置，缩放后确认上传</span>
+                </div>
+                <button class="icon-button" type="button" @click="cancelSponsorLogoCrop">
+                  <Close />
+                </button>
+              </header>
+
+              <div
+                class="sponsor-logo-crop-stage"
+                @pointerdown="startSponsorLogoDrag"
+                @pointermove="moveSponsorLogoDrag"
+                @pointerup="endSponsorLogoDrag"
+                @pointercancel="endSponsorLogoDrag"
+                @pointerleave="endSponsorLogoDrag"
+                @wheel.prevent="zoomSponsorLogoCrop"
+              >
+                <img
+                  v-if="sponsorLogoCrop.previewUrl"
+                  :src="sponsorLogoCrop.previewUrl"
+                  alt="Logo 预览"
+                  draggable="false"
+                  :style="sponsorLogoCropImageStyle"
+                  @load="handleSponsorLogoPreviewLoad"
+                />
+                <div class="sponsor-logo-crop-frame" aria-hidden="true" />
+              </div>
+
+              <div class="sponsor-logo-crop-tools">
+                <label>
+                  <span>缩放</span>
+                  <input v-model.number="sponsorLogoCrop.scale" min="1" max="3" step="0.01" type="range" />
+                </label>
+                <button class="tool-button" type="button" @click="resetSponsorLogoCrop">重置</button>
+                <button class="tool-button primary" type="button" :disabled="sponsorLogoCrop.uploading" @click="confirmSponsorLogoCrop">
+                  {{ sponsorLogoCrop.uploading ? '上传中' : '确认上传' }}
+                </button>
+              </div>
+            </section>
+          </div>
         </section>
 
         <section v-if="activeTab === 'entryConfig'" class="tab-panel entry-config-panel">
@@ -372,10 +417,16 @@
               <div>
                 <h2>投递组别</h2>
               </div>
-              <button v-if="editable.entryStructure" class="tool-button" type="button" @click="categoryForm.push('')">
-                <Plus />
-                添加组别
-              </button>
+              <div v-if="editable.entryStructure" class="panel-actions">
+                <button class="tool-button" type="button" @click="syncCategoryFormFromStyleLibrary">
+                  <CircleCheck />
+                  同步当前风格库
+                </button>
+                <button class="tool-button" type="button" @click="categoryForm.push('')">
+                  <Plus />
+                  添加组别
+                </button>
+              </div>
             </div>
             <div v-if="editable.entryStructure" class="category-editor-list">
               <label v-for="(_, index) in categoryForm" :key="`category-${index}`">
@@ -1755,6 +1806,7 @@ import {
   Check,
   CircleCheck,
   Clock,
+  Close,
   DataAnalysis,
   Delete,
   EditPen,
@@ -1862,6 +1914,25 @@ const baseForm = reactive({
 })
 const sponsorForm = reactive([])
 const sponsorLogoInputRefs = new Map()
+const sponsorLogoCropOutputWidth = 720
+const sponsorLogoCropOutputHeight = 720
+const sponsorLogoCrop = reactive({
+  open: false,
+  sponsor: null,
+  file: null,
+  previewUrl: '',
+  imageWidth: 0,
+  imageHeight: 0,
+  scale: 1,
+  x: 0,
+  y: 0,
+  dragging: false,
+  dragStartX: 0,
+  dragStartY: 0,
+  startX: 0,
+  startY: 0,
+  uploading: false,
+})
 const entryFieldForm = reactive([])
 const judgeTableForm = reactive([])
 const judgeAssignmentForm = reactive([])
@@ -2627,6 +2698,28 @@ const canSubmitFeedbackEditor = computed(() => (
   && feedbackEditorEffectiveLength.value > 0
   && String(feedbackEditor.reason || '').trim().length > 0
 ))
+const sponsorLogoCropGeometry = computed(() => {
+  const imageWidth = Number(sponsorLogoCrop.imageWidth) || 1
+  const imageHeight = Number(sponsorLogoCrop.imageHeight) || 1
+  const imageRatio = imageWidth / imageHeight
+  const frameRatio = sponsorLogoCropOutputWidth / sponsorLogoCropOutputHeight
+  const baseWidthPercent = imageRatio >= frameRatio ? (imageRatio / frameRatio) * 100 : 100
+  const baseHeightPercent = imageRatio >= frameRatio ? 100 : (frameRatio / imageRatio) * 100
+  const widthPercent = baseWidthPercent * sponsorLogoCrop.scale
+  const heightPercent = baseHeightPercent * sponsorLogoCrop.scale
+  return {
+    widthPercent,
+    heightPercent,
+    maxX: Math.max(0, (widthPercent - 100) / 2),
+    maxY: Math.max(0, (heightPercent - 100) / 2),
+  }
+})
+const sponsorLogoCropImageStyle = computed(() => ({
+  width: `${sponsorLogoCropGeometry.value.widthPercent}%`,
+  height: `${sponsorLogoCropGeometry.value.heightPercent}%`,
+  left: `calc(50% + ${sponsorLogoCrop.x}%)`,
+  top: `calc(50% + ${sponsorLogoCrop.y}%)`,
+}))
 
 onMounted(() => {
   loadStyleLibraries()
@@ -2639,6 +2732,7 @@ onUnmounted(() => {
   if (roundProgressPollTimer) window.clearInterval(roundProgressPollTimer)
   clearRoundTableNameAutoSave()
   if (styleDistributionResizeObserver) styleDistributionResizeObserver.disconnect()
+  closeSponsorLogoCrop()
 })
 watch(() => route.params.id, loadDetail)
 watch(() => route.query.tab, (tab) => {
@@ -2690,6 +2784,7 @@ watch(feedbackFilteredEntries, (entries) => {
     selectedFeedbackEntryKey.value = feedbackEntryKey(entries[0])
   }
 })
+watch(() => sponsorLogoCrop.scale, clampSponsorLogoCropOffset)
 async function loadDetail() {
   loading.value = true
   try {
@@ -6084,15 +6179,144 @@ async function handleSponsorLogoChange(event, sponsor) {
     ElMessage.warning('Logo 图片不能超过 5MB')
     return
   }
-  sponsor.uploading = true
+  openSponsorLogoCrop(file, sponsor)
+}
+
+function openSponsorLogoCrop(file, sponsor) {
+  closeSponsorLogoCrop()
+  sponsorLogoCrop.open = true
+  sponsorLogoCrop.sponsor = sponsor
+  sponsorLogoCrop.file = file
+  sponsorLogoCrop.previewUrl = URL.createObjectURL(file)
+  sponsorLogoCrop.imageWidth = 0
+  sponsorLogoCrop.imageHeight = 0
+  sponsorLogoCrop.scale = 1
+  sponsorLogoCrop.x = 0
+  sponsorLogoCrop.y = 0
+  sponsorLogoCrop.dragging = false
+  sponsorLogoCrop.uploading = false
+}
+
+function closeSponsorLogoCrop() {
+  if (sponsorLogoCrop.previewUrl) URL.revokeObjectURL(sponsorLogoCrop.previewUrl)
+  sponsorLogoCrop.open = false
+  sponsorLogoCrop.sponsor = null
+  sponsorLogoCrop.file = null
+  sponsorLogoCrop.previewUrl = ''
+  sponsorLogoCrop.dragging = false
+  sponsorLogoCrop.uploading = false
+}
+
+function cancelSponsorLogoCrop() {
+  if (sponsorLogoCrop.uploading) return
+  closeSponsorLogoCrop()
+}
+
+function handleSponsorLogoPreviewLoad(event) {
+  sponsorLogoCrop.imageWidth = event.target.naturalWidth || 1
+  sponsorLogoCrop.imageHeight = event.target.naturalHeight || 1
+  resetSponsorLogoCrop()
+}
+
+function resetSponsorLogoCrop() {
+  sponsorLogoCrop.scale = 1
+  sponsorLogoCrop.x = 0
+  sponsorLogoCrop.y = 0
+}
+
+function startSponsorLogoDrag(event) {
+  if (!sponsorLogoCrop.previewUrl || sponsorLogoCrop.uploading) return
+  sponsorLogoCrop.dragging = true
+  sponsorLogoCrop.dragStartX = event.clientX
+  sponsorLogoCrop.dragStartY = event.clientY
+  sponsorLogoCrop.startX = sponsorLogoCrop.x
+  sponsorLogoCrop.startY = sponsorLogoCrop.y
+  event.currentTarget.setPointerCapture?.(event.pointerId)
+}
+
+function moveSponsorLogoDrag(event) {
+  if (!sponsorLogoCrop.dragging) return
+  const bounds = event.currentTarget.getBoundingClientRect()
+  const deltaXPercent = ((event.clientX - sponsorLogoCrop.dragStartX) / bounds.width) * 100
+  const deltaYPercent = ((event.clientY - sponsorLogoCrop.dragStartY) / bounds.height) * 100
+  sponsorLogoCrop.x = sponsorLogoCrop.startX + deltaXPercent
+  sponsorLogoCrop.y = sponsorLogoCrop.startY + deltaYPercent
+  clampSponsorLogoCropOffset()
+}
+
+function endSponsorLogoDrag(event) {
+  if (!sponsorLogoCrop.dragging) return
+  sponsorLogoCrop.dragging = false
+  event.currentTarget.releasePointerCapture?.(event.pointerId)
+}
+
+function zoomSponsorLogoCrop(event) {
+  if (!sponsorLogoCrop.previewUrl || sponsorLogoCrop.uploading) return
+  const nextScale = sponsorLogoCrop.scale + (event.deltaY > 0 ? -0.08 : 0.08)
+  sponsorLogoCrop.scale = Math.min(3, Math.max(1, Number(nextScale.toFixed(2))))
+  clampSponsorLogoCropOffset()
+}
+
+function clampSponsorLogoCropOffset() {
+  const { maxX, maxY } = sponsorLogoCropGeometry.value
+  sponsorLogoCrop.x = Math.min(maxX, Math.max(-maxX, Number(sponsorLogoCrop.x) || 0))
+  sponsorLogoCrop.y = Math.min(maxY, Math.max(-maxY, Number(sponsorLogoCrop.y) || 0))
+}
+
+async function confirmSponsorLogoCrop() {
+  if (!sponsorLogoCrop.sponsor || !competition.value?.id) return
+  const targetSponsor = sponsorLogoCrop.sponsor
+  sponsorLogoCrop.uploading = true
+  targetSponsor.uploading = true
   try {
-    const uploaded = await uploadCompetitionSponsorLogo(competition.value.id, file)
-    sponsor.logoAssetId = uploaded.fileAssetId
-    sponsor.logoUrl = uploaded.publicUrl
+    const croppedFile = await buildSponsorLogoCropFile()
+    const uploaded = await uploadCompetitionSponsorLogo(competition.value.id, croppedFile)
+    targetSponsor.logoAssetId = uploaded.fileAssetId
+    targetSponsor.logoUrl = uploaded.publicUrl
     ElMessage.success('Logo 已上传')
+    closeSponsorLogoCrop()
+  } catch (error) {
+    ElMessage.error(error?.message || 'Logo 上传失败')
   } finally {
-    sponsor.uploading = false
+    targetSponsor.uploading = false
+    sponsorLogoCrop.uploading = false
   }
+}
+
+function buildSponsorLogoCropFile() {
+  return new Promise((resolve, reject) => {
+    const image = new Image()
+    image.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = sponsorLogoCropOutputWidth
+      canvas.height = sponsorLogoCropOutputHeight
+      const context = canvas.getContext('2d')
+      if (!context) {
+        reject(new Error('无法处理 Logo 图片'))
+        return
+      }
+      context.fillStyle = '#ffffff'
+      context.fillRect(0, 0, canvas.width, canvas.height)
+      const { widthPercent, heightPercent } = sponsorLogoCropGeometry.value
+      const drawWidth = canvas.width * (widthPercent / 100)
+      const drawHeight = canvas.height * (heightPercent / 100)
+      const drawX = (canvas.width - drawWidth) / 2 + canvas.width * (sponsorLogoCrop.x / 100)
+      const drawY = (canvas.height - drawHeight) / 2 + canvas.height * (sponsorLogoCrop.y / 100)
+      context.imageSmoothingQuality = 'high'
+      context.drawImage(image, drawX, drawY, drawWidth, drawHeight)
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error('Logo 图片导出失败'))
+          return
+        }
+        const sourceName = sponsorLogoCrop.file?.name || 'sponsor-logo.png'
+        const filename = sourceName.replace(/\.[^.]+$/, '') || 'sponsor-logo'
+        resolve(new File([blob], `${filename}-display.png`, { type: 'image/png' }))
+      }, 'image/png')
+    }
+    image.onerror = () => reject(new Error('Logo 图片读取失败'))
+    image.src = sponsorLogoCrop.previewUrl
+  })
 }
 
 async function saveSponsors() {
@@ -6115,6 +6339,39 @@ async function saveSponsors() {
   competition.value = normalizeDetail({ ...competition.value, sponsors })
   resetForms()
   ElMessage.success('赞助商配置已保存')
+}
+
+function getSelectedStyleCategoryNames() {
+  const names = []
+  const seen = new Set()
+  selectedStyleItems.value.forEach((style) => {
+    const name = String(style.name || '').trim()
+    if (!name || seen.has(name)) return
+    seen.add(name)
+    names.push(name)
+  })
+  return names
+}
+
+async function syncCategoryFormFromStyleLibrary() {
+  const names = getSelectedStyleCategoryNames()
+  if (!names.length) {
+    ElMessage.warning('当前风格库没有可同步的风格')
+    return
+  }
+  if (categoryForm.filter(Boolean).length) {
+    try {
+      await ElMessageBox.confirm('将用当前风格库的可用风格替换现有投递组别，保存前仍可继续调整。', '同步投递组别', {
+        confirmButtonText: '同步',
+        cancelButtonText: '取消',
+        type: 'warning',
+      })
+    } catch {
+      return
+    }
+  }
+  categoryForm.splice(0, categoryForm.length, ...names)
+  ElMessage.success('已同步当前风格库的投递组别')
 }
 
 async function saveEntryConfig() {
@@ -7575,6 +7832,12 @@ small,
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 14px;
+}
+
+.panel-actions {
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .panel-heading.compact {
@@ -10810,16 +11073,16 @@ button.pyramid-placeholder-mark {
   display: grid;
   place-items: center;
   width: 96px;
-  aspect-ratio: 1.6;
+  aspect-ratio: 1;
   overflow: hidden;
   border: 1px solid rgba(216, 169, 53, 0.2);
   border-radius: 8px;
-  background: rgba(4, 9, 12, 0.58);
+  background: #fff;
 }
 
 .sponsor-logo-box img {
-  max-width: 88%;
-  max-height: 76%;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
 }
 
@@ -10858,6 +11121,112 @@ button.pyramid-placeholder-mark {
 
 .hidden-file-input {
   display: none;
+}
+
+.sponsor-logo-crop-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  background: rgba(2, 5, 7, 0.76);
+  backdrop-filter: blur(10px);
+}
+
+.sponsor-logo-crop-dialog {
+  display: grid;
+  gap: 16px;
+  width: min(620px, 100%);
+  padding: 18px;
+  border: 1px solid rgba(216, 169, 53, 0.26);
+  border-radius: 10px;
+  background: #101719;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+}
+
+.sponsor-logo-crop-dialog header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.sponsor-logo-crop-dialog h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 20px;
+  line-height: 1.15;
+}
+
+.sponsor-logo-crop-dialog header span {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.sponsor-logo-crop-stage {
+  position: relative;
+  width: min(460px, 100%);
+  aspect-ratio: 1;
+  justify-self: center;
+  overflow: hidden;
+  border-radius: 8px;
+  background:
+    linear-gradient(45deg, rgba(255, 255, 255, 0.86) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(255, 255, 255, 0.86) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(255, 255, 255, 0.86) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(255, 255, 255, 0.86) 75%),
+    #eef1f2;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+  background-size: 20px 20px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.sponsor-logo-crop-stage:active {
+  cursor: grabbing;
+}
+
+.sponsor-logo-crop-stage img {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  object-fit: fill;
+  user-select: none;
+  pointer-events: none;
+}
+
+.sponsor-logo-crop-frame {
+  position: absolute;
+  inset: 0;
+  border: 2px solid rgba(216, 169, 53, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(7, 12, 14, 0.24);
+  pointer-events: none;
+}
+
+.sponsor-logo-crop-tools {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.sponsor-logo-crop-tools label {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.sponsor-logo-crop-tools input[type='range'] {
+  width: 100%;
+  accent-color: var(--gold);
 }
 
 .sponsor-empty {

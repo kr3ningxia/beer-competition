@@ -225,15 +225,21 @@
                 <h3>投递组别</h3>
                 <span class="count-pill">{{ categoryCount }} 个</span>
               </div>
-              <button class="tool-button" type="button" @click="addCategory">
-                <Plus />
-                添加组别
-              </button>
+              <div class="title-actions">
+                <button class="tool-button" type="button" @click="syncCategoriesFromSelectedLibrary">
+                  <CircleCheck />
+                  同步风格库
+                </button>
+                <button class="tool-button" type="button" @click="addCategory">
+                  <Plus />
+                  添加组别
+                </button>
+              </div>
             </div>
             <div class="category-list">
               <div v-for="(category, index) in draft.categories" :key="category.id" class="category-row">
-                <input v-model.trim="category.name" :aria-label="`投递组别 ${index + 1}`" placeholder="例如 浅色拉格" />
-                <button class="icon-button" title="删除投递组别" type="button" @click="removeItem(draft.categories, index)"><Delete /></button>
+                <input v-model.trim="category.name" :aria-label="`投递组别 ${index + 1}`" placeholder="例如 浅色拉格" @input="markCategoryEdited" />
+                <button class="icon-button" title="删除投递组别" type="button" @click="removeCategory(index)"><Delete /></button>
               </div>
             </div>
           </section>
@@ -447,7 +453,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Back, CircleCheck, Delete, Plus, Warning } from '@element-plus/icons-vue'
@@ -539,6 +545,7 @@ const scoreDescriptions = {
 
 const categoryCount = computed(() => draft.categories.filter((category) => category.name).length)
 const styleLibraryOptions = ref(normalizeStyleLibraries(fallbackStyleLibraries))
+const categoryManuallyEdited = ref(false)
 const selectedStyleLibrary = computed(() => getStyleLibrary(draft.styleLibraryVersion, styleLibraryOptions.value))
 const reviewItems = computed(() => buildReviewItems(draft))
 const reviewBlockingItems = computed(() => reviewItems.value.filter((item) => item.status !== 'done'))
@@ -558,8 +565,18 @@ function removeItem(list, index) {
   list.splice(index, 1)
 }
 
+function markCategoryEdited() {
+  categoryManuallyEdited.value = true
+}
+
 function addCategory() {
+  markCategoryEdited()
   draft.categories.push({ id: `cat-${Date.now()}`, name: '' })
+}
+
+function removeCategory(index) {
+  markCategoryEdited()
+  removeItem(draft.categories, index)
 }
 
 function addEntryField() {
@@ -712,7 +729,67 @@ async function loadStyleLibraries() {
   } catch {
     styleLibraryOptions.value = normalizeStyleLibraries(fallbackStyleLibraries)
   }
+  if (!categoryManuallyEdited.value) {
+    syncCategoriesFromSelectedLibrary({ silent: true, resetManual: true })
+  }
 }
+
+function getStyleLibraryCategoryNames(library) {
+  const sourceItems = library?.styleItems?.length ? library.styleItems : (library?.styles || []).map((name) => ({ name }))
+  const names = []
+  const seen = new Set()
+  sourceItems
+    .filter((item) => item && item.status !== 0)
+    .forEach((item) => {
+      const name = String(item.name || '').trim()
+      if (!name || seen.has(name)) return
+      seen.add(name)
+      names.push(name)
+    })
+  return names
+}
+
+function replaceDraftCategories(names) {
+  draft.categories.splice(
+    0,
+    draft.categories.length,
+    ...names.map((name, index) => ({ id: `cat-sync-${Date.now()}-${index}`, name })),
+  )
+}
+
+function syncCategoriesFromSelectedLibrary(options = {}) {
+  const normalizedOptions = options instanceof Event ? {} : options
+  const names = getStyleLibraryCategoryNames(selectedStyleLibrary.value)
+  if (!names.length) {
+    ElMessage.warning('当前风格库没有可同步的风格')
+    return
+  }
+  replaceDraftCategories(names)
+  if (normalizedOptions.resetManual) {
+    categoryManuallyEdited.value = false
+  }
+  if (!normalizedOptions.silent) {
+    ElMessage.success('已同步当前风格库的投递组别')
+  }
+}
+
+watch(() => draft.styleLibraryVersion, async (nextValue, previousValue) => {
+  if (!nextValue || nextValue === previousValue) return
+  if (!categoryManuallyEdited.value || getCategoryNames(draft).length === 0) {
+    syncCategoriesFromSelectedLibrary({ silent: true, resetManual: true })
+    return
+  }
+  try {
+    await ElMessageBox.confirm('将用新风格库的可用风格替换当前投递组别，已有手动调整会被覆盖。', '同步投递组别', {
+      confirmButtonText: '同步',
+      cancelButtonText: '保留现有组别',
+      type: 'warning',
+    })
+    syncCategoriesFromSelectedLibrary({ resetManual: true })
+  } catch {
+    // 保留当前手动组别，管理员仍可稍后点击同步按钮。
+  }
+})
 
 function getCategoryNames(source) {
   return source.categories.map((category) => category.name.trim()).filter(Boolean)
@@ -1445,6 +1522,14 @@ textarea::placeholder {
   display: inline-flex;
   align-items: center;
   gap: 10px;
+}
+
+.title-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .count-pill {
