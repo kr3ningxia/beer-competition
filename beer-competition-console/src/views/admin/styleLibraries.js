@@ -98,3 +98,10 @@ export function getStyleLibrary(value, libraries = fallbackStyleLibraries) {
 export function getStyleLibraryLabel(value, libraries = fallbackStyleLibraries) {
   return getStyleLibrary(value, libraries)?.label || value || '未选择'
 }
+
+export function formatStyleItemName(style) {
+  const name = String(style?.name || '').trim()
+  const styleCode = String(style?.styleCode || '').trim()
+  if (!name || !styleCode || name.startsWith(`${styleCode} `)) return name
+  return `${styleCode} ${name}`
+}

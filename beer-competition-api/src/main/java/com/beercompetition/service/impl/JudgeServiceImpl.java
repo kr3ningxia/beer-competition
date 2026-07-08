@@ -8,10 +8,12 @@ import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.common.result.PageResult;
 import com.beercompetition.common.util.PiiService;
 import com.beercompetition.mapper.AdminOperationLogMapper;
+import com.beercompetition.mapper.BreweryMapper;
 import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.JudgeAccountMapper;
 import com.beercompetition.mapper.JudgeAssignmentMapper;
 import com.beercompetition.mapper.JudgeTableMapper;
+import com.beercompetition.mapper.PortalAccountMapper;
 import com.beercompetition.pojo.dto.AdminJudgePhoneUpdateRequest;
 import com.beercompetition.pojo.dto.AdminJudgeStatusUpdateRequest;
 import com.beercompetition.pojo.dto.AdminJudgeUpdateRequest;
@@ -22,10 +24,12 @@ import com.beercompetition.pojo.dto.JudgeProfileUpdateRequest;
 import com.beercompetition.pojo.enums.JudgeAccountStatus;
 import com.beercompetition.pojo.enums.JudgeRoleType;
 import com.beercompetition.pojo.po.AdminOperationLog;
+import com.beercompetition.pojo.po.Brewery;
 import com.beercompetition.pojo.po.Competition;
 import com.beercompetition.pojo.po.JudgeAccount;
 import com.beercompetition.pojo.po.JudgeAssignment;
 import com.beercompetition.pojo.po.JudgeTable;
+import com.beercompetition.pojo.po.PortalAccount;
 import com.beercompetition.pojo.vo.CompetitionVO;
 import com.beercompetition.pojo.vo.JudgeAccountVO;
 import com.beercompetition.pojo.vo.JudgeTaskVO;
@@ -40,6 +44,7 @@ import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -53,6 +58,8 @@ public class JudgeServiceImpl implements JudgeService {
     private final JudgeAssignmentMapper judgeAssignmentMapper;
     private final JudgeTableMapper judgeTableMapper;
     private final CompetitionMapper competitionMapper;
+    private final PortalAccountMapper portalAccountMapper;
+    private final BreweryMapper breweryMapper;
     private final AdminOperationLogMapper adminOperationLogMapper;
     private final PiiService piiService;
     private final RoundService roundService;
@@ -63,9 +70,10 @@ public class JudgeServiceImpl implements JudgeService {
         LambdaQueryWrapper<JudgeAccount> wrapper = buildJudgeQuery(status, keyword);
 
         // 2) 查询并组装全量脱敏评审池
-        return judgeAccountMapper.selectList(wrapper.orderByDesc(JudgeAccount::getId))
-                .stream()
-                .map(this::toJudgeListVO)
+        List<JudgeAccount> judges = judgeAccountMapper.selectList(wrapper.orderByDesc(JudgeAccount::getId));
+        PhoneConflictContext phoneConflictContext = buildPhoneConflictContext(judges);
+        return judges.stream()
+                .map(judge -> toJudgeListVO(judge, phoneConflictContext))
                 .toList();
     }
 
@@ -78,8 +86,9 @@ public class JudgeServiceImpl implements JudgeService {
 
         // 2) 分页查询并组装列表
         Page<JudgeAccount> result = judgeAccountMapper.selectPage(new Page<>(currentPage, currentPageSize), wrapper);
+        PhoneConflictContext phoneConflictContext = buildPhoneConflictContext(result.getRecords());
         List<JudgeAccountVO> records = result.getRecords().stream()
-                .map(this::toJudgeListVO)
+                .map(judge -> toJudgeListVO(judge, phoneConflictContext))
                 .toList();
 
         // 3) 返回分页结果
@@ -95,7 +104,7 @@ public class JudgeServiceImpl implements JudgeService {
         writeAdminLog("JUDGE_CONTACT_VIEW", account.getPublicId(), "查看评审完整联系方式");
 
         // 3) 返回完整资料
-        return toJudgeDetailVO(account);
+        return toJudgeDetailVO(account, buildPhoneConflictContext(List.of(account)));
     }
 
     @Override
@@ -104,7 +113,7 @@ public class JudgeServiceImpl implements JudgeService {
         JudgeAccount account = requireJudge(BaseContext.getCurrentId());
 
         // 2) 组装个人资料视图
-        return toJudgeDetailVO(account);
+        return toJudgeDetailVO(account, buildPhoneConflictContext(List.of(account)));
     }
 
     @Override
@@ -123,7 +132,8 @@ public class JudgeServiceImpl implements JudgeService {
         judgeAccountMapper.updateById(account);
 
         // 3) 组装并返回结果
-        return toJudgeDetailVO(judgeAccountMapper.selectById(account.getId()));
+        JudgeAccount updated = judgeAccountMapper.selectById(account.getId());
+        return toJudgeDetailVO(updated, buildPhoneConflictContext(List.of(updated)));
     }
 
     @Override
@@ -139,7 +149,8 @@ public class JudgeServiceImpl implements JudgeService {
         writeAdminLog("JUDGE_PROFILE_UPDATE", account.getPublicId(), "更新评审资料");
 
         // 3) 组装并返回结果
-        return toJudgeDetailVO(judgeAccountMapper.selectById(account.getId()));
+        JudgeAccount updated = judgeAccountMapper.selectById(account.getId());
+        return toJudgeDetailVO(updated, buildPhoneConflictContext(List.of(updated)));
     }
 
     @Override
@@ -161,7 +172,8 @@ public class JudgeServiceImpl implements JudgeService {
         writeAdminLog("JUDGE_PHONE_UPDATE", account.getPublicId(), "更正评审手机号：" + request.getReason());
 
         // 3) 组装并返回结果
-        return toJudgeDetailVO(judgeAccountMapper.selectById(account.getId()));
+        JudgeAccount updated = judgeAccountMapper.selectById(account.getId());
+        return toJudgeDetailVO(updated, buildPhoneConflictContext(List.of(updated)));
     }
 
     @Override
@@ -182,7 +194,8 @@ public class JudgeServiceImpl implements JudgeService {
         writeAdminLog(resolveStatusAction(nextStatus), account.getPublicId(), "评审状态改为" + nextStatus.getLabel());
 
         // 3) 组装并返回结果
-        return toJudgeDetailVO(judgeAccountMapper.selectById(account.getId()));
+        JudgeAccount updated = judgeAccountMapper.selectById(account.getId());
+        return toJudgeDetailVO(updated, buildPhoneConflictContext(List.of(updated)));
     }
 
     @Override
@@ -403,10 +416,47 @@ public class JudgeServiceImpl implements JudgeService {
         return wrapper;
     }
 
-    private JudgeAccountVO toJudgeListVO(JudgeAccount judge) {
+    private PhoneConflictContext buildPhoneConflictContext(List<JudgeAccount> judges) {
+        Set<String> phones = judges.stream()
+                .map(judge -> piiService.normalizePhone(piiService.decrypt(judge.getPhoneEnc())))
+                .filter(StringUtils::hasText)
+                .collect(Collectors.toSet());
+        if (phones.isEmpty()) {
+            return new PhoneConflictContext(Map.of(), Map.of());
+        }
+        List<PortalAccount> portalAccounts = portalAccountMapper.selectList(new LambdaQueryWrapper<PortalAccount>()
+                .in(PortalAccount::getPhone, phones));
+        Map<String, PortalAccount> portalByPhone = portalAccounts.stream()
+                .collect(Collectors.toMap(account -> piiService.normalizePhone(account.getPhone()), item -> item, (left, right) -> left));
+        Set<Long> breweryIds = portalAccounts.stream()
+                .map(PortalAccount::getBreweryId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, Brewery> breweryById = breweryIds.isEmpty()
+                ? Map.of()
+                : breweryMapper.selectBatchIds(breweryIds).stream()
+                .collect(Collectors.toMap(Brewery::getId, item -> item));
+        return new PhoneConflictContext(portalByPhone, breweryById);
+    }
+
+    private PhoneBreweryConflict resolvePhoneBreweryConflict(String phone, PhoneConflictContext context) {
+        PortalAccount portalAccount = context.portalByPhone().get(piiService.normalizePhone(phone));
+        if (portalAccount == null || portalAccount.getBreweryId() == null) {
+            return PhoneBreweryConflict.empty();
+        }
+        Brewery brewery = context.breweryById().get(portalAccount.getBreweryId());
+        String breweryName = brewery == null ? null : brewery.getCompanyName();
+        String text = StringUtils.hasText(breweryName)
+                ? "手机号匹配厂商账号：" + breweryName
+                : "手机号匹配厂商账号";
+        return new PhoneBreweryConflict(true, portalAccount.getBreweryId(), breweryName, text);
+    }
+
+    private JudgeAccountVO toJudgeListVO(JudgeAccount judge, PhoneConflictContext phoneConflictContext) {
         JudgeAccountStatus status = JudgeAccountStatus.of(judge.getStatus());
         String phone = piiService.decrypt(judge.getPhoneEnc());
         String wechat = piiService.decrypt(judge.getWechatEnc());
+        PhoneBreweryConflict phoneConflict = resolvePhoneBreweryConflict(phone, phoneConflictContext);
         return JudgeAccountVO.builder()
                 .publicId(judge.getPublicId())
                 .name(judge.getName())
@@ -415,6 +465,10 @@ public class JudgeServiceImpl implements JudgeService {
                 .qualification(judge.getQualification())
                 .breweryConflictFlag(Boolean.TRUE.equals(judge.getBreweryConflictFlag()))
                 .breweryConflictText(judge.getBreweryConflictText())
+                .phoneBreweryConflictFlag(phoneConflict.flag())
+                .phoneConflictBreweryId(phoneConflict.breweryId())
+                .phoneConflictBreweryName(phoneConflict.breweryName())
+                .phoneConflictText(phoneConflict.text())
                 .status(status.getCode())
                 .statusLabel(status.getLabel())
                 .profileRequired(status == JudgeAccountStatus.PROFILE_INCOMPLETE)
@@ -422,10 +476,11 @@ public class JudgeServiceImpl implements JudgeService {
                 .build();
     }
 
-    private JudgeAccountVO toJudgeDetailVO(JudgeAccount judge) {
+    private JudgeAccountVO toJudgeDetailVO(JudgeAccount judge, PhoneConflictContext phoneConflictContext) {
         JudgeAccountStatus status = JudgeAccountStatus.of(judge.getStatus());
         String phone = piiService.decrypt(judge.getPhoneEnc());
         String wechat = piiService.decrypt(judge.getWechatEnc());
+        PhoneBreweryConflict phoneConflict = resolvePhoneBreweryConflict(phone, phoneConflictContext);
         return JudgeAccountVO.builder()
                 .publicId(judge.getPublicId())
                 .name(judge.getName())
@@ -436,6 +491,10 @@ public class JudgeServiceImpl implements JudgeService {
                 .qualification(judge.getQualification())
                 .breweryConflictFlag(Boolean.TRUE.equals(judge.getBreweryConflictFlag()))
                 .breweryConflictText(judge.getBreweryConflictText())
+                .phoneBreweryConflictFlag(phoneConflict.flag())
+                .phoneConflictBreweryId(phoneConflict.breweryId())
+                .phoneConflictBreweryName(phoneConflict.breweryName())
+                .phoneConflictText(phoneConflict.text())
                 .status(status.getCode())
                 .statusLabel(status.getLabel())
                 .profileRequired(status == JudgeAccountStatus.PROFILE_INCOMPLETE)
@@ -478,5 +537,15 @@ public class JudgeServiceImpl implements JudgeService {
             return "跨界评审";
         }
         return role;
+    }
+
+    private record PhoneConflictContext(Map<String, PortalAccount> portalByPhone, Map<Long, Brewery> breweryById) {
+    }
+
+    private record PhoneBreweryConflict(Boolean flag, Long breweryId, String breweryName, String text) {
+
+        private static PhoneBreweryConflict empty() {
+            return new PhoneBreweryConflict(false, null, null, null);
+        }
     }
 }

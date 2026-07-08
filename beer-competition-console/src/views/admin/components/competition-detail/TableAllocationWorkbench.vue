@@ -1238,12 +1238,16 @@ function formatJudgeQualification(qualification) {
 }
 
 function hasJudgeBreweryConflict(judge) {
-  return Boolean(judge?.breweryConflictFlag && String(judge?.breweryConflictText || '').trim())
+  return Boolean((judge?.breweryConflictFlag && String(judge?.breweryConflictText || '').trim()) || judge?.phoneBreweryConflictFlag)
 }
 
 function formatJudgeBreweryConflict(judge) {
-  const text = String(judge?.breweryConflictText || '').trim()
-  return text ? `需回避：${text}` : ''
+  const items = []
+  const manualText = String(judge?.breweryConflictText || '').trim()
+  const phoneText = String(judge?.phoneConflictText || '').trim()
+  if (manualText) items.push(`需回避：${manualText}`)
+  if (judge?.phoneBreweryConflictFlag) items.push(phoneText || '手机号匹配厂商账号')
+  return items.join('；')
 }
 
 function getJudgeBreweryConflict(judgePublicId) {

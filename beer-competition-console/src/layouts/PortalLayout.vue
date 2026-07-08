@@ -39,8 +39,60 @@
           <el-button class="logout-button" text @click="logout">退出</el-button>
         </div>
         <RouterLink v-else class="login-link" to="/portal/login">登录报名</RouterLink>
+        <button
+          class="mobile-menu-button"
+          type="button"
+          :aria-expanded="mobileMenuOpen"
+          aria-controls="portal-mobile-menu"
+          :aria-label="mobileMenuOpen ? '关闭导航菜单' : '打开导航菜单'"
+          @click="mobileMenuOpen = !mobileMenuOpen"
+        >
+          <component :is="mobileMenuOpen ? Close : Menu" />
+        </button>
       </div>
     </header>
+
+    <Transition name="mobile-menu">
+      <div
+        v-if="mobileMenuOpen"
+        id="portal-mobile-menu"
+        class="mobile-menu-layer"
+        @click.self="mobileMenuOpen = false"
+      >
+        <section class="mobile-menu-panel" aria-label="厂牌移动导航">
+          <RouterLink
+            v-if="loggedIn"
+            :class="['mobile-account-card', { active: route.path === '/portal/profile' }]"
+            to="/portal/profile"
+          >
+            <span class="avatar">
+              <img v-if="accountAvatarPreviewUrl" :src="accountAvatarPreviewUrl" alt="厂牌头像">
+              <span v-else>{{ accountInitial }}</span>
+            </span>
+            <span>
+              <strong>{{ accountName }}</strong>
+              <small>厂牌资料</small>
+            </span>
+          </RouterLink>
+
+          <RouterLink v-else class="mobile-login-card" to="/portal/login">登录后报名参赛</RouterLink>
+
+          <nav class="mobile-nav-list" aria-label="厂牌移动菜单">
+            <RouterLink
+              v-for="item in visibleNavItems"
+              :key="item.path"
+              :to="item.path"
+              :class="['mobile-nav-item', { active: isNavActive(item) }]"
+            >
+              <component :is="item.icon" />
+              <span>{{ item.label }}</span>
+            </RouterLink>
+          </nav>
+
+          <button v-if="loggedIn" class="mobile-logout-button" type="button" @click="logout">退出登录</button>
+        </section>
+      </div>
+    </Transition>
 
     <main class="page-frame">
       <router-view />
@@ -49,12 +101,14 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
   CircleCheck,
+  Close,
   Document,
   Medal,
+  Menu,
   Trophy,
   Tickets,
 } from '@element-plus/icons-vue'
@@ -67,6 +121,7 @@ const router = useRouter()
 const route = useRoute()
 const displayName = ref(getDisplayName('portal'))
 const accountAvatarUrl = ref('')
+const mobileMenuOpen = ref(false)
 const loggedIn = computed(() => isLoggedIn('portal'))
 const accountName = computed(() => isQuestionPlaceholder(displayName.value) ? '完善厂牌资料' : displayName.value || '完善厂牌资料')
 const accountInitial = computed(() => getAccountInitial(accountName.value))
@@ -90,6 +145,7 @@ function isNavActive(item) {
 }
 
 function logout() {
+  mobileMenuOpen.value = false
   clearSession('portal')
   router.replace('/portal/home')
 }
@@ -178,6 +234,13 @@ onUnmounted(() => {
   window.removeEventListener('beer-competition-session-updated', handleSessionUpdate)
   window.removeEventListener('storage', handleStorageUpdate)
 })
+
+watch(
+  () => route.fullPath,
+  () => {
+    mobileMenuOpen.value = false
+  },
+)
 </script>
 
 <style scoped>
@@ -198,6 +261,7 @@ onUnmounted(() => {
   --el-color-primary-dark-2: #8b5c19;
   min-height: 100vh;
   color: var(--ink);
+  overflow-x: hidden;
   background:
     linear-gradient(90deg, rgba(80, 51, 22, 0.052) 1px, transparent 1px),
     linear-gradient(180deg, #fff8e7 0%, #f8edd4 48%, #f3e1bd 100%);
@@ -335,6 +399,30 @@ onUnmounted(() => {
   flex: 0 0 auto;
 }
 
+.mobile-menu-button {
+  display: none;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  color: #2b1d10;
+  background: #fff4d7;
+  border: 1px solid rgba(87, 58, 26, 0.14);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+
+.mobile-menu-button:hover,
+.mobile-menu-button:focus-visible {
+  background: #ffe8b4;
+  border-color: rgba(184, 117, 23, 0.32);
+}
+
+.mobile-menu-button svg {
+  width: 21px;
+  height: 21px;
+}
+
 .login-link {
   display: inline-flex;
   align-items: center;
@@ -374,6 +462,126 @@ onUnmounted(() => {
   min-width: 0;
   margin: 0 auto;
   padding: 28px 28px 48px;
+}
+
+.mobile-menu-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 7;
+  display: none;
+  padding: 72px 14px 18px;
+  background: rgba(33, 25, 18, 0.28);
+}
+
+.mobile-menu-panel {
+  display: grid;
+  gap: 12px;
+  max-height: calc(100dvh - 92px);
+  overflow: auto;
+  padding: 14px;
+  color: #211912;
+  background: rgba(255, 250, 240, 0.98);
+  border: 1px solid rgba(87, 58, 26, 0.14);
+  border-radius: 8px;
+  box-shadow: 0 24px 60px rgba(67, 43, 17, 0.22);
+}
+
+.mobile-account-card,
+.mobile-login-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 10px;
+  color: #2b1d10;
+  background: #fff4d7;
+  border: 1px solid rgba(184, 117, 23, 0.18);
+  border-radius: 8px;
+  text-decoration: none;
+}
+
+.mobile-account-card > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.mobile-account-card strong {
+  overflow: hidden;
+  font-size: 15px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-account-card small {
+  color: #746a5f;
+  font-size: 12px;
+}
+
+.mobile-login-card {
+  justify-content: center;
+  font-weight: 900;
+}
+
+.mobile-nav-list {
+  display: grid;
+  gap: 6px;
+}
+
+.mobile-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 0 12px;
+  color: #4d4338;
+  text-decoration: none;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-weight: 800;
+}
+
+.mobile-nav-item svg {
+  width: 20px;
+  height: 20px;
+}
+
+.mobile-nav-item.active {
+  color: #2b1d10;
+  background: #fff0c2;
+  border-color: rgba(184, 117, 23, 0.24);
+}
+
+.mobile-logout-button {
+  min-height: 44px;
+  color: #6b4710;
+  background: #fffaf0;
+  border: 1px solid rgba(87, 58, 26, 0.16);
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.mobile-menu-enter-active,
+.mobile-menu-leave-active {
+  transition: opacity 0.16s ease;
+}
+
+.mobile-menu-enter-active .mobile-menu-panel,
+.mobile-menu-leave-active .mobile-menu-panel {
+  transition: transform 0.16s ease;
+}
+
+.mobile-menu-enter-from,
+.mobile-menu-leave-to {
+  opacity: 0;
+}
+
+.mobile-menu-enter-from .mobile-menu-panel,
+.mobile-menu-leave-to .mobile-menu-panel {
+  transform: translateY(-8px);
 }
 
 :deep(.portal-section-title) {
@@ -443,33 +651,51 @@ onUnmounted(() => {
 
 @media (max-width: 720px) {
   .header-inner {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    padding: 10px 16px;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 8px;
+    min-height: 60px;
+    padding: 8px 14px;
   }
 
   .brand {
-    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .brand > span:last-child {
+    min-width: 0;
+  }
+
+  .brand strong,
+  .brand small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .account-actions {
-    max-width: 100%;
-  }
-
-  .account-pill > span:nth-child(2) {
-    max-width: 120px;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    display: none;
   }
 
   .nav-list {
-    order: 3;
-    width: 100%;
+    display: none;
+  }
+
+  .mobile-menu-button {
+    display: grid;
+  }
+
+  .mobile-menu-layer {
+    display: block;
+  }
+
+  .login-link {
+    min-height: 38px;
+    padding: 0 12px;
+    font-size: 13px;
   }
 
   .page-frame {
-    padding: 18px 16px 34px;
+    padding: 16px 14px 34px;
   }
 }
 </style>

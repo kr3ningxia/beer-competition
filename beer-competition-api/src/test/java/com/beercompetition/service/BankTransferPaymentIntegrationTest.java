@@ -61,6 +61,23 @@ class BankTransferPaymentIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    void submitTransferAllowsOptionalTransferTimeAndRemark() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        var entry = createPendingEntry(fixture, "选填转账信息");
+
+        PortalBankTransferSubmitRequest request = new PortalBankTransferSubmitRequest();
+        request.setEntryId(entry.getId());
+
+        asPortal(fixture.portalA().account().getId());
+        var submitted = bankTransferPaymentService.submitPortalTransfer(request);
+
+        assertThat(submitted.getStatus()).isEqualTo(BankTransferPaymentStatus.SUBMITTED.name());
+        assertThat(submitted.getTransferTime()).isNull();
+        assertThat(submitted.getRemark()).isNull();
+        assertPayment(entry.getId(), EntryPaymentStatus.PENDING_CONFIRM, EntryPayMethod.BANK_TRANSFER, submitted.getId());
+    }
+
+    @Test
     void duplicateSubmittedTransferIsBlockedUntilTheFirstOneIsResolved() {
         BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
         var entry = createPendingEntry(fixture, "重复提交");

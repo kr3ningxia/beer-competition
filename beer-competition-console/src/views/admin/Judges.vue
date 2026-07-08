@@ -71,8 +71,8 @@
               <span :class="['conflict-badge', hasBreweryConflict(judge) ? 'warning' : 'clear']">
                 {{ hasBreweryConflict(judge) ? '需回避' : '无' }}
               </span>
-              <small v-if="hasBreweryConflict(judge)" :title="judge.breweryConflictText">
-                {{ judge.breweryConflictText }}
+              <small v-if="hasBreweryConflict(judge)" :title="formatBreweryConflict(judge)">
+                {{ formatBreweryConflict(judge) }}
               </small>
             </div>
             <span :class="['status-badge', statusTone(judge)]">
@@ -403,7 +403,14 @@ function getInitial(name) {
 }
 
 function hasBreweryConflict(judge) {
-  return Boolean(judge?.breweryConflictFlag && judge?.breweryConflictText)
+  return Boolean((judge?.breweryConflictFlag && judge?.breweryConflictText) || judge?.phoneBreweryConflictFlag)
+}
+
+function formatBreweryConflict(judge) {
+  const items = []
+  if (judge?.breweryConflictFlag && judge?.breweryConflictText) items.push(judge.breweryConflictText)
+  if (judge?.phoneBreweryConflictFlag) items.push(judge.phoneConflictText || '手机号匹配厂商账号')
+  return items.join('；')
 }
 
 function setEditorBreweryConflict(value) {

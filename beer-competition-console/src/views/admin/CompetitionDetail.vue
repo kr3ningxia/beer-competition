@@ -1872,7 +1872,7 @@ import {
   uploadAwardCertificate,
   uploadCompetitionSponsorLogo,
 } from '@/api/admin'
-import { fallbackStyleLibraries, getStyleLibrary, normalizeStyleLibraries } from './styleLibraries'
+import { fallbackStyleLibraries, formatStyleItemName, getStyleLibrary, normalizeStyleLibraries } from './styleLibraries'
 import CreateRoundWizard from './components/competition-detail/CreateRoundWizard.vue'
 import CompetitionAnalyticsPanel from './components/competition-detail/CompetitionAnalyticsPanel.vue'
 import TableAllocationWorkbench from './components/competition-detail/TableAllocationWorkbench.vue'
@@ -2634,7 +2634,14 @@ const validationIssues = computed(() => {
 const filteredJudgePool = computed(() => {
   const query = judgeKeyword.value.toLowerCase()
   const pool = judgePool.value.filter((judge) => {
-    const matchesKeyword = !query || [judge.name, judge.maskedPhone, judge.qualification, judge.breweryConflictText]
+    const matchesKeyword = !query || [
+      judge.name,
+      judge.maskedPhone,
+      judge.qualification,
+      judge.breweryConflictText,
+      judge.phoneConflictText,
+      judge.phoneConflictBreweryName,
+    ]
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(query))
     if (!matchesKeyword) return false
@@ -3181,6 +3188,7 @@ function applyRoundState(preferredRoundId = activeRoundId.value, options = {}) {
     .map((entry) => ({
       ...entry,
       categoryId: entry.categoryId ?? null,
+      breweryId: entry.breweryId ?? null,
       name: entry.name || '',
       breweryCompanyName: entry.breweryCompanyName || '',
       shortCode: entry.shortCode || '-',
@@ -4565,11 +4573,14 @@ function getRoundTableConflictWarnings(table) {
   const judges = getRoundTableConflictJudges(table)
   const entries = (table?.entryUuids || [])
     .map((uuid) => roundEntryPool.value.find((entry) => entry.uuid === uuid))
-    .filter((entry) => entry?.breweryCompanyName)
+    .filter((entry) => entry?.breweryCompanyName || entry?.breweryId)
   const warnings = []
   judges.forEach((judge) => {
     const keywords = splitBreweryConflictKeywords(judge.breweryConflictText)
     entries.forEach((entry) => {
+      if (isPhoneBreweryConflictMatch(judge, entry)) {
+        warnings.push(`本桌存在手机号匹配回避：${judge.name || '未知评审'} / ${entry.breweryCompanyName || judge.phoneConflictBreweryName || '关联厂牌'}`)
+      }
       if (isBreweryConflictMatch(keywords, entry.breweryCompanyName)) {
         warnings.push(`本桌可能存在回避风险：${judge.name || '未知评审'} / ${entry.breweryCompanyName}`)
       }
@@ -4591,7 +4602,7 @@ function getRoundTableConflictJudges(table) {
   }
   return [...publicIds]
     .map((publicId) => getJudge(publicId))
-    .filter((judge) => judge?.breweryConflictFlag && judge?.breweryConflictText)
+    .filter((judge) => (judge?.breweryConflictFlag && judge?.breweryConflictText) || judge?.phoneBreweryConflictFlag)
 }
 
 function splitBreweryConflictKeywords(text) {
@@ -4605,6 +4616,19 @@ function isBreweryConflictMatch(keywords, breweryName) {
   const brewery = String(breweryName || '').trim().toLowerCase()
   if (!brewery) return false
   return keywords.some((keyword) => keyword.includes(brewery) || brewery.includes(keyword))
+}
+
+function isPhoneBreweryConflictMatch(judge, entry) {
+  if (!judge?.phoneBreweryConflictFlag || !entry) return false
+  if (judge.phoneConflictBreweryId == null || entry.breweryId == null) {
+    return isBreweryConflictMatch(splitBreweryConflictKeywords(judge.phoneConflictBreweryName), entry.breweryCompanyName)
+  }
+  const conflictBreweryId = Number(judge.phoneConflictBreweryId)
+  const entryBreweryId = Number(entry.breweryId)
+  if (Number.isFinite(conflictBreweryId) && Number.isFinite(entryBreweryId) && conflictBreweryId === entryBreweryId) {
+    return true
+  }
+  return isBreweryConflictMatch(splitBreweryConflictKeywords(judge.phoneConflictBreweryName), entry.breweryCompanyName)
 }
 
 function getRoundEntryAssignment(uuid) {
@@ -6345,7 +6369,7 @@ function getSelectedStyleCategoryNames() {
   const names = []
   const seen = new Set()
   selectedStyleItems.value.forEach((style) => {
-    const name = String(style.name || '').trim()
+    const name = formatStyleItemName(style)
     if (!name || seen.has(name)) return
     seen.add(name)
     names.push(name)

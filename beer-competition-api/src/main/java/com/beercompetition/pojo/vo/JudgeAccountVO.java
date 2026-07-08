@@ -16,6 +16,10 @@ public class JudgeAccountVO {
     private String qualification;
     private Boolean breweryConflictFlag;
     private String breweryConflictText;
+    private Boolean phoneBreweryConflictFlag;
+    private Long phoneConflictBreweryId;
+    private String phoneConflictBreweryName;
+    private String phoneConflictText;
     private Integer status;
     private String statusLabel;
     private Boolean profileRequired;

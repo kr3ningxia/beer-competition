@@ -283,6 +283,7 @@ function earlyBirdDeadlineText(competition) {
   background: #e1a23d;
   border-radius: 8px;
   font-weight: 800;
+  line-height: 1.45;
   text-decoration: none;
 }
 
@@ -863,13 +864,100 @@ details p {
 }
 
 @media (max-width: 720px) {
+  .home-page {
+    gap: 18px;
+  }
+
+  .result-notice {
+    display: grid;
+    gap: 8px;
+    padding: 13px 14px;
+    line-height: 1.45;
+  }
+
+  .result-notice span {
+    justify-self: start;
+    min-height: 32px;
+    padding: 6px 10px;
+    color: #2b1d10;
+    background: #f3d978;
+    border-radius: 8px;
+    line-height: 20px;
+  }
+
+  .my-notice {
+    padding: 12px 14px;
+  }
+
   .site-hero {
     min-height: auto;
-    padding: 28px;
+    gap: 20px;
+    padding: 20px;
+    background-position: center top;
   }
 
   .hero-copy h1 {
-    font-size: 42px;
+    margin: 16px 0 12px;
+    font-size: 34px;
+    line-height: 1.08;
+    overflow-wrap: anywhere;
+  }
+
+  .hero-copy p {
+    font-size: 15px;
+    line-height: 1.65;
+    -webkit-line-clamp: 2;
+  }
+
+  .hero-facts {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin-top: 18px;
+  }
+
+  .hero-facts span {
+    display: flex;
+    align-items: center;
+    white-space: normal;
+  }
+
+  .hero-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 22px;
+  }
+
+  .primary-action {
+    grid-column: 1 / -1;
+  }
+
+  .primary-action,
+  .secondary-action,
+  .text-action,
+  .card-actions a {
+    min-height: 44px;
+    padding: 0 12px;
+    text-align: center;
+  }
+
+  .hero-card {
+    padding: 18px;
+  }
+
+  .hero-card > strong {
+    margin-top: 12px;
+    font-size: 22px;
+  }
+
+  .section-block,
+  .guide-card {
+    padding: 18px;
+  }
+
+  .section-head {
+    gap: 10px;
   }
 
   .category-modal-backdrop {
@@ -887,8 +975,28 @@ details p {
     grid-template-columns: 1fr;
   }
 
+  .event-card {
+    padding: 18px;
+  }
+
+  .event-card h3 {
+    margin: 14px 0 8px;
+    font-size: 22px;
+  }
+
+  .event-card p {
+    -webkit-line-clamp: 2;
+  }
+
   .event-card dl {
     grid-template-columns: 1fr;
+  }
+
+  .card-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 20px;
   }
 
   .reason-band {
@@ -901,6 +1009,11 @@ details p {
 
   .reason-grid {
     grid-template-columns: 1fr;
+  }
+
+  .flow-step,
+  details {
+    min-height: auto;
   }
 }
 </style>

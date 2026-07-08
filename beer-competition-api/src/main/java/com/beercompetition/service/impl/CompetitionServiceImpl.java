@@ -474,11 +474,20 @@ public class CompetitionServiceImpl implements CompetitionService {
         for (int index = 0; index < snapshotStyles.size(); index++) {
             StyleItemVO style = snapshotStyles.get(index);
             ConfigNameItemRequest item = new ConfigNameItemRequest();
-            item.setName(style.getName());
+            item.setName(formatStyleItemName(style));
             item.setSortOrder(resolveSort(style.getSortOrder(), index));
             generated.add(item);
         }
         return generated;
+    }
+
+    private String formatStyleItemName(StyleItemVO style) {
+        String name = normalizeNullable(style == null ? null : style.getName());
+        String styleCode = normalizeNullable(style == null ? null : style.getStyleCode());
+        if (!StringUtils.hasText(name) || !StringUtils.hasText(styleCode) || name.startsWith(styleCode + " ")) {
+            return name;
+        }
+        return styleCode + " " + name;
     }
 
     @Override

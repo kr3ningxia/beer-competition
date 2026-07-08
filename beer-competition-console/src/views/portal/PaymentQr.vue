@@ -30,9 +30,18 @@
             <span class="section-kicker">我的酒款</span>
             <h2>报名酒款</h2>
           </div>
+          <button
+            v-if="payableEntries.length"
+            class="entry-picker-toggle"
+            type="button"
+            :aria-expanded="entryPickerOpen"
+            @click="entryPickerOpen = !entryPickerOpen"
+          >
+            {{ entryPickerOpen ? '收起' : '切换' }}
+          </button>
         </div>
 
-        <div class="entry-list">
+        <div :class="['entry-list', { open: entryPickerOpen }]">
           <article
             v-for="entry in payableEntries"
             :key="entry.id"
@@ -134,7 +143,7 @@
             <div class="bank-pending-head">
               <div>
                 <strong>等待组委会核对到账</strong>
-                <span>付款信息已提交，组委会将在五个工作日内核对到账，确认后开放标签下载和送样信息填写</span>
+                <span>付款信息已提交，我们将在5个工作日内核对到账，确认后开放标签下载和送样信息填写</span>
               </div>
               <el-button
                 v-if="selectedEntry.payment?.bankTransferId"
@@ -148,10 +157,6 @@
               <div>
                 <dt>付款账户名</dt>
                 <dd>{{ submittedBankTransfer?.payerName || '未填写' }}</dd>
-              </div>
-              <div>
-                <dt>付款时间</dt>
-                <dd>{{ formatDateTime(submittedBankTransfer?.transferTime, true) || '未记录' }}</dd>
               </div>
               <div>
                 <dt>转账备注</dt>
@@ -243,22 +248,14 @@
               </div>
               <el-form label-position="top" class="bank-transfer-form">
                 <div class="bank-form-grid">
-                  <el-form-item label="应付金额">
+                  <el-form-item label="应付金额" class="bank-amount-field">
                     <div class="fixed-amount">{{ formatCurrency(entryPayAmount(selectedEntry)) }}</div>
                   </el-form-item>
-                  <el-form-item label="付款账户名">
+                  <el-form-item label="付款账户名" class="bank-payer-field">
                     <el-input v-model.trim="bankTransferForm.payerName" placeholder="填写实际转账账户名，便于核对到账" />
                   </el-form-item>
-                  <el-form-item label="付款时间（必填）">
-                    <el-date-picker
-                      v-model="bankTransferForm.transferTime"
-                      type="datetime"
-                      value-format="YYYY-MM-DDTHH:mm:ss"
-                      placeholder="选择实际付款时间"
-                    />
-                  </el-form-item>
-                  <el-form-item label="转账备注（必填）">
-                    <el-input v-model.trim="bankTransferForm.remark" placeholder="填写银行转账时使用的备注，例如厂牌名或报名编号" />
+                  <el-form-item label="转账备注（选填）" class="bank-remark-field">
+                    <el-input v-model.trim="bankTransferForm.remark" placeholder="如银行转账时填写了备注，可在这里补充" />
                   </el-form-item>
                 </div>
                 <div class="voucher-row">
@@ -274,7 +271,7 @@
                   </el-button>
                   <span>{{ bankTransferForm.voucherFileName || '未上传付款凭证；支持图片或 PDF，单个文件不超过 10MB' }}</span>
                 </div>
-                <div class="payment-actions">
+                <div class="payment-actions bank-submit-actions">
                   <el-button
                     type="primary"
                     size="large"
@@ -672,6 +669,7 @@ const bankVoucherInputRef = ref(null)
 const uploadingBankVoucher = ref(false)
 const submittingBankTransfer = ref(false)
 const cancelingBankTransfer = ref(false)
+const entryPickerOpen = ref(false)
 const editDialogVisible = ref(false)
 const editFormRef = ref(null)
 const editCompetition = ref(null)
@@ -689,7 +687,6 @@ const deliveryForm = reactive({
 })
 const bankTransferForm = reactive({
   payerName: '',
-  transferTime: '',
   remark: '',
   voucherAssetId: null,
   voucherFileName: '',
@@ -780,7 +777,7 @@ const paymentExpireText = computed(() => {
 const showLabelCard = computed(() => Boolean(selectedEntry.value?.canDownloadLabel))
 const selectedPaymentModeNote = computed(() => {
   if (payMode.value === 'BANK_TRANSFER') {
-    return '适合对公付款，提交转账信息后，组委会将在五个工作日内核对到账'
+    return '点击按钮即可查看收款账户信息。转账后请上传付款凭证，我们将在5个工作日内核对到账'
   }
   if (isWechatPayEnv.value) {
     return '支付成功后立即完成报名，并开放标签下载和送样信息填写'
@@ -889,7 +886,7 @@ const currentAction = computed(() => {
     if (entry.paymentStatus === 'PENDING_CONFIRM') {
       return {
         title: '等待转账确认',
-        description: '付款信息已提交，组委会将在五个工作日内核对到账，确认后开放标签下载和送样信息填写',
+        description: '付款信息已提交，我们将在5个工作日内核对到账，确认后开放标签下载和送样信息填写',
       }
     }
     return {
@@ -1218,6 +1215,7 @@ async function selectEntry(entry, options = {}) {
   } else if (showPaymentCard.value && !showBankPending.value && payMode.value === 'WECHAT') {
     await startWechatPayment({ silent: true })
   }
+  entryPickerOpen.value = false
 }
 
 async function refreshEntries(targetId = selectedEntry.value?.id) {
@@ -1544,8 +1542,7 @@ async function ensureBankAccount() {
 function syncBankTransferForm() {
   if (!selectedEntry.value || showBankPending.value) return
   bankTransferForm.payerName = ''
-  bankTransferForm.transferTime = ''
-  bankTransferForm.remark = selectedEntry.value?.breweryCompanyName || ''
+  bankTransferForm.remark = ''
   bankTransferForm.voucherAssetId = null
   bankTransferForm.voucherFileName = ''
 }
@@ -1572,21 +1569,12 @@ async function submitBankTransferForCurrentEntry() {
     ElMessage.warning('请先选择一款要支付的酒')
     return
   }
-  if (!bankTransferForm.transferTime) {
-    ElMessage.warning('请选择付款时间')
-    return
-  }
-  if (!bankTransferForm.remark) {
-    ElMessage.warning('请填写转账备注，便于组委会核对')
-    return
-  }
   submittingBankTransfer.value = true
   try {
     const payload = {
       entryId: selectedEntry.value.id,
       payerName: bankTransferForm.payerName || undefined,
-      transferTime: bankTransferForm.transferTime,
-      remark: bankTransferForm.remark,
+      remark: bankTransferForm.remark || undefined,
       voucherAssetId: bankTransferForm.voucherAssetId || undefined,
     }
     if (editingBankTransferId.value) {
@@ -1595,7 +1583,7 @@ async function submitBankTransferForCurrentEntry() {
       ElMessage.success('转账信息已更新，组委会将按最新内容核对到账')
     } else {
       await submitPortalBankTransfer(payload)
-      ElMessage.success('转账信息已提交，组委会将在五个工作日内核对到账')
+      ElMessage.success('转账信息已提交，我们将在5个工作日内核对到账')
     }
     await refreshEntries(selectedEntry.value?.id)
   } catch (error) {
@@ -1628,7 +1616,6 @@ async function editSelectedBankTransfer() {
     editingBankTransferId.value = transferId
     payMode.value = 'BANK_TRANSFER'
     bankTransferForm.payerName = transfer.payerName || ''
-    bankTransferForm.transferTime = transfer.transferTime ? String(transfer.transferTime).replace(' ', 'T').slice(0, 19) : ''
     bankTransferForm.remark = transfer.remark || ''
     bankTransferForm.voucherAssetId = transfer.voucherAssetId || null
     bankTransferForm.voucherFileName = transfer.voucherFileName || ''
@@ -1947,6 +1934,10 @@ function triggerDownload(objectUrl, fileName) {
   display: flex;
   justify-content: space-between;
   gap: 12px;
+}
+
+.entry-picker-toggle {
+  display: none;
 }
 
 .entry-list,
@@ -2314,21 +2305,24 @@ function triggerDownload(objectUrl, fileName) {
 }
 
 .voucher-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px 12px;
   align-items: center;
+  padding-top: 2px;
 }
 
 .bank-account-actions {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 10px;
-  align-items: stretch;
+  gap: 12px;
+  align-items: center;
 }
 
 .bank-account-actions .el-button {
-  align-self: center;
+  min-width: 124px;
+  height: 40px;
+  align-self: stretch;
 }
 
 .bank-service-contact {
@@ -2337,6 +2331,7 @@ function triggerDownload(objectUrl, fileName) {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-height: 40px;
   padding: 10px 12px;
   background: #fffdf8;
   border: 1px dashed rgba(185, 120, 31, 0.28);
@@ -2359,29 +2354,48 @@ function triggerDownload(objectUrl, fileName) {
 
 .bank-transfer-form {
   display: grid;
-  gap: 12px;
+  gap: 14px;
+  padding-top: 2px;
 }
 
 .bank-form-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 16px;
+  grid-template-columns: minmax(132px, 0.42fr) minmax(260px, 1fr);
+  gap: 12px 16px;
+  align-items: start;
 }
 
+.bank-form-grid :deep(.el-form-item) {
+  margin-bottom: 0;
+}
+
+.bank-form-grid :deep(.el-input__wrapper),
 .bank-form-grid :deep(.el-date-editor) {
   width: 100%;
+}
+
+.bank-payer-field {
+  min-width: 0;
+}
+
+.bank-remark-field {
+  grid-column: 1 / -1;
 }
 
 .fixed-amount {
   display: flex;
   align-items: center;
-  min-height: 38px;
-  padding: 0 12px;
+  min-height: 40px;
+  padding: 0 14px;
   color: var(--accent-deep);
   background: #fff7e6;
   border: 1px solid rgba(185, 120, 31, 0.18);
   border-radius: 8px;
   font-weight: 900;
+}
+
+.bank-submit-actions {
+  margin-top: 2px;
 }
 
 .hidden-file {
@@ -2817,6 +2831,12 @@ dd {
 }
 
 @media (max-width: 820px) {
+  .payment-page {
+    gap: 12px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
   .page-head,
   .delivery-workbench,
   .inline-facts,
@@ -2832,9 +2852,179 @@ dd {
     grid-template-columns: 1fr;
   }
 
+  .page-head,
+  .entry-panel,
+  .current-card,
+  .refund-card,
+  .payment-card,
+  .label-card,
+  .delivery-card,
+  .requirement-aside {
+    padding: 16px;
+  }
+
+  .page-head {
+    gap: 12px;
+  }
+
+  .page-title h1 {
+    margin-top: 6px;
+    font-size: 24px;
+  }
+
+  .page-title p,
+  .current-card p,
+  .card-head p {
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .back-link {
+    justify-self: start;
+    min-height: 34px;
+    padding: 0 10px;
+    background: #fff7e6;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font-size: 13px;
+  }
+
+  .flow-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+    padding-top: 0;
+  }
+
+  .flow-steps span {
+    min-height: 38px;
+    padding: 8px 9px;
+    font-size: 12px;
+    line-height: 1.25;
+  }
+
+  .flow-steps b {
+    flex-basis: 20px;
+    width: 20px;
+    height: 20px;
+    font-size: 11px;
+  }
+
+  .delivery-workbench,
+  .task-panel,
+  .entry-list {
+    gap: 10px;
+  }
+
   .edit-form-grid,
   .edit-extra-grid {
     grid-template-columns: 1fr;
+  }
+
+  .compact-head {
+    align-items: center;
+  }
+
+  .entry-picker-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 58px;
+    min-height: 34px;
+    padding: 0 12px;
+    color: var(--accent-deep);
+    background: #fff7e6;
+    border: 1px solid rgba(185, 120, 31, 0.22);
+    border-radius: 8px;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 900;
+  }
+
+  .entry-list {
+    display: grid;
+    overflow: hidden;
+    margin-top: 10px;
+    padding: 0;
+    max-height: none;
+  }
+
+  .entry-list.open {
+    max-height: 320px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 2px;
+  }
+
+  .entry-list:not(.open) .entry-row:not(.active) {
+    display: none;
+  }
+
+  .entry-row {
+    padding: 12px 12px 12px 14px;
+    width: 100%;
+  }
+
+  .entry-row:hover {
+    transform: none;
+  }
+
+  .entry-row p {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: 12px;
+  }
+
+  .entry-row small {
+    margin-top: 6px;
+    font-size: 12px;
+  }
+
+  .current-card h2,
+  .card-head h3 {
+    font-size: 22px;
+  }
+
+  .current-card,
+  .card-head {
+    gap: 10px;
+  }
+
+  .payment-entry-summary,
+  .bank-submitted-summary,
+  .inline-facts,
+  .summary-list {
+    gap: 8px;
+  }
+
+  .payment-entry-summary {
+    margin-top: 12px;
+    padding: 10px;
+  }
+
+  .payment-method-options {
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .payment-method-option {
+    min-height: 52px;
+    padding: 14px 48px 14px 40px;
+  }
+
+  .payment-method-option::before {
+    top: 16px;
+  }
+
+  .payment-method-option.recommended::after {
+    top: 12px;
+    right: 12px;
+  }
+
+  .bank-transfer-panel {
+    gap: 10px;
+    margin-top: 12px;
   }
 
   .bank-service-contact {
@@ -2862,6 +3052,69 @@ dd {
 
   .current-side {
     justify-items: start;
+  }
+}
+
+@media (max-width: 560px) {
+  .flow-steps {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .section-kicker {
+    font-size: 10px;
+  }
+
+  .compact-head h2,
+  .aside-head h2 {
+    margin-bottom: 0;
+    font-size: 20px;
+  }
+
+  .card-head strong {
+    font-size: 20px;
+  }
+
+  .payment-actions,
+  .label-actions,
+  .button-row,
+  .voucher-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .payment-actions .el-button,
+  .label-actions .el-button,
+  .button-row .el-button,
+  .voucher-row .el-button,
+  .bank-account-actions .el-button {
+    width: 100%;
+  }
+
+  .voucher-row span {
+    font-size: 12px;
+  }
+
+  .bank-account-box div,
+  .bank-submitted-summary div,
+  .inline-facts div,
+  .summary-list div,
+  .aside-list div {
+    padding: 11px;
+  }
+
+  .bank-section-title {
+    margin-top: 0;
+  }
+
+  .fixed-amount {
+    justify-content: center;
+  }
+
+  .wechat-pay-box {
+    display: grid;
+    justify-items: center;
+    text-align: center;
   }
 }
 </style>

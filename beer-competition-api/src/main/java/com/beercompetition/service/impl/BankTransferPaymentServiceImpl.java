@@ -137,7 +137,7 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
         Brewery brewery = requireBrewery(account.getBreweryId());
         Long entryId = request.getEntryId();
         String payerName = normalizeNullable(request.getPayerName());
-        String remark = normalizeRequired(request.getRemark(), "请填写转账备注");
+        String remark = normalizeNullable(request.getRemark());
         FileAsset voucher = resolveVoucherAsset(request.getVoucherAssetId(), account.getId());
 
         // 2) 读取并校验当前酒款与支付记录
@@ -201,7 +201,7 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
 
         // 2) 校验凭证并更新付款信息
         String payerName = normalizeNullable(request.getPayerName());
-        String remark = normalizeRequired(request.getRemark(), "请填写转账备注");
+        String remark = normalizeNullable(request.getRemark());
         FileAsset voucher = resolveVoucherAsset(request.getVoucherAssetId(), account.getId());
         transfer.setPayerName(payerName);
         transfer.setTransferTime(request.getTransferTime());

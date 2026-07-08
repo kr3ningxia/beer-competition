@@ -6,7 +6,6 @@
         <h1>为你的酒款匹配更合适的赛场</h1>
         <p>查看报名窗口、投递组别、风格要求与结果状态，进入单场赛事完成报名</p>
       </div>
-      <RouterLink class="primary-action" to="/portal/home">返回赛事首页</RouterLink>
     </section>
 
     <section class="event-list">

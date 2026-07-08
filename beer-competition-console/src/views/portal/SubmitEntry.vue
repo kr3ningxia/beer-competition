@@ -206,7 +206,7 @@
         </section>
 
         <div v-if="!submittedEntry" class="form-actions">
-          <p>{{ submitHint }}</p>
+          <p v-if="submitHint">{{ submitHint }}</p>
           <el-button class="submit-cta" type="primary" :loading="submittingEntry" @click="submitEntry">
             {{ submitButtonLabel }}
           </el-button>
@@ -402,7 +402,7 @@ const submitHint = computed(() => {
   if (payMode.value === 'BANK_TRANSFER') {
     return '提交报名后填写转账信息，到账确认后办理标签和送样'
   }
-  return '提交报名后生成微信支付码，付款成功即完成报名'
+  return ''
 })
 const submitButtonLabel = computed(() => {
   if (Number(currentEntryFee(selectedCompetition.value)) <= 0) {
@@ -421,7 +421,7 @@ const receiptStatusText = computed(() => {
 })
 const selectedPaymentModeNote = computed(() => {
   if (payMode.value === 'BANK_TRANSFER') {
-    return '适合对公付款，提交转账信息后，组委会将在五个工作日内核对到账'
+    return '点击按钮即可查看收款账户信息。转账后请上传付款凭证，我们将在5个工作日内核对到账'
   }
   return '支付成功后立即完成报名，并开放标签下载和送样信息填写'
 })
@@ -432,6 +432,7 @@ const formRules = computed(() => {
     style: [{ required: true, message: '请选择基础风格', trigger: 'change' }],
     abv: [
       {
+        required: true,
         validator: (_rule, value, callback) => {
           if (isValidAbvInput(value)) {
             callback()

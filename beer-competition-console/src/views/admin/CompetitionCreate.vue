@@ -467,7 +467,7 @@ import {
   createCompetition,
   fetchStyleLibraries,
 } from '@/api/admin'
-import { defaultStyleLibraryValue, fallbackStyleLibraries, getStyleLibrary, normalizeStyleLibraries } from './styleLibraries'
+import { defaultStyleLibraryValue, fallbackStyleLibraries, formatStyleItemName, getStyleLibrary, normalizeStyleLibraries } from './styleLibraries'
 
 const router = useRouter()
 const activeSection = ref('base-info')
@@ -741,7 +741,7 @@ function getStyleLibraryCategoryNames(library) {
   sourceItems
     .filter((item) => item && item.status !== 0)
     .forEach((item) => {
-      const name = String(item.name || '').trim()
+      const name = formatStyleItemName(item)
       if (!name || seen.has(name)) return
       seen.add(name)
       names.push(name)

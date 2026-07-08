@@ -1542,6 +1542,7 @@ public class RoundServiceImpl implements RoundService {
                 .shortCode(label == null ? null : label.getShortCode())
                 .scanToken(label == null ? null : label.getScanToken())
                 .name(entry.getName())
+                .breweryId(entry.getBreweryId())
                 .breweryCompanyName(brewery == null ? null : brewery.getCompanyName())
                 .breweryContactName(brewery == null ? null : brewery.getContactName())
                 .categoryId(entry.getCategoryId())
