@@ -151,15 +151,7 @@
     </section>
 
     <section class="guide-grid">
-      <article class="brewer-card guide-card">
-        <h2 class="portal-section-title">送样与标签</h2>
-        <dl>
-          <div><dt>参赛编号</dt><dd>报名后生成，用于厂牌和组委会核对报名记录</dd></div>
-          <div><dt>现场短编号</dt><dd>展示在标签下方，扫码失败时供现场人工输入</dd></div>
-          <div><dt>标签用途</dt><dd>支付成功后下载并贴在酒瓶或外箱，组委会收样后确认入库</dd></div>
-        </dl>
-      </article>
-      <article class="brewer-card guide-card">
+      <article class="brewer-card guide-card faq-card">
         <h2 class="portal-section-title">常见问题</h2>
         <div class="faq-list">
           <details v-for="item in faqs" :key="item.question">
@@ -804,17 +796,24 @@ dd {
 
 .guide-grid {
   display: grid;
-  grid-template-columns: 0.9fr 1.1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
+}
+
+.faq-card {
+  padding: 28px;
 }
 
 .faq-list {
   display: grid;
-  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
 }
 
 details {
-  padding: 14px;
+  min-height: 112px;
+  padding: 16px;
   background: #fff7e6;
   border: 1px solid rgba(87, 58, 26, 0.1);
   border-radius: 8px;
@@ -834,6 +833,10 @@ details p {
   .site-hero,
   .reason-band,
   .guide-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .faq-list {
     grid-template-columns: 1fr;
   }
 

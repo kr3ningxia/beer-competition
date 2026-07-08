@@ -16,6 +16,7 @@ public class WechatPayProperties {
     private String publicKeyId;
     private String publicKeyPath;
     private String notifyBaseUrl;
+    private String appSecret;
 
     public boolean isWechatMode() {
         return "WECHAT".equalsIgnoreCase(mode);

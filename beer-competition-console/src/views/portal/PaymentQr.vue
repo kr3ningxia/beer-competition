@@ -178,7 +178,7 @@
                 @click="switchPayMode('WECHAT')"
               >
                 <div class="payment-method-option-title">
-                  <span>微信扫码支付</span>
+                  <span>{{ wechatPayTitle }}</span>
                 </div>
               </button>
               <button
@@ -196,7 +196,7 @@
             <p v-if="!editingBankTransferId" class="payment-method-note">{{ selectedPaymentModeNote }}</p>
 
             <div v-if="payMode === 'WECHAT'" class="payment-actions">
-              <div v-if="paymentOrder?.mode === 'WECHAT'" class="wechat-pay-box">
+              <div v-if="paymentOrder?.mode === 'WECHAT' && !isWechatPayEnv" class="wechat-pay-box">
                 <img v-if="paymentQrDataUrl" :src="paymentQrDataUrl" alt="微信支付二维码" />
                 <div>
                   <strong>微信扫码支付</strong>
@@ -212,8 +212,8 @@
               >
                 模拟微信到账
               </el-button>
-              <el-button v-else type="primary" size="large" :loading="creatingPayment" @click="startNativePayment">
-                {{ paymentOrder?.mode === 'WECHAT' ? '重新生成支付码' : '生成微信支付码' }}
+              <el-button v-else type="primary" size="large" :loading="creatingPayment" @click="startWechatPayment">
+                {{ wechatPayButtonText }}
               </el-button>
               <el-button :loading="checkingPayment" @click="checkPaymentStatus">查看支付结果</el-button>
             </div>
@@ -626,6 +626,7 @@ import { Refresh } from '@element-plus/icons-vue'
 import QRCode from 'qrcode'
 import {
   cancelPortalEntry,
+  createPortalEntryWechatJsapiPayment,
   createPortalEntryWechatNativePayment,
   downloadPortalEntryLabelPdf,
   fetchPortalCompetitionDetail,
@@ -635,6 +636,7 @@ import {
   fetchPortalEntries,
   fetchPortalEntryDetail,
   fetchPortalEntryLabel,
+  fetchPortalWechatPayClientConfig,
   requestPortalEntryRefund,
   simulatePortalEntryPayment,
   submitPortalBankTransfer,
@@ -643,8 +645,9 @@ import {
   updatePortalBankTransfer,
   uploadPortalBankTransferVoucher,
 } from '@/api/portal'
-import { JUDGE_H5_BASE_URL } from '@/config'
+import { JUDGE_H5_BASE_URL, WECHAT_PAY_APP_ID } from '@/config'
 import { formatAbvWithUnit, isValidAbvInput, normalizeAbvInput } from '@/utils/formatters'
+import { buildWechatOauthUrl, currentUrlWithoutWechatCode, invokeWechatPay, isWechatBrowser } from '@/utils/wechatPay'
 import { entryPayAmount, isEntryRefundActive, isEntryRefunded } from './portalViewModels'
 
 const route = useRoute()
@@ -660,6 +663,7 @@ const creatingPayment = ref(false)
 const checkingPayment = ref(false)
 const paymentOrder = ref(null)
 const paymentQrDataUrl = ref('')
+const wechatPayConfig = ref(null)
 const payMode = ref('WECHAT')
 const bankAccount = ref(null)
 const submittedBankTransfer = ref(null)
@@ -778,7 +782,20 @@ const selectedPaymentModeNote = computed(() => {
   if (payMode.value === 'BANK_TRANSFER') {
     return '适合对公付款，提交转账信息后，组委会将在五个工作日内核对到账'
   }
-  return '支付成功后立即完成报名，并开放标签下载和送样信息填写'
+  if (isWechatPayEnv.value) {
+    return '支付成功后立即完成报名，并开放标签下载和送样信息填写'
+  }
+  return '请使用微信扫一扫支付，付款后回到页面查看结果'
+})
+const isWechatPayEnv = computed(() => isWechatBrowser())
+const wechatAuthCode = ref(String(route.query.code || ''))
+const wechatPayAppId = computed(() => wechatPayConfig.value?.appId || WECHAT_PAY_APP_ID)
+const wechatPayTitle = computed(() => isWechatPayEnv.value ? '微信支付' : '微信扫码支付')
+const wechatPayButtonText = computed(() => {
+  if (isWechatPayEnv.value) {
+    return paymentOrder.value?.mode === 'WECHAT' ? '重新发起微信支付' : '发起微信支付'
+  }
+  return paymentOrder.value?.mode === 'WECHAT' ? '重新生成支付码' : '生成微信支付码'
 })
 const bankServiceWechat = computed(() => bankAccount.value?.serviceWechat || 'beerxms')
 const showPreparationCards = computed(() => {
@@ -959,6 +976,9 @@ const isDirty = computed(() => {
 
 onMounted(async () => {
   window.addEventListener('beforeunload', handleBeforeUnload)
+  if (isWechatPayEnv.value) {
+    await loadWechatPayConfig()
+  }
   entries.value = await fetchPortalEntries()
   if (String(route.query.payMode || '').toLowerCase() === 'bank') {
     payMode.value = 'BANK_TRANSFER'
@@ -1196,7 +1216,7 @@ async function selectEntry(entry, options = {}) {
   if (selectedEntry.value?.canDownloadLabel) {
     labelData.value = await fetchPortalEntryLabel(entry.id)
   } else if (showPaymentCard.value && !showBankPending.value && payMode.value === 'WECHAT') {
-    await startNativePayment({ silent: true })
+    await startWechatPayment({ silent: true })
   }
 }
 
@@ -1374,6 +1394,14 @@ async function simulatePayment() {
   }
 }
 
+async function startWechatPayment(options = {}) {
+  if (isWechatPayEnv.value) {
+    await startJsapiPayment(options)
+    return
+  }
+  await startNativePayment(options)
+}
+
 async function startNativePayment(options = {}) {
   if (!selectedEntry.value || selectedEntry.value.paymentStatus === 'PAID') return
 
@@ -1395,6 +1423,66 @@ async function startNativePayment(options = {}) {
   } finally {
     creatingPayment.value = false
   }
+}
+
+async function startJsapiPayment(options = {}) {
+  if (!selectedEntry.value || selectedEntry.value.paymentStatus === 'PAID') return
+  await loadWechatPayConfig()
+  if (wechatPayConfig.value?.jsapiConfigured === false || !wechatPayAppId.value) {
+    if (!options.silent) {
+      ElMessage.warning('微信支付配置未完成，请改用银行转账或稍后再试')
+    }
+    return
+  }
+  if (!wechatAuthCode.value) {
+    window.location.href = buildWechatOauthUrl(wechatPayAppId.value)
+    return
+  }
+
+  creatingPayment.value = true
+  try {
+    paymentOrder.value = await createPortalEntryWechatJsapiPayment(selectedEntry.value.id, {
+      code: wechatAuthCode.value,
+    })
+    clearWechatAuthCode()
+    if (paymentOrder.value?.mode === 'MOCK') {
+      return
+    }
+    if (!paymentOrder.value?.payParams) {
+      throw new Error('微信支付参数缺失')
+    }
+    await invokeWechatPay(paymentOrder.value.payParams)
+    ElMessage.success('微信支付已提交，请等待结果确认')
+    startPaymentPolling()
+    await checkPaymentStatus()
+  } catch (error) {
+    clearWechatAuthCode()
+    if (!options.silent) {
+      ElMessage.warning(error?.message || '微信支付未完成，请稍后重试')
+    }
+  } finally {
+    creatingPayment.value = false
+  }
+}
+
+async function loadWechatPayConfig() {
+  if (wechatPayConfig.value) return wechatPayConfig.value
+  try {
+    wechatPayConfig.value = await fetchPortalWechatPayClientConfig()
+  } catch {
+    wechatPayConfig.value = {
+      mode: 'WECHAT',
+      appId: WECHAT_PAY_APP_ID,
+      jsapiConfigured: Boolean(WECHAT_PAY_APP_ID),
+    }
+  }
+  return wechatPayConfig.value
+}
+
+function clearWechatAuthCode() {
+  if (!wechatAuthCode.value) return
+  wechatAuthCode.value = ''
+  window.history.replaceState(null, '', currentUrlWithoutWechatCode())
 }
 
 async function checkPaymentStatus() {
@@ -1444,7 +1532,7 @@ async function switchPayMode(mode) {
     return
   }
   if (showPaymentCard.value && !showBankPending.value) {
-    await startNativePayment({ silent: true })
+    await startWechatPayment({ silent: true })
   }
 }
 

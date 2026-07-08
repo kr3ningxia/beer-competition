@@ -28,9 +28,12 @@ import com.beercompetition.pojo.po.EntryRefund;
 import com.beercompetition.pojo.po.PortalAccount;
 import com.beercompetition.pojo.po.WechatPayNotify;
 import com.beercompetition.pojo.vo.EntryPaymentStatusVO;
+import com.beercompetition.pojo.vo.WechatJsapiPayVO;
 import com.beercompetition.pojo.vo.WechatNativePayVO;
+import com.beercompetition.pojo.vo.WechatPayClientConfigVO;
 import com.beercompetition.service.WechatPaymentService;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -38,6 +41,12 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Set;
@@ -61,6 +70,8 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
     private static final String BUSINESS_PAYMENT = "PAYMENT";
     private static final String BUSINESS_REFUND = "REFUND";
     private static final int NATIVE_PAY_EXPIRE_MINUTES = 30;
+    private static final int JSAPI_PAY_EXPIRE_MINUTES = 30;
+    private static final String WECHAT_OAUTH_TOKEN_URL = "https://api.weixin.qq.com/sns/oauth2/access_token";
 
     private final WechatPayClient wechatPayClient;
     private final WechatPayProperties wechatPayProperties;
@@ -74,6 +85,7 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
     private final AdminOperationLogMapper adminOperationLogMapper;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
+    private final HttpClient httpClient = HttpClient.newHttpClient();
 
     @Override
     public WechatNativePayVO createNativePayment(Long entryId) {
@@ -123,6 +135,66 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
         payment.setWechatTradeStateDesc("待支付");
         entryPaymentMapper.updateById(payment);
         return toNativePayVO(payment);
+    }
+
+    @Override
+    public WechatJsapiPayVO createJsapiPayment(Long entryId, String code) {
+        // 1) 校验厂牌作品、支付资格与微信授权码
+        if (!StringUtils.hasText(code)) {
+            throw new BaseException("请先完成微信授权");
+        }
+        PortalAccount account = requirePortalAccount();
+        BeerEntry entry = requireOwnedEntry(entryId, account.getBreweryId());
+        EntryPayment payment = ensurePayment(entry);
+        if (EntryPaymentStatus.PAID.name().equals(payment.getStatus())) {
+            return toJsapiPayVO(payment, null);
+        }
+        if (EntryPaymentStatus.PENDING_CONFIRM.name().equals(payment.getStatus())) {
+            throw new BaseException("银行转账信息已提交，请等待组委会核对到账");
+        }
+        if (!EntryStatus.PENDING_PAYMENT.name().equals(entry.getStatus())) {
+            throw new BaseException("当前酒款不能支付报名费");
+        }
+        if (hasActiveRefund(entry.getId())) {
+            throw new BaseException("退款处理中，不能重新支付");
+        }
+
+        // 2) 获取 openid 并清理旧的未支付微信订单
+        String openid = fetchOpenidByCode(code);
+        closeUnpaidWechatOrder(payment, entry);
+        payment = entryPaymentMapper.selectById(payment.getId());
+        if (EntryPaymentStatus.PAID.name().equals(payment.getStatus())) {
+            return toJsapiPayVO(payment, null);
+        }
+
+        // 3) 调用微信 JSAPI 下单并保存订单
+        String outTradeNo = generateOutTradeNo();
+        LocalDateTime expireTime = LocalDateTime.now().plusMinutes(JSAPI_PAY_EXPIRE_MINUTES);
+        WechatPayClient.JsapiPayResult result = wechatPayClient.createJsapiPayment(
+                new WechatPayClient.JsapiPayRequest(outTradeNo, buildPaymentDescription(entry),
+                        payment.getAmount(), expireTime, openid));
+
+        payment.setPayMethod(EntryPayMethod.WECHAT.name());
+        payment.setStatus(EntryPaymentStatus.UNPAID.name());
+        payment.setOutTradeNo(outTradeNo);
+        payment.setCodeUrl(null);
+        payment.setExpireTime(expireTime);
+        payment.setWechatTradeState("NOTPAY");
+        payment.setWechatTradeStateDesc("待支付");
+        entryPaymentMapper.updateById(payment);
+        return toJsapiPayVO(payment, result);
+    }
+
+    @Override
+    public WechatPayClientConfigVO getClientConfig() {
+        String appId = trimToNull(wechatPayProperties.getAppId());
+        boolean jsapiConfigured = !wechatPayProperties.isWechatMode()
+                || (appId != null && StringUtils.hasText(wechatPayProperties.getAppSecret()));
+        return WechatPayClientConfigVO.builder()
+                .mode(wechatPayProperties.normalizedMode())
+                .appId(appId)
+                .jsapiConfigured(jsapiConfigured)
+                .build();
     }
 
     @Override
@@ -256,6 +328,22 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
             EntryPayment refreshed = entryPaymentMapper.selectById(payment.getId());
             if (!EntryPaymentStatus.PAID.name().equals(refreshed.getStatus())) {
                 wechatPayClient.closePayment(payment.getOutTradeNo());
+            }
+        } catch (Exception ex) {
+            throw new BaseException("支付订单状态同步失败，请稍后重试");
+        }
+    }
+
+    private void closeUnpaidWechatOrder(EntryPayment payment, BeerEntry entry) {
+        if (!StringUtils.hasText(payment.getOutTradeNo()) || EntryPaymentStatus.PAID.name().equals(payment.getStatus())) {
+            return;
+        }
+        try {
+            syncPaymentQuery(payment, entry);
+            EntryPayment refreshed = entryPaymentMapper.selectById(payment.getId());
+            if (refreshed != null && !EntryPaymentStatus.PAID.name().equals(refreshed.getStatus())
+                    && StringUtils.hasText(refreshed.getOutTradeNo())) {
+                wechatPayClient.closePayment(refreshed.getOutTradeNo());
             }
         } catch (Exception ex) {
             throw new BaseException("支付订单状态同步失败，请稍后重试");
@@ -489,6 +577,72 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
                 .expireTime(payment.getExpireTime())
                 .paymentStatus(payment.getStatus())
                 .build();
+    }
+
+    private WechatJsapiPayVO toJsapiPayVO(EntryPayment payment, WechatPayClient.JsapiPayResult result) {
+        WechatJsapiPayVO.JsapiPayParams params = result == null ? null : WechatJsapiPayVO.JsapiPayParams.builder()
+                .appId(result.appId())
+                .timeStamp(result.timeStamp())
+                .nonceStr(result.nonceStr())
+                .packageValue(result.packageValue())
+                .signType(result.signType())
+                .paySign(result.paySign())
+                .build();
+        return WechatJsapiPayVO.builder()
+                .mode(wechatPayProperties.normalizedMode())
+                .outTradeNo(payment.getOutTradeNo())
+                .amount(payment.getAmount())
+                .expireTime(payment.getExpireTime())
+                .paymentStatus(payment.getStatus())
+                .payParams(params)
+                .build();
+    }
+
+    private String fetchOpenidByCode(String code) {
+        if (!wechatPayProperties.isWechatMode()) {
+            return "mock-openid";
+        }
+        String appId = requiredWechatConfig(wechatPayProperties.getAppId(), "微信支付 AppID 未配置");
+        String appSecret = requiredWechatConfig(wechatPayProperties.getAppSecret(), "公众号 AppSecret 未配置");
+        String query = "appid=" + encode(appId)
+                + "&secret=" + encode(appSecret)
+                + "&code=" + encode(code.trim())
+                + "&grant_type=authorization_code";
+        HttpRequest request = HttpRequest.newBuilder(URI.create(WECHAT_OAUTH_TOKEN_URL + "?" + query))
+                .GET()
+                .build();
+        try {
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            JsonNode root = objectMapper.readTree(response.body());
+            String openid = root.path("openid").asText(null);
+            if (StringUtils.hasText(openid)) {
+                return openid;
+            }
+            String errMsg = root.path("errmsg").asText("微信授权失败");
+            throw new BaseException("微信授权失败：" + errMsg);
+        } catch (BaseException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new BaseException("微信授权失败，请重新打开页面后再试");
+        }
+    }
+
+    private String requiredWechatConfig(String value, String message) {
+        if (!StringUtils.hasText(value)) {
+            throw new BaseException(message);
+        }
+        return value.trim();
+    }
+
+    private String trimToNull(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    private String encode(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 
     private EntryPayment ensurePayment(BeerEntry entry) {

@@ -6,6 +6,7 @@ import com.wechat.pay.java.core.RSAPublicKeyConfig;
 import com.wechat.pay.java.core.notification.NotificationParser;
 import com.wechat.pay.java.core.notification.RequestParam;
 import com.wechat.pay.java.service.payments.model.Transaction;
+import com.wechat.pay.java.service.payments.jsapi.JsapiServiceExtension;
 import com.wechat.pay.java.service.payments.nativepay.NativePayService;
 import com.wechat.pay.java.service.payments.nativepay.model.CloseOrderRequest;
 import com.wechat.pay.java.service.payments.nativepay.model.PrepayRequest;
@@ -45,6 +46,7 @@ public class WechatSdkPayClient implements WechatPayClient {
     private final ObjectMapper objectMapper;
 
     private volatile NativePayService nativePayService;
+    private volatile JsapiServiceExtension jsapiPayService;
     private volatile RefundService refundService;
     private volatile NotificationParser notificationParser;
 
@@ -66,6 +68,39 @@ public class WechatSdkPayClient implements WechatPayClient {
 
         PrepayResponse response = nativePay().prepay(prepayRequest);
         return new NativePayResult(response.getCodeUrl());
+    }
+
+    @Override
+    public JsapiPayResult createJsapiPayment(JsapiPayRequest request) {
+        com.wechat.pay.java.service.payments.jsapi.model.PrepayRequest prepayRequest =
+                new com.wechat.pay.java.service.payments.jsapi.model.PrepayRequest();
+        prepayRequest.setAppid(required(properties.getAppId(), "微信支付 AppID 未配置"));
+        prepayRequest.setMchid(required(properties.getMchId(), "微信支付商户号未配置"));
+        prepayRequest.setDescription(request.description());
+        prepayRequest.setOutTradeNo(request.outTradeNo());
+        prepayRequest.setTimeExpire(toWechatTime(request.expireTime()));
+        prepayRequest.setNotifyUrl(notifyUrl("/api/pay/wechat/payment-notify"));
+
+        com.wechat.pay.java.service.payments.jsapi.model.Amount amount =
+                new com.wechat.pay.java.service.payments.jsapi.model.Amount();
+        amount.setTotal(Math.toIntExact(yuanToCents(request.amount())));
+        amount.setCurrency(CURRENCY_CNY);
+        prepayRequest.setAmount(amount);
+
+        com.wechat.pay.java.service.payments.jsapi.model.Payer payer =
+                new com.wechat.pay.java.service.payments.jsapi.model.Payer();
+        payer.setOpenid(required(request.openid(), "微信用户标识缺失"));
+        prepayRequest.setPayer(payer);
+
+        var response = jsapiPay().prepayWithRequestPayment(prepayRequest);
+        return new JsapiPayResult(
+                response.getAppId(),
+                response.getTimeStamp(),
+                response.getNonceStr(),
+                response.getPackageVal(),
+                response.getSignType(),
+                response.getPaySign()
+        );
     }
 
     @Override
@@ -184,6 +219,17 @@ public class WechatSdkPayClient implements WechatPayClient {
             }
         }
         return refundService;
+    }
+
+    private JsapiServiceExtension jsapiPay() {
+        if (jsapiPayService == null) {
+            synchronized (this) {
+                if (jsapiPayService == null) {
+                    jsapiPayService = new JsapiServiceExtension.Builder().config(config()).build();
+                }
+            }
+        }
+        return jsapiPayService;
     }
 
     private NotificationParser parser() {

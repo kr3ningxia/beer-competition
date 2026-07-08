@@ -147,15 +147,8 @@
           </div>
         </section>
 
-        <section class="confirm-panel" aria-label="报名确认">
-          <el-form-item prop="confirmed" class="confirm-item">
-            <div class="confirm-row">
-              <el-checkbox v-model="form.confirmed">
-                我确认评审可见内容不含厂牌或联系方式
-              </el-checkbox>
-            </div>
-          </el-form-item>
-          <el-form-item v-if="hasRulesUrl" prop="rulesAccepted" class="confirm-item">
+        <section v-if="hasRulesUrl" class="confirm-panel" aria-label="报名确认">
+          <el-form-item prop="rulesAccepted" class="confirm-item">
             <div class="confirm-row">
               <el-checkbox v-model="form.rulesAccepted">
                 <span class="rules-confirm-copy">
@@ -337,6 +330,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import QRCode from 'qrcode'
 import { formatAbvWithUnit, isValidAbvInput, normalizeAbvInput } from '@/utils/formatters'
+import { isWechatBrowser } from '@/utils/wechatPay'
 import {
   createPortalEntryWechatNativePayment,
   fetchPortalCompetitionDetail,
@@ -375,7 +369,6 @@ const form = reactive({
   style: '',
   abv: '',
   extraFields: {},
-  confirmed: false,
   rulesAccepted: false,
 })
 
@@ -449,18 +442,6 @@ const formRules = computed(() => {
         trigger: ['blur', 'change'],
       },
     ],
-    confirmed: [
-      {
-        validator: (_rule, value, callback) => {
-          if (value) {
-            callback()
-            return
-          }
-          callback(new Error('请确认评审可见内容不包含身份信息'))
-        },
-        trigger: 'change',
-      },
-    ],
   }
   if (hasRulesUrl.value) {
     rules.rulesAccepted = [
@@ -517,7 +498,6 @@ function syncCompetitionDefaults() {
     form.categoryId = null
     form.style = ''
     form.abv = ''
-    form.confirmed = false
     form.rulesAccepted = false
     form.extraFields = {}
     return
@@ -525,7 +505,6 @@ function syncCompetitionDefaults() {
   form.categoryId = null
   form.style = ''
   form.abv = ''
-  form.confirmed = false
   form.rulesAccepted = false
   form.extraFields = Object.fromEntries(configuredFields.value.map((field) => [field.fieldKey, getEmptyFieldValue(field)]))
 }
@@ -555,6 +534,11 @@ async function submitEntry() {
     if (payMode.value === 'BANK_TRANSFER') {
       ElMessage.success('报名已提交，请继续填写转账信息')
       await router.push(`/portal/payment?entryId=${entry.id}&payMode=bank`)
+      return
+    }
+    if (isWechatBrowser()) {
+      ElMessage.success('报名已提交，请继续完成付款')
+      await router.push(`/portal/payment?entryId=${entry.id}`)
       return
     }
     await startSubmittedEntryPayment({ silent: true })

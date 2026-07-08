@@ -55,6 +55,29 @@ class WechatPaymentIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    void mockJsapiPaymentCreatesRequestPaymentParams() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        var entry = createPendingEntry(fixture, "微信JSAPI支付");
+
+        asPortal(fixture.portalA().account().getId());
+        var order = wechatPaymentService.createJsapiPayment(entry.getId(), "mock-code");
+
+        assertThat(order.getMode()).isEqualTo("MOCK");
+        assertThat(order.getOutTradeNo()).startsWith("BC");
+        assertThat(order.getPayParams()).isNotNull();
+        assertThat(order.getPayParams().getPackageValue()).startsWith("prepay_id=mock-");
+        assertPayment(entry.getId(), EntryPaymentStatus.UNPAID, EntryPayMethod.WECHAT);
+    }
+
+    @Test
+    void mockWechatClientConfigAllowsLocalPaymentTesting() {
+        var config = wechatPaymentService.getClientConfig();
+
+        assertThat(config.getMode()).isEqualTo("MOCK");
+        assertThat(config.isJsapiConfigured()).isTrue();
+    }
+
+    @Test
     void wechatPaidEntryRefundsAutomaticallyBeforeRegistrationDeadline() {
         BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
         var entry = createPendingEntry(fixture, "微信自动退款");

@@ -56,6 +56,14 @@ export function createPortalEntryWechatNativePayment(entryId) {
   return request.post(`/api/portal/entries/${entryId}/payment/wechat/native`, {}, { authScope: 'portal' })
 }
 
+export function createPortalEntryWechatJsapiPayment(entryId, data) {
+  return request.post(`/api/portal/entries/${entryId}/payment/wechat/jsapi`, data, { authScope: 'portal' })
+}
+
+export function fetchPortalWechatPayClientConfig() {
+  return request.get('/api/portal/payment/wechat/client-config', { authScope: 'portal' })
+}
+
 export function fetchPortalEntryPaymentStatus(entryId) {
   return request.get(`/api/portal/entries/${entryId}/payment/status`, { authScope: 'portal' })
 }

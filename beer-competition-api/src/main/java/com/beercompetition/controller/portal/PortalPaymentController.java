@@ -2,11 +2,14 @@ package com.beercompetition.controller.portal;
 
 import com.beercompetition.common.result.Result;
 import com.beercompetition.pojo.dto.PortalBankTransferSubmitRequest;
+import com.beercompetition.pojo.dto.WechatJsapiPayRequest;
 import com.beercompetition.pojo.vo.BankTransferAccountVO;
 import com.beercompetition.pojo.vo.BankTransferVO;
 import com.beercompetition.pojo.vo.BankTransferVoucherVO;
 import com.beercompetition.pojo.vo.EntryPaymentStatusVO;
+import com.beercompetition.pojo.vo.WechatJsapiPayVO;
 import com.beercompetition.pojo.vo.WechatNativePayVO;
+import com.beercompetition.pojo.vo.WechatPayClientConfigVO;
 import com.beercompetition.service.BankTransferPaymentService;
 import com.beercompetition.service.WechatPaymentService;
 import jakarta.validation.Valid;
@@ -39,6 +42,20 @@ public class PortalPaymentController {
     @PostMapping("/entries/{id}/payment/wechat/native")
     public Result<WechatNativePayVO> createWechatNativePayment(@PathVariable Long id) {
         return Result.success(wechatPaymentService.createNativePayment(id));
+    }
+
+    /**
+     * 为微信内置浏览器创建微信 JSAPI 支付订单。
+     */
+    @PostMapping("/entries/{id}/payment/wechat/jsapi")
+    public Result<WechatJsapiPayVO> createWechatJsapiPayment(@PathVariable Long id,
+                                                             @RequestBody @Valid WechatJsapiPayRequest request) {
+        return Result.success(wechatPaymentService.createJsapiPayment(id, request.getCode()));
+    }
+
+    @GetMapping("/payment/wechat/client-config")
+    public Result<WechatPayClientConfigVO> wechatPaymentClientConfig() {
+        return Result.success(wechatPaymentService.getClientConfig());
     }
 
     /**

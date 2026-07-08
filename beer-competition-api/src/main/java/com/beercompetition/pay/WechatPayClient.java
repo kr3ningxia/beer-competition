@@ -7,6 +7,8 @@ public interface WechatPayClient {
 
     NativePayResult createNativePayment(NativePayRequest request);
 
+    JsapiPayResult createJsapiPayment(JsapiPayRequest request);
+
     PaymentQueryResult queryPayment(String outTradeNo);
 
     void closePayment(String outTradeNo);
@@ -28,6 +30,25 @@ public interface WechatPayClient {
     }
 
     record NativePayResult(String codeUrl) {
+    }
+
+    record JsapiPayRequest(
+            String outTradeNo,
+            String description,
+            BigDecimal amount,
+            LocalDateTime expireTime,
+            String openid
+    ) {
+    }
+
+    record JsapiPayResult(
+            String appId,
+            String timeStamp,
+            String nonceStr,
+            String packageValue,
+            String signType,
+            String paySign
+    ) {
     }
 
     record PaymentQueryResult(

@@ -13,3 +13,4 @@ function defaultJudgeH5BaseUrl() {
 
 export const BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL)
 export const JUDGE_H5_BASE_URL = import.meta.env.VITE_JUDGE_H5_BASE_URL || defaultJudgeH5BaseUrl()
+export const WECHAT_PAY_APP_ID = import.meta.env.VITE_WECHAT_PAY_APP_ID || ''

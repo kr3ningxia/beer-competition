@@ -23,6 +23,18 @@ public class MockWechatPayClient implements WechatPayClient {
     }
 
     @Override
+    public JsapiPayResult createJsapiPayment(JsapiPayRequest request) {
+        return new JsapiPayResult(
+                "mock-app-id",
+                String.valueOf(System.currentTimeMillis() / 1000),
+                "mock-nonce",
+                "prepay_id=mock-" + request.outTradeNo(),
+                "RSA",
+                "mock-pay-sign"
+        );
+    }
+
+    @Override
     public PaymentQueryResult queryPayment(String outTradeNo) {
         return new PaymentQueryResult(outTradeNo, null, "NOTPAY", "测试订单待支付", null, null);
     }

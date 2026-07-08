@@ -90,3 +90,4 @@ app:
     public-key-id: ${APP_WECHAT_PAY_PUBLIC_KEY_ID:}
     public-key-path: ${APP_WECHAT_PAY_PUBLIC_KEY_PATH:}
     notify-base-url: ${APP_WECHAT_PAY_NOTIFY_BASE_URL:}
+    app-secret: ${APP_WECHAT_MP_APP_SECRET:}
