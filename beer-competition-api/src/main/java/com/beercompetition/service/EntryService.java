@@ -52,6 +52,8 @@ public interface EntryService {
 
     FileDownloadVO downloadPortalEntryLabelPdf(Long entryId);
 
+    FileDownloadVO downloadPortalEntryLabelPng(Long entryId);
+
     PortalProfileVO getPortalProfile();
 
     PortalProfileVO updatePortalProfile(PortalProfileUpdateRequest request);

@@ -560,6 +560,24 @@ public class EntryServiceImpl implements EntryService {
     }
 
     @Override
+    public FileDownloadVO downloadPortalEntryLabelPng(Long entryId) {
+        PortalAccount account = requirePortalAccount();
+        BeerEntry entry = requireOwnedEntry(entryId, account.getBreweryId());
+        assertCanDownloadPortalLabel(entry);
+
+        CompetitionCategory category = competitionCategoryMapper.selectById(entry.getCategoryId());
+        EntryScanLabel label = entryScanLabelService.requireActiveLabel(entry.getId());
+        LabelRenderItem item = toLabelRenderItem(entry, label, category == null ? null : category.getName());
+        byte[] content = entryLabelFileGenerator.buildFourUpPng(List.of(item, item, item, item));
+
+        return FileDownloadVO.builder()
+                .fileName(buildPortalLabelPngFilename(entry, label))
+                .contentType(EntryLabelFileGenerator.CONTENT_TYPE_PNG)
+                .content(content)
+                .build();
+    }
+
+    @Override
     public PortalProfileVO getPortalProfile() {
         // 1) 查询账号与厂牌资料
         PortalAccount account = requirePortalAccount();
@@ -2736,6 +2754,12 @@ public class EntryServiceImpl implements EntryService {
         String entryName = safeDownloadFilename(firstText(entry.getName(), entry.getUuid()));
         String shortCode = safeDownloadFilename(firstText(label.getShortCode(), entry.getUuid()));
         return entryName + "-" + shortCode + "-现场参赛标签.pdf";
+    }
+
+    private String buildPortalLabelPngFilename(BeerEntry entry, EntryScanLabel label) {
+        String entryName = safeDownloadFilename(firstText(entry.getName(), entry.getUuid()));
+        String shortCode = safeDownloadFilename(firstText(label.getShortCode(), entry.getUuid()));
+        return entryName + "-" + shortCode + "-现场参赛标签.png";
     }
 
     private List<String> readOptions(String json) {

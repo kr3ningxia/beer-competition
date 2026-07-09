@@ -308,7 +308,7 @@
             <el-button type="primary" :disabled="!selectedEntry.canDownloadLabel" :loading="labelPdfDownloading" @click="downloadLabelPdf">
               下载 PDF
             </el-button>
-            <el-button :disabled="!selectedEntry.canDownloadLabel" @click="downloadLabelPng">
+            <el-button :disabled="!selectedEntry.canDownloadLabel" :loading="labelPngDownloading" @click="downloadLabelPng">
               下载 PNG
             </el-button>
           </div>
@@ -626,6 +626,7 @@ import {
   createPortalEntryWechatJsapiPayment,
   createPortalEntryWechatNativePayment,
   downloadPortalEntryLabelPdf,
+  downloadPortalEntryLabelPng,
   fetchPortalCompetitionDetail,
   fetchPortalBankTransferAccount,
   fetchPortalBankTransfer,
@@ -653,6 +654,7 @@ const entries = ref([])
 const selectedEntry = ref(null)
 const labelData = ref(null)
 const labelPdfDownloading = ref(false)
+const labelPngDownloading = ref(false)
 const editingDelivery = ref(false)
 const savingDelivery = ref(false)
 const simulatingPayment = ref(false)
@@ -1730,36 +1732,15 @@ function escapeXml(value) {
 async function downloadLabelPng() {
   if (!selectedEntry.value?.canDownloadLabel) return
 
+  labelPngDownloading.value = true
   try {
-    const svgBlob = new Blob([labelSvg.value], { type: 'image/svg+xml;charset=utf-8' })
-    const svgUrl = URL.createObjectURL(svgBlob)
-    const image = new Image()
-
-    await new Promise((resolve, reject) => {
-      image.onload = resolve
-      image.onerror = reject
-      image.src = svgUrl
-    })
-
-    const canvas = document.createElement('canvas')
-    canvas.width = 1040
-    canvas.height = 1440
-    const context = canvas.getContext('2d')
-    context.fillStyle = '#fff8ec'
-    context.fillRect(0, 0, canvas.width, canvas.height)
-    context.drawImage(image, 0, 0, canvas.width, canvas.height)
-
-    const pngBlob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'))
-    URL.revokeObjectURL(svgUrl)
-
-    if (!pngBlob) {
-      throw new Error('现场标签生成失败')
-    }
-
-    triggerDownload(URL.createObjectURL(pngBlob), `${selectedEntry.value.shortCode || 'entry-label'}.png`)
-    ElMessage.success('现场标签已开始下载')
+    const blob = await downloadPortalEntryLabelPng(selectedEntry.value.id)
+    triggerDownload(URL.createObjectURL(blob), buildLabelPngFilename(selectedEntry.value))
+    ElMessage.success('现场参赛标签 PNG 已开始下载')
   } catch {
     ElMessage.error('标签下载失败，请稍后重试')
+  } finally {
+    labelPngDownloading.value = false
   }
 }
 
@@ -1782,6 +1763,12 @@ function buildLabelPdfFilename(entry) {
   const entryName = safeDownloadFilename(entry?.name || entry?.uuid || 'entry-label')
   const shortCode = safeDownloadFilename(entry?.shortCode || entry?.uuid || 'entry-label')
   return `${entryName}-${shortCode}-现场参赛标签.pdf`
+}
+
+function buildLabelPngFilename(entry) {
+  const entryName = safeDownloadFilename(entry?.name || entry?.uuid || 'entry-label')
+  const shortCode = safeDownloadFilename(entry?.shortCode || entry?.uuid || 'entry-label')
+  return `${entryName}-${shortCode}-现场参赛标签.png`
 }
 
 function safeDownloadFilename(value) {

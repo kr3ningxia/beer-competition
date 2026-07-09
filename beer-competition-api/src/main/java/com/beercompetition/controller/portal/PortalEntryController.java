@@ -118,6 +118,11 @@ public class PortalEntryController {
         return FileResponseHelper.attachment(entryService.downloadPortalEntryLabelPdf(id));
     }
 
+    @GetMapping("/entries/{id}/label/png")
+    public ResponseEntity<byte[]> entryLabelPng(@PathVariable Long id) {
+        return FileResponseHelper.attachment(entryService.downloadPortalEntryLabelPng(id));
+    }
+
     /**
      * 查询当前厂商参赛首页聚合信息。
      */
