@@ -38,7 +38,6 @@ import org.springframework.util.StringUtils;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -199,8 +198,9 @@ public class AdminExportServiceImpl implements AdminExportService {
         }
 
         // 3) 按格式生成 PDF 或兼容的图片文件包
+        List<LabelRenderItem> expandedItems = expandLabelRenderItems(labelItems);
         if (LABEL_EXPORT_FORMAT_PDF.equalsIgnoreCase(value(format))) {
-            byte[] content = entryLabelFileGenerator.buildFourUpPdf(expandLabelRenderItems(labelItems));
+            byte[] content = entryLabelFileGenerator.buildFourUpPdf(expandedItems);
             logExport("EXPORT_LABELS", context.competition(), context.filters() + ", copies=" + normalizedCopies + ", format=pdf", labelEntries.size());
             return FileDownloadVO.builder()
                     .fileName(safeFilename(context.competition().getName()) + "-批量参赛标签.pdf")
@@ -212,13 +212,14 @@ public class AdminExportServiceImpl implements AdminExportService {
         try {
             ByteArrayOutputStream output = new ByteArrayOutputStream();
             try (ZipOutputStream zip = new ZipOutputStream(output, StandardCharsets.UTF_8)) {
-                for (LabelItem item : labelItems) {
-                    for (int index = 1; index <= normalizedCopies; index++) {
-                        String name = "labels/" + safeFilename(item.label().getShortCode()) + "-" + index + ".png";
-                        SimpleXlsxBuilder.writeZipEntry(zip, name, entryLabelFileGenerator.buildLabelPng(toLabelRenderItem(item)));
-                    }
+                int pageNo = 1;
+                for (int index = 0; index < expandedItems.size(); index += 4) {
+                    List<LabelRenderItem> pageItems = expandedItems.subList(index, Math.min(index + 4, expandedItems.size()));
+                    String name = "label-sheets/page-" + String.format("%03d", pageNo) + ".png";
+                    SimpleXlsxBuilder.writeZipEntry(zip, name, entryLabelFileGenerator.buildFourUpPng(pageItems));
+                    pageNo++;
                 }
-                SimpleXlsxBuilder.writeZipEntry(zip, "labels.html", buildLabelsHtml(labelItems));
+                SimpleXlsxBuilder.writeZipEntry(zip, "labels.html", buildLabelsHtml(pageNo - 1));
                 SimpleXlsxBuilder.writeZipEntry(zip, "标签清单.xlsx", buildLabelLedger(context, labelItems));
             }
             logExport("EXPORT_LABELS", context.competition(), context.filters() + ", copies=" + normalizedCopies + ", format=zip", labelEntries.size());
@@ -369,7 +370,7 @@ public class AdminExportServiceImpl implements AdminExportService {
         return SimpleXlsxBuilder.build(List.of(new SimpleXlsxBuilder.Sheet(context.competition().getName() + "瓶贴清单", rows)));
     }
 
-    private String buildLabelsHtml(List<LabelItem> labelItems) {
+    private String buildLabelsHtml(int pageCount) {
         StringBuilder html = new StringBuilder();
         html.append("""
                 <!doctype html>
@@ -379,29 +380,24 @@ public class AdminExportServiceImpl implements AdminExportService {
                     <title>批量打印现场评审标签</title>
                     <style>
                       * { box-sizing: border-box; }
-                      body { margin: 0; padding: 10mm; font-family: "Microsoft YaHei", sans-serif; background: #fff; }
-                      .sheet { display: grid; grid-template-columns: repeat(2, 90mm); gap: 10mm; align-items: start; }
-                      .label { page-break-inside: avoid; break-inside: avoid; padding: 0; background: #fffdf9; }
-                      .label img { display: block; width: 90mm; height: auto; }
-                      @page { size: A4; margin: 10mm; }
-                      @media print { body { padding: 0; } }
+                      body { margin: 0; background: #fff; }
+                      .sheet { display: block; width: 210mm; min-height: 297mm; margin: 0 auto; page-break-after: always; break-after: page; }
+                      .sheet:last-child { page-break-after: auto; break-after: auto; }
+                      .sheet img { display: block; width: 210mm; height: 297mm; object-fit: contain; }
+                      @page { size: A4; margin: 0; }
                     </style>
                   </head>
                   <body>
-                    <main class="sheet">
                 """);
-        for (LabelItem item : labelItems) {
-            for (int index = 1; index <= item.copies(); index++) {
-                String src = "labels/" + urlPath(item.label().getShortCode()) + "-" + index + ".png";
-                html.append("<article class=\"label\"><img src=\"")
-                        .append(src)
-                        .append("\" alt=\"")
-                        .append(SimpleXlsxBuilder.escapeXml(item.label().getShortCode()))
-                        .append("\"></article>\n");
-            }
+        for (int pageNo = 1; pageNo <= pageCount; pageNo++) {
+            String src = "label-sheets/page-" + String.format("%03d", pageNo) + ".png";
+            html.append("<main class=\"sheet\"><img src=\"")
+                    .append(src)
+                    .append("\" alt=\"第 ")
+                    .append(pageNo)
+                    .append(" 页标签\"></main>\n");
         }
         html.append("""
-                    </main>
                   </body>
                 </html>
                 """);
@@ -542,10 +538,6 @@ public class AdminExportServiceImpl implements AdminExportService {
     private String safeFilename(String value) {
         String name = StringUtils.hasText(value) ? value.trim() : "导出文件";
         return name.replaceAll("[\\\\/:*?\"<>|]", "_");
-    }
-
-    private String urlPath(String value) {
-        return URLEncoder.encode(safeFilename(value), StandardCharsets.UTF_8).replace("+", "%20");
     }
 
     private record ExportContext(Competition competition,

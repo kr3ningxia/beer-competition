@@ -22,9 +22,11 @@ import java.awt.Color;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
+import java.awt.GraphicsEnvironment;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -40,17 +42,34 @@ public class EntryLabelFileGenerator {
 
     private static final int LABEL_IMAGE_WIDTH = 1040;
     private static final int LABEL_IMAGE_HEIGHT = 1440;
+    private static final int A4_IMAGE_WIDTH = 2480;
+    private static final int A4_IMAGE_HEIGHT = 3508;
     private static final int LABELS_PER_PAGE = 4;
     private static final float PDF_MARGIN_X = 30f;
     private static final float PDF_MARGIN_Y = 36f;
     private static final float PDF_GAP_X = 20f;
     private static final float PDF_GAP_Y = 56f;
+    private static final String FONT_FAMILY = registerLabelFonts();
 
     private final ExportProperties exportProperties;
 
     public byte[] buildLabelPng(LabelRenderItem item) {
         try {
             BufferedImage image = buildLabelImage(item);
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            ImageIO.write(image, "png", output);
+            return output.toByteArray();
+        } catch (Exception ex) {
+            throw new BaseException("标签图片生成失败");
+        }
+    }
+
+    public byte[] buildFourUpPng(List<LabelRenderItem> items) {
+        if (items == null || items.isEmpty()) {
+            throw new BaseException("没有可导出的参赛标签");
+        }
+        try {
+            BufferedImage image = buildFourUpImage(items);
             ByteArrayOutputStream output = new ByteArrayOutputStream();
             ImageIO.write(image, "png", output);
             return output.toByteArray();
@@ -99,7 +118,7 @@ public class EntryLabelFileGenerator {
         g.setStroke(new BasicStroke(4));
         g.drawRoundRect(56, 56, 928, 1328, 72, 72);
 
-        drawCenteredText(g, "现场评审标签", new Font("Microsoft YaHei", Font.BOLD, 48), new Color(0x8c6330), 520, 176);
+        drawCenteredText(g, "现场评审标签", labelFont(Font.BOLD, 48), new Color(0x8c6330), 520, 176);
         g.setColor(new Color(0xf7ecd8));
         g.fillRoundRect(112, 256, 816, 816, 72, 72);
         g.setColor(new Color(0x3a2818));
@@ -108,11 +127,46 @@ public class EntryLabelFileGenerator {
 
         BufferedImage qr = buildQrImage(scanUrl(item), 704);
         g.drawImage(qr, 168, 312, null);
-        drawCenteredText(g, "参赛编号", new Font("Microsoft YaHei", Font.BOLD, 48), new Color(0x8c6330), 520, 1168);
-        drawCenteredText(g, firstText(item.shortCode(), "PENDING"), new Font("Microsoft YaHei", Font.BOLD, 112), new Color(0x24170f), 520, 1272);
-        drawCenteredText(g, "组别：" + firstText(item.categoryName(), "待确认组别"), new Font("Microsoft YaHei", Font.PLAIN, 44), new Color(0x665647), 520, 1360);
+        drawCenteredText(g, "参赛编号", labelFont(Font.BOLD, 48), new Color(0x8c6330), 520, 1168);
+        drawCenteredText(g, firstText(item.shortCode(), "PENDING"), labelFont(Font.BOLD, 112), new Color(0x24170f), 520, 1272);
+        drawCenteredText(g, "组别：" + firstText(item.categoryName(), "待确认组别"), labelFont(Font.PLAIN, 44), new Color(0x665647), 520, 1360);
         g.dispose();
         return image;
+    }
+
+    private BufferedImage buildFourUpImage(List<LabelRenderItem> items) throws Exception {
+        BufferedImage sheet = new BufferedImage(A4_IMAGE_WIDTH, A4_IMAGE_HEIGHT, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = sheet.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+        g.setColor(Color.WHITE);
+        g.fillRect(0, 0, A4_IMAGE_WIDTH, A4_IMAGE_HEIGHT);
+
+        PDRectangle mediaBox = PDRectangle.A4;
+        float labelWidth = (mediaBox.getWidth() - PDF_MARGIN_X * 2 - PDF_GAP_X) / 2;
+        float labelHeight = labelWidth * LABEL_IMAGE_HEIGHT / LABEL_IMAGE_WIDTH;
+        float topY = mediaBox.getHeight() - PDF_MARGIN_Y - labelHeight;
+        float bottomY = topY - PDF_GAP_Y - labelHeight;
+        float rightX = PDF_MARGIN_X + labelWidth + PDF_GAP_X;
+        float scaleX = A4_IMAGE_WIDTH / mediaBox.getWidth();
+        float scaleY = A4_IMAGE_HEIGHT / mediaBox.getHeight();
+
+        float[][] positions = new float[][]{
+                {PDF_MARGIN_X, topY},
+                {rightX, topY},
+                {PDF_MARGIN_X, bottomY},
+                {rightX, bottomY}
+        };
+        for (int i = 0; i < Math.min(items.size(), LABELS_PER_PAGE); i++) {
+            BufferedImage label = buildLabelImage(items.get(i));
+            int x = Math.round(positions[i][0] * scaleX);
+            int y = A4_IMAGE_HEIGHT - Math.round((positions[i][1] + labelHeight) * scaleY);
+            int width = Math.round(labelWidth * scaleX);
+            int height = Math.round(labelHeight * scaleY);
+            g.drawImage(label, x, y, width, height, null);
+        }
+        g.dispose();
+        return sheet;
     }
 
     private void drawLabelPage(PDDocument document, PDPage page, List<LabelRenderItem> items) throws Exception {
@@ -158,6 +212,28 @@ public class EntryLabelFileGenerator {
         FontMetrics metrics = g.getFontMetrics();
         int x = centerX - metrics.stringWidth(text) / 2;
         g.drawString(text, x, baselineY);
+    }
+
+    private Font labelFont(int style, int size) {
+        return new Font(FONT_FAMILY, style, size);
+    }
+
+    private static String registerLabelFonts() {
+        registerFont("/fonts/NotoSansSC-Regular.ttf");
+        registerFont("/fonts/NotoSansSC-Bold.ttf");
+        return "Noto Sans SC";
+    }
+
+    private static void registerFont(String resourcePath) {
+        try (InputStream inputStream = EntryLabelFileGenerator.class.getResourceAsStream(resourcePath)) {
+            if (inputStream == null) {
+                return;
+            }
+            Font font = Font.createFont(Font.TRUETYPE_FONT, inputStream);
+            GraphicsEnvironment.getLocalGraphicsEnvironment().registerFont(font);
+        } catch (Exception ignored) {
+            // Fall back to system font lookup if bundled fonts cannot be loaded.
+        }
     }
 
     private String firstText(String... values) {
