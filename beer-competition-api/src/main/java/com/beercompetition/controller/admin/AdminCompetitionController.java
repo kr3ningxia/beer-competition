@@ -13,6 +13,7 @@ import com.beercompetition.pojo.dto.JudgeTableBatchUpdateRequest;
 import com.beercompetition.pojo.vo.CompetitionAnalyticsVO;
 import com.beercompetition.pojo.vo.CompetitionDetailVO;
 import com.beercompetition.pojo.vo.CompetitionLiveBoardVO;
+import com.beercompetition.pojo.vo.CompetitionQuickSummaryVO;
 import com.beercompetition.pojo.vo.CompetitionSponsorLogoVO;
 import com.beercompetition.pojo.vo.CompetitionSponsorVO;
 import com.beercompetition.pojo.vo.CompetitionVO;
@@ -68,6 +69,14 @@ public class AdminCompetitionController {
     @GetMapping("/{id}")
     public Result<CompetitionDetailVO> getCompetitionDetail(@PathVariable Long id) {
         return Result.success(competitionService.getCompetitionDetail(id));
+    }
+
+    /**
+     * 查询比赛列表快速概览所需的进度和提醒。
+     */
+    @GetMapping("/{id}/quick-summary")
+    public Result<CompetitionQuickSummaryVO> getCompetitionQuickSummary(@PathVariable Long id) {
+        return Result.success(competitionService.getCompetitionQuickSummary(id));
     }
 
     /**

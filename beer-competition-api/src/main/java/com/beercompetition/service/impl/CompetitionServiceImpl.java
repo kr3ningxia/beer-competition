@@ -81,10 +81,12 @@ import com.beercompetition.pojo.vo.CompetitionAnalyticsVO;
 import com.beercompetition.pojo.vo.CompetitionCheckVO;
 import com.beercompetition.pojo.vo.CompetitionConfigNameVO;
 import com.beercompetition.pojo.vo.CompetitionDetailVO;
+import com.beercompetition.pojo.vo.CompetitionEntryStatsVO;
 import com.beercompetition.pojo.vo.CompetitionEntryVO;
 import com.beercompetition.pojo.vo.CompetitionLogisticsVO;
 import com.beercompetition.pojo.vo.CompetitionRoundVO;
 import com.beercompetition.pojo.vo.CompetitionPrimaryActionVO;
+import com.beercompetition.pojo.vo.CompetitionQuickSummaryVO;
 import com.beercompetition.pojo.vo.CompetitionStageCheckVO;
 import com.beercompetition.pojo.vo.CompetitionVO;
 import com.beercompetition.pojo.vo.EntryFieldConfigVO;
@@ -177,6 +179,7 @@ public class CompetitionServiceImpl implements CompetitionService {
     private static final String DEFAULT_DELIVERY_METHOD = "BOTH";
     private static final String DEFAULT_LOGISTICS_VISIBILITY = "PAYMENT_CONFIRMED";
     private static final String LOG_TARGET_COMPETITION = "COMPETITION";
+    private static final String LEGACY_ENTRY_PUBLISHED_STATUS = "PUBLISHED";
     private static final DateTimeFormatter COMPETITION_CODE_DATE_FORMAT = DateTimeFormatter.BASIC_ISO_DATE;
     private static final DateTimeFormatter EXPORT_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final Set<String> ENTRY_FIELD_TYPES = Set.of("text", "textarea", "number", "select", "multi_select");
@@ -225,13 +228,48 @@ public class CompetitionServiceImpl implements CompetitionService {
             wrapper.ne(Competition::getStatus, CompetitionStatus.ARCHIVED.name());
         }
         List<Competition> competitions = competitionMapper.selectList(wrapper);
+        if (competitions.isEmpty()) {
+            return List.of();
+        }
 
-        // 3) 聚合每场比赛的配置检查与统计摘要
+        // 2) 批量查询列表所需统计，避免逐场构建完整比赛详情
+        List<Long> competitionIds = competitions.stream().map(Competition::getId).toList();
+        Map<Long, CompetitionEntryStatsVO> entryStatsByCompetition = beerEntryMapper.selectCompetitionStats(
+                        competitionIds,
+                        EntryStatus.PENDING_PAYMENT.name(),
+                        EntryStatus.CANCELED.name(),
+                        EntryStatus.RESULT_PUBLISHED.name(),
+                        LEGACY_ENTRY_PUBLISHED_STATUS,
+                        FLAG_TRUE)
+                .stream()
+                .collect(Collectors.toMap(CompetitionEntryStatsVO::getCompetitionId, Function.identity()));
+        Map<Long, Long> categoryCountByCompetition = competitionCategoryMapper.selectList(
+                        new LambdaQueryWrapper<CompetitionCategory>().in(CompetitionCategory::getCompetitionId, competitionIds))
+                .stream()
+                .collect(Collectors.groupingBy(CompetitionCategory::getCompetitionId, Collectors.counting()));
+        Map<Long, List<JudgeTable>> judgeTablesByCompetition = judgeTableMapper.selectList(
+                        new LambdaQueryWrapper<JudgeTable>().in(JudgeTable::getCompetitionId, competitionIds))
+                .stream()
+                .collect(Collectors.groupingBy(JudgeTable::getCompetitionId));
+        Map<Long, Long> judgeCountByCompetition = judgeAssignmentMapper.selectList(
+                        new LambdaQueryWrapper<JudgeAssignment>().in(JudgeAssignment::getCompetitionId, competitionIds))
+                .stream()
+                .collect(Collectors.groupingBy(JudgeAssignment::getCompetitionId, Collectors.counting()));
+        Map<Long, List<ScoreConfigVO>> scoreConfigsByCompetition = competitionScoreConfigMapper.selectList(
+                        new LambdaQueryWrapper<CompetitionScoreConfig>().in(CompetitionScoreConfig::getCompetitionId, competitionIds))
+                .stream()
+                .map(this::toScoreConfigVO)
+                .collect(Collectors.groupingBy(ScoreConfigVO::getCompetitionId));
+
+        // 3) 按原有业务口径组装列表摘要，保持前端返回契约不变
         return competitions.stream()
-                .map(competition -> {
-                    CompetitionDetailVO detail = buildDetail(competition);
-                    return toCompetitionVO(competition, detail);
-                })
+                .map(competition -> buildCompetitionListVO(
+                        competition,
+                        entryStatsByCompetition.get(competition.getId()),
+                        categoryCountByCompetition.getOrDefault(competition.getId(), 0L) > 0,
+                        judgeTablesByCompetition.getOrDefault(competition.getId(), List.of()).size(),
+                        Math.toIntExact(judgeCountByCompetition.getOrDefault(competition.getId(), 0L)),
+                        scoreConfigsByCompetition.getOrDefault(competition.getId(), List.of())))
                 .toList();
     }
 
@@ -348,6 +386,19 @@ public class CompetitionServiceImpl implements CompetitionService {
 
         // 3) 查询并聚合关联配置
         return buildDetail(competition);
+    }
+
+    @Override
+    public CompetitionQuickSummaryVO getCompetitionQuickSummary(Long id) {
+        // 1) 复用单场比赛完整业务计算，确保快速概览与详情页口径一致
+        CompetitionDetailVO detail = getCompetitionDetail(id);
+
+        // 2) 仅返回列表抽屉需要的进度和提醒
+        return CompetitionQuickSummaryVO.builder()
+                .progressSummary(detail.getProgressSummary())
+                .alerts(detail.getAlerts())
+                .dataIntegrityIssues(detail.getDataIntegrityIssues())
+                .build();
     }
 
     @Override
@@ -1740,6 +1791,105 @@ public class CompetitionServiceImpl implements CompetitionService {
             }
         }
         throw new BaseException("比赛编号生成失败，请重试");
+    }
+
+    private CompetitionVO buildCompetitionListVO(Competition competition,
+                                                   CompetitionEntryStatsVO entryStats,
+                                                   boolean hasCategories,
+                                                   int judgeTableCount,
+                                                   int judgeCount,
+                                                   List<ScoreConfigVO> scoreConfigs) {
+        EntrySummaryVO entriesSummary = buildListEntriesSummary(entryStats);
+        List<CompetitionCheckVO> checks = buildListChecks(
+                competition, hasCategories, judgeTableCount > 0, scoreConfigs, entriesSummary);
+        List<String> dataIntegrityIssues = buildDataIntegrityIssues(competition, checks);
+        List<CompetitionStageCheckVO> stageChecks = buildStageChecks(competition, checks, dataIntegrityIssues);
+        List<CompetitionAlertVO> alerts = buildAlerts(checks, entriesSummary, dataIntegrityIssues);
+        CompetitionPrimaryActionVO primaryAction = buildPrimaryAction(competition, stageChecks, dataIntegrityIssues);
+
+        return CompetitionVO.builder()
+                .id(competition.getId())
+                .code(competition.getCode())
+                .name(competition.getName())
+                .competitionType(resolveCompetitionType(competition).name())
+                .competitionDate(competition.getCompetitionDate())
+                .registrationStart(competition.getRegistrationStart())
+                .registrationDeadline(competition.getRegistrationDeadline())
+                .status(competition.getStatus())
+                .entryFee(competition.getEntryFee())
+                .earlyBirdFee(competition.getEarlyBirdFee())
+                .earlyBirdDeadline(competition.getEarlyBirdDeadline())
+                .description(competition.getDescription())
+                .rulesUrl(competition.getRulesUrl())
+                .styleLibraryVersion(competition.getStyleLibraryVersion())
+                .logistics(toCompetitionLogisticsVO(competition))
+                .currentStageLabel(resolveStageLabel(parseStatus(competition)))
+                .primaryAction(primaryAction)
+                .readyCount(countDoneChecks(checks))
+                .checkTotal(checks.size())
+                .alertCount(alerts.size())
+                .nextAction(resolveNextAction(parseStatus(competition)))
+                .dataIntegrityIssues(dataIntegrityIssues)
+                .entriesSummary(entriesSummary)
+                .progressSummary(null)
+                .judgeTableCount(judgeTableCount)
+                .judgeCount(judgeCount)
+                .build();
+    }
+
+    private EntrySummaryVO buildListEntriesSummary(CompetitionEntryStatsVO stats) {
+        if (stats == null) {
+            return EntrySummaryVO.builder()
+                    .total(0)
+                    .pendingPayment(0)
+                    .registered(0)
+                    .stored(0)
+                    .canceled(0)
+                    .resultPublished(0)
+                    .build();
+        }
+        return EntrySummaryVO.builder()
+                .total(toInt(stats.getTotalCount()))
+                .pendingPayment(toInt(stats.getPendingPaymentCount()))
+                .registered(toInt(stats.getRegisteredCount()))
+                .stored(toInt(stats.getStoredCount()))
+                .canceled(toInt(stats.getCanceledCount()))
+                .resultPublished(toInt(stats.getResultPublishedCount()))
+                .build();
+    }
+
+    private List<CompetitionCheckVO> buildListChecks(Competition competition,
+                                                      boolean hasCategories,
+                                                      boolean hasJudgeTables,
+                                                      List<ScoreConfigVO> scoreConfigs,
+                                                      EntrySummaryVO entriesSummary) {
+        List<CompetitionCheckVO> checks = new ArrayList<>();
+        checks.add(check("baseInfo", "基础信息", isBaseInfoReady(competition), "名称、日期、简介、报名时间和费用需要完整"));
+        checks.add(check("categories", "投递组别", hasCategories, "至少配置 1 个投递组别"));
+        checks.add(check("styleLibrary", "基础风格库", StringUtils.hasText(competition.getStyleLibraryVersion()), "请选择基础风格库"));
+        checks.add(check("entryFields", "补充字段", true, "未配置补充字段"));
+        checks.add(check("judgeTables", "评审桌", hasJudgeTables, "至少配置 1 张评审桌"));
+        checks.add(check("scoreForms", "评分表", isScoreFormsReady(scoreConfigs), "跨界、专业、桌长三类评分表都必须为 50 分"));
+        checks.add(check("storedEntries", "酒款入库", entriesSummary.getRegistered() > 0
+                && entriesSummary.getStored() >= entriesSummary.getRegistered(), "报名酒款需要完成入库确认"));
+        boolean published = Set.of(CompetitionStatus.PUBLISHED, CompetitionStatus.ARCHIVED).contains(parseStatus(competition));
+        checks.add(check("resultSetup", "结果发布", published,
+                resolveCompetitionType(competition) == CompetitionType.FEEDBACK_ONLY
+                        ? "首轮锁定后可发布诊断结果"
+                        : "奖项确认后才能发布结果"));
+
+        Map<String, Boolean> editableScopes = buildEditableScopes(competition);
+        if (!editableScopes.get("entryStructure")) {
+            markLocked(checks, Set.of("categories", "styleLibrary", "entryFields"), "报名已开放，报名结构已锁定");
+        }
+        if (!editableScopes.get("judgeConfig")) {
+            markLocked(checks, Set.of("judgeTables", "scoreForms"), "评审已开始，评审配置已锁定");
+        }
+        return checks;
+    }
+
+    private int toInt(Long value) {
+        return value == null ? 0 : Math.toIntExact(value);
     }
 
     private CompetitionDetailVO buildDetail(Competition competition) {

@@ -66,6 +66,12 @@ jobs:
           mysql -h 127.0.0.1 -P 3306 -uroot -p"$APP_DB_PASSWORD" \
             --default-character-set=utf8mb4 "$APP_DB_NAME" \
             < beer-competition-api/src/main/resources/db/migrations/beer_competition_full.sql
+          mysql -h 127.0.0.1 -P 3306 -uroot -p"$APP_DB_PASSWORD" \
+            --default-character-set=utf8mb4 "$APP_DB_NAME" \
+            < docs/sql/20260718_multi_entry_registration.sql
+          mysql -h 127.0.0.1 -P 3306 -uroot -p"$APP_DB_PASSWORD" \
+            --default-character-set=utf8mb4 "$APP_DB_NAME" \
+            < docs/sql/20260719_competition_list_indexes.sql
 
       - name: Build backend
         working-directory: beer-competition-api

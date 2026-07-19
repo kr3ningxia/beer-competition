@@ -36,7 +36,7 @@
           :key="option.value"
           :class="{ active: selectedStatus === option.value }"
           type="button"
-          @click="selectedStatus = option.value"
+          @click="selectStatus(option.value)"
         >
           {{ option.label }}
         </button>
@@ -151,7 +151,7 @@
             </div>
             <div>
               <small>已汇总</small>
-              <strong>{{ selectedCompetition.progressSummary.finalized }}</strong>
+              <strong>{{ quickLoading ? '—' : selectedCompetition.progressSummary.finalized }}</strong>
             </div>
           </div>
         </div>
@@ -162,7 +162,11 @@
             <span>{{ selectedCompetition.dataIntegrityIssues.length || selectedCompetition.alerts.length }} 项</span>
           </div>
           <div class="drawer-alerts">
-            <p v-if="selectedCompetition.dataIntegrityIssues.length" class="danger">
+            <p v-if="quickLoading" class="loading-line">
+              <Clock />
+              正在加载赛事进度
+            </p>
+            <p v-else-if="selectedCompetition.dataIntegrityIssues.length" class="danger">
               <Warning />
               数据需修正：比赛已开放报名，但缺少开放报名必需配置
             </p>
@@ -209,7 +213,7 @@ import {
   getDateDistance,
   statusMeta,
 } from './competitionStore'
-import { fetchCompetitions } from '@/api/admin'
+import { fetchCompetitionQuickSummary, fetchCompetitions } from '@/api/admin'
 
 const router = useRouter()
 const competitions = ref([])
@@ -218,7 +222,9 @@ const keyword = ref('')
 const selectedStatus = ref('ALL')
 const selectedYear = ref('ALL')
 const quickVisible = ref(false)
+const quickLoading = ref(false)
 const selectedCompetition = ref(null)
+const archivesLoaded = ref(false)
 
 const statusOptions = [
   { label: '全部', value: 'ALL' },
@@ -257,7 +263,7 @@ onMounted(loadCompetitions)
 async function loadCompetitions() {
   loading.value = true
   try {
-    const data = await fetchCompetitions({ includeArchived: true })
+    const data = await fetchCompetitions({ includeArchived: false })
     competitions.value = data.map(normalizeCompetition)
   } finally {
     loading.value = false
@@ -290,9 +296,40 @@ function normalizeCompetition(item) {
   }
 }
 
-function openQuickView(competition) {
-  selectedCompetition.value = competition
+async function openQuickView(competition) {
+  const competitionId = competition.id
+  selectedCompetition.value = { ...competition }
   quickVisible.value = true
+  quickLoading.value = true
+  try {
+    const summary = await fetchCompetitionQuickSummary(competitionId)
+    if (selectedCompetition.value?.id !== competitionId) return
+    selectedCompetition.value = {
+      ...selectedCompetition.value,
+      progressSummary: summary.progressSummary || selectedCompetition.value.progressSummary,
+      alerts: summary.alerts || [],
+      dataIntegrityIssues: summary.dataIntegrityIssues || [],
+    }
+  } catch {
+    // 保留列表摘要，接口层已经提示加载失败
+  } finally {
+    if (selectedCompetition.value?.id === competitionId) quickLoading.value = false
+  }
+}
+
+async function selectStatus(status) {
+  selectedStatus.value = status
+  if (status !== 'ARCHIVED' || archivesLoaded.value || loading.value) return
+  loading.value = true
+  try {
+    const data = await fetchCompetitions({ includeArchived: true })
+    const merged = new Map(competitions.value.map((item) => [item.id, item]))
+    data.map(normalizeCompetition).forEach((item) => merged.set(item.id, item))
+    competitions.value = [...merged.values()]
+    archivesLoaded.value = true
+  } finally {
+    loading.value = false
+  }
 }
 
 function goDetail(competition) {

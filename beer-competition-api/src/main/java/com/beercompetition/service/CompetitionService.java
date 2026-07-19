@@ -10,6 +10,7 @@ import com.beercompetition.pojo.dto.EntryFieldBatchUpdateRequest;
 import com.beercompetition.pojo.dto.JudgeTableBatchUpdateRequest;
 import com.beercompetition.pojo.dto.ScoreConfigBatchUpdateRequest;
 import com.beercompetition.pojo.vo.CompetitionDetailVO;
+import com.beercompetition.pojo.vo.CompetitionQuickSummaryVO;
 import com.beercompetition.pojo.vo.CompetitionVO;
 import com.beercompetition.pojo.vo.AdminFeedbackReviewEntryVO;
 import com.beercompetition.pojo.vo.CompetitionAnalyticsVO;
@@ -34,6 +35,8 @@ public interface CompetitionService {
     CompetitionVO createCompetition(CompetitionCreateRequest request);
 
     CompetitionDetailVO getCompetitionDetail(Long id);
+
+    CompetitionQuickSummaryVO getCompetitionQuickSummary(Long id);
 
     void deleteCompetition(Long id);
 
