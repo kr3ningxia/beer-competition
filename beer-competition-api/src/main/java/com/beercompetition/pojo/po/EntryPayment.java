@@ -21,6 +21,7 @@ public class EntryPayment {
     @TableId(type = IdType.AUTO)
     private Long id;
     private Long beerEntryId;
+    private Long paymentOrderId;
     private BigDecimal amount;
     private String status;
     private String payMethod;

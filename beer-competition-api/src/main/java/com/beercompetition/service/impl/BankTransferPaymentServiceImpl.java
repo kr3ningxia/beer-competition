@@ -17,8 +17,12 @@ import com.beercompetition.mapper.EntryPaymentMapper;
 import com.beercompetition.mapper.EntryScanLabelMapper;
 import com.beercompetition.mapper.FileAssetMapper;
 import com.beercompetition.mapper.PortalAccountMapper;
+import com.beercompetition.mapper.PaymentOrderItemMapper;
+import com.beercompetition.mapper.PaymentOrderMapper;
+import com.beercompetition.mapper.RegistrationBatchMapper;
 import com.beercompetition.pojo.dto.AdminBankTransferProcessRequest;
 import com.beercompetition.pojo.dto.PortalBankTransferSubmitRequest;
+import com.beercompetition.pojo.dto.PortalPaymentOrderBankTransferRequest;
 import com.beercompetition.pojo.enums.BankTransferPaymentStatus;
 import com.beercompetition.pojo.enums.EntryPayMethod;
 import com.beercompetition.pojo.enums.EntryPaymentStatus;
@@ -34,12 +38,15 @@ import com.beercompetition.pojo.po.EntryPayment;
 import com.beercompetition.pojo.po.EntryScanLabel;
 import com.beercompetition.pojo.po.FileAsset;
 import com.beercompetition.pojo.po.PortalAccount;
+import com.beercompetition.pojo.po.PaymentOrder;
+import com.beercompetition.pojo.po.RegistrationBatch;
 import com.beercompetition.pojo.vo.BankTransferAccountVO;
 import com.beercompetition.pojo.vo.BankTransferVO;
 import com.beercompetition.pojo.vo.BankTransferVoucherVO;
 import com.beercompetition.pojo.vo.FileDownloadVO;
 import com.beercompetition.properties.StorageProperties;
 import com.beercompetition.service.BankTransferPaymentService;
+import com.beercompetition.service.BatchPaymentService;
 import com.beercompetition.storage.FileStorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -82,6 +89,10 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
     private final EntryScanLabelMapper entryScanLabelMapper;
     private final FileAssetMapper fileAssetMapper;
     private final PortalAccountMapper portalAccountMapper;
+    private final PaymentOrderMapper paymentOrderMapper;
+    private final PaymentOrderItemMapper paymentOrderItemMapper;
+    private final RegistrationBatchMapper registrationBatchMapper;
+    private final BatchPaymentService batchPaymentService;
     private final FileStorageService fileStorageService;
     private final StorageProperties storageProperties;
 
@@ -143,6 +154,9 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
         // 2) 读取并校验当前酒款与支付记录
         BeerEntry entry = requireOwnedPayableEntry(entryId, brewery.getId());
         EntryPayment payment = ensurePayment(entry);
+        if (payment.getPaymentOrderId() != null) {
+            throw new BaseException("该酒款已加入统一付款订单，请按整批提交银行转账");
+        }
 
         // 3) 创建转账记录并锁定关联支付
         BankTransferPayment transfer = BankTransferPayment.builder()
@@ -167,6 +181,77 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
         entryPaymentMapper.updateById(payment);
 
         // 4) 返回转账详情
+        return toBankTransferVO(bankTransferPaymentMapper.selectById(transfer.getId()), true);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public BankTransferVO submitPortalOrderTransfer(Long orderId, PortalPaymentOrderBankTransferRequest request) {
+        // 1) 校验当前厂商、付款订单和凭证归属
+        PortalAccount account = requirePortalAccount();
+        Brewery brewery = requireBrewery(account.getBreweryId());
+        PaymentOrder order = paymentOrderMapper.selectById(orderId);
+        if (order == null) {
+            throw new ResourceNotFoundException("支付订单不存在");
+        }
+        RegistrationBatch batch = registrationBatchMapper.selectById(order.getRegistrationBatchId());
+        if (batch == null || !Objects.equals(batch.getBreweryId(), brewery.getId())) {
+            throw new ForbiddenException("无权操作该支付订单");
+        }
+        FileAsset voucher = resolveVoucherAsset(request.getVoucherAssetId(), account.getId());
+
+        // 2) 创建一笔覆盖整个报名批次的转账记录
+        BankTransferPayment transfer = BankTransferPayment.builder()
+                .transferNo(generateTransferNo())
+                .breweryId(brewery.getId())
+                .portalAccountId(account.getId())
+                .competitionId(batch.getCompetitionId())
+                .paymentOrderId(order.getId())
+                .amount(order.getAmount())
+                .payerName(normalizeNullable(request.getPayerName()))
+                .transferTime(request.getTransferTime())
+                .remark(normalizeNullable(request.getRemark()))
+                .voucherAssetId(voucher == null ? null : voucher.getId())
+                .status(BankTransferPaymentStatus.SUBMITTED.name())
+                .submittedTime(LocalDateTime.now())
+                .build();
+        bankTransferPaymentMapper.insert(transfer);
+
+        // 3) 锁定聚合订单和全部酒款付款状态
+        batchPaymentService.markBankTransferPending(order.getId(), transfer.getId());
+
+        // 4) 返回转账详情
+        return toBankTransferVO(bankTransferPaymentMapper.selectById(transfer.getId()), true);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public BankTransferVO updatePortalOrderTransfer(Long orderId, PortalPaymentOrderBankTransferRequest request) {
+        // 1) 校验当前厂商、聚合订单和待确认转账记录
+        PortalAccount account = requirePortalAccount();
+        PaymentOrder order = paymentOrderMapper.selectById(orderId);
+        if (order == null || order.getBankTransferId() == null) {
+            throw new ResourceNotFoundException("待确认的转账信息不存在");
+        }
+        RegistrationBatch batch = registrationBatchMapper.selectById(order.getRegistrationBatchId());
+        if (batch == null || !Objects.equals(batch.getBreweryId(), account.getBreweryId())) {
+            throw new ForbiddenException("无权修改该支付订单");
+        }
+        BankTransferPayment transfer = requireTransfer(order.getBankTransferId());
+        if (!BankTransferPaymentStatus.SUBMITTED.name().equals(transfer.getStatus())
+                || !Objects.equals(transfer.getPaymentOrderId(), orderId)) {
+            throw new BaseException("当前转账信息不能修改");
+        }
+
+        // 2) 校验凭证并更新付款信息
+        FileAsset voucher = resolveVoucherAsset(request.getVoucherAssetId(), account.getId());
+        transfer.setPayerName(normalizeNullable(request.getPayerName()));
+        transfer.setTransferTime(request.getTransferTime());
+        transfer.setRemark(normalizeNullable(request.getRemark()));
+        transfer.setVoucherAssetId(voucher == null ? null : voucher.getId());
+        bankTransferPaymentMapper.updateById(transfer);
+
+        // 3) 返回最新转账详情
         return toBankTransferVO(bankTransferPaymentMapper.selectById(transfer.getId()), true);
     }
 
@@ -281,6 +366,10 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
         transfer.setAdminNote(normalizeNullable(request == null ? null : request.getAdminNote()));
         transfer.setProcessedTime(now);
         bankTransferPaymentMapper.updateById(transfer);
+        if (transfer.getPaymentOrderId() != null && transfer.getEntryPaymentId() == null) {
+            batchPaymentService.confirmBankTransfer(transfer.getPaymentOrderId(), transfer.getId(), BaseContext.getCurrentId());
+            return toBankTransferVO(bankTransferPaymentMapper.selectById(id), true);
+        }
         EntryPayment payment = entryPaymentMapper.selectById(transfer.getEntryPaymentId());
         BeerEntry entry = beerEntryMapper.selectById(transfer.getBeerEntryId());
         if (payment == null || entry == null) {
@@ -346,6 +435,10 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
     }
 
     private void resetRelatedPayment(BankTransferPayment transfer, String actionStatus, String note) {
+        if (transfer.getPaymentOrderId() != null && transfer.getEntryPaymentId() == null) {
+            batchPaymentService.resetBankTransfer(transfer.getPaymentOrderId(), transfer.getId());
+            return;
+        }
         EntryPayment payment = entryPaymentMapper.selectById(transfer.getEntryPaymentId());
         BeerEntry entry = beerEntryMapper.selectById(transfer.getBeerEntryId());
         if (payment != null && EntryPaymentStatus.PENDING_CONFIRM.name().equals(payment.getStatus())
@@ -397,7 +490,12 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
         Competition competition = competitionMapper.selectById(transfer.getCompetitionId());
         Brewery brewery = breweryMapper.selectById(transfer.getBreweryId());
         FileAsset voucher = transfer.getVoucherAssetId() == null ? null : fileAssetMapper.selectById(transfer.getVoucherAssetId());
-        BeerEntry entry = beerEntryMapper.selectById(transfer.getBeerEntryId());
+        BeerEntry entry = transfer.getBeerEntryId() == null ? null : beerEntryMapper.selectById(transfer.getBeerEntryId());
+        PaymentOrder order = transfer.getPaymentOrderId() == null ? null : paymentOrderMapper.selectById(transfer.getPaymentOrderId());
+        RegistrationBatch batch = order == null ? null : registrationBatchMapper.selectById(order.getRegistrationBatchId());
+        int entryCount = order == null ? 1 : Math.toIntExact(paymentOrderItemMapper.selectCount(
+                new LambdaQueryWrapper<com.beercompetition.pojo.po.PaymentOrderItem>()
+                        .eq(com.beercompetition.pojo.po.PaymentOrderItem::getPaymentOrderId, order.getId())));
         CompetitionCategory category = !includeDetails || entry == null ? null : competitionCategoryMapper.selectById(entry.getCategoryId());
         EntryScanLabel label = !includeDetails || entry == null ? null : entryScanLabelMapper.selectOne(new LambdaQueryWrapper<EntryScanLabel>()
                 .eq(EntryScanLabel::getBeerEntryId, entry.getId())
@@ -407,6 +505,8 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
                 .id(transfer.getId())
                 .transferNo(transfer.getTransferNo())
                 .competitionId(transfer.getCompetitionId())
+                .paymentOrderId(transfer.getPaymentOrderId())
+                .batchNo(batch == null ? null : batch.getBatchNo())
                 .competitionName(competition == null ? null : competition.getName())
                 .competitionCode(competition == null ? null : competition.getCode())
                 .breweryId(transfer.getBreweryId())
@@ -419,7 +519,7 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
                 .categoryName(category == null ? null : category.getName())
                 .style(entry == null ? null : entry.getStyle())
                 .amount(transfer.getAmount())
-                .entryCount(1)
+                .entryCount(entryCount)
                 .payerName(transfer.getPayerName())
                 .transferTime(transfer.getTransferTime())
                 .remark(transfer.getRemark())

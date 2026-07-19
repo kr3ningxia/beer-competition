@@ -36,6 +36,42 @@ export function submitPortalEntry(competitionId, data) {
   return request.post(`/api/portal/competitions/${competitionId}/entries`, data, { authScope: 'portal' })
 }
 
+export function quotePortalEntryBatch(competitionId, entryCount) {
+  return request.post(`/api/portal/competitions/${competitionId}/entry-batches/quote`, { entryCount }, { authScope: 'portal' })
+}
+
+export function submitPortalEntryBatch(competitionId, data) {
+  return request.post(`/api/portal/competitions/${competitionId}/entry-batches`, data, { authScope: 'portal' })
+}
+
+export function fetchPortalEntryBatch(batchId) {
+  return request.get(`/api/portal/entry-batches/${batchId}`, { authScope: 'portal' })
+}
+
+export function createPortalBatchWechatNativePayment(orderId) {
+  return request.post(`/api/portal/payment-orders/${orderId}/wechat/native`, {}, { authScope: 'portal' })
+}
+
+export function createPortalBatchWechatJsapiPayment(orderId, data) {
+  return request.post(`/api/portal/payment-orders/${orderId}/wechat/jsapi`, data, { authScope: 'portal' })
+}
+
+export function fetchPortalBatchPaymentStatus(orderId) {
+  return request.get(`/api/portal/payment-orders/${orderId}/status`, { authScope: 'portal' })
+}
+
+export function simulatePortalBatchPayment(orderId) {
+  return request.post(`/api/portal/payment-orders/${orderId}/simulate`, {}, { authScope: 'portal' })
+}
+
+export function submitPortalBatchBankTransfer(orderId, data) {
+  return request.post(`/api/portal/payment-orders/${orderId}/bank-transfer`, data, { authScope: 'portal' })
+}
+
+export function updatePortalBatchBankTransfer(orderId, data) {
+  return request.put(`/api/portal/payment-orders/${orderId}/bank-transfer`, data, { authScope: 'portal' })
+}
+
 export function updatePortalEntry(entryId, data) {
   return request.put(`/api/portal/entries/${entryId}`, data, { authScope: 'portal' })
 }

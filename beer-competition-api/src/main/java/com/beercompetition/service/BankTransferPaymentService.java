@@ -3,6 +3,7 @@ package com.beercompetition.service;
 import com.beercompetition.common.result.PageResult;
 import com.beercompetition.pojo.dto.AdminBankTransferProcessRequest;
 import com.beercompetition.pojo.dto.PortalBankTransferSubmitRequest;
+import com.beercompetition.pojo.dto.PortalPaymentOrderBankTransferRequest;
 import com.beercompetition.pojo.vo.BankTransferAccountVO;
 import com.beercompetition.pojo.vo.BankTransferVO;
 import com.beercompetition.pojo.vo.BankTransferVoucherVO;
@@ -16,6 +17,10 @@ public interface BankTransferPaymentService {
     BankTransferVoucherVO uploadVoucher(MultipartFile file);
 
     BankTransferVO submitPortalTransfer(PortalBankTransferSubmitRequest request);
+
+    BankTransferVO submitPortalOrderTransfer(Long orderId, PortalPaymentOrderBankTransferRequest request);
+
+    BankTransferVO updatePortalOrderTransfer(Long orderId, PortalPaymentOrderBankTransferRequest request);
 
     BankTransferVO getPortalTransfer(Long id);
 

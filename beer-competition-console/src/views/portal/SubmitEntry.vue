@@ -1,361 +1,304 @@
 <template>
-  <div class="submit-page">
-    <section class="form-card brewer-card">
-      <div class="form-header">
-        <h2 class="portal-section-title">提交参赛酒款</h2>
-      </div>
-
-      <section v-if="selectedCompetition" class="competition-banner">
+  <div class="batch-submit-page">
+    <main class="batch-workbench brewer-card">
+      <header class="page-heading">
         <div>
-          <span>正在报名：</span>
-          <strong>{{ selectedCompetition.name }}</strong>
+          <span class="section-kicker">赛事报名</span>
+          <h1>提交参赛酒款</h1>
         </div>
-        <RouterLink :to="`/portal/events/${selectedCompetition.id}`">赛事详情</RouterLink>
+        <RouterLink v-if="competition" :to="`/portal/events/${competition.id}`">赛事详情</RouterLink>
+      </header>
+
+      <section v-if="competition" class="competition-strip">
+        <span>正在报名</span>
+        <strong>{{ competition.name }}</strong>
+        <b>{{ feeText }}</b>
       </section>
 
-      <section v-else class="competition-empty">
-        <strong>未找到赛事</strong>
-        <p>请从赛事详情页进入报名，或先返回赛事列表重新选择</p>
-        <RouterLink class="secondary-link" to="/portal/events">返回赛事列表</RouterLink>
+      <section v-else-if="loading" class="page-state">正在读取赛事信息…</section>
+      <section v-else class="page-state">
+        <strong>未找到可报名赛事</strong>
+        <RouterLink to="/portal/events">返回赛事列表</RouterLink>
       </section>
 
-      <el-form
-        v-if="selectedCompetition"
-        ref="entryFormRef"
-        :model="form"
-        :rules="formRules"
-        :disabled="Boolean(submittedEntry)"
-        :validate-on-rule-change="false"
-        label-position="top"
-        class="entry-form"
-      >
-        <section class="form-section">
-          <div class="section-title-row">
-            <h3>酒款信息</h3>
-            <span v-if="selectedCompetition">{{ currentFeeText }}</span>
-          </div>
-          <el-form-item label="酒款名称" prop="name" class="full-field">
-            <el-input v-model.trim="form.name" placeholder="请填写酒款名称" />
-          </el-form-item>
-        </section>
-
-        <section class="form-section">
-          <div class="section-title-row">
-            <h3>分类与风格</h3>
-          </div>
-          <div class="form-grid">
-            <el-form-item label="投递组别" prop="categoryId">
-              <el-select v-model="form.categoryId" placeholder="请选择投递组别">
-                <el-option
-                  v-for="item in selectedCompetition?.categories || []"
-                  :key="item.id"
-                  :label="item.name"
-                  :value="item.id"
-                />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="基础风格" prop="style">
-              <el-select v-model="form.style" filterable placeholder="请选择或搜索基础风格">
-                <el-option
-                  v-for="item in selectedCompetition?.styles || []"
-                  :key="item.id || item.name"
-                  :label="styleLabel(item)"
-                  :value="item.name"
-                />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="ABV" prop="abv" class="abv-field">
-              <div class="abv-input-row">
-                <el-input
-                  v-model.trim="form.abv"
-                  inputmode="decimal"
-                  placeholder="请填写酒精度"
-                  @blur="form.abv = normalizeAbvInput(form.abv)"
-                >
-                  <template #suffix>
-                    <span class="abv-input-suffix">%</span>
-                  </template>
-                </el-input>
-              </div>
-            </el-form-item>
-          </div>
-
-        </section>
-
-        <section v-if="configuredFields.length" class="form-section">
-          <div class="section-title-row">
-            <h3>补充信息</h3>
-          </div>
-
-          <div class="dynamic-field-list">
-            <el-form-item
-              v-for="field in configuredFields"
-              :key="field.fieldKey"
-              :label="field.fieldLabel"
-              :prop="`extraFields.${field.fieldKey}`"
-              class="dynamic-field"
-            >
-              <template #label>
-                <span class="field-label">
-                  <span>{{ field.fieldLabel }}</span>
-                  <em v-if="field.required">必填</em>
-                </span>
-              </template>
-
-              <el-input
-                v-if="field.fieldType === 'textarea'"
-                v-model.trim="form.extraFields[field.fieldKey]"
-                type="textarea"
-                :rows="4"
-                maxlength="255"
-                show-word-limit
-                placeholder="选填"
-              />
-              <el-input-number
-                v-else-if="field.fieldType === 'number'"
-                v-model="form.extraFields[field.fieldKey]"
-                :min="0"
-                controls-position="right"
-                placeholder="请输入数字"
-              />
-              <el-select
-                v-else-if="field.fieldType === 'select'"
-                v-model="form.extraFields[field.fieldKey]"
-                placeholder="请选择"
-              >
-                <el-option v-for="option in field.options" :key="option" :label="option" :value="option" />
-              </el-select>
-              <el-select
-                v-else-if="field.fieldType === 'multi_select'"
-                v-model="form.extraFields[field.fieldKey]"
-                multiple
-                collapse-tags
-                collapse-tags-tooltip
-                placeholder="请选择，可多选"
-              >
-                <el-option v-for="option in field.options" :key="option" :label="option" :value="option" />
-              </el-select>
-              <el-input
-                v-else
-                v-model.trim="form.extraFields[field.fieldKey]"
-                maxlength="255"
-                show-word-limit
-                :placeholder="field.helpText || '请填写'"
-              />
-              <p v-if="field.helpText" class="field-help">{{ field.helpText }}</p>
-            </el-form-item>
-          </div>
-        </section>
-
-        <section v-if="hasRulesUrl" class="confirm-panel" aria-label="报名确认">
-          <el-form-item prop="rulesAccepted" class="confirm-item">
-            <div class="confirm-row">
-              <el-checkbox v-model="form.rulesAccepted">
-                <span class="rules-confirm-copy">
-                  我已阅读并同意本次大赛
-                  <a
-                    :href="selectedCompetition.rulesUrl"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    @click.stop
-                  >
-                    参赛细则
-                  </a>
-                </span>
-              </el-checkbox>
-            </div>
-          </el-form-item>
-        </section>
-
-        <section v-if="!submittedEntry" class="payment-method-panel" aria-labelledby="entry-payment-title">
-          <div class="payment-method-head">
-            <div>
-              <h3 id="entry-payment-title">选择付款方式</h3>
-            </div>
-            <div class="payment-method-amount">
-              <span>{{ earlyBirdActive ? '早鸟价' : '本款应付' }}</span>
-              <strong>{{ entryFeeLabel }}</strong>
-              <del v-if="showEarlyBirdOriginalFee">报名费 {{ standardEntryFeeLabel }}</del>
-            </div>
-          </div>
-          <div class="payment-method-options" role="radiogroup" aria-label="选择付款方式">
+      <template v-if="competition">
+        <section class="entry-switcher" aria-label="报名酒款列表">
+          <div class="entry-tabs">
             <button
-              :class="['payment-method-option', 'recommended', { active: payMode === 'WECHAT' }]"
+              v-for="(entry, index) in entries"
+              :key="entry.clientId"
+              :class="['entry-tab', { active: index === activeIndex }]"
+              type="button"
+              @click="activeIndex = index"
+            >
+              <span>{{ index + 1 }}</span>
+              <span class="entry-tab-copy">
+                <strong>{{ entry.name || `酒款 ${index + 1}` }}</strong>
+                <small :class="{ complete: entryErrorCount(entry) === 0 }">
+                  {{ entryErrorCount(entry) === 0 ? '资料完整' : `缺 ${entryErrorCount(entry)} 项` }}
+                </small>
+              </span>
+            </button>
+          </div>
+          <el-button
+            class="add-entry-button"
+            :icon="Plus"
+            :disabled="entries.length >= MAX_BATCH_ENTRIES"
+            @click="addEntry"
+          >
+            添加酒款
+          </el-button>
+        </section>
+
+        <div class="entry-editor-head">
+          <div>
+            <span>第 {{ activeIndex + 1 }} 款，共 {{ entries.length }} 款</span>
+            <h2>{{ activeEntry.name || '填写酒款资料' }}</h2>
+          </div>
+          <div class="entry-tools">
+            <el-button
+              class="delete-entry-button"
+              :icon="Delete"
+              :disabled="entries.length === 1"
+              @click="removeEntry"
+            >
+              删除本款
+            </el-button>
+          </div>
+        </div>
+
+        <el-form
+          ref="activeFormRef"
+          :key="activeEntry.clientId"
+          :model="activeEntry"
+          :rules="formRules"
+          label-position="top"
+          class="entry-form"
+        >
+          <section class="form-section">
+            <div class="section-title-row">
+              <h3>酒款信息</h3>
+            </div>
+            <el-form-item label="酒款名称" prop="name">
+              <el-input v-model.trim="activeEntry.name" maxlength="128" placeholder="请输入酒款名称..." />
+            </el-form-item>
+          </section>
+
+          <section class="form-section">
+            <div class="section-title-row">
+              <h3>分类与风格</h3>
+            </div>
+            <div class="form-grid">
+              <el-form-item label="投递组别" prop="categoryId">
+                <el-select v-model="activeEntry.categoryId" placeholder="请选择投递组别…">
+                  <el-option
+                    v-for="item in competition.categories || []"
+                    :key="item.id"
+                    :label="item.name"
+                    :value="item.id"
+                  />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="基础风格" prop="style">
+                <el-select v-model="activeEntry.style" filterable placeholder="请选择或搜索基础风格…">
+                  <el-option
+                    v-for="item in competition.styles || []"
+                    :key="item.id || item.name"
+                    :label="styleLabel(item)"
+                    :value="item.name"
+                  />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="ABV" prop="abv">
+                <el-input
+                  v-model.trim="activeEntry.abv"
+                  inputmode="decimal"
+                  placeholder="请输入酒精度"
+                  @blur="activeEntry.abv = normalizeAbvInput(activeEntry.abv)"
+                >
+                  <template #suffix><b class="input-suffix">%</b></template>
+                </el-input>
+              </el-form-item>
+            </div>
+          </section>
+
+          <section v-if="configuredFields.length" class="form-section">
+            <div class="section-title-row">
+              <h3>补充信息</h3>
+            </div>
+            <div class="dynamic-field-list">
+              <el-form-item
+                v-for="field in configuredFields"
+                :key="field.fieldKey"
+                :label="field.fieldLabel"
+                :prop="`extraFields.${field.fieldKey}`"
+                :class="['dynamic-field', { wide: field.fieldType === 'textarea' }]"
+              >
+                <template #label>
+                  <span class="field-label">
+                    {{ field.fieldLabel }}
+                    <em v-if="field.required">必填</em>
+                  </span>
+                </template>
+                <el-input
+                  v-if="field.fieldType === 'textarea'"
+                  v-model.trim="activeEntry.extraFields[field.fieldKey]"
+                  type="textarea"
+                  :rows="4"
+                  maxlength="255"
+                  show-word-limit
+                  placeholder="选填…"
+                />
+                <el-input-number
+                  v-else-if="field.fieldType === 'number'"
+                  v-model="activeEntry.extraFields[field.fieldKey]"
+                  :min="0"
+                  controls-position="right"
+                />
+                <el-select
+                  v-else-if="field.fieldType === 'select'"
+                  v-model="activeEntry.extraFields[field.fieldKey]"
+                  placeholder="请选择…"
+                >
+                  <el-option v-for="option in field.options" :key="option" :label="option" :value="option" />
+                </el-select>
+                <el-select
+                  v-else-if="field.fieldType === 'multi_select'"
+                  v-model="activeEntry.extraFields[field.fieldKey]"
+                  multiple
+                  collapse-tags
+                  collapse-tags-tooltip
+                  placeholder="请选择，可多选…"
+                >
+                  <el-option v-for="option in field.options" :key="option" :label="option" :value="option" />
+                </el-select>
+                <el-input
+                  v-else
+                  v-model.trim="activeEntry.extraFields[field.fieldKey]"
+                  maxlength="255"
+                  :placeholder="field.helpText || '请填写…'"
+                />
+                <p v-if="field.helpText" class="field-help">{{ field.helpText }}</p>
+              </el-form-item>
+            </div>
+          </section>
+        </el-form>
+
+        <section v-if="hasRulesUrl" class="rules-panel">
+          <el-checkbox v-model="rulesAccepted">
+            我已阅读并同意本次大赛
+            <a :href="competition.rulesUrl" target="_blank" rel="noopener noreferrer" @click.stop>参赛细则</a>
+          </el-checkbox>
+          <p v-if="showRulesError">请先阅读并同意本次大赛参赛细则</p>
+        </section>
+
+        <section class="payment-panel">
+          <div>
+            <h3>选择付款方式</h3>
+          </div>
+          <div class="payment-options" role="radiogroup" aria-label="选择付款方式">
+            <button
+              :class="['payment-option', { active: payMode === 'WECHAT' }]"
               type="button"
               role="radio"
               :aria-checked="payMode === 'WECHAT'"
               @click="payMode = 'WECHAT'"
             >
-              <div class="payment-method-option-title">
-                <span>微信扫码支付</span>
-              </div>
+              <span>微信支付</span>
+              <small>支付成功后完成报名</small>
             </button>
             <button
-              :class="['payment-method-option', { active: payMode === 'BANK_TRANSFER' }]"
+              :class="['payment-option', { active: payMode === 'BANK_TRANSFER' }]"
               type="button"
               role="radio"
               :aria-checked="payMode === 'BANK_TRANSFER'"
               @click="payMode = 'BANK_TRANSFER'"
             >
-              <div class="payment-method-option-title">
-                <span>银行转账</span>
-              </div>
+              <span>银行转账</span>
+              <small>转账后等待到账确认</small>
             </button>
           </div>
-          <p class="payment-method-note">{{ selectedPaymentModeNote }}</p>
         </section>
+      </template>
+    </main>
 
-        <div v-if="!submittedEntry" class="form-actions">
-          <p v-if="submitHint">{{ submitHint }}</p>
-          <el-button class="submit-cta" type="primary" :loading="submittingEntry" @click="submitEntry">
-            {{ submitButtonLabel }}
-          </el-button>
-        </div>
-      </el-form>
-
-      <section v-if="submittedEntry" class="inline-payment">
-        <div class="payment-head">
-          <div>
-            <span>报名支付</span>
-            <h3>{{ paymentPaid ? '报名已完成' : '完成报名付款' }}</h3>
-            <p>{{ paymentPaid ? '请下载标签，并填写这款酒的送样信息' : '请使用微信扫码支付本款报名费，付款成功后可继续下载标签和填写送样信息' }}</p>
-          </div>
-          <strong>{{ formatCurrency(paymentAmount) }}</strong>
-        </div>
-
-        <dl class="payment-facts">
-          <div>
-            <dt>酒款</dt>
-            <dd>{{ submittedEntry.name }}</dd>
-          </div>
-          <div>
-            <dt>状态</dt>
-            <dd>{{ paymentPaid ? '报名已完成' : '付款后办理送样' }}</dd>
-          </div>
+    <aside v-if="competition" class="receipt-column">
+      <section class="receipt-card">
+        <header>
+          <span>报名确认</span>
+          <b>{{ entries.length }} 款</b>
+        </header>
+        <div class="receipt-rule" />
+        <dl class="event-fact">
+          <dt>赛事</dt>
+          <dd>{{ competition.name }}</dd>
         </dl>
 
-        <div class="payment-actions">
-          <div v-if="paymentOrder?.mode === 'WECHAT' && !paymentPaid" class="wechat-pay-box">
-            <img v-if="paymentQrDataUrl" :src="paymentQrDataUrl" alt="微信支付二维码" />
-            <div>
-              <strong>微信扫码支付</strong>
-              <span>{{ paymentExpireText }}</span>
-            </div>
-          </div>
-          <el-button
-            v-if="!paymentPaid && paymentOrder?.mode === 'MOCK'"
-            type="primary"
-            size="large"
-            :loading="simulatingPayment"
-            @click="paySubmittedEntry"
+        <div class="receipt-items">
+          <button
+            v-for="(entry, index) in entries"
+            :key="entry.clientId"
+            type="button"
+            @click="activeIndex = index"
           >
-            模拟微信到账
-          </el-button>
-          <el-button
-            v-else-if="!paymentPaid"
-            type="primary"
-            size="large"
-            :loading="creatingPayment"
-            @click="startSubmittedEntryPayment"
-          >
-            {{ paymentOrder?.mode === 'WECHAT' ? '重新生成支付码' : '生成微信支付码' }}
-          </el-button>
-          <el-button v-if="!paymentPaid" :loading="checkingPayment" @click="checkSubmittedEntryPayment">
-            查看支付结果
-          </el-button>
-          <RouterLink
-            v-if="!paymentPaid"
-            class="secondary-link"
-            :to="`/portal/payment?entryId=${submittedEntry.id}&payMode=bank`"
-          >
-            改用银行转账
-          </RouterLink>
-          <RouterLink
-            v-else
-            class="primary-link"
-            :to="`/portal/payment?entryId=${submittedEntry.id}`"
-          >
-            下载标签并填写送样信息
-          </RouterLink>
-          <el-button v-if="paymentPaid" :disabled="simulatingPayment" @click="resetForNextEntry">继续提交另一款</el-button>
+            <span>{{ String(index + 1).padStart(2, '0') }}</span>
+            <span class="receipt-entry-copy">
+              <strong>{{ entry.name || `酒款 ${index + 1}` }}</strong>
+              <small>{{ entryMeta(entry) }}</small>
+            </span>
+            <span :class="['entry-check', { complete: entryErrorCount(entry) === 0 }]">
+              <CircleCheck v-if="entryErrorCount(entry) === 0" />
+              <WarningFilled v-else />
+            </span>
+            <b>{{ formatCurrency(unitAmount) }}</b>
+          </button>
         </div>
+
+        <div class="receipt-totals">
+          <div><span>报名费</span><b>{{ formatCurrency(unitAmount) }} × {{ entries.length }}</b></div>
+          <div v-if="discountAmount > 0"><span>早鸟优惠</span><b>-{{ formatCurrency(discountAmount) }}</b></div>
+          <div class="receipt-total"><span>应付总额</span><strong>{{ formatCurrency(totalAmount) }}</strong></div>
+          <div><span>付款方式</span><b>{{ payMode === 'WECHAT' ? '微信支付' : '银行转账' }}</b></div>
+        </div>
+
+        <el-button class="submit-batch-button" type="primary" :loading="submitting" @click="submitBatch">
+          {{ submitButtonLabel }}
+          <el-icon><ArrowRight /></el-icon>
+        </el-button>
+        <p v-if="quote?.earlyBirdActive" class="price-note">
+          当前按早鸟价结算，订单提交时锁定本批价格
+        </p>
       </section>
-    </section>
-
-    <aside v-if="selectedCompetition" class="preview-card">
-      <div class="preview-label">
-        <h3>报名确认</h3>
-        <div class="receipt-line" />
-        <dl>
-          <div>
-            <dt>赛事</dt>
-            <dd>{{ selectedCompetition.name }}</dd>
-          </div>
-          <div v-if="form.name">
-            <dt>酒款</dt>
-            <dd>{{ form.name }}</dd>
-          </div>
-          <div v-if="selectedCategoryName">
-            <dt>组别</dt>
-            <dd>{{ selectedCategoryName }}</dd>
-          </div>
-          <div v-if="form.style">
-            <dt>基础风格</dt>
-            <dd>{{ form.style }}</dd>
-          </div>
-          <div v-if="form.abv !== null && form.abv !== undefined && form.abv !== ''">
-            <dt>ABV</dt>
-            <dd>{{ formatAbvWithUnit(form.abv) }}</dd>
-          </div>
-          <div
-            v-for="field in configuredFields"
-            v-show="hasFieldValue(form.extraFields[field.fieldKey])"
-            :key="field.fieldKey"
-          >
-            <dt>{{ field.fieldLabel }}</dt>
-            <dd>{{ formatFieldValue(form.extraFields[field.fieldKey]) }}</dd>
-          </div>
-        </dl>
-        <div class="foam-line" />
-        <p class="receipt-status">{{ receiptStatusText }}</p>
-      </div>
-
     </aside>
   </div>
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import QRCode from 'qrcode'
-import { formatAbvWithUnit, isValidAbvInput, normalizeAbvInput } from '@/utils/formatters'
-import { isWechatBrowser } from '@/utils/wechatPay'
-import {
-  createPortalEntryWechatNativePayment,
-  fetchPortalCompetitionDetail,
-  fetchPortalEntryDetail,
-  fetchPortalEntryPaymentStatus,
-  simulatePortalEntryPayment,
-  submitPortalEntry,
-} from '@/api/portal'
-import { currentEntryFee, formatCompetitionFee, isEarlyBirdActive } from './portalViewModels'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { onBeforeRouteLeave, RouterLink, useRoute, useRouter } from 'vue-router'
+import { ArrowRight, CircleCheck, Delete, Plus, WarningFilled } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { fetchPortalCompetitionDetail, quotePortalEntryBatch, submitPortalEntryBatch } from '@/api/portal'
+import { isValidAbvInput, normalizeAbvInput } from '@/utils/formatters'
 
+const MAX_BATCH_ENTRIES = 20
 const route = useRoute()
 const router = useRouter()
-const entryFormRef = ref(null)
-const selectedDetail = ref(null)
-const submittedEntry = ref(null)
-const submittingEntry = ref(false)
-const simulatingPayment = ref(false)
-const creatingPayment = ref(false)
-const checkingPayment = ref(false)
-const paymentOrder = ref(null)
-const paymentQrDataUrl = ref('')
+const activeFormRef = ref(null)
+const competition = ref(null)
+const entries = ref([])
+const activeIndex = ref(0)
+const rulesAccepted = ref(false)
 const payMode = ref('WECHAT')
-let paymentPollingTimer = null
-let paymentPollingCount = 0
-const queryCompetitionId = Number(route.query.competitionId || 0)
+const quote = ref(null)
+const loading = ref(true)
+const submitting = ref(false)
+const hydrated = ref(false)
+const dirty = ref(false)
+const showRulesError = ref(false)
+const competitionId = Number(route.query.competitionId || 0)
+const draftKey = `portal-entry-batch-draft:${competitionId}`
+const idempotencyKey = ref(createRequestKey())
 const currencyFormatter = new Intl.NumberFormat('zh-CN', {
   style: 'currency',
   currency: 'CNY',
@@ -363,1008 +306,513 @@ const currencyFormatter = new Intl.NumberFormat('zh-CN', {
   maximumFractionDigits: 2,
 })
 
-const form = reactive({
-  name: '',
-  categoryId: null,
-  style: '',
-  abv: '',
-  extraFields: {},
-  rulesAccepted: false,
+const configuredFields = computed(() => normalizeEntryFields(competition.value?.entryFields || []))
+const activeEntry = computed(() => entries.value[activeIndex.value] || entries.value[0])
+const hasRulesUrl = computed(() => Boolean(competition.value?.rulesUrl))
+const unitAmount = computed(() => Number(quote.value?.unitAmount ?? competition.value?.entryFee ?? 0))
+const totalAmount = computed(() => Number(quote.value?.totalAmount ?? unitAmount.value * entries.value.length))
+const discountAmount = computed(() => Number(quote.value?.discountAmount || 0))
+const feeText = computed(() => `${formatCurrency(unitAmount.value)} / 款`)
+const submitButtonLabel = computed(() => {
+  if (totalAmount.value <= 0) return `提交 ${entries.value.length} 款报名`
+  if (payMode.value === 'BANK_TRANSFER') return `提交 ${entries.value.length} 款，查看转账信息`
+  return `提交 ${entries.value.length} 款，前往付款`
 })
 
-const selectedCompetition = computed(() => selectedDetail.value || null)
-const hasRulesUrl = computed(() => Boolean(selectedCompetition.value?.rulesUrl))
-const configuredFields = computed(() => normalizeEntryFields(selectedCompetition.value?.entryFields || []))
-const selectedCategoryName = computed(() => selectedCompetition.value?.categories?.find((item) => item.id === form.categoryId)?.name || '')
-const paymentAmount = computed(() => submittedEntry.value?.payment?.amount ?? submittedEntry.value?.entryFee ?? selectedCompetition.value?.entryFee ?? 0)
-const paymentPaid = computed(() => submittedEntry.value?.paymentStatus === 'PAID' || submittedEntry.value?.canDownloadLabel)
-const paymentExpireText = computed(() => {
-  if (!paymentOrder.value?.expireTime) return '请在页面提示时间内完成支付'
-  return `${formatDateTime(paymentOrder.value.expireTime)} 前完成支付`
-})
-const currentFeeText = computed(() => formatCompetitionFee(selectedCompetition.value))
-const entryFeeLabel = computed(() => formatCurrency(currentEntryFee(selectedCompetition.value)))
-const earlyBirdActive = computed(() => isEarlyBirdActive(selectedCompetition.value))
-const earlyBirdDeadlineText = computed(() => formatMonthDayTime(selectedCompetition.value?.earlyBirdDeadline))
-const standardEntryFeeLabel = computed(() => formatCurrency(selectedCompetition.value?.entryFee))
-const showEarlyBirdOriginalFee = computed(() => {
-  const competition = selectedCompetition.value
-  if (!earlyBirdActive.value || competition?.entryFee === null || competition?.entryFee === undefined) return false
-  return Number(competition.entryFee) > Number(currentEntryFee(competition))
-})
-const submitHint = computed(() => {
-  if (Number(currentEntryFee(selectedCompetition.value)) <= 0) {
-    return '本款无需支付报名费，提交后直接办理标签和送样'
-  }
-  if (earlyBirdActive.value) {
-    return `当前享早鸟价，${earlyBirdDeadlineText.value ? `${earlyBirdDeadlineText.value} 前` : '现在'}提交并完成付款有效`
-  }
-  if (payMode.value === 'BANK_TRANSFER') {
-    return '提交报名后填写转账信息，到账确认后办理标签和送样'
-  }
-  return ''
-})
-const submitButtonLabel = computed(() => {
-  if (Number(currentEntryFee(selectedCompetition.value)) <= 0) {
-    return '提交报名'
-  }
-  if (payMode.value === 'BANK_TRANSFER') {
-    return `提交报名并填写转账信息 ${entryFeeLabel.value}`
-  }
-  return `提交报名并支付 ${entryFeeLabel.value}`
-})
-const receiptStatusText = computed(() => {
-  if (!submittedEntry.value) return '下一步：选择付款方式'
-  if (paymentPaid.value) return '办理送样'
-  if (submittedEntry.value?.paymentStatus === 'PENDING_CONFIRM') return '等待到账确认'
-  return '下一步：完成付款'
-})
-const selectedPaymentModeNote = computed(() => {
-  if (payMode.value === 'BANK_TRANSFER') {
-    return '点击按钮即可查看收款账户信息。转账后请上传付款凭证，我们将在5个工作日内核对到账'
-  }
-  return '支付成功后立即完成报名，并开放标签下载和送样信息填写'
-})
 const formRules = computed(() => {
   const rules = {
     name: [{ required: true, message: '请填写酒款名称', trigger: 'blur' }],
     categoryId: [{ required: true, message: '请选择投递组别', trigger: 'change' }],
     style: [{ required: true, message: '请选择基础风格', trigger: 'change' }],
-    abv: [
-      {
-        required: true,
-        validator: (_rule, value, callback) => {
-          if (isValidAbvInput(value)) {
-            callback()
-            return
-          }
-          callback(new Error('请填写 0-99.99 之间的 ABV，最多两位小数'))
-        },
-        trigger: ['blur', 'change'],
+    abv: [{
+      validator: (_rule, value, callback) => {
+        if (isValidAbvInput(value)) callback()
+        else callback(new Error('请填写 0-99.99 之间的 ABV，最多两位小数'))
       },
-    ],
+      trigger: ['blur', 'change'],
+    }],
   }
-  if (hasRulesUrl.value) {
-    rules.rulesAccepted = [
-      {
-        validator: (_rule, value, callback) => {
-          if (value) {
-            callback()
-            return
-          }
-          callback(new Error('请阅读并同意本次大赛参赛细则'))
-        },
-        trigger: 'change',
+  configuredFields.value.filter((field) => field.required).forEach((field) => {
+    rules[`extraFields.${field.fieldKey}`] = [{
+      validator: (_rule, value, callback) => {
+        if (hasFieldValue(value)) callback()
+        else callback(new Error(`请填写${field.fieldLabel}`))
       },
-    ]
-  }
-
-  configuredFields.value.forEach((field) => {
-    if (!field.required) {
-      return
-    }
-    rules[`extraFields.${field.fieldKey}`] = [
-      {
-        validator: (_rule, value, callback) => {
-          if (hasFieldValue(value)) {
-            callback()
-            return
-          }
-          callback(new Error(`请填写${field.fieldLabel}`))
-        },
-        trigger: field.fieldType === 'text' || field.fieldType === 'textarea' ? 'blur' : 'change',
-      },
-    ]
+      trigger: ['blur', 'change'],
+    }]
   })
-
   return rules
 })
 
 onMounted(async () => {
-  if (!queryCompetitionId) {
-    selectedDetail.value = null
-    syncCompetitionDefaults()
-    return
+  try {
+    if (!competitionId) return
+    competition.value = await fetchPortalCompetitionDetail(competitionId)
+    restoreDraft()
+    if (!entries.value.length) entries.value = [createEmptyEntry()]
+    await refreshQuote()
+  } catch (error) {
+    ElMessage.warning(error?.message || '赛事信息读取失败')
+  } finally {
+    loading.value = false
+    hydrated.value = true
+    window.addEventListener('beforeunload', handleBeforeUnload)
   }
-  selectedDetail.value = await fetchPortalCompetitionDetail(queryCompetitionId)
-  syncCompetitionDefaults()
 })
 
-onBeforeUnmount(() => {
-  stopPaymentPolling()
+onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnload))
+
+onBeforeRouteLeave(() => {
+  if (!dirty.value || submitting.value) return true
+  return window.confirm('报名资料尚未提交，确定离开当前页面吗？')
 })
 
-function syncCompetitionDefaults() {
-  if (!selectedCompetition.value) {
-    form.categoryId = null
-    form.style = ''
-    form.abv = ''
-    form.rulesAccepted = false
-    form.extraFields = {}
-    return
+watch([entries, rulesAccepted, payMode], () => {
+  if (!hydrated.value) return
+  dirty.value = true
+  saveDraft()
+}, { deep: true })
+
+watch(() => entries.value.length, () => {
+  if (hydrated.value) refreshQuote()
+})
+
+function createEmptyEntry() {
+  const extraFields = Object.fromEntries(configuredFields.value.map((field) => [
+    field.fieldKey,
+    emptyFieldValue(field),
+  ]))
+  return {
+    clientId: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`,
+    name: '',
+    categoryId: null,
+    style: '',
+    abv: '',
+    extraFields,
   }
-  form.categoryId = null
-  form.style = ''
-  form.abv = ''
-  form.rulesAccepted = false
-  form.extraFields = Object.fromEntries(configuredFields.value.map((field) => [field.fieldKey, getEmptyFieldValue(field)]))
 }
 
-async function submitEntry() {
-  if (submittedEntry.value || submittingEntry.value) return
-  const valid = await entryFormRef.value?.validate().catch(() => false)
-  if (!valid) {
-    ElMessage.warning('请先补全报名表中的必要信息')
-    return
-  }
-  if (!selectedCompetition.value) {
-    ElMessage.warning('请先从赛事详情进入报名')
-    return
-  }
-  submittingEntry.value = true
+function addEntry() {
+  if (entries.value.length >= MAX_BATCH_ENTRIES) return
+  entries.value.push(createEmptyEntry())
+  activeIndex.value = entries.value.length - 1
+  nextTick(() => activeFormRef.value?.clearValidate())
+}
+
+async function removeEntry() {
+  if (entries.value.length === 1) return
+  const entryName = activeEntry.value.name || `酒款 ${activeIndex.value + 1}`
+  const confirmed = await ElMessageBox.confirm(`“${entryName}”将从本次报名中移除，应付金额会同步更新。`, '确认删除这款酒？', {
+    confirmButtonText: '确认删除',
+    cancelButtonText: '暂不删除',
+    type: 'warning',
+    customClass: 'entry-delete-dialog',
+    closeOnClickModal: false,
+  }).catch(() => false)
+  if (!confirmed) return
+  entries.value.splice(activeIndex.value, 1)
+  activeIndex.value = Math.min(activeIndex.value, entries.value.length - 1)
+}
+
+async function refreshQuote() {
+  if (!competition.value || !entries.value.length) return
   try {
-    const entry = await submitPortalEntry(selectedCompetition.value.id, {
-      name: form.name,
-      categoryId: form.categoryId,
-      style: form.style,
-      abv: Number(normalizeAbvInput(form.abv)),
-      extraFields: form.extraFields,
-      rulesAccepted: hasRulesUrl.value ? form.rulesAccepted : undefined,
+    quote.value = await quotePortalEntryBatch(competition.value.id, entries.value.length)
+  } catch {
+    quote.value = null
+  }
+}
+
+async function submitBatch() {
+  if (submitting.value) return
+  const invalidIndex = entries.value.findIndex((entry) => entryErrorCount(entry) > 0)
+  if (invalidIndex >= 0) {
+    activeIndex.value = invalidIndex
+    await nextTick()
+    await activeFormRef.value?.validate().catch(() => false)
+    ElMessage.warning(`请先补全第 ${invalidIndex + 1} 款酒的报名资料`)
+    return
+  }
+  if (hasRulesUrl.value && !rulesAccepted.value) {
+    showRulesError.value = true
+    ElMessage.warning('请先阅读并同意本次大赛参赛细则')
+    return
+  }
+  showRulesError.value = false
+  submitting.value = true
+  try {
+    const batch = await submitPortalEntryBatch(competition.value.id, {
+      idempotencyKey: idempotencyKey.value,
+      expectedTotalAmount: totalAmount.value,
+      rulesAccepted: hasRulesUrl.value ? rulesAccepted.value : undefined,
+      entries: entries.value.map((entry) => ({
+        name: entry.name.trim(),
+        categoryId: entry.categoryId,
+        style: entry.style,
+        abv: Number(normalizeAbvInput(entry.abv)),
+        extraFields: entry.extraFields,
+      })),
     })
-    submittedEntry.value = entry
-    if (payMode.value === 'BANK_TRANSFER') {
-      ElMessage.success('报名已提交，请继续填写转账信息')
-      await router.push(`/portal/payment?entryId=${entry.id}&payMode=bank`)
-      return
-    }
-    if (isWechatBrowser()) {
-      ElMessage.success('报名已提交，请继续完成付款')
-      await router.push(`/portal/payment?entryId=${entry.id}`)
-      return
-    }
-    await startSubmittedEntryPayment({ silent: true })
-    ElMessage.success('报名已提交，请完成付款')
+    dirty.value = false
+    localStorage.removeItem(draftKey)
+    ElMessage.success(`${batch.entryCount} 款酒已提交`)
+    await router.push({
+      path: '/portal/batch-payment',
+      query: { batchId: batch.id, orderId: batch.paymentOrderId, payMode: payMode.value.toLowerCase() },
+    })
   } catch (error) {
+    await refreshQuote()
     ElMessage.warning(error?.message || '报名提交失败，请稍后重试')
   } finally {
-    submittingEntry.value = false
+    submitting.value = false
   }
 }
 
-async function paySubmittedEntry() {
-  if (!submittedEntry.value || paymentPaid.value) return
+function entryErrorCount(entry) {
+  if (!entry) return 0
+  let count = 0
+  if (!entry.name?.trim()) count += 1
+  if (!entry.categoryId) count += 1
+  if (!entry.style) count += 1
+  if (!isValidAbvInput(entry.abv)) count += 1
+  configuredFields.value.forEach((field) => {
+    if (field.required && !hasFieldValue(entry.extraFields?.[field.fieldKey])) count += 1
+  })
+  return count
+}
 
-  simulatingPayment.value = true
+function entryMeta(entry) {
+  const category = competition.value?.categories?.find((item) => item.id === entry.categoryId)?.name
+  if (entryErrorCount(entry) > 0) return `还缺 ${entryErrorCount(entry)} 项`
+  return [category, entry.style].filter(Boolean).join(' · ')
+}
+
+function saveDraft() {
+  localStorage.setItem(draftKey, JSON.stringify({
+    competitionId,
+    entries: entries.value,
+    activeIndex: activeIndex.value,
+    rulesAccepted: rulesAccepted.value,
+    payMode: payMode.value,
+    idempotencyKey: idempotencyKey.value,
+    savedAt: Date.now(),
+  }))
+}
+
+function restoreDraft() {
   try {
-    submittedEntry.value = await simulatePortalEntryPayment(submittedEntry.value.id)
-    ElMessage.success('支付成功，报名已完成')
-  } catch (error) {
-    ElMessage.warning(error?.message || '支付失败，请稍后重试')
-  } finally {
-    simulatingPayment.value = false
+    const draft = JSON.parse(localStorage.getItem(draftKey) || 'null')
+    if (!draft || draft.competitionId !== competitionId || !Array.isArray(draft.entries) || !draft.entries.length) return
+    entries.value = draft.entries.slice(0, MAX_BATCH_ENTRIES).map((entry) => ({
+      ...createEmptyEntry(),
+      ...entry,
+      extraFields: Object.fromEntries(configuredFields.value.map((field) => [
+        field.fieldKey,
+        entry.extraFields?.[field.fieldKey] ?? emptyFieldValue(field),
+      ])),
+    }))
+    activeIndex.value = Math.min(Number(draft.activeIndex || 0), entries.value.length - 1)
+    rulesAccepted.value = Boolean(draft.rulesAccepted)
+    payMode.value = draft.payMode === 'BANK_TRANSFER' ? 'BANK_TRANSFER' : 'WECHAT'
+    idempotencyKey.value = draft.idempotencyKey || idempotencyKey.value
+    ElMessage.success('已恢复上次未提交的报名资料')
+  } catch {
+    localStorage.removeItem(draftKey)
   }
 }
 
-async function startSubmittedEntryPayment(options = {}) {
-  if (!submittedEntry.value || paymentPaid.value) return
-
-  creatingPayment.value = true
-  try {
-    paymentOrder.value = await createPortalEntryWechatNativePayment(submittedEntry.value.id)
-    if (paymentOrder.value?.mode === 'WECHAT' && paymentOrder.value.codeUrl) {
-      paymentQrDataUrl.value = await QRCode.toDataURL(paymentOrder.value.codeUrl, {
-        errorCorrectionLevel: 'M',
-        margin: 1,
-        width: 220,
-      })
-      startPaymentPolling()
-    }
-  } catch (error) {
-    if (!options.silent) {
-      ElMessage.warning(error?.message || '支付码生成失败，请稍后重试')
-    }
-  } finally {
-    creatingPayment.value = false
-  }
+function handleBeforeUnload(event) {
+  if (!dirty.value || submitting.value) return
+  event.preventDefault()
+  event.returnValue = ''
 }
 
-async function checkSubmittedEntryPayment() {
-  if (!submittedEntry.value) return
-
-  checkingPayment.value = true
-  try {
-    const status = await fetchPortalEntryPaymentStatus(submittedEntry.value.id)
-    if (status.paymentStatus === 'PAID' || status.canDownloadLabel) {
-      submittedEntry.value = await fetchPortalEntryDetail(submittedEntry.value.id)
-      stopPaymentPolling()
-      ElMessage.success('支付成功，报名已完成')
-    }
-  } catch (error) {
-    ElMessage.warning(error?.message || '支付结果查询失败')
-  } finally {
-    checkingPayment.value = false
-  }
+function createRequestKey() {
+  return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`
 }
 
-function startPaymentPolling() {
-  stopPaymentPolling()
-  paymentPollingCount = 0
-  paymentPollingTimer = window.setInterval(async () => {
-    paymentPollingCount += 1
-    if (paymentPollingCount > 40) {
-      stopPaymentPolling()
-      return
-    }
-    await checkSubmittedEntryPayment()
-  }, 3000)
+function normalizeEntryFields(fields) {
+  return fields.map((field, index) => ({
+    fieldKey: field.fieldKey || `custom_${index}`,
+    fieldLabel: field.fieldLabel || field.label || `补充字段 ${index + 1}`,
+    fieldType: field.fieldType || field.type || 'text',
+    helpText: field.helpText || '',
+    options: Array.isArray(field.options) ? field.options : [],
+    required: Boolean(field.required),
+    sortOrder: Number(field.sortOrder ?? index),
+  })).sort((a, b) => a.sortOrder - b.sortOrder)
 }
 
-function stopPaymentPolling() {
-  if (paymentPollingTimer) {
-    window.clearInterval(paymentPollingTimer)
-    paymentPollingTimer = null
-  }
-}
-
-function resetForNextEntry() {
-  submittedEntry.value = null
-  paymentOrder.value = null
-  paymentQrDataUrl.value = ''
-  stopPaymentPolling()
-  syncCompetitionDefaults()
-  entryFormRef.value?.clearValidate()
-}
-
-function normalizeEntryFields(fields = []) {
-  return fields
-    .map((field, index) => {
-      if (typeof field === 'string') {
-        return {
-          fieldKey: `legacy_${index}`,
-          fieldLabel: field,
-          fieldType: 'text',
-          helpText: '',
-          options: [],
-          required: false,
-          visibleToJudges: true,
-          sortOrder: index,
-        }
-      }
-      return {
-        fieldKey: field.fieldKey || `custom_${index}`,
-        fieldLabel: field.fieldLabel || field.label || `补充字段 ${index + 1}`,
-        fieldType: field.fieldType || field.type || 'text',
-        helpText: field.helpText || '',
-        options: Array.isArray(field.options) ? field.options : [],
-        required: Boolean(field.required),
-        visibleToJudges: field.visibleToJudges !== false,
-        sortOrder: Number(field.sortOrder ?? index),
-      }
-    })
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-}
-
-function getEmptyFieldValue(field) {
-  if (field.fieldType === 'multi_select') {
-    return []
-  }
-  if (field.fieldType === 'number') {
-    return null
-  }
+function emptyFieldValue(field) {
+  if (field.fieldType === 'multi_select') return []
+  if (field.fieldType === 'number') return null
   return ''
 }
 
 function hasFieldValue(value) {
-  if (Array.isArray(value)) {
-    return value.length > 0
-  }
+  if (Array.isArray(value)) return value.length > 0
   return value !== null && value !== undefined && String(value).trim() !== ''
 }
 
-function formatFieldValue(value) {
-  return Array.isArray(value) ? value.join('、') : value
+function styleLabel(item) {
+  return item?.styleCode ? `${item.styleCode} ${item.name}` : item?.name
 }
 
 function formatCurrency(value) {
-  if (value === null || value === undefined || value === '') return '¥0'
-  return currencyFormatter.format(Number(value))
-}
-
-function formatDateTime(value) {
-  if (!value) return ''
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return String(value).replace('T', ' ').slice(0, 16)
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hour = String(date.getHours()).padStart(2, '0')
-  const minute = String(date.getMinutes()).padStart(2, '0')
-  return `${date.getFullYear()}-${month}-${day} ${hour}:${minute}`
-}
-
-function formatMonthDayTime(value) {
-  if (!value) return ''
-  const normalized = String(value).replace('T', ' ')
-  const match = normalized.match(/^\d{4}-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/)
-  if (!match) return normalized.slice(0, 16)
-  const [, month, day, hour, minute] = match
-  return `${Number(month)}月${Number(day)}日 ${hour}:${minute}`
-}
-
-function styleLabel(item) {
-  return item.styleCode ? `${item.styleCode} ${item.name}` : item.name
+  return currencyFormatter.format(Number(value || 0))
 }
 </script>
 
 <style scoped>
-.submit-page {
+.batch-submit-page {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr) 350px;
+  gap: 20px;
+  align-items: start;
+}
+
+.batch-workbench { padding: 24px; }
+
+.page-heading,
+.competition-strip,
+.entry-switcher,
+.entry-editor-head,
+.payment-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 18px;
-  align-items: start;
 }
 
-.form-card {
-  padding: 22px 24px;
-}
+.page-heading h1,
+.entry-editor-head h2,
+.payment-panel h3 { margin: 4px 0 0; color: #2b1d10; }
+.page-heading h1 { font-size: 25px; }
+.page-heading a { color: #86540f; font-weight: 800; text-decoration: none; }
+.section-kicker { color: #96611b; font-size: 11px; font-weight: 900; letter-spacing: .08em; }
 
-.form-header p {
-  margin: 8px 0 16px;
-  color: #746a5f;
-  line-height: 1.65;
-}
-
-.competition-banner,
-.competition-empty {
-  margin-bottom: 14px;
-  padding: 12px 14px;
-  background: #fff7e6;
-  border: 1px solid rgba(87, 58, 26, 0.12);
+.competition-strip {
+  margin-top: 18px;
+  padding: 13px 15px;
+  justify-content: flex-start;
+  color: #68451b;
+  background: #fff6df;
+  border: 1px solid rgba(87, 58, 26, .12);
   border-radius: 8px;
 }
+.competition-strip span { font-size: 12px; font-weight: 800; }
+.competition-strip strong { color: #2b1d10; font-size: 17px; }
+.competition-strip b { margin-left: auto; font-size: 13px; }
 
-.competition-banner {
+.entry-switcher {
+  margin: 18px -24px 0;
+  padding: 14px 24px;
+  border-top: 1px solid rgba(87, 58, 26, .1);
+  border-bottom: 1px solid rgba(87, 58, 26, .1);
+}
+.entry-tabs { display: flex; gap: 8px; min-width: 0; overflow-x: auto; padding: 2px; }
+.entry-tab {
   display: flex;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 9px;
   align-items: center;
-}
-
-.competition-banner span {
-  display: inline;
-  color: #8b5c19;
-  font-size: 13px;
-  font-weight: 900;
-}
-
-.competition-banner strong,
-.competition-empty strong {
-  display: inline;
-  margin-top: 0;
-  color: #2b1d10;
-  font-size: 18px;
-  line-height: 1.25;
-}
-
-.competition-banner a {
-  color: #8b5c19;
-  font-weight: 800;
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.form-section {
-  padding: 15px 0;
-  border-top: 1px solid rgba(87, 58, 26, 0.1);
-}
-
-.form-section:first-of-type {
-  padding-top: 0;
-  border-top: 0;
-}
-
-.section-title-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.section-title-row h3 {
-  margin: 0;
-  color: #2b1d10;
-  font-size: 16px;
-}
-
-.section-title-row span {
-  color: #8b5c19;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.entry-form :deep(.el-input__wrapper),
-.entry-form :deep(.el-textarea__inner),
-.entry-form :deep(.el-select__wrapper),
-.entry-form :deep(.el-input-number) {
-  background: #fffdf7;
-  border-radius: 8px;
-  box-shadow: 0 0 0 1px rgba(87, 58, 26, 0.14) inset;
-}
-
-.entry-form :deep(.el-input-number) {
-  width: 100%;
-}
-
-.entry-form :deep(.el-form-item__label) {
-  color: #514338;
-  font-weight: 800;
-}
-
-.form-grid {
-  display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.15fr) minmax(150px, 0.72fr);
-  gap: 6px 18px;
-  align-items: start;
-}
-
-.full-field {
-  max-width: none;
-}
-
-.abv-input-row {
-  width: 100%;
-  max-width: 190px;
-}
-
-.abv-input-suffix {
-  color: #5f4d3d;
-  font-weight: 800;
-}
-
-.dynamic-field-list {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px 18px;
-}
-
-.dynamic-field:has(textarea) {
-  grid-column: 1 / -1;
-}
-
-.field-label {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 7px;
-  align-items: center;
-}
-
-.field-label em {
-  display: inline-flex;
-  align-items: center;
-  min-height: 20px;
-  padding: 0 7px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-style: normal;
-  font-weight: 800;
-}
-
-.field-label em {
-  color: #8f5100;
-  background: #ffe3a6;
-}
-
-.field-help {
-  margin: 7px 0 0;
-  color: #746a5f;
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.confirm-panel {
-  display: grid;
-  gap: 10px;
-  margin-top: 8px;
-  padding: 16px 18px;
-  background: #fff7e6;
-  border: 1px dashed rgba(87, 58, 26, 0.2);
-  border-radius: 8px;
-}
-
-.confirm-item {
-  margin-bottom: 0;
-}
-
-.confirm-item :deep(.el-form-item__content) {
-  display: block;
-  line-height: normal;
-}
-
-.confirm-item :deep(.el-form-item__error) {
-  position: static;
-  margin-top: 4px;
-  padding-left: 24px;
-  line-height: 1.45;
-}
-
-.confirm-row {
-  width: 100%;
-}
-
-.confirm-row :deep(.el-checkbox) {
-  align-items: flex-start;
-  height: auto;
-  min-height: 22px;
-  white-space: normal;
-}
-
-.confirm-row :deep(.el-checkbox__input) {
-  margin-top: 2px;
-}
-
-.confirm-row :deep(.el-checkbox__label) {
-  color: #4a3b2c;
-  font-weight: 700;
-  line-height: 1.5;
-}
-
-.rules-confirm-copy a {
-  color: #8a560e;
-  font-weight: 900;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.payment-method-panel {
-  display: grid;
-  gap: 14px;
-  margin-top: 14px;
-  padding: 18px;
-  background: linear-gradient(180deg, #fffdf8, #fff7e6);
-  border: 1px solid rgba(87, 58, 26, 0.14);
-  border-radius: 8px;
-}
-
-.payment-method-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: center;
-}
-
-.payment-method-amount span {
-  display: block;
-  color: #8b5c19;
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.12em;
-}
-
-.payment-method-head h3 {
-  margin: 0;
-  color: #2b1d10;
-  font-size: 18px;
-  line-height: 1.25;
-}
-
-.payment-method-amount {
-  display: grid;
-  gap: 2px;
-  justify-items: end;
-  text-align: right;
-}
-
-.payment-method-amount strong {
-  color: #8b5c19;
-  font-size: 24px;
-  line-height: 1.15;
-  white-space: nowrap;
-}
-
-.payment-method-amount del {
-  color: #8d7b69;
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1.35;
-  text-decoration-thickness: 2px;
-  text-decoration-color: rgba(132, 87, 27, 0.55);
-  white-space: nowrap;
-}
-
-.payment-method-options {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.payment-method-option {
-  position: relative;
-  display: grid;
-  min-height: 64px;
-  padding: 18px 76px 18px 42px;
+  min-width: 150px;
+  padding: 9px 11px;
+  color: #5e4b38;
   text-align: left;
-  color: #4a3b2c;
   background: #fffdf8;
-  border: 1px solid rgba(87, 58, 26, 0.14);
-  border-radius: 8px;
+  border: 1px solid rgba(87, 58, 26, .13);
+  border-radius: 7px;
   cursor: pointer;
 }
-
-.payment-method-option::before {
-  position: absolute;
-  top: 18px;
-  left: 16px;
-  width: 15px;
-  height: 15px;
-  border: 2px solid #c4aa84;
-  border-radius: 50%;
-  content: '';
+.entry-tab:hover { border-color: rgba(166, 101, 20, .45); }
+.entry-tab.active { background: #fff2ce; border-color: #b87820; box-shadow: 0 0 0 2px rgba(184, 120, 32, .1); }
+.entry-tab > span:first-child {
+  display: grid; width: 27px; height: 27px; place-items: center; color: #fff; background: #9b651d; border-radius: 50%; font-weight: 900;
 }
+.entry-tab-copy { display: grid; min-width: 0; gap: 2px; }
+.entry-tab-copy strong { max-width: 100px; overflow: hidden; color: #2b1d10; text-overflow: ellipsis; white-space: nowrap; }
+.entry-tab-copy small { color: #a55f20; }
+.entry-tab-copy small.complete { color: #36754b; }
 
-.payment-method-option.active {
-  border-color: rgba(185, 120, 31, 0.45);
-  box-shadow: 0 10px 24px rgba(141, 88, 18, 0.1);
-}
-
-.payment-method-option.active::before {
-  border-color: #b9781f;
-  background: radial-gradient(circle, #b9781f 0 42%, transparent 46%);
-}
-
-.payment-method-option.recommended::after {
-  position: absolute;
-  top: 14px;
-  right: 16px;
-  padding: 2px 7px;
-  color: #7d4c0e;
-  background: #f9dfa4;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 900;
-  content: '推荐';
-}
-
-.payment-method-option-title {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  min-height: 22px;
-}
-
-.payment-method-option-title span {
-  color: #2b1d10;
-  font-weight: 900;
-  line-height: 1.35;
-}
-
-.payment-method-note {
-  margin: 0;
-  color: #746a5f;
-  font-size: 13px;
-  line-height: 1.6;
-}
-
-.form-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 18px;
-  margin-top: 18px;
-  padding-top: 16px;
-  border-top: 1px solid rgba(87, 58, 26, 0.1);
-}
-
-.form-actions p {
-  max-width: 360px;
-  margin: 0;
-  color: #746a5f;
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.6;
-}
-
-.submit-cta {
-  min-width: 260px;
-  min-height: 50px;
-  padding: 0 24px;
-  border: 0;
-  border-radius: 8px;
-  background: linear-gradient(180deg, #d99a30, #a86514);
-  box-shadow: 0 12px 24px rgba(141, 88, 18, 0.2);
-  font-size: 16px;
-  font-weight: 900;
-}
-
-.submit-cta:hover {
-  background: linear-gradient(180deg, #e1a23d, #b9781f);
-}
-
-.inline-payment {
-  margin-top: 18px;
-  padding: 18px;
-  background: linear-gradient(180deg, #fffaf0, #fff5df);
-  border: 1px solid rgba(87, 58, 26, 0.16);
-  border-radius: 8px;
-}
-
-.payment-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 18px;
-  align-items: flex-start;
-}
-
-.payment-head span {
-  display: block;
-  color: #8b5c19;
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.12em;
-}
-
-.payment-head h3 {
-  margin: 8px 0 6px;
-  color: #2b1d10;
-  font-size: 22px;
-  line-height: 1.2;
-}
-
-.payment-head p {
-  margin: 0;
-  color: #746a5f;
-  line-height: 1.6;
-}
-
-.payment-head strong {
-  color: #8b5c19;
-  font-size: 24px;
-  white-space: nowrap;
-}
-
-.payment-facts {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin: 14px 0 0;
-}
-
-.payment-facts div {
-  padding: 12px;
-  background: #fffdf7;
-  border: 1px solid rgba(87, 58, 26, 0.12);
-  border-radius: 8px;
-}
-
-.payment-facts dt,
-.payment-facts dd {
-  margin: 0;
-}
-
-.payment-facts dt {
-  color: #907c66;
-  font-size: 12px;
+.entry-editor-head { padding: 22px 0 10px; align-items: flex-end; }
+.entry-editor-head span { color: #8a765f; font-size: 12px; font-weight: 700; }
+.entry-editor-head h2 { font-size: 20px; }
+.entry-tools { display: flex; gap: 8px; }
+.add-entry-button {
+  min-width: 108px;
+  height: 36px;
+  color: #75470d;
+  background: #fffaf0;
+  border-color: rgba(117, 71, 13, .28);
+  border-radius: 7px;
   font-weight: 800;
 }
-
-.payment-facts dd {
-  margin-top: 6px;
-  color: #2b1d10;
-  font-weight: 800;
-  line-height: 1.5;
+.add-entry-button:hover,
+.add-entry-button:focus-visible {
+  color: #5f3707;
+  background: #fff1c9;
+  border-color: #b87820;
 }
-
-.payment-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-  margin-top: 16px;
-}
-
-.wechat-pay-box {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex: 1 1 260px;
-  min-width: 0;
-  padding: 12px;
-  background: #f7f1e7;
-  border: 1px solid rgba(103, 72, 39, 0.13);
-  border-radius: 8px;
-}
-
-.wechat-pay-box img {
-  width: 112px;
-  height: 112px;
-  flex: 0 0 112px;
-  background: #fff;
+.delete-entry-button {
+  height: 34px;
+  padding: 0 10px;
+  color: #8a513a;
+  background: transparent;
+  border-color: transparent;
   border-radius: 6px;
+  font-weight: 700;
+}
+.delete-entry-button:hover,
+.delete-entry-button:focus-visible {
+  color: #7c321f;
+  background: #fff0e8;
+  border-color: rgba(139, 61, 41, .24);
+}
+.delete-entry-button.is-disabled {
+  color: #b6a99d;
+  background: transparent;
+  border-color: transparent;
 }
 
-.wechat-pay-box div {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-}
+.form-section { padding: 17px 0; border-top: 1px solid rgba(87, 58, 26, .1); }
+.section-title-row { margin-bottom: 13px; }
+.section-title-row h3 { margin: 0; color: #2b1d10; font-size: 16px; }
+.form-grid { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.2fr) minmax(140px, .65fr); gap: 18px; }
+.dynamic-field-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 18px; }
+.dynamic-field.wide { grid-column: 1 / -1; }
+.entry-form :deep(.el-input__wrapper),
+.entry-form :deep(.el-select__wrapper),
+.entry-form :deep(.el-textarea__inner),
+.entry-form :deep(.el-input-number) { width: 100%; background: #fffdf8; border-radius: 7px; box-shadow: 0 0 0 1px rgba(87, 58, 26, .15) inset; }
+.entry-form :deep(.el-form-item__label) { color: #514338; font-weight: 800; }
+.input-suffix { color: #5f4d3d; }
+.field-label { display: inline-flex; gap: 7px; align-items: center; }
+.field-label em { padding: 1px 6px; color: #8b5105; background: #ffe2a3; border-radius: 999px; font-size: 10px; font-style: normal; }
+.field-help { margin: 6px 0 0; color: #7d6b58; font-size: 12px; }
 
-.wechat-pay-box strong {
+.rules-panel { padding: 15px 17px; background: #fff7e6; border: 1px dashed rgba(87, 58, 26, .22); border-radius: 8px; }
+.rules-panel a { color: #83520f; font-weight: 900; text-underline-offset: 3px; }
+.rules-panel p { margin: 6px 0 0 24px; color: #c45656; font-size: 12px; }
+
+.payment-panel { margin-top: 16px; padding-top: 18px; border-top: 1px solid rgba(87, 58, 26, .1); align-items: flex-start; }
+.payment-panel h3 { font-size: 17px; }
+.payment-options { display: grid; grid-template-columns: repeat(2, minmax(170px, 1fr)); gap: 10px; }
+.payment-option { display: grid; gap: 3px; padding: 12px 14px; text-align: left; color: #493a2d; background: #fffdf8; border: 1px solid rgba(87, 58, 26, .16); border-radius: 7px; cursor: pointer; }
+.payment-option:hover { border-color: rgba(166, 101, 20, .48); }
+.payment-option.active { background: #fff1c7; border-color: #ae6f19; box-shadow: 0 0 0 2px rgba(174, 111, 25, .09); }
+.payment-option span { font-weight: 900; }
+.payment-option small { color: #7d6a56; }
+
+.receipt-column { position: sticky; top: 116px; }
+.receipt-card { overflow: hidden; padding: 22px; color: #2d2115; background: linear-gradient(180deg, #fffaf0 0%, #f3d58f 72%, #e8bd60 100%); border: 1px solid rgba(87, 58, 26, .2); border-radius: 8px; box-shadow: 0 22px 44px rgba(83, 51, 17, .14); }
+.receipt-card > header { display: flex; justify-content: space-between; align-items: baseline; }
+.receipt-card > header span { font-size: 27px; font-weight: 900; }
+.receipt-card > header b { color: #795018; font-size: 13px; }
+.receipt-rule { height: 1px; margin: 18px 0; background: repeating-linear-gradient(90deg, rgba(43, 29, 16, .42) 0 7px, transparent 7px 13px); }
+.event-fact { margin: 0 0 14px; }
+.event-fact dt { color: #86725d; font-size: 12px; }
+.event-fact dd { margin: 5px 0 0; font-weight: 900; line-height: 1.45; }
+.receipt-items { max-height: 285px; overflow-y: auto; border-top: 1px solid rgba(91, 61, 25, .13); }
+.receipt-items button { display: grid; grid-template-columns: 24px minmax(0, 1fr) 20px auto; gap: 8px; align-items: center; width: 100%; padding: 12px 0; color: inherit; text-align: left; background: transparent; border: 0; border-bottom: 1px solid rgba(91, 61, 25, .13); cursor: pointer; }
+.receipt-items button:hover strong { color: #81500d; }
+.receipt-entry-copy { display: grid; gap: 3px; min-width: 0; }
+.receipt-entry-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.receipt-entry-copy small { overflow: hidden; color: #806d57; text-overflow: ellipsis; white-space: nowrap; }
+.entry-check { width: 17px; height: 17px; color: #a55f20; }
+.entry-check.complete { color: #3d7750; }
+.entry-check svg { width: 100%; height: 100%; }
+.receipt-items button > b { font-variant-numeric: tabular-nums; }
+.receipt-totals { display: grid; gap: 10px; padding: 16px 0 4px; }
+.receipt-totals div { display: flex; justify-content: space-between; gap: 15px; color: #725d44; font-size: 13px; }
+.receipt-totals b { color: #372719; font-variant-numeric: tabular-nums; }
+.receipt-totals .receipt-total { align-items: baseline; padding: 12px 0; color: #2b1d10; border-top: 1px dashed rgba(43, 29, 16, .3); border-bottom: 1px dashed rgba(43, 29, 16, .3); font-weight: 900; }
+.receipt-total strong { color: #704408; font-size: 27px; font-variant-numeric: tabular-nums; }
+.submit-batch-button { width: 100%; min-height: 50px; margin-top: 16px; border: 0; border-radius: 7px; background: #7d4d12; font-size: 15px; font-weight: 900; }
+.submit-batch-button:hover { background: #925d19; }
+.price-note { margin: 10px 0 0; color: #725b3d; text-align: center; font-size: 12px; }
+.page-state { display: grid; gap: 12px; padding: 40px; text-align: center; }
+
+:global(.entry-delete-dialog) {
+  width: min(430px, calc(100vw - 32px));
+  padding: 0;
+  overflow: hidden;
+  background: #fffaf0;
+  border: 1px solid rgba(87, 58, 26, .22);
+  border-radius: 8px;
+  box-shadow: 0 24px 64px rgba(57, 36, 16, .24);
+}
+:global(.entry-delete-dialog .el-message-box__header) {
+  padding: 20px 22px 10px;
+}
+:global(.entry-delete-dialog .el-message-box__title) {
   color: #2b1d10;
-  font-size: 16px;
-}
-
-.wechat-pay-box span {
-  color: #6f5a44;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.primary-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 40px;
-  padding: 0 14px;
-  color: #fffaf0;
-  background: #b9781f;
-  border-radius: 8px;
-  font-weight: 800;
-  text-decoration: none;
-}
-
-.secondary-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 40px;
-  padding: 0 14px;
-  color: #6b4710;
-  background: #fff7e6;
-  border: 1px solid rgba(87, 58, 26, 0.14);
-  border-radius: 8px;
-  font-weight: 800;
-  text-decoration: none;
-}
-
-.preview-card {
-  position: sticky;
-  top: 116px;
-  display: grid;
-  gap: 16px;
-}
-
-.preview-label {
-  min-height: 260px;
-  padding: 22px;
-  color: #2b1d10;
-  background:
-    linear-gradient(180deg, #fffaf0, #eac06c),
-    repeating-linear-gradient(135deg, rgba(45, 29, 14, 0.07) 0 1px, transparent 1px 10px);
-  border: 1px solid rgba(87, 58, 26, 0.18);
-  border-radius: 8px;
-  box-shadow: 0 24px 48px rgba(83, 51, 17, 0.14);
-}
-
-.preview-label > span {
-  display: block;
-  color: #8b5c19;
-  font-size: 12px;
+  font-size: 19px;
   font-weight: 900;
-  letter-spacing: 0.1em;
 }
-
-.preview-label h3 {
-  margin: 18px 0 0;
-  color: #2b1d10;
-  font-size: 28px;
-  line-height: 1.15;
+:global(.entry-delete-dialog .el-message-box__headerbtn) {
+  top: 17px;
+  right: 17px;
 }
-
-.preview-label p {
-  color: #675b4a;
+:global(.entry-delete-dialog .el-message-box__close) { color: #927c66; }
+:global(.entry-delete-dialog .el-message-box__content) {
+  padding: 8px 22px 20px;
+  color: #66513e;
+}
+:global(.entry-delete-dialog .el-message-box__container) { align-items: flex-start; }
+:global(.entry-delete-dialog .el-message-box__status) {
+  margin-top: 2px;
+  color: #b87820;
+  font-size: 22px;
+}
+:global(.entry-delete-dialog .el-message-box__message) {
+  padding-left: 12px;
   line-height: 1.7;
 }
-
-.receipt-line {
-  height: 1px;
-  margin: 22px 0 18px;
-  background: repeating-linear-gradient(90deg, rgba(43, 29, 16, 0.45) 0 8px, transparent 8px 14px);
+:global(.entry-delete-dialog .el-message-box__btns) {
+  gap: 8px;
+  padding: 14px 22px 18px;
+  background: #fff4d9;
+  border-top: 1px solid rgba(87, 58, 26, .12);
 }
-
-.foam-line {
-  height: 9px;
-  margin: 24px 0 14px;
-  background:
-    radial-gradient(circle, #fffaf0 0 45%, transparent 48%) 0 0 / 16px 9px repeat-x;
-}
-
-.preview-label dl {
-  display: grid;
-  gap: 10px;
-  margin: 0;
-}
-
-.preview-label dt {
-  color: #806f5b;
-  font-size: 13px;
-}
-
-.preview-label dd {
-  margin: 4px 0 0;
-  font-weight: 800;
-  line-height: 1.5;
-}
-
-.receipt-status {
-  margin: 0;
-  color: #6b4710;
+:global(.entry-delete-dialog .el-button) {
+  min-width: 88px;
+  height: 36px;
+  border-radius: 6px;
   font-weight: 800;
 }
-
-@media (max-width: 1080px) {
-  .submit-page {
-    grid-template-columns: 1fr;
-  }
-
-  .competition-banner {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .preview-card {
-    position: static;
-  }
+:global(.entry-delete-dialog .el-button--default) {
+  color: #684d34;
+  background: #fffdf8;
+  border-color: rgba(87, 58, 26, .2);
+}
+:global(.entry-delete-dialog .el-button--default:hover) {
+  color: #4d321c;
+  background: #fff8e8;
+  border-color: rgba(87, 58, 26, .38);
+}
+:global(.entry-delete-dialog .el-button--primary) {
+  color: #fff;
+  background: #8a3f2a;
+  border-color: #8a3f2a;
+}
+:global(.entry-delete-dialog .el-button--primary:hover) {
+  background: #76311f;
+  border-color: #76311f;
 }
 
-@media (max-width: 680px) {
-  .form-grid,
-  .dynamic-field-list,
-  .form-actions,
-  .payment-method-options,
-  .payment-facts {
-    grid-template-columns: 1fr;
-  }
+@media (max-width: 1160px) {
+  .batch-submit-page { grid-template-columns: 1fr; }
+  .receipt-column { position: static; }
+}
 
-  .dynamic-field:has(textarea) {
-    grid-column: auto;
-  }
-
-  .form-actions {
-    display: grid;
-    justify-content: stretch;
-  }
-
-  .submit-cta {
-    width: 100%;
-    min-width: 0;
-  }
-
-  .payment-head {
-    display: grid;
-  }
-
-  .abv-input-row {
-    max-width: none;
-  }
+@media (max-width: 760px) {
+  .batch-workbench { padding: 18px; }
+  .page-heading, .competition-strip, .entry-editor-head, .payment-panel { align-items: flex-start; flex-direction: column; }
+  .competition-strip b { margin-left: 0; }
+  .entry-switcher { margin-right: -18px; margin-left: -18px; padding: 12px 18px; align-items: flex-start; flex-direction: column; }
+  .entry-tabs { width: 100%; }
+  .form-grid, .dynamic-field-list, .payment-options { grid-template-columns: 1fr; width: 100%; }
+  .dynamic-field.wide { grid-column: auto; }
+  .entry-tools { width: 100%; }
 }
 </style>

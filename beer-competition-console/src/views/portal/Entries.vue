@@ -696,7 +696,7 @@ function refundStatusText(status) {
 
 async function submitRefundRequest(entry) {
   if (isEntryRefundActive(entry)) {
-    router.push(`/portal/payment?entryId=${entry.id}`)
+    router.push(`/portal/fulfillment?entryId=${entry.id}${entry.registrationBatchId ? `&batchId=${entry.registrationBatchId}` : ''}`)
     return
   }
   if (!entry?.canRequestRefund) {

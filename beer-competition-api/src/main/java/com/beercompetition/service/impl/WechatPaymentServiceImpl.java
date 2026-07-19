@@ -12,6 +12,9 @@ import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.EntryPaymentMapper;
 import com.beercompetition.mapper.EntryRefundMapper;
 import com.beercompetition.mapper.PortalAccountMapper;
+import com.beercompetition.mapper.PaymentOrderItemMapper;
+import com.beercompetition.mapper.PaymentOrderMapper;
+import com.beercompetition.mapper.RegistrationBatchMapper;
 import com.beercompetition.mapper.WechatPayNotifyMapper;
 import com.beercompetition.pay.WechatPayClient;
 import com.beercompetition.properties.WechatPayProperties;
@@ -19,6 +22,8 @@ import com.beercompetition.pojo.enums.EntryPayMethod;
 import com.beercompetition.pojo.enums.EntryPaymentStatus;
 import com.beercompetition.pojo.enums.EntryRefundStatus;
 import com.beercompetition.pojo.enums.EntryStatus;
+import com.beercompetition.pojo.enums.PaymentOrderStatus;
+import com.beercompetition.pojo.enums.RegistrationBatchStatus;
 import com.beercompetition.pojo.po.AdminOperationLog;
 import com.beercompetition.pojo.po.BeerEntry;
 import com.beercompetition.pojo.po.Brewery;
@@ -26,14 +31,18 @@ import com.beercompetition.pojo.po.Competition;
 import com.beercompetition.pojo.po.EntryPayment;
 import com.beercompetition.pojo.po.EntryRefund;
 import com.beercompetition.pojo.po.PortalAccount;
+import com.beercompetition.pojo.po.PaymentOrder;
+import com.beercompetition.pojo.po.PaymentOrderItem;
+import com.beercompetition.pojo.po.RegistrationBatch;
 import com.beercompetition.pojo.po.WechatPayNotify;
 import com.beercompetition.pojo.vo.EntryPaymentStatusVO;
 import com.beercompetition.pojo.vo.WechatJsapiPayVO;
 import com.beercompetition.pojo.vo.WechatNativePayVO;
 import com.beercompetition.pojo.vo.WechatPayClientConfigVO;
 import com.beercompetition.service.WechatPaymentService;
+import com.beercompetition.service.BatchPaymentService;
+import com.beercompetition.service.WechatOAuthService;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -41,14 +50,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
-import java.net.URI;
-import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -71,9 +75,9 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
     private static final String BUSINESS_REFUND = "REFUND";
     private static final int NATIVE_PAY_EXPIRE_MINUTES = 30;
     private static final int JSAPI_PAY_EXPIRE_MINUTES = 30;
-    private static final String WECHAT_OAUTH_TOKEN_URL = "https://api.weixin.qq.com/sns/oauth2/access_token";
-
     private final WechatPayClient wechatPayClient;
+    private final BatchPaymentService batchPaymentService;
+    private final WechatOAuthService wechatOAuthService;
     private final WechatPayProperties wechatPayProperties;
     private final PortalAccountMapper portalAccountMapper;
     private final BreweryMapper breweryMapper;
@@ -81,11 +85,13 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
     private final CompetitionMapper competitionMapper;
     private final EntryPaymentMapper entryPaymentMapper;
     private final EntryRefundMapper entryRefundMapper;
+    private final PaymentOrderMapper paymentOrderMapper;
+    private final PaymentOrderItemMapper paymentOrderItemMapper;
+    private final RegistrationBatchMapper registrationBatchMapper;
     private final WechatPayNotifyMapper wechatPayNotifyMapper;
     private final AdminOperationLogMapper adminOperationLogMapper;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
-    private final HttpClient httpClient = HttpClient.newHttpClient();
 
     @Override
     public WechatNativePayVO createNativePayment(Long entryId) {
@@ -93,6 +99,7 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
         PortalAccount account = requirePortalAccount();
         BeerEntry entry = requireOwnedEntry(entryId, account.getBreweryId());
         EntryPayment payment = ensurePayment(entry);
+        assertStandalonePayment(payment);
         if (EntryPaymentStatus.PAID.name().equals(payment.getStatus())) {
             return toNativePayVO(payment);
         }
@@ -146,6 +153,7 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
         PortalAccount account = requirePortalAccount();
         BeerEntry entry = requireOwnedEntry(entryId, account.getBreweryId());
         EntryPayment payment = ensurePayment(entry);
+        assertStandalonePayment(payment);
         if (EntryPaymentStatus.PAID.name().equals(payment.getStatus())) {
             return toJsapiPayVO(payment, null);
         }
@@ -160,7 +168,7 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
         }
 
         // 2) 获取 openid 并清理旧的未支付微信订单
-        String openid = fetchOpenidByCode(code);
+        String openid = wechatOAuthService.resolveOpenid(code);
         closeUnpaidWechatOrder(payment, entry);
         payment = entryPaymentMapper.selectById(payment.getId());
         if (EntryPaymentStatus.PAID.name().equals(payment.getStatus())) {
@@ -230,7 +238,11 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
         WechatPayNotify notify = insertNotify(result.notifyId(), result.eventType(), BUSINESS_PAYMENT,
                 result.outTradeNo(), null, result.transactionId(), null, result.rawJson());
         try {
-            transactionTemplate.executeWithoutResult(status -> applyPaymentSuccess(result));
+            transactionTemplate.executeWithoutResult(status -> {
+                if (!batchPaymentService.applyWechatPaymentSuccess(result)) {
+                    applyPaymentSuccess(result);
+                }
+            });
             markNotifyProcessed(notify.getId(), "OK");
         } catch (RuntimeException ex) {
             markNotifyProcessed(notify.getId(), ex.getMessage());
@@ -267,12 +279,12 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
 
         // 2) 微信付款发起原路退款
         WechatPayClient.RefundResult result = wechatPayClient.createRefund(new WechatPayClient.RefundRequest(
-                context.payment().getOutTradeNo(),
-                context.payment().getWechatTransactionId(),
+                resolveRefundOutTradeNo(context),
+                resolveRefundTransactionId(context),
                 context.refund().getOutRefundNo(),
                 context.refund().getReason(),
                 context.refund().getAmount(),
-                context.payment().getAmount()
+                resolveRefundTotalAmount(context)
         ));
 
         // 3) 应用微信退款受理结果
@@ -295,12 +307,12 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
         // 2) 调用微信原路退款，失败时登记为可后台重试
         try {
             WechatPayClient.RefundResult result = wechatPayClient.createRefund(new WechatPayClient.RefundRequest(
-                    context.payment().getOutTradeNo(),
-                    context.payment().getWechatTransactionId(),
+                    resolveRefundOutTradeNo(context),
+                    resolveRefundTransactionId(context),
                     context.refund().getOutRefundNo(),
                     context.refund().getReason(),
                     context.refund().getAmount(),
-                    context.payment().getAmount()
+                    resolveRefundTotalAmount(context)
             ));
             transactionTemplate.executeWithoutResult(status -> applyRefundResult(result.outRefundNo(), result.refundId(),
                     result.refundStatus(), result.successTime(), null));
@@ -421,11 +433,14 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
         if (payment == null || !EntryPaymentStatus.PAID.name().equals(payment.getStatus())) {
             throw new BaseException("只有已支付报名可以退款");
         }
+        PaymentOrderItem orderItem = findOrderItem(payment);
+        PaymentOrder order = orderItem == null ? null : paymentOrderMapper.selectById(orderItem.getPaymentOrderId());
         if (!isManualRefundPayment(payment)) {
-            if (!StringUtils.hasText(payment.getOutTradeNo()) && wechatPayProperties.isWechatMode()) {
+            if (!StringUtils.hasText(order == null ? payment.getOutTradeNo() : order.getOutTradeNo())
+                    && wechatPayProperties.isWechatMode()) {
                 throw new BaseException("缺少支付订单号，无法发起微信退款");
             }
-            if (!StringUtils.hasText(payment.getOutTradeNo())) {
+            if (order == null && !StringUtils.hasText(payment.getOutTradeNo())) {
                 payment.setOutTradeNo(generateOutTradeNo());
                 entryPaymentMapper.updateById(payment);
             }
@@ -437,9 +452,12 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
         refund.setProcessedByAdminId(adminId);
         refund.setProcessedTime(LocalDateTime.now());
         refund.setFailReason(null);
+        if (refund.getPaymentOrderItemId() == null && orderItem != null) {
+            refund.setPaymentOrderItemId(orderItem.getId());
+        }
         entryRefundMapper.updateById(refund);
         writeEntryLog(adminId, "ENTRY_REFUND_APPROVE", entry.getUuid(), buildStatusLogSummary("受理退款", reason));
-        return new RefundContext(refund, payment, entry);
+        return new RefundContext(refund, payment, entry, order, orderItem);
     }
 
     private RefundContext prepareAutoRefund(Long refundId, String reason) {
@@ -452,7 +470,10 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
         if (payment == null || !EntryPaymentStatus.PAID.name().equals(payment.getStatus())) {
             throw new BaseException("只有已支付报名可以退款");
         }
-        if (!isManualRefundPayment(payment) && !StringUtils.hasText(payment.getOutTradeNo())) {
+        PaymentOrderItem orderItem = findOrderItem(payment);
+        PaymentOrder order = orderItem == null ? null : paymentOrderMapper.selectById(orderItem.getPaymentOrderId());
+        if (!isManualRefundPayment(payment)
+                && !StringUtils.hasText(order == null ? payment.getOutTradeNo() : order.getOutTradeNo())) {
             throw new BaseException("缺少支付订单号，无法发起微信退款");
         }
         if (!isManualRefundPayment(payment) && !StringUtils.hasText(refund.getOutRefundNo())) {
@@ -462,8 +483,11 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
         refund.setProcessedByAdminId(null);
         refund.setProcessedTime(LocalDateTime.now());
         refund.setFailReason(null);
+        if (refund.getPaymentOrderItemId() == null && orderItem != null) {
+            refund.setPaymentOrderItemId(orderItem.getId());
+        }
         entryRefundMapper.updateById(refund);
-        return new RefundContext(refund, payment, entry);
+        return new RefundContext(refund, payment, entry, order, orderItem);
     }
 
     private void markAutoRefundFailed(Long refundId, RuntimeException ex) {
@@ -491,6 +515,7 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
 
         payment.setStatus(EntryPaymentStatus.REFUNDED.name());
         entryPaymentMapper.updateById(payment);
+        applyAggregateRefundSuccess(refund, payment);
 
         entry.setStatus(EntryStatus.CANCELED.name());
         beerEntryMapper.updateById(entry);
@@ -521,6 +546,7 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
 
             payment.setStatus(EntryPaymentStatus.REFUNDED.name());
             entryPaymentMapper.updateById(payment);
+            applyAggregateRefundSuccess(refund, payment);
 
             entry.setStatus(EntryStatus.CANCELED.name());
             beerEntryMapper.updateById(entry);
@@ -568,6 +594,66 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
                 || EntryPayMethod.MANUAL.name().equals(payment.getPayMethod()));
     }
 
+    private PaymentOrderItem findOrderItem(EntryPayment payment) {
+        if (payment == null || payment.getPaymentOrderId() == null) {
+            return null;
+        }
+        return paymentOrderItemMapper.selectOne(new LambdaQueryWrapper<PaymentOrderItem>()
+                .eq(PaymentOrderItem::getEntryPaymentId, payment.getId())
+                .last("LIMIT 1"));
+    }
+
+    private String resolveRefundOutTradeNo(RefundContext context) {
+        return context.order() == null ? context.payment().getOutTradeNo() : context.order().getOutTradeNo();
+    }
+
+    private String resolveRefundTransactionId(RefundContext context) {
+        return context.order() == null
+                ? context.payment().getWechatTransactionId()
+                : context.order().getWechatTransactionId();
+    }
+
+    private BigDecimal resolveRefundTotalAmount(RefundContext context) {
+        return context.order() == null ? context.payment().getAmount() : context.order().getAmount();
+    }
+
+    private void applyAggregateRefundSuccess(EntryRefund refund, EntryPayment payment) {
+        PaymentOrderItem item = refund.getPaymentOrderItemId() == null
+                ? findOrderItem(payment)
+                : paymentOrderItemMapper.selectById(refund.getPaymentOrderItemId());
+        if (item == null) {
+            return;
+        }
+        item.setRefundedAmount(item.getAmount());
+        item.setStatus(EntryPaymentStatus.REFUNDED.name());
+        paymentOrderItemMapper.updateById(item);
+
+        PaymentOrder order = paymentOrderMapper.selectById(item.getPaymentOrderId());
+        if (order == null) {
+            return;
+        }
+        BigDecimal refundedAmount = paymentOrderItemMapper.selectList(new LambdaQueryWrapper<PaymentOrderItem>()
+                        .eq(PaymentOrderItem::getPaymentOrderId, order.getId()))
+                .stream()
+                .map(PaymentOrderItem::getRefundedAmount)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        boolean fullyRefunded = refundedAmount.compareTo(order.getAmount()) >= 0;
+        order.setRefundedAmount(refundedAmount);
+        order.setStatus(fullyRefunded
+                ? PaymentOrderStatus.REFUNDED.name()
+                : PaymentOrderStatus.PARTIALLY_REFUNDED.name());
+        paymentOrderMapper.updateById(order);
+
+        RegistrationBatch batch = registrationBatchMapper.selectById(order.getRegistrationBatchId());
+        if (batch != null) {
+            batch.setStatus(fullyRefunded
+                    ? RegistrationBatchStatus.REFUNDED.name()
+                    : RegistrationBatchStatus.PARTIALLY_REFUNDED.name());
+            registrationBatchMapper.updateById(batch);
+        }
+    }
+
     private WechatNativePayVO toNativePayVO(EntryPayment payment) {
         return WechatNativePayVO.builder()
                 .mode(wechatPayProperties.normalizedMode())
@@ -598,51 +684,11 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
                 .build();
     }
 
-    private String fetchOpenidByCode(String code) {
-        if (!wechatPayProperties.isWechatMode()) {
-            return "mock-openid";
-        }
-        String appId = requiredWechatConfig(wechatPayProperties.getAppId(), "微信支付 AppID 未配置");
-        String appSecret = requiredWechatConfig(wechatPayProperties.getAppSecret(), "公众号 AppSecret 未配置");
-        String query = "appid=" + encode(appId)
-                + "&secret=" + encode(appSecret)
-                + "&code=" + encode(code.trim())
-                + "&grant_type=authorization_code";
-        HttpRequest request = HttpRequest.newBuilder(URI.create(WECHAT_OAUTH_TOKEN_URL + "?" + query))
-                .GET()
-                .build();
-        try {
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-            JsonNode root = objectMapper.readTree(response.body());
-            String openid = root.path("openid").asText(null);
-            if (StringUtils.hasText(openid)) {
-                return openid;
-            }
-            String errMsg = root.path("errmsg").asText("微信授权失败");
-            throw new BaseException("微信授权失败：" + errMsg);
-        } catch (BaseException ex) {
-            throw ex;
-        } catch (Exception ex) {
-            throw new BaseException("微信授权失败，请重新打开页面后再试");
-        }
-    }
-
-    private String requiredWechatConfig(String value, String message) {
-        if (!StringUtils.hasText(value)) {
-            throw new BaseException(message);
-        }
-        return value.trim();
-    }
-
     private String trimToNull(String value) {
         if (!StringUtils.hasText(value)) {
             return null;
         }
         return value.trim();
-    }
-
-    private String encode(String value) {
-        return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 
     private EntryPayment ensurePayment(BeerEntry entry) {
@@ -659,6 +705,12 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
                 .build();
         entryPaymentMapper.insert(created);
         return created;
+    }
+
+    private void assertStandalonePayment(EntryPayment payment) {
+        if (payment != null && payment.getPaymentOrderId() != null) {
+            throw new BaseException("该酒款已加入统一付款订单，请返回报名订单完成支付");
+        }
     }
 
     private EntryPayment findPayment(Long beerEntryId) {
@@ -791,6 +843,7 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
                 .build());
     }
 
-    private record RefundContext(EntryRefund refund, EntryPayment payment, BeerEntry entry) {
+    private record RefundContext(EntryRefund refund, EntryPayment payment, BeerEntry entry,
+                                 PaymentOrder order, PaymentOrderItem orderItem) {
     }
 }

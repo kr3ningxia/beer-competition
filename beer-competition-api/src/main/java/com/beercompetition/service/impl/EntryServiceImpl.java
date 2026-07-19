@@ -22,6 +22,8 @@ import com.beercompetition.mapper.EntryRefundMapper;
 import com.beercompetition.mapper.FileAssetMapper;
 import com.beercompetition.mapper.JudgeAccountMapper;
 import com.beercompetition.mapper.PortalAccountMapper;
+import com.beercompetition.mapper.PaymentOrderItemMapper;
+import com.beercompetition.mapper.PaymentOrderMapper;
 import com.beercompetition.mapper.RoundResultMapper;
 import com.beercompetition.mapper.RoundTableEntryMapper;
 import com.beercompetition.mapper.RoundTableMapper;
@@ -69,6 +71,8 @@ import com.beercompetition.pojo.po.EntryRefund;
 import com.beercompetition.pojo.po.FileAsset;
 import com.beercompetition.pojo.po.JudgeAccount;
 import com.beercompetition.pojo.po.PortalAccount;
+import com.beercompetition.pojo.po.PaymentOrder;
+import com.beercompetition.pojo.po.PaymentOrderItem;
 import com.beercompetition.pojo.po.RoundResult;
 import com.beercompetition.pojo.po.RoundTable;
 import com.beercompetition.pojo.po.RoundTableEntry;
@@ -169,6 +173,8 @@ public class EntryServiceImpl implements EntryService {
     private final CompetitionStyleConfigMapper competitionStyleConfigMapper;
     private final EntryPaymentMapper entryPaymentMapper;
     private final EntryRefundMapper entryRefundMapper;
+    private final PaymentOrderItemMapper paymentOrderItemMapper;
+    private final PaymentOrderMapper paymentOrderMapper;
     private final EntryDeliveryMapper entryDeliveryMapper;
     private final EntryFieldConfigMapper entryFieldConfigMapper;
     private final BeerEntryExtraFieldMapper beerEntryExtraFieldMapper;
@@ -467,6 +473,7 @@ public class EntryServiceImpl implements EntryService {
             throw new BaseException("当前酒款不能取消报名");
         }
         EntryPayment payment = ensureEntryPayment(entry.getId(), entry.getCompetitionId());
+        assertStandalonePaymentAction(payment, "该酒款已加入统一付款订单，不能单独取消报名");
         if (EntryPaymentStatus.PAID.name().equals(payment.getStatus())) {
             throw new BaseException("已支付报名请通过退款申请处理");
         }
@@ -498,6 +505,7 @@ public class EntryServiceImpl implements EntryService {
         EntryRefund refund = EntryRefund.builder()
                 .beerEntryId(entry.getId())
                 .entryPaymentId(payment.getId())
+                .paymentOrderItemId(findPaymentOrderItemId(payment))
                 .refundNo(generateRefundNo())
                 .amount(payment.getAmount())
                 .status(EntryRefundStatus.REQUESTED.name())
@@ -510,6 +518,16 @@ public class EntryServiceImpl implements EntryService {
 
         // 3) 返回最新酒款详情
         return toEntryDetailVO(beerEntryMapper.selectById(entry.getId()));
+    }
+
+    private Long findPaymentOrderItemId(EntryPayment payment) {
+        if (payment == null || payment.getPaymentOrderId() == null) {
+            return null;
+        }
+        PaymentOrderItem item = paymentOrderItemMapper.selectOne(new LambdaQueryWrapper<PaymentOrderItem>()
+                .eq(PaymentOrderItem::getEntryPaymentId, payment.getId())
+                .last("LIMIT 1"));
+        return item == null ? null : item.getId();
     }
 
     @Override
@@ -813,6 +831,7 @@ public class EntryServiceImpl implements EntryService {
             throw new BaseException("当前酒款不能支付报名费");
         }
         EntryPayment payment = ensureEntryPayment(entry.getId(), entry.getCompetitionId());
+        assertStandalonePaymentAction(payment, "该酒款已加入统一付款订单，请按整批完成付款");
         if (EntryPaymentStatus.PENDING_CONFIRM.name().equals(payment.getStatus())) {
             throw new BaseException("银行转账信息已提交，请等待组委会核对到账");
         }
@@ -847,6 +866,7 @@ public class EntryServiceImpl implements EntryService {
             throw new BaseException("只有待支付确认的酒款可以确认支付");
         }
         EntryPayment payment = ensureEntryPayment(entry.getId(), entry.getCompetitionId());
+        assertStandalonePaymentAction(payment, "该酒款已加入统一付款订单，不能单独确认付款");
         if (EntryPaymentStatus.PENDING_CONFIRM.name().equals(payment.getStatus())) {
             throw new BaseException("银行转账记录请在转账确认页面处理");
         }
@@ -1407,6 +1427,7 @@ public class EntryServiceImpl implements EntryService {
         Competition competition = competitionMapper.selectById(entry.getCompetitionId());
         CompetitionCategory category = competitionCategoryMapper.selectById(entry.getCategoryId());
         EntryPayment payment = findEntryPayment(entry.getId());
+        PaymentOrder paymentOrder = findPaymentOrder(payment);
         EntryDelivery delivery = findEntryDelivery(entry.getId());
         EntryRefund refund = findLatestRefund(entry.getId());
         EntryScanLabel label = entryScanLabelService.requireActiveLabel(entry.getId());
@@ -1420,6 +1441,9 @@ public class EntryServiceImpl implements EntryService {
                 .shortCode(label.getShortCode())
                 .scanToken(label.getScanToken())
                 .competitionId(entry.getCompetitionId())
+                .registrationBatchId(entry.getRegistrationBatchId())
+                .paymentOrderId(payment == null ? null : payment.getPaymentOrderId())
+                .paymentOrderStatus(paymentOrder == null ? null : paymentOrder.getStatus())
                 .competitionType(resolveCompetitionType(competition).name())
                 .competitionCode(competition == null ? null : competition.getCode())
                 .name(entry.getName())
@@ -1463,6 +1487,7 @@ public class EntryServiceImpl implements EntryService {
         Competition competition = competitionMapper.selectById(entry.getCompetitionId());
         CompetitionCategory category = competitionCategoryMapper.selectById(entry.getCategoryId());
         EntryPayment payment = findEntryPayment(entry.getId());
+        PaymentOrder paymentOrder = findPaymentOrder(payment);
         EntryDelivery delivery = findEntryDelivery(entry.getId());
         EntryRefund refund = findLatestRefund(entry.getId());
         EntryScanLabel label = entryScanLabelService.requireActiveLabel(entry.getId());
@@ -1476,6 +1501,9 @@ public class EntryServiceImpl implements EntryService {
                 .shortCode(label.getShortCode())
                 .scanToken(label.getScanToken())
                 .competitionId(entry.getCompetitionId())
+                .registrationBatchId(entry.getRegistrationBatchId())
+                .paymentOrderId(payment == null ? null : payment.getPaymentOrderId())
+                .paymentOrderStatus(paymentOrder == null ? null : paymentOrder.getStatus())
                 .competitionType(resolveCompetitionType(competition).name())
                 .competitionCode(competition == null ? null : competition.getCode())
                 .name(entry.getName())
@@ -2269,6 +2297,12 @@ public class EntryServiceImpl implements EntryService {
         return created;
     }
 
+    private void assertStandalonePaymentAction(EntryPayment payment, String message) {
+        if (payment != null && payment.getPaymentOrderId() != null) {
+            throw new BaseException(message);
+        }
+    }
+
     private BigDecimal resolveEntryFee(Competition competition, LocalDateTime now) {
         if (competition == null) {
             return BigDecimal.ZERO;
@@ -2339,6 +2373,7 @@ public class EntryServiceImpl implements EntryService {
 
     private EntryPaymentVO toEntryPaymentVO(EntryPayment payment, Competition competition) {
         return EntryPaymentVO.builder()
+                .paymentOrderId(payment == null ? null : payment.getPaymentOrderId())
                 .status(payment == null ? EntryPaymentStatus.UNPAID.name() : payment.getStatus())
                 .payMethod(resolvePayMethod(payment == null ? null : payment.getPayMethod()))
                 .amount(payment == null ? competition == null ? null : competition.getEntryFee() : payment.getAmount())
@@ -2352,6 +2387,13 @@ public class EntryServiceImpl implements EntryService {
                 .wechatTradeStateDesc(payment == null ? null : payment.getWechatTradeStateDesc())
                 .paidTime(payment == null ? null : payment.getPaidTime())
                 .build();
+    }
+
+    private PaymentOrder findPaymentOrder(EntryPayment payment) {
+        if (payment == null || payment.getPaymentOrderId() == null) {
+            return null;
+        }
+        return paymentOrderMapper.selectById(payment.getPaymentOrderId());
     }
 
     private EntryRefundVO toEntryRefundVO(EntryRefund refund) {

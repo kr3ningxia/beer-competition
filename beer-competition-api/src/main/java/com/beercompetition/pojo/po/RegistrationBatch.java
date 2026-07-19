@@ -15,28 +15,20 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@TableName("bank_transfer_payment")
-public class BankTransferPayment {
+@TableName("registration_batch")
+public class RegistrationBatch {
 
     @TableId(type = IdType.AUTO)
     private Long id;
-    private String transferNo;
+    private String batchNo;
+    private Long competitionId;
     private Long breweryId;
     private Long portalAccountId;
-    private Long competitionId;
-    private Long paymentOrderId;
-    private Long beerEntryId;
-    private Long entryPaymentId;
-    private BigDecimal amount;
-    private String payerName;
-    private LocalDateTime transferTime;
-    private String remark;
-    private Long voucherAssetId;
+    private Integer entryCount;
+    private BigDecimal totalAmount;
     private String status;
-    private Long adminId;
-    private String adminNote;
-    private LocalDateTime submittedTime;
-    private LocalDateTime processedTime;
+    private String idempotencyKey;
+    private Integer rulesAccepted;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

@@ -133,13 +133,13 @@ const myCompetitions = computed(() => competitions.value)
 
 const heroReminder = computed(() => {
   if (unpaidEntries.value.length > 0) {
-    return { label: `${unpaidEntries.value.length} 款待支付`, to: '/portal/payment' }
+    return { label: `${unpaidEntries.value.length} 款待支付`, to: entryPrimaryAction(unpaidEntries.value[0]).to }
   }
   if (labelEntries.value.length > 0) {
-    return { label: `${labelEntries.value.length} 款待办理送样`, to: '/portal/payment' }
+    return { label: `${labelEntries.value.length} 款待办理送样`, to: entryPrimaryAction(labelEntries.value[0]).to }
   }
   if (waitingDeliveryEntries.value.length > 0) {
-    return { label: `${waitingDeliveryEntries.value.length} 款等待确认`, to: '/portal/payment' }
+    return { label: `${waitingDeliveryEntries.value.length} 款等待确认`, to: entryPrimaryAction(waitingDeliveryEntries.value[0]).to }
   }
   if (resultEntries.value.length > 0) {
     return { label: `${resultEntries.value.length} 款结果可看`, to: '/portal/results' }
@@ -196,42 +196,48 @@ function progressChips(competition) {
 
 function competitionActions(competition) {
   const item = summary(competition.id)
-  const extraActions = canSubmitEntry(competition)
-    ? [{ label: '再报一款酒', to: `/portal/submit?competitionId=${competition.id}` }]
-    : []
   const entriesPath = `/portal/entries?competitionId=${competition.id}`
+  const entriesAction = { label: '查看酒款', to: entriesPath }
+  const tertiaryAction = canSubmitEntry(competition)
+    ? { label: '再报一款酒', to: `/portal/submit?competitionId=${competition.id}` }
+    : { label: '赛事详情', to: `/portal/events/${competition.id}` }
+
   if (item.pendingPayment > 0) {
+    const pendingEntries = entries.value.filter((entry) => entry.competitionId === competition.id && isEntryPaymentPending(entry))
+    const pendingEntry = pendingEntries.find((entry) => entry.paymentStatus !== 'PENDING_CONFIRM') || pendingEntries[0]
+    const paymentAction = entryPrimaryAction(pendingEntry)
     return [
-      { label: '去支付', to: '/portal/payment', primary: true },
-      { label: '赛事详情', to: `/portal/events/${competition.id}` },
-      ...extraActions,
+      { ...paymentAction, primary: true },
+      entriesAction,
+      tertiaryAction,
     ]
   }
   if (item.deliveryActionPending > 0) {
+    const deliveryEntry = entries.value.find((entry) => entry.competitionId === competition.id && isEntryDeliveryActionPending(entry))
     return [
-      { label: '办理送样', to: '/portal/payment', primary: true },
-      { label: '查看酒款', to: entriesPath },
-      ...extraActions,
+      { label: '办理送样', to: entryPrimaryAction(deliveryEntry).to, primary: true },
+      entriesAction,
+      tertiaryAction,
     ]
   }
   if (item.deliverySubmitted > 0 || item.registered > 0) {
+    const progressEntry = entries.value.find((entry) => entry.competitionId === competition.id && entry.status === 'REGISTERED')
     return [
-      { label: '查看送样进度', to: '/portal/payment', primary: true },
-      { label: '查看酒款', to: entriesPath },
-      ...extraActions,
+      { label: '查看送样进度', to: entryPrimaryAction(progressEntry).to, primary: true },
+      entriesAction,
+      tertiaryAction,
     ]
   }
   if (item.result > 0) {
     return [
       { label: '查看结果', to: competitionResultPath(competition.id), primary: true },
+      entriesAction,
       { label: '赛事详情', to: `/portal/events/${competition.id}` },
-      ...extraActions,
     ]
   }
   return [
-    { label: '查看酒款', to: entriesPath, primary: true },
-    { label: '赛事详情', to: `/portal/events/${competition.id}` },
-    ...extraActions,
+    { ...entriesAction, primary: true },
+    tertiaryAction,
   ]
 }
 

@@ -1,0 +1,353 @@
+- generic [ref=e31]:
+  - banner [ref=e32]:
+    - generic [ref=e33]:
+      - link "赛事首页" [ref=e34] [cursor=pointer]:
+        - /url: /portal/home
+        - generic [ref=e37]:
+          - strong [ref=e38]: 啤酒事务局
+          - generic [ref=e39]: 赛事平台
+      - navigation "厂牌导航" [ref=e40]:
+        - link "赛事首页" [ref=e41] [cursor=pointer]:
+          - /url: /portal/home
+        - link "全部赛事" [ref=e45] [cursor=pointer]:
+          - /url: /portal/events
+        - link "赛事结果" [ref=e49] [cursor=pointer]:
+          - /url: /portal/competition-results
+        - link "我的参赛" [ref=e53] [cursor=pointer]:
+          - /url: /portal/my
+        - link "我的结果" [ref=e58] [cursor=pointer]:
+          - /url: /portal/results
+      - generic [ref=e63]:
+        - link "进入厂牌资料" [ref=e64] [cursor=pointer]:
+          - /url: /portal/profile
+          - img "厂牌头像" [ref=e66]
+          - generic [ref=e67]: 八千代麦芽工坊
+        - button "退出" [ref=e68] [cursor=pointer]
+  - main [ref=e70]:
+    - generic [ref=e272]:
+      - generic [ref=e273]:
+        - generic [ref=e274]:
+          - heading "我的酒款" [level=2] [ref=e275]
+          - paragraph [ref=e276]: 按酒款查看报名记录，并处理支付、现场标签、样品入库和结果
+        - generic [ref=e277]:
+          - textbox "搜索酒名 / 现场短编号" [ref=e280]
+          - generic [ref=e282] [cursor=pointer]:
+            - generic:
+              - combobox [ref=e284]
+              - generic [ref=e285]: 状态
+      - generic [ref=e290]:
+        - generic [ref=e291]: 当前查看
+        - strong [ref=e292]: 啤酒事务局风格对齐会：布鲁塞尔
+        - button "查看全部酒款" [ref=e293] [cursor=pointer]
+      - generic [ref=e294]:
+        - article [ref=e295] [cursor=pointer]:
+          - generic [ref=e296]:
+            - generic [ref=e297]: 待支付
+            - generic [ref=e298]: "11"
+          - generic [ref=e299]: 啤酒事务局风格对齐会：布鲁塞尔
+          - heading "111" [level=3] [ref=e300]
+          - paragraph [ref=e301]: 深色艾尔啤酒 Dark Ale · 修道院风格特别单料 / Abbey Style / Single-Extra
+          - generic [ref=e302]:
+            - generic [ref=e303]:
+              - generic [ref=e304]: ABV
+              - strong [ref=e305]: 11%
+            - generic [ref=e306]:
+              - generic [ref=e307]: 报名费
+              - strong [ref=e308]: ¥199
+            - generic [ref=e309]:
+              - generic [ref=e310]: 支付
+              - strong [ref=e311]: 待支付
+          - generic [ref=e312]:
+            - generic [ref=e313]: 现场短编号 CILDM
+            - button "详情" [ref=e314]
+          - generic [ref=e316]:
+            - link "查看转账进度" [ref=e317]:
+              - /url: /portal/batch-payment?batchId=161&orderId=161&payMode=bank_transfer
+            - button "更多" [ref=e319]
+        - article [ref=e320] [cursor=pointer]:
+          - generic [ref=e321]:
+            - generic [ref=e322]: 报名成功
+            - generic [ref=e323]: "11"
+          - generic [ref=e324]: 啤酒事务局风格对齐会：布鲁塞尔
+          - heading "111" [level=3] [ref=e325]
+          - paragraph [ref=e326]: 深色艾尔啤酒 Dark Ale · 修道院风格特别单料 / Abbey Style / Single-Extra
+          - generic [ref=e327]:
+            - generic [ref=e328]:
+              - generic [ref=e329]: ABV
+              - strong [ref=e330]: 11%
+            - generic [ref=e331]:
+              - generic [ref=e332]: 报名费
+              - strong [ref=e333]: ¥199
+            - generic [ref=e334]:
+              - generic [ref=e335]: 支付
+              - strong [ref=e336]: 已支付
+          - generic [ref=e337]:
+            - generic [ref=e338]: 现场短编号 TZN36
+            - button "详情" [ref=e339]
+          - generic [ref=e341]:
+            - link "办理送样" [ref=e342]:
+              - /url: /portal/fulfillment?entryId=46043&batchId=160
+            - button "更多" [ref=e344]
+        - article [ref=e345] [cursor=pointer]:
+          - generic [ref=e346]:
+            - generic [ref=e347]: 报名成功
+            - generic [ref=e348]: "11"
+          - generic [ref=e349]: 啤酒事务局风格对齐会：布鲁塞尔
+          - heading "111" [level=3] [ref=e350]
+          - paragraph [ref=e351]: 深色艾尔啤酒 Dark Ale · 慕尼黑清亮拉格 / Helles
+          - generic [ref=e352]:
+            - generic [ref=e353]:
+              - generic [ref=e354]: ABV
+              - strong [ref=e355]: 11%
+            - generic [ref=e356]:
+              - generic [ref=e357]: 报名费
+              - strong [ref=e358]: ¥199
+            - generic [ref=e359]:
+              - generic [ref=e360]: 支付
+              - strong [ref=e361]: 已支付
+          - generic [ref=e362]:
+            - generic [ref=e363]: 现场短编号 I0UYW
+            - button "详情" [ref=e364]
+          - generic [ref=e366]:
+            - link "办理送样" [ref=e367]:
+              - /url: /portal/fulfillment?entryId=46042&batchId=160
+            - button "更多" [ref=e369]
+        - article [ref=e370] [cursor=pointer]:
+          - generic [ref=e371]:
+            - generic [ref=e372]: 待支付
+            - generic [ref=e373]: "5.8"
+          - generic [ref=e374]: 啤酒事务局风格对齐会：布鲁塞尔
+          - heading "微信环境自动支付验收" [level=3] [ref=e375]
+          - paragraph [ref=e376]: 淡色/琥珀艾尔 Pale/Amber Ale · 修道院风格金色艾尔 / Abbey / Trappist Style Blond
+          - generic [ref=e377]:
+            - generic [ref=e378]:
+              - generic [ref=e379]: ABV
+              - strong [ref=e380]: 5.8%
+            - generic [ref=e381]:
+              - generic [ref=e382]: 报名费
+              - strong [ref=e383]: ¥199
+            - generic [ref=e384]:
+              - generic [ref=e385]: 支付
+              - strong [ref=e386]: 待支付
+          - generic [ref=e387]:
+            - generic [ref=e388]: 现场短编号 4XV4Q
+            - button "详情" [ref=e389]
+          - generic [ref=e391]:
+            - link "去支付" [ref=e392]:
+              - /url: /portal/batch-payment?batchId=154&orderId=154&payMode=wechat
+            - button "更多" [ref=e394]
+        - article [ref=e395] [cursor=pointer]:
+          - generic [ref=e396]:
+            - generic [ref=e397]: 报名成功
+            - generic [ref=e398]: "5.8"
+          - generic [ref=e399]: 啤酒事务局风格对齐会：布鲁塞尔
+          - heading "微信链路验收酒款 B" [level=3] [ref=e400]
+          - paragraph [ref=e401]: 淡色/琥珀艾尔 Pale/Amber Ale · 修道院风格金色艾尔 / Abbey / Trappist Style Blond
+          - generic [ref=e402]:
+            - generic [ref=e403]:
+              - generic [ref=e404]: ABV
+              - strong [ref=e405]: 5.8%
+            - generic [ref=e406]:
+              - generic [ref=e407]: 报名费
+              - strong [ref=e408]: ¥199
+            - generic [ref=e409]:
+              - generic [ref=e410]: 支付
+              - strong [ref=e411]: 已支付
+          - generic [ref=e412]:
+            - generic [ref=e413]: 现场短编号 1UBTT
+            - button "详情" [ref=e414]
+          - generic [ref=e416]:
+            - link "查看送样进度" [ref=e417]:
+              - /url: /portal/fulfillment?entryId=45815&batchId=148
+            - button "更多" [ref=e419]
+        - article [ref=e420] [cursor=pointer]:
+          - generic [ref=e421]:
+            - generic [ref=e422]: 报名成功
+            - generic [ref=e423]: "5.8"
+          - generic [ref=e424]: 啤酒事务局风格对齐会：布鲁塞尔
+          - heading "微信链路验收酒款 A" [level=3] [ref=e425]
+          - paragraph [ref=e426]: 淡色/琥珀艾尔 Pale/Amber Ale · 修道院风格金色艾尔 / Abbey / Trappist Style Blond
+          - generic [ref=e427]:
+            - generic [ref=e428]:
+              - generic [ref=e429]: ABV
+              - strong [ref=e430]: 5.8%
+            - generic [ref=e431]:
+              - generic [ref=e432]: 报名费
+              - strong [ref=e433]: ¥199
+            - generic [ref=e434]:
+              - generic [ref=e435]: 支付
+              - strong [ref=e436]: 已支付
+          - generic [ref=e437]:
+            - generic [ref=e438]: 现场短编号 G7M6T
+            - button "详情" [ref=e439]
+          - generic [ref=e441]:
+            - link "查看送样进度" [ref=e442]:
+              - /url: /portal/fulfillment?entryId=45814&batchId=148
+            - button "更多" [ref=e444]
+        - article [ref=e445] [cursor=pointer]:
+          - generic [ref=e446]:
+            - generic [ref=e447]: 待支付
+            - generic [ref=e448]: "5.5"
+          - generic [ref=e449]: 啤酒事务局风格对齐会：布鲁塞尔
+          - heading "链路验收酒款 B" [level=3] [ref=e450]
+          - paragraph [ref=e451]: 淡色/琥珀艾尔 Pale/Amber Ale · 修道院风格金色艾尔 / Abbey / Trappist Style Blond
+          - generic [ref=e452]:
+            - generic [ref=e453]:
+              - generic [ref=e454]: ABV
+              - strong [ref=e455]: 5.5%
+            - generic [ref=e456]:
+              - generic [ref=e457]: 报名费
+              - strong [ref=e458]: ¥199
+            - generic [ref=e459]:
+              - generic [ref=e460]: 支付
+              - strong [ref=e461]: 待支付
+          - generic [ref=e462]:
+            - generic [ref=e463]: 现场短编号 2PSIZ
+            - button "详情" [ref=e464]
+          - generic [ref=e466]:
+            - link "查看转账进度" [ref=e467]:
+              - /url: /portal/batch-payment?batchId=147&orderId=147&payMode=bank_transfer
+            - button "更多" [ref=e469]
+        - article [ref=e470] [cursor=pointer]:
+          - generic [ref=e471]:
+            - generic [ref=e472]: 待支付
+            - generic [ref=e473]: "5.5"
+          - generic [ref=e474]: 啤酒事务局风格对齐会：布鲁塞尔
+          - heading "链路验收酒款 A" [level=3] [ref=e475]
+          - paragraph [ref=e476]: 淡色/琥珀艾尔 Pale/Amber Ale · 修道院风格金色艾尔 / Abbey / Trappist Style Blond
+          - generic [ref=e477]:
+            - generic [ref=e478]:
+              - generic [ref=e479]: ABV
+              - strong [ref=e480]: 5.5%
+            - generic [ref=e481]:
+              - generic [ref=e482]: 报名费
+              - strong [ref=e483]: ¥199
+            - generic [ref=e484]:
+              - generic [ref=e485]: 支付
+              - strong [ref=e486]: 待支付
+          - generic [ref=e487]:
+            - generic [ref=e488]: 现场短编号 0BCJQ
+            - button "详情" [ref=e489]
+          - generic [ref=e491]:
+            - link "查看转账进度" [ref=e492]:
+              - /url: /portal/batch-payment?batchId=147&orderId=147&payMode=bank_transfer
+            - button "更多" [ref=e494]
+        - article [ref=e495] [cursor=pointer]:
+          - generic [ref=e496]:
+            - generic [ref=e497]: 报名成功
+            - generic [ref=e498]: "11"
+          - generic [ref=e499]: 啤酒事务局风格对齐会：布鲁塞尔
+          - heading "111" [level=3] [ref=e500]
+          - paragraph [ref=e501]: 增味啤酒 Flavoured Beer · 英式IPA / English IPA
+          - generic [ref=e502]:
+            - generic [ref=e503]:
+              - generic [ref=e504]: ABV
+              - strong [ref=e505]: 11%
+            - generic [ref=e506]:
+              - generic [ref=e507]: 报名费
+              - strong [ref=e508]: ¥199
+            - generic [ref=e509]:
+              - generic [ref=e510]: 支付
+              - strong [ref=e511]: 已支付
+          - generic [ref=e512]:
+            - generic [ref=e513]: 现场短编号 I35OJ
+            - button "详情" [ref=e514]
+          - generic [ref=e516]:
+            - link "办理送样" [ref=e517]:
+              - /url: /portal/fulfillment?entryId=45761&batchId=136
+            - button "更多" [ref=e519]
+        - article [ref=e520] [cursor=pointer]:
+          - generic [ref=e521]:
+            - generic [ref=e522]: 报名成功
+            - generic [ref=e523]: "5.2"
+          - generic [ref=e524]: 啤酒事务局风格对齐会：布鲁塞尔
+          - heading "批次测试深色拉格" [level=3] [ref=e525]
+          - paragraph [ref=e526]: 拉格 Lager · 美式皮尔森 / American-Style Pilsner
+          - generic [ref=e527]:
+            - generic [ref=e528]:
+              - generic [ref=e529]: ABV
+              - strong [ref=e530]: 5.2%
+            - generic [ref=e531]:
+              - generic [ref=e532]: 报名费
+              - strong [ref=e533]: ¥199
+            - generic [ref=e534]:
+              - generic [ref=e535]: 支付
+              - strong [ref=e536]: 已支付
+          - generic [ref=e537]:
+            - generic [ref=e538]: 现场短编号 KF44O
+            - button "详情" [ref=e539]
+          - generic [ref=e541]:
+            - link "办理送样" [ref=e542]:
+              - /url: /portal/fulfillment?entryId=45760&batchId=135
+            - button "更多" [ref=e544]
+        - article [ref=e545] [cursor=pointer]:
+          - generic [ref=e546]:
+            - generic [ref=e547]: 报名成功
+            - generic [ref=e548]: "5.2"
+          - generic [ref=e549]: 啤酒事务局风格对齐会：布鲁塞尔
+          - heading "批次测试浅色拉格" [level=3] [ref=e550]
+          - paragraph [ref=e551]: 拉格 Lager · 美式皮尔森 / American-Style Pilsner
+          - generic [ref=e552]:
+            - generic [ref=e553]:
+              - generic [ref=e554]: ABV
+              - strong [ref=e555]: 5.2%
+            - generic [ref=e556]:
+              - generic [ref=e557]: 报名费
+              - strong [ref=e558]: ¥199
+            - generic [ref=e559]:
+              - generic [ref=e560]: 支付
+              - strong [ref=e561]: 已支付
+          - generic [ref=e562]:
+            - generic [ref=e563]: 现场短编号 7UZHC
+            - button "详情" [ref=e564]
+          - generic [ref=e566]:
+            - link "办理送样" [ref=e567]:
+              - /url: /portal/fulfillment?entryId=45759&batchId=135
+            - button "更多" [ref=e569]
+        - article [ref=e570] [cursor=pointer]:
+          - generic [ref=e571]:
+            - generic [ref=e572]: 报名成功
+            - generic [ref=e573]: "11"
+          - generic [ref=e574]: 啤酒事务局风格对齐会：布鲁塞尔
+          - heading "111" [level=3] [ref=e575]
+          - paragraph [ref=e576]: 深色艾尔啤酒 Dark Ale · 修道院风格特别单料 / Abbey Style / Single-Extra
+          - generic [ref=e577]:
+            - generic [ref=e578]:
+              - generic [ref=e579]: ABV
+              - strong [ref=e580]: 11%
+            - generic [ref=e581]:
+              - generic [ref=e582]: 报名费
+              - strong [ref=e583]: ¥199
+            - generic [ref=e584]:
+              - generic [ref=e585]: 支付
+              - strong [ref=e586]: 已支付
+          - generic [ref=e587]:
+            - generic [ref=e588]: 现场短编号 4JXYE
+            - button "详情" [ref=e589]
+          - generic [ref=e591]:
+            - link "办理送样" [ref=e592]:
+              - /url: /portal/fulfillment?entryId=44925&batchId=118
+            - button "更多" [ref=e594]
+        - article [ref=e595] [cursor=pointer]:
+          - generic [ref=e596]:
+            - generic [ref=e597]: 报名已取消
+            - generic [ref=e598]: "3.5"
+          - generic [ref=e599]: 啤酒事务局风格对齐会：布鲁塞尔
+          - heading "过桶野草莓酸啤" [level=3] [ref=e600]
+          - paragraph [ref=e601]: 增味啤酒 Flavoured Beer · 卡特琳娜酸啤 / Catharina Sour
+          - generic [ref=e602]:
+            - generic [ref=e603]:
+              - generic [ref=e604]: ABV
+              - strong [ref=e605]: 3.5%
+            - generic [ref=e606]:
+              - generic [ref=e607]: 报名费
+              - strong [ref=e608]: ¥0.01
+            - generic [ref=e609]:
+              - generic [ref=e610]: 支付
+              - strong [ref=e611]: 已退款
+          - generic [ref=e612]:
+            - generic [ref=e613]: 现场短编号 XJNAH
+            - button "详情" [ref=e614]
+          - generic [ref=e616]:
+            - button "查看酒款资料" [ref=e617]
+            - button "更多" [ref=e619]

@@ -23,6 +23,7 @@ public class BeerEntry {
     private String uuid;
     private Long competitionId;
     private Long breweryId;
+    private Long registrationBatchId;
     private Long categoryId;
     private String name;
     private String style;

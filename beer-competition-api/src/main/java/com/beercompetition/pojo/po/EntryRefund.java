@@ -22,6 +22,7 @@ public class EntryRefund {
     private Long id;
     private Long beerEntryId;
     private Long entryPaymentId;
+    private Long paymentOrderItemId;
     private String refundNo;
     private BigDecimal amount;
     private String status;

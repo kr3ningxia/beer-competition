@@ -144,9 +144,12 @@ export function entryPrimaryAction(entry) {
   if (!entry) {
     return { label: '浏览开放赛事', to: '/portal/events' }
   }
-  const paymentPath = `/portal/payment?entryId=${entry.id}`
+  const paymentPath = entry.paymentOrderId && entry.registrationBatchId
+    ? `/portal/batch-payment?batchId=${entry.registrationBatchId}&orderId=${entry.paymentOrderId}&payMode=${entry.payment?.payMethod === 'BANK_TRANSFER' ? 'bank_transfer' : 'wechat'}`
+    : `/portal/payment?entryId=${entry.id}`
+  const fulfillmentPath = `/portal/fulfillment?entryId=${entry.id}${entry.registrationBatchId ? `&batchId=${entry.registrationBatchId}` : ''}`
   if (isEntryRefundActive(entry)) {
-    return { label: '查看退款进度', to: paymentPath }
+    return { label: '查看退款进度', to: fulfillmentPath }
   }
   if (isEntryRefunded(entry)) {
     return { label: '查看酒款资料', to: '/portal/entries' }
@@ -161,10 +164,10 @@ export function entryPrimaryAction(entry) {
     return { label: '查看结果', to: entryResultPath(entry) }
   }
   if (isEntryDeliveryActionPending(entry)) {
-    return { label: '办理送样', to: paymentPath }
+    return { label: '办理送样', to: fulfillmentPath }
   }
   if (entry.status === 'REGISTERED') {
-    return { label: '查看送样进度', to: paymentPath }
+    return { label: '查看送样进度', to: fulfillmentPath }
   }
   if (entry.status === 'STORED') {
     return { label: '查看参赛进度', to: '/portal/entries' }

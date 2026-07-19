@@ -617,7 +617,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import QRCode from 'qrcode'
@@ -630,6 +630,7 @@ import {
   fetchPortalCompetitionDetail,
   fetchPortalBankTransferAccount,
   fetchPortalBankTransfer,
+  fetchPortalEntryBatch,
   fetchPortalEntryPaymentStatus,
   fetchPortalEntries,
   fetchPortalEntryDetail,
@@ -649,6 +650,8 @@ import { buildWechatOauthUrl, currentUrlWithoutWechatCode, invokeWechatPay, isWe
 import { entryPayAmount, isEntryRefundActive, isEntryRefunded } from './portalViewModels'
 
 const route = useRoute()
+const router = useRouter()
+const batchId = Number(route.query.batchId || 0)
 
 const entries = ref([])
 const selectedEntry = ref(null)
@@ -978,7 +981,7 @@ onMounted(async () => {
   if (isWechatPayEnv.value) {
     await loadWechatPayConfig()
   }
-  entries.value = await fetchPortalEntries()
+  entries.value = await loadEntries()
   if (String(route.query.payMode || '').toLowerCase() === 'bank') {
     payMode.value = 'BANK_TRANSFER'
     await ensureBankAccount()
@@ -1200,6 +1203,17 @@ async function selectEntry(entry, options = {}) {
   }
 
   selectedEntry.value = await fetchPortalEntryDetail(entry.id)
+  if (showPaymentCard.value && selectedEntry.value?.paymentOrderId && selectedEntry.value?.registrationBatchId) {
+    await router.replace({
+      path: '/portal/batch-payment',
+      query: {
+        batchId: selectedEntry.value.registrationBatchId,
+        orderId: selectedEntry.value.paymentOrderId,
+        payMode: String(route.query.payMode || '').toLowerCase() === 'bank' ? 'bank_transfer' : 'wechat',
+      },
+    })
+    return
+  }
   labelData.value = null
   submittedBankTransfer.value = null
   editingBankTransferId.value = null
@@ -1221,7 +1235,7 @@ async function selectEntry(entry, options = {}) {
 }
 
 async function refreshEntries(targetId = selectedEntry.value?.id) {
-  entries.value = await fetchPortalEntries()
+  entries.value = await loadEntries()
   if (!targetId) return
   const matched = entries.value.find((entry) => entry.id === targetId)
   if (matched) {
@@ -1239,6 +1253,12 @@ function handleMoreCommand(command) {
   if (command === 'refund') {
     submitRefundRequest()
   }
+}
+
+async function loadEntries() {
+  if (!batchId) return fetchPortalEntries()
+  const batch = await fetchPortalEntryBatch(batchId)
+  return batch.entries || []
 }
 
 async function openSelectedEntryEdit() {
@@ -1343,9 +1363,18 @@ async function saveDelivery() {
   savingDelivery.value = true
   try {
     await submitPortalEntryDelivery(selectedEntry.value.id, payload)
-    ElMessage.success('送样信息已提交')
+    const completedEntryId = selectedEntry.value.id
     editingDelivery.value = false
-    await refreshEntries(selectedEntry.value.id)
+    await refreshEntries(completedEntryId)
+    const nextEntry = batchId
+      ? payableEntries.value.find((entry) => entry.id !== completedEntryId && entry.canDownloadLabel && !hasDeliveryProgress(entry))
+      : null
+    if (nextEntry) {
+      ElMessage.success('已保存，继续填写下一款酒')
+      await selectEntry(nextEntry, { skipConfirm: true })
+    } else {
+      ElMessage.success(batchId ? '本批送样信息已全部填写' : '送样信息已提交')
+    }
   } finally {
     savingDelivery.value = false
   }

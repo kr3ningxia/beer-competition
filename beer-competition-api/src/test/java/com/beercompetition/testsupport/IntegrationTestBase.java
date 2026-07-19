@@ -52,6 +52,26 @@ public abstract class IntegrationTestBase {
 
     protected void cleanupByPrefix(String prefix) {
         jdbcTemplate.update("""
+                DELETE wpn FROM wechat_pay_notify wpn
+                JOIN payment_order po ON po.out_trade_no = wpn.out_trade_no
+                JOIN registration_batch rb ON rb.id = po.registration_batch_id
+                JOIN competition c ON c.id = rb.competition_id
+                WHERE c.code LIKE ?
+                """, prefix + "%");
+        jdbcTemplate.update("""
+                DELETE poi FROM payment_order_item poi
+                JOIN payment_order po ON po.id = poi.payment_order_id
+                JOIN registration_batch rb ON rb.id = po.registration_batch_id
+                JOIN competition c ON c.id = rb.competition_id
+                WHERE c.code LIKE ?
+                """, prefix + "%");
+        jdbcTemplate.update("""
+                DELETE po FROM payment_order po
+                JOIN registration_batch rb ON rb.id = po.registration_batch_id
+                JOIN competition c ON c.id = rb.competition_id
+                WHERE c.code LIKE ?
+                """, prefix + "%");
+        jdbcTemplate.update("""
                 DELETE btp FROM bank_transfer_payment btp
                 JOIN competition c ON c.id = btp.competition_id
                 WHERE c.code LIKE ?
@@ -160,6 +180,11 @@ public abstract class IntegrationTestBase {
                 WHERE be.uuid LIKE ?
                 """, prefix + "%");
         jdbcTemplate.update("DELETE FROM beer_entry WHERE uuid LIKE ?", prefix + "%");
+        jdbcTemplate.update("""
+                DELETE rb FROM registration_batch rb
+                JOIN competition c ON c.id = rb.competition_id
+                WHERE c.code LIKE ?
+                """, prefix + "%");
         jdbcTemplate.update("""
                 DELETE jaa FROM competition_judge_assignment jaa
                 JOIN competition c ON c.id = jaa.competition_id

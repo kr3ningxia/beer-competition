@@ -8,19 +8,17 @@ import java.time.LocalDateTime;
 
 @Data
 @Builder
-public class EntryPaymentVO {
+public class PaymentOrderStatusVO {
 
-    private Long paymentOrderId;
+    private Long orderId;
+    private Long batchId;
+    private String orderNo;
     private String status;
     private String payMethod;
-    private BigDecimal amount;
-    private String outTradeNo;
-    private String wechatTransactionId;
     private Long bankTransferId;
-    private String codeUrl;
-    private LocalDateTime expireTime;
+    private BigDecimal amount;
     private BigDecimal paidAmount;
-    private String wechatTradeState;
-    private String wechatTradeStateDesc;
+    private BigDecimal refundedAmount;
+    private LocalDateTime expireTime;
     private LocalDateTime paidTime;
 }

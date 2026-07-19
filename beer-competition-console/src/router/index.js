@@ -23,6 +23,8 @@ const routes = [
       { path: 'entries', component: () => import('@/views/portal/Entries.vue'), meta: { requiresAuth: true, scope: 'portal' } },
       { path: 'submit', component: () => import('@/views/portal/SubmitEntry.vue'), meta: { requiresAuth: true, scope: 'portal' } },
       { path: 'payment', component: () => import('@/views/portal/PaymentQr.vue'), meta: { requiresAuth: true, scope: 'portal' } },
+      { path: 'fulfillment', component: () => import('@/views/portal/PaymentQr.vue'), meta: { requiresAuth: true, scope: 'portal' } },
+      { path: 'batch-payment', component: () => import('@/views/portal/BatchPayment.vue'), meta: { requiresAuth: true, scope: 'portal' } },
       { path: 'results', component: () => import('@/views/portal/Results.vue'), meta: { requiresAuth: true, scope: 'portal' } },
       { path: 'profile', component: () => import('@/views/portal/Profile.vue'), meta: { requiresAuth: true, scope: 'portal' } },
     ],

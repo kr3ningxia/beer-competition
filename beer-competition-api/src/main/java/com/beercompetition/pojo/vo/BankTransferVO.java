@@ -13,6 +13,8 @@ public class BankTransferVO {
     private Long id;
     private String transferNo;
     private Long competitionId;
+    private Long paymentOrderId;
+    private String batchNo;
     private String competitionName;
     private String competitionCode;
     private Long breweryId;

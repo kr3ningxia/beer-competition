@@ -18,6 +18,9 @@ public class EntryDetailVO {
     private String shortCode;
     private String scanToken;
     private Long competitionId;
+    private Long registrationBatchId;
+    private Long paymentOrderId;
+    private String paymentOrderStatus;
     private String competitionType;
     private String competitionCode;
     private String name;
