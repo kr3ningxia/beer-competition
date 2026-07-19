@@ -1,6 +1,30 @@
 <template>
-  <router-view />
+  <div class="judge-app">
+    <router-view />
+    <SiteFilingFooter :with-bottom-nav="hasBottomNav" />
+  </div>
 </template>
+
+<script setup>
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
+import SiteFilingFooter from '@/components/SiteFilingFooter.vue'
+
+const route = useRoute()
+const bottomNavExactPaths = ['/competitions', '/judged', '/profile']
+const bottomNavPathPrefixes = [
+  '/captain',
+  '/q/',
+  '/scan-result/',
+  '/score-confirmation/',
+  '/ranking-confirmation/',
+]
+
+const hasBottomNav = computed(() => (
+  bottomNavExactPaths.includes(route.path)
+  || bottomNavPathPrefixes.some((path) => route.path.startsWith(path))
+))
+</script>
 
 <style>
 :root {
@@ -13,6 +37,18 @@
 
 * {
   box-sizing: border-box;
+}
+
+.judge-app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: #eef1f0;
+}
+
+.judge-app > main {
+  flex: 1;
+  min-height: 0 !important;
 }
 
 html {

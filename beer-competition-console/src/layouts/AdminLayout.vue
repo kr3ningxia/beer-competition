@@ -31,6 +31,7 @@
         </div>
         <el-button class="sidebar-logout" text :icon="SwitchButton" @click="logout">退出登录</el-button>
       </div>
+      <SiteFilingFooter tone="dark" compact />
     </aside>
 
     <section class="content">
@@ -60,6 +61,7 @@ import {
   User,
   UserFilled,
 } from '@element-plus/icons-vue'
+import SiteFilingFooter from '@/components/SiteFilingFooter.vue'
 import { clearSession, getDisplayName } from '@/utils/auth'
 
 const router = useRouter()

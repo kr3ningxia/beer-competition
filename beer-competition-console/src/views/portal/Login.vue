@@ -37,6 +37,7 @@
         </el-form>
       </section>
     </main>
+    <SiteFilingFooter />
   </div>
 </template>
 
@@ -45,6 +46,7 @@ import { computed, onBeforeUnmount, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { portalLogin, sendSmsCode } from '@/api/auth'
+import SiteFilingFooter from '@/components/SiteFilingFooter.vue'
 import { setSession } from '@/utils/auth'
 
 const router = useRouter()
@@ -148,9 +150,9 @@ onBeforeUnmount(() => window.clearInterval(timer))
   --el-color-primary-light-9: #fff0c2;
   --el-color-primary-dark-2: #8b5c19;
   min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   color: #2b1d10;
   background:
     linear-gradient(90deg, rgba(80, 51, 22, 0.055) 1px, transparent 1px),
@@ -160,8 +162,11 @@ onBeforeUnmount(() => window.clearInterval(timer))
 
 .login-shell {
   display: grid;
+  flex: 1;
+  align-items: center;
   width: min(100%, 540px);
   margin: 0 auto;
+  padding: 28px 0;
 }
 
 .login-panel {
@@ -221,8 +226,19 @@ onBeforeUnmount(() => window.clearInterval(timer))
 
 .sms-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 116px;
+  grid-template-columns: minmax(0, 2fr) minmax(112px, 1fr);
   gap: 12px;
+  width: 100%;
+}
+
+.sms-row :deep(.el-input) {
+  min-width: 0;
+}
+
+.sms-row :deep(.el-button) {
+  width: 100%;
+  padding-inline: 12px;
+  white-space: nowrap;
 }
 
 .form-note {
@@ -238,23 +254,21 @@ onBeforeUnmount(() => window.clearInterval(timer))
 }
 
 @media (max-width: 980px) {
-  .portal-login {
-    padding: 20px;
-  }
-
   .login-shell {
     width: min(100%, 520px);
+    padding: 20px 0;
   }
 }
 
 @media (max-width: 640px) {
-  .portal-login {
-    padding: 14px;
-  }
-
   .login-panel {
     padding: 24px;
     min-height: 430px;
+  }
+
+  .login-shell {
+    width: calc(100% - 28px);
+    padding: 14px 0;
   }
 
   .login-panel h1 {
@@ -262,7 +276,8 @@ onBeforeUnmount(() => window.clearInterval(timer))
   }
 
   .sms-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 2fr) minmax(108px, 1fr);
+    gap: 10px;
   }
 }
 </style>

@@ -97,6 +97,7 @@
     <main class="page-frame">
       <router-view />
     </main>
+    <SiteFilingFooter />
   </div>
 </template>
 
@@ -114,6 +115,7 @@ import {
 } from '@element-plus/icons-vue'
 import { getPortalMe } from '@/api/auth'
 import { fetchPortalProfile } from '@/api/portal'
+import SiteFilingFooter from '@/components/SiteFilingFooter.vue'
 import { BASE_URL } from '@/config'
 import { clearSession, getDisplayName, isLoggedIn, setDisplayName } from '@/utils/auth'
 
@@ -260,6 +262,8 @@ watch(
   --el-color-primary-light-9: #fff0c2;
   --el-color-primary-dark-2: #8b5c19;
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   color: var(--ink);
   overflow-x: hidden;
   background:
@@ -458,6 +462,8 @@ watch(
 }
 
 .page-frame {
+  flex: 1;
+  width: 100%;
   max-width: 1280px;
   min-width: 0;
   margin: 0 auto;

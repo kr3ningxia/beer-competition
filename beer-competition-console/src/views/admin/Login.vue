@@ -74,6 +74,7 @@
         </div>
       </section>
     </section>
+    <SiteFilingFooter tone="dark" />
   </div>
 </template>
 
@@ -83,6 +84,7 @@ import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { Lock, Right, User } from '@element-plus/icons-vue'
 import { adminLogin } from '@/api/auth'
+import SiteFilingFooter from '@/components/SiteFilingFooter.vue'
 import { setSession } from '@/utils/auth'
 
 const router = useRouter()
@@ -116,11 +118,13 @@ async function submit() {
   --green: #70cf7c;
   min-height: 100vh;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 18px;
   padding: 32px;
   color: var(--text);
-  overflow: hidden;
+  overflow: auto;
   background:
     linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.026) 1px, transparent 1px),
