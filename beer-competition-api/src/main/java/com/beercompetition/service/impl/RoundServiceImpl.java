@@ -200,6 +200,10 @@ public class RoundServiceImpl implements RoundService {
                 .eq(BeerEntry::getCompetitionId, competitionId)
                 .orderByDesc(BeerEntry::getCreateTime)
                 .orderByAsc(BeerEntry::getId));
+        Map<Long, CompetitionStyleConfig> styleById = roundQuerySupport.loadStyleSnapshots(entries.stream()
+                .map(BeerEntry::getStyleConfigId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet()));
         Map<Long, RoundTable> tableById = roundQuerySupport.loadRoundTables(latestResultByEntry.values().stream()
                 .map(RoundResult::getRoundTableId)
                 .collect(Collectors.toSet()));
@@ -211,7 +215,7 @@ public class RoundServiceImpl implements RoundService {
 
         // 2) 组装后台酒款池视图，保留报名、入库、支付与评审结果的综合状态
         return entries.stream()
-                .map(entry -> toEntryVO(entry, categoryNameById, styleByName, latestResultByEntry.get(entry.getId()), tableById,
+                .map(entry -> toEntryVO(entry, categoryNameById, styleById, styleByName, latestResultByEntry.get(entry.getId()), tableById,
                         breweryById.get(entry.getBreweryId()), paymentByEntryId.get(entry.getId()), deliveryByEntryId.get(entry.getId()),
                         refundByEntryId.get(entry.getId()), labelByEntryId.get(entry.getId())))
                 .toList();
@@ -927,6 +931,10 @@ public class RoundServiceImpl implements RoundService {
                 .orderByAsc(RoundTableEntry::getSortOrder)
                 .orderByAsc(RoundTableEntry::getId));
         Map<Long, BeerEntry> entryById = roundQuerySupport.loadEntries(entries.stream().map(RoundTableEntry::getBeerEntryId).collect(Collectors.toSet()));
+        Map<Long, CompetitionStyleConfig> styleById = roundQuerySupport.loadStyleSnapshots(entryById.values().stream()
+                .map(BeerEntry::getStyleConfigId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet()));
         Map<Long, EntryScanLabel> labelByEntryId = entryScanLabelService.listActiveLabels(entryById.keySet());
         List<RoundResult> results = roundResultMapper.selectList(new LambdaQueryWrapper<RoundResult>()
                 .eq(RoundResult::getRoundTableId, roundTableId)
@@ -953,6 +961,7 @@ public class RoundServiceImpl implements RoundService {
                         .map(item -> toEntryVO(
                                 entryById.get(item.getBeerEntryId()),
                                 categoryNameById,
+                                styleById,
                                 styleByName,
                                 null,
                                 Map.of(),
@@ -1520,6 +1529,7 @@ public class RoundServiceImpl implements RoundService {
 
     private CompetitionEntryVO toEntryVO(BeerEntry entry,
                                          Map<Long, String> categoryNameById,
+                                         Map<Long, CompetitionStyleConfig> styleById,
                                          Map<String, CompetitionStyleConfig> styleByName,
                                          RoundResult latestResult,
                                          Map<Long, RoundTable> tableById,
@@ -1531,7 +1541,10 @@ public class RoundServiceImpl implements RoundService {
         if (entry == null) {
             return CompetitionEntryVO.builder().build();
         }
-        CompetitionStyleConfig style = styleByName.get(entry.getStyle());
+        CompetitionStyleConfig style = entry.getStyleConfigId() == null ? null : styleById.get(entry.getStyleConfigId());
+        if (style == null) {
+            style = styleByName.get(entry.getStyle());
+        }
         boolean canConfirmPayment = EntryStatus.PENDING_PAYMENT.name().equals(entry.getStatus());
         boolean canMarkStored = EntryStatus.REGISTERED.name().equals(entry.getStatus());
         boolean canCancel = Set.of(EntryStatus.PENDING_PAYMENT.name(), EntryStatus.REGISTERED.name()).contains(entry.getStatus());

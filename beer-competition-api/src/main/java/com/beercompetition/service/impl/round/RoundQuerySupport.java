@@ -214,6 +214,14 @@ public class RoundQuerySupport {
                 .collect(Collectors.toMap(CompetitionStyleConfig::getName, Function.identity(), (left, right) -> left, LinkedHashMap::new));
     }
 
+    public Map<Long, CompetitionStyleConfig> loadStyleSnapshots(Set<Long> styleConfigIds) {
+        if (styleConfigIds == null || styleConfigIds.isEmpty()) {
+            return Map.of();
+        }
+        return competitionStyleConfigMapper.selectBatchIds(styleConfigIds).stream()
+                .collect(Collectors.toMap(CompetitionStyleConfig::getId, Function.identity(), (left, right) -> left));
+    }
+
     public Map<Long, RoundResult> latestResultByEntry(Long competitionId) {
         Map<Long, RoundResult> map = new LinkedHashMap<>();
         // 按轮次和结果顺序覆盖写入，最终保留每个酒款最近一次轮次结果。

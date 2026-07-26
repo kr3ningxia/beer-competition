@@ -3,8 +3,10 @@ package com.beercompetition.controller.admin;
 import com.beercompetition.common.result.PageResult;
 import com.beercompetition.common.result.Result;
 import com.beercompetition.pojo.dto.AdminEntryStatusRequest;
+import com.beercompetition.pojo.dto.AdminEntryDeleteRequest;
 import com.beercompetition.pojo.dto.AdminEntryUpdateRequest;
 import com.beercompetition.pojo.vo.AdminEntryDetailVO;
+import com.beercompetition.pojo.vo.AdminEntryDeleteImpactVO;
 import com.beercompetition.pojo.vo.AdminEntryVO;
 import com.beercompetition.service.EntryService;
 import jakarta.validation.Valid;
@@ -61,6 +63,24 @@ public class AdminEntryController {
     public Result<AdminEntryDetailVO> updateEntry(@PathVariable Long id,
                                                   @RequestBody @Valid AdminEntryUpdateRequest request) {
         return Result.success(entryService.updateAdminEntry(id, request));
+    }
+
+    /**
+     * 预览管理端删除酒款会影响的业务数据。
+     */
+    @GetMapping("/entries/{id}/delete-impact")
+    public Result<AdminEntryDeleteImpactVO> entryDeleteImpact(@PathVariable Long id) {
+        return Result.success(entryService.getAdminEntryDeleteImpact(id));
+    }
+
+    /**
+     * 执行带确认信息的管理端酒款删除。
+     */
+    @PostMapping("/entries/{id}/administrative-delete")
+    public Result<String> administrativelyDeleteEntry(@PathVariable Long id,
+                                                       @RequestBody @Valid AdminEntryDeleteRequest request) {
+        entryService.administrativelyDeleteEntry(id, request);
+        return Result.success("酒款已删除");
     }
 
     /**

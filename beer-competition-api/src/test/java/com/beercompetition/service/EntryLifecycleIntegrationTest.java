@@ -4,10 +4,13 @@ import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.pojo.dto.PortalEntryRefundRequest;
 import com.beercompetition.pojo.dto.PortalEntrySubmitRequest;
 import com.beercompetition.pojo.dto.PortalEntryUpdateRequest;
+import com.beercompetition.pojo.dto.AdminEntryDeleteRequest;
 import com.beercompetition.pojo.enums.CompetitionStatus;
 import com.beercompetition.pojo.enums.EntryPaymentStatus;
 import com.beercompetition.pojo.enums.EntryRefundStatus;
 import com.beercompetition.pojo.enums.EntryStatus;
+import com.beercompetition.pojo.enums.RoundStatus;
+import com.beercompetition.pojo.enums.RoundTargetMode;
 import com.beercompetition.testsupport.BeerCompetitionTestData;
 import com.beercompetition.testsupport.IntegrationTestBase;
 import org.junit.jupiter.api.Test;
@@ -15,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -27,6 +31,9 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
 
     @Autowired
     private EntryService entryService;
+
+    @Autowired
+    private RoundService roundService;
 
     @Test
     void simulatePaymentIsOwnedAndIdempotentForPendingEntry() {
@@ -80,6 +87,109 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
         assertThatThrownBy(() -> entryService.submitPortalEntry(fixture.competition().getId(), request))
                 .isInstanceOf(BaseException.class)
                 .hasMessageContaining("补充说明不能超过255个字符");
+    }
+
+    @Test
+    void submitEntrySupportsSingleSelectAndRejectsUnknownOption() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        jdbcTemplate.update("""
+                INSERT INTO entry_field_config
+                    (competition_id, field_key, field_label, field_type, options_json, required_flag, visible_to_judges, sort_order)
+                VALUES (?, 'color', '颜色', 'select', '[\"金色\",\"琥珀\"]', 1, 0, 1)
+                """, fixture.competition().getId());
+        jdbcTemplate.update("UPDATE competition SET status = ? WHERE id = ?",
+                CompetitionStatus.REGISTRATION_OPEN.name(), fixture.competition().getId());
+        PortalEntrySubmitRequest request = new PortalEntrySubmitRequest();
+        request.setName(testRun + "-单选");
+        request.setCategoryId(fixture.category().getId());
+        request.setStyle(testRun + "-风格");
+        request.setAbv(new BigDecimal("5.0"));
+        request.setExtraFields(Map.of("color", "金色"));
+        asPortal(fixture.portalA().account().getId());
+        var submitted = entryService.submitPortalEntry(fixture.competition().getId(), request);
+        assertThat(submitted.getExtraFields()).anySatisfy(field -> assertThat(field.getValue()).isEqualTo("金色"));
+
+        request.setName(testRun + "-单选非法");
+        request.setExtraFields(Map.of("color", "黑色"));
+        assertThatThrownBy(() -> entryService.submitPortalEntry(fixture.competition().getId(), request))
+                .isInstanceOf(BaseException.class)
+                .hasMessageContaining("选项不合法");
+    }
+
+    @Test
+    void judgeViewsExposeOnlyJudgeVisibleExtraFieldsAndKeepBoundStyleSnapshot() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        Long boundStyleId = jdbcTemplate.queryForObject("""
+                SELECT id FROM competition_style_config
+                WHERE competition_id = ? AND name = ?
+                ORDER BY id ASC
+                LIMIT 1
+                """, Long.class, fixture.competition().getId(), testRun + "-风格");
+        jdbcTemplate.update("""
+                UPDATE competition_style_config
+                SET description = '历史风格说明', active_flag = 0
+                WHERE id = ?
+                """, boundStyleId);
+        var replacementStyle = testData.createStyle(fixture.competition().getId(), testRun + "-风格");
+        jdbcTemplate.update("""
+                UPDATE competition_style_config
+                SET description = '当前风格说明', active_flag = 1
+                WHERE id = ?
+                """, replacementStyle.getId());
+        jdbcTemplate.update("UPDATE beer_entry SET style_config_id = ? WHERE id = ?",
+                boundStyleId, fixture.entryA1().getId());
+        jdbcTemplate.update("""
+                INSERT INTO entry_field_config
+                    (competition_id, field_key, field_label, field_type, required_flag,
+                     visible_to_judges, sort_order, active_flag)
+                VALUES
+                    (?, 'visibleNote', '评审备注', 'text', 0, 1, 1, 1),
+                    (?, 'hiddenNote', '厂商内部信息', 'text', 0, 0, 2, 1),
+                    (?, 'retiredNote', '历史评审备注', 'text', 0, 1, 3, 0)
+                """, fixture.competition().getId(), fixture.competition().getId(), fixture.competition().getId());
+        jdbcTemplate.update("""
+                INSERT INTO beer_entry_extra_field (beer_entry_id, field_key, field_label, field_value)
+                VALUES
+                    (?, 'visibleNote', '评审备注', '酒花香明显'),
+                    (?, 'hiddenNote', '厂商内部信息', '不要展示'),
+                    (?, 'retiredNote', '历史评审备注', '保留历史值')
+                """, fixture.entryA1().getId(), fixture.entryA1().getId(), fixture.entryA1().getId());
+        var rankingRound = testData.createRankingRound(fixture, List.of(fixture.entryA1()),
+                RoundTargetMode.TOP_N, 1, RoundStatus.IN_PROGRESS, 1);
+
+        asJudge(fixture.professional().getId());
+        var judgeEntry = entryService.getJudgeEntry(fixture.entryA1().getUuid());
+        assertThat(judgeEntry.getStyleDescription()).isEqualTo("历史风格说明");
+        assertThat(judgeEntry.getExtraFields())
+                .extracting(field -> field.getKey())
+                .containsExactlyInAnyOrder("visibleNote", "retiredNote");
+
+        var roundTable = roundService.getMyRoundTable(rankingRound.table().getId());
+        var roundEntry = roundTable.getEntries().get(0);
+        assertThat(roundEntry.getStyleDescription()).isEqualTo("历史风格说明");
+        assertThat(roundEntry.getExtraFields())
+                .extracting(field -> field.getKey())
+                .containsExactlyInAnyOrder("visibleNote", "retiredNote");
+    }
+
+    @Test
+    void adminCanDeletePaidEntryAfterExplicitRefundConfirmation() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        var entry = testData.createEntry(testRun, fixture.competition().getId(), fixture.portalA().brewery().getId(),
+                fixture.category().getId(), testRun + "-待删除", EntryStatus.REGISTERED, true);
+        String shortCode = jdbcTemplate.queryForObject("SELECT short_code FROM entry_scan_label WHERE beer_entry_id = ?",
+                String.class, entry.getId());
+        asAdmin(1L);
+        AdminEntryDeleteRequest request = new AdminEntryDeleteRequest();
+        request.setReason("测试清理重复报名");
+        request.setConfirmationCode(shortCode);
+        request.setPaymentDisposition("MANUAL_REFUNDED");
+        request.setHighRiskConfirmed(false);
+        entryService.administrativelyDeleteEntry(entry.getId(), request);
+
+        assertThat(jdbcTemplate.queryForObject("SELECT deleted_flag FROM beer_entry WHERE id = ?", Integer.class, entry.getId())).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM entry_scan_label WHERE beer_entry_id = ?", String.class, entry.getId())).isEqualTo("DISABLED");
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM entry_payment WHERE beer_entry_id = ?", String.class, entry.getId())).isEqualTo("REFUNDED");
     }
 
     @Test

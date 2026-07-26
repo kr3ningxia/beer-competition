@@ -24,7 +24,11 @@
         v-for="entry in filteredEntries"
         :key="entry.id"
         class="entry-card"
+        role="button"
+        tabindex="0"
         @click="selectEntry(entry)"
+        @keydown.enter.prevent="selectEntry(entry)"
+        @keydown.space.prevent="selectEntry(entry)"
       >
         <div class="label-top">
           <span :class="['label-chip', `tone-${entryStatusMeta[entry.status].tone}`]">
@@ -1345,6 +1349,15 @@ dd {
   color: #6f6252;
   background: #fffdf8;
   border-color: rgba(87, 58, 26, 0.18);
+}
+
+:global(.entry-drawer.el-drawer) {
+  width: min(520px, 100vw) !important;
+  max-width: 100vw;
+}
+
+:global(.entry-drawer .el-drawer__body) {
+  overscroll-behavior: contain;
 }
 
 @media (max-width: 1180px) {

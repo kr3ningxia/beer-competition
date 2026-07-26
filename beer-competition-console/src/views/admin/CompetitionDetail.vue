@@ -407,7 +407,7 @@
         </section>
 
         <section v-if="activeTab === 'entryConfig'" class="tab-panel entry-config-panel">
-          <div v-if="!editable.entryStructure" class="edit-banner locked">
+          <div v-if="!editable.categories && !editable.styleLibrary && !editable.entryFields" class="edit-banner locked">
             <Lock />
             比赛已进入后续流程，报名结构已锁定，投递组别和补充字段不再直接编辑
           </div>
@@ -417,7 +417,7 @@
               <div>
                 <h2>投递组别</h2>
               </div>
-              <div v-if="editable.entryStructure" class="panel-actions">
+              <div v-if="editable.categories" class="panel-actions">
                 <button class="tool-button" type="button" @click="syncCategoryFormFromStyleLibrary">
                   <CircleCheck />
                   同步当前风格库
@@ -428,7 +428,7 @@
                 </button>
               </div>
             </div>
-            <div v-if="editable.entryStructure" class="category-editor-list">
+            <div v-if="editable.categories" class="category-editor-list">
               <label v-for="(_, index) in categoryForm" :key="`category-${index}`">
                 <input v-model.trim="categoryForm[index]" placeholder="例如 IPA" />
                 <button class="icon-button" type="button" @click="removeItem(categoryForm, index)">
@@ -457,6 +457,9 @@
                 </select>
                 <button class="tool-button" type="button" @click="openSelectedStyleLibrary">
                   查看风格库
+                </button>
+                <button v-if="editable.styleLibrary" class="tool-button primary" type="button" @click="saveStyleLibrary">
+                  保存风格库
                 </button>
               </div>
             </div>
@@ -490,9 +493,12 @@
               <div>
                 <h2>报名补充信息</h2>
               </div>
-              <button v-if="editable.entryStructure" class="tool-button" type="button" @click="addEntryField">
+              <button v-if="editable.entryFields" class="tool-button" type="button" @click="addEntryField">
                 <Plus />
                 添加字段
+              </button>
+              <button v-if="editable.entryFields" class="tool-button primary" type="button" @click="saveEntryFields">
+                保存补充信息
               </button>
             </div>
             <div class="data-table field-table">
@@ -505,20 +511,29 @@
                 <span></span>
               </div>
               <div v-for="(field, index) in entryFieldForm" :key="field.localId" class="table-row">
-                <input v-model.trim="field.fieldLabel" :disabled="!editable.entryStructure" />
-                <select v-model="field.fieldType" :disabled="!editable.entryStructure">
+                <input v-model.trim="field.fieldLabel" :disabled="!editable.entryFields" />
+                <select v-model="field.fieldType" :disabled="!editable.entryFields">
                   <option value="text">短文本</option>
                   <option value="textarea">长文本</option>
                   <option value="number">数字</option>
                   <option value="select">选项</option>
                   <option value="multi_select">多选</option>
                 </select>
-                <input v-model.trim="field.helpText" :disabled="!editable.entryStructure" placeholder="给厂牌看的填写说明" />
-                <label class="check-control"><input v-model="field.required" type="checkbox" :disabled="!editable.entryStructure" /> 必填</label>
-                <label class="check-control"><input v-model="field.visibleToJudges" type="checkbox" :disabled="!editable.entryStructure" /> 评审可见</label>
-                <button class="icon-button" type="button" :disabled="!editable.entryStructure" @click="removeItem(entryFieldForm, index)">
+                <input v-model.trim="field.helpText" :disabled="!editable.entryFields" placeholder="给厂牌看的填写说明" />
+                <label class="check-control"><input v-model="field.required" type="checkbox" :disabled="!editable.entryFields" /> 必填</label>
+                <label class="check-control"><input v-model="field.visibleToJudges" type="checkbox" :disabled="!editable.entryFields" /> 评审可见</label>
+                <button class="icon-button" type="button" :disabled="!editable.entryFields" @click="removeItem(entryFieldForm, index)">
                   <Delete />
                 </button>
+                <div v-if="['select', 'multi_select'].includes(field.fieldType)" class="field-option-panel">
+                  <div class="option-editor-head"><span>候选项（至少 2 个）</span><button type="button" @click="addFieldOption(field)">添加选项</button></div>
+                  <div v-for="(_, optionIndex) in (field.options || [])" :key="`${field.localId}-option-${optionIndex}`" class="option-editor-row">
+                    <input v-model.trim="field.options[optionIndex]" :disabled="!editable.entryFields" :placeholder="`选项 ${optionIndex + 1}`" />
+                    <button type="button" :disabled="!editable.entryFields || optionIndex === 0" @click="moveFieldOption(field, optionIndex, -1)">上移</button>
+                    <button type="button" :disabled="!editable.entryFields || optionIndex === field.options.length - 1" @click="moveFieldOption(field, optionIndex, 1)">下移</button>
+                    <button class="danger-text" type="button" :disabled="!editable.entryFields" @click="removeItem(field.options, optionIndex)">删除</button>
+                  </div>
+                </div>
               </div>
               <p v-if="entryFieldForm.length === 0" class="empty-line">当前没有报名补充字段</p>
             </div>
@@ -5917,6 +5932,18 @@ function addEntryField() {
   })
 }
 
+function addFieldOption(field) {
+  field.options ||= []
+  field.options.push('')
+}
+
+function moveFieldOption(field, index, offset) {
+  const target = index + offset
+  if (target < 0 || target >= field.options.length) return
+  const [item] = field.options.splice(index, 1)
+  field.options.splice(target, 0, item)
+}
+
 function createEntryFieldKey() {
   return `custom_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
 }
@@ -6425,7 +6452,7 @@ async function saveEntryConfig() {
     styleLibraryVersion: library.value,
   })
   detail = await updateCompetitionCategories(competition.value.id, { items: categoryItems })
-  if (fieldItems.length) detail = await updateCompetitionEntryFields(competition.value.id, { items: fieldItems })
+  detail = await updateCompetitionEntryFields(competition.value.id, { items: fieldItems })
   competition.value = normalizeDetail(detail)
   resetForms()
   applyRoundState()
@@ -6461,6 +6488,45 @@ async function saveScoreConfigs() {
   })
   await loadDetail()
   ElMessage.success('评分表已保存')
+}
+
+async function saveStyleLibrary() {
+  const library = getStyleLibrary(selectedStyleLibraryVersion.value, styleLibraryOptions.value)
+  if (!library?.value) {
+    ElMessage.warning('请选择风格库')
+    return
+  }
+  const detail = await updateCompetitionStyles(competition.value.id, { styleLibraryVersion: library.value })
+  competition.value = normalizeDetail(detail)
+  resetForms()
+  applyRoundState()
+  ElMessage.success('报名风格库已保存')
+}
+
+async function saveEntryFields() {
+  const fieldItems = entryFieldForm
+    .filter((field) => field.fieldLabel)
+    .map((field, index) => ({
+      fieldKey: field.fieldKey || createEntryFieldKey(),
+      fieldLabel: field.fieldLabel,
+      fieldType: field.fieldType,
+      helpText: field.helpText,
+      options: ['select', 'multi_select'].includes(field.fieldType) ? (field.options || []).filter(Boolean) : [],
+      required: Boolean(field.required),
+      visibleToJudges: Boolean(field.visibleToJudges),
+      sortOrder: index,
+    }))
+  const invalid = fieldItems.find((field) => ['select', 'multi_select'].includes(field.fieldType)
+    && [...new Set(field.options)].length < 2)
+  if (invalid) {
+    ElMessage.warning(`“${invalid.fieldLabel}”至少需要 2 个不重复候选项`)
+    return
+  }
+  const detail = await updateCompetitionEntryFields(competition.value.id, { items: fieldItems })
+  competition.value = normalizeDetail(detail)
+  resetForms()
+  applyRoundState()
+  ElMessage.success('报名补充信息已保存')
 }
 
 function isProfessionalScoreConfigFixed(config) {
@@ -8280,6 +8346,29 @@ input[type="checkbox"] {
 .field-table .table-row {
   grid-template-columns: minmax(150px, 0.9fr) minmax(104px, 124px) minmax(260px, 1.8fr) 72px 96px 38px;
 }
+
+.field-option-panel {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-left: 2px solid #d5a24f;
+  background: rgba(213, 162, 79, .06);
+}
+
+.option-editor-head,
+.option-editor-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.option-editor-head { justify-content: space-between; color: var(--muted); font-size: 12px; font-weight: 700; }
+.option-editor-row input { flex: 1; }
+.option-editor-head button,
+.option-editor-row button { border: 0; background: transparent; color: #d5a24f; cursor: pointer; }
+.option-editor-row button:disabled { opacity: .35; cursor: default; }
+.option-editor-row .danger-text { color: #ef8b7e; }
 
 .entries-table .table-head,
 .entries-table .table-row {

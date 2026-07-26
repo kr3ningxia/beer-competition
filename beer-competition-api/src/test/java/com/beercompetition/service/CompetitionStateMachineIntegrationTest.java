@@ -4,6 +4,9 @@ import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.mapper.CompetitionRoundMapper;
 import com.beercompetition.pojo.dto.CompetitionReopenRegistrationRequest;
 import com.beercompetition.pojo.dto.CompetitionReturnToSampleCheckRequest;
+import com.beercompetition.pojo.dto.CompetitionStyleLibraryUpdateRequest;
+import com.beercompetition.pojo.dto.EntryFieldBatchUpdateRequest;
+import com.beercompetition.pojo.dto.EntryFieldItemRequest;
 import com.beercompetition.pojo.enums.CompetitionStatus;
 import com.beercompetition.pojo.enums.RoundStatus;
 import com.beercompetition.pojo.po.CompetitionRound;
@@ -16,6 +19,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 class CompetitionStateMachineIntegrationTest extends IntegrationTestBase {
 
@@ -39,6 +43,59 @@ class CompetitionStateMachineIntegrationTest extends IntegrationTestBase {
         assertThatThrownBy(() -> competitionService.prepareJudging(fixture.competition().getId()))
                 .isInstanceOf(BaseException.class)
                 .hasMessageContaining("报名截止");
+    }
+
+    @Test
+    void registrationOpenAllowsStyleLibraryAndEntryFieldUpdates() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        jdbcTemplate.update("UPDATE competition SET status = ? WHERE id = ?",
+                CompetitionStatus.REGISTRATION_OPEN.name(), fixture.competition().getId());
+        asAdmin(1L);
+
+        CompetitionStyleLibraryUpdateRequest styleRequest = new CompetitionStyleLibraryUpdateRequest();
+        styleRequest.setStyleLibraryVersion(jdbcTemplate.queryForObject("""
+                SELECT l.code
+                FROM style_library l
+                WHERE l.status = 1
+                  AND EXISTS (SELECT 1 FROM style_item i WHERE i.library_id = l.id AND i.status = 1)
+                ORDER BY l.id
+                LIMIT 1
+                """, String.class));
+        assertThatCode(() -> competitionService.updateStyles(fixture.competition().getId(), styleRequest))
+                .doesNotThrowAnyException();
+
+        EntryFieldItemRequest field = new EntryFieldItemRequest();
+        field.setFieldKey("servingTemp");
+        field.setFieldLabel("饮用温度");
+        field.setFieldType("select");
+        field.setOptions(List.of("冷藏", "常温"));
+        field.setRequired(false);
+        field.setVisibleToJudges(true);
+        field.setSortOrder(0);
+        EntryFieldBatchUpdateRequest fieldRequest = new EntryFieldBatchUpdateRequest();
+        fieldRequest.setItems(List.of(field));
+        competitionService.updateEntryFields(fixture.competition().getId(), fieldRequest);
+
+        assertThat(jdbcTemplate.queryForObject("SELECT active_flag FROM entry_field_config WHERE competition_id = ? AND field_key = ?",
+                Integer.class, fixture.competition().getId(), "servingTemp")).isEqualTo(1);
+    }
+
+    @Test
+    void optionFieldRequiresAtLeastTwoChoices() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        asAdmin(1L);
+        EntryFieldItemRequest field = new EntryFieldItemRequest();
+        field.setFieldKey("single");
+        field.setFieldLabel("单选字段");
+        field.setFieldType("select");
+        field.setOptions(List.of("唯一选项"));
+        field.setRequired(false);
+        field.setVisibleToJudges(false);
+        EntryFieldBatchUpdateRequest request = new EntryFieldBatchUpdateRequest();
+        request.setItems(List.of(field));
+        assertThatThrownBy(() -> competitionService.updateEntryFields(fixture.competition().getId(), request))
+                .isInstanceOf(BaseException.class)
+                .hasMessageContaining("至少需要 2 个候选项");
     }
 
     @Test

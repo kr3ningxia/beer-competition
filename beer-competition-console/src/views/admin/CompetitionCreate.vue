@@ -294,6 +294,18 @@
                     评审可见
                   </label>
                 </div>
+                <div v-if="['select', 'multi_select'].includes(field.type)" class="field-options-editor">
+                  <div class="option-editor-head">
+                    <span>候选项</span>
+                    <button type="button" @click="addFieldOption(field)">添加选项</button>
+                  </div>
+                  <div v-for="(_, optionIndex) in field.options" :key="`${field.key}-option-${optionIndex}`" class="option-editor-row">
+                    <input v-model.trim="field.options[optionIndex]" :placeholder="`选项 ${optionIndex + 1}`" />
+                    <button type="button" :disabled="optionIndex === 0" @click="moveFieldOption(field, optionIndex, -1)">上移</button>
+                    <button type="button" :disabled="optionIndex === field.options.length - 1" @click="moveFieldOption(field, optionIndex, 1)">下移</button>
+                    <button class="danger-text" type="button" @click="removeItem(field.options, optionIndex)">删除</button>
+                  </div>
+                </div>
               </div>
             </div>
           </section>
@@ -493,7 +505,7 @@ const fieldTypeOptions = [
   { label: '短文本', value: 'text' },
   { label: '长文本', value: 'textarea' },
   { label: '数字', value: 'number' },
-  { label: '选项', value: 'select' },
+  { label: '单选', value: 'select' },
   { label: '多选', value: 'multi_select' },
 ]
 
@@ -531,6 +543,7 @@ const draft = reactive({
       helpText: '如使用茶、咖啡、水果、桶陈等，请描述原料和工艺',
       required: false,
       visibleToJudges: true,
+      options: [],
     },
   ],
   scoreConfigs: createScoreConfigs(),
@@ -587,7 +600,20 @@ function addEntryField() {
     helpText: '',
     required: false,
     visibleToJudges: true,
+    options: [],
   })
+}
+
+function addFieldOption(field) {
+  field.options ||= []
+  field.options.push('')
+}
+
+function moveFieldOption(field, index, offset) {
+  const target = index + offset
+  if (target < 0 || target >= field.options.length) return
+  const [item] = field.options.splice(index, 1)
+  field.options.splice(target, 0, item)
 }
 
 function addCrossDimension(config) {
@@ -613,6 +639,12 @@ async function submitDraft() {
   if (firstIssue) {
     ElMessage.warning(firstIssue.detail)
     scrollToSection(firstIssue.target)
+    return
+  }
+  const invalidOptionField = draft.entryFields.find((field) => ['select', 'multi_select'].includes(field.type)
+    && [...new Set((field.options || []).map((item) => item.trim()).filter(Boolean))].length < 2)
+  if (invalidOptionField) {
+    ElMessage.warning(`“${invalidOptionField.label || '未命名字段'}”至少需要 2 个不重复候选项`)
     return
   }
   try {
@@ -647,7 +679,7 @@ async function submitDraft() {
         fieldLabel: field.label,
         fieldType: field.type,
         helpText: field.helpText,
-        options: [],
+        options: ['select', 'multi_select'].includes(field.type) ? (field.options || []).filter(Boolean) : [],
         required: Boolean(field.required),
         visibleToJudges: Boolean(field.visibleToJudges),
         sortOrder: index,
@@ -844,6 +876,7 @@ function toDraftSnapshot(source) {
       helpText: field.helpText,
       required: field.required,
       visibleToJudges: field.visibleToJudges,
+      options: [...(field.options || [])],
     })),
     scoreConfigs: source.scoreConfigs.map((config) => ({
       role: config.role,
@@ -1602,6 +1635,51 @@ textarea::placeholder {
   gap: 16px;
   align-items: end;
   justify-content: start;
+}
+
+.field-options-editor {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-left: 2px solid #d5a24f;
+  background: rgba(213, 162, 79, 0.06);
+}
+
+.option-editor-head,
+.option-editor-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.option-editor-head {
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.option-editor-row input {
+  flex: 1;
+  min-height: 34px;
+}
+
+.option-editor-row button,
+.option-editor-head button {
+  border: 0;
+  background: transparent;
+  color: #d5a24f;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.option-editor-row button:disabled {
+  opacity: .35;
+  cursor: default;
+}
+
+.option-editor-row .danger-text {
+  color: #e68577;
 }
 
 .dimension-row {

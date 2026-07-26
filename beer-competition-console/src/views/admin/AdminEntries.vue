@@ -141,6 +141,10 @@
                 <button type="button" :disabled="!entry.canEdit" @click="openDetail(entry.id, 'profile', true)">编辑资料</button>
                 <button type="button" @click="openDetail(entry.id, 'status')">状态处理</button>
               </template>
+              <details class="row-more">
+                <summary>更多</summary>
+                <button class="danger" type="button" @click="openDeleteDialog(entry)">删除酒款</button>
+              </details>
             </div>
           </div>
           <div v-if="!loading && !entries.length" class="empty-state">
@@ -337,6 +341,11 @@
             </div>
             <p v-if="!detail.logs?.length" class="empty-line">暂无修改记录</p>
           </section>
+          <details class="danger-zone">
+            <summary>危险操作</summary>
+            <p>仅在确需移除酒款时使用，操作需要短编号确认并记录原因。</p>
+            <button class="danger" type="button" @click="openDeleteDialog(detail)">删除酒款</button>
+          </details>
         </template>
       </aside>
     </div>
@@ -366,6 +375,24 @@
         </footer>
       </section>
     </div>
+
+    <div v-if="deleteDialog.open" class="stage-confirm-backdrop" @click.self="closeDeleteDialog">
+      <section class="stage-confirm-dialog danger-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-entry-title">
+        <header><span class="confirm-kicker">危险操作</span><h2 id="delete-entry-title">删除酒款</h2></header>
+        <p class="confirm-copy">删除后酒款会退出报名、入库、分桌、评审和结果流程，财务与操作记录仍会保留。</p>
+        <div v-if="deleteDialog.impact" class="confirm-summary">
+          <span><small>酒款</small><strong>{{ deleteDialog.impact.entryName }}</strong></span>
+          <span><small>支付</small><strong>{{ paymentLabel(deleteDialog.impact.paymentStatus) }}</strong></span>
+          <span><small>分桌/评分</small><strong>{{ deleteDialog.impact.roundAssignmentCount }}/{{ deleteDialog.impact.scoreRecordCount }}</strong></span>
+          <span><small>结果/奖项</small><strong>{{ deleteDialog.impact.roundResultCount }}/{{ deleteDialog.impact.awardResultCount }}</strong></span>
+        </div>
+        <label class="confirm-reason"><span>删除原因</span><textarea v-model.trim="deleteDialog.reason" maxlength="500" placeholder="请填写删除原因"></textarea></label>
+        <label class="confirm-reason"><span>输入短编号：{{ deleteDialog.impact?.shortCode || '-' }}</span><input v-model.trim="deleteDialog.confirmationCode" placeholder="输入酒款短编号" /></label>
+        <label v-if="deleteDialog.impact?.paymentStatus === 'PAID'" class="confirm-check"><input v-model="deleteDialog.manualRefunded" type="checkbox" /> 我已完成退款，并确认保留财务记录</label>
+        <label v-if="deleteDialog.impact?.highRisk" class="confirm-check"><input v-model="deleteDialog.highRiskConfirmed" type="checkbox" /> 我确认这是一项高风险删除操作</label>
+        <footer><button class="confirm-button ghost" type="button" :disabled="deleteDialog.loading" @click="closeDeleteDialog">取消</button><button class="confirm-button primary danger" type="button" :disabled="deleteDialog.loading || !canSubmitDelete" @click="confirmDeleteEntry">{{ deleteDialog.loading ? '删除中' : '确认删除' }}</button></footer>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -381,6 +408,7 @@ import {
   confirmEntryPayment,
   fetchAdminEntries,
   fetchAdminEntryDetail,
+  fetchAdminEntryDeleteImpact,
   fetchCompetitionDetail,
   fetchCompetitions,
   markEntryStored,
@@ -388,6 +416,7 @@ import {
   retryEntryRefund,
   unmarkEntryStored,
   updateAdminEntry,
+  administrativelyDeleteEntry,
 } from '@/api/admin'
 import { JUDGE_H5_BASE_URL } from '@/config'
 import { isValidAbvInput, normalizeAbvInput } from '@/utils/formatters'
@@ -422,6 +451,10 @@ const entryConfirm = reactive({
   reason: '',
   payload: null,
 })
+const deleteDialog = reactive({ open: false, loading: false, impact: null, entryId: null, reason: '', confirmationCode: '', manualRefunded: false, highRiskConfirmed: false })
+const canSubmitDelete = computed(() => Boolean(deleteDialog.reason.trim() && deleteDialog.confirmationCode.trim()
+  && (!deleteDialog.impact?.highRisk || deleteDialog.highRiskConfirmed)
+  && (deleteDialog.impact?.paymentStatus !== 'PAID' || deleteDialog.manualRefunded)))
 
 const filters = reactive({
   competitionId: '',
@@ -631,6 +664,47 @@ async function openDetail(entryId, tab = 'profile', edit = false) {
     })
   } finally {
     detailLoading.value = false
+  }
+}
+
+async function openDeleteDialog(entry) {
+  deleteDialog.open = true
+  deleteDialog.loading = true
+  deleteDialog.entryId = entry.id
+  deleteDialog.impact = null
+  deleteDialog.reason = ''
+  deleteDialog.confirmationCode = ''
+  deleteDialog.manualRefunded = false
+  deleteDialog.highRiskConfirmed = false
+  try {
+    deleteDialog.impact = await fetchAdminEntryDeleteImpact(entry.id)
+  } finally {
+    deleteDialog.loading = false
+  }
+}
+
+function closeDeleteDialog() {
+  if (deleteDialog.loading) return
+  deleteDialog.open = false
+}
+
+async function confirmDeleteEntry() {
+  if (!canSubmitDelete.value) return
+  deleteDialog.loading = true
+  try {
+    await administrativelyDeleteEntry(deleteDialog.entryId, {
+      reason: deleteDialog.reason,
+      confirmationCode: deleteDialog.confirmationCode,
+      paymentDisposition: deleteDialog.manualRefunded ? 'MANUAL_REFUNDED' : 'NONE',
+      highRiskConfirmed: deleteDialog.highRiskConfirmed,
+    })
+    const deletedId = deleteDialog.entryId
+    deleteDialog.open = false
+    if (detail.value?.id === deletedId) closeDetail()
+    await loadEntries()
+    ElMessage.success('酒款已删除')
+  } finally {
+    deleteDialog.loading = false
   }
 }
 
@@ -1596,6 +1670,45 @@ button:disabled {
   flex-wrap: nowrap;
   justify-content: flex-start;
 }
+
+.row-more {
+  position: relative;
+}
+
+.row-more summary {
+  cursor: pointer;
+  color: var(--muted);
+  list-style: none;
+}
+
+.row-more summary::-webkit-details-marker { display: none; }
+.row-more[open] { z-index: 3; }
+.row-more button {
+  position: absolute;
+  right: 0;
+  top: 26px;
+  min-width: 100px;
+  padding: 8px 10px;
+  border: 1px solid rgba(219, 232, 237, .16);
+  border-radius: 6px;
+  background: #172329;
+  color: #ef8b7e;
+  cursor: pointer;
+}
+
+.danger-zone {
+  margin-top: 22px;
+  padding: 12px;
+  border: 1px solid rgba(239, 139, 126, .3);
+  border-radius: 8px;
+  color: var(--muted);
+}
+
+.danger-zone summary { cursor: pointer; color: #ef8b7e; font-weight: 700; }
+.danger-zone button { margin-top: 8px; }
+.confirm-reason input { width: 100%; min-height: 38px; }
+.confirm-check { display: flex; gap: 8px; align-items: flex-start; margin-top: 10px; color: #f1d6d0; font-size: 13px; }
+.danger-dialog .confirm-button.primary { background: #b94b40; }
 
 .row-actions button {
   min-height: 30px;

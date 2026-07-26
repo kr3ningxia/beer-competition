@@ -114,7 +114,7 @@ function entryFeeText(competition) {
   color: #fff6df;
   background:
     linear-gradient(135deg, rgba(32, 22, 15, 0.94), rgba(91, 50, 18, 0.86)),
-    url("https://images.unsplash.com/photo-1518099074172-2e47ee6cfdc0?auto=format&fit=crop&w=1800&q=80");
+    url("https://images.unsplash.com/photo-1518099074172-2e47ee6cfdc0?auto=format&fit=crop&w=1200&q=72");
   background-position: center;
   background-size: cover;
   border-radius: 8px;
@@ -139,7 +139,7 @@ function entryFeeText(competition) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 15px;
   color: #2b1d10;
   background: #e1a23d;
@@ -147,6 +147,7 @@ function entryFeeText(competition) {
   font-weight: 800;
   text-decoration: none;
   white-space: nowrap;
+  touch-action: manipulation;
 }
 
 .event-list {

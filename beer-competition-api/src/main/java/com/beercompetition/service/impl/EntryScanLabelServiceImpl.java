@@ -1,6 +1,7 @@
 package com.beercompetition.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.mapper.EntryScanLabelMapper;
@@ -109,6 +110,14 @@ public class EntryScanLabelServiceImpl implements EntryScanLabelService {
                         .eq(EntryScanLabel::getStatus, EntryScanLabelStatus.ACTIVE.name()))
                 .stream()
                 .collect(Collectors.toMap(EntryScanLabel::getBeerEntryId, Function.identity(), (left, right) -> left, LinkedHashMap::new));
+    }
+
+    @Override
+    public void disableActiveLabel(Long beerEntryId) {
+        entryScanLabelMapper.update(null, new LambdaUpdateWrapper<EntryScanLabel>()
+                .set(EntryScanLabel::getStatus, EntryScanLabelStatus.DISABLED.name())
+                .eq(EntryScanLabel::getBeerEntryId, beerEntryId)
+                .eq(EntryScanLabel::getStatus, EntryScanLabelStatus.ACTIVE.name()));
     }
 
     private String normalizeCode(String code) {

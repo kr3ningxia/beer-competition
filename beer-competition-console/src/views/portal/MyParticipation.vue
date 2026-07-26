@@ -312,7 +312,7 @@ onMounted(async () => {
   color: #fff6df;
   background:
     linear-gradient(135deg, rgba(31, 21, 14, 0.95), rgba(89, 49, 18, 0.88)),
-    url("https://images.unsplash.com/photo-1505075106905-fb052892c116?auto=format&fit=crop&w=1800&q=80");
+    url("https://images.unsplash.com/photo-1505075106905-fb052892c116?auto=format&fit=crop&w=1200&q=72");
   background-position: center;
   background-size: cover;
   border-radius: 8px;

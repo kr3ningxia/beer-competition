@@ -89,6 +89,14 @@ export function updateAdminEntry(entryId, payload) {
   return request.put(`/api/admin/entries/${entryId}`, payload, { authScope: 'admin' })
 }
 
+export function fetchAdminEntryDeleteImpact(entryId) {
+  return request.get(`/api/admin/entries/${entryId}/delete-impact`, { authScope: 'admin' })
+}
+
+export function administrativelyDeleteEntry(entryId, payload) {
+  return request.post(`/api/admin/entries/${entryId}/administrative-delete`, payload, { authScope: 'admin' })
+}
+
 export function deleteCompetition(id) {
   return request.delete(`/api/admin/competitions/${id}`, { authScope: 'admin' })
 }

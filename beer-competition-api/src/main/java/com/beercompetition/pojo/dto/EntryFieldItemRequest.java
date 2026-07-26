@@ -19,6 +19,7 @@ public class EntryFieldItemRequest {
     @Size(max = 255, message = "提示文案不能超过 255 个字符")
     private String helpText;
 
+    @Size(max = 100, message = "字段选项不能超过 100 个")
     private List<String> options;
 
     @NotNull(message = "必填标记不能为空")

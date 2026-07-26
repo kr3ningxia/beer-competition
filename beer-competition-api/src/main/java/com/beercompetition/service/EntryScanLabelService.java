@@ -15,4 +15,6 @@ public interface EntryScanLabelService {
     EntryScanLabel resolveActiveLabel(String code);
 
     Map<Long, EntryScanLabel> listActiveLabels(Collection<Long> beerEntryIds);
+
+    void disableActiveLabel(Long beerEntryId);
 }

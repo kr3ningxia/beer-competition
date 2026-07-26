@@ -2,6 +2,7 @@ package com.beercompetition.service;
 
 import com.beercompetition.common.result.PageResult;
 import com.beercompetition.pojo.dto.AdminEntryStatusRequest;
+import com.beercompetition.pojo.dto.AdminEntryDeleteRequest;
 import com.beercompetition.pojo.dto.AdminEntryUpdateRequest;
 import com.beercompetition.pojo.dto.PortalEntrySubmitRequest;
 import com.beercompetition.pojo.dto.PortalEntryDeliverySubmitRequest;
@@ -9,6 +10,7 @@ import com.beercompetition.pojo.dto.PortalEntryRefundRequest;
 import com.beercompetition.pojo.dto.PortalEntryUpdateRequest;
 import com.beercompetition.pojo.dto.PortalProfileUpdateRequest;
 import com.beercompetition.pojo.vo.AdminEntryDetailVO;
+import com.beercompetition.pojo.vo.AdminEntryDeleteImpactVO;
 import com.beercompetition.pojo.vo.AdminEntryVO;
 import com.beercompetition.pojo.vo.EntryDetailVO;
 import com.beercompetition.pojo.vo.EntrySummaryVO;
@@ -33,6 +35,10 @@ public interface EntryService {
     AdminEntryDetailVO getAdminEntry(Long entryId);
 
     AdminEntryDetailVO updateAdminEntry(Long entryId, AdminEntryUpdateRequest request);
+
+    AdminEntryDeleteImpactVO getAdminEntryDeleteImpact(Long entryId);
+
+    void administrativelyDeleteEntry(Long entryId, AdminEntryDeleteRequest request);
 
     List<EntrySummaryVO> listPortalEntries();
 

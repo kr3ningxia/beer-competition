@@ -83,9 +83,13 @@ const policeBadge = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACQAAAAoCAYAA
 }
 
 .site-filing a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   color: inherit;
   text-decoration: none;
   transition: color 0.16s ease;
+  touch-action: manipulation;
 }
 
 .site-filing a:hover,
@@ -162,7 +166,7 @@ const policeBadge = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACQAAAAoCAYAA
 
 @media (max-width: 720px) {
   .site-filing {
-    padding: 16px 14px 18px;
+    padding: 16px 14px calc(18px + env(safe-area-inset-bottom));
   }
 
   .site-filing__inner {

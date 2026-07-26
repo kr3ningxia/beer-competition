@@ -25,5 +25,7 @@ public class CompetitionStyleConfig {
     private String styleCode;
     private String description;
     private Integer sortOrder;
+    private Integer activeFlag;
+    private String sourceLibraryVersion;
     private LocalDateTime createTime;
 }

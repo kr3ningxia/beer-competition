@@ -93,8 +93,8 @@
       </aside>
     </section>
 
-    <div v-if="avatarCrop.open" class="avatar-crop-mask" @click.self="cancelAvatarCrop">
-      <section class="avatar-crop-dialog" role="dialog" aria-modal="true" aria-label="调整厂牌头像">
+    <div v-if="avatarCrop.open" class="avatar-crop-mask" @click.self="cancelAvatarCrop" @keydown.esc.prevent="cancelAvatarCrop" @keydown.tab="trapAvatarCropFocus">
+      <section ref="avatarCropDialogRef" class="avatar-crop-dialog" role="dialog" aria-modal="true" aria-label="调整厂牌头像" tabindex="-1">
         <header>
           <div>
             <h3>调整厂牌头像</h3>
@@ -142,7 +142,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Close, RefreshLeft } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -165,6 +165,9 @@ const sameAsAccountName = ref(false)
 const saving = ref(false)
 const uploadingAvatar = ref(false)
 const avatarUploadRef = ref()
+const avatarCropDialogRef = ref(null)
+const avatarCropTriggerRef = ref(null)
+let bodyOverflowBeforeAvatarCrop = ''
 const avatarCrop = reactive({
   open: false,
   file: null,
@@ -217,6 +220,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   closeAvatarCrop()
+  document.body.style.overflow = bodyOverflowBeforeAvatarCrop
 })
 
 watch(
@@ -229,6 +233,18 @@ watch(
 )
 
 watch(() => avatarCrop.scale, clampAvatarCropOffset)
+
+watch(() => avatarCrop.open, async (open) => {
+  if (open) {
+    bodyOverflowBeforeAvatarCrop = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    await nextTick()
+    avatarCropDialogRef.value?.focus()
+    return
+  }
+  document.body.style.overflow = bodyOverflowBeforeAvatarCrop
+  avatarCropTriggerRef.value?.focus?.()
+})
 
 async function saveProfile() {
   saving.value = true
@@ -269,6 +285,7 @@ function handleAvatarChange(uploadFile) {
 
 function openAvatarCrop(file) {
   closeAvatarCrop()
+  avatarCropTriggerRef.value = document.activeElement
   avatarCrop.open = true
   avatarCrop.file = file
   avatarCrop.previewUrl = URL.createObjectURL(file)
@@ -293,6 +310,19 @@ function closeAvatarCrop() {
 function cancelAvatarCrop() {
   if (avatarCrop.uploading) return
   closeAvatarCrop()
+}
+
+function trapAvatarCropFocus(event) {
+  if (!avatarCrop.open || event.key !== 'Tab') return
+  const focusable = Array.from(avatarCropDialogRef.value?.querySelectorAll('button, input, a[href], [tabindex]:not([tabindex="-1"])') || [])
+    .filter((element) => !element.disabled && element.offsetParent !== null)
+  if (!focusable.length) return
+  const currentIndex = focusable.indexOf(document.activeElement)
+  const nextIndex = event.shiftKey
+    ? (currentIndex <= 0 ? focusable.length - 1 : currentIndex - 1)
+    : (currentIndex === focusable.length - 1 ? 0 : currentIndex + 1)
+  event.preventDefault()
+  focusable[nextIndex].focus()
 }
 
 function handleAvatarPreviewLoad(event) {
@@ -687,8 +717,9 @@ function normalizePortalPath(value) {
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
+  touch-action: manipulation;
   color: #5c5045;
   background: #fffaf0;
   border: 1px solid rgba(87, 58, 26, 0.14);

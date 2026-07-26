@@ -28,6 +28,7 @@ public class EntryFieldConfig {
     private Integer requiredFlag;
     private Integer visibleToJudges;
     private Integer sortOrder;
+    private Integer activeFlag;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

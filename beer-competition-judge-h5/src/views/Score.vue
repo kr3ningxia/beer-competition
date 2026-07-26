@@ -45,6 +45,13 @@
               </svg>
             </button>
           </div>
+
+          <div v-if="visibleExtraFields(entry).length" class="entry-extra-list">
+            <div v-for="field in visibleExtraFields(entry)" :key="field.key" class="entry-extra-row">
+              <span>{{ field.label }}</span>
+              <strong>{{ field.value }}</strong>
+            </div>
+          </div>
         </div>
 
           <div v-if="entry.locked" class="locked-alert">
@@ -316,6 +323,10 @@ function styleDisplayName(source) {
 
 function styleCategoryText(source) {
   return source?.styleCategoryName || source?.categoryName || '-'
+}
+
+function visibleExtraFields(source) {
+  return (source?.extraFields || []).filter((field) => String(field?.value || '').trim())
 }
 
 function displayShortCode(source) {
@@ -647,6 +658,40 @@ onMounted(async () => {
   fill: none;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.entry-extra-list {
+  display: grid;
+  border-top: 1px solid var(--score-border);
+  padding: 4px 20px;
+}
+
+.entry-extra-row {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 14px;
+  align-items: start;
+  padding: 12px 0;
+  border-bottom: 1px solid #ece9e3;
+}
+
+.entry-extra-row:last-child {
+  border-bottom: 0;
+}
+
+.entry-extra-row span {
+  color: #586271;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.entry-extra-row strong {
+  color: #050b16;
+  text-align: right;
+  font-size: 16px;
+  line-height: 1.4;
+  font-weight: 800;
+  overflow-wrap: anywhere;
 }
 
 .locked-alert {

@@ -40,12 +40,14 @@
         </div>
         <RouterLink v-else class="login-link" to="/portal/login">登录报名</RouterLink>
         <button
+          ref="mobileMenuTriggerRef"
           class="mobile-menu-button"
           type="button"
           :aria-expanded="mobileMenuOpen"
           aria-controls="portal-mobile-menu"
           :aria-label="mobileMenuOpen ? '关闭导航菜单' : '打开导航菜单'"
           @click="mobileMenuOpen = !mobileMenuOpen"
+          @keydown.tab="trapMobileMenuFocus"
         >
           <component :is="mobileMenuOpen ? Close : Menu" />
         </button>
@@ -57,9 +59,15 @@
         v-if="mobileMenuOpen"
         id="portal-mobile-menu"
         class="mobile-menu-layer"
-        @click.self="mobileMenuOpen = false"
+        role="dialog"
+        aria-modal="true"
+        aria-label="厂牌移动导航"
+        tabindex="-1"
+        @click.self="closeMobileMenu"
+        @keydown.esc.prevent="closeMobileMenu"
+        @keydown.tab="trapMobileMenuFocus"
       >
-        <section class="mobile-menu-panel" aria-label="厂牌移动导航">
+        <section ref="mobileMenuPanelRef" class="mobile-menu-panel" aria-label="厂牌移动菜单" tabindex="-1">
           <RouterLink
             v-if="loggedIn"
             :class="['mobile-account-card', { active: route.path === '/portal/profile' }]"
@@ -102,7 +110,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
   CircleCheck,
@@ -124,6 +132,9 @@ const route = useRoute()
 const displayName = ref(getDisplayName('portal'))
 const accountAvatarUrl = ref('')
 const mobileMenuOpen = ref(false)
+const mobileMenuTriggerRef = ref(null)
+const mobileMenuPanelRef = ref(null)
+let bodyOverflowBeforeMenu = ''
 const loggedIn = computed(() => isLoggedIn('portal'))
 const accountName = computed(() => isQuestionPlaceholder(displayName.value) ? '完善厂牌资料' : displayName.value || '完善厂牌资料')
 const accountInitial = computed(() => getAccountInitial(accountName.value))
@@ -147,9 +158,34 @@ function isNavActive(item) {
 }
 
 function logout() {
-  mobileMenuOpen.value = false
+  closeMobileMenu()
   clearSession('portal')
   router.replace('/portal/home')
+}
+
+function closeMobileMenu() {
+  mobileMenuOpen.value = false
+}
+
+function mobileMenuFocusableElements() {
+  return [
+    mobileMenuTriggerRef.value,
+    ...(mobileMenuPanelRef.value?.querySelectorAll(
+      'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ) || []),
+  ].filter((element) => element && !element.hasAttribute('disabled'))
+}
+
+function trapMobileMenuFocus(event) {
+  if (!mobileMenuOpen.value || event.key !== 'Tab') return
+  const focusable = mobileMenuFocusableElements()
+  if (!focusable.length) return
+  const currentIndex = focusable.indexOf(document.activeElement)
+  const nextIndex = event.shiftKey
+    ? (currentIndex <= 0 ? focusable.length - 1 : currentIndex - 1)
+    : (currentIndex === focusable.length - 1 ? 0 : currentIndex + 1)
+  event.preventDefault()
+  focusable[nextIndex].focus()
 }
 
 function syncDisplayNameFromStorage() {
@@ -235,6 +271,21 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('beer-competition-session-updated', handleSessionUpdate)
   window.removeEventListener('storage', handleStorageUpdate)
+  document.body.style.overflow = bodyOverflowBeforeMenu
+})
+
+watch(mobileMenuOpen, async (open) => {
+  if (open) {
+    bodyOverflowBeforeMenu = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    await nextTick()
+    mobileMenuPanelRef.value?.focus()
+    return
+  }
+  document.body.style.overflow = bodyOverflowBeforeMenu
+  if (document.activeElement?.closest?.('#portal-mobile-menu')) {
+    mobileMenuTriggerRef.value?.focus()
+  }
 })
 
 watch(
@@ -406,8 +457,8 @@ watch(
 .mobile-menu-button {
   display: none;
   place-items: center;
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   color: #2b1d10;
   background: #fff4d7;
   border: 1px solid rgba(87, 58, 26, 0.14);
@@ -477,6 +528,8 @@ watch(
   display: none;
   padding: 72px 14px 18px;
   background: rgba(33, 25, 18, 0.28);
+  overscroll-behavior: contain;
+  touch-action: manipulation;
 }
 
 .mobile-menu-panel {
@@ -490,6 +543,7 @@ watch(
   border: 1px solid rgba(87, 58, 26, 0.14);
   border-radius: 8px;
   box-shadow: 0 24px 60px rgba(67, 43, 17, 0.22);
+  overscroll-behavior: contain;
 }
 
 .mobile-account-card,
@@ -695,13 +749,24 @@ watch(
   }
 
   .login-link {
-    min-height: 38px;
+    min-height: 44px;
     padding: 0 12px;
     font-size: 13px;
   }
 
   .page-frame {
     padding: 16px 14px 34px;
+  }
+}
+
+@media (max-width: 350px) {
+  .brand small {
+    display: none;
+  }
+
+  .login-link {
+    padding-inline: 10px;
+    font-size: 12px;
   }
 }
 </style>

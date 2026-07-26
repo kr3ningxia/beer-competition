@@ -23,7 +23,7 @@
 
       <template v-if="competition">
         <section class="entry-switcher" aria-label="报名酒款列表">
-          <div class="entry-tabs">
+          <div ref="entryTabsRef" class="entry-tabs">
             <button
               v-for="(entry, index) in entries"
               :key="entry.clientId"
@@ -285,6 +285,7 @@ const MAX_BATCH_ENTRIES = 20
 const route = useRoute()
 const router = useRouter()
 const activeFormRef = ref(null)
+const entryTabsRef = ref(null)
 const competition = ref(null)
 const entries = ref([])
 const activeIndex = ref(0)
@@ -375,6 +376,11 @@ watch([entries, rulesAccepted, payMode], () => {
 
 watch(() => entries.value.length, () => {
   if (hydrated.value) refreshQuote()
+})
+
+watch(activeIndex, async () => {
+  await nextTick()
+  entryTabsRef.value?.querySelector('.entry-tab.active')?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' })
 })
 
 function createEmptyEntry() {
@@ -610,12 +616,13 @@ function formatCurrency(value) {
   border-top: 1px solid rgba(87, 58, 26, .1);
   border-bottom: 1px solid rgba(87, 58, 26, .1);
 }
-.entry-tabs { display: flex; gap: 8px; min-width: 0; overflow-x: auto; padding: 2px; }
+.entry-tabs { display: flex; gap: 8px; min-width: 0; overflow-x: auto; padding: 2px; scroll-snap-type: x proximity; overscroll-behavior-inline: contain; }
 .entry-tab {
   display: flex;
   gap: 9px;
   align-items: center;
   min-width: 150px;
+  min-height: 44px;
   padding: 9px 11px;
   color: #5e4b38;
   text-align: left;
@@ -623,6 +630,8 @@ function formatCurrency(value) {
   border: 1px solid rgba(87, 58, 26, .13);
   border-radius: 7px;
   cursor: pointer;
+  scroll-snap-align: start;
+  touch-action: manipulation;
 }
 .entry-tab:hover { border-color: rgba(166, 101, 20, .45); }
 .entry-tab.active { background: #fff2ce; border-color: #b87820; box-shadow: 0 0 0 2px rgba(184, 120, 32, .1); }

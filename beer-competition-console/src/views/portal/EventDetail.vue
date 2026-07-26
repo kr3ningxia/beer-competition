@@ -287,7 +287,7 @@ function deliveryMethodText(value) {
   color: #fff6df;
   background:
     linear-gradient(135deg, rgba(31, 21, 14, 0.94), rgba(86, 48, 18, 0.82)),
-    url("https://images.unsplash.com/photo-1518099074172-2e47ee6cfdc0?auto=format&fit=crop&w=1800&q=80");
+    url("https://images.unsplash.com/photo-1518099074172-2e47ee6cfdc0?auto=format&fit=crop&w=1200&q=72");
   background-position: center;
   background-size: cover;
   border-radius: 8px;

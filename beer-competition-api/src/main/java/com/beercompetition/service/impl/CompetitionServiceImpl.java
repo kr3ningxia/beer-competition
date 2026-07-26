@@ -122,6 +122,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
@@ -183,6 +184,7 @@ public class CompetitionServiceImpl implements CompetitionService {
     private static final DateTimeFormatter COMPETITION_CODE_DATE_FORMAT = DateTimeFormatter.BASIC_ISO_DATE;
     private static final DateTimeFormatter EXPORT_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final Set<String> ENTRY_FIELD_TYPES = Set.of("text", "textarea", "number", "select", "multi_select");
+    private static final Set<String> OPTION_ENTRY_FIELD_TYPES = Set.of("select", "multi_select");
 
     private final CompetitionMapper competitionMapper;
     private final AdminOperationLogMapper adminOperationLogMapper;
@@ -367,7 +369,7 @@ public class CompetitionServiceImpl implements CompetitionService {
         // 3) 事务内写入比赛和新建页完整配置
         insertCompetitionWithGeneratedCode(competition);
         replaceCategories(competition.getId(), categories);
-        replaceStyleSnapshot(competition.getId(), snapshotStyles);
+        replaceStyleSnapshot(competition.getId(), styleLibraryVersion, snapshotStyles);
         replaceEntryFields(competition.getId(), entryFields);
         replaceScoreConfigs(competition.getId(), request.getScoreConfigs());
 
@@ -469,7 +471,7 @@ public class CompetitionServiceImpl implements CompetitionService {
     public CompetitionDetailVO updateCategories(Long id, ConfigNameBatchUpdateRequest request) {
         // 1) 参数规范化与阶段权限校验
         Competition competition = getCompetitionOrThrow(id);
-        assertEntryStructureEditable(competition);
+        assertCategoriesEditable(competition);
         List<ConfigNameItemRequest> items = normalizeNameItems(request.getItems(), "投递组别");
 
         // 2) 替换当前比赛投递组别
@@ -484,23 +486,29 @@ public class CompetitionServiceImpl implements CompetitionService {
     public CompetitionDetailVO updateStyles(Long id, CompetitionStyleLibraryUpdateRequest request) {
         // 1) 参数规范化与阶段权限校验
         Competition competition = getCompetitionOrThrow(id);
-        assertEntryStructureEditable(competition);
+        assertRegistrationConfigEditable(competition, "基础风格库");
         String styleLibraryVersion = normalizeRequired(request.getStyleLibraryVersion(), "基础风格库不能为空");
         List<StyleItemVO> snapshotStyles = styleLibraryService.listEnabledStyles(styleLibraryVersion);
         competition.setStyleLibraryVersion(styleLibraryVersion);
 
         // 2) 更新比赛风格库版本并重建比赛风格快照
         competitionMapper.updateById(competition);
-        replaceStyleSnapshot(id, snapshotStyles);
+        replaceStyleSnapshot(id, styleLibraryVersion, snapshotStyles);
 
         // 3) 重新计算配置检查并返回详情
         return getCompetitionDetail(id);
     }
 
     private void replaceStyleSnapshot(Long competitionId, List<StyleItemVO> styles) {
-        // 1) 清理当前比赛旧基础风格快照
-        competitionStyleConfigMapper.delete(new LambdaQueryWrapper<CompetitionStyleConfig>()
-                .eq(CompetitionStyleConfig::getCompetitionId, competitionId));
+        replaceStyleSnapshot(competitionId, null, styles);
+    }
+
+    private void replaceStyleSnapshot(Long competitionId, String sourceLibraryVersion, List<StyleItemVO> styles) {
+        // 1) 停用旧快照，已报名酒款仍可通过 styleConfigId 读取历史说明
+        competitionStyleConfigMapper.update(null, new LambdaUpdateWrapper<CompetitionStyleConfig>()
+                .set(CompetitionStyleConfig::getActiveFlag, FLAG_FALSE)
+                .eq(CompetitionStyleConfig::getCompetitionId, competitionId)
+                .eq(CompetitionStyleConfig::getActiveFlag, FLAG_TRUE));
 
         // 2) 批量写入新的比赛风格快照
         int sort = 0;
@@ -512,6 +520,8 @@ public class CompetitionServiceImpl implements CompetitionService {
                     .styleCode(style.getStyleCode())
                     .description(style.getDescription())
                     .sortOrder(sort++)
+                    .activeFlag(FLAG_TRUE)
+                    .sourceLibraryVersion(sourceLibraryVersion)
                     .build());
         }
     }
@@ -546,11 +556,11 @@ public class CompetitionServiceImpl implements CompetitionService {
     public CompetitionDetailVO updateEntryFields(Long id, EntryFieldBatchUpdateRequest request) {
         // 1) 参数规范化与阶段权限校验
         Competition competition = getCompetitionOrThrow(id);
-        assertEntryStructureEditable(competition);
+        assertRegistrationConfigEditable(competition, "报名补充字段");
         List<EntryFieldItemRequest> items = normalizeEntryFields(request.getItems());
 
-        // 2) 替换当前比赛报名补充字段
-        replaceEntryFields(id, items);
+        // 2) 差异更新当前字段，停用项及历史填写值继续保留
+        reconcileEntryFields(id, items);
 
         // 3) 重新计算配置检查并返回详情
         return getCompetitionDetail(id);
@@ -1706,7 +1716,90 @@ public class CompetitionServiceImpl implements CompetitionService {
                     .requiredFlag(Boolean.TRUE.equals(item.getRequired()) ? 1 : 0)
                     .visibleToJudges(Boolean.TRUE.equals(item.getVisibleToJudges()) ? 1 : 0)
                     .sortOrder(resolveSort(item.getSortOrder(), sort++))
+                    .activeFlag(FLAG_TRUE)
                     .build());
+        }
+    }
+
+    private void reconcileEntryFields(Long competitionId, List<EntryFieldItemRequest> items) {
+        List<EntryFieldConfig> existing = entryFieldConfigMapper.selectList(new LambdaQueryWrapper<EntryFieldConfig>()
+                .eq(EntryFieldConfig::getCompetitionId, competitionId));
+        Map<String, EntryFieldConfig> existingByKey = existing.stream()
+                .collect(Collectors.toMap(EntryFieldConfig::getFieldKey, Function.identity(), (left, right) -> left));
+        assertEntryFieldChangesCompatible(competitionId, items, existingByKey);
+
+        Set<String> nextKeys = items.stream().map(EntryFieldItemRequest::getFieldKey).collect(Collectors.toSet());
+        for (EntryFieldConfig config : existing) {
+            if (!nextKeys.contains(config.getFieldKey()) && Objects.equals(config.getActiveFlag(), FLAG_TRUE)) {
+                config.setActiveFlag(FLAG_FALSE);
+                entryFieldConfigMapper.updateById(config);
+            }
+        }
+
+        int sort = 0;
+        for (EntryFieldItemRequest item : items) {
+            EntryFieldConfig config = existingByKey.get(item.getFieldKey());
+            if (config == null) {
+                config = EntryFieldConfig.builder()
+                        .competitionId(competitionId)
+                        .fieldKey(item.getFieldKey())
+                        .build();
+            }
+            config.setFieldLabel(item.getFieldLabel());
+            config.setFieldType(item.getFieldType());
+            config.setHelpText(normalizeNullable(item.getHelpText()));
+            config.setOptionsJson(writeOptions(item.getOptions()));
+            config.setRequiredFlag(Boolean.TRUE.equals(item.getRequired()) ? FLAG_TRUE : FLAG_FALSE);
+            config.setVisibleToJudges(Boolean.TRUE.equals(item.getVisibleToJudges()) ? FLAG_TRUE : FLAG_FALSE);
+            config.setSortOrder(resolveSort(item.getSortOrder(), sort++));
+            config.setActiveFlag(FLAG_TRUE);
+            if (config.getId() == null) {
+                entryFieldConfigMapper.insert(config);
+            } else {
+                entryFieldConfigMapper.updateById(config);
+            }
+        }
+    }
+
+    private void assertEntryFieldChangesCompatible(Long competitionId,
+                                                   List<EntryFieldItemRequest> items,
+                                                   Map<String, EntryFieldConfig> existingByKey) {
+        List<Long> activeEntryIds = beerEntryMapper.selectList(new LambdaQueryWrapper<BeerEntry>()
+                        .eq(BeerEntry::getCompetitionId, competitionId)
+                        .eq(BeerEntry::getDeletedFlag, FLAG_FALSE)
+                        .ne(BeerEntry::getStatus, EntryStatus.CANCELED.name()))
+                .stream().map(BeerEntry::getId).toList();
+        if (activeEntryIds.isEmpty()) {
+            return;
+        }
+        Map<String, List<String>> valuesByKey = beerEntryExtraFieldMapper.selectList(
+                        new LambdaQueryWrapper<BeerEntryExtraField>().in(BeerEntryExtraField::getBeerEntryId, activeEntryIds))
+                .stream()
+                .collect(Collectors.groupingBy(BeerEntryExtraField::getFieldKey,
+                        Collectors.mapping(BeerEntryExtraField::getFieldValue, Collectors.toList())));
+        for (EntryFieldItemRequest item : items) {
+            List<String> values = valuesByKey.getOrDefault(item.getFieldKey(), List.of()).stream()
+                    .filter(StringUtils::hasText).toList();
+            if (Boolean.TRUE.equals(item.getRequired()) && values.size() < activeEntryIds.size()) {
+                throw new BaseException(item.getFieldLabel() + "存在未填写的报名酒款，暂不能设为必填");
+            }
+            if (values.isEmpty()) {
+                continue;
+            }
+            if ("select".equals(item.getFieldType()) && values.stream().anyMatch(value -> !item.getOptions().contains(value))) {
+                throw new BaseException(item.getFieldLabel() + "已有填写值不在新选项中");
+            }
+            if ("multi_select".equals(item.getFieldType()) && values.stream()
+                    .flatMap(value -> Arrays.stream(value.split("、")))
+                    .anyMatch(value -> !item.getOptions().contains(value))) {
+                throw new BaseException(item.getFieldLabel() + "已有多选值不在新选项中");
+            }
+            EntryFieldConfig previous = existingByKey.get(item.getFieldKey());
+            if (previous != null && !Objects.equals(previous.getFieldType(), item.getFieldType())
+                    && !(Set.of("text", "textarea").contains(previous.getFieldType())
+                    && Set.of("text", "textarea").contains(item.getFieldType()))) {
+                throw new BaseException(item.getFieldLabel() + "已有填写数据，暂不能修改字段类型");
+            }
         }
     }
 
@@ -2121,6 +2214,7 @@ public class CompetitionServiceImpl implements CompetitionService {
     private List<CompetitionConfigNameVO> listStyles(Long competitionId) {
         return competitionStyleConfigMapper.selectList(new LambdaQueryWrapper<CompetitionStyleConfig>()
                         .eq(CompetitionStyleConfig::getCompetitionId, competitionId)
+                        .eq(CompetitionStyleConfig::getActiveFlag, FLAG_TRUE)
                         .orderByAsc(CompetitionStyleConfig::getSortOrder)
                         .orderByAsc(CompetitionStyleConfig::getId))
                 .stream()
@@ -2138,6 +2232,7 @@ public class CompetitionServiceImpl implements CompetitionService {
     private List<EntryFieldConfigVO> listEntryFields(Long competitionId) {
         return entryFieldConfigMapper.selectList(new LambdaQueryWrapper<EntryFieldConfig>()
                         .eq(EntryFieldConfig::getCompetitionId, competitionId)
+                        .eq(EntryFieldConfig::getActiveFlag, FLAG_TRUE)
                         .orderByAsc(EntryFieldConfig::getSortOrder)
                         .orderByAsc(EntryFieldConfig::getId))
                 .stream()
@@ -2784,9 +2879,9 @@ public class CompetitionServiceImpl implements CompetitionService {
         scopes.put("description", true);
         scopes.put("entryStructure", draft);
         scopes.put("categories", draft);
-        scopes.put("styleLibrary", draft);
-        scopes.put("styles", draft);
-        scopes.put("entryFields", draft);
+        scopes.put("styleLibrary", draft || status == CompetitionStatus.REGISTRATION_OPEN);
+        scopes.put("styles", draft || status == CompetitionStatus.REGISTRATION_OPEN);
+        scopes.put("entryFields", draft || status == CompetitionStatus.REGISTRATION_OPEN);
         scopes.put("judgeConfig", judgeConfig);
         scopes.put("judgeTables", judgeConfig);
         scopes.put("scoreConfigs", judgeConfig);
@@ -2842,10 +2937,18 @@ public class CompetitionServiceImpl implements CompetitionService {
         return left.compareTo(right) == 0;
     }
 
-    private void assertEntryStructureEditable(Competition competition) {
+    private void assertCategoriesEditable(Competition competition) {
         if (parseStatus(competition) != CompetitionStatus.DRAFT) {
-            throw new BaseException("报名已开放，报名结构已锁定");
+            throw new BaseException("报名已开放，投递组别已锁定");
         }
+    }
+
+    private void assertRegistrationConfigEditable(Competition competition, String label) {
+        CompetitionStatus status = parseStatus(competition);
+        if (status == CompetitionStatus.DRAFT || status == CompetitionStatus.REGISTRATION_OPEN) {
+            return;
+        }
+        throw new BaseException("当前阶段不能修改" + label);
     }
 
     private void assertJudgeConfigEditable(Competition competition) {
@@ -3043,7 +3146,16 @@ public class CompetitionServiceImpl implements CompetitionService {
                 item.setFieldKey(normalizeRequired(item.getFieldKey(), "字段 key 不能为空"));
             }
             item.setHelpText(normalizeNullable(item.getHelpText()));
-            item.setOptions(normalizeOptions(item.getOptions()));
+            List<String> options = normalizeOptions(item.getOptions());
+            if (OPTION_ENTRY_FIELD_TYPES.contains(item.getFieldType())) {
+                if (options.size() < 2) {
+                    throw new BaseException(item.getFieldLabel() + "至少需要 2 个候选项");
+                }
+                assertUniqueKeys(options, item.getFieldLabel() + "选项");
+                item.setOptions(options);
+            } else {
+                item.setOptions(List.of());
+            }
             normalized.add(item);
         }
         normalized = normalized.stream()

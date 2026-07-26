@@ -21,7 +21,8 @@ public interface BeerEntryMapper extends BaseMapper<BeerEntry> {
                    SUM(CASE WHEN status = #{canceledStatus} THEN 1 ELSE 0 END) AS canceled_count,
                    SUM(CASE WHEN status IN (#{resultPublishedStatus}, #{legacyPublishedStatus}) THEN 1 ELSE 0 END) AS result_published_count
             FROM beer_entry
-            WHERE competition_id IN
+            WHERE deleted_flag = 0
+              AND competition_id IN
             <foreach collection="competitionIds" item="competitionId" open="(" separator="," close=")">
               #{competitionId}
             </foreach>

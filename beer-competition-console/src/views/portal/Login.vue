@@ -10,6 +10,9 @@
             <el-input
               v-model="form.phone"
               clearable
+              type="tel"
+              name="phone"
+              autocomplete="tel"
               inputmode="numeric"
               maxlength="11"
               placeholder="请输入联系人手机号"
@@ -20,6 +23,9 @@
             <div class="sms-row">
               <el-input
                 v-model="form.code"
+                name="code"
+                autocomplete="one-time-code"
+                spellcheck="false"
                 inputmode="numeric"
                 maxlength="6"
                 placeholder="请输入验证码"
@@ -278,6 +284,12 @@ onBeforeUnmount(() => window.clearInterval(timer))
   .sms-row {
     grid-template-columns: minmax(0, 2fr) minmax(108px, 1fr);
     gap: 10px;
+  }
+}
+
+@media (max-width: 720px) {
+  .portal-login :deep(.el-input__inner) {
+    font-size: 16px;
   }
 }
 </style>

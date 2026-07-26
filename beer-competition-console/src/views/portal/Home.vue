@@ -48,7 +48,7 @@
                 v-if="activeCategoryNames.length > summaryCategoryLimit"
                 class="category-expand"
                 type="button"
-                @click="categoryDialogOpen = true"
+                @click="openCategoryDialog"
               >
                 查看全部
               </button>
@@ -60,8 +60,8 @@
     </section>
 
     <Teleport to="body">
-      <div v-if="categoryDialogOpen" class="category-modal-backdrop" @click.self="categoryDialogOpen = false">
-        <section class="category-modal" role="dialog" aria-modal="true" aria-labelledby="category-modal-title">
+      <div v-if="categoryDialogOpen" class="category-modal-backdrop" @click.self="closeCategoryDialog" @keydown.esc.prevent="closeCategoryDialog" @keydown.tab="trapCategoryDialogFocus">
+        <section ref="categoryModalRef" class="category-modal" role="dialog" aria-modal="true" aria-labelledby="category-modal-title" tabindex="-1">
           <header class="category-modal-head">
             <div>
               <span>参赛组别</span>
@@ -165,7 +165,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { isLoggedIn } from '@/utils/auth'
 import { fetchPortalEntries, fetchPortalHome, fetchPortalResults } from '@/api/portal'
@@ -176,6 +176,9 @@ const homeData = ref({ activeCompetition: null, openCompetitions: [], competitio
 const entries = ref([])
 const results = ref([])
 const categoryDialogOpen = ref(false)
+const categoryDialogTriggerRef = ref(null)
+const categoryModalRef = ref(null)
+let bodyOverflowBeforeCategoryDialog = ''
 const summaryCategoryLimit = 3
 const activeCompetition = computed(() => homeData.value.activeCompetition)
 const openCompetitions = computed(() => homeData.value.openCompetitions || [])
@@ -268,6 +271,43 @@ function entryFeeText(competition) {
 function earlyBirdDeadlineText(competition) {
   return isEarlyBirdActive(competition) ? formatDateTime(competition.earlyBirdDeadline) : ''
 }
+
+function openCategoryDialog(event) {
+  categoryDialogTriggerRef.value = event?.currentTarget || null
+  categoryDialogOpen.value = true
+}
+
+function closeCategoryDialog() {
+  categoryDialogOpen.value = false
+}
+
+function trapCategoryDialogFocus(event) {
+  if (!categoryDialogOpen.value || event.key !== 'Tab') return
+  const focusable = Array.from(categoryModalRef.value?.querySelectorAll('button, a[href], [tabindex]:not([tabindex="-1"])') || [])
+  if (!focusable.length) return
+  const currentIndex = focusable.indexOf(document.activeElement)
+  const nextIndex = event.shiftKey
+    ? (currentIndex <= 0 ? focusable.length - 1 : currentIndex - 1)
+    : (currentIndex === focusable.length - 1 ? 0 : currentIndex + 1)
+  event.preventDefault()
+  focusable[nextIndex].focus()
+}
+
+watch(categoryDialogOpen, async (open) => {
+  if (open) {
+    bodyOverflowBeforeCategoryDialog = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    await nextTick()
+    categoryModalRef.value?.focus()
+    return
+  }
+  document.body.style.overflow = bodyOverflowBeforeCategoryDialog
+  categoryDialogTriggerRef.value?.focus?.()
+})
+
+onBeforeUnmount(() => {
+  document.body.style.overflow = bodyOverflowBeforeCategoryDialog
+})
 </script>
 
 <style scoped>
@@ -314,7 +354,7 @@ function earlyBirdDeadlineText(competition) {
   color: #fff8e8;
   background:
     linear-gradient(135deg, rgba(31, 21, 14, 0.92), rgba(78, 43, 16, 0.74)),
-    url("https://images.unsplash.com/photo-1532634786-c8f8c86a0062?auto=format&fit=crop&w=1800&q=80");
+    url("https://images.unsplash.com/photo-1518099074172-2e47ee6cfdc0?auto=format&fit=crop&w=1200&q=72");
   background-position: center;
   background-size: cover;
   border-radius: 8px;
@@ -501,8 +541,8 @@ function earlyBirdDeadlineText(competition) {
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
   color: #6b4710;
   background: #fff3d8;
   border: 1px solid rgba(87, 58, 26, 0.14);
@@ -677,7 +717,7 @@ dd {
   color: #fff6df;
   background:
     linear-gradient(90deg, rgba(31, 20, 13, 0.98) 0%, rgba(38, 23, 14, 0.96) 40%, rgba(74, 40, 18, 0.9) 100%),
-    url("https://images.unsplash.com/photo-1566633806327-68e152aaf26d?auto=format&fit=crop&w=1600&q=80");
+    url("https://images.unsplash.com/photo-1566633806327-68e152aaf26d?auto=format&fit=crop&w=1200&q=72");
   background-position: center;
   background-size: cover;
 }
@@ -894,6 +934,9 @@ details p {
     gap: 20px;
     padding: 20px;
     background-position: center top;
+    background-image:
+      linear-gradient(135deg, rgba(31, 21, 14, 0.92), rgba(78, 43, 16, 0.74)),
+      url("https://images.unsplash.com/photo-1518099074172-2e47ee6cfdc0?auto=format&fit=crop&w=800&q=70");
   }
 
   .hero-copy h1 {

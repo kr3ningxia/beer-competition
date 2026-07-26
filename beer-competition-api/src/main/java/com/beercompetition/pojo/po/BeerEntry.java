@@ -2,6 +2,7 @@ package com.beercompetition.pojo.po;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -27,10 +28,16 @@ public class BeerEntry {
     private Long categoryId;
     private String name;
     private String style;
+    private Long styleConfigId;
     private BigDecimal abv;
     private String extraFieldsJson;
     private String status;
     private Integer storedFlag;
+    @TableLogic(value = "0", delval = "1")
+    private Integer deletedFlag;
+    private LocalDateTime deletedTime;
+    private Long deletedByAdminId;
+    private String deleteReason;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

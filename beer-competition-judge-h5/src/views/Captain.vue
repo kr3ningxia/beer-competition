@@ -107,6 +107,13 @@
           </button>
         </div>
 
+        <div v-if="visibleExtraFields(entry).length" class="entry-extra-list">
+          <div v-for="field in visibleExtraFields(entry)" :key="field.key" class="entry-extra-row">
+            <span>{{ field.label }}</span>
+            <strong>{{ field.value }}</strong>
+          </div>
+        </div>
+
         <div v-if="!myScoreSubmitted" class="captain-alert">
           你还没有提交这款酒的专业评分。
           <button type="button" @click="$router.push(`/score/${uuid}`)">去填写</button>
@@ -618,6 +625,10 @@ function styleCategoryText(source) {
   return source?.styleCategoryName || source?.categoryName || '-'
 }
 
+function visibleExtraFields(source) {
+  return (source?.extraFields || []).filter((field) => String(field?.value || '').trim())
+}
+
 function openStyleDetail() {
   if (!entry.value) return
   styleDetailOpen.value = true
@@ -883,6 +894,42 @@ onMounted(async () => {
   fill: none;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.entry-extra-list {
+  display: grid;
+  margin-top: 10px;
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+  padding: 0 12px;
+  background: #fff;
+}
+
+.entry-extra-row {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 12px;
+  align-items: start;
+  padding: 11px 0;
+  border-bottom: 1px solid #eaecf0;
+}
+
+.entry-extra-row:last-child {
+  border-bottom: 0;
+}
+
+.entry-extra-row span {
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.entry-extra-row strong {
+  color: #18222f;
+  text-align: right;
+  font-size: 14px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .score-title {

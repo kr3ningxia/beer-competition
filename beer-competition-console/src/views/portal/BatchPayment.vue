@@ -503,12 +503,12 @@ function formatCurrency(value) {
 .change-method-button:hover { color: #80500f; }
 .change-method-button:focus-visible { color: #80500f; outline: 2px solid rgba(174, 111, 25, .35); outline-offset: 3px; border-radius: 3px; }
 .wechat-panel { display: flex; justify-content: center; gap: 34px; align-items: center; min-height: 330px; margin-top: 20px; padding: 28px; background: #fff8e8; border: 1px solid rgba(87,58,26,.12); border-radius: 8px; }
-.qr-frame { display: grid; width: 240px; height: 240px; place-items: center; background: #fff; border: 1px solid rgba(87,58,26,.14); border-radius: 8px; }
+.qr-frame { display: grid; width: min(240px, 100%); aspect-ratio: 1; height: auto; min-width: 0; place-items: center; background: #fff; border: 1px solid rgba(87,58,26,.14); border-radius: 8px; box-sizing: border-box; }
 .qr-loading { color: #8a7864; }
 .jsapi-mark { display: grid; width: 210px; min-height: 210px; place-items: center; align-content: center; gap: 10px; color: #2f6f46; background: #fff; border: 1px solid rgba(87,58,26,.14); border-radius: 8px; text-align: center; }
 .jsapi-mark .el-icon { font-size: 52px; }
 .jsapi-mark span { color: #806c55; font-size: 13px; }
-.wechat-copy { display: grid; gap: 10px; min-width: 230px; }
+.wechat-copy { display: grid; gap: 10px; width: 100%; min-width: 0; box-sizing: border-box; }
 .wechat-copy > span { color: #806c55; font-size: 13px; }
 .wechat-copy > strong { color: #744709; font-size: 34px; font-variant-numeric: tabular-nums; }
 .wechat-copy p { margin: 0 0 8px; color: #74624d; }
@@ -546,5 +546,5 @@ function formatCurrency(value) {
 .summary-actions a { display: flex; min-height: 42px; align-items: center; justify-content: center; color: #fff; background: #875515; border-radius: 7px; font-weight: 900; text-decoration: none; }
 .loading-state { padding: 80px; text-align: center; }
 @media (max-width: 1000px) { .payment-layout { grid-template-columns: 1fr; } .order-summary { position: static; } }
-@media (max-width: 700px) { .payment-heading, .method-head, .wechat-panel { align-items: flex-start; flex-direction: column; } .bank-account, .bank-grid { grid-template-columns: 1fr; } .qr-frame { align-self: center; } }
+@media (max-width: 700px) { .payment-heading, .method-head, .wechat-panel { align-items: flex-start; flex-direction: column; } .wechat-panel { width: 100%; box-sizing: border-box; } .bank-account, .bank-grid { grid-template-columns: 1fr; } .qr-frame { align-self: center; } }
 </style>
