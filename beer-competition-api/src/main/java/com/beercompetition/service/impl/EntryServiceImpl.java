@@ -217,6 +217,7 @@ public class EntryServiceImpl implements EntryService {
         String normalizedKeyword = normalizeNullable(keyword);
         List<BeerEntry> entries = beerEntryMapper.selectList(new LambdaQueryWrapper<BeerEntry>()
                 .eq(competitionId != null, BeerEntry::getCompetitionId, competitionId)
+                .ne(BeerEntry::getStatus, EntryStatus.CANCELED.name())
                 .eq(StringUtils.hasText(status), BeerEntry::getStatus, status)
                 .eq(categoryId != null, BeerEntry::getCategoryId, categoryId)
                 .orderByDesc(BeerEntry::getId));
@@ -1244,7 +1245,7 @@ public class EntryServiceImpl implements EntryService {
 
     @Override
     public JudgeEntryVO resolveJudgeScan(String code) {
-        // 1) 解析二维码令牌、现场短编号或匿名标签编码
+        // 1) 解析二维码令牌、作品编号或匿名标签编码
         EntryScanLabel label = entryScanLabelService.resolveActiveLabel(code);
         BeerEntry entry = requireEntry(label.getBeerEntryId());
         assertCompetitionNotArchived(entry.getCompetitionId());

@@ -101,27 +101,14 @@
                 <div><dt>转账金额</dt><dd>{{ formatCurrency(batch.totalAmount) }}</dd></div>
               </dl>
               <el-form label-position="top" class="bank-form">
-                <div class="bank-grid">
-                  <el-form-item label="付款账户名">
-                    <el-input v-model.trim="bankForm.payerName" maxlength="128" placeholder="填写付款账户名…" />
-                  </el-form-item>
-                  <el-form-item label="转账时间">
-                    <el-date-picker
-                      v-model="bankForm.transferTime"
-                      type="datetime"
-                      value-format="YYYY-MM-DDTHH:mm:ss"
-                      placeholder="选择转账时间…"
-                    />
-                  </el-form-item>
-                </div>
-                <el-form-item label="转账备注">
-                  <el-input v-model.trim="bankForm.remark" maxlength="255" placeholder="填写银行流水备注或其他核对信息…" />
+                <el-form-item label="转账备注（选填）">
+                  <el-input v-model.trim="bankForm.remark" maxlength="255" placeholder="如需补充核对信息，可填写转账备注" />
                 </el-form-item>
-                <el-form-item label="付款凭证">
+                <el-form-item label="付款凭证" required>
                   <label class="voucher-picker">
                     <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" @change="selectVoucher" />
                     <el-icon><Upload /></el-icon>
-                    <span>{{ voucherFile?.name || bankVoucherName || '选择图片或 PDF' }}</span>
+                    <span>{{ voucherFile?.name || bankVoucherName || '上传图片或 PDF，单个文件不超过 10MB' }}</span>
                   </label>
                 </el-form-item>
                 <el-button class="bank-submit" type="primary" :loading="submittingBank" @click="submitBankTransfer">
@@ -204,7 +191,7 @@ const payMode = ref(route.query.payMode === 'bank_transfer' || route.query.payMo
 const redirectSeconds = ref(3)
 const autoRedirectCancelled = ref(false)
 const wechatRetryAvailable = ref(false)
-const bankForm = reactive({ payerName: '', transferTime: '', remark: '' })
+const bankForm = reactive({ remark: '' })
 let pollingTimer = null
 let redirectTimer = null
 const currencyFormatter = new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY', minimumFractionDigits: 0, maximumFractionDigits: 2 })
@@ -389,6 +376,10 @@ function selectVoucher(event) {
 
 async function submitBankTransfer() {
   if (submittingBank.value) return
+  if (!voucherFile.value && !bankVoucherAssetId.value) {
+    ElMessage.warning('请上传付款凭证')
+    return
+  }
   submittingBank.value = true
   try {
     const wasEditing = editingBankTransfer.value
@@ -409,7 +400,7 @@ async function submitBankTransfer() {
     ElMessage.success(wasEditing ? '转账信息已更新' : '转账信息已提交')
   } catch (error) {
     paymentStatus.value = await fetchPortalBatchPaymentStatus(orderId).catch(() => paymentStatus.value)
-    ElMessage.warning(error?.message || '转账信息提交失败')
+    if (!error?.userNotified) ElMessage.warning(error?.message || '转账信息提交失败，请稍后重试')
   } finally {
     submittingBank.value = false
   }
@@ -425,8 +416,6 @@ async function editBankTransfer() {
     const transfer = await fetchPortalBankTransfer(transferId)
     await loadBankAccount()
     payMode.value = 'BANK_TRANSFER'
-    bankForm.payerName = transfer.payerName || ''
-    bankForm.transferTime = transfer.transferTime || ''
     bankForm.remark = transfer.remark || ''
     bankVoucherAssetId.value = transfer.voucherAssetId || null
     bankVoucherName.value = transfer.voucherFileName || ''
@@ -518,8 +507,6 @@ function formatCurrency(value) {
 .bank-account dt { color: #8a7761; font-size: 12px; }
 .bank-account dd { margin: 5px 0 0; color: #342518; font-weight: 800; }
 .bank-form { margin-top: 20px; }
-.bank-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
-.bank-form :deep(.el-date-editor) { width: 100%; }
 .voucher-picker { display: flex; align-items: center; gap: 9px; width: 100%; padding: 12px 14px; color: #6f573e; background: #fffdf8; border: 1px dashed rgba(87,58,26,.25); border-radius: 7px; cursor: pointer; }
 .voucher-picker input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .bank-submit { width: 100%; min-height: 46px; background: #875515; border: 0; font-weight: 900; }
@@ -546,5 +533,5 @@ function formatCurrency(value) {
 .summary-actions a { display: flex; min-height: 42px; align-items: center; justify-content: center; color: #fff; background: #875515; border-radius: 7px; font-weight: 900; text-decoration: none; }
 .loading-state { padding: 80px; text-align: center; }
 @media (max-width: 1000px) { .payment-layout { grid-template-columns: 1fr; } .order-summary { position: static; } }
-@media (max-width: 700px) { .payment-heading, .method-head, .wechat-panel { align-items: flex-start; flex-direction: column; } .wechat-panel { width: 100%; box-sizing: border-box; } .bank-account, .bank-grid { grid-template-columns: 1fr; } .qr-frame { align-self: center; } }
+@media (max-width: 700px) { .payment-heading, .method-head, .wechat-panel { align-items: flex-start; flex-direction: column; } .wechat-panel { width: 100%; box-sizing: border-box; } .bank-account { grid-template-columns: 1fr; } .qr-frame { align-self: center; } }
 </style>

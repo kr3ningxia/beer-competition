@@ -198,6 +198,7 @@ public class RoundServiceImpl implements RoundService {
         Map<Long, RoundResult> latestResultByEntry = roundQuerySupport.latestResultByEntry(competitionId);
         List<BeerEntry> entries = beerEntryMapper.selectList(new LambdaQueryWrapper<BeerEntry>()
                 .eq(BeerEntry::getCompetitionId, competitionId)
+                .ne(BeerEntry::getStatus, EntryStatus.CANCELED.name())
                 .orderByDesc(BeerEntry::getCreateTime)
                 .orderByAsc(BeerEntry::getId));
         Map<Long, CompetitionStyleConfig> styleById = roundQuerySupport.loadStyleSnapshots(entries.stream()

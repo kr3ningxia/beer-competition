@@ -54,7 +54,6 @@
           <option value="PENDING_CONFIRM">等待转账确认</option>
           <option value="PAID">已支付</option>
           <option value="REFUNDED">已退款</option>
-          <option value="CANCELED">已取消</option>
         </select>
       </label>
       <label class="field">
@@ -318,7 +317,7 @@
               <button class="tool-button primary" type="button" @click="downloadAdminLabelPng">下载 PNG</button>
             </div>
             <div class="label-meta-grid">
-              <article><small>现场短编号</small><strong>{{ detail.shortCode || '-' }}</strong></article>
+              <article><small>作品编号</small><strong>{{ detail.shortCode || '-' }}</strong></article>
               <article><small>匿名编码</small><strong>{{ detail.uuid }}</strong></article>
               <article><small>投递组别</small><strong>{{ detail.categoryName || '-' }}</strong></article>
               <article><small>基础风格</small><strong>{{ detail.style || '-' }}</strong></article>
@@ -482,7 +481,6 @@ const entryStatusOptions = [
   { value: 'PENDING_PAYMENT', label: '待支付' },
   { value: 'REGISTERED', label: '报名成功' },
   { value: 'STORED', label: '已入库' },
-  { value: 'CANCELED', label: '已取消' },
   { value: 'RESULT_PUBLISHED', label: '结果已出' },
 ]
 

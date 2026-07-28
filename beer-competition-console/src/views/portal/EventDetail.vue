@@ -724,6 +724,36 @@ dd {
 
   .detail-hero h1 {
     font-size: 34px;
+    overflow-wrap: anywhere;
+  }
+
+  .hero-facts {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .hero-facts span {
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .section-heading {
+    display: grid;
+  }
+
+  .rules-link {
+    justify-self: start;
+    max-width: 100%;
+    white-space: normal;
+    text-align: center;
+  }
+
+  .brief-actions a,
+  .card-link {
+    max-width: 100%;
+    white-space: normal;
+    text-align: center;
   }
 
   .brief-stats,

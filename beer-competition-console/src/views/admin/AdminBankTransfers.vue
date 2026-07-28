@@ -22,7 +22,7 @@
         <span>关键词</span>
         <div>
           <Search />
-          <input v-model.trim="filters.keyword" placeholder="搜索厂牌、赛事、付款账户名、转账备注" @keyup.enter="applyFilters" />
+          <input v-model.trim="filters.keyword" placeholder="搜索厂牌、赛事、转账备注" @keyup.enter="applyFilters" />
         </div>
       </label>
       <label class="field">
@@ -64,7 +64,7 @@
           <div v-for="item in transfers" :key="item.id" :class="['table-row', { urgent: item.status === 'SUBMITTED' }]">
             <div class="strong-cell">
               <strong>{{ item.breweryName || '-' }}</strong>
-              <small>{{ item.payerName || '未填写付款账户名' }}</small>
+              <small>{{ item.transferNo || '-' }}</small>
             </div>
             <div class="soft-cell">
               <strong>{{ item.competitionName || '-' }}</strong>
@@ -76,7 +76,7 @@
             </div>
             <div class="soft-cell">
               <strong class="remark-preview" :title="item.remark || ''">{{ item.remark || '-' }}</strong>
-              <small>{{ formatTime(item.transferTime) }} · {{ item.voucherFileName ? '已上传凭证' : '未上传凭证' }}</small>
+              <small>{{ item.voucherFileName ? '付款凭证已上传' : '付款凭证缺失' }}</small>
             </div>
             <span :class="['state-pill', statusTone(item.status)]">{{ statusLabel(item.status) }}</span>
             <span class="time-cell">{{ formatTime(item.submittedTime) }}</span>
@@ -122,7 +122,7 @@
           <section class="summary-grid">
             <article><small>状态</small><strong>{{ statusLabel(detail.status) }}</strong></article>
             <article><small>金额</small><strong>{{ formatMoney(detail.amount) }}</strong></article>
-            <article><small>付款时间</small><strong>{{ formatTime(detail.transferTime) }}</strong></article>
+            <article><small>付款凭证</small><strong>{{ detail.voucherFileName ? '已上传' : '缺失' }}</strong></article>
             <article><small>提交时间</small><strong>{{ formatTime(detail.submittedTime) }}</strong></article>
           </section>
 
@@ -135,7 +135,6 @@
               </div>
             </div>
             <dl>
-              <div><dt>付款账户名</dt><dd>{{ detail.payerName || '-' }}</dd></div>
               <div><dt>凭证文件</dt><dd>{{ detail.voucherFileName || '未上传' }}</dd></div>
               <div class="full-info-row"><dt>转账备注</dt><dd>{{ detail.remark || '-' }}</dd></div>
               <div><dt>处理时间</dt><dd>{{ formatTime(detail.processedTime) }}</dd></div>

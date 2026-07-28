@@ -94,6 +94,11 @@ class RegistrationBatchIntegrationTest extends IntegrationTestBase {
 
         PortalPaymentOrderBankTransferRequest transferRequest = new PortalPaymentOrderBankTransferRequest();
         transferRequest.setPayerName("批次付款账户");
+        assertThatThrownBy(() -> bankTransferPaymentService.submitPortalOrderTransfer(
+                batch.getPaymentOrderId(), transferRequest))
+                .hasMessageContaining("请上传付款凭证");
+
+        transferRequest.setVoucherAssetId(insertVoucherAsset(fixture.portalA().account().getId()));
         var transfer = bankTransferPaymentService.submitPortalOrderTransfer(batch.getPaymentOrderId(), transferRequest);
         assertThat(transfer.getEntryCount()).isEqualTo(2);
         assertThat(batchPaymentService.getPortalPaymentStatus(batch.getPaymentOrderId()).getStatus())
@@ -142,6 +147,7 @@ class RegistrationBatchIntegrationTest extends IntegrationTestBase {
 
         PortalBankTransferSubmitRequest transferRequest = new PortalBankTransferSubmitRequest();
         transferRequest.setEntryId(entryId);
+        transferRequest.setVoucherAssetId(insertVoucherAsset(fixture.portalA().account().getId()));
         assertThatThrownBy(() -> bankTransferPaymentService.submitPortalTransfer(transferRequest))
                 .hasMessageContaining("按整批提交银行转账");
 
@@ -197,5 +203,17 @@ class RegistrationBatchIntegrationTest extends IntegrationTestBase {
         request.setStyle(testRun + "-风格");
         request.setAbv(new BigDecimal("5.50"));
         return request;
+    }
+
+    private Long insertVoucherAsset(Long portalAccountId) {
+        String filename = testRun + "-batch-voucher.pdf";
+        jdbcTemplate.update("""
+                INSERT INTO file_asset
+                  (business_type, owner_type, owner_id, storage_provider, file_name, storage_path, public_url, create_time)
+                VALUES ('BANK_TRANSFER_VOUCHER', 'PORTAL_ACCOUNT', ?, 'local', ?, ?, ?, NOW())
+                """, portalAccountId, filename, "uploads/BANK_TRANSFER_VOUCHER/" + filename,
+                "/uploads/BANK_TRANSFER_VOUCHER/" + filename);
+        return jdbcTemplate.queryForObject("SELECT id FROM file_asset WHERE file_name = ? ORDER BY id DESC LIMIT 1",
+                Long.class, filename);
     }
 }

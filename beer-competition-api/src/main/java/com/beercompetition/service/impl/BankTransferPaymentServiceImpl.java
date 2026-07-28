@@ -147,9 +147,11 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
         PortalAccount account = requirePortalAccount();
         Brewery brewery = requireBrewery(account.getBreweryId());
         Long entryId = request.getEntryId();
-        String payerName = normalizeNullable(request.getPayerName());
-        String remark = normalizeNullable(request.getRemark());
-        FileAsset voucher = resolveVoucherAsset(request.getVoucherAssetId(), account.getId());
+        String payerName = defaultString(normalizeNullable(request.getPayerName()));
+        String remark = defaultString(normalizeNullable(request.getRemark()));
+        FileAsset voucher = requireVoucherAsset(request.getVoucherAssetId(), account.getId());
+        LocalDateTime submittedTime = LocalDateTime.now();
+        LocalDateTime transferTime = request.getTransferTime() == null ? submittedTime : request.getTransferTime();
 
         // 2) 读取并校验当前酒款与支付记录
         BeerEntry entry = requireOwnedPayableEntry(entryId, brewery.getId());
@@ -168,11 +170,11 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
                 .entryPaymentId(payment.getId())
                 .amount(payment.getAmount())
                 .payerName(payerName)
-                .transferTime(request.getTransferTime())
+                .transferTime(transferTime)
                 .remark(remark)
-                .voucherAssetId(voucher == null ? null : voucher.getId())
+                .voucherAssetId(voucher.getId())
                 .status(BankTransferPaymentStatus.SUBMITTED.name())
-                .submittedTime(LocalDateTime.now())
+                .submittedTime(submittedTime)
                 .build();
         bankTransferPaymentMapper.insert(transfer);
         payment.setStatus(EntryPaymentStatus.PENDING_CONFIRM.name());
@@ -198,7 +200,9 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
         if (batch == null || !Objects.equals(batch.getBreweryId(), brewery.getId())) {
             throw new ForbiddenException("无权操作该支付订单");
         }
-        FileAsset voucher = resolveVoucherAsset(request.getVoucherAssetId(), account.getId());
+        FileAsset voucher = requireVoucherAsset(request.getVoucherAssetId(), account.getId());
+        LocalDateTime submittedTime = LocalDateTime.now();
+        LocalDateTime transferTime = request.getTransferTime() == null ? submittedTime : request.getTransferTime();
 
         // 2) 创建一笔覆盖整个报名批次的转账记录
         BankTransferPayment transfer = BankTransferPayment.builder()
@@ -208,12 +212,12 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
                 .competitionId(batch.getCompetitionId())
                 .paymentOrderId(order.getId())
                 .amount(order.getAmount())
-                .payerName(normalizeNullable(request.getPayerName()))
-                .transferTime(request.getTransferTime())
-                .remark(normalizeNullable(request.getRemark()))
-                .voucherAssetId(voucher == null ? null : voucher.getId())
+                .payerName(defaultString(normalizeNullable(request.getPayerName())))
+                .transferTime(transferTime)
+                .remark(defaultString(normalizeNullable(request.getRemark())))
+                .voucherAssetId(voucher.getId())
                 .status(BankTransferPaymentStatus.SUBMITTED.name())
-                .submittedTime(LocalDateTime.now())
+                .submittedTime(submittedTime)
                 .build();
         bankTransferPaymentMapper.insert(transfer);
 
@@ -244,11 +248,15 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
         }
 
         // 2) 校验凭证并更新付款信息
-        FileAsset voucher = resolveVoucherAsset(request.getVoucherAssetId(), account.getId());
-        transfer.setPayerName(normalizeNullable(request.getPayerName()));
-        transfer.setTransferTime(request.getTransferTime());
-        transfer.setRemark(normalizeNullable(request.getRemark()));
-        transfer.setVoucherAssetId(voucher == null ? null : voucher.getId());
+        FileAsset voucher = requireVoucherAsset(request.getVoucherAssetId(), account.getId());
+        if (request.getPayerName() != null) {
+            transfer.setPayerName(normalizeNullable(request.getPayerName()));
+        }
+        if (request.getTransferTime() != null) {
+            transfer.setTransferTime(request.getTransferTime());
+        }
+        transfer.setRemark(defaultString(normalizeNullable(request.getRemark())));
+        transfer.setVoucherAssetId(voucher.getId());
         bankTransferPaymentMapper.updateById(transfer);
 
         // 3) 返回最新转账详情
@@ -286,12 +294,16 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
 
         // 2) 校验凭证并更新付款信息
         String payerName = normalizeNullable(request.getPayerName());
-        String remark = normalizeNullable(request.getRemark());
-        FileAsset voucher = resolveVoucherAsset(request.getVoucherAssetId(), account.getId());
-        transfer.setPayerName(payerName);
-        transfer.setTransferTime(request.getTransferTime());
+        String remark = defaultString(normalizeNullable(request.getRemark()));
+        FileAsset voucher = requireVoucherAsset(request.getVoucherAssetId(), account.getId());
+        if (request.getPayerName() != null) {
+            transfer.setPayerName(payerName);
+        }
+        if (request.getTransferTime() != null) {
+            transfer.setTransferTime(request.getTransferTime());
+        }
         transfer.setRemark(remark);
-        transfer.setVoucherAssetId(voucher == null ? null : voucher.getId());
+        transfer.setVoucherAssetId(voucher.getId());
         bankTransferPaymentMapper.updateById(transfer);
 
         // 3) 返回更新后的转账详情
@@ -548,6 +560,10 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
         return StringUtils.hasText(value) && value.toLowerCase(Locale.ROOT).contains(keyword);
     }
 
+    private String defaultString(String value) {
+        return value == null ? "" : value;
+    }
+
     private PortalAccount requirePortalAccount() {
         PortalAccount account = portalAccountMapper.selectById(BaseContext.getCurrentId());
         if (account == null) {
@@ -572,9 +588,9 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
         return transfer;
     }
 
-    private FileAsset resolveVoucherAsset(Long assetId, Long portalAccountId) {
+    private FileAsset requireVoucherAsset(Long assetId, Long portalAccountId) {
         if (assetId == null) {
-            return null;
+            throw new BaseException("请上传付款凭证");
         }
         FileAsset asset = fileAssetMapper.selectById(assetId);
         if (asset == null || !BUSINESS_TYPE_BANK_TRANSFER_VOUCHER.equals(asset.getBusinessType())) {

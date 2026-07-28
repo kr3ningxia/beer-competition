@@ -289,7 +289,7 @@
                 <input v-model.trim="baseForm.sampleQuantityNote" :disabled="!editable.baseInfo" />
               </label>
               <label class="wide-field">
-                <span>送样说明</span>
+                <span>粘贴标签说明</span>
                 <textarea v-model.trim="baseForm.deliveryNote" rows="3" :disabled="!editable.baseInfo" />
               </label>
             </div>
@@ -542,7 +542,7 @@
 
         <section v-if="activeTab === 'entries'" class="tab-panel">
           <div class="overview-grid">
-            <article class="metric-card"><small>全部</small><strong>{{ competition.entriesSummary.total }}</strong><p>已报名酒款</p></article>
+            <article class="metric-card"><small>参赛酒款</small><strong>{{ competition.entriesSummary.total }}</strong><p>当前保留的报名</p></article>
             <article class="metric-card"><small>待支付</small><strong>{{ competition.entriesSummary.pendingPayment }}</strong><p>需跟进支付</p></article>
             <article class="metric-card"><small>已入库</small><strong>{{ competition.entriesSummary.stored }}</strong><p>现场已确认</p></article>
             <article class="metric-card"><small>{{ isFeedbackOnlyCompetition ? '评审轨迹' : '晋级轨迹' }}</small><strong>{{ roundEntryPool.length }}</strong><p>真实轮次分配</p></article>

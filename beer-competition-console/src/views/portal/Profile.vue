@@ -95,7 +95,7 @@
 
     <div v-if="avatarCrop.open" class="avatar-crop-mask" @click.self="cancelAvatarCrop" @keydown.esc.prevent="cancelAvatarCrop" @keydown.tab="trapAvatarCropFocus">
       <section ref="avatarCropDialogRef" class="avatar-crop-dialog" role="dialog" aria-modal="true" aria-label="调整厂牌头像" tabindex="-1">
-        <header>
+        <header class="avatar-crop-header">
           <div>
             <h3>调整厂牌头像</h3>
             <span>拖动图片调整位置，缩放到合适大小后再上传</span>
@@ -105,29 +105,31 @@
           </button>
         </header>
 
-        <div
-          class="avatar-crop-stage"
-          @pointerdown="startAvatarDrag"
-          @pointermove="moveAvatarDrag"
-          @pointerup="endAvatarDrag"
-          @pointercancel="endAvatarDrag"
-          @pointerleave="endAvatarDrag"
-          @wheel.prevent="zoomAvatarCrop"
-        >
-          <img
-            v-if="avatarCrop.previewUrl"
-            :src="avatarCrop.previewUrl"
-            alt="头像预览"
-            draggable="false"
-            :style="avatarCropImageStyle"
-            @load="handleAvatarPreviewLoad"
+        <div class="avatar-crop-body">
+          <div
+            class="avatar-crop-stage"
+            @pointerdown="startAvatarDrag"
+            @pointermove="moveAvatarDrag"
+            @pointerup="endAvatarDrag"
+            @pointercancel="endAvatarDrag"
+            @pointerleave="endAvatarDrag"
+            @wheel.prevent="zoomAvatarCrop"
           >
-          <div class="avatar-crop-shade" aria-hidden="true"></div>
-          <div class="avatar-crop-frame" aria-hidden="true"></div>
+            <img
+              v-if="avatarCrop.previewUrl"
+              :src="avatarCrop.previewUrl"
+              alt="头像预览"
+              draggable="false"
+              :style="avatarCropImageStyle"
+              @load="handleAvatarPreviewLoad"
+            >
+            <div class="avatar-crop-shade" aria-hidden="true"></div>
+            <div class="avatar-crop-frame" aria-hidden="true"></div>
+          </div>
         </div>
 
-        <div class="avatar-crop-tools">
-          <label>
+        <footer class="avatar-crop-tools">
+          <label class="avatar-crop-scale">
             <span>缩放</span>
             <input v-model.number="avatarCrop.scale" min="1" max="3" step="0.01" type="range">
           </label>
@@ -135,7 +137,7 @@
             <el-button :icon="RefreshLeft" :disabled="avatarCrop.uploading" @click="resetAvatarCrop">重置</el-button>
             <el-button type="primary" :loading="avatarCrop.uploading" @click="confirmAvatarCrop">确认上传</el-button>
           </div>
-        </div>
+        </footer>
       </section>
     </div>
   </div>
@@ -168,6 +170,11 @@ const avatarUploadRef = ref()
 const avatarCropDialogRef = ref(null)
 const avatarCropTriggerRef = ref(null)
 let bodyOverflowBeforeAvatarCrop = ''
+let bodyPositionBeforeAvatarCrop = ''
+let bodyTopBeforeAvatarCrop = ''
+let bodyWidthBeforeAvatarCrop = ''
+let pageScrollBeforeAvatarCrop = 0
+let pageScrollLockedForAvatarCrop = false
 const avatarCrop = reactive({
   open: false,
   file: null,
@@ -220,7 +227,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   closeAvatarCrop()
-  document.body.style.overflow = bodyOverflowBeforeAvatarCrop
+  unlockPageScroll()
 })
 
 watch(
@@ -236,13 +243,12 @@ watch(() => avatarCrop.scale, clampAvatarCropOffset)
 
 watch(() => avatarCrop.open, async (open) => {
   if (open) {
-    bodyOverflowBeforeAvatarCrop = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
+    lockPageScroll()
     await nextTick()
     avatarCropDialogRef.value?.focus()
     return
   }
-  document.body.style.overflow = bodyOverflowBeforeAvatarCrop
+  unlockPageScroll()
   avatarCropTriggerRef.value?.focus?.()
 })
 
@@ -286,6 +292,7 @@ function handleAvatarChange(uploadFile) {
 function openAvatarCrop(file) {
   closeAvatarCrop()
   avatarCropTriggerRef.value = document.activeElement
+  document.activeElement?.blur?.()
   avatarCrop.open = true
   avatarCrop.file = file
   avatarCrop.previewUrl = URL.createObjectURL(file)
@@ -296,6 +303,30 @@ function openAvatarCrop(file) {
   avatarCrop.y = 0
   avatarCrop.dragging = false
   avatarCrop.uploading = false
+}
+
+function lockPageScroll() {
+  if (pageScrollLockedForAvatarCrop) return
+  pageScrollBeforeAvatarCrop = window.scrollY
+  bodyOverflowBeforeAvatarCrop = document.body.style.overflow
+  bodyPositionBeforeAvatarCrop = document.body.style.position
+  bodyTopBeforeAvatarCrop = document.body.style.top
+  bodyWidthBeforeAvatarCrop = document.body.style.width
+  document.body.style.overflow = 'hidden'
+  document.body.style.position = 'fixed'
+  document.body.style.top = `-${pageScrollBeforeAvatarCrop}px`
+  document.body.style.width = '100%'
+  pageScrollLockedForAvatarCrop = true
+}
+
+function unlockPageScroll() {
+  if (!pageScrollLockedForAvatarCrop) return
+  document.body.style.overflow = bodyOverflowBeforeAvatarCrop
+  document.body.style.position = bodyPositionBeforeAvatarCrop
+  document.body.style.top = bodyTopBeforeAvatarCrop
+  document.body.style.width = bodyWidthBeforeAvatarCrop
+  pageScrollLockedForAvatarCrop = false
+  window.scrollTo(0, pageScrollBeforeAvatarCrop)
 }
 
 function closeAvatarCrop() {
@@ -668,10 +699,13 @@ function normalizePortalPath(value) {
 
 .avatar-crop-mask {
   position: fixed;
-  inset: 0;
+  top: var(--app-viewport-offset-top, 0px);
+  left: var(--app-viewport-offset-left, 0px);
   z-index: 30;
   display: grid;
   place-items: center;
+  width: var(--app-viewport-width, 100vw);
+  height: var(--app-viewport-height, 100dvh);
   padding: 28px;
   background: rgba(43, 29, 16, 0.42);
   backdrop-filter: blur(12px);
@@ -679,10 +713,12 @@ function normalizePortalPath(value) {
 
 .avatar-crop-dialog {
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 16px;
   width: min(560px, 100%);
-  max-height: calc(100dvh - 56px);
-  overflow: auto;
+  height: min(720px, calc(var(--app-viewport-height, 100dvh) - 56px));
+  max-height: calc(var(--app-viewport-height, 100dvh) - 56px);
+  overflow: hidden;
   padding: 20px;
   color: #2b1d10;
   background:
@@ -692,7 +728,7 @@ function normalizePortalPath(value) {
   box-shadow: 0 28px 80px rgba(43, 29, 16, 0.28);
 }
 
-.avatar-crop-dialog header {
+.avatar-crop-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -705,7 +741,7 @@ function normalizePortalPath(value) {
   line-height: 1.2;
 }
 
-.avatar-crop-dialog header span {
+.avatar-crop-header span {
   display: block;
   margin-top: 6px;
   color: #746a5f;
@@ -740,9 +776,18 @@ function normalizePortalPath(value) {
   height: 18px;
 }
 
+.avatar-crop-body {
+  display: grid;
+  min-height: 0;
+  place-items: center;
+  overflow: hidden;
+}
+
 .avatar-crop-stage {
   position: relative;
-  width: min(420px, 100%);
+  width: auto;
+  height: min(420px, 100%);
+  max-width: 100%;
   aspect-ratio: 1;
   justify-self: center;
   overflow: hidden;
@@ -796,9 +841,12 @@ function normalizePortalPath(value) {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
+  min-width: 0;
+  padding-top: 14px;
+  border-top: 1px solid rgba(87, 58, 26, 0.12);
 }
 
-.avatar-crop-tools label {
+.avatar-crop-scale {
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr);
   gap: 10px;
@@ -848,14 +896,20 @@ function normalizePortalPath(value) {
   }
 
   .avatar-crop-mask {
-    align-items: end;
-    padding: 12px;
+    align-items: stretch;
+    padding-top: max(10px, env(safe-area-inset-top));
+    padding-right: 10px;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+    padding-left: 10px;
   }
 
   .avatar-crop-dialog {
-    gap: 14px;
-    max-height: calc(100dvh - 24px);
+    gap: 12px;
+    width: 100%;
+    height: 100%;
+    max-height: none;
     padding: 16px;
+    border-radius: 12px;
   }
 
   .avatar-crop-dialog h3 {
@@ -863,8 +917,10 @@ function normalizePortalPath(value) {
   }
 
   .avatar-crop-stage {
-    width: min(100%, calc(100dvh - 260px));
-    min-width: 0;
+    width: auto;
+    height: min(100%, 440px);
+    max-width: 100%;
+    min-height: 0;
   }
 
   .avatar-crop-shade,
@@ -872,13 +928,15 @@ function normalizePortalPath(value) {
     inset: 18px;
   }
 
-  .avatar-crop-tools,
-  .avatar-crop-actions {
+  .avatar-crop-tools {
     grid-template-columns: 1fr;
+    gap: 10px;
+    padding-top: 12px;
   }
 
   .avatar-crop-actions {
     display: grid;
+    grid-template-columns: minmax(96px, 0.72fr) minmax(0, 1.28fr);
   }
 
   .avatar-crop-actions :deep(.el-button) {

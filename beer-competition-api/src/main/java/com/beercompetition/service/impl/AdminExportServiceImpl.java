@@ -93,7 +93,7 @@ public class AdminExportServiceImpl implements AdminExportService {
 
         // 2) 组装报名台账工作表
         List<List<String>> rows = new ArrayList<>();
-        rows.add(List.of("比赛名称", "比赛编号", "酒款 UUID", "匿名标签编码", "现场短编号", "酒款名称", "厂牌名称",
+        rows.add(List.of("比赛名称", "比赛编号", "酒款 UUID", "匿名标签编码", "作品编号", "酒款名称", "厂牌名称",
                 "联系人", "投递组别", "基础风格", "ABV", "额外报名字段", "酒款状态", "支付状态", "报名金额", "支付时间", "报名时间"));
         for (BeerEntry entry : context.entries()) {
             EntryScanLabel label = context.labelsByEntryId().get(entry.getId());
@@ -140,7 +140,7 @@ public class AdminExportServiceImpl implements AdminExportService {
 
         // 2) 组装收样入库工作表
         List<List<String>> rows = new ArrayList<>();
-        rows.add(List.of("比赛名称", "酒款 UUID", "现场短编号", "酒款名称", "厂牌名称", "组别", "风格", "送样方式",
+        rows.add(List.of("比赛名称", "酒款 UUID", "作品编号", "酒款名称", "厂牌名称", "组别", "风格", "送样方式",
                 "快递公司", "快递单号", "送样备注", "送样状态", "提交时间", "签收时间", "入库状态", "签收备注"));
         for (BeerEntry entry : context.entries()) {
             EntryScanLabel label = context.labelsByEntryId().get(entry.getId());

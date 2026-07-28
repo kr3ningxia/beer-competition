@@ -1941,12 +1941,13 @@ public class CompetitionServiceImpl implements CompetitionService {
                     .resultPublished(0)
                     .build();
         }
+        int activeEntries = toInt(stats.getRegisteredCount());
         return EntrySummaryVO.builder()
-                .total(toInt(stats.getTotalCount()))
+                .total(activeEntries)
                 .pendingPayment(toInt(stats.getPendingPaymentCount()))
-                .registered(toInt(stats.getRegisteredCount()))
+                .registered(activeEntries)
                 .stored(toInt(stats.getStoredCount()))
-                .canceled(toInt(stats.getCanceledCount()))
+                .canceled(0)
                 .resultPublished(toInt(stats.getResultPublishedCount()))
                 .build();
     }
@@ -2324,19 +2325,18 @@ public class CompetitionServiceImpl implements CompetitionService {
 
     private EntrySummaryVO buildEntriesSummary(Long competitionId) {
         List<BeerEntry> entries = beerEntryMapper.selectList(new LambdaQueryWrapper<BeerEntry>()
-                .eq(BeerEntry::getCompetitionId, competitionId));
+                .eq(BeerEntry::getCompetitionId, competitionId)
+                .ne(BeerEntry::getStatus, EntryStatus.CANCELED.name()));
         int total = entries.size();
         int pendingPayment = countEntryStatus(entries, "PENDING_PAYMENT");
-        int canceled = countEntryStatus(entries, "CANCELED");
         int stored = (int) entries.stream().filter(entry -> Objects.equals(entry.getStoredFlag(), 1)).count();
         int resultPublished = countEntryStatus(entries, "RESULT_PUBLISHED") + countEntryStatus(entries, "PUBLISHED");
-        int registered = Math.max(0, total - canceled);
         return EntrySummaryVO.builder()
                 .total(total)
                 .pendingPayment(pendingPayment)
-                .registered(registered)
+                .registered(total)
                 .stored(stored)
-                .canceled(canceled)
+                .canceled(0)
                 .resultPublished(resultPublished)
                 .build();
     }
@@ -2348,6 +2348,7 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .collect(Collectors.toMap(CompetitionConfigNameVO::getName, Function.identity(), (left, right) -> left));
         List<BeerEntry> entries = beerEntryMapper.selectList(new LambdaQueryWrapper<BeerEntry>()
                         .eq(BeerEntry::getCompetitionId, competitionId)
+                        .ne(BeerEntry::getStatus, EntryStatus.CANCELED.name())
                         .orderByDesc(BeerEntry::getCreateTime)
                         .last("LIMIT 20"));
         Map<Long, EntryScanLabel> labelByEntryId = entryScanLabelService.listActiveLabels(entries.stream()

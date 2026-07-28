@@ -159,7 +159,14 @@ function entryFeeText(competition) {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
   gap: 22px;
+  min-width: 0;
+  max-width: 100%;
   padding: 24px;
+}
+
+.event-main,
+.event-side {
+  min-width: 0;
 }
 
 .event-main h2 {
@@ -167,6 +174,7 @@ function entryFeeText(competition) {
   margin: 16px 0 10px;
   font-size: 34px;
   line-height: 1.12;
+  overflow-wrap: anywhere;
 }
 
 .event-main p,
@@ -198,12 +206,14 @@ function entryFeeText(competition) {
 }
 
 .fact-row span {
+  min-width: 0;
   padding: 8px 10px;
   background: #fff7e6;
   border: 1px solid rgba(87, 58, 26, 0.1);
   border-radius: 8px;
   font-size: 13px;
   font-weight: 800;
+  overflow-wrap: anywhere;
 }
 
 .event-side {
@@ -253,6 +263,39 @@ function entryFeeText(competition) {
 
   .events-hero h1 {
     font-size: 36px;
+    overflow-wrap: anywhere;
+  }
+
+  .event-card {
+    gap: 16px;
+    padding: 18px;
+  }
+
+  .event-main h2 {
+    font-size: 28px;
+  }
+
+  .event-side {
+    padding: 16px;
+  }
+
+  .event-side p {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .event-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .event-actions a {
+    min-width: 0;
+    padding-inline: 10px;
+    text-align: center;
+    white-space: normal;
   }
 }
 </style>

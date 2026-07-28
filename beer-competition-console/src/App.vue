@@ -4,6 +4,10 @@
 
 <style>
 :root {
+  --app-viewport-width: 100vw;
+  --app-viewport-height: 100dvh;
+  --app-viewport-offset-left: 0px;
+  --app-viewport-offset-top: 0px;
   color: #14213d;
   background: #f5f7fb;
   font-family: "Segoe UI", "PingFang SC", sans-serif;
@@ -11,6 +15,13 @@
 
 * {
   box-sizing: border-box;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
 }
 
 body {
@@ -69,5 +80,66 @@ input[type="number"]::-webkit-inner-spin-button {
 
 a {
   color: inherit;
+}
+
+@media (max-width: 720px) {
+  input:not([type]),
+  input:is(
+    [type="text"],
+    [type="search"],
+    [type="tel"],
+    [type="email"],
+    [type="url"],
+    [type="password"],
+    [type="number"],
+    [type="date"],
+    [type="time"],
+    [type="datetime-local"]
+  ),
+  textarea,
+  select,
+  .el-input,
+  .el-textarea,
+  .el-select,
+  .el-input__inner,
+  .el-textarea__inner,
+  .el-select__input,
+  .el-select__selected-item,
+  .el-select__placeholder {
+    font-size: 16px !important;
+  }
+
+  .el-input__wrapper,
+  .el-select__wrapper,
+  .el-input-number {
+    min-height: 44px;
+  }
+
+  .el-overlay-dialog {
+    padding-top: max(12px, env(safe-area-inset-top));
+    padding-right: 12px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    padding-left: 12px;
+  }
+
+  .el-dialog:not(.is-fullscreen) {
+    display: flex;
+    flex-direction: column;
+    width: 100% !important;
+    max-width: 640px;
+    max-height: calc(var(--app-viewport-height, 100dvh) - 24px);
+    margin: auto;
+  }
+
+  .el-dialog:not(.is-fullscreen) .el-dialog__header,
+  .el-dialog:not(.is-fullscreen) .el-dialog__footer {
+    flex: 0 0 auto;
+  }
+
+  .el-dialog:not(.is-fullscreen) .el-dialog__body {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
 }
 </style>

@@ -20,5 +20,6 @@ public class PortalBankTransferSubmitRequest {
     @Size(max = 255, message = "转账备注最多 255 个字")
     private String remark;
 
+    @NotNull(message = "请上传付款凭证")
     private Long voucherAssetId;
 }

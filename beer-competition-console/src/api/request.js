@@ -60,8 +60,11 @@ service.interceptors.response.use(
     if (payload.code === 1) {
       return payload.data
     }
-    ElMessage.error(payload.msg || '操作失败')
-    return Promise.reject(new Error(payload.msg || '操作失败'))
+    const message = payload.msg || '操作失败'
+    ElMessage.error(message)
+    const businessError = new Error(message)
+    businessError.userNotified = true
+    return Promise.reject(businessError)
   },
   async (error) => {
     const status = error.response?.status
@@ -84,7 +87,10 @@ service.interceptors.response.use(
       clearSession(scope)
       router.push(scope === 'admin' ? '/admin/login' : '/portal/login')
     }
-    ElMessage.error(error.response?.data?.msg || '请求失败，请稍后重试')
+    const message = error.response?.data?.msg || '请求失败，请稍后重试'
+    ElMessage.error(message)
+    error.userNotified = true
+    error.userMessage = message
     return Promise.reject(error)
   }
 )

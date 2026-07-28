@@ -71,7 +71,7 @@
           <div class="entry-status">
             <p>{{ entryStatusText(entry) }}</p>
             <span v-if="showShortCode(entry)" class="short-code">
-              <small>现场编号</small>
+              <small>作品编号</small>
               <b>{{ entry.shortCode || '待生成' }}</b>
             </span>
           </div>

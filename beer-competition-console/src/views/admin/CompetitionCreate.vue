@@ -176,8 +176,8 @@
                   <input v-model.trim="draft.sampleQuantityNote" placeholder="例如 每款 6 瓶，单瓶不低于 330ml" />
                 </label>
                 <label class="wide-field">
-                  <span>送样说明</span>
-                  <textarea v-model.trim="draft.deliveryNote" rows="3" placeholder="包装、防漏、外箱贴标签、随箱清单等要求" />
+                  <span>粘贴标签说明</span>
+                  <textarea v-model.trim="draft.deliveryNote" rows="3" placeholder="说明标签打印、裁剪、粘贴和防水等要求" />
                 </label>
               </div>
             </section>
@@ -527,7 +527,7 @@ const draft = reactive({
   deliveryRecipient: '赛事收样组',
   deliveryPhone: '',
   deliveryAddress: '',
-  deliveryNote: '请做好防震、防漏和外箱加固；每款酒瓶身至少贴 1 张现场标签，整箱寄送时外箱必须再贴 1 张',
+  deliveryNote: '支付成功后，您将看到自动生成的作品标签。请用 A4 纸打印，裁剪后分别贴在每瓶／罐参赛酒款上。张贴之前，请移除参赛酒款原本的酒标。建议采用激光打印，并在贴后使用透明塑料胶带覆盖，以增加防水性。',
   logisticsVisibility: 'PAYMENT_CONFIRMED',
   categories: [
     { id: 'cat-1', name: '浅色拉格' },

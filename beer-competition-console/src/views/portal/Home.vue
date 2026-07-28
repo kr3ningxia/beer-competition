@@ -507,7 +507,7 @@ onBeforeUnmount(() => {
 
 .category-modal {
   width: min(560px, 100%);
-  max-height: min(680px, calc(100vh - 48px));
+  max-height: min(680px, calc(var(--app-viewport-height, 100dvh) - 48px));
   overflow: auto;
   padding: 24px;
   color: #2b1d10;
@@ -858,6 +858,7 @@ details {
   background: #fff7e6;
   border: 1px solid rgba(87, 58, 26, 0.1);
   border-radius: 8px;
+  overflow-wrap: anywhere;
 }
 
 summary {

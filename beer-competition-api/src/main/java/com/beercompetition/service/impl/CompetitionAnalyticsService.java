@@ -123,7 +123,8 @@ public class CompetitionAnalyticsService {
         }
 
         List<BeerEntry> entries = beerEntryMapper.selectList(new LambdaQueryWrapper<BeerEntry>()
-                .eq(BeerEntry::getCompetitionId, competitionId));
+                .eq(BeerEntry::getCompetitionId, competitionId)
+                .ne(BeerEntry::getStatus, EntryStatus.CANCELED.name()));
         Map<Long, BeerEntry> entryById = entries.stream()
                 .collect(Collectors.toMap(BeerEntry::getId, Function.identity(), (left, right) -> left, LinkedHashMap::new));
 
@@ -157,10 +158,16 @@ public class CompetitionAnalyticsService {
                 .filter(Objects::nonNull)
                 .collect(Collectors.toMap(Brewery::getId, Function.identity(), (left, right) -> left, LinkedHashMap::new));
 
-        List<AwardResult> awardResults = awardResultMapper.selectList(new LambdaQueryWrapper<AwardResult>()
-                .eq(AwardResult::getCompetitionId, competitionId));
-        List<ScoreRecord> scoreRecords = scoreRecordMapper.selectList(new LambdaQueryWrapper<ScoreRecord>()
-                .eq(ScoreRecord::getCompetitionId, competitionId));
+        List<AwardResult> awardResults = entryIds.isEmpty()
+                ? List.of()
+                : awardResultMapper.selectList(new LambdaQueryWrapper<AwardResult>()
+                .eq(AwardResult::getCompetitionId, competitionId)
+                .in(AwardResult::getBeerEntryId, entryIds));
+        List<ScoreRecord> scoreRecords = entryIds.isEmpty()
+                ? List.of()
+                : scoreRecordMapper.selectList(new LambdaQueryWrapper<ScoreRecord>()
+                .eq(ScoreRecord::getCompetitionId, competitionId)
+                .in(ScoreRecord::getBeerEntryId, entryIds));
         Set<Long> judgeIds = scoreRecords.stream()
                 .map(ScoreRecord::getJudgeAccountId)
                 .filter(Objects::nonNull)
@@ -172,9 +179,7 @@ public class CompetitionAnalyticsService {
                 .collect(Collectors.toMap(JudgeAccount::getId, Function.identity(), (left, right) -> left, LinkedHashMap::new));
 
         int totalEntries = entries.size();
-        int registeredEntries = (int) entries.stream()
-                .filter(entry -> !Objects.equals(entry.getStatus(), EntryStatus.CANCELED.name()))
-                .count();
+        int registeredEntries = totalEntries;
         int storedEntries = (int) entries.stream().filter(entry -> Objects.equals(entry.getStoredFlag(), 1)).count();
         int paidEntries = (int) payments.stream().filter(payment -> "PAID".equals(payment.getStatus())).count();
         int pendingPaymentEntries = (int) payments.stream().filter(payment -> "UNPAID".equals(payment.getStatus())).count();

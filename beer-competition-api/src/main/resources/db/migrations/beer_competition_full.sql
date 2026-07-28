@@ -1351,6 +1351,7 @@ UNLOCK TABLES;
 --
 -- Dumping routines for database 'beer_competition'
 --
+
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;

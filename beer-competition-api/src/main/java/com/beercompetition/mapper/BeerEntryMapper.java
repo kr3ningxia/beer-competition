@@ -17,7 +17,7 @@ public interface BeerEntryMapper extends BaseMapper<BeerEntry> {
                    COUNT(*) AS total_count,
                    SUM(CASE WHEN status = #{pendingPaymentStatus} THEN 1 ELSE 0 END) AS pending_payment_count,
                    SUM(CASE WHEN status != #{canceledStatus} THEN 1 ELSE 0 END) AS registered_count,
-                   SUM(CASE WHEN stored_flag = #{storedFlag} THEN 1 ELSE 0 END) AS stored_count,
+                   SUM(CASE WHEN status != #{canceledStatus} AND stored_flag = #{storedFlag} THEN 1 ELSE 0 END) AS stored_count,
                    SUM(CASE WHEN status = #{canceledStatus} THEN 1 ELSE 0 END) AS canceled_count,
                    SUM(CASE WHEN status IN (#{resultPublishedStatus}, #{legacyPublishedStatus}) THEN 1 ELSE 0 END) AS result_published_count
             FROM beer_entry

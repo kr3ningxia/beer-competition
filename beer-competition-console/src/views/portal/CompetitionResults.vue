@@ -338,10 +338,15 @@ function formatDateTime(value) {
   padding: 26px 26px 24px;
 }
 
+.competition-copy {
+  min-width: 0;
+}
+
 .competition-copy h2 {
   margin: 0 0 16px;
   font-size: 24px;
   line-height: 1.2;
+  overflow-wrap: anywhere;
 }
 
 .competition-copy p {
@@ -362,6 +367,8 @@ function formatDateTime(value) {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .facts svg,
@@ -567,6 +574,20 @@ function formatDateTime(value) {
 
   .detail-button {
     justify-self: start;
+  }
+
+  .facts span {
+    white-space: normal;
+  }
+
+  .preview-head {
+    display: grid;
+    gap: 6px;
+  }
+
+  .preview-head a {
+    justify-self: start;
+    overflow-wrap: anywhere;
   }
 
   .award-preview ul {

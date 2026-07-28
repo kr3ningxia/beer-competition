@@ -6,7 +6,7 @@
         <p>按酒款查看报名记录，并处理支付、现场标签、样品入库和结果</p>
       </div>
       <div class="toolbar-actions">
-        <el-input v-model="keyword" placeholder="搜索酒名 / 现场短编号" clearable />
+        <el-input v-model="keyword" placeholder="搜索酒名 / 作品编号" clearable />
         <el-select v-model="statusFilter" placeholder="状态" clearable>
           <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
@@ -54,8 +54,8 @@
           </span>
         </div>
         <div class="uuid-band">
-          <span v-if="entry.shortCode">现场短编号 {{ entry.shortCode }}</span>
-          <span v-else>现场短编号待生成</span>
+          <span v-if="entry.shortCode">作品编号 {{ entry.shortCode }}</span>
+          <span v-else>作品编号待生成</span>
           <el-button size="small" text @click.stop="selectEntry(entry)">详情</el-button>
         </div>
         <div class="card-actions" @click.stop>
@@ -88,7 +88,7 @@
             {{ entryStatusMeta[selectedEntry.status].label }}
           </span>
           <h2>{{ selectedEntry.name }}</h2>
-          <p>现场短编号 {{ selectedEntry.shortCode || '待生成' }}</p>
+          <p>作品编号 {{ selectedEntry.shortCode || '待生成' }}</p>
         </div>
 
         <section class="drawer-section">
@@ -113,7 +113,7 @@
             <div><dt>投递组别</dt><dd>{{ selectedEntry.categoryName }}</dd></div>
             <div><dt>基础风格</dt><dd>{{ selectedEntry.style }}</dd></div>
             <div><dt>ABV</dt><dd>{{ formatAbvWithUnit(selectedEntry.abv) }}</dd></div>
-            <div><dt>现场短编号</dt><dd>{{ selectedEntry.shortCode }}</dd></div>
+            <div><dt>作品编号</dt><dd>{{ selectedEntry.shortCode }}</dd></div>
             <div><dt>提交时间</dt><dd>{{ selectedEntry.submittedAt }}</dd></div>
             <div><dt>支付状态</dt><dd>{{ paymentStatusText(selectedEntry) }}</dd></div>
             <div v-if="selectedEntry.refundStatus"><dt>退款状态</dt><dd>{{ refundStatusText(selectedEntry.refundStatus) }}</dd></div>

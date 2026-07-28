@@ -145,7 +145,7 @@ public class EntryScanLabelServiceImpl implements EntryScanLabelService {
                 return code;
             }
         }
-        throw new BaseException("现场短编号生成失败，请重试");
+        throw new BaseException("作品编号生成失败，请重试");
     }
 
     private String generateScanToken() {

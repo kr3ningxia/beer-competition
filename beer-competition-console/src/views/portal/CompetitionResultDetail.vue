@@ -273,6 +273,7 @@ function formatDateTime(value) {
   font-size: 32px;
   line-height: 1.18;
   letter-spacing: 0;
+  overflow-wrap: anywhere;
 }
 
 .summary-card dl {
@@ -321,6 +322,10 @@ function formatDateTime(value) {
   padding: 28px;
 }
 
+.champion-inner > div {
+  min-width: 0;
+}
+
 .champion-icon {
   display: grid;
   place-items: center;
@@ -349,6 +354,7 @@ function formatDateTime(value) {
   margin: 0;
   font-size: 25px;
   line-height: 1.2;
+  overflow-wrap: anywhere;
 }
 
 .champion-inner strong {
@@ -453,6 +459,7 @@ function formatDateTime(value) {
 .group-card h3 {
   margin: 0;
   font-size: 15px;
+  overflow-wrap: anywhere;
 }
 
 .group-card header span {
@@ -593,6 +600,15 @@ function formatDateTime(value) {
   .champion-inner {
     display: grid;
     padding: 24px;
+  }
+
+  .group-card header {
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .group-card header span {
+    flex: 0 0 auto;
   }
 }
 </style>

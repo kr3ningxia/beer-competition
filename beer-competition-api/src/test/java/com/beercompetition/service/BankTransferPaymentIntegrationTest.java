@@ -1,5 +1,6 @@
 package com.beercompetition.service;
 
+import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ForbiddenException;
 import com.beercompetition.pojo.dto.AdminBankTransferProcessRequest;
@@ -61,7 +62,7 @@ class BankTransferPaymentIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
-    void submitTransferAllowsOptionalTransferTimeAndRemark() {
+    void submitTransferRequiresVoucherAndUsesSubmissionTimeWhenTransferTimeIsEmpty() {
         BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
         var entry = createPendingEntry(fixture, "选填转账信息");
 
@@ -69,11 +70,19 @@ class BankTransferPaymentIntegrationTest extends IntegrationTestBase {
         request.setEntryId(entry.getId());
 
         asPortal(fixture.portalA().account().getId());
+        assertThatThrownBy(() -> bankTransferPaymentService.submitPortalTransfer(request))
+                .isInstanceOf(BaseException.class)
+                .hasMessageContaining("请上传付款凭证");
+
+        Long voucherAssetId = insertVoucherAsset(fixture.portalA().account().getId());
+        request.setVoucherAssetId(voucherAssetId);
         var submitted = bankTransferPaymentService.submitPortalTransfer(request);
 
         assertThat(submitted.getStatus()).isEqualTo(BankTransferPaymentStatus.SUBMITTED.name());
-        assertThat(submitted.getTransferTime()).isNull();
-        assertThat(submitted.getRemark()).isNull();
+        assertThat(submitted.getVoucherAssetId()).isEqualTo(voucherAssetId);
+        assertThat(submitted.getPayerName()).isEmpty();
+        assertThat(submitted.getTransferTime()).isEqualTo(submitted.getSubmittedTime());
+        assertThat(submitted.getRemark()).isEmpty();
         assertPayment(entry.getId(), EntryPaymentStatus.PENDING_CONFIRM, EntryPayMethod.BANK_TRANSFER, submitted.getId());
     }
 
@@ -237,7 +246,9 @@ class BankTransferPaymentIntegrationTest extends IntegrationTestBase {
         request.setPayerName(payerName);
         request.setTransferTime(LocalDateTime.now().minusMinutes(5));
         request.setRemark(testRun + "-厂牌转账备注");
-        request.setVoucherAssetId(voucherAssetId);
+        request.setVoucherAssetId(voucherAssetId == null
+                ? insertVoucherAsset(BaseContext.getCurrentId())
+                : voucherAssetId);
         return request;
     }
 
@@ -249,7 +260,8 @@ class BankTransferPaymentIntegrationTest extends IntegrationTestBase {
                 VALUES ('BANK_TRANSFER_VOUCHER', 'PORTAL_ACCOUNT', ?, 'local', ?, ?, ?, NOW())
                 """, portalAccountId, filename, "uploads/BANK_TRANSFER_VOUCHER/" + filename,
                 "/uploads/BANK_TRANSFER_VOUCHER/" + filename);
-        return jdbcTemplate.queryForObject("SELECT id FROM file_asset WHERE file_name = ?", Long.class, filename);
+        return jdbcTemplate.queryForObject("SELECT id FROM file_asset WHERE file_name = ? ORDER BY id DESC LIMIT 1",
+                Long.class, filename);
     }
 
     private void assertThatEntryStatus(Long entryId, EntryStatus expected) {

@@ -296,8 +296,7 @@ const feedback = computed(() => props.analytics?.feedback || {})
 const warnings = computed(() => props.analytics?.warnings || [])
 
 const summaryCards = computed(() => ([
-  { key: 'total', label: '报名总数', value: formatCount(summary.value.totalEntries), hint: '全部提交的参赛酒款' },
-  { key: 'registered', label: '有效报名', value: formatCount(summary.value.registeredEntries), hint: '剔除取消后的报名' },
+  { key: 'total', label: '参赛酒款', value: formatCount(summary.value.totalEntries), hint: '当前保留的报名酒款' },
   { key: 'stored', label: '已入库', value: formatCount(summary.value.storedEntries), hint: '完成收样确认的酒款' },
   { key: 'paid', label: '已支付', value: formatCount(summary.value.paidEntries), hint: '正式支付完成的记录' },
   { key: 'pending', label: '待支付', value: formatCount(summary.value.pendingPaymentEntries), hint: '需要继续跟进的报名' },
@@ -316,7 +315,7 @@ const deliveryMethods = computed(() => delivery.value.methods || [])
 const wordCloudItems = computed(() => (feedback.value.wordCloud || []).slice(0, 28))
 const positivePhrases = computed(() => (feedback.value.positivePhrases || []).slice(0, 4))
 const negativePhrases = computed(() => (feedback.value.negativePhrases || []).slice(0, 4))
-const totalRegisteredText = computed(() => `${formatCount(summary.value.registeredEntries)} 款有效报名`)
+const totalRegisteredText = computed(() => `${formatCount(summary.value.totalEntries)} 款参赛酒款`)
 
 function topBuckets(list, limit) {
   return (list || []).slice(0, limit)

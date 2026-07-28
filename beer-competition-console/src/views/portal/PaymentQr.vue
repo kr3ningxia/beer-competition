@@ -155,8 +155,8 @@
             </div>
             <dl class="bank-submitted-summary">
               <div>
-                <dt>付款账户名</dt>
-                <dd>{{ submittedBankTransfer?.payerName || '未填写' }}</dd>
+                <dt>提交时间</dt>
+                <dd>{{ formatTime(submittedBankTransfer?.submittedTime) }}</dd>
               </div>
               <div>
                 <dt>转账备注</dt>
@@ -251,26 +251,25 @@
                   <el-form-item label="应付金额" class="bank-amount-field">
                     <div class="fixed-amount">{{ formatCurrency(entryPayAmount(selectedEntry)) }}</div>
                   </el-form-item>
-                  <el-form-item label="付款账户名" class="bank-payer-field">
-                    <el-input v-model.trim="bankTransferForm.payerName" placeholder="填写实际转账账户名，便于核对到账" />
-                  </el-form-item>
                   <el-form-item label="转账备注（选填）" class="bank-remark-field">
-                    <el-input v-model.trim="bankTransferForm.remark" placeholder="如银行转账时填写了备注，可在这里补充" />
+                    <el-input v-model.trim="bankTransferForm.remark" maxlength="255" placeholder="如需补充核对信息，可填写转账备注" />
                   </el-form-item>
                 </div>
-                <div class="voucher-row">
-                  <input
-                    ref="bankVoucherInputRef"
-                    class="hidden-file"
-                    type="file"
-                    accept=".jpg,.jpeg,.png,.webp,.pdf"
-                    @change="uploadBankVoucher"
-                  />
-                  <el-button :loading="uploadingBankVoucher" @click="bankVoucherInputRef?.click()">
-                    {{ bankTransferForm.voucherFileName ? '重新上传付款凭证' : '上传付款凭证' }}
-                  </el-button>
-                  <span>{{ bankTransferForm.voucherFileName || '未上传付款凭证；支持图片或 PDF，单个文件不超过 10MB' }}</span>
-                </div>
+                <el-form-item label="付款凭证" required class="bank-voucher-field">
+                  <div class="voucher-row">
+                    <input
+                      ref="bankVoucherInputRef"
+                      class="hidden-file"
+                      type="file"
+                      accept=".jpg,.jpeg,.png,.webp,.pdf"
+                      @change="uploadBankVoucher"
+                    />
+                    <el-button :loading="uploadingBankVoucher" @click="bankVoucherInputRef?.click()">
+                      {{ bankTransferForm.voucherFileName ? '重新上传付款凭证' : '上传付款凭证' }}
+                    </el-button>
+                    <span>{{ bankTransferForm.voucherFileName || '支持图片或 PDF，单个文件不超过 10MB' }}</span>
+                  </div>
+                </el-form-item>
                 <div class="payment-actions bank-submit-actions">
                   <el-button
                     type="primary"
@@ -438,12 +437,8 @@
               <dd>{{ selectedLogistics.sampleQuantityNote || '以组委会赛事通知为准' }}</dd>
             </div>
             <div>
-              <dt>标签粘贴</dt>
-              <dd>每款酒瓶身至少贴 1 张，整箱寄送时外箱再贴 1 张</dd>
-            </div>
-            <div>
-              <dt>包装检查</dt>
-              <dd>{{ selectedLogistics.deliveryNote || '请做好防震、防漏和外箱加固，避免运输中破损' }}</dd>
+              <dt>粘贴标签</dt>
+              <dd>{{ selectedLogistics.deliveryNote || '请将下载的作品标签打印、裁剪后，分别贴在每瓶／罐参赛酒款上' }}</dd>
             </div>
           </dl>
 
@@ -691,7 +686,6 @@ const deliveryForm = reactive({
   deliveryNote: '',
 })
 const bankTransferForm = reactive({
-  payerName: '',
   remark: '',
   voucherAssetId: null,
   voucherFileName: '',
@@ -1572,7 +1566,6 @@ async function ensureBankAccount() {
 
 function syncBankTransferForm() {
   if (!selectedEntry.value || showBankPending.value) return
-  bankTransferForm.payerName = ''
   bankTransferForm.remark = ''
   bankTransferForm.voucherAssetId = null
   bankTransferForm.voucherFileName = ''
@@ -1589,7 +1582,7 @@ async function uploadBankVoucher(event) {
     bankTransferForm.voucherFileName = result.fileName
     ElMessage.success('转账凭证已上传')
   } catch (error) {
-    ElMessage.warning(error?.message || '凭证上传失败')
+    if (!error?.userNotified) ElMessage.warning(error?.message || '凭证上传失败，请稍后重试')
   } finally {
     uploadingBankVoucher.value = false
   }
@@ -1600,13 +1593,16 @@ async function submitBankTransferForCurrentEntry() {
     ElMessage.warning('请先选择一款要支付的酒')
     return
   }
+  if (!bankTransferForm.voucherAssetId) {
+    ElMessage.warning('请上传付款凭证')
+    return
+  }
   submittingBankTransfer.value = true
   try {
     const payload = {
       entryId: selectedEntry.value.id,
-      payerName: bankTransferForm.payerName || undefined,
       remark: bankTransferForm.remark || undefined,
-      voucherAssetId: bankTransferForm.voucherAssetId || undefined,
+      voucherAssetId: bankTransferForm.voucherAssetId,
     }
     if (editingBankTransferId.value) {
       await updatePortalBankTransfer(editingBankTransferId.value, payload)
@@ -1618,7 +1614,9 @@ async function submitBankTransferForCurrentEntry() {
     }
     await refreshEntries(selectedEntry.value?.id)
   } catch (error) {
-    ElMessage.warning(error?.message || (editingBankTransferId.value ? '转账信息更新失败' : '转账信息提交失败'))
+    if (!error?.userNotified) {
+      ElMessage.warning(error?.message || (editingBankTransferId.value ? '转账信息更新失败，请稍后重试' : '转账信息提交失败，请稍后重试'))
+    }
   } finally {
     submittingBankTransfer.value = false
   }
@@ -1646,7 +1644,6 @@ async function editSelectedBankTransfer() {
     submittedBankTransfer.value = transfer
     editingBankTransferId.value = transferId
     payMode.value = 'BANK_TRANSFER'
-    bankTransferForm.payerName = transfer.payerName || ''
     bankTransferForm.remark = transfer.remark || ''
     bankTransferForm.voucherAssetId = transfer.voucherAssetId || null
     bankTransferForm.voucherFileName = transfer.voucherFileName || ''
@@ -2397,6 +2394,7 @@ function triggerDownload(objectUrl, fileName) {
   grid-template-columns: auto minmax(0, 1fr);
   gap: 10px 12px;
   align-items: center;
+  width: 100%;
   padding-top: 2px;
 }
 
@@ -2462,12 +2460,16 @@ function triggerDownload(objectUrl, fileName) {
   width: 100%;
 }
 
-.bank-payer-field {
+.bank-remark-field {
   min-width: 0;
 }
 
-.bank-remark-field {
-  grid-column: 1 / -1;
+.bank-voucher-field {
+  margin-bottom: 0;
+}
+
+.bank-voucher-field :deep(.el-form-item__content) {
+  width: 100%;
 }
 
 .fixed-amount {
