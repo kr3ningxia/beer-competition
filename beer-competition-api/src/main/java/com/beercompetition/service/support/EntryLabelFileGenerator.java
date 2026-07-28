@@ -30,6 +30,7 @@ import java.io.InputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -49,6 +50,11 @@ public class EntryLabelFileGenerator {
     private static final float PDF_MARGIN_Y = 36f;
     private static final float PDF_GAP_X = 20f;
     private static final float PDF_GAP_Y = 56f;
+    private static final int CATEGORY_TEXT_MAX_WIDTH = 820;
+    private static final int CATEGORY_TEXT_MAX_LINES = 3;
+    private static final int CATEGORY_TEXT_LAST_BASELINE = 1360;
+    private static final int CATEGORY_TEXT_CENTERED_LAST_BASELINE = 1328;
+    private static final int[] CATEGORY_TEXT_FONT_SIZES = {42, 38, 34, 30, 26, 22, 20};
     private static final String FONT_FAMILY = registerLabelFonts();
 
     private final ExportProperties exportProperties;
@@ -120,16 +126,17 @@ public class EntryLabelFileGenerator {
 
         drawCenteredText(g, "现场评审标签", labelFont(Font.BOLD, 48), new Color(0x8c6330), 520, 176);
         g.setColor(new Color(0xf7ecd8));
-        g.fillRoundRect(112, 256, 816, 816, 72, 72);
+        g.fillRoundRect(156, 224, 728, 728, 64, 64);
         g.setColor(new Color(0x3a2818));
-        g.setStroke(new BasicStroke(40));
-        g.drawRoundRect(112, 256, 816, 816, 72, 72);
+        g.setStroke(new BasicStroke(34));
+        g.drawRoundRect(156, 224, 728, 728, 64, 64);
 
-        BufferedImage qr = buildQrImage(scanUrl(item), 704);
-        g.drawImage(qr, 168, 312, null);
-        drawCenteredText(g, "参赛编号", labelFont(Font.BOLD, 48), new Color(0x8c6330), 520, 1168);
-        drawCenteredText(g, firstText(item.shortCode(), "PENDING"), labelFont(Font.BOLD, 112), new Color(0x24170f), 520, 1272);
-        drawCenteredText(g, "组别：" + firstText(item.categoryName(), "待确认组别"), labelFont(Font.PLAIN, 44), new Color(0x665647), 520, 1360);
+        BufferedImage qr = buildQrImage(scanUrl(item), 640);
+        g.drawImage(qr, 200, 268, null);
+        drawCenteredText(g, "参赛编号", labelFont(Font.BOLD, 46), new Color(0x8c6330), 520, 1022);
+        drawCenteredText(g, firstText(item.shortCode(), "PENDING"), labelFont(Font.BOLD, 104), new Color(0x24170f), 520, 1136);
+        drawCenteredText(g, "组别", labelFont(Font.BOLD, 34), new Color(0x8c6330), 520, 1200);
+        drawCategoryText(g, firstText(item.categoryName(), "待确认组别"));
         g.dispose();
         return image;
     }
@@ -214,7 +221,81 @@ public class EntryLabelFileGenerator {
         g.drawString(text, x, baselineY);
     }
 
+    private void drawCategoryText(Graphics2D g, String categoryText) {
+        CategoryTextLayout layout = layoutCategoryText(g, categoryText);
+        int lastBaseline = layout.lines().size() < CATEGORY_TEXT_MAX_LINES
+                ? CATEGORY_TEXT_CENTERED_LAST_BASELINE
+                : CATEGORY_TEXT_LAST_BASELINE;
+        int firstBaseline = lastBaseline - (layout.lines().size() - 1) * layout.lineHeight();
+        for (int index = 0; index < layout.lines().size(); index++) {
+            drawCenteredText(g, layout.lines().get(index), layout.font(), new Color(0x665647), 520,
+                    firstBaseline + index * layout.lineHeight());
+        }
+    }
+
+    static CategoryTextLayout layoutCategoryText(Graphics2D g, String text) {
+        for (int fontSize : CATEGORY_TEXT_FONT_SIZES) {
+            Font font = labelFontStatic(Font.BOLD, fontSize);
+            g.setFont(font);
+            List<String> lines = wrapText(g.getFontMetrics(), text, CATEGORY_TEXT_MAX_WIDTH);
+            if (lines.size() <= CATEGORY_TEXT_MAX_LINES) {
+                return new CategoryTextLayout(font, lines, Math.round(fontSize * 1.25f));
+            }
+        }
+
+        Font font = labelFontStatic(Font.BOLD, CATEGORY_TEXT_FONT_SIZES[CATEGORY_TEXT_FONT_SIZES.length - 1]);
+        g.setFont(font);
+        List<String> lines = wrapText(g.getFontMetrics(), text, CATEGORY_TEXT_MAX_WIDTH);
+        return new CategoryTextLayout(font, trimLines(g.getFontMetrics(), lines), Math.round(font.getSize() * 1.25f));
+    }
+
+    static List<String> wrapText(FontMetrics metrics, String text, int maxWidth) {
+        List<String> lines = new ArrayList<>();
+        String remaining = text == null ? "" : text.trim();
+        while (!remaining.isEmpty()) {
+            int end = fittingEnd(metrics, remaining, maxWidth);
+            if (end >= remaining.length()) {
+                lines.add(remaining);
+                break;
+            }
+            int breakAt = remaining.lastIndexOf(' ', end - 1);
+            if (breakAt > 0) {
+                lines.add(remaining.substring(0, breakAt).trim());
+                remaining = remaining.substring(breakAt + 1).trim();
+            } else {
+                lines.add(remaining.substring(0, end));
+                remaining = remaining.substring(end).trim();
+            }
+        }
+        return lines.isEmpty() ? List.of("") : lines;
+    }
+
+    private static int fittingEnd(FontMetrics metrics, String text, int maxWidth) {
+        int end = 1;
+        while (end <= text.length() && metrics.stringWidth(text.substring(0, end)) <= maxWidth) {
+            end++;
+        }
+        return Math.max(1, end - 1);
+    }
+
+    private static List<String> trimLines(FontMetrics metrics, List<String> lines) {
+        if (lines.size() <= CATEGORY_TEXT_MAX_LINES) {
+            return lines;
+        }
+        List<String> result = new ArrayList<>(lines.subList(0, CATEGORY_TEXT_MAX_LINES));
+        String lastLine = result.get(CATEGORY_TEXT_MAX_LINES - 1);
+        while (!lastLine.isEmpty() && metrics.stringWidth(lastLine + "…") > CATEGORY_TEXT_MAX_WIDTH) {
+            lastLine = lastLine.substring(0, lastLine.length() - 1).trim();
+        }
+        result.set(CATEGORY_TEXT_MAX_LINES - 1, lastLine + "…");
+        return result;
+    }
+
     private Font labelFont(int style, int size) {
+        return labelFontStatic(style, size);
+    }
+
+    private static Font labelFontStatic(int style, int size) {
         return new Font(FONT_FAMILY, style, size);
     }
 
@@ -250,5 +331,8 @@ public class EntryLabelFileGenerator {
                                   String shortCode,
                                   String scanToken,
                                   String categoryName) {
+    }
+
+    record CategoryTextLayout(Font font, List<String> lines, int lineHeight) {
     }
 }

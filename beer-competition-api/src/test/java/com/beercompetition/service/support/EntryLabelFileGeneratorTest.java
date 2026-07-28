@@ -5,6 +5,7 @@ import com.beercompetition.service.support.EntryLabelFileGenerator.LabelRenderIt
 import org.junit.jupiter.api.Test;
 
 import javax.imageio.ImageIO;
+import java.awt.Graphics2D;
 import java.awt.Font;
 import java.awt.GraphicsEnvironment;
 import java.awt.image.BufferedImage;
@@ -27,7 +28,7 @@ class EntryLabelFileGeneratorTest {
                 "LABEL-TEST000001",
                 "7HMYX",
                 "scan-token",
-                "啤酒组 1.12 IPA New England IPA"
+                "3. Fermentis · 100% 国产酒花组（酒花型啤酒）· 中低酒精度啤酒 NABLAB: No- and Low-Alcohol Beers"
         );
 
         byte[] png = generator.buildFourUpPng(List.of(item, item, item, item));
@@ -42,6 +43,25 @@ class EntryLabelFileGeneratorTest {
         assertEquals('P', pdf[1]);
         assertTrue(hasNotoSansScFont());
         assertTrue(new Font("Noto Sans SC", Font.PLAIN, 12).canDisplay('组'));
+    }
+
+    @Test
+    void wrapsLongCategoryTextWithinTheLabelArea() {
+        BufferedImage image = new BufferedImage(1040, 1440, BufferedImage.TYPE_INT_RGB);
+        Graphics2D graphics = image.createGraphics();
+        try {
+            EntryLabelFileGenerator.CategoryTextLayout layout = EntryLabelFileGenerator.layoutCategoryText(graphics,
+                    "组别：3. Fermentis · 100% 国产酒花组（酒花型啤酒）· 中低酒精度啤酒 NABLAB: No- and Low-Alcohol Beers");
+
+            assertTrue(layout.lines().size() > 1);
+            assertTrue(layout.lines().size() <= 3);
+            graphics.setFont(layout.font());
+            for (String line : layout.lines()) {
+                assertTrue(graphics.getFontMetrics().stringWidth(line) <= 820);
+            }
+        } finally {
+            graphics.dispose();
+        }
     }
 
     private boolean hasNotoSansScFont() {

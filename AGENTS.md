@@ -43,5 +43,5 @@ APP_DB_PASSWORD=0d000721
 
 
 
-如果需要当前远程部署的信息，可查看"D:\project\beer-competition\docs\啤酒大赛系统部署与运维速查.md"
+如果需要当前远程部署的信息，可查看"D:\project\beer-competition\docs\04-运维\啤酒大赛系统部署与运维速查.md"
 注：当前系统还没有投入使用，还处于测试阶段，服务器数据库中没有有价值的数据

@@ -493,7 +493,7 @@
               />
             </el-select>
           </el-form-item>
-          <el-form-item label="ABV" prop="abv">
+          <el-form-item label="ABV" prop="abv" required>
             <el-input
               v-model.trim="editForm.abv"
               inputmode="decimal"
@@ -531,7 +531,7 @@
                 :rows="4"
                 maxlength="255"
                 show-word-limit
-                placeholder="选填"
+                :placeholder="field.required ? '请填写' : '选填'"
               />
               <el-input-number
                 v-else-if="field.fieldType === 'number'"
@@ -1711,11 +1711,11 @@ function buildLabelSvg(label) {
   const qr = QRCode.create(scanUrl(label), { errorCorrectionLevel: 'M', margin: 0 })
   const matrix = qr.modules
   const cells = []
-  const qrSize = 176
+  const qrSize = 160
   const cellSize = qrSize / matrix.size
-  const offsetX = 42
-  const offsetY = 78
-
+  const offsetX = 50
+  const offsetY = 67
+  
   for (let row = 0; row < matrix.size; row += 1) {
     for (let col = 0; col < matrix.size; col += 1) {
       if (!matrix.data[row * matrix.size + col]) continue
@@ -1723,21 +1723,93 @@ function buildLabelSvg(label) {
     }
   }
 
-  const category = escapeXml(label.categoryName || '组别待确认')
   const code = escapeXml(label.shortCode || 'PENDING')
+  const categoryLayout = layoutLabelCategory(label.categoryName || '待确认组别')
+  const categoryLines = categoryLayout.lines.map((line, index) => (
+    `<tspan x="130" y="${categoryLayout.firstBaseline + index * categoryLayout.lineHeight}">${escapeXml(line)}</tspan>`
+  )).join('')
 
   return `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 360" role="img" aria-label="现场评审标签">
       <rect width="260" height="360" rx="24" fill="#fff8ec"/>
       <rect x="14" y="14" width="232" height="332" rx="18" fill="#fffdf9" stroke="#d4bf9f"/>
       <text x="130" y="44" text-anchor="middle" font-size="12" font-weight="700" letter-spacing="1.4" fill="#8c6330">现场评审标签</text>
-      <rect x="28" y="64" width="204" height="204" rx="18" fill="#f7ecd8" stroke="#3a2818" stroke-width="10"/>
+      <rect x="39" y="56" width="182" height="182" rx="16" fill="#f7ecd8" stroke="#3a2818" stroke-width="8.5"/>
       ${cells.join('')}
-      <text x="130" y="292" text-anchor="middle" font-size="12" font-weight="700" fill="#8c6330">参赛编号</text>
-      <text x="130" y="318" text-anchor="middle" font-size="28" font-weight="900" fill="#24170f">${code}</text>
-      <text x="130" y="340" text-anchor="middle" font-size="13" fill="#665647">组别：${category}</text>
+      <text x="130" y="255" text-anchor="middle" font-size="11.5" font-weight="700" fill="#8c6330">参赛编号</text>
+      <text x="130" y="284" text-anchor="middle" font-size="26" font-weight="900" fill="#24170f">${code}</text>
+      <text x="130" y="300" text-anchor="middle" font-size="9.5" font-weight="700" fill="#8c6330">组别</text>
+      <text text-anchor="middle" font-size="${categoryLayout.fontSize}" font-weight="700" fill="#665647">${categoryLines}</text>
     </svg>
   `
+}
+
+function layoutLabelCategory(text) {
+  const maxWidth = 220
+  const maxLines = 3
+  const fontSizes = [12, 11, 10, 9, 8, 7, 6]
+
+  for (const fontSize of fontSizes) {
+    const lines = wrapLabelText(text, fontSize, maxWidth)
+    if (lines.length <= maxLines) {
+      const lineHeight = Math.round(fontSize * 1.25 * 10) / 10
+      const lastBaseline = lines.length < maxLines ? 332 : 340
+      return {
+        fontSize,
+        lines,
+        lineHeight,
+        firstBaseline: lastBaseline - (lines.length - 1) * lineHeight,
+      }
+    }
+  }
+
+  const fontSize = fontSizes.at(-1)
+  const lines = wrapLabelText(text, fontSize, maxWidth)
+  const visibleLines = lines.slice(0, maxLines)
+  visibleLines[maxLines - 1] = truncateLabelLine(visibleLines[maxLines - 1], fontSize, maxWidth)
+  const lineHeight = Math.round(fontSize * 1.25 * 10) / 10
+  return {
+    fontSize,
+    lines: visibleLines,
+    lineHeight,
+    firstBaseline: 340 - (visibleLines.length - 1) * lineHeight,
+  }
+}
+
+function wrapLabelText(text, fontSize, maxWidth) {
+  const lines = []
+  let remaining = String(text || '').trim()
+  while (remaining) {
+    let end = 1
+    while (end <= remaining.length && measureLabelText(remaining.slice(0, end), fontSize) <= maxWidth) end += 1
+    if (end > remaining.length) {
+      lines.push(remaining)
+      break
+    }
+    const fittingEnd = Math.max(1, end - 1)
+    const breakAt = remaining.lastIndexOf(' ', fittingEnd - 1)
+    if (breakAt > 0) {
+      lines.push(remaining.slice(0, breakAt).trim())
+      remaining = remaining.slice(breakAt + 1).trim()
+    } else {
+      lines.push(remaining.slice(0, fittingEnd))
+      remaining = remaining.slice(fittingEnd).trim()
+    }
+  }
+  return lines.length ? lines : ['']
+}
+
+function truncateLabelLine(text, fontSize, maxWidth) {
+  let result = text
+  while (result && measureLabelText(`${result}…`, fontSize) > maxWidth) result = result.slice(0, -1).trim()
+  return `${result}…`
+}
+
+function measureLabelText(text, fontSize) {
+  const canvas = document.createElement('canvas')
+  const context = canvas.getContext('2d')
+  context.font = `${fontSize}px "Noto Sans SC", "Microsoft YaHei", sans-serif`
+  return context.measureText(text).width
 }
 
 function scanUrl(label) {

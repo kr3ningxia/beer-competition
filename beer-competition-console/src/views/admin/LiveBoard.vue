@@ -4,12 +4,10 @@
       <section class="title-zone">
         <div class="top-line">
           <button type="button" class="back-button" @click="goBack">返回</button>
-          <span class="brand-mark">CHINESE LAGER AWARDS</span>
           <span class="screen-name">评审现场实时大屏</span>
         </div>
 
         <h1>{{ board.title }}</h1>
-        <p class="subtitle">{{ board.subtitle }}</p>
 
         <div class="stage-line">
           <span>{{ board.roundName }}</span>
@@ -19,15 +17,32 @@
       </section>
 
       <section class="partner-wall" aria-label="赛事合作方">
-        <article v-for="group in board.partners" :key="group.label" :class="{ featured: group.featured }">
-          <span>{{ group.label }}</span>
-          <div class="partner-logos">
-            <div v-for="sponsor in group.sponsors" :key="sponsor.name" class="partner-logo-item">
-              <img v-if="sponsor.logoUrl" :src="sponsor.logoUrl" :alt="sponsor.name" />
-              <strong>{{ sponsor.name }}</strong>
+        <div class="partner-pinned">
+          <article v-for="group in pinnedPartnerGroups" :key="group.key" :class="{ featured: group.featured }">
+            <span>{{ group.label }}</span>
+            <div :class="['partner-logos', `sponsors-${group.sponsors.length}`]">
+              <div v-for="sponsor in group.sponsors" :key="sponsor.key" class="partner-logo-item">
+                <img v-if="sponsor.logoUrl" :src="sponsor.logoUrl" :alt="sponsor.name" />
+                <i v-else class="partner-logo-placeholder" aria-hidden="true">{{ sponsor.name.slice(0, 2) }}</i>
+                <strong>{{ sponsor.name }}</strong>
+              </div>
             </div>
+          </article>
+        </div>
+        <Transition name="partner-page" mode="out-in">
+          <div :key="activePartnerPageKey" class="partner-page">
+            <article v-for="group in activePartnerPage" :key="group.key" :class="{ featured: group.featured }">
+              <span>{{ group.label }}</span>
+              <div :class="['partner-logos', `sponsors-${group.sponsors.length}`]">
+                <div v-for="sponsor in group.sponsors" :key="sponsor.key" class="partner-logo-item">
+                  <img v-if="sponsor.logoUrl" :src="sponsor.logoUrl" :alt="sponsor.name" />
+                  <i v-else class="partner-logo-placeholder" aria-hidden="true">{{ sponsor.name.slice(0, 2) }}</i>
+                  <strong>{{ sponsor.name }}</strong>
+                </div>
+              </div>
+            </article>
           </div>
-        </article>
+        </Transition>
       </section>
     </header>
 
@@ -114,7 +129,6 @@
           <span>{{ step.status }}</span>
         </li>
       </ol>
-      <small>CHINESE LAGER AWARDS · LIVE SCOREBOARD</small>
     </footer>
   </main>
 </template>
@@ -125,6 +139,10 @@ import { useRoute, useRouter } from 'vue-router'
 import { fetchCompetitionLiveBoard, fetchCompetitions } from '@/api/admin'
 
 const REFRESH_SECONDS = 10
+const PARTNER_ROTATE_SECONDS = 12
+const PINNED_PARTNER_GROUPS = 2
+const ROTATING_PARTNER_GROUPS_PER_PAGE = 2
+const SPONSORS_PER_GROUP = 3
 const DEFAULT_TITLE = '首届中国拉格大赛'
 const DEFAULT_SUBTITLE = 'The 1st Chinese Lager Awards'
 const DEFAULT_SPONSOR_GROUPS = [{ label: '主办方', featured: true, sponsors: [{ name: '啤酒事务局', logoUrl: '' }] }]
@@ -135,9 +153,19 @@ const loading = ref(false)
 const detail = ref(null)
 const selectedCompetitionId = ref(route.query.competitionId || '')
 let refreshTimer = null
+let partnerRotateTimer = null
 
 const board = computed(() => buildBoard(detail.value))
 const densityClass = computed(() => `tables-${Math.min(Math.max(board.value.tables.length || 1, 1), 8)}`)
+const pinnedPartnerGroups = computed(() => buildPartnerCards(board.value.partners.slice(0, PINNED_PARTNER_GROUPS)))
+const partnerPages = computed(() => buildPartnerPages(board.value.partners.slice(PINNED_PARTNER_GROUPS)))
+const activePartnerPage = computed(() => {
+  const pages = partnerPages.value
+  if (!pages.length) return []
+  return pages[partnerPageIndex.value % pages.length]
+})
+const activePartnerPageKey = computed(() => `${partnerPageIndex.value % Math.max(partnerPages.value.length, 1)}-${partnerPages.value.length}`)
+const partnerPageIndex = ref(0)
 
 onMounted(async () => {
   await ensureCompetition()
@@ -147,6 +175,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.clearInterval(refreshTimer)
+  window.clearInterval(partnerRotateTimer)
 })
 
 async function ensureCompetition() {
@@ -159,6 +188,9 @@ async function ensureCompetition() {
 
 function startTimers() {
   refreshTimer = window.setInterval(refreshBoard, REFRESH_SECONDS * 1000)
+  partnerRotateTimer = window.setInterval(() => {
+    if (partnerPages.value.length > 1) partnerPageIndex.value += 1
+  }, PARTNER_ROTATE_SECONDS * 1000)
 }
 
 function goBack() {
@@ -274,11 +306,32 @@ function buildPartnerGroups(groups = []) {
   return groups.map((group) => ({
     label: group.tierLabel || '赞助商',
     featured: Boolean(group.featured),
-    sponsors: (group.sponsors || []).map((sponsor) => ({
+    sponsors: (group.sponsors || []).map((sponsor, index) => ({
+      key: String(sponsor.id || `${group.tierLabel || 'sponsor'}-${index}-${sponsor.sponsorName || sponsor.name || ''}`),
       name: sponsor.sponsorName || sponsor.name || '赞助商',
       logoUrl: sponsor.logoUrl || '',
     })),
   })).filter((group) => group.sponsors.length)
+}
+
+function buildPartnerCards(groups = []) {
+  return groups.flatMap((group) => chunk(group.sponsors, SPONSORS_PER_GROUP).map((sponsors, index) => ({
+    ...group,
+    key: `${group.label}-${index}`,
+    sponsors,
+  })))
+}
+
+function buildPartnerPages(groups = []) {
+  return chunk(buildPartnerCards(groups), ROTATING_PARTNER_GROUPS_PER_PAGE)
+}
+
+function chunk(items, size) {
+  const groups = []
+  for (let index = 0; index < items.length; index += size) {
+    groups.push(items.slice(index, index + size))
+  }
+  return groups
 }
 
 function buildTableColumns(isRanking) {
@@ -405,10 +458,10 @@ function normalizeFoamBottom(percent) {
 
 .board-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(520px, 31%);
+  grid-template-columns: minmax(0, 1fr) minmax(590px, 36%);
   gap: 28px;
   align-items: end;
-  min-height: 132px;
+  height: 174px;
   padding-bottom: 10px;
   border-bottom: 1px solid rgba(225, 178, 91, 0.18);
 }
@@ -420,7 +473,7 @@ function normalizeFoamBottom(percent) {
 .top-line {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   min-width: 0;
   color: var(--dim);
   font-size: 13px;
@@ -446,16 +499,6 @@ function normalizeFoamBottom(percent) {
   margin-right: 6px;
 }
 
-.brand-mark {
-  overflow: hidden;
-  max-width: 300px;
-  color: var(--gold);
-  font-size: 12px;
-  letter-spacing: 6px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
 .screen-name {
   color: #d8ccb4;
   white-space: nowrap;
@@ -466,7 +509,7 @@ function normalizeFoamBottom(percent) {
   display: inline-block;
   width: 1px;
   height: 14px;
-  margin-right: 14px;
+  margin-right: 12px;
   vertical-align: -2px;
   background: rgba(225, 178, 91, 0.36);
 }
@@ -484,21 +527,11 @@ function normalizeFoamBottom(percent) {
   text-shadow: 0 14px 28px rgba(0, 0, 0, 0.56);
 }
 
-.subtitle {
-  margin: 5px 0 10px;
-  overflow: hidden;
-  color: #e5c68a;
-  font-size: clamp(17px, 1.18vw, 23px);
-  line-height: 1.1;
-  font-weight: 800;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
 .stage-line {
   display: flex;
   align-items: center;
   gap: 10px;
+  margin-top: 16px;
   min-width: 0;
 }
 
@@ -543,6 +576,16 @@ function normalizeFoamBottom(percent) {
 }
 
 .partner-wall {
+  position: relative;
+  display: grid;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.partner-pinned,
+.partner-page {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
@@ -550,10 +593,11 @@ function normalizeFoamBottom(percent) {
 
 .partner-wall article {
   display: grid;
-  gap: 5px;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 3px;
   min-width: 0;
-  min-height: 50px;
-  padding: 9px 13px;
+  min-height: 0;
+  padding: 8px 10px;
   border: 1px solid rgba(225, 178, 91, 0.18);
   border-radius: 8px;
   background: rgba(18, 19, 17, 0.62);
@@ -567,48 +611,81 @@ function normalizeFoamBottom(percent) {
 
 .partner-wall span {
   color: #8f8878;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1;
   font-weight: 900;
 }
 
 .partner-logos {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: center;
-  gap: 8px;
+  gap: 5px;
   min-width: 0;
-  overflow: hidden;
+}
+
+.partner-logos.sponsors-1 {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.partner-logos.sponsors-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .partner-logo-item {
-  display: inline-flex;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  justify-items: center;
   align-items: center;
-  gap: 8px;
+  gap: 3px;
   min-width: 0;
-  max-width: 100%;
+  min-height: 0;
 }
 
-.partner-logo-item img {
-  flex: 0 0 auto;
-  width: clamp(48px, 3.8vw, 76px);
-  height: clamp(48px, 3.8vw, 76px);
+.partner-logo-item img,
+.partner-logo-placeholder {
+  width: clamp(36px, 2.55vw, 54px);
+  height: clamp(36px, 2.55vw, 54px);
+  min-width: 0;
   object-fit: contain;
-  padding: 6px;
+  padding: 4px;
   border: 1px solid rgba(225, 178, 91, 0.2);
   border-radius: 8px;
   background: #fff;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
 }
 
+.partner-logo-placeholder {
+  display: grid;
+  place-items: center;
+  color: #8b682f;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 950;
+}
+
 .partner-wall strong {
+  width: 100%;
   overflow: hidden;
   color: var(--text);
-  font-size: clamp(15px, 1.12vw, 20px);
-  line-height: 1.1;
-  font-weight: 950;
+  font-size: clamp(10px, 0.65vw, 12px);
+  line-height: 1.15;
+  font-weight: 800;
+  text-align: center;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+
+.partner-page-enter-active,
+.partner-page-leave-active {
+  transition: opacity 500ms ease, transform 500ms ease;
+}
+
+.partner-page-enter-from,
+.partner-page-leave-to {
+  opacity: 0;
+  transform: translateY(6px);
 }
 
 .scoreboard-stage {
@@ -1209,7 +1286,7 @@ function normalizeFoamBottom(percent) {
 
 .round-footer {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 16px;
   min-height: 36px;
@@ -1279,16 +1356,6 @@ function normalizeFoamBottom(percent) {
   font-weight: 850;
 }
 
-.round-footer small {
-  overflow: hidden;
-  color: rgba(189, 167, 111, 0.76);
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: 4px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
 .live-board.tables-5,
 .live-board.tables-6,
 .live-board.tables-7,
@@ -1342,9 +1409,9 @@ function normalizeFoamBottom(percent) {
   }
 
   .board-header {
-    grid-template-columns: minmax(0, 1fr) minmax(390px, 31%);
+    grid-template-columns: minmax(0, 1fr) minmax(500px, 36%);
     gap: 26px;
-    min-height: 128px;
+    height: 160px;
     padding-bottom: 10px;
   }
 
@@ -1382,6 +1449,70 @@ function normalizeFoamBottom(percent) {
   .desk-row {
     min-height: 37px;
     gap: 9px;
+  }
+}
+
+@media (max-height: 900px) {
+  .live-board {
+    gap: 10px;
+    padding: 18px clamp(26px, 2vw, 34px) 12px;
+    grid-template-rows: 164px minmax(238px, 30vh) minmax(210px, 1fr) 32px;
+  }
+
+  .board-header {
+    height: 164px;
+    padding-bottom: 8px;
+  }
+
+  .title-zone h1 {
+    font-size: clamp(34px, 3vw, 50px);
+  }
+
+  .stage-line {
+    margin-top: 10px;
+  }
+
+  .partner-wall,
+  .partner-pinned,
+  .partner-page {
+    gap: 8px;
+  }
+
+  .partner-wall article {
+    padding: 7px 9px;
+  }
+
+  .partner-logo-item img,
+  .partner-logo-placeholder {
+    width: 34px;
+    height: 34px;
+  }
+
+  .partner-wall strong {
+    font-size: 10px;
+    line-height: 1;
+    -webkit-line-clamp: 1;
+  }
+
+  .scoreboard-stage {
+    gap: 12px;
+  }
+
+  .hero-panel {
+    padding: 18px 24px;
+  }
+
+  .metric-panel {
+    gap: 8px;
+    grid-template-rows: minmax(84px, 1fr) minmax(54px, auto);
+  }
+
+  .metric-card {
+    padding: 10px 13px 12px;
+  }
+
+  .round-footer {
+    min-height: 32px;
   }
 }
 </style>

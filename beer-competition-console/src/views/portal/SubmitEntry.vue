@@ -109,7 +109,7 @@
                   />
                 </el-select>
               </el-form-item>
-              <el-form-item label="ABV" prop="abv">
+              <el-form-item label="ABV" prop="abv" required>
                 <el-input
                   v-model.trim="activeEntry.abv"
                   inputmode="decimal"
@@ -147,7 +147,7 @@
                   :rows="4"
                   maxlength="255"
                   show-word-limit
-                  placeholder="选填…"
+                  :placeholder="field.required ? '请填写…' : '选填…'"
                 />
                 <el-input-number
                   v-else-if="field.fieldType === 'number'"
