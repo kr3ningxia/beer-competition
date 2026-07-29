@@ -226,10 +226,14 @@
                 <span class="count-pill">{{ categoryCount }} 个</span>
               </div>
               <div class="title-actions">
-                <button class="tool-button" type="button" @click="syncCategoriesFromSelectedLibrary">
-                  <CircleCheck />
-                  同步风格库
-                </button>
+                <label class="style-sync-switch">
+                  <span>同步风格库</span>
+                  <el-switch
+                    v-model="syncCategoriesWithStyleLibrary"
+                    aria-label="同步风格库投递组别"
+                    @change="toggleCategoryStyleSync"
+                  />
+                </label>
                 <button class="tool-button" type="button" @click="addCategory">
                   <Plus />
                   添加组别
@@ -238,8 +242,8 @@
             </div>
             <div class="category-list">
               <div v-for="(category, index) in draft.categories" :key="category.id" class="category-row">
-                <input v-model.trim="category.name" :aria-label="`投递组别 ${index + 1}`" placeholder="例如 浅色拉格" @input="markCategoryEdited" />
-                <button class="icon-button" title="删除投递组别" type="button" @click="removeCategory(index)"><Delete /></button>
+                <input v-model.trim="category.name" :aria-label="`投递组别 ${index + 1}`" :disabled="syncCategoriesWithStyleLibrary" placeholder="例如 浅色拉格" />
+                <button class="icon-button" :disabled="syncCategoriesWithStyleLibrary" title="删除投递组别" type="button" @click="removeCategory(index)"><Delete /></button>
               </div>
             </div>
           </section>
@@ -530,9 +534,8 @@ const draft = reactive({
   deliveryNote: '支付成功后，您将看到自动生成的作品标签。请用 A4 纸打印，裁剪后分别贴在每瓶／罐参赛酒款上。张贴之前，请移除参赛酒款原本的酒标。建议采用激光打印，并在贴后使用透明塑料胶带覆盖，以增加防水性。',
   logisticsVisibility: 'PAYMENT_CONFIRMED',
   categories: [
-    { id: 'cat-1', name: '浅色拉格' },
-    { id: 'cat-2', name: '深色拉格' },
-    { id: 'cat-3', name: '创意拉格' },
+    { id: 'cat-1', name: '组别1' },
+    { id: 'cat-2', name: '组别2' },
   ],
   styleLibraryVersion: defaultStyleLibraryValue,
   entryFields: [
@@ -558,7 +561,8 @@ const scoreDescriptions = {
 
 const categoryCount = computed(() => draft.categories.filter((category) => category.name).length)
 const styleLibraryOptions = ref(normalizeStyleLibraries(fallbackStyleLibraries))
-const categoryManuallyEdited = ref(false)
+const syncCategoriesWithStyleLibrary = ref(false)
+let manualCategoriesBeforeStyleSync = []
 const selectedStyleLibrary = computed(() => getStyleLibrary(draft.styleLibraryVersion, styleLibraryOptions.value))
 const reviewItems = computed(() => buildReviewItems(draft))
 const reviewBlockingItems = computed(() => reviewItems.value.filter((item) => item.status !== 'done'))
@@ -578,17 +582,13 @@ function removeItem(list, index) {
   list.splice(index, 1)
 }
 
-function markCategoryEdited() {
-  categoryManuallyEdited.value = true
-}
-
 function addCategory() {
-  markCategoryEdited()
+  if (syncCategoriesWithStyleLibrary.value) return
   draft.categories.push({ id: `cat-${Date.now()}`, name: '' })
 }
 
 function removeCategory(index) {
-  markCategoryEdited()
+  if (syncCategoriesWithStyleLibrary.value) return
   removeItem(draft.categories, index)
 }
 
@@ -761,9 +761,6 @@ async function loadStyleLibraries() {
   } catch {
     styleLibraryOptions.value = normalizeStyleLibraries(fallbackStyleLibraries)
   }
-  if (!categoryManuallyEdited.value) {
-    syncCategoriesFromSelectedLibrary({ silent: true, resetManual: true })
-  }
 }
 
 function getStyleLibraryCategoryNames(library) {
@@ -789,37 +786,38 @@ function replaceDraftCategories(names) {
   )
 }
 
-function syncCategoriesFromSelectedLibrary(options = {}) {
-  const normalizedOptions = options instanceof Event ? {} : options
+function syncCategoriesFromSelectedLibrary() {
   const names = getStyleLibraryCategoryNames(selectedStyleLibrary.value)
   if (!names.length) {
     ElMessage.warning('当前风格库没有可同步的风格')
-    return
+    return false
   }
   replaceDraftCategories(names)
-  if (normalizedOptions.resetManual) {
-    categoryManuallyEdited.value = false
-  }
-  if (!normalizedOptions.silent) {
-    ElMessage.success('已同步当前风格库的投递组别')
-  }
+  return true
 }
 
-watch(() => draft.styleLibraryVersion, async (nextValue, previousValue) => {
-  if (!nextValue || nextValue === previousValue) return
-  if (!categoryManuallyEdited.value || getCategoryNames(draft).length === 0) {
-    syncCategoriesFromSelectedLibrary({ silent: true, resetManual: true })
+function cloneCategories(categories) {
+  return categories.map((category) => ({ ...category }))
+}
+
+function toggleCategoryStyleSync(enabled) {
+  if (enabled) {
+    manualCategoriesBeforeStyleSync = cloneCategories(draft.categories)
+    if (syncCategoriesFromSelectedLibrary()) {
+      ElMessage.success('已按当前风格库同步投递组别')
+      return
+    }
+    syncCategoriesWithStyleLibrary.value = false
     return
   }
-  try {
-    await ElMessageBox.confirm('将用新风格库的可用风格替换当前投递组别，已有手动调整会被覆盖。', '同步投递组别', {
-      confirmButtonText: '同步',
-      cancelButtonText: '保留现有组别',
-      type: 'warning',
-    })
-    syncCategoriesFromSelectedLibrary({ resetManual: true })
-  } catch {
-    // 保留当前手动组别，管理员仍可稍后点击同步按钮。
+  draft.categories.splice(0, draft.categories.length, ...cloneCategories(manualCategoriesBeforeStyleSync))
+}
+
+watch(() => draft.styleLibraryVersion, (nextValue, previousValue) => {
+  if (!nextValue || nextValue === previousValue) return
+  if (syncCategoriesWithStyleLibrary.value && !syncCategoriesFromSelectedLibrary()) {
+    syncCategoriesWithStyleLibrary.value = false
+    draft.categories.splice(0, draft.categories.length, ...cloneCategories(manualCategoriesBeforeStyleSync))
   }
 })
 
@@ -1565,6 +1563,32 @@ textarea::placeholder {
   justify-content: flex-end;
 }
 
+.style-sync-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 38px;
+  padding: 0 11px 0 13px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.style-sync-switch :deep(.el-switch) {
+  --el-switch-on-color: #d8a935;
+  --el-switch-off-color: rgba(255, 255, 255, 0.16);
+}
+
+.style-sync-switch:has(.el-switch.is-checked) {
+  color: var(--gold-soft);
+  border-color: rgba(216, 169, 53, 0.32);
+  background: rgba(216, 169, 53, 0.08);
+}
+
 .count-pill {
   display: inline-flex;
   align-items: center;
@@ -1610,6 +1634,17 @@ textarea::placeholder {
 
 .category-row input {
   min-height: 38px;
+}
+
+.category-row input:disabled {
+  color: #aebfc6;
+  cursor: not-allowed;
+}
+
+.icon-button:disabled,
+.tool-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
 }
 
 .field-card {

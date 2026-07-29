@@ -346,7 +346,8 @@ public class CompetitionServiceImpl implements CompetitionService {
         List<EntryFieldItemRequest> entryFields = normalizeEntryFields(request.getEntryFields() == null ? List.of() : request.getEntryFields());
         String styleLibraryVersion = normalizeRequired(request.getStyleLibraryVersion(), "基础风格库不能为空");
         List<StyleItemVO> snapshotStyles = styleLibraryService.listEnabledStyles(styleLibraryVersion);
-        List<ConfigNameItemRequest> categories = normalizeNameItems(resolveCreateCategories(request.getCategories(), snapshotStyles), "投递组别");
+        List<ConfigNameItemRequest> categories = normalizeNameItems(
+                request.getCategories() == null ? List.of() : request.getCategories(), "投递组别");
         validateScoreConfigs(request.getScoreConfigs());
 
         // 2) 构造草稿比赛主记录
@@ -524,31 +525,6 @@ public class CompetitionServiceImpl implements CompetitionService {
                     .sourceLibraryVersion(sourceLibraryVersion)
                     .build());
         }
-    }
-
-    private List<ConfigNameItemRequest> resolveCreateCategories(List<ConfigNameItemRequest> categories,
-                                                                List<StyleItemVO> snapshotStyles) {
-        if (categories != null && categories.stream().anyMatch(item -> StringUtils.hasText(item.getName()))) {
-            return categories;
-        }
-        List<ConfigNameItemRequest> generated = new ArrayList<>();
-        for (int index = 0; index < snapshotStyles.size(); index++) {
-            StyleItemVO style = snapshotStyles.get(index);
-            ConfigNameItemRequest item = new ConfigNameItemRequest();
-            item.setName(formatStyleItemName(style));
-            item.setSortOrder(resolveSort(style.getSortOrder(), index));
-            generated.add(item);
-        }
-        return generated;
-    }
-
-    private String formatStyleItemName(StyleItemVO style) {
-        String name = normalizeNullable(style == null ? null : style.getName());
-        String styleCode = normalizeNullable(style == null ? null : style.getStyleCode());
-        if (!StringUtils.hasText(name) || !StringUtils.hasText(styleCode) || name.startsWith(styleCode + " ")) {
-            return name;
-        }
-        return styleCode + " " + name;
     }
 
     @Override
@@ -3125,6 +3101,9 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .peek(item -> item.setName(normalizeRequired(item.getName(), label + "名称不能为空")))
                 .sorted(Comparator.comparing(item -> resolveSort(item.getSortOrder(), 0)))
                 .toList();
+        if (normalized.isEmpty()) {
+            throw new BaseException("请至少配置 1 个" + label);
+        }
         assertUniqueKeys(normalized.stream().map(ConfigNameItemRequest::getName).toList(), label + "名称");
         return normalized;
     }
