@@ -5,10 +5,13 @@ import com.beercompetition.pojo.dto.PortalEntryRefundRequest;
 import com.beercompetition.pojo.dto.PortalEntrySubmitRequest;
 import com.beercompetition.pojo.dto.PortalEntryUpdateRequest;
 import com.beercompetition.pojo.dto.AdminEntryDeleteRequest;
+import com.beercompetition.pojo.dto.AdminEntryStatusRequest;
+import com.beercompetition.pojo.dto.CompetitionRefundPolicyUpdateRequest;
 import com.beercompetition.pojo.enums.CompetitionStatus;
 import com.beercompetition.pojo.enums.EntryPaymentStatus;
 import com.beercompetition.pojo.enums.EntryRefundStatus;
 import com.beercompetition.pojo.enums.EntryStatus;
+import com.beercompetition.pojo.enums.RefundApprovalMode;
 import com.beercompetition.pojo.enums.RoundStatus;
 import com.beercompetition.pojo.enums.RoundTargetMode;
 import com.beercompetition.testsupport.BeerCompetitionTestData;
@@ -31,6 +34,9 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
 
     @Autowired
     private EntryService entryService;
+
+    @Autowired
+    private CompetitionService competitionService;
 
     @Autowired
     private RoundService roundService;
@@ -274,7 +280,7 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
-    void refundRequestBeforeRegistrationDeadlineAutoApprovesAndCancelsEntry() {
+    void autoApprovedManualPaymentRefundWaitsForOfflineCompletion() {
         BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
         var refundable = testData.createEntry(testRun, fixture.competition().getId(), fixture.portalA().brewery().getId(),
                 fixture.category().getId(), testRun + "-可退款", EntryStatus.REGISTERED, true);
@@ -296,13 +302,142 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
         var refundStatus = jdbcTemplate.queryForObject("SELECT status FROM entry_refund WHERE id = ?",
                 String.class, refundId);
 
-        assertThat(entryStatus).isEqualTo(EntryStatus.CANCELED.name());
-        assertThat(paymentStatus).isEqualTo(EntryPaymentStatus.REFUNDED.name());
-        assertThat(refundStatus).isEqualTo(EntryRefundStatus.SUCCESS.name());
+        assertThat(entryStatus).isEqualTo(EntryStatus.REGISTERED.name());
+        assertThat(paymentStatus).isEqualTo(EntryPaymentStatus.PAID.name());
+        assertThat(refundStatus).isEqualTo(EntryRefundStatus.APPROVED.name());
     }
 
     @Test
-    void storedEntryCanRequestRefundBeforeRegistrationDeadline() {
+    void manualReviewModeKeepsRequestPendingUntilAdminDecision() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        jdbcTemplate.update("UPDATE competition SET refund_approval_mode = ? WHERE id = ?",
+                RefundApprovalMode.MANUAL_REVIEW.name(), fixture.competition().getId());
+        var refundable = testData.createEntry(testRun, fixture.competition().getId(), fixture.portalA().brewery().getId(),
+                fixture.category().getId(), testRun + "-人工审批退款", EntryStatus.REGISTERED, true);
+
+        asPortal(fixture.portalA().account().getId());
+        PortalEntryRefundRequest request = new PortalEntryRefundRequest();
+        request.setReason("等待管理员审批");
+        entryService.requestPortalEntryRefund(refundable.getId(), request);
+
+        Map<String, Object> refund = jdbcTemplate.queryForMap("""
+                SELECT status, approval_mode_snapshot
+                FROM entry_refund
+                WHERE beer_entry_id = ?
+                ORDER BY id DESC
+                LIMIT 1
+                """, refundable.getId());
+        assertThat(refund.get("status")).isEqualTo(EntryRefundStatus.REQUESTED.name());
+        assertThat(refund.get("approval_mode_snapshot")).isEqualTo(RefundApprovalMode.MANUAL_REVIEW.name());
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM beer_entry WHERE id = ?",
+                String.class, refundable.getId())).isEqualTo(EntryStatus.REGISTERED.name());
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM entry_payment WHERE beer_entry_id = ?",
+                String.class, refundable.getId())).isEqualTo(EntryPaymentStatus.PAID.name());
+
+        Long refundId = jdbcTemplate.queryForObject("""
+                SELECT id FROM entry_refund
+                WHERE beer_entry_id = ?
+                ORDER BY id DESC
+                LIMIT 1
+        """, Long.class, refundable.getId());
+        asAdmin(1L);
+        AdminEntryStatusRequest approveRequest = new AdminEntryStatusRequest();
+        approveRequest.setReason("同意退款");
+        entryService.approveRefund(refundId, approveRequest);
+
+        assertThat(latestRefundStatus(refundable.getId())).isEqualTo(EntryRefundStatus.APPROVED.name());
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM beer_entry WHERE id = ?",
+                String.class, refundable.getId())).isEqualTo(EntryStatus.REGISTERED.name());
+    }
+
+    @Test
+    void manualReviewRefundCanBeRejectedWithoutInvalidatingPayment() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        jdbcTemplate.update("UPDATE competition SET refund_approval_mode = ? WHERE id = ?",
+                RefundApprovalMode.MANUAL_REVIEW.name(), fixture.competition().getId());
+        var refundable = testData.createEntry(testRun, fixture.competition().getId(), fixture.portalA().brewery().getId(),
+                fixture.category().getId(), testRun + "-驳回退款", EntryStatus.REGISTERED, true);
+
+        asPortal(fixture.portalA().account().getId());
+        PortalEntryRefundRequest refundRequest = new PortalEntryRefundRequest();
+        refundRequest.setReason("申请退款");
+        entryService.requestPortalEntryRefund(refundable.getId(), refundRequest);
+        Long refundId = jdbcTemplate.queryForObject("""
+                SELECT id FROM entry_refund
+                WHERE beer_entry_id = ?
+                ORDER BY id DESC
+                LIMIT 1
+                """, Long.class, refundable.getId());
+
+        asAdmin(1L);
+        AdminEntryStatusRequest rejectRequest = new AdminEntryStatusRequest();
+        rejectRequest.setReason("不符合退款条件");
+        entryService.rejectRefund(refundId, rejectRequest);
+
+        assertThat(latestRefundStatus(refundable.getId())).isEqualTo(EntryRefundStatus.REJECTED.name());
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM entry_payment WHERE beer_entry_id = ?",
+                String.class, refundable.getId())).isEqualTo(EntryPaymentStatus.PAID.name());
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM beer_entry WHERE id = ?",
+                String.class, refundable.getId())).isEqualTo(EntryStatus.REGISTERED.name());
+    }
+
+    @Test
+    void changingRefundPolicyOnlyAffectsLaterRequests() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        jdbcTemplate.update("UPDATE competition SET refund_approval_mode = ? WHERE id = ?",
+                RefundApprovalMode.MANUAL_REVIEW.name(), fixture.competition().getId());
+        var pendingReview = testData.createEntry(testRun, fixture.competition().getId(), fixture.portalA().brewery().getId(),
+                fixture.category().getId(), testRun + "-切换前", EntryStatus.REGISTERED, true);
+        var autoApproved = testData.createEntry(testRun, fixture.competition().getId(), fixture.portalA().brewery().getId(),
+                fixture.category().getId(), testRun + "-切换后", EntryStatus.REGISTERED, true);
+
+        asPortal(fixture.portalA().account().getId());
+        PortalEntryRefundRequest request = new PortalEntryRefundRequest();
+        request.setReason("切换审批方式");
+        entryService.requestPortalEntryRefund(pendingReview.getId(), request);
+
+        asAdmin(1L);
+        CompetitionRefundPolicyUpdateRequest policyRequest = new CompetitionRefundPolicyUpdateRequest();
+        policyRequest.setRefundApprovalMode(RefundApprovalMode.AUTO_APPROVE.name());
+        competitionService.updateRefundPolicy(fixture.competition().getId(), policyRequest);
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM admin_operation_log
+                WHERE action = 'COMPETITION_REFUND_POLICY_UPDATE'
+                  AND target_public_id = ?
+                """, Integer.class, String.valueOf(fixture.competition().getId()))).isEqualTo(1);
+
+        asPortal(fixture.portalA().account().getId());
+        entryService.requestPortalEntryRefund(autoApproved.getId(), request);
+
+        assertThat(latestRefundStatus(pendingReview.getId())).isEqualTo(EntryRefundStatus.REQUESTED.name());
+        assertThat(latestRefundStatus(autoApproved.getId())).isEqualTo(EntryRefundStatus.APPROVED.name());
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT approval_mode_snapshot FROM entry_refund
+                WHERE beer_entry_id = ? ORDER BY id DESC LIMIT 1
+                """, String.class, pendingReview.getId())).isEqualTo(RefundApprovalMode.MANUAL_REVIEW.name());
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT approval_mode_snapshot FROM entry_refund
+                WHERE beer_entry_id = ? ORDER BY id DESC LIMIT 1
+                """, String.class, autoApproved.getId())).isEqualTo(RefundApprovalMode.AUTO_APPROVE.name());
+    }
+
+    @Test
+    void refundPolicyCannotChangeAfterRefundDeadline() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        jdbcTemplate.update("UPDATE competition SET registration_deadline = ? WHERE id = ?",
+                LocalDateTime.now().minusMinutes(1), fixture.competition().getId());
+        CompetitionRefundPolicyUpdateRequest request = new CompetitionRefundPolicyUpdateRequest();
+        request.setRefundApprovalMode(RefundApprovalMode.MANUAL_REVIEW.name());
+
+        asAdmin(1L);
+
+        assertThatThrownBy(() -> competitionService.updateRefundPolicy(fixture.competition().getId(), request))
+                .isInstanceOf(BaseException.class)
+                .hasMessageContaining("退款申请时间已截止");
+    }
+
+    @Test
+    void storedEntryManualPaymentRefundWaitsForOfflineCompletion() {
         BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
 
         asPortal(fixture.portalA().account().getId());
@@ -321,9 +456,9 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
                 LIMIT 1
                 """, String.class, fixture.entryA1().getId());
 
-        assertThat(entryStatus).isEqualTo(EntryStatus.CANCELED.name());
-        assertThat(paymentStatus).isEqualTo(EntryPaymentStatus.REFUNDED.name());
-        assertThat(refundStatus).isEqualTo(EntryRefundStatus.SUCCESS.name());
+        assertThat(entryStatus).isEqualTo(EntryStatus.STORED.name());
+        assertThat(paymentStatus).isEqualTo(EntryPaymentStatus.PAID.name());
+        assertThat(refundStatus).isEqualTo(EntryRefundStatus.APPROVED.name());
     }
 
     @Test
@@ -364,5 +499,14 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
         assertThatThrownBy(() -> entryService.requestPortalEntryRefund(refundable.getId(), request))
                 .isInstanceOf(BaseException.class)
                 .hasMessageContaining("退款暂未成功");
+    }
+
+    private String latestRefundStatus(Long entryId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT status FROM entry_refund
+                WHERE beer_entry_id = ?
+                ORDER BY id DESC
+                LIMIT 1
+                """, String.class, entryId);
     }
 }

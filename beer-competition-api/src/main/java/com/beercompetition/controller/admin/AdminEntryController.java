@@ -3,6 +3,7 @@ package com.beercompetition.controller.admin;
 import com.beercompetition.common.result.PageResult;
 import com.beercompetition.common.result.Result;
 import com.beercompetition.pojo.dto.AdminEntryStatusRequest;
+import com.beercompetition.pojo.dto.AdminOfflineRefundRequest;
 import com.beercompetition.pojo.dto.AdminEntryDeleteRequest;
 import com.beercompetition.pojo.dto.AdminEntryUpdateRequest;
 import com.beercompetition.pojo.vo.AdminEntryDetailVO;
@@ -19,6 +20,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.http.MediaType;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * 后台报名管理接口，负责报名列表、详情、支付收样和退款处理入口。
@@ -140,7 +145,7 @@ public class AdminEntryController {
     public Result<String> approveRefund(@PathVariable Long id,
                                         @RequestBody(required = false) @Valid AdminEntryStatusRequest request) {
         entryService.approveRefund(id, request);
-        return Result.success("退款成功");
+        return Result.success("退款已受理");
     }
 
     /**
@@ -151,6 +156,26 @@ public class AdminEntryController {
                                        @RequestBody(required = false) @Valid AdminEntryStatusRequest request) {
         entryService.rejectRefund(id, request);
         return Result.success("已驳回退款");
+    }
+
+    /**
+     * 确认线下退款已经实际完成。
+     */
+    @PostMapping("/refunds/{id}/confirm-offline")
+    public Result<String> completeOfflineRefund(
+            @PathVariable Long id,
+            @RequestBody(required = false) @Valid AdminEntryStatusRequest request) {
+        entryService.completeOfflineRefund(id, request);
+        return Result.success("线下退款已确认");
+    }
+
+    @PostMapping(value = "/refunds/{id}/register-offline", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Result<String> registerOfflineRefund(
+            @PathVariable Long id,
+            @Valid @ModelAttribute AdminOfflineRefundRequest request,
+            @RequestPart("voucher") MultipartFile voucher) {
+        entryService.registerOfflineRefund(id, request, voucher);
+        return Result.success("线下打款已登记");
     }
 
     /**

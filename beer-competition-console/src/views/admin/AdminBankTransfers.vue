@@ -72,7 +72,7 @@
             </div>
             <div class="soft-cell">
               <strong>{{ formatMoney(item.amount) }}</strong>
-              <small>{{ item.entryName || '当前酒款' }}</small>
+              <small>{{ entrySummary(item) }}</small>
             </div>
             <div class="soft-cell">
               <strong class="remark-preview" :title="item.remark || ''">{{ item.remark || '-' }}</strong>
@@ -144,16 +144,17 @@
 
           <section class="info-card">
             <div class="section-title">
-              <strong>当前酒款</strong>
+              <strong>酒款明细</strong>
             </div>
             <div class="entry-list">
-              <article>
+              <article v-for="entry in transferEntries(detail)" :key="entry.entryId">
                 <div>
-                  <strong>{{ detail.entryName || '-' }}</strong>
-                  <small>{{ [detail.shortCode, detail.categoryName, detail.style].filter(Boolean).join(' · ') }}</small>
+                  <strong>{{ entry.entryName || '-' }}</strong>
+                  <small v-if="entryDescription(entry)">{{ entryDescription(entry) }}</small>
                 </div>
-                <b>{{ formatMoney(detail.amount) }}</b>
+                <b>{{ formatMoney(entry.amount) }}</b>
               </article>
+              <p v-if="!transferEntries(detail).length" class="entry-empty">未找到关联的酒款明细</p>
             </div>
           </section>
 
@@ -319,7 +320,7 @@ async function confirmTransfer() {
   if (!detail.value) return
   try {
     await ElMessageBox.confirm(
-      `确认这笔 ${formatMoney(detail.value.amount)} 转账已经到账？确认后该酒款将开放标签下载和送样信息填写`,
+      `确认这笔 ${formatMoney(detail.value.amount)} 转账已经到账？确认后相关酒款将开放标签下载和送样信息填写`,
       '确认到账',
       {
         confirmButtonText: '确认到账',
@@ -461,6 +462,29 @@ function formatMoney(value) {
 function formatTime(value) {
   if (!value) return '-'
   return String(value).replace('T', ' ').slice(0, 16)
+}
+
+function entrySummary(transfer) {
+  if (transfer?.entryName) return transfer.entryName
+  const entryCount = Number(transfer?.entryCount || 0)
+  return entryCount > 0 ? `${entryCount} 款酒` : '酒款信息缺失'
+}
+
+function transferEntries(transfer) {
+  if (Array.isArray(transfer?.entries) && transfer.entries.length) return transfer.entries
+  if (!transfer?.entryId) return []
+  return [{
+    entryId: transfer.entryId,
+    entryName: transfer.entryName,
+    shortCode: transfer.shortCode,
+    categoryName: transfer.categoryName,
+    style: transfer.style,
+    amount: transfer.amount,
+  }]
+}
+
+function entryDescription(entry) {
+  return [entry?.shortCode, entry?.categoryName, entry?.style].filter(Boolean).join(' · ')
 }
 </script>
 
@@ -916,6 +940,11 @@ button:disabled {
 .entry-list b {
   color: #ffdc73;
   white-space: nowrap;
+}
+
+.entry-empty {
+  margin: 0;
+  color: #8ea4ad;
 }
 
 .process-card label {

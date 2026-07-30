@@ -43,6 +43,7 @@ public class EntryDetailVO {
     private String refundReason;
     private LocalDateTime refundRequestedAt;
     private LocalDateTime refundProcessedAt;
+    private String refundApprovalMode;
     private Boolean canRequestRefund;
     private Boolean canUpdateInfo;
     private String updateInfoDisabledReason;

@@ -26,6 +26,14 @@ public class EntryRefund {
     private String refundNo;
     private BigDecimal amount;
     private String status;
+    private String approvalModeSnapshot;
+    private String offlineRefundAccountName;
+    private String offlineRefundBankName;
+    private String offlineRefundAccountNoEnc;
+    private String offlineRefundAccountNoLast4;
+    private String offlineRefundTransferNo;
+    private LocalDateTime offlineRefundTime;
+    private Long offlineRefundVoucherAssetId;
     private String reason;
     private Long requestedByPortalId;
     private LocalDateTime requestedTime;

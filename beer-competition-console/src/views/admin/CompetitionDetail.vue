@@ -227,6 +227,43 @@
                 </div>
               </section>
 
+              <section class="form-subgroup refund-policy-group">
+                <div class="refund-policy-heading">
+                  <h3>退款审批</h3>
+                  <el-tooltip :content="refundPolicyTooltip" placement="top">
+                    <button class="hint-marker" type="button" aria-label="查看退款审批说明">?</button>
+                  </el-tooltip>
+                </div>
+                <div class="refund-policy-editor">
+                  <div class="refund-mode-switch" role="radiogroup" aria-label="退款审批方式">
+                    <button
+                      :class="{ active: baseForm.refundApprovalMode === 'AUTO_APPROVE' }"
+                      type="button"
+                      :disabled="!competition.refundPolicyEditable || refundPolicySaving"
+                      @click="baseForm.refundApprovalMode = 'AUTO_APPROVE'"
+                    >
+                      自动同意
+                    </button>
+                    <button
+                      :class="{ active: baseForm.refundApprovalMode === 'MANUAL_REVIEW' }"
+                      type="button"
+                      :disabled="!competition.refundPolicyEditable || refundPolicySaving"
+                      @click="baseForm.refundApprovalMode = 'MANUAL_REVIEW'"
+                    >
+                      管理员审批
+                    </button>
+                  </div>
+                  <button
+                    class="tool-button"
+                    type="button"
+                    :disabled="!competition.refundPolicyEditable || !refundPolicyDirty || refundPolicySaving"
+                    @click="saveRefundPolicy"
+                  >
+                    {{ refundPolicySaving ? '保存中' : '保存退款设置' }}
+                  </button>
+                </div>
+              </section>
+
               <section class="form-subgroup">
                 <h3>赛事展示</h3>
                 <label class="wide-field">
@@ -1877,6 +1914,7 @@ import {
   syncRoundCandidates,
   updateCompetitionFeedbackComment,
   updateCompetitionBaseInfo,
+  updateCompetitionRefundPolicy,
   updateCompetitionCategories,
   updateCompetitionEntryFields,
   updateCompetitionJudgeAssignments,
@@ -1915,6 +1953,7 @@ const baseForm = reactive({
   entryFee: 0,
   earlyBirdFee: '',
   earlyBirdDeadline: '',
+  refundApprovalMode: 'AUTO_APPROVE',
   description: '',
   rulesUrl: '',
   deliveryMethod: 'BOTH',
@@ -1927,6 +1966,7 @@ const baseForm = reactive({
   deliveryNote: '',
   logisticsVisibility: 'PAYMENT_CONFIRMED',
 })
+const refundPolicySaving = ref(false)
 const sponsorForm = reactive([])
 const sponsorLogoInputRefs = new Map()
 const sponsorLogoCropOutputWidth = 720
@@ -2115,6 +2155,16 @@ const roundStatusLabels = {
 
 const statusInfo = computed(() => statusMeta[competition.value?.status] || statusMeta.DRAFT)
 const editable = computed(() => competition.value?.editableScopes || {})
+const refundPolicyDirty = computed(() => (
+  baseForm.refundApprovalMode !== (competition.value?.refundApprovalMode || 'AUTO_APPROVE')
+))
+const refundPolicyTooltip = computed(() => {
+  const deadline = competition.value?.refundPolicyEditableUntil
+  const cutoff = deadline ? formatDateTime(deadline) : '报名截止时间'
+  return competition.value?.refundPolicyEditable
+    ? `${cutoff}前可调整；修改后仅影响新提交的退款申请。银行转账退款仍需确认实际退款完成。`
+    : `退款申请已于${cutoff}截止，审批方式不能再修改。`
+})
 const hasDataIssues = computed(() => Boolean(competition.value?.dataIntegrityIssues?.length))
 const registrationRequiredKeys = ['baseInfo', 'categories', 'styleLibrary']
 const registrationRequiredChecks = computed(() => (competition.value?.checks || []).filter((check) => registrationRequiredKeys.includes(check.key)))
@@ -3135,6 +3185,7 @@ function resetForms() {
     entryFee: competition.value.entryFee ?? 0,
     earlyBirdFee: competition.value.earlyBirdFee ?? '',
     earlyBirdDeadline: toInputDateTime(competition.value.earlyBirdDeadline),
+    refundApprovalMode: competition.value.refundApprovalMode || 'AUTO_APPROVE',
     description: competition.value.description || '',
     rulesUrl: competition.value.rulesUrl || '',
     deliveryMethod: logistics.deliveryMethod || 'BOTH',
@@ -3342,7 +3393,7 @@ function entryRefundProgress(entry) {
   const progress = {
     REQUESTED: { label: '待退款审核', tone: 'warning' },
     APPROVED: { label: '退款处理中', tone: 'warning' },
-    PROCESSING: { label: '退款处理中', tone: 'warning' },
+    PROCESSING: { label: '已登记打款', tone: 'warning' },
     SUCCESS: { label: '已退款', tone: 'muted' },
     FAILED: { label: '退款失败', tone: 'warning' },
     REJECTED: { label: '退款已驳回', tone: 'muted' },
@@ -6162,6 +6213,8 @@ async function saveBaseInfo() {
       return
     }
   }
+  const pendingRefundApprovalMode = baseForm.refundApprovalMode
+  const hadPendingRefundPolicyChange = refundPolicyDirty.value
   const detail = await updateCompetitionBaseInfo(competition.value.id, {
     name: baseForm.name,
     code: baseForm.code,
@@ -6185,8 +6238,24 @@ async function saveBaseInfo() {
   })
   competition.value = normalizeDetail(detail)
   resetForms()
+  if (hadPendingRefundPolicyChange) baseForm.refundApprovalMode = pendingRefundApprovalMode
   applyRoundState()
   ElMessage.success('基础信息已保存')
+}
+
+async function saveRefundPolicy() {
+  if (!competition.value?.refundPolicyEditable || !refundPolicyDirty.value || refundPolicySaving.value) return
+  refundPolicySaving.value = true
+  try {
+    const detail = await updateCompetitionRefundPolicy(competition.value.id, {
+      refundApprovalMode: baseForm.refundApprovalMode,
+    })
+    competition.value = normalizeDetail(detail)
+    baseForm.refundApprovalMode = competition.value.refundApprovalMode || 'AUTO_APPROVE'
+    ElMessage.success('退款设置已保存')
+  } finally {
+    refundPolicySaving.value = false
+  }
 }
 
 function addSponsor() {
@@ -8280,6 +8349,64 @@ textarea::placeholder {
   color: #c7d5db;
   font-size: 13px;
   line-height: 1.2;
+}
+
+.refund-policy-heading,
+.refund-policy-editor {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.hint-marker {
+  display: inline-grid;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  place-items: center;
+  color: var(--muted);
+  border: 1px solid rgba(219, 232, 237, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: help;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.hint-marker:hover,
+.hint-marker:focus-visible {
+  color: var(--gold-soft);
+  border-color: rgba(224, 184, 74, 0.48);
+  outline: none;
+}
+
+.refund-mode-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(140px, 1fr));
+  gap: 8px;
+  width: min(420px, 100%);
+}
+
+.refund-mode-switch button {
+  min-height: 40px;
+  padding: 9px 14px;
+  color: #c7d5db;
+  border: 1px solid rgba(219, 232, 237, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  cursor: pointer;
+}
+
+.refund-mode-switch button.active {
+  color: #10191d;
+  border-color: rgba(224, 184, 74, 0.78);
+  background: var(--gold-soft);
+}
+
+.refund-mode-switch button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .base-form-grid {

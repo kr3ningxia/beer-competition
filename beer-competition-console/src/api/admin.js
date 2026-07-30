@@ -121,6 +121,10 @@ export function updateCompetitionBaseInfo(id, payload) {
   return request.put(`/api/admin/competitions/${id}/base-info`, payload, { authScope: 'admin' })
 }
 
+export function updateCompetitionRefundPolicy(id, payload) {
+  return request.put(`/api/admin/competitions/${id}/refund-policy`, payload, { authScope: 'admin' })
+}
+
 export function updateCompetitionCategories(id, payload) {
   return request.put(`/api/admin/competitions/${id}/categories`, payload, { authScope: 'admin' })
 }
@@ -319,6 +323,18 @@ export function rejectEntryRefund(refundId, payload = {}) {
 
 export function retryEntryRefund(refundId, payload = {}) {
   return request.post(`/api/admin/refunds/${refundId}/retry`, payload, { authScope: 'admin' })
+}
+
+export function confirmOfflineEntryRefund(refundId, payload = {}) {
+  return request.post(`/api/admin/refunds/${refundId}/confirm-offline`, payload, { authScope: 'admin' })
+}
+
+export function registerOfflineEntryRefund(refundId, payload = {}) {
+  const formData = new FormData()
+  Object.entries(payload).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') formData.append(key, value)
+  })
+  return request.post(`/api/admin/refunds/${refundId}/register-offline`, formData, { authScope: 'admin' })
 }
 
 export function fetchAdminUsers(params = {}) {

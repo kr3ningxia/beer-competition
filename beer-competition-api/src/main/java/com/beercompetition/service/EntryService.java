@@ -2,6 +2,7 @@ package com.beercompetition.service;
 
 import com.beercompetition.common.result.PageResult;
 import com.beercompetition.pojo.dto.AdminEntryStatusRequest;
+import com.beercompetition.pojo.dto.AdminOfflineRefundRequest;
 import com.beercompetition.pojo.dto.AdminEntryDeleteRequest;
 import com.beercompetition.pojo.dto.AdminEntryUpdateRequest;
 import com.beercompetition.pojo.dto.PortalEntrySubmitRequest;
@@ -99,6 +100,10 @@ public interface EntryService {
     void approveRefund(Long refundId, AdminEntryStatusRequest request);
 
     void rejectRefund(Long refundId, AdminEntryStatusRequest request);
+
+    void completeOfflineRefund(Long refundId, AdminEntryStatusRequest request);
+
+    void registerOfflineRefund(Long refundId, AdminOfflineRefundRequest request, MultipartFile voucher);
 
     void retryRefund(Long refundId, AdminEntryStatusRequest request);
 

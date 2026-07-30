@@ -116,7 +116,7 @@
             <div><dt>作品编号</dt><dd>{{ selectedEntry.shortCode }}</dd></div>
             <div><dt>提交时间</dt><dd>{{ selectedEntry.submittedAt }}</dd></div>
             <div><dt>支付状态</dt><dd>{{ paymentStatusText(selectedEntry) }}</dd></div>
-            <div v-if="selectedEntry.refundStatus"><dt>退款状态</dt><dd>{{ refundStatusText(selectedEntry.refundStatus) }}</dd></div>
+            <div v-if="selectedEntry.refundStatus"><dt>退款状态</dt><dd>{{ refundStatusText(selectedEntry.refundStatus, selectedEntry) }}</dd></div>
             <div><dt>入库状态</dt><dd>{{ isStored(selectedEntry) ? '已入库' : '待入库' }}</dd></div>
           </dl>
           <p v-if="!selectedEntry.canUpdateInfo && selectedEntry.updateInfoDisabledReason" class="edit-lock-note">
@@ -312,9 +312,9 @@
       :close-on-click-modal="!refunding"
     >
       <div class="refund-confirm-body">
-        <p>
-          点击确定退款按钮，这款酒将退出比赛，酒标同时作废。如需修改酒款信息，您可以直接点击“修改信息”。您确定要退款吗？
-        </p>
+        <el-tooltip :content="refundConfirmTip" placement="top">
+          <button class="refund-hint-marker" type="button" aria-label="查看退款说明">?</button>
+        </el-tooltip>
         <el-input
           v-model.trim="refundForm.reason"
           class="refund-reason-input"
@@ -388,6 +388,11 @@ const currencyFormatter = new Intl.NumberFormat('zh-CN', {
 })
 
 const statusOptions = Object.entries(entryStatusMeta).map(([value, meta]) => ({ value, label: meta.label }))
+const refundConfirmTip = computed(() => (
+  pendingRefundEntry.value?.refundApprovalMode === 'MANUAL_REVIEW'
+    ? '提交后等待组委会审核；退款完成后报名取消，酒标同时作废。'
+    : '提交后系统自动受理；退款完成后报名取消，酒标同时作废。'
+))
 const competitionMap = computed(() => new Map(competitions.value.map((competition) => [competition.id, competition])))
 const editConfiguredFields = computed(() => normalizeEntryFields(editCompetition.value?.entryFields || []))
 const editFormRules = computed(() => {
@@ -678,6 +683,8 @@ function formatCurrency(value) {
 }
 
 function paymentStatusText(entry) {
+  if (entry?.refundStatus === 'REQUESTED') return '待组委会审核'
+  if (entry?.refundStatus === 'APPROVED' && isManualRefundPayment(entry)) return '待线下退款'
   if (isEntryRefundActive(entry)) return '退款处理中'
   if (isEntryRefunded(entry)) return '已退款'
   if (entry?.refundStatus === 'FAILED') return '退款失败'
@@ -687,11 +694,12 @@ function paymentStatusText(entry) {
   return '待支付'
 }
 
-function refundStatusText(status) {
+function refundStatusText(status, entry) {
+  if (status === 'APPROVED' && isManualRefundPayment(entry)) return '待线下退款'
   return {
-    REQUESTED: '待组委会处理',
+    REQUESTED: '待组委会审核',
     APPROVED: '退款处理中',
-    PROCESSING: '退款处理中',
+    PROCESSING: '已登记打款',
     SUCCESS: '已退款',
     FAILED: '退款失败',
     REJECTED: '已驳回',
@@ -728,7 +736,7 @@ async function confirmRefundRequest() {
     const reason = refundForm.reason.trim() || DEFAULT_REFUND_REASON
     const detail = await requestPortalEntryRefund(entry.id, { reason })
     refundDialogVisible.value = false
-    ElMessage.success('退款申请已提交')
+    ElMessage.success(entry.refundApprovalMode === 'MANUAL_REVIEW' ? '退款申请已提交' : '退款申请已受理')
     entries.value = await fetchPortalEntries()
     if (selectedEntry.value?.id === entry.id) selectedEntry.value = detail
   } catch (error) {
@@ -743,6 +751,10 @@ function refundUnavailableText(entry) {
   if (entry?.paymentStatus !== 'PAID') return '报名费支付完成后才能申请退款'
   if (entry?.status === 'CANCELED') return '报名已取消，不能申请退款'
   return '报名截止后不能申请退款'
+}
+
+function isManualRefundPayment(entry) {
+  return ['BANK_TRANSFER', 'MANUAL'].includes(entry?.payment?.payMethod)
 }
 
 onMounted(async () => {
@@ -1301,16 +1313,34 @@ dd {
 }
 
 .refund-confirm-body {
+  position: relative;
   display: grid;
   gap: 14px;
 }
 
-.refund-confirm-body p {
-  margin: 0;
-  color: #2b1d10;
-  font-size: 15px;
-  font-weight: 700;
-  line-height: 1.75;
+.refund-hint-marker {
+  position: absolute;
+  top: -42px;
+  right: 34px;
+  display: inline-grid;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  place-items: center;
+  color: #80694d;
+  border: 1px solid rgba(87, 58, 26, 0.22);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.52);
+  cursor: help;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.refund-hint-marker:hover,
+.refund-hint-marker:focus-visible {
+  color: #4a321b;
+  border-color: rgba(87, 58, 26, 0.5);
+  outline: none;
 }
 
 .refund-reason-input :deep(.el-input__wrapper) {

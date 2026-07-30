@@ -1129,7 +1129,7 @@ function refundStatusText(status) {
   return {
     REQUESTED: '待处理',
     APPROVED: '处理中',
-    PROCESSING: '处理中',
+    PROCESSING: '已登记打款',
     SUCCESS: '已退款',
     FAILED: '退款失败',
     REJECTED: '已驳回',

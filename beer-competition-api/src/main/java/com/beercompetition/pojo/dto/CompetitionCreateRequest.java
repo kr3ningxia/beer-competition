@@ -39,6 +39,8 @@ public class CompetitionCreateRequest {
 
     private LocalDateTime earlyBirdDeadline;
 
+    private String refundApprovalMode;
+
     @NotBlank(message = "赛事简介不能为空")
     @Size(max = 1000, message = "赛事简介不能超过 1000 个字符")
     private String description;

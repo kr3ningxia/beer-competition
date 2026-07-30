@@ -23,6 +23,7 @@ public class CompetitionVO {
     private BigDecimal entryFee;
     private BigDecimal earlyBirdFee;
     private LocalDateTime earlyBirdDeadline;
+    private String refundApprovalMode;
     private String description;
     private String rulesUrl;
     private String styleLibraryVersion;

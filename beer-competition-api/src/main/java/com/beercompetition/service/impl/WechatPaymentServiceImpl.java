@@ -273,7 +273,6 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
         // 1) 查询退款上下文并按付款方式分流
         RefundContext context = transactionTemplate.execute(status -> prepareRefund(refundId, reason, adminId));
         if (isManualRefundPayment(context.payment())) {
-            transactionTemplate.executeWithoutResult(status -> applyManualRefundSuccess(context.refund().getId(), adminId));
             return;
         }
 
@@ -300,7 +299,6 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
             return;
         }
         if (isManualRefundPayment(context.payment())) {
-            transactionTemplate.executeWithoutResult(status -> applyManualRefundSuccess(context.refund().getId(), null));
             return;
         }
 
@@ -332,6 +330,19 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
             throw new BaseException("线下退款请确认完成后直接登记，不能重试微信退款");
         }
         approveRefund(refundId, reason, adminId);
+    }
+
+    @Override
+    public void completeOfflineRefund(Long refundId, String reason, Long adminId) {
+        EntryRefund refund = requireRefund(refundId);
+        if (!EntryRefundStatus.PROCESSING.name().equals(refund.getStatus())) {
+            throw new BaseException("只有已登记打款的记录可以确认完成");
+        }
+        EntryPayment payment = entryPaymentMapper.selectById(refund.getEntryPaymentId());
+        if (!isManualRefundPayment(payment)) {
+            throw new BaseException("当前退款不是线下退款");
+        }
+        transactionTemplate.executeWithoutResult(status -> applyManualRefundSuccess(refundId, reason, adminId));
     }
 
     private void syncExpiredPayment(EntryPayment payment, BeerEntry entry) {
@@ -448,7 +459,9 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
                 refund.setOutRefundNo(generateOutRefundNo());
             }
         }
-        refund.setStatus(EntryRefundStatus.PROCESSING.name());
+        refund.setStatus(isManualRefundPayment(payment)
+                ? EntryRefundStatus.APPROVED.name()
+                : EntryRefundStatus.PROCESSING.name());
         refund.setProcessedByAdminId(adminId);
         refund.setProcessedTime(LocalDateTime.now());
         refund.setFailReason(null);
@@ -479,7 +492,9 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
         if (!isManualRefundPayment(payment) && !StringUtils.hasText(refund.getOutRefundNo())) {
             refund.setOutRefundNo(generateOutRefundNo());
         }
-        refund.setStatus(EntryRefundStatus.PROCESSING.name());
+        refund.setStatus(isManualRefundPayment(payment)
+                ? EntryRefundStatus.APPROVED.name()
+                : EntryRefundStatus.PROCESSING.name());
         refund.setProcessedByAdminId(null);
         refund.setProcessedTime(LocalDateTime.now());
         refund.setFailReason(null);
@@ -501,7 +516,7 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
         entryRefundMapper.updateById(refund);
     }
 
-    private void applyManualRefundSuccess(Long refundId, Long adminId) {
+    private void applyManualRefundSuccess(Long refundId, String reason, Long adminId) {
         EntryRefund refund = requireRefund(refundId);
         EntryPayment payment = entryPaymentMapper.selectById(refund.getEntryPaymentId());
         BeerEntry entry = requireEntry(refund.getBeerEntryId());
@@ -519,7 +534,7 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
 
         entry.setStatus(EntryStatus.CANCELED.name());
         beerEntryMapper.updateById(entry);
-        writeEntryLog(adminId, "ENTRY_REFUND_SUCCESS", entry.getUuid(), buildStatusLogSummary("线下退款完成", null));
+        writeEntryLog(adminId, "ENTRY_REFUND_SUCCESS", entry.getUuid(), buildStatusLogSummary("线下退款完成", reason));
     }
 
     private void applyRefundResult(String outRefundNo, String refundId, String refundStatus,

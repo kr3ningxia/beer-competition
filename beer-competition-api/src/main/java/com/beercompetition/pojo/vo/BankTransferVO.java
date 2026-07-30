@@ -5,6 +5,7 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @Builder
@@ -28,6 +29,7 @@ public class BankTransferVO {
     private String style;
     private BigDecimal amount;
     private Integer entryCount;
+    private List<BankTransferEntryVO> entries;
     private String payerName;
     private LocalDateTime transferTime;
     private String remark;

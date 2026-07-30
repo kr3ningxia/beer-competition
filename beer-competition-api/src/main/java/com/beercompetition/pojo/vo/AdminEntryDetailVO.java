@@ -29,7 +29,14 @@ public class AdminEntryDetailVO {
     private String status;
     private String paymentStatus;
     private EntryPaymentVO payment;
+    private BankTransferVO bankTransfer;
     private EntryRefundVO refund;
+    private String offlineRefundAccountName;
+    private String offlineRefundBankName;
+    private String offlineRefundAccountNoLast4;
+    private String offlineRefundTransferNo;
+    private LocalDateTime offlineRefundTime;
+    private Long offlineRefundVoucherAssetId;
     private String refundStatus;
     private String refundReason;
     private LocalDateTime refundRequestedAt;
@@ -45,6 +52,8 @@ public class AdminEntryDetailVO {
     private Boolean canCancel;
     private Boolean canApproveRefund;
     private Boolean canRejectRefund;
+    private Boolean canRetryRefund;
+    private Boolean canConfirmOfflineRefund;
     private Boolean canEdit;
     private LocalDateTime submittedAt;
     private List<EntryExtraFieldVO> extraFields;

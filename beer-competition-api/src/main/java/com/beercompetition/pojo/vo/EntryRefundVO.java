@@ -16,6 +16,7 @@ public class EntryRefundVO {
     private String refundNo;
     private BigDecimal amount;
     private String status;
+    private String approvalModeSnapshot;
     private String reason;
     private Long requestedByPortalId;
     private LocalDateTime requestedTime;

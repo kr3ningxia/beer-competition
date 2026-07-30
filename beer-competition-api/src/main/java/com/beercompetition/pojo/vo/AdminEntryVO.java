@@ -1,7 +1,9 @@
 package com.beercompetition.pojo.vo;
 
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -9,6 +11,8 @@ import java.util.List;
 
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class AdminEntryVO {
 
     private Long id;
@@ -48,6 +52,8 @@ public class AdminEntryVO {
     private Boolean canCancel;
     private Boolean canApproveRefund;
     private Boolean canRejectRefund;
+    private Boolean canRetryRefund;
+    private Boolean canConfirmOfflineRefund;
     private Boolean canEdit;
     private List<AdminEntryTraceVO> traces;
 }

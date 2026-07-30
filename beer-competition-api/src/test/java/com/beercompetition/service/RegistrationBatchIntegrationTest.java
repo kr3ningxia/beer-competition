@@ -101,6 +101,12 @@ class RegistrationBatchIntegrationTest extends IntegrationTestBase {
         transferRequest.setVoucherAssetId(insertVoucherAsset(fixture.portalA().account().getId()));
         var transfer = bankTransferPaymentService.submitPortalOrderTransfer(batch.getPaymentOrderId(), transferRequest);
         assertThat(transfer.getEntryCount()).isEqualTo(2);
+        assertThat(transfer.getEntries())
+                .extracting(entry -> entry.getEntryName())
+                .containsExactly(testRun + "-转账酒款甲", testRun + "-转账酒款乙");
+        assertThat(transfer.getEntries())
+                .extracting(entry -> entry.getAmount())
+                .allMatch(amount -> amount.compareTo(new BigDecimal("100.00")) == 0);
         assertThat(batchPaymentService.getPortalPaymentStatus(batch.getPaymentOrderId()).getStatus())
                 .isEqualTo(PaymentOrderStatus.PENDING_CONFIRM.name());
 

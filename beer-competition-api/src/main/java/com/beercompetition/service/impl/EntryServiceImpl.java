@@ -35,6 +35,7 @@ import com.beercompetition.mapper.ScoreRecordMapper;
 import com.beercompetition.properties.StorageProperties;
 import com.beercompetition.properties.WechatPayProperties;
 import com.beercompetition.pojo.dto.AdminEntryStatusRequest;
+import com.beercompetition.pojo.dto.AdminOfflineRefundRequest;
 import com.beercompetition.pojo.dto.AdminEntryDeleteRequest;
 import com.beercompetition.pojo.dto.AdminEntryUpdateRequest;
 import com.beercompetition.pojo.dto.PortalEntryDeliverySubmitRequest;
@@ -55,6 +56,7 @@ import com.beercompetition.pojo.enums.JudgeAccountStatus;
 import com.beercompetition.pojo.enums.JudgeRoleType;
 import com.beercompetition.pojo.enums.JudgeTaskType;
 import com.beercompetition.pojo.enums.LogisticsVisibility;
+import com.beercompetition.pojo.enums.RefundApprovalMode;
 import com.beercompetition.pojo.enums.RoundStatus;
 import com.beercompetition.pojo.enums.RoundResultType;
 import com.beercompetition.pojo.enums.RoundType;
@@ -97,6 +99,7 @@ import com.beercompetition.pojo.vo.EntryPaymentVO;
 import com.beercompetition.pojo.vo.EntryRefundVO;
 import com.beercompetition.pojo.vo.EntrySummaryVO;
 import com.beercompetition.pojo.vo.FileDownloadVO;
+import com.beercompetition.pojo.vo.BankTransferVO;
 import com.beercompetition.pojo.vo.CompetitionLogisticsVO;
 import com.beercompetition.pojo.vo.JudgeEntryVO;
 import com.beercompetition.pojo.vo.PortalAwardEntryVO;
@@ -114,6 +117,7 @@ import com.beercompetition.pojo.vo.PortalScoreRecordVO;
 import com.beercompetition.service.CompetitionService;
 import com.beercompetition.service.EntryService;
 import com.beercompetition.service.EntryScanLabelService;
+import com.beercompetition.service.BankTransferPaymentService;
 import com.beercompetition.service.WechatPaymentService;
 import com.beercompetition.service.support.EntryLabelFileGenerator;
 import com.beercompetition.service.support.EntryLabelFileGenerator.LabelRenderItem;
@@ -200,6 +204,7 @@ public class EntryServiceImpl implements EntryService {
     private final ScoreRecordMapper scoreRecordMapper;
     private final CompetitionService competitionService;
     private final EntryScanLabelService entryScanLabelService;
+    private final BankTransferPaymentService bankTransferPaymentService;
     private final WechatPaymentService wechatPaymentService;
     private final EntryLabelFileGenerator entryLabelFileGenerator;
     private final ObjectMapper objectMapper;
@@ -215,30 +220,16 @@ public class EntryServiceImpl implements EntryService {
         int currentPage = Math.max(page == null ? 1 : page, 1);
         int currentPageSize = Math.min(Math.max(pageSize == null ? 30 : pageSize, 1), 100);
         String normalizedKeyword = normalizeNullable(keyword);
-        List<BeerEntry> entries = beerEntryMapper.selectList(new LambdaQueryWrapper<BeerEntry>()
-                .eq(competitionId != null, BeerEntry::getCompetitionId, competitionId)
-                .ne(BeerEntry::getStatus, EntryStatus.CANCELED.name())
-                .eq(StringUtils.hasText(status), BeerEntry::getStatus, status)
-                .eq(categoryId != null, BeerEntry::getCategoryId, categoryId)
-                .orderByDesc(BeerEntry::getId));
-        
-        // 2) 组装运营列表并执行复合筛选
-        List<AdminEntryVO> filtered = entries.stream()
-                .map(this::toAdminEntryVO)
-                .filter(item -> !StringUtils.hasText(paymentStatus) || paymentStatus.equals(item.getPaymentStatus()))
-                .filter(item -> !StringUtils.hasText(deliveryStatus) || deliveryStatus.equals(item.getDeliveryStatus()))
-                .filter(item -> !StringUtils.hasText(refundStatus) || refundStatus.equals(item.getRefundStatus()))
-                .filter(item -> assigned == null || assigned.equals(Boolean.TRUE.equals(item.getAssigned())))
-                .filter(item -> !StringUtils.hasText(normalizedKeyword) || matchesEntryKeyword(item, normalizedKeyword))
-                .sorted(Comparator.comparingInt(this::adminEntryDisplayPriority)
-                        .thenComparing(AdminEntryVO::getLastModifiedAt, Comparator.nullsLast(Comparator.reverseOrder()))
-                        .thenComparing(AdminEntryVO::getId, Comparator.nullsLast(Comparator.reverseOrder())))
-                .toList();
+        int offset = (currentPage - 1) * currentPageSize;
 
-        // 3) 内存分页并返回
-        int fromIndex = Math.min((currentPage - 1) * currentPageSize, filtered.size());
-        int toIndex = Math.min(fromIndex + currentPageSize, filtered.size());
-        return new PageResult<>(filtered.size(), filtered.subList(fromIndex, toIndex));
+        // 2) 由数据库完成关联、筛选、排序和分页，避免为当前页以外的酒款反复查询详情。
+        long total = beerEntryMapper.countAdminEntries(competitionId, status, paymentStatus, deliveryStatus,
+                categoryId, assigned, refundStatus, normalizedKeyword);
+        List<AdminEntryVO> records = total == 0
+                ? List.of()
+                : beerEntryMapper.selectAdminEntryPage(competitionId, status, paymentStatus, deliveryStatus,
+                categoryId, assigned, refundStatus, normalizedKeyword, offset, currentPageSize);
+        return new PageResult<>(total, records);
     }
 
     private int adminEntryDisplayPriority(AdminEntryVO entry) {
@@ -246,7 +237,8 @@ public class EntryServiceImpl implements EntryService {
             return 1;
         }
         if (EntryRefundStatus.REQUESTED.name().equals(entry.getRefundStatus())
-                || EntryRefundStatus.FAILED.name().equals(entry.getRefundStatus())) {
+                || EntryRefundStatus.FAILED.name().equals(entry.getRefundStatus())
+                || Boolean.TRUE.equals(entry.getCanConfirmOfflineRefund())) {
             return 0;
         }
         if (EntryRefundStatus.SUCCESS.name().equals(entry.getRefundStatus())
@@ -699,8 +691,9 @@ public class EntryServiceImpl implements EntryService {
         PortalAccount account = requirePortalAccount();
         BeerEntry entry = requireOwnedEntry(entryId, account.getBreweryId());
         Competition competition = competitionMapper.selectById(entry.getCompetitionId());
-        EntryPayment payment = ensureEntryPayment(entry.getId(), entry.getCompetitionId());
+        EntryPayment payment = lockEntryPayment(ensureEntryPayment(entry.getId(), entry.getCompetitionId()).getId());
         assertCanRequestRefund(entry, competition, payment);
+        RefundApprovalMode approvalMode = resolveRefundApprovalMode(competition);
 
         // 2) 创建退款申请记录
         EntryRefund refund = EntryRefund.builder()
@@ -710,12 +703,15 @@ public class EntryServiceImpl implements EntryService {
                 .refundNo(generateRefundNo())
                 .amount(payment.getAmount())
                 .status(EntryRefundStatus.REQUESTED.name())
+                .approvalModeSnapshot(approvalMode.name())
                 .reason(normalizeRequired(request.getReason(), "请填写退款原因"))
                 .requestedByPortalId(account.getId())
                 .requestedTime(LocalDateTime.now())
                 .build();
         entryRefundMapper.insert(refund);
-        scheduleRefundAutoApproval(refund.getId());
+        if (approvalMode == RefundApprovalMode.AUTO_APPROVE) {
+            scheduleRefundAutoApproval(refund.getId());
+        }
 
         // 3) 返回最新酒款详情
         return toEntryDetailVO(beerEntryMapper.selectById(entry.getId()));
@@ -1222,6 +1218,50 @@ public class EntryServiceImpl implements EntryService {
     }
 
     @Override
+    public void completeOfflineRefund(Long refundId, AdminEntryStatusRequest request) {
+        wechatPaymentService.completeOfflineRefund(refundId, normalizeStatusReason(request), BaseContext.getCurrentId());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void registerOfflineRefund(Long refundId, AdminOfflineRefundRequest request, MultipartFile voucher) {
+        EntryRefund refund = requireRefund(refundId);
+        if (!EntryRefundStatus.APPROVED.name().equals(refund.getStatus())) {
+            throw new BaseException("只有待线下退款的记录可以登记打款");
+        }
+        EntryPayment payment = entryPaymentMapper.selectById(refund.getEntryPaymentId());
+        if (!isManualRefundPayment(payment)) {
+            throw new BaseException("当前退款不是线下退款");
+        }
+        if (voucher == null || voucher.isEmpty()) {
+            throw new BaseException("请上传打款凭证");
+        }
+        String filename = sanitizeUploadFilename(voucher.getOriginalFilename(), "offline-refund-voucher.pdf");
+        byte[] bytes = readUploadBytes(voucher, "读取打款凭证失败");
+        String storagePath = fileStorageService.upload("OFFLINE_REFUND_VOUCHER", filename, bytes);
+        FileAsset asset = FileAsset.builder()
+                .businessType("OFFLINE_REFUND_VOUCHER")
+                .ownerType("ADMIN")
+                .ownerId(BaseContext.getCurrentId())
+                .storageProvider(storageProperties.getProvider())
+                .fileName(filename)
+                .storagePath(storagePath)
+                .publicUrl(resolveUploadPublicUrl(storagePath))
+                .createTime(LocalDateTime.now())
+                .build();
+        fileAssetMapper.insert(asset);
+
+        refund.setStatus(EntryRefundStatus.PROCESSING.name());
+        refund.setOfflineRefundVoucherAssetId(asset.getId());
+        refund.setProcessedByAdminId(BaseContext.getCurrentId());
+        refund.setProcessedTime(LocalDateTime.now());
+        refund.setFailReason(null);
+        entryRefundMapper.updateById(refund);
+        writeEntryLog("ENTRY_REFUND_REGISTER_OFFLINE", requireEntry(refund.getBeerEntryId()).getUuid(),
+                buildStatusLogSummary("登记线下打款", request.getReason()));
+    }
+
+    @Override
     public void retryRefund(Long refundId, AdminEntryStatusRequest request) {
         // 1) 委托微信支付服务重试失败退款
         wechatPaymentService.retryRefund(refundId, normalizeStatusReason(request), BaseContext.getCurrentId());
@@ -1342,6 +1382,8 @@ public class EntryServiceImpl implements EntryService {
                 .canCancel(canCancelEntry(entry, payment))
                 .canApproveRefund(canApproveRefund(refund))
                 .canRejectRefund(canRejectRefund(refund))
+                .canRetryRefund(canRetryRefund(refund, payment))
+                .canConfirmOfflineRefund(canConfirmOfflineRefund(refund, payment))
                 .canEdit(!EntryStatus.RESULT_PUBLISHED.name().equals(entry.getStatus()) && !resultPublished)
                 .traces(traces)
                 .build();
@@ -1357,6 +1399,7 @@ public class EntryServiceImpl implements EntryService {
         EntryScanLabel label = entryScanLabelService.requireActiveLabel(entry.getId());
         boolean resultPublished = isResultPublished(competition, entry);
         boolean assigned = hasRoundAssignment(entry.getId());
+        BankTransferVO bankTransfer = resolveBankTransfer(payment);
         return AdminEntryDetailVO.builder()
                 .id(entry.getId())
                 .uuid(entry.getUuid())
@@ -1376,7 +1419,14 @@ public class EntryServiceImpl implements EntryService {
                 .status(entry.getStatus())
                 .paymentStatus(resolvePaymentStatus(entry, payment))
                 .payment(toEntryPaymentVO(payment, competition))
+                .bankTransfer(bankTransfer)
                 .refund(toEntryRefundVO(refund))
+                .offlineRefundAccountName(refund == null ? null : refund.getOfflineRefundAccountName())
+                .offlineRefundBankName(refund == null ? null : refund.getOfflineRefundBankName())
+                .offlineRefundAccountNoLast4(refund == null ? null : refund.getOfflineRefundAccountNoLast4())
+                .offlineRefundTransferNo(refund == null ? null : refund.getOfflineRefundTransferNo())
+                .offlineRefundTime(refund == null ? null : refund.getOfflineRefundTime())
+                .offlineRefundVoucherAssetId(refund == null ? null : refund.getOfflineRefundVoucherAssetId())
                 .refundStatus(refund == null ? null : refund.getStatus())
                 .refundReason(refund == null ? null : refund.getReason())
                 .refundRequestedAt(refund == null ? null : refund.getRequestedTime())
@@ -1392,6 +1442,8 @@ public class EntryServiceImpl implements EntryService {
                 .canCancel(canCancelEntry(entry, payment))
                 .canApproveRefund(canApproveRefund(refund))
                 .canRejectRefund(canRejectRefund(refund))
+                .canRetryRefund(canRetryRefund(refund, payment))
+                .canConfirmOfflineRefund(canConfirmOfflineRefund(refund, payment))
                 .canEdit(!EntryStatus.RESULT_PUBLISHED.name().equals(entry.getStatus()) && !resultPublished)
                 .submittedAt(entry.getCreateTime())
                 .extraFields(listExtraFields(entry.getId()))
@@ -1667,7 +1719,8 @@ public class EntryServiceImpl implements EntryService {
                 .refundReason(refund == null ? null : refund.getReason())
                 .refundRequestedAt(refund == null ? null : refund.getRequestedTime())
                 .refundProcessedAt(refund == null ? null : refund.getProcessedTime())
-                .canRequestRefund(canRequestRefund(entry, competition, payment, refund, resultPublished))
+                .refundApprovalMode(resolveRefundApprovalMode(competition).name())
+                .canRequestRefund(canRequestRefund(entry, competition, payment, refund))
                 .canUpdateInfo(canUpdateInfo)
                 .updateInfoDisabledReason(canUpdateInfo ? null : resolvePortalEntryUpdateUnavailableReason(entry, competition))
                 .delivery(toEntryDeliveryVO(delivery))
@@ -1725,7 +1778,8 @@ public class EntryServiceImpl implements EntryService {
                 .refundReason(refund == null ? null : refund.getReason())
                 .refundRequestedAt(refund == null ? null : refund.getRequestedTime())
                 .refundProcessedAt(refund == null ? null : refund.getProcessedTime())
-                .canRequestRefund(canRequestRefund(entry, competition, payment, refund, resultPublished))
+                .refundApprovalMode(resolveRefundApprovalMode(competition).name())
+                .canRequestRefund(canRequestRefund(entry, competition, payment, refund))
                 .canUpdateInfo(canUpdateInfo)
                 .updateInfoDisabledReason(canUpdateInfo ? null : resolvePortalEntryUpdateUnavailableReason(entry, competition))
                 .delivery(toEntryDeliveryVO(delivery))
@@ -2207,12 +2261,21 @@ public class EntryServiceImpl implements EntryService {
     }
 
     private boolean canApproveRefund(EntryRefund refund) {
-        return refund != null && (EntryRefundStatus.REQUESTED.name().equals(refund.getStatus())
-                || EntryRefundStatus.FAILED.name().equals(refund.getStatus()));
+        return refund != null && EntryRefundStatus.REQUESTED.name().equals(refund.getStatus());
     }
 
     private boolean canRejectRefund(EntryRefund refund) {
         return refund != null && EntryRefundStatus.REQUESTED.name().equals(refund.getStatus());
+    }
+
+    private boolean canRetryRefund(EntryRefund refund, EntryPayment payment) {
+        return refund != null && EntryRefundStatus.FAILED.name().equals(refund.getStatus())
+                && !isManualRefundPayment(payment);
+    }
+
+    private boolean canConfirmOfflineRefund(EntryRefund refund, EntryPayment payment) {
+        return refund != null && EntryRefundStatus.PROCESSING.name().equals(refund.getStatus())
+                && isManualRefundPayment(payment);
     }
 
     private boolean canUnmarkStored(BeerEntry entry, Competition competition, EntryRefund refund) {
@@ -2313,15 +2376,14 @@ public class EntryServiceImpl implements EntryService {
     }
 
     private void assertCanRequestRefund(BeerEntry entry, Competition competition, EntryPayment payment) {
-        boolean resultPublished = isResultPublished(competition, entry);
         EntryRefund latestRefund = findLatestRefund(entry.getId());
-        if (!canRequestRefund(entry, competition, payment, latestRefund, resultPublished)) {
-            throw new BaseException(resolveRefundUnavailableReason(entry, competition, payment, latestRefund, resultPublished));
+        if (!canRequestRefund(entry, competition, payment, latestRefund)) {
+            throw new BaseException(resolveRefundUnavailableReason(entry, competition, payment, latestRefund));
         }
     }
 
     private boolean canRequestRefund(BeerEntry entry, Competition competition, EntryPayment payment,
-                                     EntryRefund refund, boolean resultPublished) {
+                                     EntryRefund refund) {
         if (entry == null || competition == null || payment == null) {
             return false;
         }
@@ -2338,7 +2400,7 @@ public class EntryServiceImpl implements EntryService {
     }
 
     private String resolveRefundUnavailableReason(BeerEntry entry, Competition competition, EntryPayment payment,
-                                                  EntryRefund refund, boolean resultPublished) {
+                                                  EntryRefund refund) {
         if (entry == null || competition == null || payment == null) {
             return "当前酒款不能申请退款";
         }
@@ -2378,6 +2440,10 @@ public class EntryServiceImpl implements EntryService {
             return;
         }
         wechatPaymentService.autoApproveRefund(refundId, "报名截止前自动受理");
+    }
+
+    private RefundApprovalMode resolveRefundApprovalMode(Competition competition) {
+        return RefundApprovalMode.of(competition == null ? null : competition.getRefundApprovalMode());
     }
 
     private EntryDelivery findEntryDelivery(Long beerEntryId) {
@@ -2504,6 +2570,21 @@ public class EntryServiceImpl implements EntryService {
         return created;
     }
 
+    private EntryPayment lockEntryPayment(Long paymentId) {
+        EntryPayment payment = entryPaymentMapper.selectOne(new LambdaQueryWrapper<EntryPayment>()
+                .eq(EntryPayment::getId, paymentId)
+                .last("FOR UPDATE"));
+        if (payment == null) {
+            throw new ResourceNotFoundException("支付记录不存在");
+        }
+        return payment;
+    }
+
+    private boolean isManualRefundPayment(EntryPayment payment) {
+        return payment != null && (EntryPayMethod.BANK_TRANSFER.name().equals(payment.getPayMethod())
+                || EntryPayMethod.MANUAL.name().equals(payment.getPayMethod()));
+    }
+
     private void assertStandalonePaymentAction(EntryPayment payment, String message) {
         if (payment != null && payment.getPaymentOrderId() != null) {
             throw new BaseException(message);
@@ -2612,6 +2693,18 @@ public class EntryServiceImpl implements EntryService {
         return paymentOrderMapper.selectById(payment.getPaymentOrderId());
     }
 
+    private BankTransferVO resolveBankTransfer(EntryPayment payment) {
+        if (payment == null) {
+            return null;
+        }
+        Long transferId = payment.getBankTransferId();
+        if (transferId == null && payment.getPaymentOrderId() != null) {
+            PaymentOrder order = paymentOrderMapper.selectById(payment.getPaymentOrderId());
+            transferId = order == null ? null : order.getBankTransferId();
+        }
+        return transferId == null ? null : bankTransferPaymentService.getAdminTransfer(transferId);
+    }
+
     private EntryRefundVO toEntryRefundVO(EntryRefund refund) {
         if (refund == null) {
             return null;
@@ -2623,6 +2716,7 @@ public class EntryServiceImpl implements EntryService {
                 .refundNo(refund.getRefundNo())
                 .amount(refund.getAmount())
                 .status(refund.getStatus())
+                .approvalModeSnapshot(refund.getApprovalModeSnapshot())
                 .reason(refund.getReason())
                 .requestedByPortalId(refund.getRequestedByPortalId())
                 .requestedTime(refund.getRequestedTime())

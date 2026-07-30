@@ -28,6 +28,7 @@ import com.beercompetition.mapper.ScoreRecordMapper;
 import com.beercompetition.pojo.dto.CompetitionBaseInfoUpdateRequest;
 import com.beercompetition.pojo.dto.CompetitionCreateRequest;
 import com.beercompetition.pojo.dto.CompetitionReopenRegistrationRequest;
+import com.beercompetition.pojo.dto.CompetitionRefundPolicyUpdateRequest;
 import com.beercompetition.pojo.dto.CompetitionReturnToSampleCheckRequest;
 import com.beercompetition.pojo.dto.CompetitionStyleLibraryUpdateRequest;
 import com.beercompetition.pojo.dto.ConfigNameBatchUpdateRequest;
@@ -47,6 +48,7 @@ import com.beercompetition.pojo.enums.AwardResultStatus;
 import com.beercompetition.pojo.enums.AwardType;
 import com.beercompetition.pojo.enums.JudgeRoleType;
 import com.beercompetition.pojo.enums.LogisticsVisibility;
+import com.beercompetition.pojo.enums.RefundApprovalMode;
 import com.beercompetition.pojo.enums.RoundStatus;
 import com.beercompetition.pojo.enums.RoundResultType;
 import com.beercompetition.pojo.enums.RoundTargetMode;
@@ -361,6 +363,7 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .entryFee(request.getEntryFee())
                 .earlyBirdFee(request.getEarlyBirdFee())
                 .earlyBirdDeadline(request.getEarlyBirdDeadline())
+                .refundApprovalMode(RefundApprovalMode.of(request.getRefundApprovalMode()).name())
                 .description(normalizeRequired(request.getDescription(), "赛事简介不能为空"))
                 .rulesUrl(normalizeRulesUrl(request.getRulesUrl()))
                 .styleLibraryVersion(styleLibraryVersion)
@@ -464,6 +467,25 @@ public class CompetitionServiceImpl implements CompetitionService {
         }
 
         // 4) 重新计算配置检查并返回详情
+        return getCompetitionDetail(id);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public CompetitionDetailVO updateRefundPolicy(Long id, CompetitionRefundPolicyUpdateRequest request) {
+        Competition competition = getCompetitionOrThrow(id);
+        LocalDateTime now = LocalDateTime.now();
+        if (!isRefundPolicyEditable(competition, now)) {
+            throw new BaseException("退款申请时间已截止，审批方式不能修改");
+        }
+        String oldMode = resolveRefundApprovalMode(competition).name();
+        String newMode = RefundApprovalMode.of(request.getRefundApprovalMode()).name();
+        if (Objects.equals(oldMode, newMode)) {
+            return getCompetitionDetail(id);
+        }
+        competition.setRefundApprovalMode(newMode);
+        competitionMapper.updateById(competition);
+        writeRefundPolicyLog(competition.getId(), oldMode, newMode);
         return getCompetitionDetail(id);
     }
 
@@ -1888,6 +1910,7 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .entryFee(competition.getEntryFee())
                 .earlyBirdFee(competition.getEarlyBirdFee())
                 .earlyBirdDeadline(competition.getEarlyBirdDeadline())
+                .refundApprovalMode(resolveRefundApprovalMode(competition).name())
                 .description(competition.getDescription())
                 .rulesUrl(competition.getRulesUrl())
                 .styleLibraryVersion(competition.getStyleLibraryVersion())
@@ -1996,6 +2019,9 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .entryFee(competition.getEntryFee())
                 .earlyBirdFee(competition.getEarlyBirdFee())
                 .earlyBirdDeadline(competition.getEarlyBirdDeadline())
+                .refundApprovalMode(resolveRefundApprovalMode(competition).name())
+                .refundPolicyEditable(isRefundPolicyEditable(competition, LocalDateTime.now()))
+                .refundPolicyEditableUntil(competition.getRegistrationDeadline())
                 .description(competition.getDescription())
                 .rulesUrl(competition.getRulesUrl())
                 .styleLibraryVersion(competition.getStyleLibraryVersion())
@@ -2042,6 +2068,7 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .entryFee(competition.getEntryFee())
                 .earlyBirdFee(competition.getEarlyBirdFee())
                 .earlyBirdDeadline(competition.getEarlyBirdDeadline())
+                .refundApprovalMode(resolveRefundApprovalMode(competition).name())
                 .description(competition.getDescription())
                 .rulesUrl(competition.getRulesUrl())
                 .styleLibraryVersion(competition.getStyleLibraryVersion())
@@ -2073,6 +2100,7 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .entryFee(competition.getEntryFee())
                 .earlyBirdFee(competition.getEarlyBirdFee())
                 .earlyBirdDeadline(competition.getEarlyBirdDeadline())
+                .refundApprovalMode(resolveRefundApprovalMode(competition).name())
                 .description(competition.getDescription())
                 .rulesUrl(competition.getRulesUrl())
                 .logistics(toPublicCompetitionLogisticsVO(competition))
@@ -2859,11 +2887,24 @@ public class CompetitionServiceImpl implements CompetitionService {
         scopes.put("styleLibrary", draft || status == CompetitionStatus.REGISTRATION_OPEN);
         scopes.put("styles", draft || status == CompetitionStatus.REGISTRATION_OPEN);
         scopes.put("entryFields", draft || status == CompetitionStatus.REGISTRATION_OPEN);
+        scopes.put("refundPolicy", isRefundPolicyEditable(competition, LocalDateTime.now()));
         scopes.put("judgeConfig", judgeConfig);
         scopes.put("judgeTables", judgeConfig);
         scopes.put("scoreConfigs", judgeConfig);
         scopes.put("resultConfig", status == CompetitionStatus.RESULT_CONFIRMING);
         return scopes;
+    }
+
+    private RefundApprovalMode resolveRefundApprovalMode(Competition competition) {
+        return RefundApprovalMode.of(competition == null ? null : competition.getRefundApprovalMode());
+    }
+
+    private boolean isRefundPolicyEditable(Competition competition, LocalDateTime now) {
+        if (competition == null || parseStatus(competition) == CompetitionStatus.ARCHIVED
+                || competition.getRegistrationDeadline() == null) {
+            return false;
+        }
+        return !now.isAfter(competition.getRegistrationDeadline());
     }
 
     private void assertBaseInfoEditable(Competition competition, CompetitionBaseInfoUpdateRequest request) {
@@ -3070,6 +3111,21 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .targetType(LOG_TARGET_COMPETITION)
                 .targetPublicId(String.valueOf(competitionId))
                 .summary(writeObjectJson(payload, "保存比赛阶段操作日志失败"))
+                .createTime(LocalDateTime.now())
+                .build());
+    }
+
+    private void writeRefundPolicyLog(Long competitionId, String oldMode, String newMode) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("action", "修改退款审批方式");
+        payload.put("oldMode", oldMode);
+        payload.put("newMode", newMode);
+        adminOperationLogMapper.insert(AdminOperationLog.builder()
+                .adminUserId(BaseContext.getCurrentId())
+                .action("COMPETITION_REFUND_POLICY_UPDATE")
+                .targetType(LOG_TARGET_COMPETITION)
+                .targetPublicId(String.valueOf(competitionId))
+                .summary(writeObjectJson(payload, "保存退款规则操作日志失败"))
                 .createTime(LocalDateTime.now())
                 .build());
     }

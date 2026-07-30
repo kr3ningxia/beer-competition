@@ -4,7 +4,10 @@ import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ForbiddenException;
 import com.beercompetition.pojo.dto.AdminBankTransferProcessRequest;
+import com.beercompetition.pojo.dto.AdminEntryStatusRequest;
+import com.beercompetition.pojo.dto.AdminOfflineRefundRequest;
 import com.beercompetition.pojo.dto.PortalBankTransferSubmitRequest;
+import com.beercompetition.pojo.dto.PortalEntryRefundRequest;
 import com.beercompetition.pojo.enums.BankTransferPaymentStatus;
 import com.beercompetition.pojo.enums.EntryPayMethod;
 import com.beercompetition.pojo.enums.EntryPaymentStatus;
@@ -14,6 +17,7 @@ import com.beercompetition.testsupport.BeerCompetitionTestData;
 import com.beercompetition.testsupport.IntegrationTestBase;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.mock.web.MockMultipartFile;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -203,7 +207,7 @@ class BankTransferPaymentIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
-    void bankTransferRefundIsCompletedAsManualRefundWithoutWechatRetry() {
+    void bankTransferAutoApprovedRefundWaitsForOfflineCompletion() {
         BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
         var entry = createPendingEntry(fixture, "线下退款");
 
@@ -213,18 +217,28 @@ class BankTransferPaymentIntegrationTest extends IntegrationTestBase {
         asAdmin(1L);
         bankTransferPaymentService.confirmTransfer(submitted.getId(), new AdminBankTransferProcessRequest());
 
-        Long paymentId = jdbcTemplate.queryForObject("SELECT id FROM entry_payment WHERE beer_entry_id = ?",
-                Long.class, entry.getId());
-        jdbcTemplate.update("""
-                INSERT INTO entry_refund
-                  (beer_entry_id, entry_payment_id, refund_no, amount, status, reason,
-                   requested_by_portal_id, requested_time)
-                VALUES (?, ?, ?, 100.00, 'REQUESTED', '测试退款', ?, NOW())
-                """, entry.getId(), paymentId, testRun + "-RF-BANK", fixture.portalA().account().getId());
-        Long refundId = jdbcTemplate.queryForObject("SELECT id FROM entry_refund WHERE refund_no = ?",
-                Long.class, testRun + "-RF-BANK");
+        asPortal(fixture.portalA().account().getId());
+        PortalEntryRefundRequest refundRequest = new PortalEntryRefundRequest();
+        refundRequest.setReason("测试退款");
+        entryService.requestPortalEntryRefund(entry.getId(), refundRequest);
+        Long refundId = jdbcTemplate.queryForObject(
+                "SELECT id FROM entry_refund WHERE beer_entry_id = ? ORDER BY id DESC LIMIT 1",
+                Long.class,
+                entry.getId());
 
-        entryService.approveRefund(refundId, null);
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM entry_refund WHERE id = ?",
+                String.class, refundId)).isEqualTo(EntryRefundStatus.APPROVED.name());
+        assertPayment(entry.getId(), EntryPaymentStatus.PAID, EntryPayMethod.BANK_TRANSFER, submitted.getId());
+        assertThatEntryStatus(entry.getId(), EntryStatus.REGISTERED);
+
+        asAdmin(1L);
+        AdminOfflineRefundRequest offlineRequest = new AdminOfflineRefundRequest();
+        offlineRequest.setReason("线下退款测试");
+        entryService.registerOfflineRefund(refundId, offlineRequest,
+                new MockMultipartFile("voucher", "refund.png", "image/png", new byte[]{1, 2, 3}));
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM entry_refund WHERE id = ?",
+                String.class, refundId)).isEqualTo(EntryRefundStatus.PROCESSING.name());
+        entryService.completeOfflineRefund(refundId, new AdminEntryStatusRequest());
 
         assertThat(jdbcTemplate.queryForObject("SELECT status FROM entry_refund WHERE id = ?",
                 String.class, refundId)).isEqualTo(EntryRefundStatus.SUCCESS.name());

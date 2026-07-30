@@ -362,6 +362,11 @@ INSERT INTO `competition` VALUES (1,'BC-2026','2026 大湾区精酿啤酒大赛'
 /*!40000 ALTER TABLE `competition` ENABLE KEYS */;
 UNLOCK TABLES;
 
+ALTER TABLE `competition`
+  ADD COLUMN `refund_approval_mode` varchar(32) NOT NULL DEFAULT 'AUTO_APPROVE'
+    COMMENT '退款申请审批方式：AUTO_APPROVE、MANUAL_REVIEW'
+    AFTER `early_bird_deadline`;
+
 --
 -- Table structure for table `competition_category`
 --
@@ -745,6 +750,20 @@ LOCK TABLES `entry_refund` WRITE;
 INSERT INTO `entry_refund` VALUES (1,41021,41021,'RF-608C684930C2475C9246834F',99.00,'SUCCESS','不想要了',2,'2026-06-10 15:48:23',1,'2026-06-10 16:14:08','2026-06-10 16:14:08',NULL,NULL,NULL,NULL,NULL,NULL,NULL,'2026-06-10 15:48:23','2026-06-10 15:48:23'),(2,41022,41022,'RF-181CAE4BEFA141029C6E2B7E',99.00,'REJECTED','信息填错了',2,'2026-06-10 16:20:01',1,'2026-06-10 16:23:51',NULL,'我们直接帮您这边改就行',NULL,NULL,NULL,NULL,NULL,NULL,'2026-06-10 16:20:01','2026-06-10 16:20:01'),(3,41022,41022,'RF-8781E32731294EFD9E14B2F2',99.00,'SUCCESS','还是要退',2,'2026-06-10 16:24:06',1,'2026-06-10 16:24:17','2026-06-10 16:24:17',NULL,NULL,NULL,NULL,NULL,NULL,NULL,'2026-06-10 16:24:06','2026-06-10 16:24:06'),(50,43507,43507,'RF-BC24062246AE423199CF10DD',0.01,'SUCCESS','组别错误',1,'2026-06-26 06:26:31',1,'2026-06-26 06:27:07','2026-06-26 14:27:10',NULL,'50303707672026062620494079728','SUCCESS','WRF17824552267016620B366',NULL,'{\"id\": \"9f8685fd-1a75-589a-a17b-9ee87c1273c1\", \"summary\": \"退款成功\", \"resource\": {\"nonce\": \"iMDlJefcpfBl\", \"algorithm\": \"AEAD_AES_256_GCM\", \"ciphertext\": \"kYK3kt40gVRVN43n0Z1W0NwidJy8OkMco+i6TkhC5VfUfsFHOmpX3OSlKQ8Ho32FS7iJ7xg9rWhn+nFvLukINFvUWqelVhV0d7SJfSufBshrLHQ1ziNJEqSEdRY5V4iJq45aVVGOvIgspWuIDTaZj0bTSQ0wxkvreRCZq6QlDpcHUKAwgO2Lqexo/qcgiwlVGuOE0sppYNbfzqeZqjH87kwR+1Ieoh8el2SLfX9f7CnrPo2HKU0mpJUgljECcixLU9+6c8cg9JadvTALdunGHwlAXQNgtBOwAxvEla4zrplS4W0zRGFSkO1beE+p2imjezPvtLhyoVj+vz/tzKorrDCK/T9DLPpNGdwpQcc8r3BaJSb9VsjWxxjgVaz3y6CM4wGOcfQsjzpJoKKcVm6M1oVq57jFnnyzgQxD1tRmzAg5UH5vdqX+nlC0y52l8WGT/ttvrYlh8oTXjkp3F36y1dTtkOmqC8LZMiczf9/2X75lqgTzQ9RO01oy803tzthVlSmPDx1S120J\", \"original_type\": \"refund\", \"associated_data\": \"refund\"}, \"event_type\": \"REFUND.SUCCESS\", \"create_time\": \"2026-06-26T14:27:10+08:00\", \"resource_type\": \"encrypt-resource\"}','2026-06-26 06:27:13','2026-06-26 14:26:30','2026-06-26 14:26:30'),(51,43508,43508,'RF-FE1EAAF4EE73480485464D38',0.01,'SUCCESS','没酿好',1462,'2026-07-01 08:18:07',1,'2026-07-01 08:20:01','2026-07-01 16:20:04',NULL,'50301507692026070173750900796','SUCCESS','WRF17828940009720C3994EE',NULL,'{\"id\": \"4edaa571-22b6-5fec-a50a-3cc9369b177c\", \"summary\": \"退款成功\", \"resource\": {\"nonce\": \"0B5tlycgi4yY\", \"algorithm\": \"AEAD_AES_256_GCM\", \"ciphertext\": \"A6SOkYarAp/UM6t/zf4HS8SnHBSEa0qSCjY+xwvvfWKknJIP+7w68qKJpkUf71Qs5EZFxtu5kZ8a+nj+IZ7UZuCHbJre5xpw+f1+6wc6GP6g/T8zlXnsRlL8Cihx91tx0dCS+f1/8qRoy10JoV+WVFl+AYsIayl2bh+LNHAdC7N+7yg5q/xzd5sMvl/4qfXyAAAxz9jMO+A+J7pxmrCefFuy0SaNDb3auGKPGDmmM2tYuex7GI1pLSQ4dpuzKj1YzaEM9A3Uo2v6xbubKeD/4ik+buGB8XjOXFPgrOjpUHxD+dpd1ZorrnNjkKDoR1dFWwgKtbiNMCQL/aKPzYHQG8kZmufRWHqiftrPOV2TT8dR+16YVNflounLC8GMd7V5Z/lLlorxxfbsfqCBSBgRhofdkpx28gA7kAd7EaUSEfhe8n+aoVw/UW/xmq64X1kiLMW0ss1VwmbidD6zNYasKi4SBdoOEdJDSLyD85f3fIEIFsgSHf4Z/32bwAXPENwlMugAlI+tIkIQ8+ZI\", \"original_type\": \"refund\", \"associated_data\": \"refund\"}, \"event_type\": \"REFUND.SUCCESS\", \"create_time\": \"2026-07-01T16:20:04+08:00\", \"resource_type\": \"encrypt-resource\"}','2026-07-01 08:20:08','2026-07-01 16:18:07','2026-07-01 16:18:07');
 /*!40000 ALTER TABLE `entry_refund` ENABLE KEYS */;
 UNLOCK TABLES;
+
+ALTER TABLE `entry_refund`
+  ADD COLUMN `approval_mode_snapshot` varchar(32) DEFAULT NULL
+    COMMENT '申请退款时比赛采用的审批方式'
+    AFTER `status`;
+
+ALTER TABLE `entry_refund`
+  ADD COLUMN `offline_refund_account_name` varchar(128) DEFAULT NULL COMMENT '线下退款收款人' AFTER `approval_mode_snapshot`,
+  ADD COLUMN `offline_refund_bank_name` varchar(128) DEFAULT NULL COMMENT '线下退款收款银行' AFTER `offline_refund_account_name`,
+  ADD COLUMN `offline_refund_account_no_enc` varchar(512) DEFAULT NULL COMMENT '线下退款收款账号密文' AFTER `offline_refund_bank_name`,
+  ADD COLUMN `offline_refund_account_no_last4` varchar(8) DEFAULT NULL COMMENT '线下退款收款账号后四位' AFTER `offline_refund_account_no_enc`,
+  ADD COLUMN `offline_refund_transfer_no` varchar(128) DEFAULT NULL COMMENT '线下退款流水号' AFTER `offline_refund_account_no_last4`,
+  ADD COLUMN `offline_refund_time` datetime DEFAULT NULL COMMENT '实际线下打款时间' AFTER `offline_refund_transfer_no`,
+  ADD COLUMN `offline_refund_voucher_asset_id` bigint DEFAULT NULL COMMENT '线下退款打款凭证文件ID' AFTER `offline_refund_time`;
 
 --
 -- Table structure for table `entry_scan_label`

@@ -98,6 +98,34 @@
               </div>
             </section>
 
+            <section class="form-subgroup refund-policy-group">
+              <div class="subgroup-heading">
+                <h3>退款审批</h3>
+                <el-tooltip
+                  content="报名截止前可调整；修改后仅影响新提交的退款申请。银行转账退款仍需确认实际退款完成。"
+                  placement="top"
+                >
+                  <button class="hint-marker" type="button" aria-label="查看退款审批说明">?</button>
+                </el-tooltip>
+              </div>
+              <div class="refund-mode-switch" role="radiogroup" aria-label="退款审批方式">
+                <button
+                  :class="{ active: draft.refundApprovalMode === 'AUTO_APPROVE' }"
+                  type="button"
+                  @click="draft.refundApprovalMode = 'AUTO_APPROVE'"
+                >
+                  自动同意
+                </button>
+                <button
+                  :class="{ active: draft.refundApprovalMode === 'MANUAL_REVIEW' }"
+                  type="button"
+                  @click="draft.refundApprovalMode = 'MANUAL_REVIEW'"
+                >
+                  管理员审批
+                </button>
+              </div>
+            </section>
+
             <section class="form-subgroup">
               <h3>赛事展示</h3>
               <label class="wide-field">
@@ -436,6 +464,10 @@
                   <dd>{{ formatDateTime(draft.earlyBirdDeadline) }}</dd>
                 </div>
                 <div>
+                  <dt>退款审批</dt>
+                  <dd>{{ refundApprovalModeLabel }}</dd>
+                </div>
+                <div>
                   <dt>赛事简介</dt>
                   <dd>{{ draft.description || '-' }}</dd>
                 </div>
@@ -522,7 +554,8 @@ const draft = reactive({
   entryFee: 199,
   earlyBirdFee: 159,
   earlyBirdDeadline: '2026-06-30T18:00',
-  description: '面向精酿厂牌的综合赛事，适合提交稳定量产款和年度新品',
+  refundApprovalMode: 'AUTO_APPROVE',
+  description: '',
   rulesUrl: 'https://mp.weixin.qq.com/s/iGxSnomHIXvdOyMO9xgd2Q',
   deliveryMethod: 'BOTH',
   sampleArrivalStart: '2026-08-10T10:00',
@@ -568,6 +601,7 @@ const reviewItems = computed(() => buildReviewItems(draft))
 const reviewBlockingItems = computed(() => reviewItems.value.filter((item) => item.status !== 'done'))
 const reviewBlockingText = computed(() => `请先处理：${reviewBlockingItems.value.map((item) => item.label).join('、')}`)
 const competitionTypeLabel = computed(() => competitionTypeOptions.find((item) => item.value === draft.competitionType)?.label || '正式评奖比赛')
+const refundApprovalModeLabel = computed(() => draft.refundApprovalMode === 'MANUAL_REVIEW' ? '管理员审批' : '自动同意')
 const reviewReadyText = computed(() => (
   draft.competitionType === 'FEEDBACK_ONLY'
     ? '保存后进入工作台配置评审桌、首轮评审和诊断发布'
@@ -657,6 +691,7 @@ async function submitDraft() {
       entryFee: Number(draft.entryFee || 0),
       earlyBirdFee: draft.earlyBirdFee === '' || draft.earlyBirdFee === null ? null : Number(draft.earlyBirdFee),
       earlyBirdDeadline: toBackendDateTime(draft.earlyBirdDeadline),
+      refundApprovalMode: draft.refundApprovalMode,
       description: draft.description,
       rulesUrl: draft.rulesUrl || null,
       deliveryMethod: draft.deliveryMethod,
@@ -855,6 +890,7 @@ function toDraftSnapshot(source) {
     entryFee: source.entryFee,
     earlyBirdFee: source.earlyBirdFee,
     earlyBirdDeadline: source.earlyBirdDeadline,
+    refundApprovalMode: source.refundApprovalMode,
     description: source.description,
     rulesUrl: source.rulesUrl,
     deliveryMethod: source.deliveryMethod,
@@ -1365,6 +1401,58 @@ h1 {
   color: #c7d5db;
   font-size: 13px;
   line-height: 1.2;
+}
+
+.subgroup-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.hint-marker {
+  display: inline-grid;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  place-items: center;
+  color: var(--muted);
+  border: 1px solid rgba(219, 232, 237, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: help;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.hint-marker:hover,
+.hint-marker:focus-visible {
+  color: var(--gold-soft);
+  border-color: rgba(224, 184, 74, 0.48);
+  outline: none;
+}
+
+.refund-mode-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(140px, 1fr));
+  gap: 8px;
+  max-width: 420px;
+}
+
+.refund-mode-switch button {
+  min-height: 40px;
+  padding: 9px 14px;
+  color: #c7d5db;
+  border: 1px solid rgba(219, 232, 237, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  cursor: pointer;
+}
+
+.refund-mode-switch button.active {
+  color: #10191d;
+  border-color: rgba(224, 184, 74, 0.78);
+  background: var(--gold-soft);
 }
 
 .competition-type-switch {

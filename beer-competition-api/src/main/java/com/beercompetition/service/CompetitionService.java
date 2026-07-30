@@ -3,6 +3,7 @@ package com.beercompetition.service;
 import com.beercompetition.pojo.dto.CompetitionCreateRequest;
 import com.beercompetition.pojo.dto.CompetitionBaseInfoUpdateRequest;
 import com.beercompetition.pojo.dto.CompetitionReopenRegistrationRequest;
+import com.beercompetition.pojo.dto.CompetitionRefundPolicyUpdateRequest;
 import com.beercompetition.pojo.dto.CompetitionReturnToSampleCheckRequest;
 import com.beercompetition.pojo.dto.CompetitionStyleLibraryUpdateRequest;
 import com.beercompetition.pojo.dto.ConfigNameBatchUpdateRequest;
@@ -41,6 +42,8 @@ public interface CompetitionService {
     void deleteCompetition(Long id);
 
     CompetitionDetailVO updateBaseInfo(Long id, CompetitionBaseInfoUpdateRequest request);
+
+    CompetitionDetailVO updateRefundPolicy(Long id, CompetitionRefundPolicyUpdateRequest request);
 
     CompetitionDetailVO updateCategories(Long id, ConfigNameBatchUpdateRequest request);
 

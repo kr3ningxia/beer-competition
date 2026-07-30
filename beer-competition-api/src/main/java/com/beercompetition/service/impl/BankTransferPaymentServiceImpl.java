@@ -39,8 +39,10 @@ import com.beercompetition.pojo.po.EntryScanLabel;
 import com.beercompetition.pojo.po.FileAsset;
 import com.beercompetition.pojo.po.PortalAccount;
 import com.beercompetition.pojo.po.PaymentOrder;
+import com.beercompetition.pojo.po.PaymentOrderItem;
 import com.beercompetition.pojo.po.RegistrationBatch;
 import com.beercompetition.pojo.vo.BankTransferAccountVO;
+import com.beercompetition.pojo.vo.BankTransferEntryVO;
 import com.beercompetition.pojo.vo.BankTransferVO;
 import com.beercompetition.pojo.vo.BankTransferVoucherVO;
 import com.beercompetition.pojo.vo.FileDownloadVO;
@@ -506,13 +508,14 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
         PaymentOrder order = transfer.getPaymentOrderId() == null ? null : paymentOrderMapper.selectById(transfer.getPaymentOrderId());
         RegistrationBatch batch = order == null ? null : registrationBatchMapper.selectById(order.getRegistrationBatchId());
         int entryCount = order == null ? 1 : Math.toIntExact(paymentOrderItemMapper.selectCount(
-                new LambdaQueryWrapper<com.beercompetition.pojo.po.PaymentOrderItem>()
-                        .eq(com.beercompetition.pojo.po.PaymentOrderItem::getPaymentOrderId, order.getId())));
+                new LambdaQueryWrapper<PaymentOrderItem>()
+                        .eq(PaymentOrderItem::getPaymentOrderId, order.getId())));
         CompetitionCategory category = !includeDetails || entry == null ? null : competitionCategoryMapper.selectById(entry.getCategoryId());
         EntryScanLabel label = !includeDetails || entry == null ? null : entryScanLabelMapper.selectOne(new LambdaQueryWrapper<EntryScanLabel>()
                 .eq(EntryScanLabel::getBeerEntryId, entry.getId())
                 .eq(EntryScanLabel::getStatus, EntryScanLabelStatus.ACTIVE.name())
                 .last("LIMIT 1"));
+        List<BankTransferEntryVO> entries = includeDetails ? resolveTransferEntries(order, entry, transfer.getAmount()) : List.of();
         return BankTransferVO.builder()
                 .id(transfer.getId())
                 .transferNo(transfer.getTransferNo())
@@ -532,6 +535,7 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
                 .style(entry == null ? null : entry.getStyle())
                 .amount(transfer.getAmount())
                 .entryCount(entryCount)
+                .entries(entries)
                 .payerName(transfer.getPayerName())
                 .transferTime(transfer.getTransferTime())
                 .remark(transfer.getRemark())
@@ -543,6 +547,40 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
                 .adminNote(transfer.getAdminNote())
                 .submittedTime(transfer.getSubmittedTime())
                 .processedTime(transfer.getProcessedTime())
+                .build();
+    }
+
+    private List<BankTransferEntryVO> resolveTransferEntries(PaymentOrder order, BeerEntry legacyEntry,
+                                                              BigDecimal legacyAmount) {
+        if (order == null) {
+            BankTransferEntryVO entry = toBankTransferEntryVO(legacyEntry, legacyAmount);
+            return entry == null ? List.of() : List.of(entry);
+        }
+        return paymentOrderItemMapper.selectList(new LambdaQueryWrapper<PaymentOrderItem>()
+                        .eq(PaymentOrderItem::getPaymentOrderId, order.getId())
+                        .orderByAsc(PaymentOrderItem::getId))
+                .stream()
+                .map(item -> toBankTransferEntryVO(beerEntryMapper.selectById(item.getBeerEntryId()), item.getAmount()))
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    private BankTransferEntryVO toBankTransferEntryVO(BeerEntry entry, BigDecimal amount) {
+        if (entry == null) {
+            return null;
+        }
+        CompetitionCategory category = competitionCategoryMapper.selectById(entry.getCategoryId());
+        EntryScanLabel label = entryScanLabelMapper.selectOne(new LambdaQueryWrapper<EntryScanLabel>()
+                .eq(EntryScanLabel::getBeerEntryId, entry.getId())
+                .eq(EntryScanLabel::getStatus, EntryScanLabelStatus.ACTIVE.name())
+                .last("LIMIT 1"));
+        return BankTransferEntryVO.builder()
+                .entryId(entry.getId())
+                .entryName(entry.getName())
+                .shortCode(label == null ? null : label.getShortCode())
+                .categoryName(category == null ? null : category.getName())
+                .style(entry.getStyle())
+                .amount(amount)
                 .build();
     }
 

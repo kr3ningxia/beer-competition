@@ -4,6 +4,7 @@ import com.beercompetition.common.result.Result;
 import com.beercompetition.pojo.dto.CompetitionBaseInfoUpdateRequest;
 import com.beercompetition.pojo.dto.CompetitionCreateRequest;
 import com.beercompetition.pojo.dto.CompetitionReopenRegistrationRequest;
+import com.beercompetition.pojo.dto.CompetitionRefundPolicyUpdateRequest;
 import com.beercompetition.pojo.dto.CompetitionReturnToSampleCheckRequest;
 import com.beercompetition.pojo.dto.CompetitionSponsorBatchUpdateRequest;
 import com.beercompetition.pojo.dto.CompetitionStyleLibraryUpdateRequest;
@@ -95,6 +96,16 @@ public class AdminCompetitionController {
     public Result<CompetitionDetailVO> updateBaseInfo(@PathVariable Long id,
                                                       @RequestBody @Valid CompetitionBaseInfoUpdateRequest request) {
         return Result.success(competitionService.updateBaseInfo(id, request));
+    }
+
+    /**
+     * 在退款申请截止前更新比赛退款审批方式。
+     */
+    @PutMapping("/{id}/refund-policy")
+    public Result<CompetitionDetailVO> updateRefundPolicy(
+            @PathVariable Long id,
+            @RequestBody @Valid CompetitionRefundPolicyUpdateRequest request) {
+        return Result.success(competitionService.updateRefundPolicy(id, request));
     }
 
     /**

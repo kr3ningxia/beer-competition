@@ -70,8 +70,8 @@
         <select v-model="filters.refundStatus" @change="applyFilters">
           <option value="">全部退款</option>
           <option value="REQUESTED">待处理</option>
-          <option value="APPROVED">处理中</option>
-          <option value="PROCESSING">处理中</option>
+          <option value="APPROVED">待线下退款</option>
+          <option value="PROCESSING">已登记打款</option>
           <option value="SUCCESS">已退款</option>
           <option value="REJECTED">已驳回</option>
           <option value="FAILED">退款失败</option>
@@ -96,7 +96,6 @@
         <div class="table-head">
           <span>酒款</span>
           <span>比赛</span>
-          <span>编号</span>
           <span>组别 / 风格</span>
           <span>支付/退款</span>
           <span>入库</span>
@@ -106,20 +105,16 @@
         <div class="table-body">
           <div v-for="entry in entries" :key="entry.id" :class="['table-row', { refunded: isRefundedEntry(entry), 'refund-priority': hasRefundPriority(entry) }]">
             <div class="entry-cell">
-              <strong>{{ entry.name || '未命名酒款' }}</strong>
-              <small>{{ entry.breweryCompanyName || '未关联厂牌' }}</small>
+              <strong :data-tooltip="entry.name || '未命名酒款'" :title="entry.name || '未命名酒款'">{{ entry.name || '未命名酒款' }}</strong>
+              <small :data-tooltip="entry.breweryCompanyName || '未关联厂牌'" :title="entry.breweryCompanyName || '未关联厂牌'">{{ entry.breweryCompanyName || '未关联厂牌' }}</small>
             </div>
             <div class="soft-cell">
-              <strong>{{ entry.competitionName || '-' }}</strong>
-              <small>{{ entry.competitionCode || '-' }}</small>
-            </div>
-            <div class="code-cell">
-              <strong>{{ entry.shortCode || '-' }}</strong>
-              <small>{{ entry.uuid }}</small>
+              <strong :data-tooltip="entry.competitionName || '-'" :title="entry.competitionName || '-'">{{ entry.competitionName || '-' }}</strong>
+              <small :data-tooltip="entry.competitionCode || '-'" :title="entry.competitionCode || '-'">{{ entry.competitionCode || '-' }}</small>
             </div>
             <div class="soft-cell">
-              <strong>{{ entry.categoryName || '-' }}</strong>
-              <small>{{ entry.style || '-' }}</small>
+              <strong :data-tooltip="entry.categoryName || '-'" :title="entry.categoryName || '-'">{{ entry.categoryName || '-' }}</strong>
+              <small :data-tooltip="entry.style || '-'" :title="entry.style || '-'">{{ entry.style || '-' }}</small>
             </div>
             <div class="payment-refund-cell">
               <span :class="['state-pill', paymentRefundTone(entry)]">{{ paymentRefundLabel(entry) }}</span>
@@ -140,10 +135,6 @@
                 <button type="button" :disabled="!entry.canEdit" @click="openDetail(entry.id, 'profile', true)">编辑资料</button>
                 <button type="button" @click="openDetail(entry.id, 'status')">状态处理</button>
               </template>
-              <details class="row-more">
-                <summary>更多</summary>
-                <button class="danger" type="button" @click="openDeleteDialog(entry)">删除酒款</button>
-              </details>
             </div>
           </div>
           <div v-if="!loading && !entries.length" class="empty-state">
@@ -273,7 +264,7 @@
               </article>
               <article>
                 <small>退款</small>
-                <strong>{{ refundStatusText(detail.refundStatus) }}</strong>
+                <strong>{{ refundStatusText(detail.refundStatus, detail) }}</strong>
               </article>
             </div>
             <label class="stack-field">
@@ -290,14 +281,33 @@
 
           <section v-if="activeTab === 'refund'" class="drawer-panel refund-panel">
             <div :class="['refund-box', { urgent: hasRefundPriority(detail) }]">
-              <strong>退款申请</strong>
+              <div class="refund-box-heading">
+                <strong>退款申请</strong>
+              </div>
               <p>{{ detail.refundReason || detail.refund?.reason || '未填写退款原因' }}</p>
               <dl>
-                <div><dt>退款状态</dt><dd>{{ refundStatusText(detail.refundStatus) }}</dd></div>
+                <div><dt>退款状态</dt><dd>{{ refundStatusText(detail.refundStatus, detail) }}</dd></div>
                 <div><dt>支付方式</dt><dd>{{ paymentMethodLabel(detail.payment?.payMethod) }}</dd></div>
                 <div><dt>金额</dt><dd>{{ formatMoney(detail.refund?.amount || detail.payment?.amount) }}</dd></div>
                 <div><dt>申请时间</dt><dd>{{ formatTime(detail.refundRequestedAt || detail.refund?.requestedTime) }}</dd></div>
                 <div><dt>处理时间</dt><dd>{{ formatTime(detail.refundProcessedAt || detail.refund?.processedTime) }}</dd></div>
+              </dl>
+              <dl v-if="detail.bankTransfer" class="refund-source">
+                <div><dt>原转账单号</dt><dd>{{ detail.bankTransfer.transferNo || '-' }}</dd></div>
+                <div><dt>付款人</dt><dd>{{ detail.bankTransfer.payerName || '-' }}</dd></div>
+                <div><dt>转账时间</dt><dd>{{ formatTime(detail.bankTransfer.transferTime) }}</dd></div>
+                <div><dt>原转账金额</dt><dd>{{ formatMoney(detail.bankTransfer.amount) }}</dd></div>
+                <div><dt>付款凭证</dt><dd><a v-if="detail.bankTransfer.voucherPublicUrl" :href="detail.bankTransfer.voucherPublicUrl" target="_blank" rel="noreferrer">查看凭证</a><span v-else>-</span></dd></div>
+              </dl>
+              <dl v-if="detail.bankTransfer?.entryCount > 1" class="refund-source">
+                <div><dt>批量转账</dt><dd>共 {{ detail.bankTransfer.entryCount }} 款，本次退当前酒款 {{ formatMoney(detail.refund?.amount) }}</dd></div>
+              </dl>
+              <dl v-if="detail.offlineRefundTransferNo" class="refund-source">
+                <div><dt>退款收款人</dt><dd>{{ detail.offlineRefundAccountName || '-' }}</dd></div>
+                <div><dt>收款银行</dt><dd>{{ detail.offlineRefundBankName || '-' }}</dd></div>
+                <div><dt>收款账号</dt><dd>尾号 {{ detail.offlineRefundAccountNoLast4 || '-' }}</dd></div>
+                <div><dt>退款流水号</dt><dd>{{ detail.offlineRefundTransferNo }}</dd></div>
+                <div><dt>实际打款时间</dt><dd>{{ formatTime(detail.offlineRefundTime) }}</dd></div>
               </dl>
             </div>
             <label class="stack-field">
@@ -305,9 +315,11 @@
               <textarea v-model.trim="statusReason" placeholder="可填写退款处理说明"></textarea>
             </label>
             <div class="status-actions">
-              <button type="button" :disabled="!detail.canApproveRefund" @click="runRefundAction('approve')">{{ refundApproveButtonText(detail) }}</button>
-              <button type="button" :disabled="!detail.canRejectRefund" @click="runRefundAction('reject')">驳回退款</button>
-              <button type="button" :disabled="detail.refundStatus !== 'FAILED' || isManualRefundPayment(detail)" @click="runRefundAction('retry')">重试退款</button>
+              <button v-if="detail.canApproveRefund" type="button" @click="runRefundAction('approve')">通过申请</button>
+              <button v-if="detail.canRejectRefund" type="button" @click="runRefundAction('reject')">驳回退款</button>
+              <button v-if="detail.canRetryRefund" type="button" @click="runRefundAction('retry')">重试退款</button>
+              <button v-if="detail.refundStatus === 'APPROVED' && isManualRefundPayment(detail)" type="button" @click="openOfflineRefundDialog">登记打款</button>
+              <button v-if="detail.canConfirmOfflineRefund" type="button" @click="runRefundAction('completeOffline')">确认已完成线下退款</button>
             </div>
           </section>
 
@@ -347,6 +359,34 @@
           </details>
         </template>
       </aside>
+    </div>
+
+    <div v-if="offlineRefundDialog.open" class="stage-confirm-backdrop" @click.self="closeOfflineRefundDialog">
+      <section class="stage-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="offline-refund-title">
+        <header><span class="confirm-kicker">线下退款</span><h2 id="offline-refund-title">登记打款</h2></header>
+        <div class="confirm-summary">
+          <span><small>酒款</small><strong>{{ detail?.name || '-' }}</strong></span>
+          <span><small>退款金额</small><strong>{{ formatMoney(detail?.refund?.amount) }}</strong></span>
+        </div>
+        <div class="confirm-reason">
+          <span>打款凭证</span>
+          <div class="confirm-file-picker">
+            <input
+              id="offline-refund-voucher"
+              class="confirm-file-input"
+              type="file"
+              accept="image/*,.pdf"
+              @change="offlineRefundDialog.voucher = $event.target.files?.[0] || null"
+            />
+            <label class="confirm-file-button" for="offline-refund-voucher">选择凭证</label>
+            <span class="confirm-file-name" :class="{ selected: offlineRefundDialog.voucher }">
+              {{ offlineRefundDialog.voucher?.name || '未选择文件' }}
+            </span>
+          </div>
+        </div>
+        <label class="confirm-reason"><span>备注（选填）</span><textarea v-model.trim="offlineRefundDialog.reason" maxlength="300"></textarea></label>
+        <footer><button class="confirm-button ghost" type="button" :disabled="offlineRefundDialog.loading" @click="closeOfflineRefundDialog">取消</button><button class="confirm-button primary" type="button" :disabled="offlineRefundDialog.loading || !canSubmitOfflineRefund" @click="submitOfflineRefund">{{ offlineRefundDialog.loading ? '保存中' : '保存并登记' }}</button></footer>
+      </section>
     </div>
 
     <div v-if="entryConfirm.open" class="stage-confirm-backdrop" @click.self="closeEntryConfirm">
@@ -404,6 +444,8 @@ import QRCode from 'qrcode'
 import {
   approveEntryRefund,
   cancelEntry,
+  confirmOfflineEntryRefund,
+  registerOfflineEntryRefund,
   confirmEntryPayment,
   fetchAdminEntries,
   fetchAdminEntryDetail,
@@ -434,6 +476,8 @@ const detail = ref(null)
 const activeTab = ref('profile')
 const saving = ref(false)
 const statusReason = ref('')
+const offlineRefundDialog = reactive({ open: false, loading: false, voucher: null, reason: '' })
+const canSubmitOfflineRefund = computed(() => Boolean(offlineRefundDialog.voucher))
 const entryConfirm = reactive({
   open: false,
   loading: false,
@@ -783,7 +827,7 @@ async function runStatusAction(entry, type) {
 }
 
 function hasRefundPriority(entry) {
-  return ['REQUESTED', 'FAILED'].includes(entry?.refundStatus)
+  return ['REQUESTED', 'FAILED'].includes(entry?.refundStatus) || Boolean(entry?.canConfirmOfflineRefund)
 }
 
 function isRefundedEntry(entry) {
@@ -792,6 +836,36 @@ function isRefundedEntry(entry) {
 
 async function openRefundDetail(entry) {
   await openDetail(entry.id, 'refund')
+}
+
+function openOfflineRefundDialog() {
+  Object.assign(offlineRefundDialog, {
+    open: true,
+    loading: false,
+    voucher: null,
+    reason: '',
+  })
+}
+
+function closeOfflineRefundDialog() {
+  if (!offlineRefundDialog.loading) offlineRefundDialog.open = false
+}
+
+async function submitOfflineRefund() {
+  if (!canSubmitOfflineRefund.value || !detail.value?.refund?.id) return
+  offlineRefundDialog.loading = true
+  try {
+    await registerOfflineEntryRefund(detail.value.refund.id, {
+      reason: offlineRefundDialog.reason,
+      voucher: offlineRefundDialog.voucher,
+    })
+    offlineRefundDialog.open = false
+    detail.value = await fetchAdminEntryDetail(detail.value.id)
+    await loadEntries()
+    ElMessage.success('线下打款已登记')
+  } finally {
+    offlineRefundDialog.loading = false
+  }
 }
 
 function entrySummaryItems(current = detail.value, extra = []) {
@@ -905,20 +979,22 @@ async function runRefundAction(type) {
   const current = detail.value
   const refundId = current?.refund?.id
   if (!current || !refundId) return
-  if (type === 'approve' || type === 'retry') {
+  if (['approve', 'retry', 'completeOffline'].includes(type)) {
     openEntryConfirm({
       action: 'refund',
       kicker: '退款处理',
       title: refundConfirmTitle(current, type),
-      copy: type === 'retry'
-        ? '将重新提交微信退款，退款成功后，这款酒会取消报名并退出后续流程'
-        : refundConfirmCopy(current),
+      copy: refundConfirmCopy(current, type),
       summary: entrySummaryItems(current, [
         { label: '支付方式', value: paymentMethodLabel(current.payment?.payMethod) },
-        { label: '退款状态', value: refundStatusText(current.refundStatus) },
+        { label: '退款状态', value: refundStatusText(current.refundStatus, current) },
         { label: '退款金额', value: formatMoney(current.refund?.amount || current.payment?.amount) },
       ]),
-      confirmText: type === 'retry' ? '重试退款' : refundApproveButtonText(current),
+      confirmText: type === 'retry'
+        ? '重试退款'
+        : type === 'completeOffline'
+          ? '确认已完成'
+          : '通过申请',
       loadingText: type === 'retry' ? '重试中' : '确认中',
       reasonLabel: '处理原因',
       reasonPlaceholder: '可填写退款处理说明',
@@ -937,6 +1013,7 @@ async function executeRefundAction(type, reason = statusReason.value) {
   if (type === 'approve') await approveEntryRefund(refundId, payload)
   if (type === 'reject') await rejectEntryRefund(refundId, payload)
   if (type === 'retry') await retryEntryRefund(refundId, payload)
+  if (type === 'completeOffline') await confirmOfflineEntryRefund(refundId, payload)
   detail.value = await fetchAdminEntryDetail(current.id)
   syncEditForm()
   await loadEntries()
@@ -944,7 +1021,8 @@ async function executeRefundAction(type, reason = statusReason.value) {
 }
 
 function refundActionLabel(type) {
-  if (type === 'approve') return isManualRefundPayment(detail.value) ? '线下退款已登记' : '退款已确认'
+  if (type === 'approve') return '退款申请已通过'
+  if (type === 'completeOffline') return '线下退款已确认'
   return type === 'reject' ? '退款已驳回' : '退款已重试'
 }
 
@@ -967,11 +1045,12 @@ function paymentMethodLabel(value) {
   return { WECHAT: '微信支付', BANK_TRANSFER: '银行转账', MANUAL: '人工确认', MOCK: '测试支付' }[value] || '未记录'
 }
 
-function refundStatusText(value) {
+function refundStatusText(value, entry) {
+  if (value === 'APPROVED' && (entry?.canConfirmOfflineRefund || isManualRefundPayment(entry))) return '待线下退款'
   return {
     REQUESTED: '待处理',
     APPROVED: '处理中',
-    PROCESSING: '处理中',
+    PROCESSING: '已登记打款，待确认',
     SUCCESS: '已退款',
     FAILED: '退款失败',
     REJECTED: '已驳回',
@@ -980,20 +1059,23 @@ function refundStatusText(value) {
 
 function paymentRefundLabel(entry) {
   if (!entry?.refundStatus) return paymentLabel(entry?.paymentStatus)
+  if (entry.refundStatus === 'APPROVED' && entry.canConfirmOfflineRefund) return '待线下退款'
   return {
     REQUESTED: '待退款审核',
     APPROVED: '退款处理中',
-    PROCESSING: '退款处理中',
+    PROCESSING: '已登记打款，待确认',
     SUCCESS: '已退款',
     FAILED: '退款失败',
     REJECTED: '退款已驳回',
-  }[entry.refundStatus] || refundStatusText(entry.refundStatus)
+  }[entry.refundStatus] || refundStatusText(entry.refundStatus, entry)
 }
 
 function paymentRefundMeta(entry) {
   if (!entry?.refundStatus) return ''
   if (entry.refundStatus === 'REQUESTED') return '等待处理'
-  if (['APPROVED', 'PROCESSING'].includes(entry.refundStatus)) return '退款处理中'
+  if (entry.refundStatus === 'APPROVED' && entry.canConfirmOfflineRefund) return '等待线下退款'
+  if (entry.refundStatus === 'APPROVED') return '待线下退款'
+  if (entry.refundStatus === 'PROCESSING') return '已登记打款'
   if (entry.refundStatus === 'SUCCESS') return '报名已取消'
   if (entry.refundStatus === 'FAILED') return '需要重试'
   if (entry.refundStatus === 'REJECTED') return '支付仍有效'
@@ -1004,20 +1086,17 @@ function isManualRefundPayment(entry) {
   return ['BANK_TRANSFER', 'MANUAL'].includes(entry?.payment?.payMethod)
 }
 
-function refundApproveButtonText(entry) {
-  return isManualRefundPayment(entry) ? '确认线下退款完成' : '确认退款'
-}
-
 function refundConfirmTitle(entry, type) {
   if (type === 'retry') return '确认重试退款？'
-  return isManualRefundPayment(entry) ? '确认线下退款已完成？' : '确认退款？'
+  if (type === 'completeOffline') return '确认线下退款已完成？'
+  return '确认通过退款申请？'
 }
 
-function refundConfirmCopy(entry) {
-  if (isManualRefundPayment(entry)) {
-    return '请在完成实际转账退款后再确认，确认后，这款酒会取消报名并退出后续流程'
-  }
-  return '确认后将提交退款处理，退款成功后，这款酒会取消报名并退出后续流程'
+function refundConfirmCopy(entry, type) {
+  if (type === 'retry') return '将重新提交微信退款，退款成功后，这款酒会取消报名并退出后续流程'
+  if (type === 'completeOffline') return '确认后，这款酒会取消报名，支付记录将更新为已退款'
+  if (isManualRefundPayment(entry)) return '通过后进入待线下退款，实际转账完成后还需再次确认'
+  return '通过后将提交微信退款，退款成功后这款酒会取消报名'
 }
 
 function deliveryLabel(value) {
@@ -1403,6 +1482,63 @@ button:disabled {
   line-height: 1.5;
 }
 
+.confirm-file-picker {
+  display: flex;
+  min-height: 40px;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 5px;
+  border: 1px solid var(--confirm-line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.confirm-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.confirm-file-button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  min-height: 30px;
+  align-items: center;
+  padding: 0 11px;
+  color: var(--confirm-text);
+  border: 1px solid rgba(219, 232, 237, 0.16);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.07);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.confirm-file-button:hover,
+.confirm-file-button:focus-within {
+  color: #ffdc73;
+  border-color: rgba(224, 184, 74, 0.42);
+  background: rgba(224, 184, 74, 0.1);
+}
+
+.confirm-file-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--confirm-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.confirm-file-name.selected {
+  color: var(--confirm-text);
+}
+
 .stage-confirm-dialog footer {
   display: flex;
   justify-content: flex-end;
@@ -1518,7 +1654,7 @@ button:disabled {
   flex: 1 1 auto;
   flex-direction: column;
   min-height: 0;
-  overflow-x: auto;
+  overflow-x: hidden;
   overflow-y: hidden;
   scrollbar-gutter: stable;
 }
@@ -1530,10 +1666,10 @@ button:disabled {
 .table-head,
 .table-row {
   display: grid;
-  grid-template-columns: minmax(220px, 1.4fr) minmax(220px, 1.15fr) minmax(150px, 0.85fr) minmax(200px, 1fr) 120px 84px 130px 230px;
-  gap: 12px;
+  grid-template-columns: minmax(180px, 1.05fr) minmax(180px, 1fr) minmax(230px, 1.25fr) 132px 76px 114px minmax(208px, 1.05fr);
+  gap: 10px;
   align-items: center;
-  min-width: 1240px;
+  min-width: 0;
 }
 
 .table-head {
@@ -1571,7 +1707,7 @@ button:disabled {
   flex: 1 1 auto;
   align-content: start;
   gap: 8px;
-  min-width: 1240px;
+  min-width: 0;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -1607,7 +1743,6 @@ button:disabled {
 
 .entry-cell,
 .soft-cell,
-.code-cell,
 .payment-refund-cell {
   display: grid;
   gap: 4px;
@@ -1615,16 +1750,46 @@ button:disabled {
 }
 
 .entry-cell strong,
-.soft-cell strong,
-.code-cell strong {
+.soft-cell strong {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.entry-cell strong[data-tooltip],
+.soft-cell strong[data-tooltip],
+.entry-cell small[data-tooltip],
+.soft-cell small[data-tooltip] {
+  position: relative;
+  cursor: default;
+}
+
+.entry-cell strong[data-tooltip]:hover::after,
+.soft-cell strong[data-tooltip]:hover::after,
+.entry-cell small[data-tooltip]:hover::after,
+.soft-cell small[data-tooltip]:hover::after {
+  position: absolute;
+  z-index: 12;
+  top: calc(100% + 7px);
+  left: 0;
+  width: max-content;
+  max-width: min(420px, calc(100vw - 72px));
+  padding: 7px 9px;
+  content: attr(data-tooltip);
+  color: #e9f2f5;
+  border: 1px solid rgba(218, 232, 237, 0.18);
+  border-radius: 6px;
+  background: #18252a;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.28);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  white-space: normal;
+  pointer-events: none;
+}
+
 .entry-cell small,
 .soft-cell small,
-.code-cell small,
 .payment-refund-cell small,
 .time-cell {
   overflow: hidden;
@@ -1665,33 +1830,8 @@ button:disabled {
 }
 
 .row-actions {
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   justify-content: flex-start;
-}
-
-.row-more {
-  position: relative;
-}
-
-.row-more summary {
-  cursor: pointer;
-  color: var(--muted);
-  list-style: none;
-}
-
-.row-more summary::-webkit-details-marker { display: none; }
-.row-more[open] { z-index: 3; }
-.row-more button {
-  position: absolute;
-  right: 0;
-  top: 26px;
-  min-width: 100px;
-  padding: 8px 10px;
-  border: 1px solid rgba(219, 232, 237, .16);
-  border-radius: 6px;
-  background: #172329;
-  color: #ef8b7e;
-  cursor: pointer;
 }
 
 .danger-zone {
@@ -1976,6 +2116,35 @@ button:disabled {
   border: 1px solid rgba(218, 232, 237, 0.09);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.035);
+}
+
+.refund-box-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.hint-marker {
+  display: inline-grid;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  place-items: center;
+  color: var(--muted);
+  border: 1px solid rgba(219, 232, 237, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: help;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.hint-marker:hover,
+.hint-marker:focus-visible {
+  color: var(--gold-soft);
+  border-color: rgba(224, 184, 74, 0.48);
+  outline: none;
 }
 
 .status-grid small,
