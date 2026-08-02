@@ -38,7 +38,7 @@
           </RouterLink>
           <el-button class="logout-button" text @click="logout">退出</el-button>
         </div>
-        <RouterLink v-else class="login-link" to="/portal/login">登录报名</RouterLink>
+        <RouterLink v-else class="login-link" to="/portal/login">登录</RouterLink>
         <button
           ref="mobileMenuTriggerRef"
           class="mobile-menu-button"

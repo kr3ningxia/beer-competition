@@ -90,7 +90,7 @@ router.beforeEach((to, from, next) => {
 router.afterEach((to) => {
   document.title = to.path.startsWith('/admin')
     ? '赛事后台｜啤酒事务局'
-    : '参赛平台｜啤酒事务局'
+    : '赛事平台｜啤酒事务局'
 })
 
 export default router
