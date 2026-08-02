@@ -130,7 +130,7 @@
             <strong>{{ selectedEntry.categoryName }} · {{ selectedEntry.style }}</strong>
             <p>{{ selectedEntry.categoryName }} · {{ selectedEntry.style }} · {{ formatAbvWithUnit(selectedEntry.abv) }}</p>
             <ul>
-              <li v-for="field in selectedEntry.extraFields || []" :key="field.label">
+              <li v-for="field in judgeVisibleExtraFields" :key="field.key">
                 <span>{{ field.label }}</span>
                 <b>{{ field.value }}</b>
               </li>
@@ -395,6 +395,13 @@ const refundConfirmTip = computed(() => (
 ))
 const competitionMap = computed(() => new Map(competitions.value.map((competition) => [competition.id, competition])))
 const editConfiguredFields = computed(() => normalizeEntryFields(editCompetition.value?.entryFields || []))
+const judgeVisibleExtraFields = computed(() => {
+  const competition = competitionMap.value.get(selectedEntry.value?.competitionId)
+  const visibleKeys = new Set(normalizeEntryFields(competition?.entryFields || [])
+    .filter((field) => field.visibleToJudges)
+    .map((field) => field.fieldKey))
+  return (selectedEntry.value?.extraFields || []).filter((field) => visibleKeys.has(field.key))
+})
 const editFormRules = computed(() => {
   const rules = {
     name: [{ required: true, message: '请填写酒款名称', trigger: 'blur' }],
