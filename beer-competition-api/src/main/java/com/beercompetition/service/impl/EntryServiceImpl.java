@@ -168,6 +168,10 @@ public class EntryServiceImpl implements EntryService {
             EntryStatus.PENDING_PAYMENT.name(),
             EntryStatus.REGISTERED.name()
     );
+    private static final Set<String> PORTAL_ENTRY_UPDATE_COMPETITION_STATUSES = Set.of(
+            CompetitionStatus.REGISTRATION_OPEN.name(),
+            CompetitionStatus.REGISTRATION_CLOSED.name()
+    );
     private static final Set<String> OPTION_FIELD_TYPES = Set.of("select", "multi_select");
     private static final Set<String> AVATAR_CONTENT_TYPES = Set.of("image/jpeg", "image/png", "image/webp");
     private static final String CONTENT_TYPE_PDF = "application/pdf";
@@ -2337,7 +2341,7 @@ public class EntryServiceImpl implements EntryService {
         if (!PORTAL_ENTRY_UPDATE_STATUSES.contains(entry.getStatus())) {
             return false;
         }
-        if (isPortalEntryUpdateWindowClosed(competition)) {
+        if (!isPortalEntryUpdateCompetitionStage(competition)) {
             return false;
         }
         if (Objects.equals(entry.getStoredFlag(), 1) || isActiveRefund(refund) || resultPublished) {
@@ -2359,8 +2363,8 @@ public class EntryServiceImpl implements EntryService {
         if (!PORTAL_ENTRY_UPDATE_STATUSES.contains(entry.getStatus())) {
             return "当前状态不能修改报名资料";
         }
-        if (isPortalEntryUpdateWindowClosed(competition)) {
-            return "报名截止后不能修改报名资料";
+        if (!isPortalEntryUpdateCompetitionStage(competition)) {
+            return "赛事已进入评审准备，不能自助修改报名资料";
         }
         if (hasActiveRefund(entry.getId())) {
             return "退款处理中，不能修改报名资料";
@@ -2374,12 +2378,8 @@ public class EntryServiceImpl implements EntryService {
         return "当前酒款不能修改资料";
     }
 
-    private boolean isPortalEntryUpdateWindowClosed(Competition competition) {
-        if (!CompetitionStatus.REGISTRATION_OPEN.name().equals(competition.getStatus())) {
-            return true;
-        }
-        LocalDateTime deadline = competition.getRegistrationDeadline();
-        return deadline != null && !LocalDateTime.now().isBefore(deadline);
+    private boolean isPortalEntryUpdateCompetitionStage(Competition competition) {
+        return PORTAL_ENTRY_UPDATE_COMPETITION_STATUSES.contains(competition.getStatus());
     }
 
     private void assertCanRequestRefund(BeerEntry entry, Competition competition, EntryPayment payment) {
