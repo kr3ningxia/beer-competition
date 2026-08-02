@@ -479,7 +479,7 @@
 
         <div class="edit-form-grid">
           <el-form-item label="基础风格" prop="style">
-            <el-select v-model="editForm.style" filterable placeholder="请选择或搜索基础风格">
+            <el-select v-model="editForm.style" filterable disabled placeholder="请选择或搜索基础风格">
               <el-option
                 v-for="item in editCompetition?.styles || []"
                 :key="item.id || item.name"
