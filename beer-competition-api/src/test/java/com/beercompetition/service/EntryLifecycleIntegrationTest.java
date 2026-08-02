@@ -201,6 +201,8 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
     @Test
     void portalUpdateEntryKeepsCategoryAndLabelIdentity() {
         BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        jdbcTemplate.update("UPDATE competition SET status = ? WHERE id = ?",
+                CompetitionStatus.REGISTRATION_OPEN.name(), fixture.competition().getId());
         var entry = testData.createEntry(testRun, fixture.competition().getId(), fixture.portalA().brewery().getId(),
                 fixture.category().getId(), testRun + "-可修改", EntryStatus.REGISTERED, true);
         testData.createStyle(fixture.competition().getId(), testRun + "-新风格");
@@ -249,8 +251,9 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
         BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
         var entry = testData.createEntry(testRun, fixture.competition().getId(), fixture.portalA().brewery().getId(),
                 fixture.category().getId(), testRun + "-截止后修改", EntryStatus.REGISTERED, true);
-        jdbcTemplate.update("UPDATE competition SET registration_deadline = ? WHERE id = ?",
-                LocalDateTime.now().minusDays(1), fixture.competition().getId());
+        jdbcTemplate.update("UPDATE competition SET status = ?, registration_deadline = ? WHERE id = ?",
+                CompetitionStatus.REGISTRATION_OPEN.name(), LocalDateTime.now().minusDays(1),
+                fixture.competition().getId());
 
         PortalEntryUpdateRequest request = new PortalEntryUpdateRequest();
         request.setName(testRun + "-修改后");
@@ -258,7 +261,34 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
         request.setAbv(new BigDecimal("5.5"));
 
         asPortal(fixture.portalA().account().getId());
+        var detail = entryService.getPortalEntry(entry.getId());
 
+        assertThat(detail.getCanUpdateInfo()).isFalse();
+        assertThat(detail.getUpdateInfoDisabledReason()).contains("报名截止后不能修改报名资料");
+        assertThatThrownBy(() -> entryService.updatePortalEntry(entry.getId(), request))
+                .isInstanceOf(BaseException.class)
+                .hasMessageContaining("报名截止后不能修改报名资料");
+    }
+
+    @Test
+    void portalUpdateEntryIsRejectedAfterRegistrationIsClosedEarly() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        var entry = testData.createEntry(testRun, fixture.competition().getId(), fixture.portalA().brewery().getId(),
+                fixture.category().getId(), testRun + "-提前截止后修改", EntryStatus.REGISTERED, true);
+        jdbcTemplate.update("UPDATE competition SET status = ?, registration_deadline = ? WHERE id = ?",
+                CompetitionStatus.REGISTRATION_CLOSED.name(), LocalDateTime.now().plusDays(1),
+                fixture.competition().getId());
+
+        PortalEntryUpdateRequest request = new PortalEntryUpdateRequest();
+        request.setName(testRun + "-修改后");
+        request.setStyle(testRun + "-风格");
+        request.setAbv(new BigDecimal("5.5"));
+
+        asPortal(fixture.portalA().account().getId());
+        var detail = entryService.getPortalEntry(entry.getId());
+
+        assertThat(detail.getCanUpdateInfo()).isFalse();
+        assertThat(detail.getUpdateInfoDisabledReason()).contains("报名截止后不能修改报名资料");
         assertThatThrownBy(() -> entryService.updatePortalEntry(entry.getId(), request))
                 .isInstanceOf(BaseException.class)
                 .hasMessageContaining("报名截止后不能修改报名资料");

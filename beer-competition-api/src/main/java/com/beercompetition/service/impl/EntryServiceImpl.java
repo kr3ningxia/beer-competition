@@ -2337,8 +2337,7 @@ public class EntryServiceImpl implements EntryService {
         if (!PORTAL_ENTRY_UPDATE_STATUSES.contains(entry.getStatus())) {
             return false;
         }
-        if (competition.getRegistrationDeadline() != null
-                && LocalDateTime.now().isAfter(competition.getRegistrationDeadline())) {
+        if (isPortalEntryUpdateWindowClosed(competition)) {
             return false;
         }
         if (Objects.equals(entry.getStoredFlag(), 1) || isActiveRefund(refund) || resultPublished) {
@@ -2360,7 +2359,7 @@ public class EntryServiceImpl implements EntryService {
         if (!PORTAL_ENTRY_UPDATE_STATUSES.contains(entry.getStatus())) {
             return "当前状态不能修改报名资料";
         }
-        if (competition.getRegistrationDeadline() != null && LocalDateTime.now().isAfter(competition.getRegistrationDeadline())) {
+        if (isPortalEntryUpdateWindowClosed(competition)) {
             return "报名截止后不能修改报名资料";
         }
         if (hasActiveRefund(entry.getId())) {
@@ -2373,6 +2372,14 @@ public class EntryServiceImpl implements EntryService {
             return "结果已发布，不能修改报名资料";
         }
         return "当前酒款不能修改资料";
+    }
+
+    private boolean isPortalEntryUpdateWindowClosed(Competition competition) {
+        if (!CompetitionStatus.REGISTRATION_OPEN.name().equals(competition.getStatus())) {
+            return true;
+        }
+        LocalDateTime deadline = competition.getRegistrationDeadline();
+        return deadline != null && !LocalDateTime.now().isBefore(deadline);
     }
 
     private void assertCanRequestRefund(BeerEntry entry, Competition competition, EntryPayment payment) {

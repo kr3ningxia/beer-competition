@@ -316,10 +316,15 @@ public class CompetitionServiceImpl implements CompetitionService {
         // 2) 查询非草稿、非归档赛事
         return competitionMapper.selectList(new LambdaQueryWrapper<Competition>()
                         .ne(Competition::getStatus, CompetitionStatus.DRAFT.name())
-                        .ne(Competition::getStatus, CompetitionStatus.ARCHIVED.name())
-                        .orderByDesc(Competition::getCompetitionDate)
-                        .orderByDesc(Competition::getId))
+                        .ne(Competition::getStatus, CompetitionStatus.ARCHIVED.name()))
                 .stream()
+                .sorted(Comparator
+                        .comparing((Competition item) -> !CompetitionStatus.REGISTRATION_OPEN.name().equals(item.getStatus()))
+                        .thenComparing(Competition::getRegistrationDeadline,
+                                Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(Competition::getCompetitionDate,
+                                Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(Competition::getId, Comparator.reverseOrder()))
                 .map(this::toPortalCompetitionVO)
                 .toList();
     }
