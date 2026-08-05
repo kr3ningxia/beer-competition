@@ -691,7 +691,7 @@ function formatCurrency(value) {
 
 function paymentStatusText(entry) {
   if (entry?.refundStatus === 'REQUESTED') return '待组委会审核'
-  if (entry?.refundStatus === 'APPROVED' && isManualRefundPayment(entry)) return '待线下退款'
+  if (entry?.refundStatus === 'APPROVED' && isManualRefundPayment(entry)) return '待银行卡退款'
   if (isEntryRefundActive(entry)) return '退款处理中'
   if (isEntryRefunded(entry)) return '已退款'
   if (entry?.refundStatus === 'FAILED') return '退款失败'
@@ -702,11 +702,11 @@ function paymentStatusText(entry) {
 }
 
 function refundStatusText(status, entry) {
-  if (status === 'APPROVED' && isManualRefundPayment(entry)) return '待线下退款'
+  if (status === 'APPROVED') return isManualRefundPayment(entry) ? '待银行卡退款' : '准备提交微信退款'
+  if (status === 'PROCESSING') return isManualRefundPayment(entry) ? '银行卡退款处理中' : '微信退款处理中'
   return {
     REQUESTED: '待组委会审核',
     APPROVED: '退款处理中',
-    PROCESSING: '已登记打款',
     SUCCESS: '已退款',
     FAILED: '退款失败',
     REJECTED: '已驳回',

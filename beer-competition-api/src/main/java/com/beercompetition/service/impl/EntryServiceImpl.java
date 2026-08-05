@@ -394,7 +394,7 @@ public class EntryServiceImpl implements EntryService {
                 throw new BaseException("已支付酒款需先完成退款，并确认退款已完成");
             }
             payment.setStatus(EntryPaymentStatus.REFUNDED.name());
-            payment.setConfirmRemark("管理端删除酒款，已确认线下退款");
+            payment.setConfirmRemark("管理端删除酒款，已确认退款");
             entryPaymentMapper.updateById(payment);
             PaymentOrderItem item = paymentOrderItemMapper.selectOne(new LambdaQueryWrapper<PaymentOrderItem>()
                     .eq(PaymentOrderItem::getEntryPaymentId, payment.getId()).last("LIMIT 1"));
@@ -1223,7 +1223,7 @@ public class EntryServiceImpl implements EntryService {
 
     @Override
     public void completeOfflineRefund(Long refundId, AdminEntryStatusRequest request) {
-        wechatPaymentService.completeOfflineRefund(refundId, normalizeStatusReason(request), BaseContext.getCurrentId());
+        wechatPaymentService.completeOfflineRefund(refundId, request.getReason(), BaseContext.getCurrentId());
     }
 
     @Override
@@ -1231,11 +1231,11 @@ public class EntryServiceImpl implements EntryService {
     public void registerOfflineRefund(Long refundId, AdminOfflineRefundRequest request, MultipartFile voucher) {
         EntryRefund refund = requireRefund(refundId);
         if (!EntryRefundStatus.APPROVED.name().equals(refund.getStatus())) {
-            throw new BaseException("只有待线下退款的记录可以登记打款");
+            throw new BaseException("只有待银行卡退款的记录可以登记转账");
         }
         EntryPayment payment = entryPaymentMapper.selectById(refund.getEntryPaymentId());
         if (!isManualRefundPayment(payment)) {
-            throw new BaseException("当前退款不是线下退款");
+            throw new BaseException("当前退款不是银行卡退款");
         }
         if (voucher == null || voucher.isEmpty()) {
             throw new BaseException("请上传打款凭证");
@@ -1262,7 +1262,8 @@ public class EntryServiceImpl implements EntryService {
         refund.setFailReason(null);
         entryRefundMapper.updateById(refund);
         writeEntryLog("ENTRY_REFUND_REGISTER_OFFLINE", requireEntry(refund.getBeerEntryId()).getUuid(),
-                buildStatusLogSummary("登记线下打款", request.getReason()));
+                buildStatusLogSummary("登记银行卡退款", request.getReason()));
+        wechatPaymentService.completeOfflineRefund(refundId, request.getReason(), BaseContext.getCurrentId());
     }
 
     @Override

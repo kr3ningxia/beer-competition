@@ -27,4 +27,6 @@ public interface WechatPaymentService {
     void completeOfflineRefund(Long refundId, String reason, Long adminId);
 
     void retryRefund(Long refundId, String reason, Long adminId);
+
+    int reconcileProcessingRefunds();
 }

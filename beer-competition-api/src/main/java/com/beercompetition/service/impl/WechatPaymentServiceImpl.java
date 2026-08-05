@@ -51,6 +51,8 @@ import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -75,6 +77,8 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
     private static final String BUSINESS_REFUND = "REFUND";
     private static final int NATIVE_PAY_EXPIRE_MINUTES = 30;
     private static final int JSAPI_PAY_EXPIRE_MINUTES = 30;
+    private static final int REFUND_RECONCILE_DELAY_MINUTES = 2;
+    private static final int REFUND_RECONCILE_BATCH_SIZE = 100;
     private final WechatPayClient wechatPayClient;
     private final BatchPaymentService batchPaymentService;
     private final WechatOAuthService wechatOAuthService;
@@ -276,19 +280,7 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
             return;
         }
 
-        // 2) 微信付款发起原路退款
-        WechatPayClient.RefundResult result = wechatPayClient.createRefund(new WechatPayClient.RefundRequest(
-                resolveRefundOutTradeNo(context),
-                resolveRefundTransactionId(context),
-                context.refund().getOutRefundNo(),
-                context.refund().getReason(),
-                context.refund().getAmount(),
-                resolveRefundTotalAmount(context)
-        ));
-
-        // 3) 应用微信退款受理结果
-        transactionTemplate.executeWithoutResult(status -> applyRefundResult(result.outRefundNo(), result.refundId(),
-                result.refundStatus(), result.successTime(), null));
+        submitWechatRefund(context, true);
     }
 
     @Override
@@ -302,21 +294,7 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
             return;
         }
 
-        // 2) 调用微信原路退款，失败时登记为可后台重试
-        try {
-            WechatPayClient.RefundResult result = wechatPayClient.createRefund(new WechatPayClient.RefundRequest(
-                    resolveRefundOutTradeNo(context),
-                    resolveRefundTransactionId(context),
-                    context.refund().getOutRefundNo(),
-                    context.refund().getReason(),
-                    context.refund().getAmount(),
-                    resolveRefundTotalAmount(context)
-            ));
-            transactionTemplate.executeWithoutResult(status -> applyRefundResult(result.outRefundNo(), result.refundId(),
-                    result.refundStatus(), result.successTime(), null));
-        } catch (RuntimeException ex) {
-            transactionTemplate.executeWithoutResult(status -> markAutoRefundFailed(refundId, ex));
-        }
+        submitWechatRefund(context, false);
     }
 
     @Override
@@ -327,20 +305,70 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
         }
         EntryPayment payment = entryPaymentMapper.selectById(refund.getEntryPaymentId());
         if (isManualRefundPayment(payment)) {
-            throw new BaseException("线下退款请确认完成后直接登记，不能重试微信退款");
+            throw new BaseException("银行卡退款请上传转账凭证完成处理，不能重试微信退款");
+        }
+        if (StringUtils.hasText(refund.getOutRefundNo())) {
+            try {
+                WechatPayClient.RefundResult existing = wechatPayClient.queryRefund(refund.getOutRefundNo());
+                if (existing != null) {
+                    applyWechatRefundResult(existing);
+                    return;
+                }
+            } catch (RuntimeException ex) {
+                if (!isRefundNotFound(ex)) {
+                    String failureReason = "微信退款状态暂时无法查询，请稍后重试";
+                    transactionTemplate.executeWithoutResult(status -> markRefundFailed(refundId, failureReason));
+                    throw new BaseException(failureReason);
+                }
+            }
         }
         approveRefund(refundId, reason, adminId);
+    }
+
+    @Override
+    public int reconcileProcessingRefunds() {
+        LocalDateTime staleBefore = LocalDateTime.now().minusMinutes(REFUND_RECONCILE_DELAY_MINUTES);
+        List<EntryRefund> refunds = entryRefundMapper.selectList(new LambdaQueryWrapper<EntryRefund>()
+                .eq(EntryRefund::getStatus, EntryRefundStatus.PROCESSING.name())
+                .isNotNull(EntryRefund::getOutRefundNo)
+                .and(wrapper -> wrapper.isNull(EntryRefund::getProcessedTime)
+                        .or().le(EntryRefund::getProcessedTime, staleBefore))
+                .orderByAsc(EntryRefund::getId)
+                .last("LIMIT " + REFUND_RECONCILE_BATCH_SIZE));
+        int reconciledCount = 0;
+        for (EntryRefund refund : refunds) {
+            EntryPayment payment = entryPaymentMapper.selectById(refund.getEntryPaymentId());
+            if (isManualRefundPayment(payment)) {
+                continue;
+            }
+            try {
+                WechatPayClient.RefundResult result = wechatPayClient.queryRefund(refund.getOutRefundNo());
+                if (result == null) {
+                    transactionTemplate.executeWithoutResult(status -> markRefundFailed(
+                            refund.getId(), "微信未返回退款状态，请在后台重试"));
+                } else {
+                    applyWechatRefundResult(result);
+                }
+            } catch (RuntimeException ex) {
+                String reason = isRefundNotFound(ex)
+                        ? "微信未查询到退款单，请在后台重试"
+                        : "微信退款状态查询失败，请稍后重试";
+                transactionTemplate.executeWithoutResult(status -> markRefundFailed(refund.getId(), reason));
+            }
+            reconciledCount++;
+        }
+        return reconciledCount;
     }
 
     @Override
     public void completeOfflineRefund(Long refundId, String reason, Long adminId) {
         EntryRefund refund = requireRefund(refundId);
         if (!EntryRefundStatus.PROCESSING.name().equals(refund.getStatus())) {
-            throw new BaseException("只有已登记打款的记录可以确认完成");
+            throw new BaseException("只有已登记银行卡退款的记录可以确认完成");
         }
         EntryPayment payment = entryPaymentMapper.selectById(refund.getEntryPaymentId());
         if (!isManualRefundPayment(payment)) {
-            throw new BaseException("当前退款不是线下退款");
+            throw new BaseException("当前退款不是银行卡退款");
         }
         transactionTemplate.executeWithoutResult(status -> applyManualRefundSuccess(refundId, reason, adminId));
     }
@@ -505,15 +533,90 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
         return new RefundContext(refund, payment, entry, order, orderItem);
     }
 
-    private void markAutoRefundFailed(Long refundId, RuntimeException ex) {
+    private void submitWechatRefund(RefundContext context, boolean propagateFailure) {
+        try {
+            WechatPayClient.RefundResult result = wechatPayClient.createRefund(new WechatPayClient.RefundRequest(
+                    resolveRefundOutTradeNo(context),
+                    resolveRefundTransactionId(context),
+                    context.refund().getOutRefundNo(),
+                    context.refund().getReason(),
+                    context.refund().getAmount(),
+                    resolveRefundTotalAmount(context)
+            ));
+            applyWechatRefundResult(result);
+        } catch (RuntimeException ex) {
+            if (!isDefinitiveRefundRejection(ex) && synchronizeRefundAfterUncertainFailure(context.refund())) {
+                return;
+            }
+            String failureReason = resolveRefundFailureReason(ex);
+            transactionTemplate.executeWithoutResult(status -> markRefundFailed(context.refund().getId(), failureReason));
+            if (propagateFailure) {
+                throw new BaseException(failureReason);
+            }
+        }
+    }
+
+    private boolean synchronizeRefundAfterUncertainFailure(EntryRefund refund) {
+        try {
+            WechatPayClient.RefundResult result = wechatPayClient.queryRefund(refund.getOutRefundNo());
+            if (result == null) {
+                return false;
+            }
+            applyWechatRefundResult(result);
+            return true;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    private void applyWechatRefundResult(WechatPayClient.RefundResult result) {
+        transactionTemplate.executeWithoutResult(status -> applyRefundResult(result.outRefundNo(), result.refundId(),
+                result.refundStatus(), result.successTime(), null));
+    }
+
+    private void markRefundFailed(Long refundId, String failureReason) {
         EntryRefund refund = requireRefund(refundId);
         if (EntryRefundStatus.SUCCESS.name().equals(refund.getStatus())) {
             return;
         }
         refund.setStatus(EntryRefundStatus.FAILED.name());
-        refund.setFailReason(limitFailReason("微信退款发起失败：" + (ex.getMessage() == null ? "请稍后重试" : ex.getMessage())));
+        refund.setFailReason(limitFailReason(failureReason));
         refund.setLastQueryTime(LocalDateTime.now());
         entryRefundMapper.updateById(refund);
+    }
+
+    private String resolveRefundFailureReason(RuntimeException ex) {
+        String message = ex.getMessage() == null ? "" : ex.getMessage().toUpperCase(Locale.ROOT);
+        if (message.contains("NOT_ENOUGH")) {
+            return "微信退款发起失败：商户基本账户余额不足";
+        }
+        if (message.contains("PARAM_ERROR") || message.contains("INVALID_REQUEST")) {
+            return "微信退款发起失败：退款参数不符合微信要求";
+        }
+        if (message.contains("NO_AUTH")) {
+            return "微信退款发起失败：商户号暂无退款权限";
+        }
+        if (message.contains("FREQUENCY_LIMITED")) {
+            return "微信退款请求过于频繁，请稍后重试";
+        }
+        return "微信退款发起失败，请稍后重试";
+    }
+
+    private boolean isDefinitiveRefundRejection(RuntimeException ex) {
+        String message = ex.getMessage() == null ? "" : ex.getMessage().toUpperCase(Locale.ROOT);
+        return message.contains("NOT_ENOUGH")
+                || message.contains("PARAM_ERROR")
+                || message.contains("INVALID_REQUEST")
+                || message.contains("NO_AUTH")
+                || message.contains("FREQUENCY_LIMITED");
+    }
+
+    private boolean isRefundNotFound(RuntimeException ex) {
+        String message = ex.getMessage() == null ? "" : ex.getMessage().toUpperCase(Locale.ROOT);
+        return message.contains("RESOURCE_NOT_EXISTS")
+                || message.contains("REFUND_NOT_EXIST")
+                || message.contains("NOT_FOUND")
+                || message.contains("HTTPSTATUSCODE[404]");
     }
 
     private void applyManualRefundSuccess(Long refundId, String reason, Long adminId) {
@@ -534,7 +637,7 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
 
         entry.setStatus(EntryStatus.CANCELED.name());
         beerEntryMapper.updateById(entry);
-        writeEntryLog(adminId, "ENTRY_REFUND_SUCCESS", entry.getUuid(), buildStatusLogSummary("线下退款完成", reason));
+        writeEntryLog(adminId, "ENTRY_REFUND_SUCCESS", entry.getUuid(), buildStatusLogSummary("银行卡退款完成", reason));
     }
 
     private void applyRefundResult(String outRefundNo, String refundId, String refundStatus,

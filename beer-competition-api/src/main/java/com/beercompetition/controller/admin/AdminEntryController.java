@@ -159,14 +159,14 @@ public class AdminEntryController {
     }
 
     /**
-     * 确认线下退款已经实际完成。
+     * 兼容确认已登记的银行卡退款已经实际完成。
      */
     @PostMapping("/refunds/{id}/confirm-offline")
     public Result<String> completeOfflineRefund(
             @PathVariable Long id,
             @RequestBody(required = false) @Valid AdminEntryStatusRequest request) {
         entryService.completeOfflineRefund(id, request);
-        return Result.success("线下退款已确认");
+        return Result.success("银行卡退款已确认");
     }
 
     @PostMapping(value = "/refunds/{id}/register-offline", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -175,7 +175,7 @@ public class AdminEntryController {
             @Valid @ModelAttribute AdminOfflineRefundRequest request,
             @RequestPart("voucher") MultipartFile voucher) {
         entryService.registerOfflineRefund(id, request, voucher);
-        return Result.success("线下打款已登记");
+        return Result.success("银行卡退款已完成");
     }
 
     /**

@@ -207,7 +207,7 @@ class BankTransferPaymentIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
-    void bankTransferAutoApprovedRefundWaitsForOfflineCompletion() {
+    void bankTransferRefundCompletesWhenTransferVoucherIsRegistered() {
         BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
         var entry = createPendingEntry(fixture, "线下退款");
 
@@ -233,12 +233,9 @@ class BankTransferPaymentIntegrationTest extends IntegrationTestBase {
 
         asAdmin(1L);
         AdminOfflineRefundRequest offlineRequest = new AdminOfflineRefundRequest();
-        offlineRequest.setReason("线下退款测试");
+        offlineRequest.setReason("银行卡退款测试");
         entryService.registerOfflineRefund(refundId, offlineRequest,
                 new MockMultipartFile("voucher", "refund.png", "image/png", new byte[]{1, 2, 3}));
-        assertThat(jdbcTemplate.queryForObject("SELECT status FROM entry_refund WHERE id = ?",
-                String.class, refundId)).isEqualTo(EntryRefundStatus.PROCESSING.name());
-        entryService.completeOfflineRefund(refundId, new AdminEntryStatusRequest());
 
         assertThat(jdbcTemplate.queryForObject("SELECT status FROM entry_refund WHERE id = ?",
                 String.class, refundId)).isEqualTo(EntryRefundStatus.SUCCESS.name());

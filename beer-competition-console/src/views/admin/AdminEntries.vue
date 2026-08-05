@@ -70,8 +70,8 @@
         <select v-model="filters.refundStatus" @change="applyFilters">
           <option value="">全部退款</option>
           <option value="REQUESTED">待处理</option>
-          <option value="APPROVED">待线下退款</option>
-          <option value="PROCESSING">已登记打款</option>
+          <option value="APPROVED">待执行退款</option>
+          <option value="PROCESSING">退款处理中</option>
           <option value="SUCCESS">已退款</option>
           <option value="REJECTED">已驳回</option>
           <option value="FAILED">退款失败</option>
@@ -291,6 +291,7 @@
                 <div><dt>金额</dt><dd>{{ formatMoney(detail.refund?.amount || detail.payment?.amount) }}</dd></div>
                 <div><dt>申请时间</dt><dd>{{ formatTime(detail.refundRequestedAt || detail.refund?.requestedTime) }}</dd></div>
                 <div><dt>处理时间</dt><dd>{{ formatTime(detail.refundProcessedAt || detail.refund?.processedTime) }}</dd></div>
+                <div v-if="detail.refund?.failReason"><dt>失败原因</dt><dd>{{ detail.refund.failReason }}</dd></div>
               </dl>
               <dl v-if="detail.bankTransfer" class="refund-source">
                 <div><dt>原转账单号</dt><dd>{{ detail.bankTransfer.transferNo || '-' }}</dd></div>
@@ -318,8 +319,7 @@
               <button v-if="detail.canApproveRefund" type="button" @click="runRefundAction('approve')">通过申请</button>
               <button v-if="detail.canRejectRefund" type="button" @click="runRefundAction('reject')">驳回退款</button>
               <button v-if="detail.canRetryRefund" type="button" @click="runRefundAction('retry')">重试退款</button>
-              <button v-if="detail.refundStatus === 'APPROVED' && isManualRefundPayment(detail)" type="button" @click="openOfflineRefundDialog">登记打款</button>
-              <button v-if="detail.canConfirmOfflineRefund" type="button" @click="runRefundAction('completeOffline')">确认已完成线下退款</button>
+              <button v-if="detail.refundStatus === 'APPROVED' && isManualRefundPayment(detail)" type="button" @click="openOfflineRefundDialog">确认银行卡退款</button>
             </div>
           </section>
 
@@ -363,7 +363,7 @@
 
     <div v-if="offlineRefundDialog.open" class="stage-confirm-backdrop" @click.self="closeOfflineRefundDialog">
       <section class="stage-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="offline-refund-title">
-        <header><span class="confirm-kicker">线下退款</span><h2 id="offline-refund-title">登记打款</h2></header>
+        <header><span class="confirm-kicker">银行卡退款</span><h2 id="offline-refund-title">确认退款并上传凭证</h2></header>
         <div class="confirm-summary">
           <span><small>酒款</small><strong>{{ detail?.name || '-' }}</strong></span>
           <span><small>退款金额</small><strong>{{ formatMoney(detail?.refund?.amount) }}</strong></span>
@@ -385,7 +385,7 @@
           </div>
         </div>
         <label class="confirm-reason"><span>备注（选填）</span><textarea v-model.trim="offlineRefundDialog.reason" maxlength="300"></textarea></label>
-        <footer><button class="confirm-button ghost" type="button" :disabled="offlineRefundDialog.loading" @click="closeOfflineRefundDialog">取消</button><button class="confirm-button primary" type="button" :disabled="offlineRefundDialog.loading || !canSubmitOfflineRefund" @click="submitOfflineRefund">{{ offlineRefundDialog.loading ? '保存中' : '保存并登记' }}</button></footer>
+        <footer><button class="confirm-button ghost" type="button" :disabled="offlineRefundDialog.loading" @click="closeOfflineRefundDialog">取消</button><button class="confirm-button primary" type="button" :disabled="offlineRefundDialog.loading || !canSubmitOfflineRefund" @click="submitOfflineRefund">{{ offlineRefundDialog.loading ? '保存中' : '确认已退款' }}</button></footer>
       </section>
     </div>
 
@@ -1022,7 +1022,7 @@ async function executeRefundAction(type, reason = statusReason.value) {
 
 function refundActionLabel(type) {
   if (type === 'approve') return '退款申请已通过'
-  if (type === 'completeOffline') return '线下退款已确认'
+  if (type === 'completeOffline') return '银行卡退款已确认'
   return type === 'reject' ? '退款已驳回' : '退款已重试'
 }
 
@@ -1046,11 +1046,11 @@ function paymentMethodLabel(value) {
 }
 
 function refundStatusText(value, entry) {
-  if (value === 'APPROVED' && (entry?.canConfirmOfflineRefund || isManualRefundPayment(entry))) return '待线下退款'
+  if (value === 'APPROVED') return isManualRefundPayment(entry) ? '待银行卡退款' : '准备提交微信退款'
+  if (value === 'PROCESSING') return isManualRefundPayment(entry) ? '已登记银行卡退款' : '微信退款处理中'
   return {
     REQUESTED: '待处理',
     APPROVED: '处理中',
-    PROCESSING: '已登记打款，待确认',
     SUCCESS: '已退款',
     FAILED: '退款失败',
     REJECTED: '已驳回',
@@ -1059,11 +1059,11 @@ function refundStatusText(value, entry) {
 
 function paymentRefundLabel(entry) {
   if (!entry?.refundStatus) return paymentLabel(entry?.paymentStatus)
-  if (entry.refundStatus === 'APPROVED' && entry.canConfirmOfflineRefund) return '待线下退款'
+  if (entry.refundStatus === 'APPROVED') return isManualRefundPayment(entry) ? '待银行卡退款' : '准备提交微信退款'
+  if (entry.refundStatus === 'PROCESSING') return isManualRefundPayment(entry) ? '已登记银行卡退款' : '微信退款处理中'
   return {
     REQUESTED: '待退款审核',
     APPROVED: '退款处理中',
-    PROCESSING: '已登记打款，待确认',
     SUCCESS: '已退款',
     FAILED: '退款失败',
     REJECTED: '退款已驳回',
@@ -1073,9 +1073,8 @@ function paymentRefundLabel(entry) {
 function paymentRefundMeta(entry) {
   if (!entry?.refundStatus) return ''
   if (entry.refundStatus === 'REQUESTED') return '等待处理'
-  if (entry.refundStatus === 'APPROVED' && entry.canConfirmOfflineRefund) return '等待线下退款'
-  if (entry.refundStatus === 'APPROVED') return '待线下退款'
-  if (entry.refundStatus === 'PROCESSING') return '已登记打款'
+  if (entry.refundStatus === 'APPROVED') return isManualRefundPayment(entry) ? '等待银行卡退款' : '等待提交微信'
+  if (entry.refundStatus === 'PROCESSING') return isManualRefundPayment(entry) ? '银行卡退款待完成' : '等待微信处理结果'
   if (entry.refundStatus === 'SUCCESS') return '报名已取消'
   if (entry.refundStatus === 'FAILED') return '需要重试'
   if (entry.refundStatus === 'REJECTED') return '支付仍有效'
@@ -1088,14 +1087,14 @@ function isManualRefundPayment(entry) {
 
 function refundConfirmTitle(entry, type) {
   if (type === 'retry') return '确认重试退款？'
-  if (type === 'completeOffline') return '确认线下退款已完成？'
+  if (type === 'completeOffline') return '确认银行卡退款已完成？'
   return '确认通过退款申请？'
 }
 
 function refundConfirmCopy(entry, type) {
   if (type === 'retry') return '将重新提交微信退款，退款成功后，这款酒会取消报名并退出后续流程'
   if (type === 'completeOffline') return '确认后，这款酒会取消报名，支付记录将更新为已退款'
-  if (isManualRefundPayment(entry)) return '通过后进入待线下退款，实际转账完成后还需再次确认'
+  if (isManualRefundPayment(entry)) return '通过后等待银行卡退款，实际转账并上传凭证后完成退款'
   return '通过后将提交微信退款，退款成功后这款酒会取消报名'
 }
 
