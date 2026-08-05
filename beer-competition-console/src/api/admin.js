@@ -12,12 +12,32 @@ export function fetchCompetitionDetail(id) {
   return request.get(`/api/admin/competitions/${id}`, { authScope: 'admin' })
 }
 
+export function fetchCompetitionOverview(id) {
+  return request.get(`/api/admin/competitions/${id}/overview`, { authScope: 'admin' })
+}
+
+export function fetchCompetitionEntryPool(id) {
+  return request.get(`/api/admin/competitions/${id}/entry-pool`, { authScope: 'admin' })
+}
+
 export function fetchCompetitionQuickSummary(id) {
   return request.get(`/api/admin/competitions/${id}/quick-summary`, { authScope: 'admin' })
 }
 
 export function fetchCompetitionProgress(id) {
   return request.get(`/api/admin/competitions/${id}/progress`, { authScope: 'admin' })
+}
+
+export function fetchCompetitionResultDrafts(id) {
+  return request.get(`/api/admin/competitions/${id}/results/draft`, { authScope: 'admin' })
+}
+
+export function fetchCompetitionAwardRules(id) {
+  return request.get(`/api/admin/competitions/${id}/award-rules`, { authScope: 'admin' })
+}
+
+export function fetchCompetitionAwards(id) {
+  return request.get(`/api/admin/competitions/${id}/awards`, { authScope: 'admin' })
 }
 
 export function fetchCompetitionLiveBoard(id) {

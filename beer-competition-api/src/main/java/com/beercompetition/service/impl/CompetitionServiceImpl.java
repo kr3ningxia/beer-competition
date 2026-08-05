@@ -88,6 +88,7 @@ import com.beercompetition.pojo.vo.CompetitionEntryVO;
 import com.beercompetition.pojo.vo.CompetitionLogisticsVO;
 import com.beercompetition.pojo.vo.CompetitionRoundVO;
 import com.beercompetition.pojo.vo.CompetitionPrimaryActionVO;
+import com.beercompetition.pojo.vo.CompetitionProgressVO;
 import com.beercompetition.pojo.vo.CompetitionQuickSummaryVO;
 import com.beercompetition.pojo.vo.CompetitionStageCheckVO;
 import com.beercompetition.pojo.vo.CompetitionVO;
@@ -107,8 +108,9 @@ import com.beercompetition.pojo.vo.StyleItemVO;
 import com.beercompetition.service.AwardService;
 import com.beercompetition.service.CompetitionService;
 import com.beercompetition.service.EntryScanLabelService;
-import com.beercompetition.service.RoundService;
 import com.beercompetition.service.StyleLibraryService;
+import com.beercompetition.service.impl.competition.CompetitionProgressQueryService;
+import com.beercompetition.service.impl.competition.CompetitionWorkspaceQueryService;
 import com.beercompetition.common.context.BaseContext;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -138,7 +140,6 @@ import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import java.util.concurrent.ThreadLocalRandom;
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -211,8 +212,9 @@ public class CompetitionServiceImpl implements CompetitionService {
     private final EntryRefundMapper entryRefundMapper;
     private final StyleLibraryService styleLibraryService;
     private final EntryScanLabelService entryScanLabelService;
-    private final RoundService roundService;
     private final AwardService awardService;
+    private final CompetitionProgressQueryService competitionProgressQueryService;
+    private final CompetitionWorkspaceQueryService competitionWorkspaceQueryService;
     private final CompetitionAnalyticsService competitionAnalyticsService;
     private final ObjectMapper objectMapper;
 
@@ -221,10 +223,7 @@ public class CompetitionServiceImpl implements CompetitionService {
 
     @Override
     public List<CompetitionVO> listCompetitions(boolean includeArchived) {
-        // 1) 兜底关闭已到期报名，确保后台列表状态准确
-        closeExpiredRegistrations(LocalDateTime.now());
-
-        // 2) 查询比赛主数据，常用列表默认排除归档赛事
+        // 1) 查询比赛主数据，常用列表默认排除归档赛事
         LambdaQueryWrapper<Competition> wrapper = new LambdaQueryWrapper<Competition>()
                 .orderByDesc(Competition::getCompetitionDate)
                 .orderByDesc(Competition::getId);
@@ -310,10 +309,7 @@ public class CompetitionServiceImpl implements CompetitionService {
 
     @Override
     public List<PortalCompetitionVO> listPortalCompetitions() {
-        // 1) 兜底关闭已到期报名，确保厂商端展示状态准确
-        closeExpiredRegistrations(LocalDateTime.now());
-
-        // 2) 查询非草稿、非归档赛事
+        // 1) 查询非草稿、非归档赛事
         return competitionMapper.selectList(new LambdaQueryWrapper<Competition>()
                         .ne(Competition::getStatus, CompetitionStatus.DRAFT.name())
                         .ne(Competition::getStatus, CompetitionStatus.ARCHIVED.name()))
@@ -331,10 +327,7 @@ public class CompetitionServiceImpl implements CompetitionService {
 
     @Override
     public PortalCompetitionVO getPortalCompetitionDetail(Long id) {
-        // 1) 兜底关闭已到期报名，确保厂商端详情状态准确
-        closeExpiredRegistrations(LocalDateTime.now());
-
-        // 2) 查询赛事并校验公开范围
+        // 1) 查询赛事并校验公开范围
         Competition competition = getCompetitionOrThrow(id);
         CompetitionStatus status = parseStatus(competition);
         if (status == CompetitionStatus.DRAFT || status == CompetitionStatus.ARCHIVED) {
@@ -384,25 +377,42 @@ public class CompetitionServiceImpl implements CompetitionService {
 
         // 4) 返回列表口径摘要
         Competition saved = competitionMapper.selectById(competition.getId());
-        return toCompetitionVO(saved, buildDetail(saved));
+        return toCompetitionVO(saved, buildOverview(saved));
     }
 
     @Override
     public CompetitionDetailVO getCompetitionDetail(Long id) {
-        // 1) 兜底关闭已到期报名，确保详情页状态准确
-        closeExpiredRegistrations(LocalDateTime.now());
-
-        // 2) 查询比赛主数据
         Competition competition = getCompetitionOrThrow(id);
-
-        // 3) 查询并聚合关联配置
         return buildDetail(competition);
     }
 
     @Override
+    public CompetitionDetailVO getCompetitionOverview(Long id) {
+        return buildOverview(getCompetitionOrThrow(id));
+    }
+
+    @Override
+    public CompetitionProgressVO getCompetitionProgress(Long id) {
+        Competition competition = getCompetitionOrThrow(id);
+        EntrySummaryVO entrySummary = competitionProgressQueryService.getEntrySummary(competition.getId());
+        List<CompetitionRoundVO> rounds = competitionWorkspaceQueryService.listRounds(competition.getId());
+        return CompetitionProgressVO.builder()
+                .progressSummary(competitionProgressQueryService.getProgressSummary(competition.getId(), entrySummary))
+                .rounds(rounds)
+                .currentRound(rounds.isEmpty() ? null : rounds.get(rounds.size() - 1))
+                .build();
+    }
+
+    @Override
+    public List<CompetitionEntryVO> getCompetitionEntryPool(Long id) {
+        Competition competition = getCompetitionOrThrow(id);
+        return competitionWorkspaceQueryService.listEntryPool(competition.getId());
+    }
+
+    @Override
     public CompetitionQuickSummaryVO getCompetitionQuickSummary(Long id) {
-        // 1) 复用单场比赛完整业务计算，确保快速概览与详情页口径一致
-        CompetitionDetailVO detail = getCompetitionDetail(id);
+        // 1) 复用轻量概览计算，避免列表抽屉加载酒款、轮次和结果工作区
+        CompetitionDetailVO detail = getCompetitionOverview(id);
 
         // 2) 仅返回列表抽屉需要的进度和提醒
         return CompetitionQuickSummaryVO.builder()
@@ -612,7 +622,7 @@ public class CompetitionServiceImpl implements CompetitionService {
         }
 
         // 2) 执行完整性检查
-        CompetitionDetailVO detail = buildDetail(competition);
+        CompetitionDetailVO detail = buildOverview(competition);
         List<CompetitionCheckVO> blockingChecks = detail.getChecks().stream()
                 .filter(check -> isBlockingCheck(check.getKey()))
                 .filter(check -> !CHECK_DONE.equals(check.getState()))
@@ -666,7 +676,7 @@ public class CompetitionServiceImpl implements CompetitionService {
         }
 
         // 2) 校验评审准备必需配置
-        CompetitionDetailVO detail = buildDetail(competition);
+        CompetitionDetailVO detail = buildOverview(competition);
         assertChecksDone(detail.getChecks(), Set.of("judgeTables", "scoreForms", "storedEntries"), "评审准备");
 
         // 3) 更新比赛状态为评审准备
@@ -1991,22 +2001,25 @@ public class CompetitionServiceImpl implements CompetitionService {
     }
 
     private CompetitionDetailVO buildDetail(Competition competition) {
+        return competitionWorkspaceQueryService.enrichFullDetail(buildOverview(competition, true));
+    }
+
+    private CompetitionDetailVO buildOverview(Competition competition) {
+        return buildOverview(competition, false);
+    }
+
+    private CompetitionDetailVO buildOverview(Competition competition, boolean includeStyleSnapshot) {
         Long competitionId = competition.getId();
         List<CompetitionConfigNameVO> categories = listCategories(competitionId);
-        List<CompetitionConfigNameVO> styles = listStyles(competitionId);
+        List<CompetitionConfigNameVO> styles = includeStyleSnapshot ? listStyles(competitionId) : List.of();
         List<EntryFieldConfigVO> entryFields = listEntryFields(competitionId);
         List<JudgeTableVO> judgeTables = listJudgeTables(competitionId);
         List<ScoreConfigVO> scoreConfigs = listScoreConfigs(competitionId);
-        EntrySummaryVO entriesSummary = buildEntriesSummary(competitionId);
-        ProgressSummaryVO progressSummary = buildProgressSummary(competitionId, entriesSummary);
+        EntrySummaryVO entriesSummary = competitionProgressQueryService.getEntrySummary(competitionId);
+        ProgressSummaryVO progressSummary = competitionProgressQueryService.getProgressSummary(competitionId, entriesSummary);
         ResultSetupVO resultSetup = buildResultSetup(competition);
         List<CompetitionCheckVO> checks = buildChecks(competition, categories, styles, entryFields, judgeTables, scoreConfigs,
                 entriesSummary, resultSetup);
-        List<CompetitionRoundVO> rounds = roundService.listCompetitionRounds(competitionId);
-        List<CompetitionEntryVO> entryPool = roundService.listEntryPool(competitionId);
-        List<ResultDraftVO> resultDrafts = roundService.buildResultDrafts(competitionId);
-        List<AwardRuleVO> awardRules = awardService.listAwardRules(competitionId);
-        List<AwardResultVO> awardResults = awardService.listAwardResults(competitionId);
         List<String> dataIntegrityIssues = buildDataIntegrityIssues(competition, checks);
         List<CompetitionStageCheckVO> stageChecks = buildStageChecks(competition, checks, dataIntegrityIssues);
         List<CompetitionAlertVO> alerts = buildAlerts(checks, entriesSummary, dataIntegrityIssues);
@@ -2042,13 +2055,13 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .stageChecks(stageChecks)
                 .editableScopes(buildEditableScopes(competition))
                 .entriesSummary(entriesSummary)
-                .entries(entryPool)
-                .entryPool(entryPool)
-                .rounds(rounds)
-                .currentRound(rounds.isEmpty() ? null : rounds.get(rounds.size() - 1))
-                .resultDrafts(resultDrafts)
-                .awardRules(awardRules)
-                .awardResults(awardResults)
+                .entries(List.of())
+                .entryPool(List.of())
+                .rounds(List.of())
+                .currentRound(competitionProgressQueryService.getCurrentRoundSummary(competitionId))
+                .resultDrafts(List.of())
+                .awardRules(List.of())
+                .awardResults(List.of())
                 .progressSummary(progressSummary)
                 .resultSetup(resultSetup)
                 .alerts(alerts)
@@ -2332,24 +2345,6 @@ public class CompetitionServiceImpl implements CompetitionService {
                 .toList();
     }
 
-    private EntrySummaryVO buildEntriesSummary(Long competitionId) {
-        List<BeerEntry> entries = beerEntryMapper.selectList(new LambdaQueryWrapper<BeerEntry>()
-                .eq(BeerEntry::getCompetitionId, competitionId)
-                .ne(BeerEntry::getStatus, EntryStatus.CANCELED.name()));
-        int total = entries.size();
-        int pendingPayment = countEntryStatus(entries, "PENDING_PAYMENT");
-        int stored = (int) entries.stream().filter(entry -> Objects.equals(entry.getStoredFlag(), 1)).count();
-        int resultPublished = countEntryStatus(entries, "RESULT_PUBLISHED") + countEntryStatus(entries, "PUBLISHED");
-        return EntrySummaryVO.builder()
-                .total(total)
-                .pendingPayment(pendingPayment)
-                .registered(total)
-                .stored(stored)
-                .canceled(0)
-                .resultPublished(resultPublished)
-                .build();
-    }
-
     private List<CompetitionEntryVO> listEntries(Long competitionId, List<CompetitionConfigNameVO> categories) {
         Map<Long, String> categoryNameById = categories.stream()
                 .collect(Collectors.toMap(CompetitionConfigNameVO::getId, CompetitionConfigNameVO::getName));
@@ -2422,125 +2417,6 @@ public class CompetitionServiceImpl implements CompetitionService {
                         .orderByDesc(EntryRefund::getId))
                 .forEach(refund -> refundByEntryId.putIfAbsent(refund.getBeerEntryId(), refund));
         return refundByEntryId;
-    }
-
-    private ProgressSummaryVO buildProgressSummary(Long competitionId, EntrySummaryVO entriesSummary) {
-        CompetitionRound currentRound = competitionRoundMapper.selectList(new LambdaQueryWrapper<CompetitionRound>()
-                        .eq(CompetitionRound::getCompetitionId, competitionId)
-                        .orderByDesc(CompetitionRound::getSortOrder)
-                        .orderByDesc(CompetitionRound::getId))
-                .stream()
-                .filter(round -> !RoundStatus.DRAFT.name().equals(round.getStatus()))
-                .findFirst()
-                .orElse(null);
-        if (currentRound == null) {
-            List<ScoreRecord> finalScores = scoreRecordMapper.selectList(new LambdaQueryWrapper<ScoreRecord>()
-                    .eq(ScoreRecord::getCompetitionId, competitionId)
-                    .eq(ScoreRecord::getFinalFlag, 1));
-            int advanced = (int) finalScores.stream()
-                    .filter(record -> Objects.equals(record.getAdvancedFlag(), 1))
-                    .count();
-            return ProgressSummaryVO.builder()
-                    .finalized(finalScores.size())
-                    .total(entriesSummary.getRegistered())
-                    .advanced(advanced)
-                    .commentWarnings(0)
-                    .averageReviewMinutes(0)
-                    .averageReviewSeconds(0)
-                    .averageCommentChars(0)
-                    .build();
-        }
-        if (RoundType.RANKING.name().equals(currentRound.getRoundType())) {
-            List<RoundTable> tables = roundTableMapper.selectList(new LambdaQueryWrapper<RoundTable>()
-                    .eq(RoundTable::getRoundId, currentRound.getId()));
-            int submittedTables = (int) tables.stream()
-                    .filter(table -> RoundStatus.SUBMITTED.name().equals(table.getStatus()) || RoundStatus.LOCKED.name().equals(table.getStatus()))
-                    .count();
-            int results = Math.toIntExact(roundResultMapper.selectCount(new LambdaQueryWrapper<RoundResult>()
-                    .eq(RoundResult::getRoundId, currentRound.getId())));
-            List<RoundResult> roundResults = roundResultMapper.selectList(new LambdaQueryWrapper<RoundResult>()
-                    .eq(RoundResult::getRoundId, currentRound.getId()));
-            return ProgressSummaryVO.builder()
-                    .finalized(submittedTables)
-                    .total(tables.size())
-                    .advanced(results)
-                    .commentWarnings(0)
-                    .averageReviewMinutes(averageMinutes(currentRound.getPublishedTime(),
-                            roundResults.stream().map(RoundResult::getSubmittedTime).toList()))
-                    .averageReviewSeconds(0)
-                    .averageCommentChars(0)
-                    .build();
-        }
-        List<RoundTableEntry> roundEntries = roundTableEntryMapper.selectList(new LambdaQueryWrapper<RoundTableEntry>()
-                .eq(RoundTableEntry::getRoundId, currentRound.getId()));
-        Set<Long> entryIds = roundEntries.stream()
-                .map(RoundTableEntry::getBeerEntryId)
-                .collect(Collectors.toSet());
-        List<ScoreRecord> roundScores = entryIds.isEmpty()
-                ? List.of()
-                : scoreRecordMapper.selectList(new LambdaQueryWrapper<ScoreRecord>()
-                        .eq(ScoreRecord::getCompetitionId, competitionId)
-                        .in(ScoreRecord::getBeerEntryId, entryIds));
-        List<ScoreRecord> finalScores = roundScores.stream()
-                .filter(record -> Objects.equals(record.getFinalFlag(), 1))
-                .toList();
-        List<ScoreRecord> judgeScores = roundScores.stream()
-                .filter(record -> Objects.equals(record.getRoundId(), currentRound.getId()))
-                .filter(record -> Objects.equals(record.getFinalFlag(), 0))
-                .toList();
-        int advanced = (int) finalScores.stream()
-                .filter(record -> Objects.equals(record.getAdvancedFlag(), 1))
-                .count();
-        int captainMinCommentLength = competitionScoreConfigMapper.selectList(new LambdaQueryWrapper<CompetitionScoreConfig>()
-                        .eq(CompetitionScoreConfig::getCompetitionId, competitionId)
-                        .eq(CompetitionScoreConfig::getJudgeRoleType, JudgeRoleType.CAPTAIN.name()))
-                .stream()
-                .findFirst()
-                .map(CompetitionScoreConfig::getMinCommentLength)
-                .orElse(DEFAULT_MIN_COMMENT_LENGTH);
-        int commentWarnings = captainMinCommentLength <= 0
-                ? 0
-                : (int) finalScores.stream()
-                        .filter(record -> String.valueOf(record.getComments() == null ? "" : record.getComments()).trim().length() < captainMinCommentLength)
-                        .count();
-        return ProgressSummaryVO.builder()
-                .finalized(finalScores.size())
-                .total(roundEntries.size())
-                .advanced(advanced)
-                .commentWarnings(commentWarnings)
-                .averageReviewMinutes(averageMinutes(currentRound.getPublishedTime(),
-                        roundScores.stream().map(ScoreRecord::getCreateTime).toList()))
-                .averageReviewSeconds(averageInt(judgeScores.stream()
-                        .map(ScoreRecord::getDurationSeconds)
-                        .filter(Objects::nonNull)
-                        .toList()))
-                .averageCommentChars(averageInt(judgeScores.stream()
-                        .map(ScoreRecord::getCommentCharCount)
-                        .filter(Objects::nonNull)
-                        .toList()))
-                .build();
-    }
-
-    private int averageInt(List<Integer> values) {
-        if (values == null || values.isEmpty()) {
-            return 0;
-        }
-        return (int) Math.round(values.stream().mapToInt(Integer::intValue).average().orElse(0));
-    }
-
-    private int averageMinutes(LocalDateTime startTime, List<LocalDateTime> endTimes) {
-        if (startTime == null || endTimes == null || endTimes.isEmpty()) {
-            return 0;
-        }
-        List<Long> minutes = endTimes.stream()
-                .filter(Objects::nonNull)
-                .filter(endTime -> !endTime.isBefore(startTime))
-                .map(endTime -> Math.max(0L, Duration.between(startTime, endTime).toMinutes()))
-                .toList();
-        if (minutes.isEmpty()) {
-            return 0;
-        }
-        return Math.toIntExact(Math.round(minutes.stream().mapToLong(Long::longValue).average().orElse(0)));
     }
 
     private ResultSetupVO buildResultSetup(Competition competition) {

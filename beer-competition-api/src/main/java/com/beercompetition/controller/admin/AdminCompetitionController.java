@@ -13,6 +13,8 @@ import com.beercompetition.pojo.dto.EntryFieldBatchUpdateRequest;
 import com.beercompetition.pojo.dto.JudgeTableBatchUpdateRequest;
 import com.beercompetition.pojo.vo.CompetitionAnalyticsVO;
 import com.beercompetition.pojo.vo.CompetitionDetailVO;
+import com.beercompetition.pojo.vo.CompetitionEntryVO;
+import com.beercompetition.pojo.vo.CompetitionProgressVO;
 import com.beercompetition.pojo.vo.CompetitionLiveBoardVO;
 import com.beercompetition.pojo.vo.CompetitionQuickSummaryVO;
 import com.beercompetition.pojo.vo.CompetitionSponsorLogoVO;
@@ -70,6 +72,22 @@ public class AdminCompetitionController {
     @GetMapping("/{id}")
     public Result<CompetitionDetailVO> getCompetitionDetail(@PathVariable Long id) {
         return Result.success(competitionService.getCompetitionDetail(id));
+    }
+
+    /**
+     * 查询比赛详情首屏和配置标签需要的轻量数据。
+     */
+    @GetMapping("/{id}/overview")
+    public Result<CompetitionDetailVO> getCompetitionOverview(@PathVariable Long id) {
+        return Result.success(competitionService.getCompetitionOverview(id));
+    }
+
+    /**
+     * 按需查询比赛酒款池。
+     */
+    @GetMapping("/{id}/entry-pool")
+    public Result<List<CompetitionEntryVO>> getCompetitionEntryPool(@PathVariable Long id) {
+        return Result.success(competitionService.getCompetitionEntryPool(id));
     }
 
     /**
@@ -190,8 +208,8 @@ public class AdminCompetitionController {
      * 查询比赛当前进度，供后台流程页刷新使用。
      */
     @GetMapping("/{id}/progress")
-    public Result<CompetitionDetailVO> progress(@PathVariable Long id) {
-        return Result.success(competitionService.getCompetitionDetail(id));
+    public Result<CompetitionProgressVO> progress(@PathVariable Long id) {
+        return Result.success(competitionService.getCompetitionProgress(id));
     }
 
     /**

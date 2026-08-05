@@ -2,6 +2,8 @@ package com.beercompetition.service;
 
 import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.pojo.enums.CompetitionStatus;
+import com.beercompetition.pojo.vo.CompetitionDetailVO;
+import com.beercompetition.pojo.vo.CompetitionProgressVO;
 import com.beercompetition.pojo.vo.CompetitionQuickSummaryVO;
 import com.beercompetition.pojo.vo.CompetitionVO;
 import com.beercompetition.testsupport.BeerCompetitionTestData;
@@ -45,6 +47,24 @@ class CompetitionListSummaryIntegrationTest extends IntegrationTestBase {
         assertThat(quickSummary.getProgressSummary()).isNotNull();
         assertThat(quickSummary.getAlerts()).isNotNull();
         assertThat(quickSummary.getDataIntegrityIssues()).isNotNull();
+
+        CompetitionDetailVO overview = competitionService.getCompetitionOverview(fixture.competition().getId());
+        assertThat(overview.getEntriesSummary().getTotal()).isEqualTo(3);
+        assertThat(overview.getEntryPool()).isEmpty();
+        assertThat(overview.getRounds()).isEmpty();
+        assertThat(overview.getResultDrafts()).isEmpty();
+        assertThat(overview.getAwardRules()).isEmpty();
+        assertThat(overview.getAwardResults()).isEmpty();
+
+        assertThat(competitionService.getCompetitionEntryPool(fixture.competition().getId())).hasSize(3);
+
+        CompetitionProgressVO progress = competitionService.getCompetitionProgress(fixture.competition().getId());
+        assertThat(progress.getProgressSummary()).isNotNull();
+        assertThat(progress.getRounds()).isNotNull();
+
+        CompetitionDetailVO fullDetail = competitionService.getCompetitionDetail(fixture.competition().getId());
+        assertThat(fullDetail.getEntryPool()).hasSize(3);
+        assertThat(fullDetail.getRounds()).isNotNull();
     }
 
     @Test
