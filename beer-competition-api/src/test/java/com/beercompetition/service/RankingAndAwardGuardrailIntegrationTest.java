@@ -1,5 +1,7 @@
 package com.beercompetition.service;
 
+import com.beercompetition.judging.round.RoundLifecycleService;
+import com.beercompetition.judging.scoring.RankingService;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ForbiddenException;
 import com.beercompetition.pojo.dto.AwardConfirmItemRequest;
@@ -29,7 +31,10 @@ class RankingAndAwardGuardrailIntegrationTest extends IntegrationTestBase {
     private BeerCompetitionTestData testData;
 
     @Autowired
-    private RoundService roundService;
+    private RankingService rankingService;
+
+    @Autowired
+    private RoundLifecycleService roundLifecycleService;
 
     @Autowired
     private AwardService awardService;
@@ -41,12 +46,12 @@ class RankingAndAwardGuardrailIntegrationTest extends IntegrationTestBase {
                 fixture, List.of(fixture.entryA1(), fixture.entryA2()), RoundTargetMode.TOP_N, 1, RoundStatus.IN_PROGRESS, 1);
 
         asJudge(fixture.professional().getId());
-        assertThatThrownBy(() -> roundService.submitRanking(rankingRound.table().getId(),
+        assertThatThrownBy(() -> rankingService.submitRanking(rankingRound.table().getId(),
                 rankingRequest(result(fixture.entryA1().getId(), 1))))
                 .isInstanceOf(ForbiddenException.class);
 
         asJudge(fixture.captain().getId());
-        assertThatThrownBy(() -> roundService.submitRanking(rankingRound.table().getId(),
+        assertThatThrownBy(() -> rankingService.submitRanking(rankingRound.table().getId(),
                 rankingRequest(result(fixture.entryB1().getId(), 1))))
                 .isInstanceOf(BaseException.class)
                 .hasMessageContaining("不属于当前桌");
@@ -59,9 +64,9 @@ class RankingAndAwardGuardrailIntegrationTest extends IntegrationTestBase {
                 fixture, List.of(fixture.entryA1(), fixture.entryA2()), RoundTargetMode.TOP_N, 1, RoundStatus.IN_PROGRESS, 1);
 
         asJudge(fixture.captain().getId());
-        roundService.submitRanking(rankingRound.table().getId(), rankingRequest(result(fixture.entryA1().getId(), 1)));
+        rankingService.submitRanking(rankingRound.table().getId(), rankingRequest(result(fixture.entryA1().getId(), 1)));
 
-        assertThatThrownBy(() -> roundService.finalizeRanking(rankingRound.table().getId()))
+        assertThatThrownBy(() -> rankingService.finalizeRanking(rankingRound.table().getId()))
                 .isInstanceOf(BaseException.class)
                 .hasMessageContaining("确认未完成");
     }
@@ -73,17 +78,17 @@ class RankingAndAwardGuardrailIntegrationTest extends IntegrationTestBase {
                 fixture, List.of(fixture.entryA1(), fixture.entryA2()), RoundTargetMode.TOP_N, 1, RoundStatus.IN_PROGRESS, 1);
 
         asJudge(fixture.captain().getId());
-        roundService.submitRanking(rankingRound.table().getId(), rankingRequest(result(fixture.entryA1().getId(), 1)));
+        rankingService.submitRanking(rankingRound.table().getId(), rankingRequest(result(fixture.entryA1().getId(), 1)));
 
         asJudge(fixture.professional().getId());
-        RankingConfirmationVO confirmation = roundService.getRankingConfirmation(rankingRound.table().getId());
-        roundService.confirmRankingRoundTable(rankingRound.table().getId(), confirmationRequest(confirmation.getResultVersion()));
+        RankingConfirmationVO confirmation = rankingService.getRankingConfirmation(rankingRound.table().getId());
+        rankingService.confirmRankingRoundTable(rankingRound.table().getId(), confirmationRequest(confirmation.getResultVersion()));
         assertThat(jdbcTemplate.queryForObject("SELECT status FROM round_table WHERE id = ?",
                 String.class, rankingRound.table().getId())).isEqualTo(RoundStatus.IN_PROGRESS.name());
 
         asJudge(fixture.cross().getId());
-        confirmation = roundService.getRankingConfirmation(rankingRound.table().getId());
-        roundService.confirmRankingRoundTable(rankingRound.table().getId(), confirmationRequest(confirmation.getResultVersion()));
+        confirmation = rankingService.getRankingConfirmation(rankingRound.table().getId());
+        rankingService.confirmRankingRoundTable(rankingRound.table().getId(), confirmationRequest(confirmation.getResultVersion()));
 
         assertThat(jdbcTemplate.queryForObject("SELECT status FROM round_table WHERE id = ?",
                 String.class, rankingRound.table().getId())).isEqualTo(RoundStatus.SUBMITTED.name());
@@ -98,12 +103,12 @@ class RankingAndAwardGuardrailIntegrationTest extends IntegrationTestBase {
                 fixture, List.of(fixture.entryA1(), fixture.entryA2()), RoundTargetMode.TOP_N, 1, RoundStatus.IN_PROGRESS, 1);
 
         asJudge(fixture.captain().getId());
-        roundService.submitRanking(rankingRound.table().getId(), rankingRequest(result(fixture.entryA1().getId(), 1)));
-        Integer staleVersion = roundService.getRankingConfirmation(rankingRound.table().getId()).getResultVersion();
-        roundService.submitRanking(rankingRound.table().getId(), rankingRequest(result(fixture.entryA2().getId(), 1)));
+        rankingService.submitRanking(rankingRound.table().getId(), rankingRequest(result(fixture.entryA1().getId(), 1)));
+        Integer staleVersion = rankingService.getRankingConfirmation(rankingRound.table().getId()).getResultVersion();
+        rankingService.submitRanking(rankingRound.table().getId(), rankingRequest(result(fixture.entryA2().getId(), 1)));
 
         asJudge(fixture.professional().getId());
-        assertThatThrownBy(() -> roundService.confirmRankingRoundTable(rankingRound.table().getId(), confirmationRequest(staleVersion)))
+        assertThatThrownBy(() -> rankingService.confirmRankingRoundTable(rankingRound.table().getId(), confirmationRequest(staleVersion)))
                 .isInstanceOf(BaseException.class)
                 .hasMessageContaining("已更新");
     }
@@ -136,7 +141,7 @@ class RankingAndAwardGuardrailIntegrationTest extends IntegrationTestBase {
 
         asAdmin(1L);
 
-        assertThatThrownBy(() -> roundService.publishResults(fixture.competition().getId()))
+        assertThatThrownBy(() -> roundLifecycleService.publishResults(fixture.competition().getId()))
                 .isInstanceOf(BaseException.class)
                 .hasMessageContaining("决赛轮结果未锁定");
     }

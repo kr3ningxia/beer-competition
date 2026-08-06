@@ -3,7 +3,7 @@ package com.beercompetition.controller.admin;
 import com.beercompetition.common.result.Result;
 import com.beercompetition.pojo.dto.ScoreConfigBatchUpdateRequest;
 import com.beercompetition.pojo.vo.ScoreConfigVO;
-import com.beercompetition.service.CompetitionService;
+import com.beercompetition.competition.configuration.CompetitionConfigurationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,14 +23,14 @@ import java.util.List;
 @RequestMapping("/api/admin/score-configs")
 public class AdminScoreConfigController {
 
-    private final CompetitionService competitionService;
+    private final CompetitionConfigurationService competitionConfigurationService;
 
     /**
      * 查询指定比赛的评分表配置。
      */
     @GetMapping("/{competitionId}")
     public Result<List<ScoreConfigVO>> getScoreConfigs(@PathVariable Long competitionId) {
-        return Result.success(competitionService.getScoreConfigs(competitionId));
+        return Result.success(competitionConfigurationService.getScoreConfigs(competitionId));
     }
 
     /**
@@ -39,6 +39,6 @@ public class AdminScoreConfigController {
     @PutMapping("/{competitionId}")
     public Result<List<ScoreConfigVO>> updateScoreConfigs(@PathVariable Long competitionId,
                                                           @RequestBody @Valid ScoreConfigBatchUpdateRequest request) {
-        return Result.success(competitionService.updateScoreConfigs(competitionId, request));
+        return Result.success(competitionConfigurationService.updateScoreConfigs(competitionId, request));
     }
 }

@@ -10,7 +10,11 @@ import com.beercompetition.pojo.vo.EntryDetailVO;
 import com.beercompetition.pojo.vo.EntrySummaryVO;
 import com.beercompetition.pojo.vo.PortalEntryLabelVO;
 import com.beercompetition.pojo.vo.PortalMyParticipationVO;
-import com.beercompetition.service.EntryService;
+import com.beercompetition.registration.delivery.EntryDeliveryService;
+import com.beercompetition.registration.entry.EntryDocumentService;
+import com.beercompetition.registration.entry.PortalEntryService;
+import com.beercompetition.registration.payment.EntryPaymentAdminService;
+import com.beercompetition.registration.refund.EntryRefundService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -32,14 +36,18 @@ import java.util.List;
 @RequestMapping("/api/portal")
 public class PortalEntryController {
 
-    private final EntryService entryService;
+    private final PortalEntryService portalEntryService;
+    private final EntryDeliveryService entryDeliveryService;
+    private final EntryPaymentAdminService entryPaymentAdminService;
+    private final EntryRefundService entryRefundService;
+    private final EntryDocumentService entryDocumentService;
 
     /**
      * 查询当前厂商的报名酒款列表。
      */
     @GetMapping("/entries")
     public Result<List<EntrySummaryVO>> entries() {
-        return Result.success(entryService.listPortalEntries());
+        return Result.success(portalEntryService.listPortalEntries());
     }
 
     /**
@@ -47,7 +55,7 @@ public class PortalEntryController {
      */
     @GetMapping("/entries/{id}")
     public Result<EntryDetailVO> entryDetail(@PathVariable Long id) {
-        return Result.success(entryService.getPortalEntry(id));
+        return Result.success(portalEntryService.getPortalEntry(id));
     }
 
     /**
@@ -56,7 +64,7 @@ public class PortalEntryController {
     @PutMapping("/entries/{id}")
     public Result<EntryDetailVO> updateEntry(@PathVariable Long id,
                                              @RequestBody @Valid PortalEntryUpdateRequest request) {
-        return Result.success(entryService.updatePortalEntry(id, request));
+        return Result.success(portalEntryService.updatePortalEntry(id, request));
     }
 
     /**
@@ -65,7 +73,7 @@ public class PortalEntryController {
     @PostMapping("/entries/{id}/delivery")
     public Result<EntryDetailVO> submitEntryDelivery(@PathVariable Long id,
                                                      @RequestBody @Valid PortalEntryDeliverySubmitRequest request) {
-        return Result.success(entryService.submitPortalEntryDelivery(id, request));
+        return Result.success(entryDeliveryService.submitPortalEntryDelivery(id, request));
     }
 
     /**
@@ -73,7 +81,7 @@ public class PortalEntryController {
      */
     @PostMapping("/entries/{id}/cancel")
     public Result<EntryDetailVO> cancelEntry(@PathVariable Long id) {
-        return Result.success(entryService.cancelPortalEntry(id));
+        return Result.success(portalEntryService.cancelPortalEntry(id));
     }
 
     /**
@@ -81,7 +89,7 @@ public class PortalEntryController {
      */
     @PostMapping("/entries/{id}/payment/simulate")
     public Result<EntryDetailVO> simulatePayment(@PathVariable Long id) {
-        return Result.success(entryService.simulatePayment(id));
+        return Result.success(entryPaymentAdminService.simulatePayment(id));
     }
 
     /**
@@ -90,7 +98,7 @@ public class PortalEntryController {
     @PostMapping("/entries/{id}/refund")
     public Result<EntryDetailVO> requestRefund(@PathVariable Long id,
                                                @RequestBody @Valid PortalEntryRefundRequest request) {
-        return Result.success(entryService.requestPortalEntryRefund(id, request));
+        return Result.success(entryRefundService.requestPortalEntryRefund(id, request));
     }
 
     /**
@@ -99,7 +107,7 @@ public class PortalEntryController {
     @PostMapping("/competitions/{competitionId}/entries")
     public Result<EntryDetailVO> submitEntry(@PathVariable Long competitionId,
                                              @RequestBody @Valid PortalEntrySubmitRequest request) {
-        return Result.success(entryService.submitPortalEntry(competitionId, request));
+        return Result.success(portalEntryService.submitPortalEntry(competitionId, request));
     }
 
     /**
@@ -107,7 +115,7 @@ public class PortalEntryController {
      */
     @GetMapping("/entries/{id}/label")
     public Result<PortalEntryLabelVO> entryLabel(@PathVariable Long id) {
-        return Result.success(entryService.getPortalEntryLabel(id));
+        return Result.success(entryDocumentService.getPortalEntryLabel(id));
     }
 
     /**
@@ -115,12 +123,12 @@ public class PortalEntryController {
      */
     @GetMapping("/entries/{id}/label/pdf")
     public ResponseEntity<byte[]> entryLabelPdf(@PathVariable Long id) {
-        return FileResponseHelper.attachment(entryService.downloadPortalEntryLabelPdf(id));
+        return FileResponseHelper.attachment(entryDocumentService.downloadPortalEntryLabelPdf(id));
     }
 
     @GetMapping("/entries/{id}/label/png")
     public ResponseEntity<byte[]> entryLabelPng(@PathVariable Long id) {
-        return FileResponseHelper.attachment(entryService.downloadPortalEntryLabelPng(id));
+        return FileResponseHelper.attachment(entryDocumentService.downloadPortalEntryLabelPng(id));
     }
 
     /**
@@ -128,6 +136,6 @@ public class PortalEntryController {
      */
     @GetMapping("/my")
     public Result<PortalMyParticipationVO> myParticipation() {
-        return Result.success(entryService.getPortalMyParticipation());
+        return Result.success(portalEntryService.getPortalMyParticipation());
     }
 }

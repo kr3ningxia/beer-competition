@@ -1,6 +1,13 @@
 package com.beercompetition.service;
 
+import com.beercompetition.judging.round.JudgeRoundTaskService;
+import com.beercompetition.competition.command.CompetitionCommandService;
 import com.beercompetition.common.exception.BaseException;
+import com.beercompetition.judging.scoring.JudgeEntryQueryService;
+import com.beercompetition.registration.entry.AdminEntryService;
+import com.beercompetition.registration.entry.PortalEntryService;
+import com.beercompetition.registration.payment.EntryPaymentAdminService;
+import com.beercompetition.registration.refund.EntryRefundService;
 import com.beercompetition.pojo.dto.PortalEntryRefundRequest;
 import com.beercompetition.pojo.dto.PortalEntrySubmitRequest;
 import com.beercompetition.pojo.dto.PortalEntryUpdateRequest;
@@ -33,13 +40,25 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
     private BeerCompetitionTestData testData;
 
     @Autowired
-    private EntryService entryService;
+    private PortalEntryService portalEntryService;
 
     @Autowired
-    private CompetitionService competitionService;
+    private AdminEntryService adminEntryService;
 
     @Autowired
-    private RoundService roundService;
+    private EntryPaymentAdminService entryPaymentAdminService;
+
+    @Autowired
+    private EntryRefundService entryRefundService;
+
+    @Autowired
+    private JudgeEntryQueryService judgeEntryQueryService;
+
+    @Autowired
+    private CompetitionCommandService competitionCommandService;
+
+    @Autowired
+    private JudgeRoundTaskService judgeRoundTaskService;
 
     @Test
     void simulatePaymentIsOwnedAndIdempotentForPendingEntry() {
@@ -48,11 +67,11 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
                 fixture.category().getId(), testRun + "-待支付", EntryStatus.PENDING_PAYMENT, false);
 
         asPortal(fixture.portalA().account().getId());
-        var paid = entryService.simulatePayment(pending.getId());
+        var paid = entryPaymentAdminService.simulatePayment(pending.getId());
         assertThat(paid.getStatus()).isEqualTo(EntryStatus.REGISTERED.name());
         assertThat(paid.getPayment().getStatus()).isEqualTo(EntryPaymentStatus.PAID.name());
 
-        var repeated = entryService.simulatePayment(pending.getId());
+        var repeated = entryPaymentAdminService.simulatePayment(pending.getId());
         assertThat(repeated.getStatus()).isEqualTo(EntryStatus.REGISTERED.name());
         assertThat(repeated.getPayment().getStatus()).isEqualTo(EntryPaymentStatus.PAID.name());
     }
@@ -65,7 +84,7 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
 
         asPortal(fixture.portalA().account().getId());
 
-        assertThatThrownBy(() -> entryService.simulatePayment(canceled.getId()))
+        assertThatThrownBy(() -> entryPaymentAdminService.simulatePayment(canceled.getId()))
                 .isInstanceOf(BaseException.class)
                 .hasMessageContaining("不能支付");
     }
@@ -90,7 +109,7 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
 
         asPortal(fixture.portalA().account().getId());
 
-        assertThatThrownBy(() -> entryService.submitPortalEntry(fixture.competition().getId(), request))
+        assertThatThrownBy(() -> portalEntryService.submitPortalEntry(fixture.competition().getId(), request))
                 .isInstanceOf(BaseException.class)
                 .hasMessageContaining("补充说明不能超过255个字符");
     }
@@ -112,12 +131,12 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
         request.setAbv(new BigDecimal("5.0"));
         request.setExtraFields(Map.of("color", "金色"));
         asPortal(fixture.portalA().account().getId());
-        var submitted = entryService.submitPortalEntry(fixture.competition().getId(), request);
+        var submitted = portalEntryService.submitPortalEntry(fixture.competition().getId(), request);
         assertThat(submitted.getExtraFields()).anySatisfy(field -> assertThat(field.getValue()).isEqualTo("金色"));
 
         request.setName(testRun + "-单选非法");
         request.setExtraFields(Map.of("color", "黑色"));
-        assertThatThrownBy(() -> entryService.submitPortalEntry(fixture.competition().getId(), request))
+        assertThatThrownBy(() -> portalEntryService.submitPortalEntry(fixture.competition().getId(), request))
                 .isInstanceOf(BaseException.class)
                 .hasMessageContaining("选项不合法");
     }
@@ -164,13 +183,13 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
                 RoundTargetMode.TOP_N, 1, RoundStatus.IN_PROGRESS, 1);
 
         asJudge(fixture.professional().getId());
-        var judgeEntry = entryService.getJudgeEntry(fixture.entryA1().getUuid());
+        var judgeEntry = judgeEntryQueryService.getJudgeEntry(fixture.entryA1().getUuid());
         assertThat(judgeEntry.getStyleDescription()).isEqualTo("历史风格说明");
         assertThat(judgeEntry.getExtraFields())
                 .extracting(field -> field.getKey())
                 .containsExactlyInAnyOrder("visibleNote", "retiredNote");
 
-        var roundTable = roundService.getMyRoundTable(rankingRound.table().getId());
+        var roundTable = judgeRoundTaskService.getMyRoundTable(rankingRound.table().getId());
         var roundEntry = roundTable.getEntries().get(0);
         assertThat(roundEntry.getStyleDescription()).isEqualTo("历史风格说明");
         assertThat(roundEntry.getExtraFields())
@@ -191,7 +210,7 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
         request.setConfirmationCode(shortCode);
         request.setPaymentDisposition("MANUAL_REFUNDED");
         request.setHighRiskConfirmed(false);
-        entryService.administrativelyDeleteEntry(entry.getId(), request);
+        adminEntryService.administrativelyDeleteEntry(entry.getId(), request);
 
         assertThat(jdbcTemplate.queryForObject("SELECT deleted_flag FROM beer_entry WHERE id = ?", Integer.class, entry.getId())).isEqualTo(1);
         assertThat(jdbcTemplate.queryForObject("SELECT status FROM entry_scan_label WHERE beer_entry_id = ?", String.class, entry.getId())).isEqualTo("DISABLED");
@@ -232,7 +251,7 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
         request.setExtraFields(Map.of("note", "已修正"));
 
         asPortal(fixture.portalA().account().getId());
-        var updated = entryService.updatePortalEntry(entry.getId(), request);
+        var updated = portalEntryService.updatePortalEntry(entry.getId(), request);
 
         assertThat(updated.getName()).isEqualTo(testRun + "-修改后酒名");
         assertThat(updated.getStyle()).isEqualTo(testRun + "-新风格");
@@ -261,8 +280,8 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
         request.setAbv(new BigDecimal("5.5"));
 
         asPortal(fixture.portalA().account().getId());
-        var detail = entryService.getPortalEntry(entry.getId());
-        var updated = entryService.updatePortalEntry(entry.getId(), request);
+        var detail = portalEntryService.getPortalEntry(entry.getId());
+        var updated = portalEntryService.updatePortalEntry(entry.getId(), request);
 
         assertThat(detail.getCanUpdateInfo()).isTrue();
         assertThat(detail.getUpdateInfoDisabledReason()).isNull();
@@ -284,8 +303,8 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
         request.setAbv(new BigDecimal("5.5"));
 
         asPortal(fixture.portalA().account().getId());
-        var detail = entryService.getPortalEntry(entry.getId());
-        var updated = entryService.updatePortalEntry(entry.getId(), request);
+        var detail = portalEntryService.getPortalEntry(entry.getId());
+        var updated = portalEntryService.updatePortalEntry(entry.getId(), request);
 
         assertThat(detail.getCanUpdateInfo()).isTrue();
         assertThat(detail.getUpdateInfoDisabledReason()).isNull();
@@ -304,7 +323,7 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
 
         asPortal(fixture.portalA().account().getId());
 
-        assertThatThrownBy(() -> entryService.updatePortalEntry(fixture.entryA1().getId(), request))
+        assertThatThrownBy(() -> portalEntryService.updatePortalEntry(fixture.entryA1().getId(), request))
                 .isInstanceOf(BaseException.class)
                 .hasMessageContaining("样品已入库");
     }
@@ -323,11 +342,11 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
         request.setAbv(new BigDecimal("5.5"));
 
         asPortal(fixture.portalA().account().getId());
-        var detail = entryService.getPortalEntry(entry.getId());
+        var detail = portalEntryService.getPortalEntry(entry.getId());
 
         assertThat(detail.getCanUpdateInfo()).isFalse();
         assertThat(detail.getUpdateInfoDisabledReason()).contains("赛事已进入评审准备");
-        assertThatThrownBy(() -> entryService.updatePortalEntry(entry.getId(), request))
+        assertThatThrownBy(() -> portalEntryService.updatePortalEntry(entry.getId(), request))
                 .isInstanceOf(BaseException.class)
                 .hasMessageContaining("赛事已进入评审准备");
     }
@@ -341,7 +360,7 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
         asPortal(fixture.portalA().account().getId());
         PortalEntryRefundRequest request = new PortalEntryRefundRequest();
         request.setReason("测试退款");
-        entryService.requestPortalEntryRefund(refundable.getId(), request);
+        entryRefundService.requestPortalEntryRefund(refundable.getId(), request);
 
         Long refundId = jdbcTemplate.queryForObject(
                 "SELECT id FROM entry_refund WHERE beer_entry_id = ? ORDER BY id DESC LIMIT 1",
@@ -371,7 +390,7 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
         asPortal(fixture.portalA().account().getId());
         PortalEntryRefundRequest request = new PortalEntryRefundRequest();
         request.setReason("等待管理员审批");
-        entryService.requestPortalEntryRefund(refundable.getId(), request);
+        entryRefundService.requestPortalEntryRefund(refundable.getId(), request);
 
         Map<String, Object> refund = jdbcTemplate.queryForMap("""
                 SELECT status, approval_mode_snapshot
@@ -396,7 +415,7 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
         asAdmin(1L);
         AdminEntryStatusRequest approveRequest = new AdminEntryStatusRequest();
         approveRequest.setReason("同意退款");
-        entryService.approveRefund(refundId, approveRequest);
+        entryRefundService.approveRefund(refundId, approveRequest);
 
         assertThat(latestRefundStatus(refundable.getId())).isEqualTo(EntryRefundStatus.APPROVED.name());
         assertThat(jdbcTemplate.queryForObject("SELECT status FROM beer_entry WHERE id = ?",
@@ -414,7 +433,7 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
         asPortal(fixture.portalA().account().getId());
         PortalEntryRefundRequest refundRequest = new PortalEntryRefundRequest();
         refundRequest.setReason("申请退款");
-        entryService.requestPortalEntryRefund(refundable.getId(), refundRequest);
+        entryRefundService.requestPortalEntryRefund(refundable.getId(), refundRequest);
         Long refundId = jdbcTemplate.queryForObject("""
                 SELECT id FROM entry_refund
                 WHERE beer_entry_id = ?
@@ -425,7 +444,7 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
         asAdmin(1L);
         AdminEntryStatusRequest rejectRequest = new AdminEntryStatusRequest();
         rejectRequest.setReason("不符合退款条件");
-        entryService.rejectRefund(refundId, rejectRequest);
+        entryRefundService.rejectRefund(refundId, rejectRequest);
 
         assertThat(latestRefundStatus(refundable.getId())).isEqualTo(EntryRefundStatus.REJECTED.name());
         assertThat(jdbcTemplate.queryForObject("SELECT status FROM entry_payment WHERE beer_entry_id = ?",
@@ -447,12 +466,12 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
         asPortal(fixture.portalA().account().getId());
         PortalEntryRefundRequest request = new PortalEntryRefundRequest();
         request.setReason("切换审批方式");
-        entryService.requestPortalEntryRefund(pendingReview.getId(), request);
+        entryRefundService.requestPortalEntryRefund(pendingReview.getId(), request);
 
         asAdmin(1L);
         CompetitionRefundPolicyUpdateRequest policyRequest = new CompetitionRefundPolicyUpdateRequest();
         policyRequest.setRefundApprovalMode(RefundApprovalMode.AUTO_APPROVE.name());
-        competitionService.updateRefundPolicy(fixture.competition().getId(), policyRequest);
+        competitionCommandService.updateRefundPolicy(fixture.competition().getId(), policyRequest);
         assertThat(jdbcTemplate.queryForObject("""
                 SELECT COUNT(*) FROM admin_operation_log
                 WHERE action = 'COMPETITION_REFUND_POLICY_UPDATE'
@@ -460,7 +479,7 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
                 """, Integer.class, String.valueOf(fixture.competition().getId()))).isEqualTo(1);
 
         asPortal(fixture.portalA().account().getId());
-        entryService.requestPortalEntryRefund(autoApproved.getId(), request);
+        entryRefundService.requestPortalEntryRefund(autoApproved.getId(), request);
 
         assertThat(latestRefundStatus(pendingReview.getId())).isEqualTo(EntryRefundStatus.REQUESTED.name());
         assertThat(latestRefundStatus(autoApproved.getId())).isEqualTo(EntryRefundStatus.APPROVED.name());
@@ -484,7 +503,7 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
 
         asAdmin(1L);
 
-        assertThatThrownBy(() -> competitionService.updateRefundPolicy(fixture.competition().getId(), request))
+        assertThatThrownBy(() -> competitionCommandService.updateRefundPolicy(fixture.competition().getId(), request))
                 .isInstanceOf(BaseException.class)
                 .hasMessageContaining("退款申请时间已截止");
     }
@@ -496,7 +515,7 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
         asPortal(fixture.portalA().account().getId());
         PortalEntryRefundRequest request = new PortalEntryRefundRequest();
         request.setReason("入库后退款");
-        entryService.requestPortalEntryRefund(fixture.entryA1().getId(), request);
+        entryRefundService.requestPortalEntryRefund(fixture.entryA1().getId(), request);
 
         var entryStatus = jdbcTemplate.queryForObject("SELECT status FROM beer_entry WHERE id = ?",
                 String.class, fixture.entryA1().getId());
@@ -526,7 +545,7 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
         PortalEntryRefundRequest request = new PortalEntryRefundRequest();
         request.setReason("测试退款");
 
-        assertThatThrownBy(() -> entryService.requestPortalEntryRefund(refundable.getId(), request))
+        assertThatThrownBy(() -> entryRefundService.requestPortalEntryRefund(refundable.getId(), request))
                 .isInstanceOf(BaseException.class)
                 .hasMessageContaining("报名截止后不能申请退款");
     }
@@ -549,7 +568,7 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
         PortalEntryRefundRequest request = new PortalEntryRefundRequest();
         request.setReason("再次退款");
 
-        assertThatThrownBy(() -> entryService.requestPortalEntryRefund(refundable.getId(), request))
+        assertThatThrownBy(() -> entryRefundService.requestPortalEntryRefund(refundable.getId(), request))
                 .isInstanceOf(BaseException.class)
                 .hasMessageContaining("退款暂未成功");
     }

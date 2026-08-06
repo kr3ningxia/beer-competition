@@ -1,5 +1,6 @@
 package com.beercompetition.service;
 
+import com.beercompetition.judging.scoring.ScoreConfirmationService;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ForbiddenException;
 import com.beercompetition.pojo.dto.DimensionRequest;
@@ -33,7 +34,7 @@ class ScoreGuardrailIntegrationTest extends IntegrationTestBase {
     private ScoreService scoreService;
 
     @Autowired
-    private RoundService roundService;
+    private ScoreConfirmationService scoreConfirmationService;
 
     @Autowired
     private AuthService authService;
@@ -181,14 +182,14 @@ class ScoreGuardrailIntegrationTest extends IntegrationTestBase {
         scoreService.finalizeTableScore(fixture.entryA1().getUuid(), finalizeRequest(46, true));
 
         asJudge(fixture.professional().getId());
-        ScoreConfirmationVO confirmation = roundService.getScoreConfirmation(scoreRound.table().getId());
-        roundService.confirmScoreRoundTable(scoreRound.table().getId(), confirmationRequest(confirmation.getResultVersion()));
+        ScoreConfirmationVO confirmation = scoreConfirmationService.getScoreConfirmation(scoreRound.table().getId());
+        scoreConfirmationService.confirmScoreRoundTable(scoreRound.table().getId(), confirmationRequest(confirmation.getResultVersion()));
         assertThat(jdbcTemplate.queryForObject("SELECT status FROM round_table WHERE id = ?",
                 String.class, scoreRound.table().getId())).isEqualTo(RoundStatus.PUBLISHED.name());
 
         asJudge(fixture.cross().getId());
-        confirmation = roundService.getScoreConfirmation(scoreRound.table().getId());
-        roundService.confirmScoreRoundTable(scoreRound.table().getId(), confirmationRequest(confirmation.getResultVersion()));
+        confirmation = scoreConfirmationService.getScoreConfirmation(scoreRound.table().getId());
+        scoreConfirmationService.confirmScoreRoundTable(scoreRound.table().getId(), confirmationRequest(confirmation.getResultVersion()));
 
         assertThat(jdbcTemplate.queryForObject("SELECT status FROM round_table WHERE id = ?",
                 String.class, scoreRound.table().getId())).isEqualTo(RoundStatus.SUBMITTED.name());
@@ -203,7 +204,7 @@ class ScoreGuardrailIntegrationTest extends IntegrationTestBase {
 
         asJudge(fixture.professional().getId());
         scoreService.createScore(professionalScoreRequest(fixture.entryA1().getUuid(), 18, 27));
-        ScoreConfirmationVO staleConfirmation = roundService.getScoreConfirmation(scoreRound.table().getId());
+        ScoreConfirmationVO staleConfirmation = scoreConfirmationService.getScoreConfirmation(scoreRound.table().getId());
         asJudge(fixture.cross().getId());
         scoreService.createScore(crossScoreRequest(fixture.entryA1().getUuid(), 44));
         asJudge(fixture.captain().getId());
@@ -212,7 +213,7 @@ class ScoreGuardrailIntegrationTest extends IntegrationTestBase {
         scoreService.finalizeTableScore(fixture.entryA1().getUuid(), finalizeRequest(45, true));
 
         asJudge(fixture.professional().getId());
-        assertThatThrownBy(() -> roundService.confirmScoreRoundTable(scoreRound.table().getId(), confirmationRequest(staleConfirmation.getResultVersion())))
+        assertThatThrownBy(() -> scoreConfirmationService.confirmScoreRoundTable(scoreRound.table().getId(), confirmationRequest(staleConfirmation.getResultVersion())))
                 .isInstanceOf(BaseException.class)
                 .hasMessageContaining("已更新");
     }
@@ -233,7 +234,7 @@ class ScoreGuardrailIntegrationTest extends IntegrationTestBase {
         AdminConfirmationOverrideRequest request = new AdminConfirmationOverrideRequest();
         request.setReason("现场纸面确认");
         asAdmin(1L);
-        roundService.overrideScoreConfirmation(fixture.competition().getId(), scoreRound.table().getId(), request);
+        scoreConfirmationService.overrideScoreConfirmation(fixture.competition().getId(), scoreRound.table().getId(), request);
 
         assertThat(jdbcTemplate.queryForObject("SELECT status FROM round_table WHERE id = ?",
                 String.class, scoreRound.table().getId())).isEqualTo(RoundStatus.SUBMITTED.name());

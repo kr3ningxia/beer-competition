@@ -4,7 +4,7 @@ import com.beercompetition.common.result.Result;
 import com.beercompetition.pojo.dto.AdminFeedbackCommentUpdateRequest;
 import com.beercompetition.pojo.vo.AdminFeedbackReviewEntryVO;
 import com.beercompetition.service.AdminFeedbackService;
-import com.beercompetition.service.CompetitionService;
+import com.beercompetition.competition.query.CompetitionFeedbackQueryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,14 +25,14 @@ import java.util.List;
 public class AdminFeedbackController {
 
     private final AdminFeedbackService adminFeedbackService;
-    private final CompetitionService competitionService;
+    private final CompetitionFeedbackQueryService competitionFeedbackQueryService;
 
     /**
      * 查询指定比赛待复核的评语列表。
      */
     @GetMapping
     public Result<List<AdminFeedbackReviewEntryVO>> feedbackReview(@PathVariable Long id) {
-        return Result.success(competitionService.getFeedbackReviewEntries(id));
+        return Result.success(competitionFeedbackQueryService.getFeedbackReviewEntries(id));
     }
 
     /**

@@ -34,7 +34,7 @@ import com.beercompetition.pojo.vo.CompetitionVO;
 import com.beercompetition.pojo.vo.JudgeAccountVO;
 import com.beercompetition.pojo.vo.JudgeTaskVO;
 import com.beercompetition.service.JudgeService;
-import com.beercompetition.service.RoundService;
+import com.beercompetition.judging.round.JudgeRoundTaskService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -62,7 +62,7 @@ public class JudgeServiceImpl implements JudgeService {
     private final BreweryMapper breweryMapper;
     private final AdminOperationLogMapper adminOperationLogMapper;
     private final PiiService piiService;
-    private final RoundService roundService;
+    private final JudgeRoundTaskService judgeRoundTaskService;
 
     @Override
     public List<JudgeAccountVO> listJudges(Integer status, String keyword) {
@@ -295,7 +295,7 @@ public class JudgeServiceImpl implements JudgeService {
         if (JudgeAccountStatus.of(account.getStatus()) != JudgeAccountStatus.ACTIVE) {
             return List.of();
         }
-        return roundService.listMyTasks()
+        return judgeRoundTaskService.listMyTasks()
                 .stream()
                 .map(this::toCompetitionVO)
                 .toList();

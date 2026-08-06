@@ -7,7 +7,7 @@ import com.beercompetition.pojo.vo.CompetitionEntryVO;
 import com.beercompetition.pojo.vo.CompetitionRoundVO;
 import com.beercompetition.pojo.vo.ResultDraftVO;
 import com.beercompetition.service.AwardService;
-import com.beercompetition.service.RoundService;
+import com.beercompetition.judging.round.RoundQueryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -20,19 +20,19 @@ import java.util.List;
 @RequiredArgsConstructor
 public class CompetitionWorkspaceQueryService {
 
-    private final RoundService roundService;
+    private final RoundQueryService roundQueryService;
     private final AwardService awardService;
 
     public List<CompetitionEntryVO> listEntryPool(Long competitionId) {
-        return roundService.listEntryPool(competitionId);
+        return roundQueryService.listEntryPool(competitionId);
     }
 
     public List<CompetitionRoundVO> listRounds(Long competitionId) {
-        return roundService.listCompetitionRounds(competitionId);
+        return roundQueryService.listCompetitionRounds(competitionId);
     }
 
     public List<ResultDraftVO> listResultDrafts(Long competitionId) {
-        return roundService.buildResultDrafts(competitionId);
+        return roundQueryService.buildResultDrafts(competitionId);
     }
 
     public List<AwardRuleVO> listAwardRules(Long competitionId) {

@@ -7,8 +7,11 @@ import com.beercompetition.pojo.dto.NextRoundCreateRequest;
 import com.beercompetition.pojo.dto.RoundAllocationRequest;
 import com.beercompetition.pojo.vo.CompetitionDetailVO;
 import com.beercompetition.pojo.vo.ResultDraftVO;
-import com.beercompetition.service.CompetitionService;
-import com.beercompetition.service.RoundService;
+import com.beercompetition.competition.query.CompetitionQueryService;
+import com.beercompetition.judging.assignment.RoundAllocationService;
+import com.beercompetition.judging.round.RoundLifecycleService;
+import com.beercompetition.judging.round.RoundQueryService;
+import com.beercompetition.judging.scoring.ScoreConfirmationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -30,8 +33,11 @@ import java.util.List;
 @RequestMapping("/api/admin/competitions/{id}")
 public class AdminRoundController {
 
-    private final CompetitionService competitionService;
-    private final RoundService roundService;
+    private final CompetitionQueryService competitionQueryService;
+    private final RoundAllocationService roundAllocationService;
+    private final RoundLifecycleService roundLifecycleService;
+    private final RoundQueryService roundQueryService;
+    private final ScoreConfirmationService scoreConfirmationService;
 
     /**
      * 创建指定比赛的第一轮评审。
@@ -39,8 +45,8 @@ public class AdminRoundController {
     @PostMapping("/rounds/first")
     public Result<CompetitionDetailVO> createFirstRound(@PathVariable Long id,
                                                         @RequestBody @Valid FirstRoundCreateRequest request) {
-        roundService.createFirstRound(id, request);
-        return Result.success(competitionService.getCompetitionDetail(id));
+        roundAllocationService.createFirstRound(id, request);
+        return Result.success(competitionQueryService.getCompetitionDetail(id));
     }
 
     /**
@@ -50,8 +56,8 @@ public class AdminRoundController {
     public Result<CompetitionDetailVO> saveRoundAllocation(@PathVariable Long id,
                                                            @PathVariable Long roundId,
                                                            @RequestBody @Valid RoundAllocationRequest request) {
-        roundService.saveRoundAllocation(id, roundId, request);
-        return Result.success(competitionService.getCompetitionDetail(id));
+        roundAllocationService.saveRoundAllocation(id, roundId, request);
+        return Result.success(competitionQueryService.getCompetitionDetail(id));
     }
 
     /**
@@ -59,8 +65,8 @@ public class AdminRoundController {
      */
     @PostMapping("/rounds/{roundId}/publish")
     public Result<CompetitionDetailVO> publishRound(@PathVariable Long id, @PathVariable Long roundId) {
-        roundService.publishRound(id, roundId);
-        return Result.success(competitionService.getCompetitionDetail(id));
+        roundLifecycleService.publishRound(id, roundId);
+        return Result.success(competitionQueryService.getCompetitionDetail(id));
     }
 
     /**
@@ -68,8 +74,8 @@ public class AdminRoundController {
      */
     @PostMapping("/rounds/{roundId}/complete-first-round")
     public Result<CompetitionDetailVO> completeFirstRound(@PathVariable Long id, @PathVariable Long roundId) {
-        roundService.completeFirstRound(id, roundId);
-        return Result.success(competitionService.getCompetitionDetail(id));
+        roundLifecycleService.completeFirstRound(id, roundId);
+        return Result.success(competitionQueryService.getCompetitionDetail(id));
     }
 
     /**
@@ -78,8 +84,8 @@ public class AdminRoundController {
     @PostMapping("/rounds/next")
     public Result<CompetitionDetailVO> createNextRound(@PathVariable Long id,
                                                        @RequestBody @Valid NextRoundCreateRequest request) {
-        roundService.createNextRound(id, request);
-        return Result.success(competitionService.getCompetitionDetail(id));
+        roundAllocationService.createNextRound(id, request);
+        return Result.success(competitionQueryService.getCompetitionDetail(id));
     }
 
     /**
@@ -87,8 +93,8 @@ public class AdminRoundController {
      */
     @PostMapping("/rounds/{roundId}/sync-candidates")
     public Result<CompetitionDetailVO> syncRoundCandidates(@PathVariable Long id, @PathVariable Long roundId) {
-        roundService.syncRoundCandidates(id, roundId);
-        return Result.success(competitionService.getCompetitionDetail(id));
+        roundAllocationService.syncRoundCandidates(id, roundId);
+        return Result.success(competitionQueryService.getCompetitionDetail(id));
     }
 
     /**
@@ -96,8 +102,8 @@ public class AdminRoundController {
      */
     @DeleteMapping("/rounds/{roundId}")
     public Result<CompetitionDetailVO> deleteDraftRound(@PathVariable Long id, @PathVariable Long roundId) {
-        roundService.deleteDraftRound(id, roundId);
-        return Result.success(competitionService.getCompetitionDetail(id));
+        roundAllocationService.deleteDraftRound(id, roundId);
+        return Result.success(competitionQueryService.getCompetitionDetail(id));
     }
 
     /**
@@ -105,8 +111,8 @@ public class AdminRoundController {
      */
     @PostMapping("/rounds/{roundId}/lock")
     public Result<CompetitionDetailVO> lockRound(@PathVariable Long id, @PathVariable Long roundId) {
-        roundService.lockRound(id, roundId);
-        return Result.success(competitionService.getCompetitionDetail(id));
+        roundLifecycleService.lockRound(id, roundId);
+        return Result.success(competitionQueryService.getCompetitionDetail(id));
     }
 
     /**
@@ -116,8 +122,8 @@ public class AdminRoundController {
     public Result<CompetitionDetailVO> overrideRoundTableConfirmation(@PathVariable Long id,
                                                                       @PathVariable Long roundTableId,
                                                                       @RequestBody @Valid AdminConfirmationOverrideRequest request) {
-        roundService.overrideScoreConfirmation(id, roundTableId, request);
-        return Result.success(competitionService.getCompetitionDetail(id));
+        scoreConfirmationService.overrideScoreConfirmation(id, roundTableId, request);
+        return Result.success(competitionQueryService.getCompetitionDetail(id));
     }
 
     /**
@@ -125,7 +131,7 @@ public class AdminRoundController {
      */
     @GetMapping("/results/draft")
     public Result<List<ResultDraftVO>> resultDraft(@PathVariable Long id) {
-        return Result.success(roundService.buildResultDrafts(id));
+        return Result.success(roundQueryService.buildResultDrafts(id));
     }
 
     /**
@@ -133,7 +139,7 @@ public class AdminRoundController {
      */
     @PostMapping("/results/publish")
     public Result<CompetitionDetailVO> publishResults(@PathVariable Long id) {
-        roundService.publishResults(id);
-        return Result.success(competitionService.getCompetitionDetail(id));
+        roundLifecycleService.publishResults(id);
+        return Result.success(competitionQueryService.getCompetitionDetail(id));
     }
 }

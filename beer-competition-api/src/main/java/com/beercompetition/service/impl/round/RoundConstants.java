@@ -3,7 +3,7 @@ package com.beercompetition.service.impl.round;
 /**
  * 轮次评审模块的共享常量。
  *
- * <p>这些值原本散落在 RoundServiceImpl 中，集中后可以避免多个拆分组件重复定义魔法值。</p>
+ * <p>这些值由多个轮次组件共享，集中后可以避免重复定义业务常量。</p>
  */
 public final class RoundConstants {
 

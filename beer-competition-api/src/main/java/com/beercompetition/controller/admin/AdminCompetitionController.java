@@ -21,7 +21,10 @@ import com.beercompetition.pojo.vo.CompetitionSponsorLogoVO;
 import com.beercompetition.pojo.vo.CompetitionSponsorVO;
 import com.beercompetition.pojo.vo.CompetitionVO;
 import com.beercompetition.service.CompetitionSponsorService;
-import com.beercompetition.service.CompetitionService;
+import com.beercompetition.competition.command.CompetitionCommandService;
+import com.beercompetition.competition.configuration.CompetitionConfigurationService;
+import com.beercompetition.competition.lifecycle.CompetitionLifecycleService;
+import com.beercompetition.competition.query.CompetitionQueryService;
 import com.beercompetition.service.LiveBoardService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -46,7 +49,10 @@ import java.util.List;
 @RequestMapping("/api/admin/competitions")
 public class AdminCompetitionController {
 
-    private final CompetitionService competitionService;
+    private final CompetitionQueryService competitionQueryService;
+    private final CompetitionCommandService competitionCommandService;
+    private final CompetitionConfigurationService competitionConfigurationService;
+    private final CompetitionLifecycleService competitionLifecycleService;
     private final CompetitionSponsorService competitionSponsorService;
     private final LiveBoardService liveBoardService;
 
@@ -55,7 +61,7 @@ public class AdminCompetitionController {
      */
     @GetMapping
     public Result<List<CompetitionVO>> competitions(@RequestParam(defaultValue = "false") boolean includeArchived) {
-        return Result.success(competitionService.listCompetitions(includeArchived));
+        return Result.success(competitionQueryService.listCompetitions(includeArchived));
     }
 
     /**
@@ -63,7 +69,7 @@ public class AdminCompetitionController {
      */
     @PostMapping
     public Result<CompetitionVO> createCompetition(@RequestBody @Valid CompetitionCreateRequest request) {
-        return Result.success(competitionService.createCompetition(request));
+        return Result.success(competitionCommandService.createCompetition(request));
     }
 
     /**
@@ -71,7 +77,7 @@ public class AdminCompetitionController {
      */
     @GetMapping("/{id}")
     public Result<CompetitionDetailVO> getCompetitionDetail(@PathVariable Long id) {
-        return Result.success(competitionService.getCompetitionDetail(id));
+        return Result.success(competitionQueryService.getCompetitionDetail(id));
     }
 
     /**
@@ -79,7 +85,7 @@ public class AdminCompetitionController {
      */
     @GetMapping("/{id}/overview")
     public Result<CompetitionDetailVO> getCompetitionOverview(@PathVariable Long id) {
-        return Result.success(competitionService.getCompetitionOverview(id));
+        return Result.success(competitionQueryService.getCompetitionOverview(id));
     }
 
     /**
@@ -87,7 +93,7 @@ public class AdminCompetitionController {
      */
     @GetMapping("/{id}/entry-pool")
     public Result<List<CompetitionEntryVO>> getCompetitionEntryPool(@PathVariable Long id) {
-        return Result.success(competitionService.getCompetitionEntryPool(id));
+        return Result.success(competitionQueryService.getCompetitionEntryPool(id));
     }
 
     /**
@@ -95,7 +101,7 @@ public class AdminCompetitionController {
      */
     @GetMapping("/{id}/quick-summary")
     public Result<CompetitionQuickSummaryVO> getCompetitionQuickSummary(@PathVariable Long id) {
-        return Result.success(competitionService.getCompetitionQuickSummary(id));
+        return Result.success(competitionQueryService.getCompetitionQuickSummary(id));
     }
 
     /**
@@ -103,7 +109,7 @@ public class AdminCompetitionController {
      */
     @DeleteMapping("/{id}")
     public Result<String> deleteCompetition(@PathVariable Long id) {
-        competitionService.deleteCompetition(id);
+        competitionCommandService.deleteCompetition(id);
         return Result.success("删除成功");
     }
 
@@ -113,7 +119,7 @@ public class AdminCompetitionController {
     @PutMapping("/{id}/base-info")
     public Result<CompetitionDetailVO> updateBaseInfo(@PathVariable Long id,
                                                       @RequestBody @Valid CompetitionBaseInfoUpdateRequest request) {
-        return Result.success(competitionService.updateBaseInfo(id, request));
+        return Result.success(competitionCommandService.updateBaseInfo(id, request));
     }
 
     /**
@@ -123,7 +129,7 @@ public class AdminCompetitionController {
     public Result<CompetitionDetailVO> updateRefundPolicy(
             @PathVariable Long id,
             @RequestBody @Valid CompetitionRefundPolicyUpdateRequest request) {
-        return Result.success(competitionService.updateRefundPolicy(id, request));
+        return Result.success(competitionCommandService.updateRefundPolicy(id, request));
     }
 
     /**
@@ -132,7 +138,7 @@ public class AdminCompetitionController {
     @PutMapping("/{id}/categories")
     public Result<CompetitionDetailVO> updateCategories(@PathVariable Long id,
                                                         @RequestBody @Valid ConfigNameBatchUpdateRequest request) {
-        return Result.success(competitionService.updateCategories(id, request));
+        return Result.success(competitionConfigurationService.updateCategories(id, request));
     }
 
     /**
@@ -141,7 +147,7 @@ public class AdminCompetitionController {
     @PutMapping("/{id}/styles")
     public Result<CompetitionDetailVO> updateStyles(@PathVariable Long id,
                                                     @RequestBody @Valid CompetitionStyleLibraryUpdateRequest request) {
-        return Result.success(competitionService.updateStyles(id, request));
+        return Result.success(competitionConfigurationService.updateStyles(id, request));
     }
 
     /**
@@ -150,7 +156,7 @@ public class AdminCompetitionController {
     @PutMapping("/{id}/entry-fields")
     public Result<CompetitionDetailVO> updateEntryFields(@PathVariable Long id,
                                                          @RequestBody @Valid EntryFieldBatchUpdateRequest request) {
-        return Result.success(competitionService.updateEntryFields(id, request));
+        return Result.success(competitionConfigurationService.updateEntryFields(id, request));
     }
 
     /**
@@ -159,7 +165,7 @@ public class AdminCompetitionController {
     @PutMapping("/{id}/judge-tables")
     public Result<CompetitionDetailVO> updateJudgeTables(@PathVariable Long id,
                                                          @RequestBody @Valid JudgeTableBatchUpdateRequest request) {
-        return Result.success(competitionService.updateJudgeTables(id, request));
+        return Result.success(competitionConfigurationService.updateJudgeTables(id, request));
     }
 
     /**
@@ -167,7 +173,7 @@ public class AdminCompetitionController {
      */
     @PostMapping("/{id}/open-registration")
     public Result<CompetitionDetailVO> openRegistration(@PathVariable Long id) {
-        return Result.success(competitionService.openRegistration(id));
+        return Result.success(competitionLifecycleService.openRegistration(id));
     }
 
     /**
@@ -175,7 +181,7 @@ public class AdminCompetitionController {
      */
     @PostMapping("/{id}/close-registration")
     public Result<CompetitionDetailVO> closeRegistration(@PathVariable Long id) {
-        return Result.success(competitionService.closeRegistration(id));
+        return Result.success(competitionLifecycleService.closeRegistration(id));
     }
 
     /**
@@ -183,7 +189,7 @@ public class AdminCompetitionController {
      */
     @PostMapping("/{id}/prepare-judging")
     public Result<CompetitionDetailVO> prepareJudging(@PathVariable Long id) {
-        return Result.success(competitionService.prepareJudging(id));
+        return Result.success(competitionLifecycleService.prepareJudging(id));
     }
 
     /**
@@ -192,7 +198,7 @@ public class AdminCompetitionController {
     @PostMapping("/{id}/reopen-registration")
     public Result<CompetitionDetailVO> reopenRegistration(@PathVariable Long id,
                                                           @RequestBody @Valid CompetitionReopenRegistrationRequest request) {
-        return Result.success(competitionService.reopenRegistration(id, request));
+        return Result.success(competitionLifecycleService.reopenRegistration(id, request));
     }
 
     /**
@@ -201,7 +207,7 @@ public class AdminCompetitionController {
     @PostMapping("/{id}/return-to-sample-check")
     public Result<CompetitionDetailVO> returnToSampleCheck(@PathVariable Long id,
                                                            @RequestBody @Valid CompetitionReturnToSampleCheckRequest request) {
-        return Result.success(competitionService.returnToSampleCheck(id, request));
+        return Result.success(competitionLifecycleService.returnToSampleCheck(id, request));
     }
 
     /**
@@ -209,7 +215,7 @@ public class AdminCompetitionController {
      */
     @GetMapping("/{id}/progress")
     public Result<CompetitionProgressVO> progress(@PathVariable Long id) {
-        return Result.success(competitionService.getCompetitionProgress(id));
+        return Result.success(competitionQueryService.getCompetitionProgress(id));
     }
 
     /**
@@ -251,6 +257,6 @@ public class AdminCompetitionController {
      */
     @GetMapping("/{id}/analytics")
     public Result<CompetitionAnalyticsVO> analytics(@PathVariable Long id) {
-        return Result.success(competitionService.getCompetitionAnalytics(id));
+        return Result.success(competitionQueryService.getCompetitionAnalytics(id));
     }
 }

@@ -1,5 +1,7 @@
 package com.beercompetition.service;
 
+import com.beercompetition.competition.query.CompetitionQueryService;
+import com.beercompetition.registration.entry.AdminEntryService;
 import com.beercompetition.pojo.enums.EntryStatus;
 import com.beercompetition.pojo.vo.AdminEntryVO;
 import com.beercompetition.pojo.vo.CompetitionDetailVO;
@@ -17,10 +19,10 @@ class CanceledEntryVisibilityIntegrationTest extends IntegrationTestBase {
     private BeerCompetitionTestData testData;
 
     @Autowired
-    private CompetitionService competitionService;
+    private CompetitionQueryService competitionQueryService;
 
     @Autowired
-    private EntryService entryService;
+    private AdminEntryService adminEntryService;
 
     @Test
     void analyticsAndEntryPagesExcludeCanceledEntries() {
@@ -30,7 +32,7 @@ class CanceledEntryVisibilityIntegrationTest extends IntegrationTestBase {
                 testRun + "-已取消测试酒款", EntryStatus.CANCELED, false);
         asAdmin(1L);
 
-        var analytics = competitionService.getCompetitionAnalytics(fixture.competition().getId());
+        var analytics = competitionQueryService.getCompetitionAnalytics(fixture.competition().getId());
         assertThat(analytics.getSummary().getTotalEntries()).isEqualTo(3);
         assertThat(analytics.getSummary().getRegisteredEntries()).isEqualTo(3);
         assertThat(analytics.getSummary().getPendingPaymentEntries()).isZero();
@@ -39,7 +41,7 @@ class CanceledEntryVisibilityIntegrationTest extends IntegrationTestBase {
                 .singleElement()
                 .satisfies(bucket -> assertThat(bucket.getCount()).isEqualTo(3));
 
-        CompetitionDetailVO detail = competitionService.getCompetitionDetail(fixture.competition().getId());
+        CompetitionDetailVO detail = competitionQueryService.getCompetitionDetail(fixture.competition().getId());
         assertThat(detail.getEntriesSummary().getTotal()).isEqualTo(3);
         assertThat(detail.getEntriesSummary().getRegistered()).isEqualTo(3);
         assertThat(detail.getEntriesSummary().getCanceled()).isZero();
@@ -47,14 +49,14 @@ class CanceledEntryVisibilityIntegrationTest extends IntegrationTestBase {
                 .extracting(entry -> entry.getId())
                 .doesNotContain(canceledEntry.getId());
 
-        var adminEntries = entryService.listAdminEntries(fixture.competition().getId(), null,
+        var adminEntries = adminEntryService.listAdminEntries(fixture.competition().getId(), null,
                 null, null, null, null, null, null, 1, 30);
         assertThat(adminEntries.getTotal()).isEqualTo(3);
         assertThat(adminEntries.getRecords())
                 .extracting(AdminEntryVO::getId)
                 .doesNotContain(canceledEntry.getId());
 
-        CompetitionVO listItem = competitionService.listCompetitions(false).stream()
+        CompetitionVO listItem = competitionQueryService.listCompetitions(false).stream()
                 .filter(item -> item.getId().equals(fixture.competition().getId()))
                 .findFirst()
                 .orElseThrow();

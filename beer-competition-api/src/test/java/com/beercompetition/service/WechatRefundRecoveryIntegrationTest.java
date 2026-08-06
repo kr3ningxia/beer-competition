@@ -1,5 +1,6 @@
 package com.beercompetition.service;
 
+import com.beercompetition.registration.refund.EntryRefundService;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.pay.WechatPayClient;
 import com.beercompetition.pojo.dto.AdminEntryStatusRequest;
@@ -32,7 +33,7 @@ class WechatRefundRecoveryIntegrationTest extends IntegrationTestBase {
     private BeerCompetitionTestData testData;
 
     @Autowired
-    private EntryService entryService;
+    private EntryRefundService entryRefundService;
 
     @Autowired
     private WechatPaymentService wechatPaymentService;
@@ -55,7 +56,7 @@ class WechatRefundRecoveryIntegrationTest extends IntegrationTestBase {
         AdminEntryStatusRequest request = new AdminEntryStatusRequest();
         request.setReason("同意退款");
 
-        assertThatThrownBy(() -> entryService.approveRefund(fixture.refundId(), request))
+        assertThatThrownBy(() -> entryRefundService.approveRefund(fixture.refundId(), request))
                 .isInstanceOf(BaseException.class)
                 .hasMessageContaining("余额不足");
 
@@ -122,7 +123,7 @@ class WechatRefundRecoveryIntegrationTest extends IntegrationTestBase {
         asPortal(fixture.portalA().account().getId());
         PortalEntryRefundRequest request = new PortalEntryRefundRequest();
         request.setReason("申请退款");
-        entryService.requestPortalEntryRefund(entry.getId(), request);
+        entryRefundService.requestPortalEntryRefund(entry.getId(), request);
         Long refundId = jdbcTemplate.queryForObject("""
                 SELECT id FROM entry_refund
                 WHERE beer_entry_id = ?

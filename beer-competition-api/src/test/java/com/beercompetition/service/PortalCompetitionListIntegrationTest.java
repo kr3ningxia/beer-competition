@@ -1,5 +1,6 @@
 package com.beercompetition.service;
 
+import com.beercompetition.competition.query.CompetitionQueryService;
 import com.beercompetition.pojo.enums.CompetitionStatus;
 import com.beercompetition.pojo.po.Competition;
 import com.beercompetition.pojo.vo.PortalCompetitionVO;
@@ -21,7 +22,7 @@ class PortalCompetitionListIntegrationTest extends IntegrationTestBase {
     private BeerCompetitionTestData testData;
 
     @Autowired
-    private CompetitionService competitionService;
+    private CompetitionQueryService competitionQueryService;
 
     @Test
     void portalListsOpenCompetitionsFirstByEarliestRegistrationDeadline() {
@@ -35,7 +36,7 @@ class PortalCompetitionListIntegrationTest extends IntegrationTestBase {
         updateCompetitionSchedule(registrationClosed, now.plusDays(1), LocalDate.now().plusDays(100));
 
         Set<Long> competitionIds = Set.of(openLater.getId(), openSooner.getId(), registrationClosed.getId());
-        List<Long> displayedIds = competitionService.listPortalCompetitions().stream()
+        List<Long> displayedIds = competitionQueryService.listPortalCompetitions().stream()
                 .map(PortalCompetitionVO::getId)
                 .filter(competitionIds::contains)
                 .toList();

@@ -1,5 +1,8 @@
 package com.beercompetition.service;
 
+import com.beercompetition.registration.entry.PortalEntryService;
+import com.beercompetition.registration.payment.EntryPaymentAdminService;
+import com.beercompetition.registration.refund.EntryRefundService;
 import com.beercompetition.pojo.dto.AdminBankTransferProcessRequest;
 import com.beercompetition.pojo.dto.PortalEntryBatchQuoteRequest;
 import com.beercompetition.pojo.dto.PortalEntryBatchSubmitRequest;
@@ -38,7 +41,13 @@ class RegistrationBatchIntegrationTest extends IntegrationTestBase {
     private BankTransferPaymentService bankTransferPaymentService;
 
     @Autowired
-    private EntryService entryService;
+    private PortalEntryService portalEntryService;
+
+    @Autowired
+    private EntryPaymentAdminService entryPaymentAdminService;
+
+    @Autowired
+    private EntryRefundService entryRefundService;
 
     @Autowired
     private WechatPaymentService wechatPaymentService;
@@ -73,7 +82,7 @@ class RegistrationBatchIntegrationTest extends IntegrationTestBase {
 
         PortalEntryRefundRequest refundRequest = new PortalEntryRefundRequest();
         refundRequest.setReason("批次单款退款测试");
-        entryService.requestPortalEntryRefund(paid.getEntries().get(0).getId(), refundRequest);
+        entryRefundService.requestPortalEntryRefund(paid.getEntries().get(0).getId(), refundRequest);
 
         var partiallyRefunded = registrationBatchService.getPortalBatch(batch.getId());
         assertThat(partiallyRefunded.getStatus()).isEqualTo(RegistrationBatchStatus.PARTIALLY_REFUNDED.name());
@@ -146,9 +155,9 @@ class RegistrationBatchIntegrationTest extends IntegrationTestBase {
 
         assertThatThrownBy(() -> wechatPaymentService.createNativePayment(entryId))
                 .hasMessageContaining("统一付款订单");
-        assertThatThrownBy(() -> entryService.simulatePayment(entryId))
+        assertThatThrownBy(() -> entryPaymentAdminService.simulatePayment(entryId))
                 .hasMessageContaining("按整批完成付款");
-        assertThatThrownBy(() -> entryService.cancelPortalEntry(entryId))
+        assertThatThrownBy(() -> portalEntryService.cancelPortalEntry(entryId))
                 .hasMessageContaining("不能单独取消报名");
 
         PortalBankTransferSubmitRequest transferRequest = new PortalBankTransferSubmitRequest();
@@ -158,7 +167,7 @@ class RegistrationBatchIntegrationTest extends IntegrationTestBase {
                 .hasMessageContaining("按整批提交银行转账");
 
         asAdmin(1L);
-        assertThatThrownBy(() -> entryService.confirmPayment(entryId))
+        assertThatThrownBy(() -> entryPaymentAdminService.confirmPayment(entryId))
                 .hasMessageContaining("不能单独确认付款");
     }
 

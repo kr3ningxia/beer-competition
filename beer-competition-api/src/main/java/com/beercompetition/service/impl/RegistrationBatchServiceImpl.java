@@ -31,7 +31,7 @@ import com.beercompetition.pojo.po.RegistrationBatch;
 import com.beercompetition.pojo.vo.EntryDetailVO;
 import com.beercompetition.pojo.vo.RegistrationBatchQuoteVO;
 import com.beercompetition.pojo.vo.RegistrationBatchVO;
-import com.beercompetition.service.EntryService;
+import com.beercompetition.registration.entry.PortalEntryService;
 import com.beercompetition.service.RegistrationBatchService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -55,7 +55,7 @@ public class RegistrationBatchServiceImpl implements RegistrationBatchService {
     private final CompetitionMapper competitionMapper;
     private final BeerEntryMapper beerEntryMapper;
     private final EntryPaymentMapper entryPaymentMapper;
-    private final EntryService entryService;
+    private final PortalEntryService portalEntryService;
 
     @Override
     public RegistrationBatchQuoteVO quote(Long competitionId, PortalEntryBatchQuoteRequest request) {
@@ -117,7 +117,7 @@ public class RegistrationBatchServiceImpl implements RegistrationBatchService {
         List<EntryPayment> entryPayments = new ArrayList<>();
         for (PortalEntrySubmitRequest entryRequest : request.getEntries()) {
             entryRequest.setRulesAccepted(request.getRulesAccepted());
-            EntryDetailVO created = entryService.submitPortalEntry(competitionId, entryRequest);
+            EntryDetailVO created = portalEntryService.submitPortalEntry(competitionId, entryRequest);
             BeerEntry entry = beerEntryMapper.selectById(created.getId());
             entry.setRegistrationBatchId(batch.getId());
             beerEntryMapper.updateById(entry);
@@ -201,7 +201,7 @@ public class RegistrationBatchServiceImpl implements RegistrationBatchService {
                         .eq(BeerEntry::getRegistrationBatchId, batch.getId())
                         .orderByAsc(BeerEntry::getId))
                 .stream()
-                .map(entry -> entryService.getPortalEntry(entry.getId()))
+                .map(entry -> portalEntryService.getPortalEntry(entry.getId()))
                 .toList();
         return toBatchVO(batch, order, entries);
     }

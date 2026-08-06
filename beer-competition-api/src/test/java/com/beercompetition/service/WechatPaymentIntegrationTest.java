@@ -1,5 +1,6 @@
 package com.beercompetition.service;
 
+import com.beercompetition.registration.refund.EntryRefundService;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.pay.WechatPayClient;
 import com.beercompetition.pojo.dto.PortalEntryRefundRequest;
@@ -24,7 +25,7 @@ class WechatPaymentIntegrationTest extends IntegrationTestBase {
     private WechatPaymentService wechatPaymentService;
 
     @Autowired
-    private EntryService entryService;
+    private EntryRefundService entryRefundService;
 
     @Test
     void mockNativePaymentSuccessNotifyRegistersEntryAndIsIdempotent() {
@@ -91,7 +92,7 @@ class WechatPaymentIntegrationTest extends IntegrationTestBase {
 
         PortalEntryRefundRequest request = new PortalEntryRefundRequest();
         request.setReason("报名调整");
-        entryService.requestPortalEntryRefund(entry.getId(), request);
+        entryRefundService.requestPortalEntryRefund(entry.getId(), request);
 
         assertEntryStatus(entry.getId(), EntryStatus.CANCELED);
         assertPayment(entry.getId(), EntryPaymentStatus.REFUNDED, EntryPayMethod.WECHAT);

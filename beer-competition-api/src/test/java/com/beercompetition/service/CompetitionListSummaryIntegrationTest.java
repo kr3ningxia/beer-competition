@@ -1,5 +1,6 @@
 package com.beercompetition.service;
 
+import com.beercompetition.competition.query.CompetitionQueryService;
 import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.pojo.enums.CompetitionStatus;
 import com.beercompetition.pojo.vo.CompetitionDetailVO;
@@ -21,7 +22,7 @@ class CompetitionListSummaryIntegrationTest extends IntegrationTestBase {
     private BeerCompetitionTestData testData;
 
     @Autowired
-    private CompetitionService competitionService;
+    private CompetitionQueryService competitionQueryService;
 
     @Autowired
     private CompetitionMapper competitionMapper;
@@ -32,7 +33,7 @@ class CompetitionListSummaryIntegrationTest extends IntegrationTestBase {
         asAdmin(1L);
 
         CompetitionVO summary = findCompetition(
-                competitionService.listCompetitions(false), fixture.competition().getId());
+                competitionQueryService.listCompetitions(false), fixture.competition().getId());
 
         assertThat(summary.getEntriesSummary().getTotal()).isEqualTo(3);
         assertThat(summary.getEntriesSummary().getRegistered()).isEqualTo(3);
@@ -43,12 +44,12 @@ class CompetitionListSummaryIntegrationTest extends IntegrationTestBase {
         assertThat(summary.getPrimaryAction()).isNotNull();
         assertThat(summary.getProgressSummary()).isNull();
 
-        CompetitionQuickSummaryVO quickSummary = competitionService.getCompetitionQuickSummary(fixture.competition().getId());
+        CompetitionQuickSummaryVO quickSummary = competitionQueryService.getCompetitionQuickSummary(fixture.competition().getId());
         assertThat(quickSummary.getProgressSummary()).isNotNull();
         assertThat(quickSummary.getAlerts()).isNotNull();
         assertThat(quickSummary.getDataIntegrityIssues()).isNotNull();
 
-        CompetitionDetailVO overview = competitionService.getCompetitionOverview(fixture.competition().getId());
+        CompetitionDetailVO overview = competitionQueryService.getCompetitionOverview(fixture.competition().getId());
         assertThat(overview.getEntriesSummary().getTotal()).isEqualTo(3);
         assertThat(overview.getEntryPool()).isEmpty();
         assertThat(overview.getRounds()).isEmpty();
@@ -56,13 +57,13 @@ class CompetitionListSummaryIntegrationTest extends IntegrationTestBase {
         assertThat(overview.getAwardRules()).isEmpty();
         assertThat(overview.getAwardResults()).isEmpty();
 
-        assertThat(competitionService.getCompetitionEntryPool(fixture.competition().getId())).hasSize(3);
+        assertThat(competitionQueryService.getCompetitionEntryPool(fixture.competition().getId())).hasSize(3);
 
-        CompetitionProgressVO progress = competitionService.getCompetitionProgress(fixture.competition().getId());
+        CompetitionProgressVO progress = competitionQueryService.getCompetitionProgress(fixture.competition().getId());
         assertThat(progress.getProgressSummary()).isNotNull();
         assertThat(progress.getRounds()).isNotNull();
 
-        CompetitionDetailVO fullDetail = competitionService.getCompetitionDetail(fixture.competition().getId());
+        CompetitionDetailVO fullDetail = competitionQueryService.getCompetitionDetail(fixture.competition().getId());
         assertThat(fullDetail.getEntryPool()).hasSize(3);
         assertThat(fullDetail.getRounds()).isNotNull();
     }
@@ -74,9 +75,9 @@ class CompetitionListSummaryIntegrationTest extends IntegrationTestBase {
         competitionMapper.updateById(fixture.competition());
         asAdmin(1L);
 
-        assertThat(competitionService.listCompetitions(false))
+        assertThat(competitionQueryService.listCompetitions(false))
                 .noneMatch(item -> item.getId().equals(fixture.competition().getId()));
-        assertThat(competitionService.listCompetitions(true))
+        assertThat(competitionQueryService.listCompetitions(true))
                 .anyMatch(item -> item.getId().equals(fixture.competition().getId()));
     }
 

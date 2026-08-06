@@ -4,8 +4,8 @@ import com.beercompetition.common.result.Result;
 import com.beercompetition.pojo.vo.PortalCompetitionResultVO;
 import com.beercompetition.pojo.vo.PortalCompetitionVO;
 import com.beercompetition.pojo.vo.PortalHomeVO;
-import com.beercompetition.service.CompetitionService;
-import com.beercompetition.service.EntryService;
+import com.beercompetition.competition.query.CompetitionQueryService;
+import com.beercompetition.result.PortalResultQueryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -22,15 +22,15 @@ import java.util.List;
 @RequestMapping("/api/portal/public")
 public class PortalPublicController {
 
-    private final CompetitionService competitionService;
-    private final EntryService entryService;
+    private final CompetitionQueryService competitionQueryService;
+    private final PortalResultQueryService portalResultQueryService;
 
     /**
      * 查询厂商端首页展示数据。
      */
     @GetMapping("/home")
     public Result<PortalHomeVO> home() {
-        return Result.success(competitionService.getPortalHome());
+        return Result.success(competitionQueryService.getPortalHome());
     }
 
     /**
@@ -38,7 +38,7 @@ public class PortalPublicController {
      */
     @GetMapping("/competitions")
     public Result<List<PortalCompetitionVO>> publicCompetitions() {
-        return Result.success(competitionService.listPortalCompetitions());
+        return Result.success(competitionQueryService.listPortalCompetitions());
     }
 
     /**
@@ -46,7 +46,7 @@ public class PortalPublicController {
      */
     @GetMapping("/competitions/{id}")
     public Result<PortalCompetitionVO> publicCompetitionDetail(@PathVariable Long id) {
-        return Result.success(competitionService.getPortalCompetitionDetail(id));
+        return Result.success(competitionQueryService.getPortalCompetitionDetail(id));
     }
 
     /**
@@ -54,7 +54,7 @@ public class PortalPublicController {
      */
     @GetMapping("/results")
     public Result<List<PortalCompetitionResultVO>> publicResults() {
-        return Result.success(entryService.listPublishedCompetitionResults());
+        return Result.success(portalResultQueryService.listPublishedCompetitionResults());
     }
 
     /**
@@ -62,6 +62,6 @@ public class PortalPublicController {
      */
     @GetMapping("/results/{competitionId}")
     public Result<PortalCompetitionResultVO> publicResultDetail(@PathVariable Long competitionId) {
-        return Result.success(entryService.getPublishedCompetitionResult(competitionId));
+        return Result.success(portalResultQueryService.getPublishedCompetitionResult(competitionId));
     }
 }

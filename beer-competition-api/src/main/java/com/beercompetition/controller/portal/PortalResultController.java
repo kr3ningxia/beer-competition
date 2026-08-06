@@ -4,7 +4,7 @@ import com.beercompetition.common.result.Result;
 import com.beercompetition.controller.support.FileResponseHelper;
 import com.beercompetition.pojo.vo.PortalResultDetailVO;
 import com.beercompetition.pojo.vo.PortalResultSummaryVO;
-import com.beercompetition.service.EntryService;
+import com.beercompetition.result.PortalResultQueryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,14 +22,14 @@ import java.util.List;
 @RequestMapping("/api/portal/results")
 public class PortalResultController {
 
-    private final EntryService entryService;
+    private final PortalResultQueryService portalResultQueryService;
 
     /**
      * 查询当前厂商已可查看的成绩列表。
      */
     @GetMapping
     public Result<List<PortalResultSummaryVO>> results() {
-        return Result.success(entryService.listPortalResults());
+        return Result.success(portalResultQueryService.listPortalResults());
     }
 
     /**
@@ -37,7 +37,7 @@ public class PortalResultController {
      */
     @GetMapping("/{entryId}")
     public Result<PortalResultDetailVO> resultDetail(@PathVariable Long entryId) {
-        return Result.success(entryService.getPortalResultDetail(entryId));
+        return Result.success(portalResultQueryService.getPortalResultDetail(entryId));
     }
 
     /**
@@ -45,6 +45,6 @@ public class PortalResultController {
      */
     @GetMapping("/{entryId}/certificate")
     public ResponseEntity<byte[]> resultCertificate(@PathVariable Long entryId) {
-        return FileResponseHelper.attachment(entryService.downloadPortalResultCertificate(entryId));
+        return FileResponseHelper.attachment(portalResultQueryService.downloadPortalResultCertificate(entryId));
     }
 }

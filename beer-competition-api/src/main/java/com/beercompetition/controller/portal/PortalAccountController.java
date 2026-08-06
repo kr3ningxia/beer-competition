@@ -6,7 +6,7 @@ import com.beercompetition.pojo.enums.UserRole;
 import com.beercompetition.pojo.vo.CurrentUserResponse;
 import com.beercompetition.pojo.vo.PortalProfileVO;
 import com.beercompetition.service.AuthService;
-import com.beercompetition.service.EntryService;
+import com.beercompetition.registration.entry.PortalProfileService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -28,7 +28,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class PortalAccountController {
 
     private final AuthService authService;
-    private final EntryService entryService;
+    private final PortalProfileService portalProfileService;
 
     /**
      * 获取当前厂商登录身份信息。
@@ -43,7 +43,7 @@ public class PortalAccountController {
      */
     @GetMapping("/profile")
     public Result<PortalProfileVO> profile() {
-        return Result.success(entryService.getPortalProfile());
+        return Result.success(portalProfileService.getPortalProfile());
     }
 
     /**
@@ -51,7 +51,7 @@ public class PortalAccountController {
      */
     @PutMapping("/profile")
     public Result<PortalProfileVO> updateProfile(@RequestBody @Valid PortalProfileUpdateRequest request) {
-        return Result.success(entryService.updatePortalProfile(request));
+        return Result.success(portalProfileService.updatePortalProfile(request));
     }
 
     /**
@@ -59,6 +59,6 @@ public class PortalAccountController {
      */
     @PostMapping(value = "/profile/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Result<PortalProfileVO> uploadProfileAvatar(@RequestParam("file") MultipartFile file) {
-        return Result.success(entryService.uploadPortalAvatar(file));
+        return Result.success(portalProfileService.uploadPortalAvatar(file));
     }
 }

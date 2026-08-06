@@ -1,6 +1,9 @@
 package com.beercompetition.service;
 
+import com.beercompetition.judging.round.RoundLifecycleService;
 import com.beercompetition.common.exception.BaseException;
+import com.beercompetition.competition.configuration.CompetitionConfigurationService;
+import com.beercompetition.competition.lifecycle.CompetitionLifecycleService;
 import com.beercompetition.mapper.CompetitionRoundMapper;
 import com.beercompetition.pojo.dto.CompetitionReopenRegistrationRequest;
 import com.beercompetition.pojo.dto.CompetitionReturnToSampleCheckRequest;
@@ -27,10 +30,13 @@ class CompetitionStateMachineIntegrationTest extends IntegrationTestBase {
     private BeerCompetitionTestData testData;
 
     @Autowired
-    private CompetitionService competitionService;
+    private CompetitionConfigurationService competitionConfigurationService;
 
     @Autowired
-    private RoundService roundService;
+    private CompetitionLifecycleService competitionLifecycleService;
+
+    @Autowired
+    private RoundLifecycleService roundLifecycleService;
 
     @Autowired
     private CompetitionRoundMapper competitionRoundMapper;
@@ -40,7 +46,7 @@ class CompetitionStateMachineIntegrationTest extends IntegrationTestBase {
         BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
         asAdmin(1L);
 
-        assertThatThrownBy(() -> competitionService.prepareJudging(fixture.competition().getId()))
+        assertThatThrownBy(() -> competitionLifecycleService.prepareJudging(fixture.competition().getId()))
                 .isInstanceOf(BaseException.class)
                 .hasMessageContaining("报名截止");
     }
@@ -61,7 +67,7 @@ class CompetitionStateMachineIntegrationTest extends IntegrationTestBase {
                 ORDER BY l.id
                 LIMIT 1
                 """, String.class));
-        assertThatCode(() -> competitionService.updateStyles(fixture.competition().getId(), styleRequest))
+        assertThatCode(() -> competitionConfigurationService.updateStyles(fixture.competition().getId(), styleRequest))
                 .doesNotThrowAnyException();
 
         EntryFieldItemRequest field = new EntryFieldItemRequest();
@@ -74,7 +80,7 @@ class CompetitionStateMachineIntegrationTest extends IntegrationTestBase {
         field.setSortOrder(0);
         EntryFieldBatchUpdateRequest fieldRequest = new EntryFieldBatchUpdateRequest();
         fieldRequest.setItems(List.of(field));
-        competitionService.updateEntryFields(fixture.competition().getId(), fieldRequest);
+        competitionConfigurationService.updateEntryFields(fixture.competition().getId(), fieldRequest);
 
         assertThat(jdbcTemplate.queryForObject("SELECT active_flag FROM entry_field_config WHERE competition_id = ? AND field_key = ?",
                 Integer.class, fixture.competition().getId(), "servingTemp")).isEqualTo(1);
@@ -93,7 +99,7 @@ class CompetitionStateMachineIntegrationTest extends IntegrationTestBase {
         field.setVisibleToJudges(false);
         EntryFieldBatchUpdateRequest request = new EntryFieldBatchUpdateRequest();
         request.setItems(List.of(field));
-        assertThatThrownBy(() -> competitionService.updateEntryFields(fixture.competition().getId(), request))
+        assertThatThrownBy(() -> competitionConfigurationService.updateEntryFields(fixture.competition().getId(), request))
                 .isInstanceOf(BaseException.class)
                 .hasMessageContaining("至少需要 2 个候选项");
     }
@@ -111,14 +117,14 @@ class CompetitionStateMachineIntegrationTest extends IntegrationTestBase {
                 RoundStatus.DRAFT.name(), scoreRound.table().getId());
 
         asAdmin(1L);
-        roundService.publishRound(fixture.competition().getId(), scoreRound.round().getId());
+        roundLifecycleService.publishRound(fixture.competition().getId(), scoreRound.round().getId());
 
         assertThat(jdbcTemplate.queryForObject("SELECT status FROM competition WHERE id = ?",
                 String.class, fixture.competition().getId())).isEqualTo(CompetitionStatus.JUDGING.name());
         assertThat(jdbcTemplate.queryForObject("SELECT status FROM competition_round WHERE id = ?",
                 String.class, scoreRound.round().getId())).isEqualTo(RoundStatus.PUBLISHED.name());
 
-        assertThatThrownBy(() -> roundService.publishRound(fixture.competition().getId(), scoreRound.round().getId()))
+        assertThatThrownBy(() -> roundLifecycleService.publishRound(fixture.competition().getId(), scoreRound.round().getId()))
                 .isInstanceOf(BaseException.class)
                 .hasMessageContaining("草稿");
     }
@@ -133,7 +139,7 @@ class CompetitionStateMachineIntegrationTest extends IntegrationTestBase {
         request.setReason("误点截止报名");
         request.setRegistrationDeadline(java.time.LocalDateTime.now().plusDays(3));
 
-        competitionService.reopenRegistration(fixture.competition().getId(), request);
+        competitionLifecycleService.reopenRegistration(fixture.competition().getId(), request);
 
         assertThat(jdbcTemplate.queryForObject("SELECT status FROM competition WHERE id = ?",
                 String.class, fixture.competition().getId())).isEqualTo(CompetitionStatus.REGISTRATION_OPEN.name());
@@ -151,7 +157,7 @@ class CompetitionStateMachineIntegrationTest extends IntegrationTestBase {
         CompetitionReopenRegistrationRequest request = new CompetitionReopenRegistrationRequest();
         request.setReason("临时延长");
 
-        assertThatThrownBy(() -> competitionService.reopenRegistration(fixture.competition().getId(), request))
+        assertThatThrownBy(() -> competitionLifecycleService.reopenRegistration(fixture.competition().getId(), request))
                 .isInstanceOf(BaseException.class)
                 .hasMessageContaining("新的报名截止时间");
     }
@@ -174,7 +180,7 @@ class CompetitionStateMachineIntegrationTest extends IntegrationTestBase {
         CompetitionReturnToSampleCheckRequest request = new CompetitionReturnToSampleCheckRequest();
         request.setReason("样品入库状态待复核");
 
-        competitionService.returnToSampleCheck(fixture.competition().getId(), request);
+        competitionLifecycleService.returnToSampleCheck(fixture.competition().getId(), request);
 
         assertThat(jdbcTemplate.queryForObject("SELECT status FROM competition WHERE id = ?",
                 String.class, fixture.competition().getId())).isEqualTo(CompetitionStatus.REGISTRATION_CLOSED.name());
@@ -200,7 +206,7 @@ class CompetitionStateMachineIntegrationTest extends IntegrationTestBase {
         CompetitionReturnToSampleCheckRequest request = new CompetitionReturnToSampleCheckRequest();
         request.setReason("误点恢复");
 
-        assertThatThrownBy(() -> competitionService.returnToSampleCheck(fixture.competition().getId(), request))
+        assertThatThrownBy(() -> competitionLifecycleService.returnToSampleCheck(fixture.competition().getId(), request))
                 .isInstanceOf(BaseException.class)
                 .hasMessageContaining("首轮已发布");
     }

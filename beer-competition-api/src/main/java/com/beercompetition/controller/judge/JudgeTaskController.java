@@ -8,7 +8,9 @@ import com.beercompetition.pojo.vo.JudgeRoundTableVO;
 import com.beercompetition.pojo.vo.JudgeTaskVO;
 import com.beercompetition.pojo.vo.RankingConfirmationVO;
 import com.beercompetition.pojo.vo.ScoreConfirmationVO;
-import com.beercompetition.service.RoundService;
+import com.beercompetition.judging.round.JudgeRoundTaskService;
+import com.beercompetition.judging.scoring.RankingService;
+import com.beercompetition.judging.scoring.ScoreConfirmationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,14 +30,16 @@ import java.util.List;
 @RequestMapping("/api/judge")
 public class JudgeTaskController {
 
-    private final RoundService roundService;
+    private final JudgeRoundTaskService judgeRoundTaskService;
+    private final ScoreConfirmationService scoreConfirmationService;
+    private final RankingService rankingService;
 
     /**
      * 查询当前评委的评审任务列表。
      */
     @GetMapping("/tasks")
     public Result<List<JudgeTaskVO>> tasks() {
-        return Result.success(roundService.listMyTasks());
+        return Result.success(judgeRoundTaskService.listMyTasks());
     }
 
     /**
@@ -43,7 +47,7 @@ public class JudgeTaskController {
      */
     @GetMapping("/round-tables/{roundTableId}")
     public Result<JudgeRoundTableVO> roundTable(@PathVariable Long roundTableId) {
-        return Result.success(roundService.getMyRoundTable(roundTableId));
+        return Result.success(judgeRoundTaskService.getMyRoundTable(roundTableId));
     }
 
     /**
@@ -51,7 +55,7 @@ public class JudgeTaskController {
      */
     @PostMapping("/round-tables/{roundTableId}/score-submit")
     public Result<String> submitScoreRoundTable(@PathVariable Long roundTableId) {
-        roundService.submitScoreRoundTable(roundTableId);
+        judgeRoundTaskService.submitScoreRoundTable(roundTableId);
         return Result.success("提交成功");
     }
 
@@ -60,7 +64,7 @@ public class JudgeTaskController {
      */
     @GetMapping("/round-tables/{roundTableId}/score-confirmation")
     public Result<ScoreConfirmationVO> scoreConfirmation(@PathVariable Long roundTableId) {
-        return Result.success(roundService.getScoreConfirmation(roundTableId));
+        return Result.success(scoreConfirmationService.getScoreConfirmation(roundTableId));
     }
 
     /**
@@ -69,7 +73,7 @@ public class JudgeTaskController {
     @PostMapping("/round-tables/{roundTableId}/score-confirmation")
     public Result<ScoreConfirmationVO> confirmScoreRoundTable(@PathVariable Long roundTableId,
                                                               @RequestBody @Valid RoundTableConfirmationRequest request) {
-        return Result.success(roundService.confirmScoreRoundTable(roundTableId, request));
+        return Result.success(scoreConfirmationService.confirmScoreRoundTable(roundTableId, request));
     }
 
     /**
@@ -78,7 +82,7 @@ public class JudgeTaskController {
     @PostMapping("/round-tables/{roundTableId}/ranking")
     public Result<String> submitRanking(@PathVariable Long roundTableId,
                                         @RequestBody @Valid RankingSubmitRequest request) {
-        roundService.submitRanking(roundTableId, request);
+        rankingService.submitRanking(roundTableId, request);
         return Result.success("提交成功");
     }
 
@@ -87,7 +91,7 @@ public class JudgeTaskController {
      */
     @GetMapping("/round-tables/{roundTableId}/ranking-confirmation")
     public Result<RankingConfirmationVO> rankingConfirmation(@PathVariable Long roundTableId) {
-        return Result.success(roundService.getRankingConfirmation(roundTableId));
+        return Result.success(rankingService.getRankingConfirmation(roundTableId));
     }
 
     /**
@@ -96,7 +100,7 @@ public class JudgeTaskController {
     @PostMapping("/round-tables/{roundTableId}/ranking-confirmation")
     public Result<RankingConfirmationVO> confirmRankingRoundTable(@PathVariable Long roundTableId,
                                                                   @RequestBody @Valid RoundTableConfirmationRequest request) {
-        return Result.success(roundService.confirmRankingRoundTable(roundTableId, request));
+        return Result.success(rankingService.confirmRankingRoundTable(roundTableId, request));
     }
 
     /**
@@ -104,7 +108,7 @@ public class JudgeTaskController {
      */
     @PostMapping("/round-tables/{roundTableId}/ranking-final-submit")
     public Result<String> finalizeRanking(@PathVariable Long roundTableId) {
-        roundService.finalizeRanking(roundTableId);
+        rankingService.finalizeRanking(roundTableId);
         return Result.success("提交成功");
     }
 
@@ -114,7 +118,7 @@ public class JudgeTaskController {
     @PostMapping("/round-tables/{roundTableId}/ranking-draft")
     public Result<String> saveRankingDraft(@PathVariable Long roundTableId,
                                            @RequestBody @Valid RankingDraftSaveRequest request) {
-        roundService.saveRankingDraft(roundTableId, request);
+        rankingService.saveRankingDraft(roundTableId, request);
         return Result.success("保存成功");
     }
 }

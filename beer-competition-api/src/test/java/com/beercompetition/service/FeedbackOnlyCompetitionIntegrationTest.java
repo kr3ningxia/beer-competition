@@ -1,5 +1,10 @@
 package com.beercompetition.service;
 
+import com.beercompetition.judging.assignment.RoundAllocationService;
+import com.beercompetition.judging.round.RoundLifecycleService;
+import com.beercompetition.judging.scoring.ScoreConfirmationService;
+import com.beercompetition.competition.query.CompetitionQueryService;
+import com.beercompetition.result.PortalResultQueryService;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.pojo.dto.FirstRoundCreateRequest;
 import com.beercompetition.pojo.dto.NextRoundCreateRequest;
@@ -32,13 +37,19 @@ class FeedbackOnlyCompetitionIntegrationTest extends IntegrationTestBase {
     private BeerCompetitionTestData testData;
 
     @Autowired
-    private RoundService roundService;
+    private RoundAllocationService roundAllocationService;
 
     @Autowired
-    private CompetitionService competitionService;
+    private RoundLifecycleService roundLifecycleService;
 
     @Autowired
-    private EntryService entryService;
+    private ScoreConfirmationService scoreConfirmationService;
+
+    @Autowired
+    private CompetitionQueryService competitionQueryService;
+
+    @Autowired
+    private PortalResultQueryService portalResultQueryService;
 
     @Test
     void feedbackOnlyScoreRoundPublishesWhenTargetCountExceedsEntryCount() {
@@ -63,13 +74,13 @@ class FeedbackOnlyCompetitionIntegrationTest extends IntegrationTestBase {
         request.setTables(List.of(table));
 
         asAdmin(1L);
-        roundService.createFirstRound(fixture.competition().getId(), request);
+        roundAllocationService.createFirstRound(fixture.competition().getId(), request);
         Long roundId = jdbcTemplate.queryForObject("""
                 SELECT id FROM competition_round
                 WHERE competition_id = ? AND round_no = 1
                 """, Long.class, fixture.competition().getId());
 
-        roundService.publishRound(fixture.competition().getId(), roundId);
+        roundLifecycleService.publishRound(fixture.competition().getId(), roundId);
 
         assertThat(jdbcTemplate.queryForObject("SELECT status FROM competition_round WHERE id = ?",
                 String.class, roundId)).isEqualTo(RoundStatus.PUBLISHED.name());
@@ -89,15 +100,15 @@ class FeedbackOnlyCompetitionIntegrationTest extends IntegrationTestBase {
         insertFinalScore(fixture, scoreRound, fixture.entryA2().getId(), 44);
 
         asJudge(fixture.professional().getId());
-        roundService.confirmScoreRoundTable(scoreRound.table().getId(), confirmationRequest(scoreRound.table().getResultVersion()));
+        scoreConfirmationService.confirmScoreRoundTable(scoreRound.table().getId(), confirmationRequest(scoreRound.table().getResultVersion()));
         asJudge(fixture.cross().getId());
-        roundService.confirmScoreRoundTable(scoreRound.table().getId(), confirmationRequest(scoreRound.table().getResultVersion()));
+        scoreConfirmationService.confirmScoreRoundTable(scoreRound.table().getId(), confirmationRequest(scoreRound.table().getResultVersion()));
 
         assertThat(jdbcTemplate.queryForObject("SELECT status FROM round_table WHERE id = ?",
                 String.class, scoreRound.table().getId())).isEqualTo(RoundStatus.SUBMITTED.name());
 
         asAdmin(1L);
-        roundService.completeFirstRound(fixture.competition().getId(), scoreRound.round().getId());
+        roundLifecycleService.completeFirstRound(fixture.competition().getId(), scoreRound.round().getId());
 
         assertThat(jdbcTemplate.queryForObject("SELECT status FROM competition_round WHERE id = ?",
                 String.class, scoreRound.round().getId())).isEqualTo(RoundStatus.LOCKED.name());
@@ -111,7 +122,7 @@ class FeedbackOnlyCompetitionIntegrationTest extends IntegrationTestBase {
                 SELECT COUNT(*) FROM round_result
                 WHERE competition_id = ? AND result_type = ?
                 """, Integer.class, fixture.competition().getId(), RoundResultType.ADVANCE.name())).isZero();
-        CompetitionDetailVO lockedDetail = competitionService.getCompetitionDetail(fixture.competition().getId());
+        CompetitionDetailVO lockedDetail = competitionQueryService.getCompetitionDetail(fixture.competition().getId());
         assertThat(lockedDetail.getResultSetup().getFeedbackEntryCount()).isEqualTo(2);
         assertThat(lockedDetail.getResultSetup().getFeedbackFinalizedCount()).isEqualTo(2);
         assertThat(lockedDetail.getResultSetup().getFeedbackEvaluatedCount()).isEqualTo(2);
@@ -122,11 +133,11 @@ class FeedbackOnlyCompetitionIntegrationTest extends IntegrationTestBase {
         NextRoundCreateRequest request = new NextRoundCreateRequest();
         request.setSourceRoundId(scoreRound.round().getId());
         request.setRoundName("第二轮");
-        assertThatThrownBy(() -> roundService.createNextRound(fixture.competition().getId(), request))
+        assertThatThrownBy(() -> roundAllocationService.createNextRound(fixture.competition().getId(), request))
                 .isInstanceOf(BaseException.class)
                 .hasMessageContaining("风格对齐会不创建后续轮");
 
-        roundService.publishResults(fixture.competition().getId());
+        roundLifecycleService.publishResults(fixture.competition().getId());
 
         assertThat(jdbcTemplate.queryForObject("SELECT status FROM competition WHERE id = ?",
                 String.class, fixture.competition().getId())).isEqualTo(CompetitionStatus.PUBLISHED.name());
@@ -135,7 +146,7 @@ class FeedbackOnlyCompetitionIntegrationTest extends IntegrationTestBase {
         assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM award_result WHERE competition_id = ?",
                 Integer.class, fixture.competition().getId())).isZero();
 
-        PortalCompetitionResultVO publicResult = entryService.getPublishedCompetitionResult(fixture.competition().getId());
+        PortalCompetitionResultVO publicResult = portalResultQueryService.getPublishedCompetitionResult(fixture.competition().getId());
         assertThat(publicResult.getCompetitionType()).isEqualTo(CompetitionType.FEEDBACK_ONLY.name());
         assertThat(publicResult.getEntries()).hasSize(2);
         assertThat(publicResult.getEntries())
@@ -145,7 +156,7 @@ class FeedbackOnlyCompetitionIntegrationTest extends IntegrationTestBase {
                     assertThat(entry.getAwardName()).isNull();
                     assertThat(entry.getChampion()).isFalse();
                 });
-        assertThat(entryService.listPublishedCompetitionResults())
+        assertThat(portalResultQueryService.listPublishedCompetitionResults())
                 .anySatisfy(result -> {
                     assertThat(result.getId()).isEqualTo(fixture.competition().getId());
                     assertThat(result.getCompetitionType()).isEqualTo(CompetitionType.FEEDBACK_ONLY.name());

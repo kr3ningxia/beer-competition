@@ -1,5 +1,7 @@
 package com.beercompetition.service;
 
+import com.beercompetition.registration.entry.PortalEntryService;
+import com.beercompetition.registration.refund.EntryRefundService;
 import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ForbiddenException;
@@ -34,7 +36,10 @@ class BankTransferPaymentIntegrationTest extends IntegrationTestBase {
     private BankTransferPaymentService bankTransferPaymentService;
 
     @Autowired
-    private EntryService entryService;
+    private PortalEntryService portalEntryService;
+
+    @Autowired
+    private EntryRefundService entryRefundService;
 
     @Test
     void submitTransferLocksEntryAndAdminConfirmRegistersIt() {
@@ -180,14 +185,14 @@ class BankTransferPaymentIntegrationTest extends IntegrationTestBase {
         var pendingTransferEntry = createPendingEntry(fixture, "转账确认中取消报名");
 
         asPortal(fixture.portalA().account().getId());
-        var canceled = entryService.cancelPortalEntry(unpaidEntry.getId());
+        var canceled = portalEntryService.cancelPortalEntry(unpaidEntry.getId());
 
         assertThat(canceled.getStatus()).isEqualTo(EntryStatus.CANCELED.name());
         assertPayment(unpaidEntry.getId(), EntryPaymentStatus.CANCELED, EntryPayMethod.MOCK, null);
 
         bankTransferPaymentService.submitPortalTransfer(submitRequest(
                 pendingTransferEntry.getId(), "测试付款户名", null));
-        assertThatThrownBy(() -> entryService.cancelPortalEntry(pendingTransferEntry.getId()))
+        assertThatThrownBy(() -> portalEntryService.cancelPortalEntry(pendingTransferEntry.getId()))
                 .isInstanceOf(BaseException.class)
                 .hasMessageContaining("银行转账确认中");
     }
@@ -220,7 +225,7 @@ class BankTransferPaymentIntegrationTest extends IntegrationTestBase {
         asPortal(fixture.portalA().account().getId());
         PortalEntryRefundRequest refundRequest = new PortalEntryRefundRequest();
         refundRequest.setReason("测试退款");
-        entryService.requestPortalEntryRefund(entry.getId(), refundRequest);
+        entryRefundService.requestPortalEntryRefund(entry.getId(), refundRequest);
         Long refundId = jdbcTemplate.queryForObject(
                 "SELECT id FROM entry_refund WHERE beer_entry_id = ? ORDER BY id DESC LIMIT 1",
                 Long.class,
@@ -234,7 +239,7 @@ class BankTransferPaymentIntegrationTest extends IntegrationTestBase {
         asAdmin(1L);
         AdminOfflineRefundRequest offlineRequest = new AdminOfflineRefundRequest();
         offlineRequest.setReason("银行卡退款测试");
-        entryService.registerOfflineRefund(refundId, offlineRequest,
+        entryRefundService.registerOfflineRefund(refundId, offlineRequest,
                 new MockMultipartFile("voucher", "refund.png", "image/png", new byte[]{1, 2, 3}));
 
         assertThat(jdbcTemplate.queryForObject("SELECT status FROM entry_refund WHERE id = ?",

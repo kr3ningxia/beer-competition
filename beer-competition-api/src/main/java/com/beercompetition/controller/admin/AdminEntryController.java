@@ -9,7 +9,9 @@ import com.beercompetition.pojo.dto.AdminEntryUpdateRequest;
 import com.beercompetition.pojo.vo.AdminEntryDetailVO;
 import com.beercompetition.pojo.vo.AdminEntryDeleteImpactVO;
 import com.beercompetition.pojo.vo.AdminEntryVO;
-import com.beercompetition.service.EntryService;
+import com.beercompetition.registration.entry.AdminEntryService;
+import com.beercompetition.registration.payment.EntryPaymentAdminService;
+import com.beercompetition.registration.refund.EntryRefundService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -33,7 +35,9 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/api/admin")
 public class AdminEntryController {
 
-    private final EntryService entryService;
+    private final AdminEntryService adminEntryService;
+    private final EntryPaymentAdminService entryPaymentAdminService;
+    private final EntryRefundService entryRefundService;
 
     /**
      * 按复合条件分页查询后台报名列表。
@@ -49,7 +53,7 @@ public class AdminEntryController {
                                                     @RequestParam(required = false) String keyword,
                                                     @RequestParam(required = false) Integer page,
                                                     @RequestParam(required = false) Integer pageSize) {
-        return Result.success(entryService.listAdminEntries(competitionId, status, paymentStatus, deliveryStatus,
+        return Result.success(adminEntryService.listAdminEntries(competitionId, status, paymentStatus, deliveryStatus,
                 categoryId, assigned, refundStatus, keyword, page, pageSize));
     }
 
@@ -58,7 +62,7 @@ public class AdminEntryController {
      */
     @GetMapping("/entries/{id}")
     public Result<AdminEntryDetailVO> entryDetail(@PathVariable Long id) {
-        return Result.success(entryService.getAdminEntry(id));
+        return Result.success(adminEntryService.getAdminEntry(id));
     }
 
     /**
@@ -67,7 +71,7 @@ public class AdminEntryController {
     @PutMapping("/entries/{id}")
     public Result<AdminEntryDetailVO> updateEntry(@PathVariable Long id,
                                                   @RequestBody @Valid AdminEntryUpdateRequest request) {
-        return Result.success(entryService.updateAdminEntry(id, request));
+        return Result.success(adminEntryService.updateAdminEntry(id, request));
     }
 
     /**
@@ -75,7 +79,7 @@ public class AdminEntryController {
      */
     @GetMapping("/entries/{id}/delete-impact")
     public Result<AdminEntryDeleteImpactVO> entryDeleteImpact(@PathVariable Long id) {
-        return Result.success(entryService.getAdminEntryDeleteImpact(id));
+        return Result.success(adminEntryService.getAdminEntryDeleteImpact(id));
     }
 
     /**
@@ -84,7 +88,7 @@ public class AdminEntryController {
     @PostMapping("/entries/{id}/administrative-delete")
     public Result<String> administrativelyDeleteEntry(@PathVariable Long id,
                                                        @RequestBody @Valid AdminEntryDeleteRequest request) {
-        entryService.administrativelyDeleteEntry(id, request);
+        adminEntryService.administrativelyDeleteEntry(id, request);
         return Result.success("酒款已删除");
     }
 
@@ -94,7 +98,7 @@ public class AdminEntryController {
     @PostMapping("/entries/{id}/confirm-payment")
     public Result<String> confirmEntryPayment(@PathVariable Long id,
                                               @RequestBody(required = false) @Valid AdminEntryStatusRequest request) {
-        entryService.confirmPayment(id, request);
+        entryPaymentAdminService.confirmPayment(id, request);
         return Result.success("确认成功");
     }
 
@@ -104,7 +108,7 @@ public class AdminEntryController {
     @PostMapping("/entries/{id}/mark-stored")
     public Result<String> markEntryStored(@PathVariable Long id,
                                           @RequestBody(required = false) @Valid AdminEntryStatusRequest request) {
-        entryService.markStored(id, request);
+        adminEntryService.markStored(id, request);
         return Result.success("入库成功");
     }
 
@@ -114,7 +118,7 @@ public class AdminEntryController {
     @PostMapping("/entries/{id}/unmark-stored")
     public Result<String> unmarkEntryStored(@PathVariable Long id,
                                             @RequestBody(required = false) @Valid AdminEntryStatusRequest request) {
-        entryService.unmarkStored(id, request);
+        adminEntryService.unmarkStored(id, request);
         return Result.success("撤销成功");
     }
 
@@ -124,7 +128,7 @@ public class AdminEntryController {
     @PostMapping("/entries/{id}/cancel")
     public Result<String> cancelEntry(@PathVariable Long id,
                                       @RequestBody(required = false) @Valid AdminEntryStatusRequest request) {
-        entryService.cancelEntry(id, request);
+        adminEntryService.cancelEntry(id, request);
         return Result.success("取消成功");
     }
 
@@ -135,7 +139,7 @@ public class AdminEntryController {
     public Result<PageResult<AdminEntryVO>> refunds(@RequestParam(required = false) String status,
                                                     @RequestParam(required = false) Integer page,
                                                     @RequestParam(required = false) Integer pageSize) {
-        return Result.success(entryService.listAdminRefunds(status, page, pageSize));
+        return Result.success(entryRefundService.listAdminRefunds(status, page, pageSize));
     }
 
     /**
@@ -144,7 +148,7 @@ public class AdminEntryController {
     @PostMapping("/refunds/{id}/approve")
     public Result<String> approveRefund(@PathVariable Long id,
                                         @RequestBody(required = false) @Valid AdminEntryStatusRequest request) {
-        entryService.approveRefund(id, request);
+        entryRefundService.approveRefund(id, request);
         return Result.success("退款已受理");
     }
 
@@ -154,7 +158,7 @@ public class AdminEntryController {
     @PostMapping("/refunds/{id}/reject")
     public Result<String> rejectRefund(@PathVariable Long id,
                                        @RequestBody(required = false) @Valid AdminEntryStatusRequest request) {
-        entryService.rejectRefund(id, request);
+        entryRefundService.rejectRefund(id, request);
         return Result.success("已驳回退款");
     }
 
@@ -165,7 +169,7 @@ public class AdminEntryController {
     public Result<String> completeOfflineRefund(
             @PathVariable Long id,
             @RequestBody(required = false) @Valid AdminEntryStatusRequest request) {
-        entryService.completeOfflineRefund(id, request);
+        entryRefundService.completeOfflineRefund(id, request);
         return Result.success("银行卡退款已确认");
     }
 
@@ -174,7 +178,7 @@ public class AdminEntryController {
             @PathVariable Long id,
             @Valid @ModelAttribute AdminOfflineRefundRequest request,
             @RequestPart("voucher") MultipartFile voucher) {
-        entryService.registerOfflineRefund(id, request, voucher);
+        entryRefundService.registerOfflineRefund(id, request, voucher);
         return Result.success("银行卡退款已完成");
     }
 
@@ -184,7 +188,7 @@ public class AdminEntryController {
     @PostMapping("/refunds/{id}/retry")
     public Result<String> retryRefund(@PathVariable Long id,
                                       @RequestBody(required = false) @Valid AdminEntryStatusRequest request) {
-        entryService.retryRefund(id, request);
+        entryRefundService.retryRefund(id, request);
         return Result.success("退款重试成功");
     }
 }
