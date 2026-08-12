@@ -1,0 +1,133 @@
+{
+  "summary": {
+    "expected_entries": 179,
+    "actual_entries": 179,
+    "expected_breweries": 76,
+    "actual_breweries": 76,
+    "expected_phone_accounts": 78,
+    "actual_phone_accounts": 78,
+    "expected_styles": 84,
+    "error_count": 0,
+    "warning_count": 15,
+    "field_difference_counts": {
+      "brewery.company_name[双合盛五星]": 1,
+      "brewery.company_name[大九]": 1,
+      "brewery.wechat[贝尔嘉]": 1,
+      "brewery_company_name": 5,
+      "portal_account.brewery[15245475962]": 1,
+      "portal_account.brewery[18064050163]": 1,
+      "portal_account.display_name[15245475962]": 1,
+      "portal_account.display_name[18064050163]": 1,
+      "portal_account.wechat[13942680186]": 1,
+      "portal_account.wechat[17727123749]": 1,
+      "portal_account.wechat[18988515414]": 1
+    }
+  },
+  "differences": [
+    {
+      "source_row": 37,
+      "field": "brewery_company_name",
+      "expected": "大九",
+      "actual": "大九酿造",
+      "severity": "warning"
+    },
+    {
+      "source_row": 38,
+      "field": "brewery_company_name",
+      "expected": "大九",
+      "actual": "大九酿造",
+      "severity": "warning"
+    },
+    {
+      "source_row": 141,
+      "field": "brewery_company_name",
+      "expected": "双合盛五星",
+      "actual": "北京双合盛五星啤酒有限公司",
+      "severity": "warning"
+    },
+    {
+      "source_row": 142,
+      "field": "brewery_company_name",
+      "expected": "双合盛五星",
+      "actual": "北京双合盛五星啤酒有限公司",
+      "severity": "warning"
+    },
+    {
+      "source_row": 143,
+      "field": "brewery_company_name",
+      "expected": "双合盛五星",
+      "actual": "北京双合盛五星啤酒有限公司",
+      "severity": "warning"
+    },
+    {
+      "source_row": null,
+      "field": "portal_account.wechat[13942680186]",
+      "expected": "13942680186",
+      "actual": "",
+      "severity": "warning"
+    },
+    {
+      "source_row": null,
+      "field": "portal_account.brewery[15245475962]",
+      "expected": "大九",
+      "actual": "大九酿造",
+      "severity": "warning"
+    },
+    {
+      "source_row": null,
+      "field": "portal_account.display_name[15245475962]",
+      "expected": "大九",
+      "actual": "大九酿造",
+      "severity": "warning"
+    },
+    {
+      "source_row": null,
+      "field": "portal_account.wechat[18988515414]",
+      "expected": "18988515414",
+      "actual": "13978856663",
+      "severity": "warning"
+    },
+    {
+      "source_row": null,
+      "field": "portal_account.wechat[17727123749]",
+      "expected": "17727123749",
+      "actual": "13978856663",
+      "severity": "warning"
+    },
+    {
+      "source_row": null,
+      "field": "portal_account.brewery[18064050163]",
+      "expected": "双合盛五星",
+      "actual": "北京双合盛五星啤酒有限公司",
+      "severity": "warning"
+    },
+    {
+      "source_row": null,
+      "field": "portal_account.display_name[18064050163]",
+      "expected": "双合盛五星",
+      "actual": "北京双合盛五星啤酒有限公司",
+      "severity": "warning"
+    },
+    {
+      "source_row": null,
+      "field": "brewery.wechat[贝尔嘉]",
+      "expected": "13942680186",
+      "actual": "",
+      "severity": "warning"
+    },
+    {
+      "source_row": null,
+      "field": "brewery.company_name[大九]",
+      "expected": "大九",
+      "actual": "大九酿造",
+      "severity": "warning"
+    },
+    {
+      "source_row": null,
+      "field": "brewery.company_name[双合盛五星]",
+      "expected": "双合盛五星",
+      "actual": "北京双合盛五星啤酒有限公司",
+      "severity": "warning"
+    }
+  ]
+}
