@@ -137,6 +137,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { fetchCompetitionLiveBoard, fetchCompetitions } from '@/api/admin'
+import { selectDefaultLiveBoardCompetition } from './liveBoardSelection'
 
 const REFRESH_SECONDS = 10
 const PARTNER_ROTATE_SECONDS = 12
@@ -151,7 +152,7 @@ const route = useRoute()
 const router = useRouter()
 const loading = ref(false)
 const detail = ref(null)
-const selectedCompetitionId = ref(route.query.competitionId || '')
+const selectedCompetitionId = ref('')
 let refreshTimer = null
 let partnerRotateTimer = null
 
@@ -179,11 +180,19 @@ onUnmounted(() => {
 })
 
 async function ensureCompetition() {
+  const requestedCompetitionId = normalizeCompetitionId(route.query.competitionId)
+  if (requestedCompetitionId) {
+    selectedCompetitionId.value = requestedCompetitionId
+    return
+  }
   const competitions = await fetchCompetitions({ includeArchived: false })
-  if (selectedCompetitionId.value && competitions.some((item) => String(item.id) === String(selectedCompetitionId.value))) return
-  const target = (competitions || []).find((item) => ['JUDGING', 'JUDGING_PREP'].includes(item.status))
-    || (competitions || [])[0]
+  const target = selectDefaultLiveBoardCompetition(competitions)
   selectedCompetitionId.value = target?.id || ''
+}
+
+function normalizeCompetitionId(value) {
+  const candidate = Array.isArray(value) ? value[0] : value
+  return candidate == null ? '' : String(candidate).trim()
 }
 
 function startTimers() {
