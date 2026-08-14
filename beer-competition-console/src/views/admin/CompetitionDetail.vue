@@ -1420,9 +1420,7 @@
             <span class="confirm-kicker">轮次发布</span>
             <h2 id="round-publish-confirm-title">确认发布当前轮次？</h2>
           </header>
-          <p class="confirm-copy">
-            发布后，{{ currentRoundPublishTarget }}会在对应端看到本轮任务，发布前请确认桌次、人员和酒款都已经核对完成
-          </p>
+          <p class="confirm-copy">{{ roundPublishConfirmCopy }}</p>
           <div class="confirm-summary">
             <span>
               <small>当前轮次</small>
@@ -2250,6 +2248,11 @@ const preplanningNotice = computed(() => {
 const overviewActionItems = computed(() => buildOverviewActionItems())
 const roundCategoryFilters = computed(() => ['全部', ...new Set(currentPoolEntries.value.map((entry) => entry.categoryName).filter(Boolean))])
 const currentPoolEntries = computed(() => getPoolEntriesForRound(currentRound.value))
+const roundUnassignedCount = computed(() => {
+  if (!currentRound.value) return 0
+  const assigned = new Set(currentRoundTables.value.flatMap((table) => table.entryUuids))
+  return currentPoolEntries.value.filter((entry) => !assigned.has(entry.uuid)).length
+})
 const entryLookup = computed(() => {
   const entries = [...roundEntryPool.value, ...(competition.value?.entries || [])]
   return new Map(entries.map((entry) => [entry.uuid, entry]))
@@ -2401,6 +2404,9 @@ const currentRoundTargetModeOptions = computed(() => {
   ]
 })
 const currentRoundPublishTarget = computed(() => (currentRound.value?.type === 'RANKING' ? '桌长和参与评审' : '评审'))
+const roundPublishConfirmCopy = computed(() => (roundUnassignedCount.value > 0
+  ? `还有 ${roundUnassignedCount.value} 款已入库酒款未分桌，本次发布将不包含这些酒款。请确认当前桌次、人员和酒款安排无误`
+  : `发布后，${currentRoundPublishTarget.value}会在对应端看到本轮任务，请确认桌次、人员和酒款安排无误`))
 const roundLockConfirmTitle = computed(() => {
   const round = roundLockTargetRound.value
   if (!round) return '确认锁定当前轮次？'
@@ -3642,6 +3648,14 @@ function buildOverviewActionItems() {
   if (roundValidationIssues.value.length) {
     issues.push(...roundValidationIssues.value.slice(0, 3).map((text, index) => ({ key: `round-${index}`, level: 'warning', text, targetTab: 'rounds' })))
   }
+  if (roundUnassignedCount.value > 0) {
+    issues.push({
+      key: 'round-unassigned',
+      level: 'warning',
+      text: `还有 ${roundUnassignedCount.value} 款已入库酒款未分桌，发布本轮时不会包含这些酒款`,
+      targetTab: 'rounds',
+    })
+  }
   if (competition.value?.entriesSummary?.pendingPayment > 0) {
     issues.push({ key: 'payment', level: 'warning', text: `还有 ${competition.value.entriesSummary.pendingPayment} 款酒等待支付`, targetTab: 'entries' })
   }
@@ -3650,8 +3664,16 @@ function buildOverviewActionItems() {
 
 function buildFutureStageTasks() {
   const feedbackOnly = isFeedbackOnlyCompetition.value
+  const storedCount = Number(competition.value?.entriesSummary?.stored || 0)
   const tasks = [
-    { key: 'storedEntries', label: '样品入库', targetTab: 'entries', detail: '报名酒款到场后确认入库状态', state: 'done', statusText: '已完成' },
+    {
+      key: 'storedEntries',
+      label: '样品入库',
+      targetTab: 'entries',
+      detail: '已入库酒款将进入评审编排',
+      state: storedCount > 0 ? 'done' : 'pending',
+      statusText: storedCount > 0 ? `已核对 ${storedCount} 款` : '待入库',
+    },
   ]
   rounds.value.forEach((round) => {
     tasks.push({
@@ -4595,9 +4617,6 @@ function buildRoundValidationIssues(round) {
   if (duplicateTableNames.length) issues.push(`轮次桌名称不能重复：${duplicateTableNames[0]}`)
   const assigned = round.tables.flatMap((table) => table.entryUuids)
   if (!assigned.length) issues.push(`${round.name}尚未分配酒款`)
-  const pool = getPoolEntriesForRound(round)
-  const unassignedCount = pool.filter((entry) => !round.tables.some((table) => table.entryUuids.includes(entry.uuid))).length
-  if (unassignedCount) issues.push(`还有 ${unassignedCount} 款酒未分配到本轮桌`)
   const duplicates = assigned.filter((uuid, index, list) => list.indexOf(uuid) !== index)
   if (duplicates.length) issues.push(`${round.name}存在重复分配酒款`)
   round.tables.forEach((table) => issues.push(...getRoundTableIssues(table)))
@@ -5676,13 +5695,19 @@ async function runReturnToSampleCheck() {
 }
 
 function prepareJudgingAction() {
+  const storedCount = Number(competition.value?.entriesSummary?.stored || 0)
+  const totalCount = Number(competition.value?.entriesSummary?.total || 0)
+  const notStoredCount = Math.max(totalCount - storedCount, 0)
   openBusinessConfirm({
     action: 'prepareJudging',
     kicker: '评审准备',
     title: '确认进入评审准备中？',
-    copy: '进入后将开始按入库酒款和评审配置安排首轮，若发现仍需继续接收报名，需要先退回样品入库核对后再重新开放报名',
+    copy: notStoredCount > 0
+      ? `本次将按 ${storedCount} 款已入库酒款安排评审；另有 ${notStoredCount} 款尚未入库，不会进入首轮。若后续需要补充，请先退回样品入库核对`
+      : '进入后将按已入库酒款和评审配置安排首轮；若后续需要补充，请先退回样品入库核对',
     summary: competitionSummaryItems([
-      { label: '已入库酒款', value: `${competition.value?.entriesSummary?.stored ?? 0} 款` },
+      { label: '进入评审', value: `${storedCount} 款` },
+      { label: '未入库', value: `${notStoredCount} 款` },
       { label: '评审桌', value: `${competition.value?.judgeTables?.length ?? 0} 张` },
       { label: '评分表', value: `${competition.value?.scoreConfigs?.length ?? 0} 套` },
     ]),

@@ -1968,8 +1968,7 @@ public class CompetitionServiceImpl implements CompetitionService {
         checks.add(check("entryFields", "补充字段", true, "未配置补充字段"));
         checks.add(check("judgeTables", "评审桌", hasJudgeTables, "至少配置 1 张评审桌"));
         checks.add(check("scoreForms", "评分表", isScoreFormsReady(scoreConfigs), "跨界、专业、桌长三类评分表都必须为 50 分"));
-        checks.add(check("storedEntries", "酒款入库", entriesSummary.getRegistered() > 0
-                && entriesSummary.getStored() >= entriesSummary.getRegistered(), "报名酒款需要完成入库确认"));
+        checks.add(check("storedEntries", "酒款入库", entriesSummary.getStored() > 0, "至少确认 1 款样品入库"));
         boolean published = Set.of(CompetitionStatus.PUBLISHED, CompetitionStatus.ARCHIVED).contains(parseStatus(competition));
         checks.add(check("resultSetup", "结果发布", published,
                 resolveCompetitionType(competition) == CompetitionType.FEEDBACK_ONLY
@@ -2657,8 +2656,7 @@ public class CompetitionServiceImpl implements CompetitionService {
         checks.add(check("entryFields", "补充字段", true, entryFields.isEmpty() ? "未配置补充字段" : "已配置补充字段"));
         checks.add(check("judgeTables", "评审桌", !judgeTables.isEmpty(), "至少配置 1 张评审桌"));
         checks.add(check("scoreForms", "评分表", isScoreFormsReady(scoreConfigs), "跨界、专业、桌长三类评分表都必须为 50 分"));
-        checks.add(check("storedEntries", "酒款入库", entriesSummary.getRegistered() > 0
-                && entriesSummary.getStored() >= entriesSummary.getRegistered(), "报名酒款需要完成入库确认"));
+        checks.add(check("storedEntries", "酒款入库", entriesSummary.getStored() > 0, "至少确认 1 款样品入库"));
         checks.add(check("resultSetup", "结果发布", Boolean.TRUE.equals(resultSetup.getPublished()),
                 resolveCompetitionType(competition) == CompetitionType.FEEDBACK_ONLY ? "首轮锁定后可发布诊断结果" : "奖项确认后才能发布结果"));
 
