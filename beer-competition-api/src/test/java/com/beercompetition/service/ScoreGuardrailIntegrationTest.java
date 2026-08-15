@@ -13,6 +13,7 @@ import com.beercompetition.pojo.enums.JudgeRoleType;
 import com.beercompetition.pojo.enums.RoundStatus;
 import com.beercompetition.pojo.enums.UserRole;
 import com.beercompetition.pojo.vo.ScoreConfirmationVO;
+import com.beercompetition.pojo.vo.ScoreRecordVO;
 import com.beercompetition.testsupport.BeerCompetitionTestData;
 import com.beercompetition.testsupport.IntegrationTestBase;
 import org.junit.jupiter.api.Test;
@@ -149,6 +150,46 @@ class ScoreGuardrailIntegrationTest extends IntegrationTestBase {
         assertThatThrownBy(() -> scoreService.updateScore(professionalScore.getId(), update))
                 .isInstanceOf(BaseException.class)
                 .hasMessageContaining("桌长已汇总");
+    }
+
+    @Test
+    void captainTableScoresIncludeOwnPersonalScoreSeparatelyFromFinalOpinion() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        testData.createPublishedScoreRound(fixture, List.of(fixture.entryA1()), 1);
+
+        asJudge(fixture.professional().getId());
+        scoreService.createScore(professionalScoreRequest(fixture.entryA1().getUuid(), 18, 27));
+        asJudge(fixture.cross().getId());
+        scoreService.createScore(crossScoreRequest(fixture.entryA1().getUuid(), 44));
+        asJudge(fixture.captain().getId());
+        ScoreRecordVO captainPersonalScore = scoreService.createScore(
+                professionalScoreRequest(fixture.entryA1().getUuid(), 17, 28));
+
+        List<ScoreRecordVO> personalScores = scoreService.listTableScores(fixture.entryA1().getUuid());
+
+        assertThat(personalScores).hasSize(3);
+        assertThat(personalScores).extracting(ScoreRecordVO::getId).contains(captainPersonalScore.getId());
+        assertThat(personalScores)
+                .filteredOn(score -> Boolean.TRUE.equals(score.getMine()))
+                .singleElement()
+                .satisfies(score -> {
+                    assertThat(score.getId()).isEqualTo(captainPersonalScore.getId());
+                    assertThat(score.getIsFinal()).isZero();
+                    assertThat(score.getJudgeRoleType()).isEqualTo(JudgeRoleType.PROFESSIONAL.name());
+                });
+
+        ScoreRecordVO finalOpinion = scoreService.finalizeTableScore(
+                fixture.entryA1().getUuid(), finalizeRequest(46, true));
+        List<ScoreRecordVO> scoresWithFinalOpinion = scoreService.listTableScores(fixture.entryA1().getUuid());
+
+        assertThat(scoresWithFinalOpinion).hasSize(4);
+        assertThat(scoresWithFinalOpinion)
+                .filteredOn(score -> Integer.valueOf(0).equals(score.getIsFinal()))
+                .hasSize(3);
+        assertThat(scoresWithFinalOpinion)
+                .filteredOn(score -> Integer.valueOf(1).equals(score.getIsFinal()))
+                .extracting(ScoreRecordVO::getId)
+                .containsExactly(finalOpinion.getId());
     }
 
     @Test

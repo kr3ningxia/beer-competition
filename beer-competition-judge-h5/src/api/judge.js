@@ -222,11 +222,11 @@ export async function fetchCaptainBoard(roundTableId) {
       ? await fetchTableScores(entry.uuid)
       : []
     const finalScore = tableScores.find((score) => score.finalFlag)
-    const normalScores = tableScores.filter((score) => !score.finalFlag)
+    const peerScores = tableScores.filter((score) => !score.finalFlag && !score.mine)
     return {
       ...entry,
       scored: myScoredUuids.has(entry.uuid),
-      submittedCount: normalScores.length,
+      submittedCount: peerScores.length,
       expectedCount: table.expectedJudgeCount || 0,
       finalized: Boolean(finalScore || entry.advanced),
       finalScore: finalScore?.totalScore,

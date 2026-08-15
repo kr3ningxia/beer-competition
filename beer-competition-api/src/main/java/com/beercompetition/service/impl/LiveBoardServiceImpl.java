@@ -202,10 +202,12 @@ public class LiveBoardServiceImpl implements LiveBoardService {
         int rankingTarget = Math.max(NumberUtils.safeInt(table.getTargetCount()), 0);
         String statusText = resolveTableStatus(round, table, entryCount, personalDone, personalTotal,
                 captainDone, confirmationDone, confirmationRequired, rankingDone, rankingTarget);
-        int reviewedCount = TABLE_REVIEWED_STATUS.contains(statusText) ? entryCount : 0;
+        boolean rankingRound = RoundType.RANKING.name().equals(round.getRoundType());
+        int reviewedCount = rankingRound
+                ? (TABLE_REVIEWED_STATUS.contains(statusText) ? entryCount : 0)
+                : Math.min(captainDone, entryCount);
         int pendingCount = Math.max(entryCount - reviewedCount, 0);
         int completionPercent = percent(reviewedCount, entryCount);
-        boolean rankingRound = RoundType.RANKING.name().equals(round.getRoundType());
         return new TableStats(
                 table.getId(),
                 table.getTableName(),
@@ -360,11 +362,11 @@ public class LiveBoardServiceImpl implements LiveBoardService {
         int done = tableStats.stream().mapToInt(TableStats::reviewedCount).sum();
         int total = tableStats.stream().mapToInt(TableStats::entryCount).sum();
         return LiveBoardSummaryVO.builder()
-                .eyebrow("评审完成")
+                .eyebrow("共识提交")
                 .done(done)
                 .total(total)
                 .percent(percent(done, total))
-                .label(total > 0 ? "已评审 " + done + " 款 · 待评审 " + Math.max(total - done, 0) + " 款" : "等待首轮酒款发布")
+                .label(total > 0 ? "已汇总 " + done + " 款 · 待汇总 " + Math.max(total - done, 0) + " 款" : "等待首轮酒款发布")
                 .build();
     }
 
@@ -382,8 +384,8 @@ public class LiveBoardServiceImpl implements LiveBoardService {
                 .filter(Objects::nonNull)
                 .toList());
         return List.of(
-                buildMetric("reviewed", "已评审", String.valueOf(reviewed), rankingRound ? "桌" : "款", reviewed > 0 ? "success" : "neutral"),
-                buildMetric("pendingReview", "待评审", String.valueOf(pendingReview), rankingRound ? "桌" : "款", pendingReview > 0 ? "warning" : "success"),
+                buildMetric("reviewed", rankingRound ? "已评审" : "已汇总", String.valueOf(reviewed), rankingRound ? "桌" : "款", reviewed > 0 ? "success" : "neutral"),
+                buildMetric("pendingReview", rankingRound ? "待评审" : "待汇总", String.valueOf(pendingReview), rankingRound ? "桌" : "款", pendingReview > 0 ? "warning" : "success"),
                 buildMetric("completionRate", "完成率", percent(reviewed, total) + "%", "", resolveProgressTone(reviewed, total)),
                 buildMetric("averageComment", "平均评语", averageComment > 0 ? String.valueOf(averageComment) : "-", averageComment > 0 ? "字" : "", "neutral")
         );

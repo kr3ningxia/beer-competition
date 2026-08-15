@@ -6,7 +6,7 @@ import { clearSession, getRefreshToken, getToken, setSession } from '@/utils/aut
 
 const service = axios.create({
   baseURL: BASE_URL,
-  timeout: 10000,
+  timeout: 60000,
 })
 
 const refreshClient = axios.create({

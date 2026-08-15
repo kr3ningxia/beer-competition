@@ -252,6 +252,7 @@ const form = reactive({
 const boardEntries = computed(() => board.value?.entries || [])
 const isFeedbackOnlyCompetition = computed(() => board.value?.competition?.competitionType === 'FEEDBACK_ONLY')
 const normalScores = computed(() => tableScores.value.filter((score) => !score.finalFlag))
+const peerScores = computed(() => normalScores.value.filter((score) => !score.mine))
 const finalScore = computed(() => tableScores.value.find((score) => score.finalFlag) || null)
 const myPersonalScore = computed(() => normalScores.value.find((score) => score.mine) || null)
 const myScoreSubmitted = computed(() => Boolean(myPersonalScore.value || entry.value?.scored))
@@ -414,7 +415,7 @@ const tableSubmitHint = computed(() => {
   if (tableReadyForReview.value) return '可修改评价，修改后需重新确认。'
   return ''
 })
-const currentSubmittedCount = computed(() => Number(currentBoardEntry.value?.submittedCount || normalScores.value.length || 0))
+const currentSubmittedCount = computed(() => Number(currentBoardEntry.value?.submittedCount || peerScores.value.length || 0))
 const currentExpectedCount = computed(() => Number(currentBoardEntry.value?.expectedCount || 0))
 const tableScoresReady = computed(() => (
   currentSubmittedCount.value >= currentExpectedCount.value

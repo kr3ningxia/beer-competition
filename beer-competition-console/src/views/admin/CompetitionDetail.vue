@@ -876,7 +876,7 @@
                     <span>{{ table.entryCount }} 款</span>
                     <span>桌长 {{ table.captainName }}</span>
                     <span>{{ table.primaryProgressLabel }} {{ table.primaryProgress }}</span>
-                    <span>{{ table.secondaryProgressLabel }} {{ table.secondaryProgress }}</span>
+                    <span v-if="currentRound?.type === 'RANKING'">{{ table.secondaryProgressLabel }} {{ table.secondaryProgress }}</span>
                     <span v-if="currentRound?.type === 'SCORE'">确认 {{ table.confirmationProgress }}</span>
                     <span>{{ table.targetLabel }} {{ table.targetDisplay }}</span>
                     <em>{{ table.statusText }}</em>
@@ -3956,8 +3956,8 @@ function buildCurrentRoundMetrics() {
       { label: '问题', value: roundValidationIssues.value.length },
     ]
   }
-  const judgeCounts = currentRoundTables.value.reduce((summary, table) => {
-    const counts = getJudgeProgressCounts(table)
+  const reviewedEntryCounts = currentRoundTables.value.reduce((summary, table) => {
+    const counts = getReviewedEntryProgressCounts(table)
     summary.done += counts.done
     summary.total += counts.total
     return summary
@@ -3965,7 +3965,7 @@ function buildCurrentRoundMetrics() {
   const captainAverage = getAverageProgress(currentRoundTables.value.map((table) => table.captainProgress))
   return [
     { label: '桌数', value: currentRoundTables.value.length },
-    { label: '评审评分', value: `${judgeCounts.done} / ${judgeCounts.total}` },
+    { label: '已评数/总评分酒款', value: `${reviewedEntryCounts.done} / ${reviewedEntryCounts.total}` },
     { label: '桌长汇总', value: `${captainAverage}%` },
     { label: '待处理', value: roundValidationIssues.value.length },
   ]
@@ -4176,7 +4176,7 @@ function hasRoundTargetMode(round, mode) {
 function getRoundTableProgressSummary(round, table) {
   if (!round) {
     return {
-      primaryLabel: '评审评分',
+      primaryLabel: '已评数/总评分酒款',
       primaryValue: '-',
       secondaryLabel: '桌长汇总',
       secondaryValue: '-',
@@ -4208,25 +4208,27 @@ function getRoundTableProgressSummary(round, table) {
   else if (judgeProgress >= 100) statusText = '待桌长汇总'
   else if (judgeProgress > 0) statusText = '评分中'
   return {
-    primaryLabel: '评审评分',
-    primaryValue: formatJudgeProgress(table),
+    primaryLabel: '已评数/总评分酒款',
+    primaryValue: formatReviewedEntryProgress(table),
     secondaryLabel: '桌长汇总',
     secondaryValue: captainProgress >= 100 ? '已汇总' : '未汇总',
     statusText,
   }
 }
 
-function getJudgeProgressCounts(table) {
-  const judgeCount = getRoundTableTaskJudgeCount(table)
-  const total = table.entryUuids.length * judgeCount
-  if (!total) return { done: 0, total: 0 }
-  const progress = normalizeProgress(table.judgeProgress)
-  const done = progress >= 100 ? total : Math.min(total, Math.max(0, Math.round(total * progress / 100)))
-  return { done, total }
+function getReviewedEntryProgressCounts(table) {
+  const entryUuids = new Set(table?.entryUuids || [])
+  const reviewedEntryUuids = new Set()
+  for (const judge of table?.judgeDetails || []) {
+    for (const score of judge.entryScores || []) {
+      if (score.scored && entryUuids.has(score.beerUuid)) reviewedEntryUuids.add(score.beerUuid)
+    }
+  }
+  return { done: reviewedEntryUuids.size, total: entryUuids.size }
 }
 
-function formatJudgeProgress(table) {
-  const counts = getJudgeProgressCounts(table)
+function formatReviewedEntryProgress(table) {
+  const counts = getReviewedEntryProgressCounts(table)
   return `${counts.done} / ${counts.total}`
 }
 
@@ -9392,7 +9394,7 @@ button.pyramid-placeholder-mark {
 }
 
 .round-table-row.score-row {
-  grid-template-columns: minmax(64px, 0.55fr) minmax(52px, 0.38fr) minmax(112px, 0.85fr) minmax(104px, 0.76fr) minmax(112px, 0.78fr) minmax(88px, 0.58fr) minmax(96px, 0.68fr) minmax(120px, 0.9fr) 82px;
+  grid-template-columns: minmax(64px, 0.55fr) minmax(52px, 0.38fr) minmax(112px, 0.85fr) minmax(220px, 1.4fr) minmax(88px, 0.58fr) minmax(96px, 0.68fr) minmax(120px, 0.9fr) 82px;
 }
 
 .round-table-row.ranking-row {

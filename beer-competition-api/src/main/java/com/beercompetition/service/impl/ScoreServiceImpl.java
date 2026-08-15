@@ -251,7 +251,7 @@ public class ScoreServiceImpl implements ScoreService {
         // 1) 校验桌长权限并查询同桌原始评分
         BeerEntry entry = requireEntry(uuid);
         RoundTableEntry roundEntry = requireScoreRoundTask(entry.getId(), JudgeRoleType.CAPTAIN.name(), true);
-        Set<Long> tableJudgeIds = roundTableMemberMapper.selectList(new LambdaQueryWrapper<RoundTableMember>()
+        Set<Long> peerJudgeIds = roundTableMemberMapper.selectList(new LambdaQueryWrapper<RoundTableMember>()
                         .eq(RoundTableMember::getRoundTableId, roundEntry.getRoundTableId())
                         .eq(RoundTableMember::getSystemTaskRequired, FLAG_TRUE)
                         .ne(RoundTableMember::getRole, JudgeRoleType.CAPTAIN.name()))
@@ -262,10 +262,12 @@ public class ScoreServiceImpl implements ScoreService {
         return scoreRecordMapper.selectList(new LambdaQueryWrapper<ScoreRecord>()
                         .eq(ScoreRecord::getBeerEntryId, entry.getId())
                         .eq(ScoreRecord::getCompetitionId, entry.getCompetitionId())
+                        .eq(ScoreRecord::getRoundId, roundEntry.getRoundId())
+                        .eq(ScoreRecord::getRoundTableId, roundEntry.getRoundTableId())
                         .orderByAsc(ScoreRecord::getFinalFlag)
                         .orderByAsc(ScoreRecord::getId))
                 .stream()
-                .filter(score -> isCurrentTableScore(score, tableJudgeIds, captainId))
+                .filter(score -> isCurrentTableScore(score, peerJudgeIds, captainId))
                 .map(this::toScoreRecordVO)
                 .toList();
     }
@@ -510,11 +512,12 @@ public class ScoreServiceImpl implements ScoreService {
         }
     }
 
-    private boolean isCurrentTableScore(ScoreRecord score, Set<Long> tableJudgeIds, Long captainId) {
+    private boolean isCurrentTableScore(ScoreRecord score, Set<Long> peerJudgeIds, Long captainId) {
         if (Integer.valueOf(FLAG_TRUE).equals(score.getFinalFlag())) {
             return score.getJudgeAccountId().equals(captainId);
         }
-        return tableJudgeIds.contains(score.getJudgeAccountId());
+        return peerJudgeIds.contains(score.getJudgeAccountId())
+                || score.getJudgeAccountId().equals(captainId);
     }
 
     private RoundTableEntry requireScoreRoundTask(Long beerEntryId, String role, boolean captainOnly) {
