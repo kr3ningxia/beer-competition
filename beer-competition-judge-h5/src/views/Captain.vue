@@ -33,7 +33,15 @@
           <span v-for="item in captainSummaryBadges" :key="item">{{ item }}</span>
         </div>
         <button
-          v-if="captainSummaryState !== 'ready-review'"
+          v-if="tableSubmitted"
+          class="button secondary full check-action"
+          type="button"
+          @click="reopenDialogOpen = true"
+        >
+          修改本桌结果
+        </button>
+        <button
+          v-else-if="captainSummaryState !== 'ready-review'"
           :class="['button', summaryActionPrimary ? 'primary' : 'secondary', 'full', 'check-action']"
           type="button"
           :disabled="!canOpenNextAction"
@@ -206,6 +214,19 @@
       </div>
     </section>
 
+    <section v-if="reopenDialogOpen" class="advance-limit-overlay" role="dialog" aria-modal="true" aria-labelledby="reopen-result-title">
+      <div class="advance-limit-dialog reopen-result-dialog">
+        <h2 id="reopen-result-title">修改本桌结果？</h2>
+        <p>原有同桌确认将失效，修改后需要重新确认。</p>
+        <div class="reopen-dialog-actions">
+          <button class="button secondary" type="button" :disabled="reopening" @click="reopenDialogOpen = false">取消</button>
+          <button class="button primary" type="button" :disabled="reopening" @click="confirmReopenTable">
+            {{ reopening ? '处理中...' : '继续修改' }}
+          </button>
+        </div>
+      </div>
+    </section>
+
     <StyleDetailDialog :open="styleDetailOpen" :entry="entry" @close="closeStyleDetail" />
 
     <JudgeBottomNav :role="me?.role || 'CAPTAIN'" />
@@ -223,6 +244,7 @@ import {
   fetchScoreConfig,
   fetchTableScores,
   finalizeTableScore,
+  reopenScoreRoundTable,
 } from '@/api/judge'
 import JudgeBottomNav from '@/components/JudgeBottomNav.vue'
 import StyleDetailDialog from '@/components/StyleDetailDialog.vue'
@@ -242,6 +264,8 @@ const expandedCommentIds = ref(new Set())
 const message = ref('')
 const loadingBoard = ref(false)
 const advanceLimitDialogOpen = ref(false)
+const reopenDialogOpen = ref(false)
+const reopening = ref(false)
 const styleDetailOpen = ref(false)
 const form = reactive({
   consensusScore: '',
@@ -252,6 +276,7 @@ const form = reactive({
 const boardEntries = computed(() => board.value?.entries || [])
 const isFeedbackOnlyCompetition = computed(() => board.value?.competition?.competitionType === 'FEEDBACK_ONLY')
 const normalScores = computed(() => tableScores.value.filter((score) => !score.finalFlag))
+const peerScores = computed(() => normalScores.value.filter((score) => !score.mine))
 const finalScore = computed(() => tableScores.value.find((score) => score.finalFlag) || null)
 const myPersonalScore = computed(() => normalScores.value.find((score) => score.mine) || null)
 const myScoreSubmitted = computed(() => Boolean(myPersonalScore.value || entry.value?.scored))
@@ -353,7 +378,7 @@ const captainSummaryBadges = computed(() => {
 const tableCheckText = computed(() => {
   if (captainSummaryState.value === 'loading') return '正在同步本轮酒款和评分进度。'
   if (!boardEntries.value.length) return '请联系现场工作人员确认本轮评审桌和酒款配置。'
-  if (tableSubmitted.value) return '等待主办方确认轮次。'
+  if (tableSubmitted.value) return '管理员锁定前仍可修改。'
   if (tableReadyForReview.value) return isFeedbackOnlyCompetition.value ? '酒款诊断意见已齐，等待同桌确认。' : '酒款意见和晋级名单已齐，等待同桌确认。'
   if (captainSummaryState.value === 'advance-check') return isFeedbackOnlyCompetition.value ? '酒款诊断意见已完成，等待同桌确认。' : '酒款意见已完成，还需按本桌目标确认晋级名单。'
   if (captainSummaryState.value === 'mixed-todos') return `${readyFinalizeCount.value} 款可汇总，另有 ${myPendingScoreCount.value} 款个人评分待提交。`
@@ -406,7 +431,7 @@ const tableReviewStateText = computed(() => {
   return '等待同桌确认'
 })
 const tableSubmitHint = computed(() => {
-  if (tableSubmitted.value) return '本桌结果已提交，等待主办方确认轮次。'
+  if (tableSubmitted.value) return '管理员锁定前仍可修改，修改后需重新确认。'
   if (board.value?.roundTable?.status === 'LOCKED') return '本桌结果已锁定。'
   if (tableReadyForReview.value && !confirmationReady.value) return `等待同桌评审确认（${confirmationProgressText.value}），可修改评价，修改后需重新确认。`
   if (tableReadyForReview.value && (scoreConfirmation.value?.overrideFlag || board.value?.roundTable?.confirmationOverrideFlag)) return '现场确认通过后将进入主办方确认轮次。'
@@ -414,7 +439,7 @@ const tableSubmitHint = computed(() => {
   if (tableReadyForReview.value) return '可修改评价，修改后需重新确认。'
   return ''
 })
-const currentSubmittedCount = computed(() => Number(currentBoardEntry.value?.submittedCount || normalScores.value.length || 0))
+const currentSubmittedCount = computed(() => Number(currentBoardEntry.value?.submittedCount || peerScores.value.length || 0))
 const currentExpectedCount = computed(() => Number(currentBoardEntry.value?.expectedCount || 0))
 const tableScoresReady = computed(() => (
   currentSubmittedCount.value >= currentExpectedCount.value
@@ -638,6 +663,19 @@ function closeStyleDetail() {
   styleDetailOpen.value = false
 }
 
+async function confirmReopenTable() {
+  const roundTableId = board.value?.roundTable?.id || board.value?.competition?.roundTableId
+  if (!roundTableId || reopening.value) return
+  reopening.value = true
+  try {
+    await reopenScoreRoundTable(roundTableId)
+    reopenDialogOpen.value = false
+    await loadBoard()
+  } finally {
+    reopening.value = false
+  }
+}
+
 function displayShortCode(source) {
   return source?.shortCode ? `编号： ${source.shortCode}` : '编号'
 }
@@ -771,6 +809,13 @@ onMounted(async () => {
   color: #18222f;
   background: transparent;
   text-align: left;
+}
+
+.reopen-dialog-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 18px;
 }
 
 .board-row-footer {

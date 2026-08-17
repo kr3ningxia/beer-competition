@@ -97,8 +97,8 @@
       <div class="desk-table" role="table">
         <div class="desk-row desk-row-head" role="row">
           <span role="columnheader">评审桌</span>
-          <span role="columnheader">已评审</span>
-          <span role="columnheader">待评审</span>
+          <span role="columnheader">{{ board.tableColumns.reviewed }}</span>
+          <span role="columnheader">{{ board.tableColumns.pending }}</span>
           <span role="columnheader">完成率</span>
           <span role="columnheader">{{ board.tableColumns.comment }}</span>
         </div>
@@ -137,6 +137,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { fetchCompetitionLiveBoard, fetchCompetitions } from '@/api/admin'
+import { selectDefaultLiveBoardCompetition } from './liveBoardSelection'
 
 const REFRESH_SECONDS = 10
 const PARTNER_ROTATE_SECONDS = 12
@@ -151,7 +152,7 @@ const route = useRoute()
 const router = useRouter()
 const loading = ref(false)
 const detail = ref(null)
-const selectedCompetitionId = ref(route.query.competitionId || '')
+const selectedCompetitionId = ref('')
 let refreshTimer = null
 let partnerRotateTimer = null
 
@@ -179,11 +180,19 @@ onUnmounted(() => {
 })
 
 async function ensureCompetition() {
+  const requestedCompetitionId = normalizeCompetitionId(route.query.competitionId)
+  if (requestedCompetitionId) {
+    selectedCompetitionId.value = requestedCompetitionId
+    return
+  }
   const competitions = await fetchCompetitions({ includeArchived: false })
-  if (selectedCompetitionId.value && competitions.some((item) => String(item.id) === String(selectedCompetitionId.value))) return
-  const target = (competitions || []).find((item) => ['JUDGING', 'JUDGING_PREP'].includes(item.status))
-    || (competitions || [])[0]
+  const target = selectDefaultLiveBoardCompetition(competitions)
   selectedCompetitionId.value = target?.id || ''
+}
+
+function normalizeCompetitionId(value) {
+  const candidate = Array.isArray(value) ? value[0] : value
+  return candidate == null ? '' : String(candidate).trim()
 }
 
 function startTimers() {
@@ -239,11 +248,11 @@ function buildBoard(data) {
     statusText: data.statusText || '现场整理中',
     partners: buildPartnerGroups(data.sponsorGroups),
     progress,
-    metrics: buildMetricCards(data.metrics),
+    metrics: buildMetricCards(data.metrics, isRanking),
     tables,
     notice: collectNotice(data, tables),
     deskTitle: isRanking ? '排序轮桌次进度' : '首轮桌次评审进度',
-    deskHint: isRanking ? '按同桌确认后的完成结果展示' : '按同桌确认后的完成酒款展示',
+    deskHint: isRanking ? '按同桌确认后的完成结果展示' : '共识分提交后自动计入',
     tableColumns: buildTableColumns(isRanking),
     roundSteps: buildRoundStepsFromLiveBoard(data),
   }
@@ -259,7 +268,7 @@ function buildEmptyBoard() {
     statusText: '现场准备中',
     partners: DEFAULT_SPONSOR_GROUPS,
     progress,
-    metrics: buildMetricCards([]),
+    metrics: buildMetricCards([], false),
     tables: [],
     notice: { title: '等待轮次', text: '当前比赛还没有发布可投屏的评审轮次', tone: 'warning' },
     deskTitle: '首轮桌次评审进度',
@@ -284,11 +293,11 @@ function buildProgressFromSummary(summary = {}) {
   }
 }
 
-function buildMetricCards(metrics = []) {
+function buildMetricCards(metrics = [], isRanking = false) {
   if (!metrics.length) {
     return [
-      { label: '已评审', value: '-', unit: '', tone: 'neutral' },
-      { label: '待评审', value: '-', unit: '', tone: 'neutral' },
+      { label: isRanking ? '已评审' : '已汇总', value: '-', unit: '', tone: 'neutral' },
+      { label: isRanking ? '待评审' : '待汇总', value: '-', unit: '', tone: 'neutral' },
       { label: '完成率', value: '-', unit: '', tone: 'neutral' },
       { label: '平均评语', value: '-', unit: '', tone: 'neutral' },
     ]
@@ -336,8 +345,8 @@ function chunk(items, size) {
 
 function buildTableColumns(isRanking) {
   return isRanking
-    ? { comment: '评语统计' }
-    : { comment: '平均评语' }
+    ? { reviewed: '已评审', pending: '待评审', comment: '评语统计' }
+    : { reviewed: '已汇总', pending: '待汇总', comment: '平均评语' }
 }
 
 function formatTableCount(value) {

@@ -1,12 +1,16 @@
 package com.beercompetition.service;
 
 import com.beercompetition.judging.scoring.ScoreConfirmationService;
+import com.beercompetition.judging.assignment.RoundAllocationService;
+import com.beercompetition.judging.round.JudgeRoundTaskService;
+import com.beercompetition.judging.round.RoundQueryService;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ForbiddenException;
 import com.beercompetition.pojo.dto.DimensionRequest;
 import com.beercompetition.pojo.dto.JudgeScoreSaveRequest;
 import com.beercompetition.pojo.dto.JudgeScoreStartRequest;
 import com.beercompetition.pojo.dto.JudgeScoreUpdateRequest;
+import com.beercompetition.pojo.dto.NextRoundCreateRequest;
 import com.beercompetition.pojo.dto.AdminConfirmationOverrideRequest;
 import com.beercompetition.pojo.dto.RoundTableConfirmationRequest;
 import com.beercompetition.pojo.dto.TableScoreFinalizeRequest;
@@ -14,6 +18,8 @@ import com.beercompetition.pojo.enums.JudgeRoleType;
 import com.beercompetition.pojo.enums.RoundStatus;
 import com.beercompetition.pojo.enums.UserRole;
 import com.beercompetition.pojo.vo.ScoreConfirmationVO;
+import com.beercompetition.pojo.vo.ScoreRecordVO;
+import com.beercompetition.pojo.vo.CompetitionRoundVO;
 import com.beercompetition.testsupport.BeerCompetitionTestData;
 import com.beercompetition.testsupport.IntegrationTestBase;
 import org.junit.jupiter.api.Test;
@@ -35,6 +41,15 @@ class ScoreGuardrailIntegrationTest extends IntegrationTestBase {
 
     @Autowired
     private ScoreConfirmationService scoreConfirmationService;
+
+    @Autowired
+    private RoundAllocationService roundAllocationService;
+
+    @Autowired
+    private JudgeRoundTaskService judgeRoundTaskService;
+
+    @Autowired
+    private RoundQueryService roundQueryService;
 
     @Autowired
     private AuthService authService;
@@ -153,6 +168,46 @@ class ScoreGuardrailIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    void captainTableScoresIncludeOwnPersonalScoreSeparatelyFromFinalOpinion() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        testData.createPublishedScoreRound(fixture, List.of(fixture.entryA1()), 1);
+
+        asJudge(fixture.professional().getId());
+        scoreService.createScore(professionalScoreRequest(fixture.entryA1().getUuid(), 18, 27));
+        asJudge(fixture.cross().getId());
+        scoreService.createScore(crossScoreRequest(fixture.entryA1().getUuid(), 44));
+        asJudge(fixture.captain().getId());
+        ScoreRecordVO captainPersonalScore = scoreService.createScore(
+                professionalScoreRequest(fixture.entryA1().getUuid(), 17, 28));
+
+        List<ScoreRecordVO> personalScores = scoreService.listTableScores(fixture.entryA1().getUuid());
+
+        assertThat(personalScores).hasSize(3);
+        assertThat(personalScores).extracting(ScoreRecordVO::getId).contains(captainPersonalScore.getId());
+        assertThat(personalScores)
+                .filteredOn(score -> Boolean.TRUE.equals(score.getMine()))
+                .singleElement()
+                .satisfies(score -> {
+                    assertThat(score.getId()).isEqualTo(captainPersonalScore.getId());
+                    assertThat(score.getIsFinal()).isZero();
+                    assertThat(score.getJudgeRoleType()).isEqualTo(JudgeRoleType.PROFESSIONAL.name());
+                });
+
+        ScoreRecordVO finalOpinion = scoreService.finalizeTableScore(
+                fixture.entryA1().getUuid(), finalizeRequest(46, true));
+        List<ScoreRecordVO> scoresWithFinalOpinion = scoreService.listTableScores(fixture.entryA1().getUuid());
+
+        assertThat(scoresWithFinalOpinion).hasSize(4);
+        assertThat(scoresWithFinalOpinion)
+                .filteredOn(score -> Integer.valueOf(0).equals(score.getIsFinal()))
+                .hasSize(3);
+        assertThat(scoresWithFinalOpinion)
+                .filteredOn(score -> Integer.valueOf(1).equals(score.getIsFinal()))
+                .extracting(ScoreRecordVO::getId)
+                .containsExactly(finalOpinion.getId());
+    }
+
+    @Test
     void captainCannotFinalizeBeforeAllRequiredScoresSubmitted() {
         BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
         testData.createPublishedScoreRound(fixture, List.of(fixture.entryA1()), 1);
@@ -238,6 +293,127 @@ class ScoreGuardrailIntegrationTest extends IntegrationTestBase {
 
         assertThat(jdbcTemplate.queryForObject("SELECT status FROM round_table WHERE id = ?",
                 String.class, scoreRound.table().getId())).isEqualTo(RoundStatus.SUBMITTED.name());
+    }
+
+    @Test
+    void captainCanReopenSubmittedTableAndDraftCandidatesFollowConfirmedResults() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        BeerCompetitionTestData.ScoreRound scoreRound = testData.createPublishedScoreRound(
+                fixture, List.of(fixture.entryA1(), fixture.entryA2()), 1);
+        jdbcTemplate.update("UPDATE competition SET status = 'JUDGING' WHERE id = ?", fixture.competition().getId());
+
+        NextRoundCreateRequest nextRoundRequest = nextRoundRequest(fixture, scoreRound.round().getId(), 1);
+        asAdmin(1L);
+        roundAllocationService.createNextRound(fixture.competition().getId(), nextRoundRequest);
+        Long draftRoundId = jdbcTemplate.queryForObject(
+                "SELECT id FROM competition_round WHERE source_round_id = ?", Long.class, scoreRound.round().getId());
+
+        submitScoreRound(fixture, scoreRound, fixture.entryA1().getUuid(), fixture.entryA2().getUuid());
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT beer_entry_id FROM round_table_entry WHERE round_id = ?",
+                Long.class, draftRoundId)).isEqualTo(fixture.entryA1().getId());
+
+        asJudge(fixture.captain().getId());
+        judgeRoundTaskService.reopenScoreRoundTable(scoreRound.table().getId());
+
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM round_table WHERE id = ?",
+                String.class, scoreRound.table().getId())).isEqualTo(RoundStatus.PUBLISHED.name());
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM competition_round WHERE id = ?",
+                String.class, scoreRound.round().getId())).isEqualTo(RoundStatus.PUBLISHED.name());
+
+        scoreService.finalizeTableScore(fixture.entryA1().getUuid(), finalizeRequest(44, false));
+        scoreService.finalizeTableScore(fixture.entryA2().getUuid(), finalizeRequest(47, true));
+        confirmScoreTable(fixture, scoreRound.table().getId());
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT beer_entry_id FROM round_table_entry WHERE round_id = ?",
+                Long.class, draftRoundId)).isEqualTo(fixture.entryA2().getId());
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM competition_round WHERE id = ?",
+                String.class, scoreRound.round().getId())).isEqualTo(RoundStatus.SUBMITTED.name());
+    }
+
+    @Test
+    void submittedSourceTableCandidatesSyncBeforeWholeRoundCompletesAndReopenRemovesThem() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        BeerCompetitionTestData.ScoreRound firstTable = testData.createPublishedScoreRound(
+                fixture, List.of(fixture.entryA1()), 1);
+        BeerCompetitionTestData.ScoreRound secondTable = testData.addPublishedScoreTable(
+                fixture, firstTable.round(), "第一轮二号桌", List.of(fixture.entryB1()), 1, 2);
+        jdbcTemplate.update("UPDATE competition SET status = 'JUDGING' WHERE id = ?", fixture.competition().getId());
+
+        asAdmin(1L);
+        roundAllocationService.createNextRound(fixture.competition().getId(), nextRoundRequest(fixture, firstTable.round().getId(), 2));
+        Long draftRoundId = jdbcTemplate.queryForObject(
+                "SELECT id FROM competition_round WHERE source_round_id = ?", Long.class, firstTable.round().getId());
+
+        finalizeScoreEntry(fixture, fixture.entryA1().getUuid(), true);
+        finalizeScoreEntry(fixture, fixture.entryB1().getUuid(), true);
+        confirmScoreTable(fixture, firstTable.table().getId());
+
+        assertThat(jdbcTemplate.queryForList(
+                "SELECT beer_entry_id FROM round_table_entry WHERE round_id = ? ORDER BY beer_entry_id",
+                Long.class, draftRoundId)).containsExactly(fixture.entryA1().getId());
+        CompetitionRoundVO draftRound = roundQueryService.listCompetitionRounds(fixture.competition().getId()).stream()
+                .filter(round -> round.getId().equals(draftRoundId))
+                .findFirst()
+                .orElseThrow();
+        assertThat(draftRound.getSourceSubmittedTableCount()).isEqualTo(1);
+        assertThat(draftRound.getSourceTableCount()).isEqualTo(2);
+        assertThat(draftRound.getSourceReady()).isFalse();
+        assertThat(draftRound.getCandidatesSynced()).isTrue();
+        assertThat(draftRound.getSourceEntryUuids()).containsExactly(fixture.entryA1().getUuid());
+
+        asJudge(fixture.captain().getId());
+        judgeRoundTaskService.reopenScoreRoundTable(firstTable.table().getId());
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM round_table_entry WHERE round_id = ?",
+                Integer.class, draftRoundId)).isZero();
+
+        confirmScoreTable(fixture, firstTable.table().getId());
+        confirmScoreTable(fixture, secondTable.table().getId());
+        assertThat(jdbcTemplate.queryForList(
+                "SELECT beer_entry_id FROM round_table_entry WHERE round_id = ? ORDER BY beer_entry_id",
+                Long.class, draftRoundId)).containsExactly(fixture.entryA1().getId(), fixture.entryB1().getId());
+    }
+
+    private NextRoundCreateRequest nextRoundRequest(BeerCompetitionTestData.Fixture fixture, Long sourceRoundId, int targetCount) {
+        NextRoundCreateRequest request = new NextRoundCreateRequest();
+        request.setSourceRoundId(sourceRoundId);
+        request.setRoundName("第二轮");
+        request.setStrategy("MANUAL");
+        request.setTableCount(1);
+        request.setTargetMode("TOP_N");
+        request.setTargetCount(targetCount);
+        request.setCaptainPublicIds(List.of(fixture.captain().getPublicId()));
+        return request;
+    }
+
+    private void submitScoreRound(BeerCompetitionTestData.Fixture fixture,
+                                  BeerCompetitionTestData.ScoreRound scoreRound,
+                                  String advancedUuid,
+                                  String eliminatedUuid) {
+        finalizeScoreEntry(fixture, advancedUuid, true);
+        finalizeScoreEntry(fixture, eliminatedUuid, false);
+        confirmScoreTable(fixture, scoreRound.table().getId());
+    }
+
+    private void finalizeScoreEntry(BeerCompetitionTestData.Fixture fixture, String entryUuid, boolean advanced) {
+        asJudge(fixture.professional().getId());
+        scoreService.createScore(professionalScoreRequest(entryUuid, 18, 27));
+        asJudge(fixture.cross().getId());
+        scoreService.createScore(crossScoreRequest(entryUuid, 44));
+        asJudge(fixture.captain().getId());
+        scoreService.createScore(professionalScoreRequest(entryUuid, 17, 28));
+        scoreService.finalizeTableScore(entryUuid, finalizeRequest(46, advanced));
+    }
+
+    private void confirmScoreTable(BeerCompetitionTestData.Fixture fixture, Long roundTableId) {
+        asJudge(fixture.professional().getId());
+        ScoreConfirmationVO confirmation = scoreConfirmationService.getScoreConfirmation(roundTableId);
+        scoreConfirmationService.confirmScoreRoundTable(roundTableId, confirmationRequest(confirmation.getResultVersion()));
+        asJudge(fixture.cross().getId());
+        confirmation = scoreConfirmationService.getScoreConfirmation(roundTableId);
+        scoreConfirmationService.confirmScoreRoundTable(roundTableId, confirmationRequest(confirmation.getResultVersion()));
     }
 
     private JudgeScoreSaveRequest professionalScoreRequest(String uuid, int aroma, int taste) {

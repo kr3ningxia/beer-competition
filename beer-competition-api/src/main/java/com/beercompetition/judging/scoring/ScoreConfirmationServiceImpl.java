@@ -33,6 +33,7 @@ import com.beercompetition.pojo.vo.ScoreConfirmationVO;
 import com.beercompetition.service.EntryScanLabelService;
 import com.beercompetition.service.impl.round.RoundQuerySupport;
 import com.beercompetition.service.impl.round.RoundValidationPolicy;
+import com.beercompetition.judging.assignment.RoundCandidateSyncService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -72,6 +73,8 @@ public class ScoreConfirmationServiceImpl implements ScoreConfirmationService {
     private final RoundQuerySupport roundQuerySupport;
 
     private final RoundValidationPolicy roundValidationPolicy;
+
+    private final RoundCandidateSyncService roundCandidateSyncService;
 
     @Override
     public ScoreConfirmationVO getScoreConfirmation(Long roundTableId) {
@@ -373,6 +376,7 @@ public class ScoreConfirmationServiceImpl implements ScoreConfirmationService {
             round.setSubmittedTime(LocalDateTime.now());
             competitionRoundMapper.updateById(round);
         }
+        roundCandidateSyncService.syncDependentDrafts(round);
     }
 
     private boolean isRankingConfirmationReady(RoundTable table) {

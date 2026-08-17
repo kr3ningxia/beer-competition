@@ -59,6 +59,12 @@ public class JudgeTaskController {
         return Result.success("提交成功");
     }
 
+    @PostMapping("/round-tables/{roundTableId}/score-reopen")
+    public Result<String> reopenScoreRoundTable(@PathVariable Long roundTableId) {
+        judgeRoundTaskService.reopenScoreRoundTable(roundTableId);
+        return Result.success("可以修改本桌结果");
+    }
+
     /**
      * 查询评分桌确认状态。
      */

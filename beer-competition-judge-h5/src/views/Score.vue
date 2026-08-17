@@ -142,11 +142,19 @@
             </article>
           </div>
 
-          <div class="note-summary">
-            <p :class="['caption', commentReady ? 'ok-text' : 'warn-text']">
-              备注合计 {{ notesLength }} / {{ minNoteLength }} 字
-            </p>
-            <span v-if="existingScore" class="pill status-warn">已提交过</span>
+          <div class="score-submit-summary">
+            <div class="score-total-row">
+              <div class="score-total">
+                <span>总分：</span>
+                <strong>{{ totalScore }} <small>/ {{ maxTotalScore }}</small></strong>
+              </div>
+              <div class="score-summary-side">
+                <span v-if="existingScore" class="pill status-warn">已提交</span>
+                <p :class="['caption', commentReady ? 'ok-text' : 'warn-text']">
+                  备注合计 {{ notesLength }} / {{ minNoteLength }} 字
+                </p>
+              </div>
+            </div>
           </div>
         </section>
     </div>
@@ -189,6 +197,9 @@ const form = reactive({
 
 const totalScore = computed(() => (
   form.dimensions.reduce((sum, item) => sum + Number(item.score || 0), 0)
+))
+const maxTotalScore = computed(() => (
+  form.dimensions.reduce((sum, item) => sum + Number(item.maxScore || 0), 0)
 ))
 const notesLength = computed(() => (
   form.dimensions.reduce((sum, item) => sum + countEffectiveChars(item.note), 0)
@@ -970,16 +981,57 @@ onMounted(async () => {
   font-weight: 500;
 }
 
-.note-summary {
-  display: flex;
-  gap: 10px;
-  justify-content: space-between;
-  align-items: center;
-  margin: 0 20px 16px;
+.score-submit-summary {
+  margin: 2px 20px 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--score-border);
 }
 
-.note-summary .pill {
-  justify-self: start;
+.score-total-row {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.score-total {
+  display: flex;
+  gap: 4px;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.score-total > span {
+  color: var(--score-ink);
+  font-size: 18px;
+  font-weight: 850;
+}
+
+.score-total strong {
+  color: var(--score-ink);
+  font-size: 30px;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.score-total small {
+  color: var(--score-muted);
+  font-size: 18px;
+  font-weight: 750;
+}
+
+.score-summary-side {
+  display: grid;
+  gap: 7px;
+  justify-items: end;
+  min-width: 0;
+}
+
+.score-submit-summary .caption {
+  margin: 0;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .ok-text {

@@ -13,8 +13,6 @@ public interface RoundAllocationService {
 
     void saveRoundAllocation(Long competitionId, Long roundId, RoundAllocationRequest request);
 
-    void syncRoundCandidates(Long competitionId, Long roundId);
-
     void deleteDraftRound(Long competitionId, Long roundId);
 
     void createNextRound(Long competitionId, NextRoundCreateRequest request);

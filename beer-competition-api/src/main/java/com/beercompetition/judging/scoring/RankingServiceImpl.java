@@ -41,6 +41,7 @@ import com.beercompetition.pojo.vo.RankingConfirmationVO;
 import com.beercompetition.service.EntryScanLabelService;
 import com.beercompetition.service.impl.round.RoundQuerySupport;
 import com.beercompetition.service.impl.round.RoundValidationPolicy;
+import com.beercompetition.judging.assignment.RoundCandidateSyncService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -93,6 +94,8 @@ public class RankingServiceImpl implements RankingService {
     private final RoundQuerySupport roundQuerySupport;
 
     private final RoundValidationPolicy roundValidationPolicy;
+
+    private final RoundCandidateSyncService roundCandidateSyncService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -240,6 +243,7 @@ public class RankingServiceImpl implements RankingService {
             round.setSubmittedTime(LocalDateTime.now());
             competitionRoundMapper.updateById(round);
         }
+        roundCandidateSyncService.syncDependentDrafts(round);
     }
 
     @Override
@@ -487,6 +491,7 @@ public class RankingServiceImpl implements RankingService {
             round.setSubmittedTime(LocalDateTime.now());
             competitionRoundMapper.updateById(round);
         }
+        roundCandidateSyncService.syncDependentDrafts(round);
     }
 
     private boolean isRankingConfirmationReady(RoundTable table) {

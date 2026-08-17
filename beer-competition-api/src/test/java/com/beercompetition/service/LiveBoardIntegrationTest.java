@@ -70,12 +70,22 @@ class LiveBoardIntegrationTest extends IntegrationTestBase {
         assertThat(finalizing.getTables().get(0).getStatusText()).isEqualTo("汇总中");
         assertThat(findMetric(finalizing, "completionRate").getValue()).isEqualTo("0%");
 
-        insertFinalScores(fixture, scoreRound);
+        insertFinalScore(fixture, scoreRound, scoreRound.entries().get(0).getBeerEntryId());
+        CompetitionLiveBoardVO partiallyFinalized = liveBoardService.getCompetitionLiveBoard(fixture.competition().getId());
+        assertThat(partiallyFinalized.getTables().get(0).getStatusText()).isEqualTo("汇总中");
+        assertThat(partiallyFinalized.getTables().get(0).getReviewedCount()).isEqualTo(1);
+        assertThat(partiallyFinalized.getTables().get(0).getPendingCount()).isEqualTo(1);
+        assertThat(partiallyFinalized.getTables().get(0).getCompletionPercent()).isEqualTo(50);
+        assertThat(partiallyFinalized.getSummary().getDone()).isEqualTo(1);
+        assertThat(findMetric(partiallyFinalized, "reviewed").getValue()).isEqualTo("1");
+
+        insertFinalScore(fixture, scoreRound, scoreRound.entries().get(1).getBeerEntryId());
         CompetitionLiveBoardVO confirming = liveBoardService.getCompetitionLiveBoard(fixture.competition().getId());
         assertThat(confirming.getTables().get(0).getStatusText()).isEqualTo("确认中");
-        assertThat(confirming.getSummary().getEyebrow()).isEqualTo("评审完成");
-        assertThat(confirming.getSummary().getDone()).isZero();
+        assertThat(confirming.getSummary().getEyebrow()).isEqualTo("共识提交");
+        assertThat(confirming.getSummary().getDone()).isEqualTo(2);
         assertThat(confirming.getSummary().getTotal()).isEqualTo(2);
+        assertThat(confirming.getSummary().getPercent()).isEqualTo(100);
 
         insertConfirmation(scoreRound.table().getId(), fixture.professional().getId(), scoreRound.table().getResultVersion());
         insertConfirmation(scoreRound.table().getId(), fixture.cross().getId(), scoreRound.table().getResultVersion());
@@ -161,10 +171,9 @@ class LiveBoardIntegrationTest extends IntegrationTestBase {
         }
     }
 
-    private void insertFinalScores(BeerCompetitionTestData.Fixture fixture, BeerCompetitionTestData.ScoreRound scoreRound) {
-        for (var entry : scoreRound.entries()) {
-            insertScore(fixture, scoreRound, entry.getBeerEntryId(), fixture.captain().getId(), JudgeRoleType.CAPTAIN.name(), true, 35);
-        }
+    private void insertFinalScore(BeerCompetitionTestData.Fixture fixture, BeerCompetitionTestData.ScoreRound scoreRound,
+                                  Long beerEntryId) {
+        insertScore(fixture, scoreRound, beerEntryId, fixture.captain().getId(), JudgeRoleType.CAPTAIN.name(), true, 35);
     }
 
     private String resolveRole(BeerCompetitionTestData.Fixture fixture, Long judgeId) {

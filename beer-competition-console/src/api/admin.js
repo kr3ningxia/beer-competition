@@ -241,10 +241,6 @@ export function createNextRound(competitionId, payload) {
   return request.post(`/api/admin/competitions/${competitionId}/rounds/next`, payload, { authScope: 'admin' })
 }
 
-export function syncRoundCandidates(competitionId, roundId) {
-  return request.post(`/api/admin/competitions/${competitionId}/rounds/${roundId}/sync-candidates`, {}, { authScope: 'admin' })
-}
-
 export function deleteDraftRound(competitionId, roundId) {
   return request.delete(`/api/admin/competitions/${competitionId}/rounds/${roundId}`, { authScope: 'admin' })
 }

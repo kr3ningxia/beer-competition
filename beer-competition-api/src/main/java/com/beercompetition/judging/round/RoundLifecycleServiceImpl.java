@@ -30,6 +30,7 @@ import com.beercompetition.pojo.po.RoundTableEntry;
 import com.beercompetition.pojo.po.RoundTableMember;
 import com.beercompetition.pojo.po.ScoreRecord;
 import com.beercompetition.service.AwardService;
+import com.beercompetition.judging.assignment.RoundCandidateSyncService;
 import com.beercompetition.service.impl.round.RoundQuerySupport;
 import com.beercompetition.service.impl.round.RoundValidationPolicy;
 import lombok.RequiredArgsConstructor;
@@ -76,12 +77,14 @@ public class RoundLifecycleServiceImpl implements RoundLifecycleService {
 
     private final RoundValidationPolicy roundValidationPolicy;
 
+    private final RoundCandidateSyncService roundCandidateSyncService;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void publishRound(Long competitionId, Long roundId) {
         // 1) 查询轮次并校验发布条件
         Competition competition = roundQuerySupport.requireCompetition(competitionId);
-        CompetitionRound round = roundQuerySupport.requireRound(competitionId, roundId);
+        CompetitionRound round = roundQuerySupport.requireRoundForUpdate(competitionId, roundId);
         if (!RoundStatus.DRAFT.name().equals(round.getStatus())) {
             throw new BaseException("只有草稿轮次可以发布");
         }
@@ -180,6 +183,7 @@ public class RoundLifecycleServiceImpl implements RoundLifecycleService {
 
         // 3) 锁定第一轮
         lockRoundAndTables(round);
+        roundCandidateSyncService.syncDependentDrafts(round);
     }
 
     @Override
@@ -208,6 +212,7 @@ public class RoundLifecycleServiceImpl implements RoundLifecycleService {
 
         // 3) 锁定轮次和桌任务
         lockRoundAndTables(round);
+        roundCandidateSyncService.syncDependentDrafts(round);
         if (isAwardRound(round)) {
             awardService.generateAwardDraftsForRound(competitionId, roundId);
             competition.setStatus(CompetitionStatus.RESULT_CONFIRMING.name());

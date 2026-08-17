@@ -716,7 +716,6 @@
             @add-round-participant="addRoundParticipantToSelectedTable"
             @remove-round-participant="removeRoundParticipant"
             @drop-round-judge="dropRoundJudge"
-            @sync-round-candidates="syncCurrentRoundCandidates"
             @publish-current-round="publishCurrentRound"
           />
         </section>
@@ -805,15 +804,7 @@
                     </select>
                   </label>
                   <button
-                    v-if="currentRound?.type === 'RANKING' && currentRound?.status === 'DRAFT' && currentRound?.sourceLocked && !currentRound?.candidatesSynced"
-                    class="tool-button primary"
-                    type="button"
-                    @click="syncCurrentRoundCandidates"
-                  >
-                    同步候选酒款
-                  </button>
-                  <button
-                    v-else-if="currentRound?.status === 'DRAFT'"
+                    v-if="currentRound?.status === 'DRAFT'"
                     :class="['tool-button', 'primary', { blocked: !canPublishCurrentRound }]"
                     type="button"
                     :aria-disabled="!canPublishCurrentRound"
@@ -876,7 +867,7 @@
                     <span>{{ table.entryCount }} 款</span>
                     <span>桌长 {{ table.captainName }}</span>
                     <span>{{ table.primaryProgressLabel }} {{ table.primaryProgress }}</span>
-                    <span>{{ table.secondaryProgressLabel }} {{ table.secondaryProgress }}</span>
+                    <span v-if="currentRound?.type === 'RANKING'">{{ table.secondaryProgressLabel }} {{ table.secondaryProgress }}</span>
                     <span v-if="currentRound?.type === 'SCORE'">确认 {{ table.confirmationProgress }}</span>
                     <span>{{ table.targetLabel }} {{ table.targetDisplay }}</span>
                     <em>{{ table.statusText }}</em>
@@ -910,9 +901,6 @@
                 </button>
                 <button v-else-if="roundTodoHint.action === 'lockSourceRound'" class="tool-button primary" type="button" @click="lockCurrentDraftSourceRound">
                   确认锁定上一轮
-                </button>
-                <button v-else-if="roundTodoHint.action === 'syncCandidates'" class="tool-button primary" type="button" @click="syncCurrentRoundCandidates">
-                  同步候选酒款
                 </button>
                 <button v-else-if="roundTodoHint.action === 'goToResults'" class="tool-button primary" type="button" @click="goToResults">
                   去确认结果
@@ -1420,9 +1408,7 @@
             <span class="confirm-kicker">轮次发布</span>
             <h2 id="round-publish-confirm-title">确认发布当前轮次？</h2>
           </header>
-          <p class="confirm-copy">
-            发布后，{{ currentRoundPublishTarget }}会在对应端看到本轮任务，发布前请确认桌次、人员和酒款都已经核对完成
-          </p>
+          <p class="confirm-copy">{{ roundPublishConfirmCopy }}</p>
           <div class="confirm-summary">
             <span>
               <small>当前轮次</small>
@@ -1581,7 +1567,7 @@
     <CreateRoundWizard
       :open="createRoundDialogOpen"
       :next-round-name="nextRoundName"
-      :advanced-pool="advancedPool"
+      :advanced-pool="createRoundCandidatePool"
       :advanced-category-stats="advancedCategoryStats"
       :target-mode="createRoundForm.targetMode"
       :target-count="createRoundForm.targetCount"
@@ -1917,7 +1903,6 @@ import {
   reopenCompetitionRegistration,
   returnCompetitionToSampleCheck,
   saveRoundAllocation,
-  syncRoundCandidates,
   updateCompetitionFeedbackComment,
   updateCompetitionBaseInfo,
   updateCompetitionRefundPolicy,
@@ -2264,6 +2249,11 @@ const preplanningNotice = computed(() => {
 const overviewActionItems = computed(() => buildOverviewActionItems())
 const roundCategoryFilters = computed(() => ['全部', ...new Set(currentPoolEntries.value.map((entry) => entry.categoryName).filter(Boolean))])
 const currentPoolEntries = computed(() => getPoolEntriesForRound(currentRound.value))
+const roundUnassignedCount = computed(() => {
+  if (!currentRound.value) return 0
+  const assigned = new Set(currentRoundTables.value.flatMap((table) => table.entryUuids))
+  return currentPoolEntries.value.filter((entry) => !assigned.has(entry.uuid)).length
+})
 const entryLookup = computed(() => {
   const entries = [...roundEntryPool.value, ...(competition.value?.entries || [])]
   return new Map(entries.map((entry) => [entry.uuid, entry]))
@@ -2415,6 +2405,9 @@ const currentRoundTargetModeOptions = computed(() => {
   ]
 })
 const currentRoundPublishTarget = computed(() => (currentRound.value?.type === 'RANKING' ? '桌长和参与评审' : '评审'))
+const roundPublishConfirmCopy = computed(() => (roundUnassignedCount.value > 0
+  ? `还有 ${roundUnassignedCount.value} 款已入库酒款未分桌，本次发布将不包含这些酒款。请确认当前桌次、人员和酒款安排无误`
+  : `发布后，${currentRoundPublishTarget.value}会在对应端看到本轮任务，请确认桌次、人员和酒款安排无误`))
 const roundLockConfirmTitle = computed(() => {
   const round = roundLockTargetRound.value
   if (!round) return '确认锁定当前轮次？'
@@ -2501,6 +2494,14 @@ const createNextRoundIsEarlyDraft = computed(() => {
   const lastRound = rounds.value[rounds.value.length - 1]
   return Boolean(lastRound && lastRound.status !== 'LOCKED')
 })
+const createRoundCandidatePool = computed(() => {
+  if (!createNextRoundIsEarlyDraft.value) return advancedPool.value
+  const sourceRound = rounds.value[rounds.value.length - 1]
+  const submittedEntryUuids = new Set((sourceRound?.tables || [])
+    .filter((table) => ['SUBMITTED', 'LOCKED'].includes(table.status))
+    .flatMap((table) => table.entryUuids || []))
+  return advancedPool.value.filter((entry) => submittedEntryUuids.has(entry.uuid))
+})
 const createNextRoundButtonText = computed(() => (createNextRoundIsEarlyDraft.value ? `提前创建${nextRoundName.value}草稿` : `创建${nextRoundName.value}`))
 const nextRoundNumber = computed(() => rounds.value.length + 1)
 const nextRoundName = computed(() => {
@@ -2545,7 +2546,7 @@ const currentRoundTableSummaries = computed(() => currentRoundTables.value.map((
 const roundTodoHint = computed(() => buildRoundTodoHint())
 const advancedCategoryStats = computed(() => {
   const map = new Map()
-  advancedPool.value.forEach((entry) => map.set(entry.categoryName, (map.get(entry.categoryName) || 0) + 1))
+  createRoundCandidatePool.value.forEach((entry) => map.set(entry.categoryName, (map.get(entry.categoryName) || 0) + 1))
   return [...map.entries()].map(([category, count]) => ({ category, count }))
 })
 const entryAutoAssignCategoryOptions = computed(() => {
@@ -3690,9 +3691,6 @@ function resolveStagePrimaryAction() {
   if (canLockCurrentDraftSourceRound.value) {
     return { text: '确认锁定上一轮', enabled: true, action: 'lockSourceRound' }
   }
-  if (currentRound.value?.type === 'RANKING' && currentRound.value?.status === 'DRAFT' && currentRound.value?.sourceLocked && !currentRound.value?.candidatesSynced) {
-    return { text: '同步候选酒款', enabled: true, action: 'syncCandidates' }
-  }
   if (currentRound.value?.status === 'DRAFT') {
     return {
       text: currentRound.value.type === 'RANKING' ? '发布给桌长和参与评审' : '发布当前轮次',
@@ -3751,6 +3749,14 @@ function buildOverviewActionItems() {
   if (roundValidationIssues.value.length) {
     issues.push(...roundValidationIssues.value.slice(0, 3).map((text, index) => ({ key: `round-${index}`, level: 'warning', text, targetTab: 'rounds' })))
   }
+  if (roundUnassignedCount.value > 0) {
+    issues.push({
+      key: 'round-unassigned',
+      level: 'warning',
+      text: `还有 ${roundUnassignedCount.value} 款已入库酒款未分桌，发布本轮时不会包含这些酒款`,
+      targetTab: 'rounds',
+    })
+  }
   if (competition.value?.entriesSummary?.pendingPayment > 0) {
     issues.push({ key: 'payment', level: 'warning', text: `还有 ${competition.value.entriesSummary.pendingPayment} 款酒等待支付`, targetTab: 'entries' })
   }
@@ -3759,8 +3765,16 @@ function buildOverviewActionItems() {
 
 function buildFutureStageTasks() {
   const feedbackOnly = isFeedbackOnlyCompetition.value
+  const storedCount = Number(competition.value?.entriesSummary?.stored || 0)
   const tasks = [
-    { key: 'storedEntries', label: '样品入库', targetTab: 'entries', detail: '报名酒款到场后确认入库状态', state: 'done', statusText: '已完成' },
+    {
+      key: 'storedEntries',
+      label: '样品入库',
+      targetTab: 'entries',
+      detail: '已入库酒款将进入评审编排',
+      state: storedCount > 0 ? 'done' : 'pending',
+      statusText: storedCount > 0 ? `已核对 ${storedCount} 款` : '待入库',
+    },
   ]
   rounds.value.forEach((round) => {
     tasks.push({
@@ -3788,15 +3802,17 @@ function buildFutureStageTasks() {
     const lastRound = rounds.value[rounds.value.length - 1]
     const creatingFinal = isMedalRound(lastRound)
     const earlyDraft = createNextRoundIsEarlyDraft.value
+    const submittedTableCount = (lastRound?.tables || []).filter((table) => ['SUBMITTED', 'LOCKED'].includes(table.status)).length
+    const sourceTableCount = lastRound?.tables?.length || 0
     tasks.push({
       key: 'createNextRound',
       label: earlyDraft ? `提前创建${nextRoundName.value}草稿` : `创建${nextRoundName.value}`,
       targetTab: 'rounds',
       detail: creatingFinal
-        ? '使用各组别金奖创建决赛桌'
-        : (earlyDraft ? '先安排下一轮桌次和人员，候选酒款锁定后同步' : '使用晋级酒款创建排序草稿'),
+        ? '使用各组最高奖项创建决赛桌'
+        : (earlyDraft ? '先安排下一轮桌次和人员，每桌确认后自动加入候选酒款' : '使用晋级酒款创建排序草稿'),
       state: 'pending',
-      statusText: creatingFinal ? '总冠军 1 名' : (earlyDraft && !advancedPool.value.length ? '候选待同步' : `${advancedPool.value.length} 款`),
+      statusText: creatingFinal ? '总冠军 1 名' : (earlyDraft ? `已确认 ${submittedTableCount}/${sourceTableCount} 桌` : `${createRoundCandidatePool.value.length} 款`),
       action: 'createNextRound',
     })
   }
@@ -4043,8 +4059,8 @@ function buildCurrentRoundMetrics() {
       { label: '问题', value: roundValidationIssues.value.length },
     ]
   }
-  const judgeCounts = currentRoundTables.value.reduce((summary, table) => {
-    const counts = getJudgeProgressCounts(table)
+  const reviewedEntryCounts = currentRoundTables.value.reduce((summary, table) => {
+    const counts = getReviewedEntryProgressCounts(table)
     summary.done += counts.done
     summary.total += counts.total
     return summary
@@ -4052,7 +4068,7 @@ function buildCurrentRoundMetrics() {
   const captainAverage = getAverageProgress(currentRoundTables.value.map((table) => table.captainProgress))
   return [
     { label: '桌数', value: currentRoundTables.value.length },
-    { label: '评审评分', value: `${judgeCounts.done} / ${judgeCounts.total}` },
+    { label: '已评数/总评分酒款', value: `${reviewedEntryCounts.done} / ${reviewedEntryCounts.total}` },
     { label: '桌长汇总', value: `${captainAverage}%` },
     { label: '待处理', value: roundValidationIssues.value.length },
   ]
@@ -4083,12 +4099,12 @@ function buildRoundPyramidNodes() {
     const lastRound = rounds.value[rounds.value.length - 1]
     const creatingFinal = isMedalRound(lastRound)
     const earlyDraft = createNextRoundIsEarlyDraft.value
-    const nextRoundCandidateText = earlyDraft && !advancedPool.value.length ? '候选待同步' : `${advancedPool.value.length} 款晋级酒`
+    const nextRoundCandidateText = earlyDraft && !advancedPool.value.length ? '等待上一轮确认' : `${advancedPool.value.length} 款晋级酒`
     nodes.push({
       key: 'next-round',
       kind: 'placeholder',
       label: creatingFinal ? '决赛轮' : nextRoundName.value,
-      subtitle: creatingFinal ? '各组别金奖' : nextRoundCandidateText,
+      subtitle: creatingFinal ? '各组最高奖项' : nextRoundCandidateText,
       statusText: '可创建',
       summary: creatingFinal ? '总冠军 1 名' : nextRoundCandidateText,
       note: creatingFinal ? '点击创建决赛轮' : (earlyDraft ? `提前创建${nextRoundName.value}草稿` : `点击创建${nextRoundName.value}`),
@@ -4222,7 +4238,7 @@ function buildChampionTargetOption() {
   return {
     value: 'CHAMPION',
     label: '决赛轮',
-    description: '从各组别金奖中选出 1 款全场总冠军',
+    description: '从各组最高奖项中选出 1 款全场总冠军',
     fixedTargetCount: 1,
     fixedTableCount: 1,
   }
@@ -4263,7 +4279,7 @@ function hasRoundTargetMode(round, mode) {
 function getRoundTableProgressSummary(round, table) {
   if (!round) {
     return {
-      primaryLabel: '评审评分',
+      primaryLabel: '已评数/总评分酒款',
       primaryValue: '-',
       secondaryLabel: '桌长汇总',
       secondaryValue: '-',
@@ -4295,25 +4311,27 @@ function getRoundTableProgressSummary(round, table) {
   else if (judgeProgress >= 100) statusText = '待桌长汇总'
   else if (judgeProgress > 0) statusText = '评分中'
   return {
-    primaryLabel: '评审评分',
-    primaryValue: formatJudgeProgress(table),
+    primaryLabel: '已评数/总评分酒款',
+    primaryValue: formatReviewedEntryProgress(table),
     secondaryLabel: '桌长汇总',
     secondaryValue: captainProgress >= 100 ? '已汇总' : '未汇总',
     statusText,
   }
 }
 
-function getJudgeProgressCounts(table) {
-  const judgeCount = getRoundTableTaskJudgeCount(table)
-  const total = table.entryUuids.length * judgeCount
-  if (!total) return { done: 0, total: 0 }
-  const progress = normalizeProgress(table.judgeProgress)
-  const done = progress >= 100 ? total : Math.min(total, Math.max(0, Math.round(total * progress / 100)))
-  return { done, total }
+function getReviewedEntryProgressCounts(table) {
+  const entryUuids = new Set(table?.entryUuids || [])
+  const reviewedEntryUuids = new Set()
+  for (const judge of table?.judgeDetails || []) {
+    for (const score of judge.entryScores || []) {
+      if (score.scored && entryUuids.has(score.beerUuid)) reviewedEntryUuids.add(score.beerUuid)
+    }
+  }
+  return { done: reviewedEntryUuids.size, total: entryUuids.size }
 }
 
-function formatJudgeProgress(table) {
-  const counts = getJudgeProgressCounts(table)
+function formatReviewedEntryProgress(table) {
+  const counts = getReviewedEntryProgressCounts(table)
   return `${counts.done} / ${counts.total}`
 }
 
@@ -4504,20 +4522,23 @@ function buildRoundTodoHint() {
       action: '',
     }
   }
-  if (currentRound.value.type === 'RANKING' && currentRound.value.status === 'DRAFT' && currentRound.value.sourceLocked === false && canLockCurrentDraftSourceRound.value) {
+  if (currentRound.value.type === 'RANKING' && currentRound.value.status === 'DRAFT' && currentRound.value.sourceReady && !currentRound.value.sourceLocked && canLockCurrentDraftSourceRound.value) {
     return {
       tone: 'ready',
       title: `先锁定${currentDraftSourceRound.value?.name || '上一轮'}`,
-      detail: '锁定后同步候选酒款，再核对决赛桌分配',
+      detail: '候选酒款已自动更新，锁定后即可发布本轮',
       action: 'lockSourceRound',
     }
   }
-  if (currentRound.value.type === 'RANKING' && currentRound.value.status === 'DRAFT' && currentRound.value.sourceLocked && !currentRound.value.candidatesSynced) {
+  if (currentRound.value.type === 'RANKING' && currentRound.value.status === 'DRAFT' && !currentRound.value.sourceReady) {
+    const submittedCount = Number(currentRound.value.sourceSubmittedTableCount || 0)
+    const tableCount = Number(currentRound.value.sourceTableCount || 0)
+    const remainingCount = Math.max(0, tableCount - submittedCount)
     return {
-      tone: 'ready',
-      title: '候选酒款待同步',
-      detail: '同步上一轮锁定结果后，再核对桌次和发布任务',
-      action: 'syncCandidates',
+      tone: 'warning',
+      title: tableCount ? `已同步 ${submittedCount}/${tableCount} 桌` : '等待上一轮桌次确认',
+      detail: remainingCount ? `还有 ${remainingCount} 桌待确认` : '每桌确认后，晋级酒款会自动进入本轮草稿',
+      action: '',
     }
   }
   if (roundValidationIssues.value.length && currentRound.value.status === 'DRAFT') {
@@ -4683,9 +4704,8 @@ function formatRoundNodeTargetDisplay(round) {
 
 function getPoolEntriesForRound(round) {
   if (round?.type === 'SCORE') return roundEntryPool.value.filter((entry) => entry.stored)
-  if (round?.type === 'RANKING' && round.sourceLocked === false) return []
-  if (round?.sourceEntryUuids?.length) {
-    return round.sourceEntryUuids
+  if (round?.type === 'RANKING') {
+    return (round.sourceEntryUuids || [])
       .map((uuid) => roundEntryPool.value.find((entry) => entry.uuid === uuid))
       .filter(Boolean)
   }
@@ -4695,8 +4715,14 @@ function getPoolEntriesForRound(round) {
 function buildRoundValidationIssues(round) {
   if (!round) return ['请先创建轮次']
   const issues = []
-  if (round.type === 'RANKING' && round.sourceLocked === false) issues.push('等待上一轮结果固定后再分配酒款')
-  if (round.type === 'RANKING' && round.sourceLocked && !round.candidatesSynced) issues.push('请先同步上一轮候选酒款')
+  if (round.type === 'RANKING' && !round.sourceReady) {
+    const submittedCount = Number(round.sourceSubmittedTableCount || 0)
+    const tableCount = Number(round.sourceTableCount || 0)
+    const remainingCount = Math.max(0, tableCount - submittedCount)
+    issues.push(remainingCount ? `上一轮还有 ${remainingCount} 桌待确认` : '等待上一轮桌次确认')
+  }
+  if (round.type === 'RANKING' && round.sourceReady && !round.sourceLocked) issues.push('请先锁定上一轮')
+  if (round.type === 'RANKING' && round.sourceReady && !round.candidatesSynced) issues.push('候选酒款更新未完成，请刷新后重试')
   if (!round.tables.length) issues.push(`${round.name}至少需要 1 张桌`)
   const tableNames = round.tables.map((table) => table.name?.trim() || '')
   const duplicateTableNames = tableNames.filter((name, index, list) => name && list.indexOf(name) !== index)
@@ -4704,9 +4730,6 @@ function buildRoundValidationIssues(round) {
   if (duplicateTableNames.length) issues.push(`轮次桌名称不能重复：${duplicateTableNames[0]}`)
   const assigned = round.tables.flatMap((table) => table.entryUuids)
   if (!assigned.length) issues.push(`${round.name}尚未分配酒款`)
-  const pool = getPoolEntriesForRound(round)
-  const unassignedCount = pool.filter((entry) => !round.tables.some((table) => table.entryUuids.includes(entry.uuid))).length
-  if (unassignedCount) issues.push(`还有 ${unassignedCount} 款酒未分配到本轮桌`)
   const duplicates = assigned.filter((uuid, index, list) => list.indexOf(uuid) !== index)
   if (duplicates.length) issues.push(`${round.name}存在重复分配酒款`)
   round.tables.forEach((table) => issues.push(...getRoundTableIssues(table)))
@@ -5306,22 +5329,6 @@ function closeRoundPublishBlockedDialog() {
   roundPublishBlockedMessage.value = ''
 }
 
-async function syncCurrentRoundCandidates() {
-  if (!currentRound.value || currentRound.value.type !== 'RANKING') return
-  if (!currentRound.value.sourceLocked) {
-    ElMessage.warning('请先确认上一轮完成')
-    return
-  }
-  const targetRoundId = currentRound.value.id
-  if (currentRound.value.status === 'DRAFT') await persistCurrentRoundAllocation()
-  const detail = await syncRoundCandidates(competition.value.id, targetRoundId)
-  competition.value = normalizeDetail(detail)
-  resetForms()
-  applyRoundState(targetRoundId)
-  allocationMode.value = 'entries'
-  ElMessage.success('候选酒款已同步，请核对分桌后发布')
-}
-
 function goToRoundAllocation() {
   if (currentRound.value?.id) applyRoundState(currentRound.value.id, { preferredTableId: selectedRoundTableId.value })
   activeTab.value = 'judges'
@@ -5628,12 +5635,19 @@ function formatAwardEntryLabel(entry) {
 
 function awardEntryOptions(award) {
   if (award.awardType === 'CHAMPION') {
-    const goldEntryIds = awardDrafts.value
-      .filter((item) => item.awardType === 'MEDAL' && (item.rankNo === 1 || item.awardName === '金奖'))
+    const highestAwardByCategory = new Map()
+    awardDrafts.value
+      .filter((item) => item.awardType === 'MEDAL' && item.rankNo >= 1 && item.rankNo <= 3)
+      .forEach((item) => {
+        const categoryId = item.categoryId || resolveAwardEntry(item)?.categoryId
+        const current = highestAwardByCategory.get(categoryId)
+        if (!current || item.rankNo < current.rankNo) highestAwardByCategory.set(categoryId, item)
+      })
+    const highestAwardEntryIds = [...highestAwardByCategory.values()]
       .map((item) => item.beerEntryId)
       .filter(Boolean)
-    const goldEntries = roundEntryPool.value.filter((entry) => goldEntryIds.includes(entry.id))
-    return goldEntries.length ? goldEntries : roundEntryPool.value.filter((entry) => entry.advanced)
+    const highestAwardEntries = roundEntryPool.value.filter((entry) => highestAwardEntryIds.includes(entry.id))
+    return highestAwardEntries.length ? highestAwardEntries : roundEntryPool.value.filter((entry) => entry.advanced)
   }
   return roundEntryPool.value.filter((entry) => !award.categoryId || entry.categoryId === award.categoryId)
 }
@@ -5785,13 +5799,19 @@ async function runReturnToSampleCheck() {
 }
 
 function prepareJudgingAction() {
+  const storedCount = Number(competition.value?.entriesSummary?.stored || 0)
+  const totalCount = Number(competition.value?.entriesSummary?.total || 0)
+  const notStoredCount = Math.max(totalCount - storedCount, 0)
   openBusinessConfirm({
     action: 'prepareJudging',
     kicker: '评审准备',
     title: '确认进入评审准备中？',
-    copy: '进入后将开始按入库酒款和评审配置安排首轮，若发现仍需继续接收报名，需要先退回样品入库核对后再重新开放报名',
+    copy: notStoredCount > 0
+      ? `本次将按 ${storedCount} 款已入库酒款安排评审；另有 ${notStoredCount} 款尚未入库，不会进入首轮。若后续需要补充，请先退回样品入库核对`
+      : '进入后将按已入库酒款和评审配置安排首轮；若后续需要补充，请先退回样品入库核对',
     summary: competitionSummaryItems([
-      { label: '已入库酒款', value: `${competition.value?.entriesSummary?.stored ?? 0} 款` },
+      { label: '进入评审', value: `${storedCount} 款` },
+      { label: '未入库', value: `${notStoredCount} 款` },
       { label: '评审桌', value: `${competition.value?.judgeTables?.length ?? 0} 张` },
       { label: '评分表', value: `${competition.value?.scoreConfigs?.length ?? 0} 套` },
     ]),
@@ -6880,10 +6900,6 @@ async function handleStageAction(action) {
   }
   if (action === 'lockSourceRound') {
     lockCurrentDraftSourceRound()
-    return
-  }
-  if (action === 'syncCandidates') {
-    syncCurrentRoundCandidates()
     return
   }
   if (action === 'createNextRound') {

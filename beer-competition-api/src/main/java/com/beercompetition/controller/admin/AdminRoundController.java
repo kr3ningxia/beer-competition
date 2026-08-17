@@ -89,15 +89,6 @@ public class AdminRoundController {
     }
 
     /**
-     * 同步排序轮候选酒款，补齐未分配候选。
-     */
-    @PostMapping("/rounds/{roundId}/sync-candidates")
-    public Result<CompetitionDetailVO> syncRoundCandidates(@PathVariable Long id, @PathVariable Long roundId) {
-        roundAllocationService.syncRoundCandidates(id, roundId);
-        return Result.success(competitionQueryService.getCompetitionDetail(id));
-    }
-
-    /**
      * 删除尚未发布的草稿轮次。
      */
     @DeleteMapping("/rounds/{roundId}")

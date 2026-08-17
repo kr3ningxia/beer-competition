@@ -31,6 +31,7 @@ import com.beercompetition.pojo.po.ScoreRecord;
 import com.beercompetition.pojo.vo.JudgeRoundTableVO;
 import com.beercompetition.pojo.vo.JudgeTaskVO;
 import com.beercompetition.service.impl.round.RoundQuerySupport;
+import com.beercompetition.judging.assignment.RoundCandidateSyncService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -71,6 +72,8 @@ public class JudgeRoundTaskServiceImpl implements JudgeRoundTaskService {
     private final RoundQuerySupport roundQuerySupport;
 
     private final JudgeRoundTableQueryService judgeRoundTableQueryService;
+
+    private final RoundCandidateSyncService roundCandidateSyncService;
 
     @Override
     public List<JudgeTaskVO> listMyTasks() {
@@ -123,6 +126,40 @@ public class JudgeRoundTaskServiceImpl implements JudgeRoundTaskService {
             round.setSubmittedTime(LocalDateTime.now());
             competitionRoundMapper.updateById(round);
         }
+        roundCandidateSyncService.syncDependentDrafts(round);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void reopenScoreRoundTable(Long roundTableId) {
+        Long judgeId = BaseContext.getCurrentId();
+        roundQuerySupport.requireActiveJudge(judgeId);
+        RoundTable table = roundQuerySupport.requireRoundTable(roundTableId);
+        CompetitionRound round = roundQuerySupport.requireRoundForUpdate(table.getCompetitionId(), table.getRoundId());
+        if (!RoundType.SCORE.name().equals(round.getRoundType())) {
+            throw new BaseException("只有首轮评分桌可以重新修改");
+        }
+        if (RoundStatus.LOCKED.name().equals(round.getStatus()) || RoundStatus.LOCKED.name().equals(table.getStatus())) {
+            throw new BaseException("首轮已锁定，不能再修改本桌结果");
+        }
+        if (!RoundStatus.SUBMITTED.name().equals(table.getStatus())) {
+            throw new BaseException("本桌结果尚未提交，无需重新修改");
+        }
+        requireRankingCaptainMember(roundTableId, judgeId);
+
+        table.setStatus(RoundStatus.PUBLISHED.name());
+        table.setResultVersion(currentResultVersion(table) + 1);
+        table.setConfirmationOverrideFlag(FLAG_FALSE);
+        table.setConfirmationOverrideReason(null);
+        table.setConfirmationOverrideBy(null);
+        table.setConfirmationOverrideTime(null);
+        roundTableMapper.updateById(table);
+        if (RoundStatus.SUBMITTED.name().equals(round.getStatus())) {
+            round.setStatus(RoundStatus.PUBLISHED.name());
+            round.setSubmittedTime(null);
+            competitionRoundMapper.updateById(round);
+        }
+        roundCandidateSyncService.syncDependentDrafts(round);
     }
 
     private JudgeTaskVO buildJudgeTask(JudgeAccount judge,

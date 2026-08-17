@@ -87,14 +87,14 @@ public class BeerCompetitionTestData {
         createStyle(competition.getId(), prefix + "-风格");
         createScoreConfigs(competition.getId());
 
-        PortalUser portalA = createPortal(prefix, "A", "13900000001");
-        PortalUser portalB = createPortal(prefix, "B", "13900000002");
+        PortalUser portalA = createPortal(prefix, "A", testPhone(prefix, 1));
+        PortalUser portalB = createPortal(prefix, "B", testPhone(prefix, 2));
 
-        JudgeAccount captain = createJudge(prefix, "CAPTAIN", "13900000101", JudgeAccountStatus.ACTIVE);
-        JudgeAccount professional = createJudge(prefix, "PRO", "13900000102", JudgeAccountStatus.ACTIVE);
-        JudgeAccount cross = createJudge(prefix, "CROSS", "13900000103", JudgeAccountStatus.ACTIVE);
-        JudgeAccount outsider = createJudge(prefix, "OUT", "13900000104", JudgeAccountStatus.ACTIVE);
-        JudgeAccount disabled = createJudge(prefix, "DISABLED", "13900000105", JudgeAccountStatus.DISABLED);
+        JudgeAccount captain = createJudge(prefix, "CAPTAIN", testPhone(prefix, 101), JudgeAccountStatus.ACTIVE);
+        JudgeAccount professional = createJudge(prefix, "PRO", testPhone(prefix, 102), JudgeAccountStatus.ACTIVE);
+        JudgeAccount cross = createJudge(prefix, "CROSS", testPhone(prefix, 103), JudgeAccountStatus.ACTIVE);
+        JudgeAccount outsider = createJudge(prefix, "OUT", testPhone(prefix, 104), JudgeAccountStatus.ACTIVE);
+        JudgeAccount disabled = createJudge(prefix, "DISABLED", testPhone(prefix, 105), JudgeAccountStatus.DISABLED);
 
         JudgeTable baseTable = createBaseJudgeTable(competition.getId(), prefix + "-一号桌");
         createAssignment(competition.getId(), baseTable.getId(), captain.getId(), JudgeRoleType.CAPTAIN);
@@ -110,6 +110,11 @@ public class BeerCompetitionTestData {
 
         return new Fixture(competition, category, portalA, portalB, captain, professional, cross, outsider, disabled,
                 baseTable, entryA1, entryA2, entryB1);
+    }
+
+    private String testPhone(String prefix, int offset) {
+        long value = Math.floorMod((long) prefix.hashCode() * 1000L + offset, 100_000_000L);
+        return "139" + String.format("%08d", value);
     }
 
     public Competition createCompetition(String prefix, CompetitionStatus status) {
@@ -290,10 +295,15 @@ public class BeerCompetitionTestData {
                 .publishedTime(LocalDateTime.now())
                 .build();
         competitionRoundMapper.insert(round);
+        return addPublishedScoreTable(fixture, round, "第一轮一号桌", entries, targetCount, 1);
+    }
+
+    public ScoreRound addPublishedScoreTable(Fixture fixture, CompetitionRound round, String tableName,
+                                              List<BeerEntry> entries, int targetCount, int sortOrder) {
         RoundTable table = RoundTable.builder()
                 .competitionId(fixture.competition().getId())
                 .roundId(round.getId())
-                .tableName("第一轮一号桌")
+                .tableName(tableName)
                 .captainJudgeId(fixture.captain().getId())
                 .categoryId(fixture.category().getId())
                 .categoryMode("SINGLE")
@@ -302,7 +312,7 @@ public class BeerCompetitionTestData {
                 .status(RoundStatus.PUBLISHED.name())
                 .resultVersion(1)
                 .confirmationOverrideFlag(0)
-                .sortOrder(1)
+                .sortOrder(sortOrder)
                 .build();
         roundTableMapper.insert(table);
         insertMember(table.getId(), fixture.captain().getId(), JudgeRoleType.CAPTAIN, 1);

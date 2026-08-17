@@ -28,6 +28,7 @@ import com.beercompetition.pojo.vo.RoundTableMemberVO;
 import com.beercompetition.pojo.vo.RoundTableJudgeEntryScoreVO;
 import com.beercompetition.pojo.vo.RoundTableJudgeProgressVO;
 import com.beercompetition.pojo.vo.RoundTableVO;
+import com.beercompetition.judging.assignment.RoundCandidateSyncService;
 import com.beercompetition.service.impl.round.RoundQuerySupport;
 import com.beercompetition.service.impl.round.RoundValidationPolicy;
 import lombok.RequiredArgsConstructor;
@@ -73,6 +74,8 @@ public class RoundOverviewQueryService {
     private final RoundQuerySupport roundQuerySupport;
 
     private final RoundValidationPolicy roundValidationPolicy;
+
+    private final RoundCandidateSyncService roundCandidateSyncService;
 
     public List<CompetitionRoundVO> listCompetitionRounds(Long competitionId) {
         // 1) 查询轮次、桌、酒款与结果快照，避免组装 VO 时反复查库
@@ -126,6 +129,12 @@ public class RoundOverviewQueryService {
         }
         CompetitionRound sourceRound = round.getSourceRoundId() == null ? null : competitionRoundMapper.selectById(round.getSourceRoundId());
         boolean sourceLocked = sourceRound != null && RoundStatus.LOCKED.name().equals(sourceRound.getStatus());
+        boolean sourceReady = roundCandidateSyncService.isSourceReady(sourceRound);
+        List<RoundTable> sourceTables = sourceRound == null ? List.of() : roundQuerySupport.listRoundTables(sourceRound.getId());
+        int sourceSubmittedTableCount = (int) sourceTables.stream()
+                .filter(table -> RoundStatus.SUBMITTED.name().equals(table.getStatus())
+                        || RoundStatus.LOCKED.name().equals(table.getStatus()))
+                .count();
         Set<Long> sourceCandidateEntryIds = sourceCandidates.stream()
                 .map(RoundResult::getBeerEntryId)
                 .collect(Collectors.toSet());
@@ -134,7 +143,7 @@ public class RoundOverviewQueryService {
                 .map(RoundTableEntry::getBeerEntryId)
                 .collect(Collectors.toSet());
         boolean candidatesSynced = RoundType.SCORE.name().equals(round.getRoundType())
-                || (sourceLocked && !sourceCandidateEntryIds.isEmpty() && assignedEntryIds.equals(sourceCandidateEntryIds));
+                || assignedEntryIds.equals(sourceCandidateEntryIds);
         return CompetitionRoundVO.builder()
                 .id(round.getId())
                 .roundNo(round.getRoundNo())
@@ -144,10 +153,13 @@ public class RoundOverviewQueryService {
                 .sourceRoundId(round.getSourceRoundId())
                 .sourceEntryUuids(new ArrayList<>(sourceEntryUuids))
                 .sourceLocked(sourceRound == null ? null : sourceLocked)
+                .sourceReady(sourceRound == null ? null : sourceReady)
+                .sourceSubmittedTableCount(sourceRound == null ? null : sourceSubmittedTableCount)
+                .sourceTableCount(sourceRound == null ? null : sourceTables.size())
                 .candidatesSynced(candidatesSynced)
                 .preparationDraft(RoundType.RANKING.name().equals(round.getRoundType())
                         && RoundStatus.DRAFT.name().equals(round.getStatus())
-                        && (sourceRound == null || !sourceLocked || !candidatesSynced))
+                        && (sourceRound == null || !sourceReady || !candidatesSynced))
                 .tables(tables.stream()
                         .sorted(Comparator.comparing(RoundTable::getSortOrder, Comparator.nullsLast(Integer::compareTo)).thenComparing(RoundTable::getId))
                         .map(table -> toRoundTableVO(table, entriesByTable.getOrDefault(table.getId(), List.of()),

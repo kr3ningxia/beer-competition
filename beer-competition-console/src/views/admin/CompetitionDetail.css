@@ -2526,7 +2526,7 @@ button.pyramid-placeholder-mark {
 }
 
 .round-table-row.score-row {
-  grid-template-columns: minmax(64px, 0.55fr) minmax(52px, 0.38fr) minmax(112px, 0.85fr) minmax(104px, 0.76fr) minmax(112px, 0.78fr) minmax(88px, 0.58fr) minmax(96px, 0.68fr) minmax(120px, 0.9fr) 82px;
+  grid-template-columns: minmax(64px, 0.55fr) minmax(52px, 0.38fr) minmax(112px, 0.85fr) minmax(220px, 1.4fr) minmax(88px, 0.58fr) minmax(96px, 0.68fr) minmax(120px, 0.9fr) 82px;
 }
 
 .round-table-row.ranking-row {

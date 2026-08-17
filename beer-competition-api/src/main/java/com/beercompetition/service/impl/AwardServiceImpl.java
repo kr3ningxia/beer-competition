@@ -375,35 +375,6 @@ public class AwardServiceImpl implements AwardService {
         return drafts;
     }
 
-    private void buildChampionCandidatesFromGolds(Long competitionId, List<AwardResult> drafts, Map<String, AwardRule> ruleByKey) {
-        AwardRule championRule = ruleByKey.get(ruleKey(null, AwardType.CHAMPION.name(), 1));
-        List<AwardResult> golds = drafts.stream()
-                .filter(result -> AwardType.MEDAL.name().equals(result.getAwardType()))
-                .filter(result -> Objects.equals(result.getRankNo(), 1) || GOLD.equals(result.getAwardName()))
-                .toList();
-        if (!golds.isEmpty()) {
-            AwardResult gold = golds.get(0);
-            drafts.add(newChampionDraft(competitionId, gold, championRule));
-        }
-    }
-
-    private AwardResult newChampionDraft(Long competitionId, AwardResult sourceGold, AwardRule championRule) {
-        return AwardResult.builder()
-                .competitionId(competitionId)
-                .categoryId(null)
-                .beerEntryId(sourceGold.getBeerEntryId())
-                .awardRuleId(championRule == null ? null : championRule.getId())
-                .awardType(AwardType.CHAMPION.name())
-                .awardName(CHAMPION)
-                .rankNo(1)
-                .sourceRoundId(sourceGold.getSourceRoundId())
-                .sourceRoundTableId(sourceGold.getSourceRoundTableId())
-                .sourceResultId(sourceGold.getSourceResultId())
-                .championFlag(FLAG_TRUE)
-                .status(AwardResultStatus.DRAFT.name())
-                .build();
-    }
-
     private void validateMedalDraftSlots(List<AwardResult> drafts) {
         Map<Long, List<AwardResult>> medalsByCategory = drafts.stream()
                 .filter(result -> AwardType.MEDAL.name().equals(result.getAwardType()))
@@ -489,13 +460,9 @@ public class AwardServiceImpl implements AwardService {
             throw new BaseException("存在无效获奖酒款");
         }
         Map<String, Long> slotKeys = new LinkedHashMap<>();
-        Set<Long> goldEntryIds = items.stream()
-                .filter(item -> AwardType.MEDAL.name().equals(item.getAwardType()))
-                .filter(item -> Objects.equals(item.getRankNo(), 1) || GOLD.equals(item.getAwardName()))
-                .map(AwardConfirmItemRequest::getBeerEntryId)
-                .collect(Collectors.toSet());
         Map<Long, Set<Integer>> medalRanksByCategory = new LinkedHashMap<>();
         int championCount = 0;
+        Long championEntryId = null;
         for (AwardConfirmItemRequest item : items) {
             AwardType type = AwardType.of(item.getAwardType());
             BeerEntry entry = entryById.get(item.getBeerEntryId());
@@ -513,9 +480,7 @@ public class AwardServiceImpl implements AwardService {
             }
             if (type == AwardType.CHAMPION) {
                 championCount++;
-                if (!goldEntryIds.contains(item.getBeerEntryId())) {
-                    throw new BaseException("总冠军必须从各组别金奖中选择");
-                }
+                championEntryId = item.getBeerEntryId();
             } else {
                 medalRanksByCategory
                         .computeIfAbsent(entry.getCategoryId(), key -> new java.util.HashSet<>())
@@ -528,6 +493,19 @@ public class AwardServiceImpl implements AwardService {
         }
         if (championCount != 1) {
             throw new BaseException("必须确认且只能确认 1 个总冠军");
+        }
+        Set<Long> highestMedalEntryIds = items.stream()
+                .filter(item -> AwardType.MEDAL.name().equals(item.getAwardType()))
+                .collect(Collectors.toMap(
+                        item -> entryById.get(item.getBeerEntryId()).getCategoryId(),
+                        Function.identity(),
+                        (left, right) -> left.getRankNo() <= right.getRankNo() ? left : right,
+                        LinkedHashMap::new))
+                .values().stream()
+                .map(AwardConfirmItemRequest::getBeerEntryId)
+                .collect(Collectors.toSet());
+        if (!highestMedalEntryIds.contains(championEntryId)) {
+            throw new BaseException("总冠军必须从各组最高奖项中选择");
         }
         validateMedalConfirmationSlots(medalRanksByCategory);
     }

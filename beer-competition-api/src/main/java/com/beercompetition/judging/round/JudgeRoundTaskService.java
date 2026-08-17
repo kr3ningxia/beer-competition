@@ -15,4 +15,6 @@ public interface JudgeRoundTaskService {
     JudgeRoundTableVO getMyRoundTable(Long roundTableId);
 
     void submitScoreRoundTable(Long roundTableId);
+
+    void reopenScoreRoundTable(Long roundTableId);
 }

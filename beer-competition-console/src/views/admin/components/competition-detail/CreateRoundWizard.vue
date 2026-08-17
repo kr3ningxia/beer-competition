@@ -88,14 +88,14 @@ const isChampion = computed(() => props.targetMode === 'CHAMPION')
 const dialogTitle = computed(() => (isChampion.value ? '准备决赛轮' : `准备${props.nextRoundName}排序`))
 const dialogHint = computed(() => {
   if (isChampion.value) return '安排决赛桌、桌长和参与评审'
-  if (props.earlyDraft) return '先安排桌次和人员，来源轮次锁定后同步候选酒款'
+  if (props.earlyDraft) return '先安排桌次和人员，每桌确认后自动加入候选酒款'
   return '安排桌长、参与评审和候选酒款'
 })
-const candidateLabel = computed(() => (isChampion.value ? '各组别金奖' : (props.earlyDraft ? '候选状态' : '当前候选')))
-const candidateCountDisplay = computed(() => (props.earlyDraft && !props.advancedPool.length ? '待同步' : props.advancedPool.length))
+const candidateLabel = computed(() => (isChampion.value ? '各组最高奖项' : (props.earlyDraft ? '已确认候选' : '当前候选')))
+const candidateCountDisplay = computed(() => props.advancedPool.length)
 const candidateHint = computed(() => {
   if (isChampion.value) return '用于决出全场总冠军'
-  if (props.earlyDraft) return `来源轮锁定后同步到${props.nextRoundName}`
+  if (props.earlyDraft) return `每桌确认后自动加入${props.nextRoundName}`
   return `用于${props.nextRoundName}分桌`
 })
 const finishLabel = computed(() => (isChampion.value ? '创建决赛草稿并去分桌' : '创建草稿并去分桌'))

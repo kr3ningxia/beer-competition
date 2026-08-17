@@ -79,6 +79,8 @@ public class RoundAllocationServiceImpl implements RoundAllocationService {
 
     private final RoundValidationPolicy roundValidationPolicy;
 
+    private final RoundCandidateSyncService roundCandidateSyncService;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void createFirstRound(Long competitionId, FirstRoundCreateRequest request) {
@@ -241,79 +243,6 @@ public class RoundAllocationServiceImpl implements RoundAllocationService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void syncRoundCandidates(Long competitionId, Long roundId) {
-        // 1) 查询轮次与来源轮次
-        CompetitionRound round = roundQuerySupport.requireRound(competitionId, roundId);
-        if (!RoundType.RANKING.name().equals(round.getRoundType())) {
-            throw new BaseException("只有后续排序轮需要更新晋级酒款");
-        }
-        if (!RoundStatus.DRAFT.name().equals(round.getStatus())) {
-            throw new BaseException("只有草稿轮次可以更新晋级酒款");
-        }
-        CompetitionRound sourceRound = roundQuerySupport.requireRound(competitionId, round.getSourceRoundId());
-        if (!RoundStatus.LOCKED.name().equals(sourceRound.getStatus())) {
-            throw new BaseException("请先锁定上一轮，再更新晋级酒款");
-        }
-        roundValidationPolicy.validateSourceIsLatestLockedRound(competitionId, sourceRound);
-
-        // 2) 计算候选酒款并保留已有分配
-        List<RoundTable> tables = roundQuerySupport.listRoundTables(roundId);
-        if (tables.isEmpty()) {
-            throw new BaseException("当前轮次至少需要 1 张桌");
-        }
-        List<RoundResult> candidates = roundQuerySupport.filterCandidatesForTargetMode(roundQuerySupport.listCandidateResults(sourceRound.getId()), tables.get(0).getTargetMode());
-        if (candidates.isEmpty()) {
-            throw new BaseException("上一轮没有可同步的候选酒款");
-        }
-        Set<Long> candidateEntryIds = candidates.stream()
-                .map(RoundResult::getBeerEntryId)
-                .collect(Collectors.toSet());
-        List<RoundTableEntry> existingEntries = roundTableEntryMapper.selectList(new LambdaQueryWrapper<RoundTableEntry>()
-                .eq(RoundTableEntry::getRoundId, roundId));
-        List<Long> staleEntryIds = existingEntries.stream()
-                .filter(entry -> !candidateEntryIds.contains(entry.getBeerEntryId()))
-                .map(RoundTableEntry::getId)
-                .toList();
-        if (!staleEntryIds.isEmpty()) {
-            roundTableEntryMapper.deleteBatchIds(staleEntryIds);
-        }
-        Set<Long> existingEntryIds = existingEntries.stream()
-                .filter(entry -> candidateEntryIds.contains(entry.getBeerEntryId()))
-                .map(RoundTableEntry::getBeerEntryId)
-                .collect(Collectors.toSet());
-        Map<Long, Integer> nextSortOrderByTable = new HashMap<>();
-        for (RoundTable table : tables) {
-            int maxSort = roundTableEntryMapper.selectList(new LambdaQueryWrapper<RoundTableEntry>()
-                            .eq(RoundTableEntry::getRoundTableId, table.getId()))
-                    .stream()
-                    .map(RoundTableEntry::getSortOrder)
-                    .filter(Objects::nonNull)
-                    .max(Integer::compareTo)
-                    .orElse(-1);
-            nextSortOrderByTable.put(table.getId(), maxSort + 1);
-        }
-
-        // 3) 将缺失候选按桌次轮转补入草稿
-        int index = 0;
-        for (RoundResult source : candidates) {
-            if (existingEntryIds.contains(source.getBeerEntryId())) {
-                continue;
-            }
-            RoundTable table = tables.get(resolveCandidateTableIndex(RoundCreationStrategy.EVEN_SPLIT, index++, tables.size()));
-            roundTableEntryMapper.insert(RoundTableEntry.builder()
-                    .competitionId(competitionId)
-                    .roundId(roundId)
-                    .roundTableId(table.getId())
-                    .beerEntryId(source.getBeerEntryId())
-                    .sourceRoundTableId(source.getRoundTableId())
-                    .status(RoundEntryStatus.ASSIGNED.name())
-                    .sortOrder(nextSortOrderByTable.compute(table.getId(), (key, value) -> value == null ? 1 : value + 1) - 1)
-                    .build());
-        }
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
     public void deleteDraftRound(Long competitionId, Long roundId) {
         // 1) 查询轮次并限制只能删除草稿排序轮
         roundQuerySupport.requireCompetition(competitionId);
@@ -358,6 +287,7 @@ public class RoundAllocationServiceImpl implements RoundAllocationService {
             throw new BaseException("决赛轮已是最后一轮，不能继续创建轮次");
         }
         boolean sourceLocked = RoundStatus.LOCKED.name().equals(sourceRound.getStatus());
+        boolean sourceReady = roundCandidateSyncService.isSourceReady(sourceRound);
         if (sourceLocked) {
             roundValidationPolicy.validateSourceIsLatestLockedRound(competitionId, sourceRound);
         }
@@ -366,10 +296,9 @@ public class RoundAllocationServiceImpl implements RoundAllocationService {
                 .eq(CompetitionRound::getSourceRoundId, sourceRound.getId())) > 0) {
             throw new BaseException("已基于该轮次创建过下一轮");
         }
-        List<RoundResult> candidates = sourceLocked
-                ? roundQuerySupport.filterCandidatesForTargetMode(roundQuerySupport.listCandidateResults(sourceRound.getId()), targetMode.name())
-                : List.of();
-        if (sourceLocked && candidates.isEmpty()) {
+        List<RoundResult> candidates = roundQuerySupport.filterCandidatesForTargetMode(
+                roundQuerySupport.listSubmittedCandidateResults(sourceRound.getId()), targetMode.name());
+        if (sourceReady && candidates.isEmpty()) {
             throw new BaseException("上一轮没有可用于创建下一轮的候选酒款");
         }
         int nextRoundNo = roundQuerySupport.listRounds(competitionId).stream().mapToInt(CompetitionRound::getRoundNo).max().orElse(1) + 1;
@@ -424,6 +353,7 @@ public class RoundAllocationServiceImpl implements RoundAllocationService {
                         .build());
             }
         }
+        roundCandidateSyncService.syncDraftRound(competitionId, round.getId());
     }
 
     private Long resolveCategoryId(RoundTableAllocationRequest table, Map<String, BeerEntry> entryMap) {

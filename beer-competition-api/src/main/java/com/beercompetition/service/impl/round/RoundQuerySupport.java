@@ -24,6 +24,7 @@ import com.beercompetition.pojo.enums.EntryStatus;
 import com.beercompetition.pojo.enums.JudgeAccountStatus;
 import com.beercompetition.pojo.enums.JudgeRoleType;
 import com.beercompetition.pojo.enums.RoundResultType;
+import com.beercompetition.pojo.enums.RoundStatus;
 import com.beercompetition.pojo.enums.RoundTargetMode;
 import com.beercompetition.pojo.po.BeerEntry;
 import com.beercompetition.pojo.po.Brewery;
@@ -132,42 +133,55 @@ public class RoundQuerySupport {
                 .orderByAsc(RoundResult::getId));
     }
 
+    public List<RoundResult> listSubmittedCandidateResults(Long sourceRoundId) {
+        Set<Long> submittedTableIds = listRoundTables(sourceRoundId).stream()
+                .filter(table -> RoundStatus.SUBMITTED.name().equals(table.getStatus())
+                        || RoundStatus.LOCKED.name().equals(table.getStatus()))
+                .map(RoundTable::getId)
+                .collect(Collectors.toSet());
+        if (submittedTableIds.isEmpty()) {
+            return List.of();
+        }
+        return listCandidateResults(sourceRoundId).stream()
+                .filter(result -> submittedTableIds.contains(result.getRoundTableId()))
+                .toList();
+    }
+
     public List<RoundResult> resolveCandidateResultsForRound(CompetitionRound round, List<RoundTable> tables) {
         if (round.getSourceRoundId() == null) {
             return List.of();
         }
-        // 候选池跟随当前轮次桌的目标模式：总冠军轮只接收上一轮各组金奖，其余轮次沿用全部晋级候选。
+        // 候选池跟随当前轮次桌的目标模式：总冠军轮每桌接收最高可用奖项，其余轮次沿用全部晋级候选。
         String targetMode = tables.stream()
                 .map(RoundTable::getTargetMode)
                 .filter(StringUtils::hasText)
                 .findFirst()
                 .orElse(RoundTargetMode.TOP_N.name());
-        return filterCandidatesForTargetMode(listCandidateResults(round.getSourceRoundId()), targetMode);
+        return filterCandidatesForTargetMode(listSubmittedCandidateResults(round.getSourceRoundId()), targetMode);
     }
 
     public List<RoundResult> filterCandidatesForTargetMode(List<RoundResult> candidates, String targetMode) {
         if (!RoundTargetMode.CHAMPION.name().equals(targetMode)) {
             return candidates;
         }
-        Map<Long, RoundTable> sourceTables = new LinkedHashMap<>();
-        candidates.stream()
+        Set<Long> sourceTableIds = candidates.stream()
                 .map(RoundResult::getRoundTableId)
                 .filter(Objects::nonNull)
-                .distinct()
-                .forEach(tableId -> {
-                    RoundTable table = roundTableMapper.selectById(tableId);
-                    if (table != null) {
-                        sourceTables.put(tableId, table);
-                    }
-                });
-        return candidates.stream()
+                .collect(Collectors.toSet());
+        Map<Long, RoundTable> sourceTables = loadRoundTables(sourceTableIds);
+        Map<Long, RoundResult> highestAvailableByTable = candidates.stream()
+                .filter(result -> result.getRoundTableId() != null)
+                .filter(result -> result.getRankNo() != null && result.getRankNo() >= 1 && result.getRankNo() <= 3)
                 .filter(result -> {
                     RoundTable sourceTable = sourceTables.get(result.getRoundTableId());
-                    return sourceTable != null
-                            && RoundTargetMode.MEDALS.name().equals(sourceTable.getTargetMode())
-                            && (Objects.equals(result.getRankNo(), 1) || RoundConstants.SLOT_GOLD.equals(result.getSlotLabel()));
+                    return sourceTable != null && RoundTargetMode.MEDALS.name().equals(sourceTable.getTargetMode());
                 })
-                .toList();
+                .collect(Collectors.toMap(
+                        RoundResult::getRoundTableId,
+                        Function.identity(),
+                        (left, right) -> left.getRankNo() <= right.getRankNo() ? left : right,
+                        LinkedHashMap::new));
+        return List.copyOf(highestAvailableByTable.values());
     }
 
     public List<JudgeTable> listBaseTables(Long competitionId) {
@@ -350,6 +364,17 @@ public class RoundQuerySupport {
     public CompetitionRound requireRound(Long competitionId, Long roundId) {
         CompetitionRound round = competitionRoundMapper.selectById(roundId);
         if (round == null || !round.getCompetitionId().equals(competitionId)) {
+            throw new ResourceNotFoundException("轮次不存在");
+        }
+        return round;
+    }
+
+    public CompetitionRound requireRoundForUpdate(Long competitionId, Long roundId) {
+        CompetitionRound round = competitionRoundMapper.selectOne(new LambdaQueryWrapper<CompetitionRound>()
+                .eq(CompetitionRound::getId, roundId)
+                .eq(CompetitionRound::getCompetitionId, competitionId)
+                .last("FOR UPDATE"));
+        if (round == null) {
             throw new ResourceNotFoundException("轮次不存在");
         }
         return round;

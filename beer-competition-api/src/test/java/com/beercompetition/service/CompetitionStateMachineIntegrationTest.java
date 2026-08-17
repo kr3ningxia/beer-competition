@@ -11,6 +11,7 @@ import com.beercompetition.pojo.dto.CompetitionStyleLibraryUpdateRequest;
 import com.beercompetition.pojo.dto.EntryFieldBatchUpdateRequest;
 import com.beercompetition.pojo.dto.EntryFieldItemRequest;
 import com.beercompetition.pojo.enums.CompetitionStatus;
+import com.beercompetition.pojo.enums.EntryStatus;
 import com.beercompetition.pojo.enums.RoundStatus;
 import com.beercompetition.pojo.po.CompetitionRound;
 import com.beercompetition.testsupport.BeerCompetitionTestData;
@@ -49,6 +50,36 @@ class CompetitionStateMachineIntegrationTest extends IntegrationTestBase {
         assertThatThrownBy(() -> competitionLifecycleService.prepareJudging(fixture.competition().getId()))
                 .isInstanceOf(BaseException.class)
                 .hasMessageContaining("报名截止");
+    }
+
+    @Test
+    void prepareJudgingAllowsPaidEntriesThatHaveNotArrived() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        testData.createEntry(testRun, fixture.competition().getId(), fixture.portalB().brewery().getId(),
+                fixture.category().getId(), testRun + "-未到场作品", EntryStatus.REGISTERED, true);
+        jdbcTemplate.update("""
+                        UPDATE competition_score_config
+                        SET dimensions_json = ?
+                        WHERE competition_id = ? AND judge_role_type = 'PROFESSIONAL'
+                        """,
+                "[{\"key\":\"aroma\",\"label\":\"香气\",\"maxScore\":12},{\"key\":\"appearance\",\"label\":\"外观\",\"maxScore\":3},{\"key\":\"flavor\",\"label\":\"味道\",\"maxScore\":20},{\"key\":\"mouthfeel\",\"label\":\"口感\",\"maxScore\":5},{\"key\":\"overall\",\"label\":\"整体印象\",\"maxScore\":10}]",
+                fixture.competition().getId());
+        jdbcTemplate.update("""
+                        UPDATE competition_score_config
+                        SET dimensions_json = ?
+                        WHERE competition_id = ? AND judge_role_type = 'CROSS'
+                        """,
+                "[{\"key\":\"preference\",\"label\":\"喜好度\",\"maxScore\":25},{\"key\":\"impression\",\"label\":\"整体印象\",\"maxScore\":25}]",
+                fixture.competition().getId());
+        jdbcTemplate.update("UPDATE competition SET status = ? WHERE id = ?",
+                CompetitionStatus.REGISTRATION_CLOSED.name(), fixture.competition().getId());
+        asAdmin(1L);
+
+        var detail = competitionLifecycleService.prepareJudging(fixture.competition().getId());
+
+        assertThat(detail.getStatus()).isEqualTo(CompetitionStatus.JUDGING_PREP.name());
+        assertThat(detail.getEntriesSummary().getStored()).isEqualTo(3);
+        assertThat(detail.getEntriesSummary().getRegistered()).isEqualTo(4);
     }
 
     @Test
