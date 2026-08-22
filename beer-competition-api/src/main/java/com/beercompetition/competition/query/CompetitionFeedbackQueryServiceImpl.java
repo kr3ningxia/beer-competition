@@ -3,6 +3,7 @@ package com.beercompetition.competition.query;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
+import com.beercompetition.competition.FeedbackCommentEditPolicy;
 import com.beercompetition.mapper.BeerEntryMapper;
 import com.beercompetition.mapper.CompetitionRoundMapper;
 import com.beercompetition.mapper.CompetitionCategoryMapper;
@@ -278,8 +279,7 @@ public class CompetitionFeedbackQueryServiceImpl implements CompetitionFeedbackQ
     }
 
     private boolean isFeedbackCommentEditable(Competition competition) {
-        return !CompetitionStatus.PUBLISHED.name().equals(competition.getStatus())
-                && !CompetitionStatus.ARCHIVED.name().equals(competition.getStatus());
+        return competition != null && FeedbackCommentEditPolicy.isEditable(competition.getStatus());
     }
 
     private String resolveFeedbackStatus(ScoreRecord finalScore,

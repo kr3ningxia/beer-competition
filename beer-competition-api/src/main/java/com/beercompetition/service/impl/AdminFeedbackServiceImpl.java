@@ -6,6 +6,7 @@ import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ForbiddenException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
+import com.beercompetition.competition.FeedbackCommentEditPolicy;
 import com.beercompetition.mapper.AdminOperationLogMapper;
 import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.CompetitionRoundMapper;
@@ -203,9 +204,8 @@ public class AdminFeedbackServiceImpl implements AdminFeedbackService {
     }
 
     private void assertCompetitionAllowsFeedbackEdit(Competition competition) {
-        if (CompetitionStatus.PUBLISHED.name().equals(competition.getStatus())
-                || CompetitionStatus.ARCHIVED.name().equals(competition.getStatus())) {
-            throw new ForbiddenException("结果已发布，不能修改评审评价");
+        if (!FeedbackCommentEditPolicy.isEditable(competition.getStatus())) {
+            throw new ForbiddenException("比赛已归档，不能修改评审评价");
         }
     }
 

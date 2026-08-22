@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * 后台评语复核接口，支持发布前查看和修正第一轮评语。
+ * 后台评语复核接口，支持查看和修正第一轮文字评价。
  */
 @RestController
 @RequiredArgsConstructor
