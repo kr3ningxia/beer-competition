@@ -32,6 +32,7 @@ import com.beercompetition.pojo.po.ScoreRecord;
 import com.beercompetition.pojo.vo.AdminFeedbackCaptainOpinionVO;
 import com.beercompetition.pojo.vo.AdminFeedbackJudgeScoreVO;
 import com.beercompetition.pojo.vo.AdminFeedbackReviewEntryVO;
+import com.beercompetition.pojo.vo.AdminFeedbackReviewPageVO;
 import com.beercompetition.service.EntryScanLabelService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -107,6 +108,21 @@ public class CompetitionFeedbackQueryServiceImpl implements CompetitionFeedbackQ
 
     @Override
     public List<AdminFeedbackReviewEntryVO> getFeedbackReviewEntries(Long competitionId) {
+        return buildFeedbackReviewPage(competitionId, null, null).records();
+    }
+
+    @Override
+    public AdminFeedbackReviewPageVO getFeedbackReviewPage(Long competitionId, Integer page, Integer pageSize) {
+        FeedbackPageData pageData = buildFeedbackReviewPage(competitionId, page, pageSize);
+        return AdminFeedbackReviewPageVO.builder()
+                .total(pageData.total())
+                .records(pageData.records())
+                .tableNames(pageData.tableNames())
+                .categoryNames(pageData.categoryNames())
+                .build();
+    }
+
+    private FeedbackPageData buildFeedbackReviewPage(Long competitionId, Integer page, Integer pageSize) {
         // 1) 校验比赛并定位第一轮评分制轮次
         Competition competition = getCompetitionOrThrow(competitionId);
         boolean feedbackEditable = isFeedbackCommentEditable(competition);
@@ -118,7 +134,7 @@ public class CompetitionFeedbackQueryServiceImpl implements CompetitionFeedbackQ
                 .orderByAsc(CompetitionRound::getId)
                 .last("LIMIT 1"));
         if (firstScoreRound == null) {
-            return List.of();
+            return new FeedbackPageData(0, List.of(), List.of(), List.of());
         }
 
         // 2) 查询第一轮桌次、酒款、评审、标签和评分记录
@@ -127,7 +143,7 @@ public class CompetitionFeedbackQueryServiceImpl implements CompetitionFeedbackQ
                 .orderByAsc(RoundTable::getSortOrder)
                 .orderByAsc(RoundTable::getId));
         if (tables.isEmpty()) {
-            return List.of();
+            return new FeedbackPageData(0, List.of(), List.of(), List.of());
         }
         List<Long> tableIds = tables.stream().map(RoundTable::getId).toList();
         List<RoundTableEntry> roundEntries = roundTableEntryMapper.selectList(new LambdaQueryWrapper<RoundTableEntry>()
@@ -136,9 +152,18 @@ public class CompetitionFeedbackQueryServiceImpl implements CompetitionFeedbackQ
                 .orderByAsc(RoundTableEntry::getSortOrder)
                 .orderByAsc(RoundTableEntry::getId));
         if (roundEntries.isEmpty()) {
-            return List.of();
+            return new FeedbackPageData(0, List.of(), List.of(), List.of());
         }
-        Set<Long> beerEntryIds = roundEntries.stream().map(RoundTableEntry::getBeerEntryId).collect(Collectors.toCollection(LinkedHashSet::new));
+        int total = roundEntries.size();
+        List<RoundTableEntry> pageEntries = roundEntries;
+        if (page != null || pageSize != null) {
+            int currentPage = page == null || page < 1 ? 1 : page;
+            int currentPageSize = pageSize == null ? 20 : Math.min(Math.max(pageSize, 1), 100);
+            int fromIndex = Math.min((currentPage - 1) * currentPageSize, total);
+            int toIndex = Math.min(fromIndex + currentPageSize, total);
+            pageEntries = roundEntries.subList(fromIndex, toIndex);
+        }
+        Set<Long> beerEntryIds = pageEntries.stream().map(RoundTableEntry::getBeerEntryId).collect(Collectors.toCollection(LinkedHashSet::new));
         List<BeerEntry> entries = beerEntryMapper.selectBatchIds(beerEntryIds);
         Map<Long, BeerEntry> entryById = entries.stream()
                 .collect(Collectors.toMap(BeerEntry::getId, Function.identity(), (left, right) -> left));
@@ -156,12 +181,19 @@ public class CompetitionFeedbackQueryServiceImpl implements CompetitionFeedbackQ
         Map<String, Integer> minCommentLengthByRole = loadMinCommentLengthByRole(competitionId);
 
         // 3) 组装发布前反馈复核列表
-        return roundEntries.stream()
+        List<AdminFeedbackReviewEntryVO> records = pageEntries.stream()
                 .map(roundEntry -> buildFeedbackReviewEntry(firstScoreRound, roundEntry, tableById, entryById,
                         labelByEntryId, categoryNameById, membersByTable, judgeById, personalScoreByJudgeEntry,
                         finalScoreByEntry, minCommentLengthByRole, feedbackEditable))
                 .filter(Objects::nonNull)
                 .toList();
+        return new FeedbackPageData(total, records,
+                tables.stream().map(RoundTable::getTableName).filter(Objects::nonNull).distinct().toList(),
+                categoryNameById.values().stream().filter(Objects::nonNull).distinct().sorted().toList());
+    }
+
+    private record FeedbackPageData(long total, List<AdminFeedbackReviewEntryVO> records,
+                                    List<String> tableNames, List<String> categoryNames) {
     }
 
     private AdminFeedbackReviewEntryVO buildFeedbackReviewEntry(CompetitionRound round,

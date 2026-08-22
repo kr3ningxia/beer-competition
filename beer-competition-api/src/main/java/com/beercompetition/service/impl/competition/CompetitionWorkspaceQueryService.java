@@ -1,5 +1,6 @@
 package com.beercompetition.service.impl.competition;
 
+import com.beercompetition.common.result.PageResult;
 import com.beercompetition.pojo.vo.AwardResultVO;
 import com.beercompetition.pojo.vo.AwardRuleVO;
 import com.beercompetition.pojo.vo.CompetitionDetailVO;
@@ -25,6 +26,10 @@ public class CompetitionWorkspaceQueryService {
 
     public List<CompetitionEntryVO> listEntryPool(Long competitionId) {
         return roundQueryService.listEntryPool(competitionId);
+    }
+
+    public PageResult<CompetitionEntryVO> listEntryPoolPage(Long competitionId, Integer page, Integer pageSize) {
+        return roundQueryService.listEntryPoolPage(competitionId, page, pageSize);
     }
 
     public List<CompetitionRoundVO> listRounds(Long competitionId) {

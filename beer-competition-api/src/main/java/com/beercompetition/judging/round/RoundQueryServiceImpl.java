@@ -1,6 +1,8 @@
 package com.beercompetition.judging.round;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.beercompetition.common.result.PageResult;
 import com.beercompetition.mapper.BeerEntryMapper;
 import com.beercompetition.mapper.BeerEntryExtraFieldMapper;
 import com.beercompetition.mapper.EntryFieldConfigMapper;
@@ -62,16 +64,33 @@ public class RoundQueryServiceImpl implements RoundQueryService {
 
     @Override
     public List<CompetitionEntryVO> listEntryPool(Long competitionId) {
-        // 1) 读取报名池及其关联的支付、物流、退款、扫码标签和最新轮次结果
         roundQuerySupport.requireCompetition(competitionId);
-        Map<Long, String> categoryNameById = roundQuerySupport.listCategoryNames(competitionId);
-        Map<String, CompetitionStyleConfig> styleByName = roundQuerySupport.listStyleSnapshot(competitionId);
-        Map<Long, RoundResult> latestResultByEntry = roundQuerySupport.latestResultByEntry(competitionId);
-        List<BeerEntry> entries = beerEntryMapper.selectList(new LambdaQueryWrapper<BeerEntry>()
+        List<BeerEntry> entries = beerEntryMapper.selectList(entryPoolWrapper(competitionId));
+        return buildEntryPool(competitionId, entries);
+    }
+
+    @Override
+    public PageResult<CompetitionEntryVO> listEntryPoolPage(Long competitionId, Integer page, Integer pageSize) {
+        roundQuerySupport.requireCompetition(competitionId);
+        long currentPage = page == null || page < 1 ? 1 : page;
+        long currentPageSize = pageSize == null ? 20 : Math.min(Math.max(pageSize, 1), 100);
+        Page<BeerEntry> result = beerEntryMapper.selectPage(new Page<>(currentPage, currentPageSize), entryPoolWrapper(competitionId));
+        return new PageResult<>(result.getTotal(), buildEntryPool(competitionId, result.getRecords()));
+    }
+
+    private LambdaQueryWrapper<BeerEntry> entryPoolWrapper(Long competitionId) {
+        return new LambdaQueryWrapper<BeerEntry>()
                 .eq(BeerEntry::getCompetitionId, competitionId)
                 .ne(BeerEntry::getStatus, EntryStatus.CANCELED.name())
                 .orderByDesc(BeerEntry::getCreateTime)
-                .orderByAsc(BeerEntry::getId));
+                .orderByAsc(BeerEntry::getId);
+    }
+
+    private List<CompetitionEntryVO> buildEntryPool(Long competitionId, List<BeerEntry> entries) {
+        // 读取当前页报名及其关联的支付、物流、退款、扫码标签和最新轮次结果
+        Map<Long, String> categoryNameById = roundQuerySupport.listCategoryNames(competitionId);
+        Map<String, CompetitionStyleConfig> styleByName = roundQuerySupport.listStyleSnapshot(competitionId);
+        Map<Long, RoundResult> latestResultByEntry = roundQuerySupport.latestResultByEntry(competitionId);
         Map<Long, CompetitionStyleConfig> styleById = roundQuerySupport.loadStyleSnapshots(entries.stream()
                 .map(BeerEntry::getStyleConfigId)
                 .filter(Objects::nonNull)
@@ -85,7 +104,7 @@ public class RoundQueryServiceImpl implements RoundQueryService {
         Map<Long, EntryRefund> refundByEntryId = roundQuerySupport.loadLatestRefunds(entries.stream().map(BeerEntry::getId).collect(Collectors.toSet()));
         Map<Long, EntryScanLabel> labelByEntryId = entryScanLabelService.listActiveLabels(entries.stream().map(BeerEntry::getId).toList());
 
-        // 2) 组装后台酒款池视图，保留报名、入库、支付与评审结果的综合状态
+        // 组装后台酒款池视图，保留报名、入库、支付与评审结果的综合状态
         return entries.stream()
                 .map(entry -> toEntryVO(entry, categoryNameById, styleById, styleByName, latestResultByEntry.get(entry.getId()), tableById,
                         breweryById.get(entry.getBreweryId()), paymentByEntryId.get(entry.getId()), deliveryByEntryId.get(entry.getId()),

@@ -4,18 +4,13 @@
       <header>
         <div>
           <h2 id="create-round-title">{{ dialogTitle }}</h2>
-          <p>{{ dialogHint }}</p>
+          <p v-if="dialogHint">{{ dialogHint }}</p>
         </div>
         <button class="icon-action" type="button" @click="$emit('close')">×</button>
       </header>
 
-      <section class="summary-panel">
-        <div class="summary-main">
-          <span>{{ candidateLabel }}</span>
-          <strong>{{ candidateCountDisplay }}</strong>
-          <small>{{ candidateHint }}</small>
-        </div>
-        <div v-if="advancedCategoryStats.length" class="summary-list">
+      <section v-if="advancedCategoryStats.length" class="summary-panel">
+        <div class="summary-list">
           <span v-for="item in advancedCategoryStats" :key="item.category">
             <strong>{{ item.count }}</strong>
             {{ item.category }}
@@ -25,13 +20,12 @@
 
       <section class="round-config-panel">
         <label>
-          <span>轮次目标</span>
+          <span class="field-label">轮次目标 <span class="help-hint" tabindex="0" role="img" aria-label="查看说明" :data-tooltip="selectedTargetOption?.description">i</span></span>
           <select :value="targetMode" @change="$emit('update:targetMode', $event.target.value)">
             <option v-for="option in targetOptions" :key="option.value" :value="option.value">
               {{ option.label }}
             </option>
           </select>
-          <small>{{ selectedTargetOption?.description }}</small>
         </label>
         <label>
           <span>桌数</span>
@@ -44,7 +38,7 @@
           />
         </label>
         <label :class="{ 'fixed-count-field': isTargetCountFixed }">
-          <span>{{ targetCountLabel }}</span>
+          <span class="field-label">{{ targetCountLabel }} <span class="help-hint" tabindex="0" role="img" aria-label="查看说明" :data-tooltip="targetCountHint">i</span></span>
           <input
             :value="targetCount"
             min="1"
@@ -52,7 +46,6 @@
             :disabled="isTargetCountFixed"
             @input="$emit('update:targetCount', Number($event.target.value || 1))"
           />
-          <small>{{ targetCountHint }}</small>
         </label>
       </section>
 
@@ -88,15 +81,8 @@ const isChampion = computed(() => props.targetMode === 'CHAMPION')
 const dialogTitle = computed(() => (isChampion.value ? '准备决赛轮' : `准备${props.nextRoundName}排序`))
 const dialogHint = computed(() => {
   if (isChampion.value) return '安排决赛桌、桌长和参与评审'
-  if (props.earlyDraft) return '先安排桌次和人员，每桌确认后自动加入候选酒款'
+  if (props.earlyDraft) return ''
   return '安排桌长、参与评审和候选酒款'
-})
-const candidateLabel = computed(() => (isChampion.value ? '各组最高奖项' : (props.earlyDraft ? '已确认候选' : '当前候选')))
-const candidateCountDisplay = computed(() => props.advancedPool.length)
-const candidateHint = computed(() => {
-  if (isChampion.value) return '用于决出全场总冠军'
-  if (props.earlyDraft) return `每桌确认后自动加入${props.nextRoundName}`
-  return `用于${props.nextRoundName}分桌`
 })
 const finishLabel = computed(() => (isChampion.value ? '创建决赛草稿并去分桌' : '创建草稿并去分桌'))
 const isTargetCountFixed = computed(() => Boolean(selectedTargetOption.value?.fixedTargetCount))
@@ -217,6 +203,59 @@ button:disabled {
   border: 1px solid rgba(219, 232, 237, 0.1);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.026);
+}
+
+.field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.help-hint {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  color: #a9bac2;
+  border: 1px solid rgba(169, 186, 194, 0.55);
+  border-radius: 50%;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1;
+  cursor: help;
+  outline: none;
+}
+
+.help-hint::after {
+  position: absolute;
+  z-index: 5;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  width: max-content;
+  max-width: 260px;
+  padding: 8px 10px;
+  color: #e6edf0;
+  border: 1px solid rgba(219, 232, 237, 0.14);
+  border-radius: 6px;
+  background: #1a252a;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+  content: attr(data-tooltip);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.45;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 4px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.help-hint:hover::after,
+.help-hint:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
 }
 
 .round-config-panel label {

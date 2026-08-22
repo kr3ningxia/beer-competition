@@ -1,6 +1,7 @@
 package com.beercompetition.controller.admin;
 
 import com.beercompetition.common.result.Result;
+import com.beercompetition.common.result.PageResult;
 import com.beercompetition.pojo.dto.CompetitionBaseInfoUpdateRequest;
 import com.beercompetition.pojo.dto.CompetitionCreateRequest;
 import com.beercompetition.pojo.dto.CompetitionReopenRegistrationRequest;
@@ -94,6 +95,13 @@ public class AdminCompetitionController {
     @GetMapping("/{id}/entry-pool")
     public Result<List<CompetitionEntryVO>> getCompetitionEntryPool(@PathVariable Long id) {
         return Result.success(competitionQueryService.getCompetitionEntryPool(id));
+    }
+
+    @GetMapping("/{id}/entry-pool/page")
+    public Result<PageResult<CompetitionEntryVO>> getCompetitionEntryPoolPage(@PathVariable Long id,
+                                                                                @RequestParam(defaultValue = "1") Integer page,
+                                                                                @RequestParam(defaultValue = "20") Integer pageSize) {
+        return Result.success(competitionQueryService.getCompetitionEntryPoolPage(id, page, pageSize));
     }
 
     /**

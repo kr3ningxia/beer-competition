@@ -13,6 +13,11 @@ import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.JudgeAccountMapper;
 import com.beercompetition.mapper.JudgeAssignmentMapper;
 import com.beercompetition.mapper.JudgeTableMapper;
+import com.beercompetition.mapper.JudgeScoreSessionMapper;
+import com.beercompetition.mapper.RoundJudgeRankingDraftMapper;
+import com.beercompetition.mapper.RoundTableConfirmationMapper;
+import com.beercompetition.mapper.RoundTableMemberMapper;
+import com.beercompetition.mapper.ScoreRecordMapper;
 import com.beercompetition.mapper.PortalAccountMapper;
 import com.beercompetition.pojo.dto.AdminJudgePhoneUpdateRequest;
 import com.beercompetition.pojo.dto.AdminJudgeStatusUpdateRequest;
@@ -29,6 +34,11 @@ import com.beercompetition.pojo.po.Competition;
 import com.beercompetition.pojo.po.JudgeAccount;
 import com.beercompetition.pojo.po.JudgeAssignment;
 import com.beercompetition.pojo.po.JudgeTable;
+import com.beercompetition.pojo.po.JudgeScoreSession;
+import com.beercompetition.pojo.po.RoundJudgeRankingDraft;
+import com.beercompetition.pojo.po.RoundTableConfirmation;
+import com.beercompetition.pojo.po.RoundTableMember;
+import com.beercompetition.pojo.po.ScoreRecord;
 import com.beercompetition.pojo.po.PortalAccount;
 import com.beercompetition.pojo.vo.CompetitionVO;
 import com.beercompetition.pojo.vo.JudgeAccountVO;
@@ -57,6 +67,11 @@ public class JudgeServiceImpl implements JudgeService {
     private final JudgeAccountMapper judgeAccountMapper;
     private final JudgeAssignmentMapper judgeAssignmentMapper;
     private final JudgeTableMapper judgeTableMapper;
+    private final JudgeScoreSessionMapper judgeScoreSessionMapper;
+    private final RoundJudgeRankingDraftMapper roundJudgeRankingDraftMapper;
+    private final RoundTableConfirmationMapper roundTableConfirmationMapper;
+    private final RoundTableMemberMapper roundTableMemberMapper;
+    private final ScoreRecordMapper scoreRecordMapper;
     private final CompetitionMapper competitionMapper;
     private final PortalAccountMapper portalAccountMapper;
     private final BreweryMapper breweryMapper;
@@ -196,6 +211,28 @@ public class JudgeServiceImpl implements JudgeService {
         // 3) 组装并返回结果
         JudgeAccount updated = judgeAccountMapper.selectById(account.getId());
         return toJudgeDetailVO(updated, buildPhoneConflictContext(List.of(updated)));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteJudge(String publicId) {
+        JudgeAccount account = requireJudgeByPublicId(publicId);
+        Long judgeId = account.getId();
+        if (hasAssignments(judgeId)
+                || judgeScoreSessionMapper.selectCount(new LambdaQueryWrapper<JudgeScoreSession>()
+                .eq(JudgeScoreSession::getJudgeAccountId, judgeId)) > 0
+                || roundJudgeRankingDraftMapper.selectCount(new LambdaQueryWrapper<RoundJudgeRankingDraft>()
+                .eq(RoundJudgeRankingDraft::getJudgeAccountId, judgeId)) > 0
+                || roundTableConfirmationMapper.selectCount(new LambdaQueryWrapper<RoundTableConfirmation>()
+                .eq(RoundTableConfirmation::getJudgeAccountId, judgeId)) > 0
+                || roundTableMemberMapper.selectCount(new LambdaQueryWrapper<RoundTableMember>()
+                .eq(RoundTableMember::getJudgeAccountId, judgeId)) > 0
+                || scoreRecordMapper.selectCount(new LambdaQueryWrapper<ScoreRecord>()
+                .eq(ScoreRecord::getJudgeAccountId, judgeId)) > 0) {
+            throw new BaseException("该评审已有编排或评审记录，不能删除，请先停用");
+        }
+        judgeAccountMapper.deleteById(judgeId);
+        writeAdminLog("JUDGE_DELETE", account.getPublicId(), "删除评审账号");
     }
 
     @Override

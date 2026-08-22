@@ -10,4 +10,6 @@ import java.util.List;
 public interface CompetitionFeedbackQueryService {
 
     List<AdminFeedbackReviewEntryVO> getFeedbackReviewEntries(Long competitionId);
+
+    com.beercompetition.pojo.vo.AdminFeedbackReviewPageVO getFeedbackReviewPage(Long competitionId, Integer page, Integer pageSize);
 }

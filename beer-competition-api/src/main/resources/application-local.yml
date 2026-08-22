@@ -1,3 +1,5 @@
 app:
   sms:
     mock-enabled: ${APP_SMS_MOCK_ENABLED:true}
+  wechat-pay:
+    mode: MOCK

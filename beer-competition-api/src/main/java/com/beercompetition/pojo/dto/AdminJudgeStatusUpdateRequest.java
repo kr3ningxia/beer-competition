@@ -10,6 +10,6 @@ public class AdminJudgeStatusUpdateRequest {
     @NotNull(message = "评审状态不能为空")
     private Integer status;
 
-    @Size(max = 255, message = "审核备注最多 255 个字符")
+    @Size(max = 200, message = "备注最多 200 个字符")
     private String reviewRemark;
 }

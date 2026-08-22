@@ -7,12 +7,12 @@
       </button>
       <p class="eyebrow">{{ table?.roundName || '排序轮次' }}</p>
       <h1 class="page-title">{{ table?.tableName || '排序任务' }}</h1>
-      <p class="ranking-mode">{{ rankingModeText }}</p>
+      <p v-if="rankingModeText" class="ranking-mode">{{ rankingModeText }}</p>
     </section>
 
     <section class="card">
       <div class="split">
-        <h2 class="section-title compact">{{ canSubmitFinal ? '本桌最终排序' : '我的参考排序' }}</h2>
+        <h2 class="section-title compact">{{ canSubmitFinal ? '本桌排序' : '我的参考排序' }}</h2>
         <span :class="['pill', submitted || draftSaved ? 'status-ok' : 'status-warn']">{{ rankingStatusText }}</span>
       </div>
 
@@ -114,16 +114,22 @@
           v-for="entry in entries"
           :key="entry.id"
           :class="['entry-row', { dragging: draggedEntryId === entry.id, used: isEntryUsed(entry.id) }]"
-          draggable="true"
-          @dragstart="dragEntry(entry, $event)"
-          @dragend="endDrag"
-          @pointerdown="startPointerDrag(entry, $event)"
-          @pointermove="movePointerDrag($event)"
-          @pointerup="endPointerDrag($event)"
-          @pointercancel="cancelPointerDrag"
           @click="handleEntryClick(entry, $event)"
         >
           <div class="entry-row-head">
+            <button
+              class="entry-drag-handle"
+              type="button"
+              aria-label="按住拖动酒款"
+              title="按住拖动酒款"
+              @pointerdown="startPointerDrag(entry, $event)"
+              @pointermove="movePointerDrag($event)"
+              @pointerup="endPointerDrag($event)"
+              @pointercancel="cancelPointerDrag"
+              @click.stop
+            >
+              <span v-for="line in 3" :key="line" aria-hidden="true"></span>
+            </button>
             <div class="entry-main">
               <strong>{{ displayShortCode(entry) }}</strong>
               <small>{{ entryMeta(entry) }}</small>
@@ -133,13 +139,14 @@
               <button
                 class="entry-expand-button"
                 type="button"
-                :aria-label="`${displayShortCode(entry)}详情`"
+                :aria-label="expandedEntryId === entry.id ? `收起${displayShortCode(entry)}详情` : `展开${displayShortCode(entry)}详情`"
                 :aria-expanded="expandedEntryId === entry.id"
                 @click.stop="toggleEntryDetail(entry)"
               >
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="m6 9 6 6 6-6" />
                 </svg>
+                <span>{{ expandedEntryId === entry.id ? '收起详情' : '展开详情' }}</span>
               </button>
             </div>
           </div>
@@ -344,7 +351,7 @@ const submitResults = computed(() => slots.value
 const rankingModeText = computed(() => {
   const count = table.value?.targetCount || slots.value.length || 0
   if (canSubmitFinal.value) {
-    if (table.value?.targetMode === 'MEDALS') return '组别决战：确认奖项，未设置的奖项可留空'
+    if (table.value?.targetMode === 'MEDALS') return ''
     if (table.value?.targetMode === 'CHAMPION') return '总冠军轮：确认全场总冠军'
     return `继续筛选：选择并排序前 ${count} 款`
   }
@@ -430,15 +437,6 @@ function closeStyleDetail() {
   styleDetailEntry.value = null
 }
 
-function dragEntry(entry, event) {
-  if (!canEdit.value) return
-  draggedEntryId.value = entry.id
-  if (event?.dataTransfer) {
-    event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.setData('text/plain', String(entry.id))
-  }
-}
-
 function endDrag() {
   draggedEntryId.value = null
   activeDropRank.value = null
@@ -452,7 +450,7 @@ function dropEntryOnSlot(slot, event) {
 }
 
 function startPointerDrag(entry, event) {
-  if (!canEdit.value || event.pointerType === 'mouse') return
+  if (!canEdit.value) return
   pointerEntryId.value = entry.id
   pointerStart.value = { x: event.clientX, y: event.clientY }
   event.currentTarget?.setPointerCapture?.(event.pointerId)
@@ -943,12 +941,42 @@ onBeforeUnmount(() => {
 .entry-row-head {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
   gap: 10px;
+}
+
+.entry-drag-handle {
+  display: inline-flex;
+  flex: 0 0 30px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  width: 30px;
+  height: 30px;
+  margin-top: 1px;
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+  padding: 0 7px;
+  color: #667085;
+  background: #fff;
+  cursor: grab;
+  touch-action: none;
+}
+
+.entry-drag-handle:active {
+  cursor: grabbing;
+}
+
+.entry-drag-handle span {
+  display: block;
+  width: 100%;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
 }
 
 .entry-main {
   min-width: 0;
+  flex: 1 1 auto;
 }
 
 .entry-main strong,
@@ -981,14 +1009,19 @@ onBeforeUnmount(() => {
 }
 
 .entry-expand-button {
-  display: grid;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   place-items: center;
-  width: 30px;
+  gap: 5px;
+  min-width: 30px;
   height: 30px;
   border: 1px solid #e4e7ec;
   border-radius: 8px;
+  padding: 0 7px;
   color: #475467;
   background: #fff;
+  white-space: nowrap;
 }
 
 .entry-expand-button svg {
@@ -1006,8 +1039,13 @@ onBeforeUnmount(() => {
   transform: rotate(180deg);
 }
 
+.entry-expand-button span {
+  font-size: 12px;
+  font-weight: 750;
+}
+
 .entry-supplement {
-  margin: 8px 0 0;
+  margin: 8px 0 0 40px;
   color: #667085;
   font-size: 13px;
   font-weight: 700;
@@ -1018,7 +1056,7 @@ onBeforeUnmount(() => {
 .entry-detail-panel {
   display: grid;
   gap: 10px;
-  margin-top: 12px;
+  margin: 12px 0 0 40px;
   border-top: 1px solid #edf0f3;
   padding-top: 12px;
 }

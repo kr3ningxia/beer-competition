@@ -167,7 +167,8 @@ public class CompetitionScoringExportServiceImpl implements CompetitionScoringEx
                 new SimpleXlsxBuilder.Sheet("评审原始评分", buildPersonalScoreRows(entries, categoryById, labelByEntryId, scoresByEntry, judgeById)),
                 new SimpleXlsxBuilder.Sheet("评分维度明细", buildScoreDimensionRows(entries, labelByEntryId, scoresByEntry, judgeById)),
                 new SimpleXlsxBuilder.Sheet("桌长汇总", buildCaptainSummaryRows(entries, categoryById, labelByEntryId, scoresByEntry)),
-                new SimpleXlsxBuilder.Sheet("轮次与奖项", buildRoundAwardRows(roundResults, awardsByEntry, entryById, categoryById, labelByEntryId, roundById, tableById))
+                new SimpleXlsxBuilder.Sheet("轮次与奖项", buildRoundAwardRows(roundResults, awardsByEntry, entryById, categoryById,
+                        labelByEntryId, roundById, tableById, breweryById))
         );
 
         // 3) 返回可被 Excel 直接打开的 xlsx 文件
@@ -185,7 +186,7 @@ public class CompetitionScoringExportServiceImpl implements CompetitionScoringEx
                                                        Map<Long, RoundTable> tableById,
                                                        Map<Long, List<AwardResult>> awardsByEntry) {
         List<List<String>> rows = new ArrayList<>();
-        rows.add(List.of("匿名编号", "短编号", "酒款名称", "厂牌", "联系人", "投递组别", "基础风格", "酒精度",
+        rows.add(List.of("匿名编号", "短编号", "酒款名称", "厂牌", "联系人", "手机号", "微信号", "投递组别", "基础风格", "酒精度",
                 "额外报名信息", "报名状态", "入库状态", "发布状态", "原始评分数", "桌长共识分",
                 "桌长综合评语", "轮次记录", "奖项结果"));
         for (BeerEntry entry : entries) {
@@ -198,6 +199,8 @@ public class CompetitionScoringExportServiceImpl implements CompetitionScoringEx
                     firstText(entry.getName(), ""),
                     brewery == null ? "" : firstText(brewery.getCompanyName(), ""),
                     brewery == null ? "" : firstText(brewery.getContactName(), ""),
+                    brewery == null ? "" : firstText(brewery.getPhone(), ""),
+                    brewery == null ? "" : firstText(brewery.getWechat(), ""),
                     categoryName(entry, categoryById),
                     firstText(entry.getStyle(), ""),
                     toPlain(entry.getAbv()),
@@ -308,9 +311,10 @@ public class CompetitionScoringExportServiceImpl implements CompetitionScoringEx
                                                    Map<Long, CompetitionCategory> categoryById,
                                                    Map<Long, EntryScanLabel> labelByEntryId,
                                                    Map<Long, CompetitionRound> roundById,
-                                                   Map<Long, RoundTable> tableById) {
+                                                   Map<Long, RoundTable> tableById,
+                                                   Map<Long, Brewery> breweryById) {
         List<List<String>> rows = new ArrayList<>();
-        rows.add(List.of("记录类型", "匿名编号", "短编号", "酒款名称", "投递组别", "轮次", "评审桌",
+        rows.add(List.of("记录类型", "匿名编号", "短编号", "酒款名称", "厂牌", "联系人", "手机号", "微信号", "投递组别", "轮次", "评审桌",
                 "结果口径", "排名", "锁定状态", "奖项名称", "奖项状态", "发布时间"));
         for (RoundResult result : roundResults) {
             BeerEntry entry = entryById.get(result.getBeerEntryId());
@@ -319,11 +323,16 @@ public class CompetitionScoringExportServiceImpl implements CompetitionScoringEx
             }
             CompetitionRound round = roundById.get(result.getRoundId());
             RoundTable table = tableById.get(result.getRoundTableId());
+            Brewery brewery = breweryById.get(entry.getBreweryId());
             rows.add(List.of(
                     "轮次记录",
                     anonymousCode(entry, labelByEntryId),
                     shortCode(entry, labelByEntryId),
                     firstText(entry.getName(), ""),
+                    brewery == null ? "" : firstText(brewery.getCompanyName(), ""),
+                    brewery == null ? "" : firstText(brewery.getContactName(), ""),
+                    brewery == null ? "" : firstText(brewery.getPhone(), ""),
+                    brewery == null ? "" : firstText(brewery.getWechat(), ""),
                     categoryName(entry, categoryById),
                     round == null ? "" : firstText(round.getRoundName(), ""),
                     table == null ? "" : firstText(table.getTableName(), ""),
@@ -343,11 +352,16 @@ public class CompetitionScoringExportServiceImpl implements CompetitionScoringEx
                 }
                 CompetitionRound round = roundById.get(award.getSourceRoundId());
                 RoundTable table = tableById.get(award.getSourceRoundTableId());
+                Brewery brewery = breweryById.get(entry.getBreweryId());
                 rows.add(List.of(
                         "奖项结果",
                         anonymousCode(entry, labelByEntryId),
                         shortCode(entry, labelByEntryId),
                         firstText(entry.getName(), ""),
+                        brewery == null ? "" : firstText(brewery.getCompanyName(), ""),
+                        brewery == null ? "" : firstText(brewery.getContactName(), ""),
+                        brewery == null ? "" : firstText(brewery.getPhone(), ""),
+                        brewery == null ? "" : firstText(brewery.getWechat(), ""),
                         categoryName(entry, categoryById),
                         round == null ? "" : firstText(round.getRoundName(), ""),
                         table == null ? "" : firstText(table.getTableName(), ""),

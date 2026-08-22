@@ -22,6 +22,7 @@ public class RoundTableVO {
     private String targetMode;
     private String status;
     private List<String> entryUuids;
+    private List<String> advancedEntryUuids;
     private Integer advancedCount;
     private Integer finalCount;
     private Integer evaluatedCount;

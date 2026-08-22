@@ -8,6 +8,7 @@ import com.beercompetition.pojo.vo.CompetitionQuickSummaryVO;
 import com.beercompetition.pojo.vo.CompetitionVO;
 import com.beercompetition.pojo.vo.PortalCompetitionVO;
 import com.beercompetition.pojo.vo.PortalHomeVO;
+import com.beercompetition.common.result.PageResult;
 
 import java.util.List;
 
@@ -33,6 +34,8 @@ public interface CompetitionQueryService {
     CompetitionProgressVO getCompetitionProgress(Long id);
 
     List<CompetitionEntryVO> getCompetitionEntryPool(Long id);
+
+    PageResult<CompetitionEntryVO> getCompetitionEntryPoolPage(Long id, Integer page, Integer pageSize);
 
     CompetitionQuickSummaryVO getCompetitionQuickSummary(Long id);
 

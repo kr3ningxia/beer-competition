@@ -24,14 +24,9 @@
         </component>
       </nav>
 
-      <div class="system-card">
-        <div class="system-status">
-          <span />
-          <strong>系统运行正常</strong>
-        </div>
+      <div class="sidebar-actions">
         <el-button class="sidebar-logout" text :icon="SwitchButton" @click="logout">退出登录</el-button>
       </div>
-      <SiteFilingFooter tone="dark" compact />
     </aside>
 
     <section class="content">
@@ -55,13 +50,11 @@ import {
   Document,
   Files,
   Download,
-  House,
   Medal,
   SwitchButton,
   User,
   UserFilled,
 } from '@element-plus/icons-vue'
-import SiteFilingFooter from '@/components/SiteFilingFooter.vue'
 import { clearSession, getDisplayName } from '@/utils/auth'
 
 const router = useRouter()
@@ -70,9 +63,8 @@ const displayName = getDisplayName('admin')
 const isDashboard = computed(() => ['/admin/dashboard', '/admin/judges', '/admin/admin-users', '/admin/operation-logs', '/admin/entries', '/admin/bank-transfers', '/admin/style-libraries', '/admin/exports'].includes(route.path) || route.path.startsWith('/admin/competitions'))
 
 const navItems = [
-  { path: '/admin/dashboard', label: '首页', icon: House },
-  { path: '/admin/live-board', label: '现场看板', icon: DataBoard },
   { path: '/admin/competitions', label: '比赛管理', icon: Medal },
+  { path: '/admin/live-board', label: '现场看板', icon: DataBoard },
   { path: '/admin/judges', label: '评审列表', icon: User },
   { path: '/admin/entries', label: '酒款管理', icon: Document },
   { path: '/admin/bank-transfers', label: '转账确认', icon: Document },
@@ -206,43 +198,17 @@ function logout() {
   opacity: 0.82;
 }
 
-.system-card {
-  display: grid;
-  gap: 10px;
+.sidebar-actions {
   margin-top: auto;
-  padding: 12px;
-  border: 1px solid rgba(218, 231, 236, 0.06);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.system-status {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.system-status > span {
-  width: 8px;
-  height: 8px;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: #53c979;
-}
-
-.system-card strong {
-  display: block;
-  color: #b9cad0;
-  font-size: 13px;
-  font-weight: 600;
+  padding-top: 16px;
 }
 
 .sidebar-logout {
   justify-content: flex-start;
-  width: fit-content;
-  height: 26px;
-  margin-left: 18px;
-  padding: 0 4px;
+  width: 100%;
+  height: 40px;
+  margin: 0;
+  padding: 0 12px;
   color: #657982;
   font-size: 12px;
   font-weight: 600;
@@ -316,8 +282,5 @@ function logout() {
     overflow: visible;
   }
 
-  .system-card {
-    display: none;
-  }
 }
 </style>

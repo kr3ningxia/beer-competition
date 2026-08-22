@@ -98,11 +98,19 @@
       </div>
       <div class="entry-list">
         <article v-for="entry in entries" :key="entry.uuid" class="entry-row static-row">
-          <span>
+          <span class="static-entry-main">
             <strong>{{ displayShortCode(entry) }}</strong>
             <small>组别：{{ entry.categoryName || '-' }}</small>
             <small>风格：{{ styleDisplayName(entry) || '-' }}</small>
           </span>
+          <button
+            class="entry-detail-button"
+            type="button"
+            :aria-label="`查看${entry.shortCode || ''}酒款详情`"
+            @click.stop="openEntryDetail(entry)"
+          >
+            详情
+          </button>
         </article>
       </div>
       <p v-if="!entries.length" class="empty-note">当前还没有排序酒款，请联系现场工作人员确认。</p>
@@ -153,6 +161,28 @@
         <span class="pill">{{ entries.length }} 款</span>
       </div>
       <p v-if="!isScoreRoundCaptain" class="task-hint">{{ taskSectionHint }}</p>
+      <div v-if="entries.length" class="entry-tools" aria-label="酒款筛选和排序">
+        <div class="entry-filter" role="group" aria-label="评分状态">
+          <button
+            v-for="option in scoreFilterOptions"
+            :key="option.value"
+            type="button"
+            :class="{ active: scoreFilter === option.value }"
+            :aria-pressed="scoreFilter === option.value"
+            @click="scoreFilter = option.value"
+          >
+            {{ option.label }}
+          </button>
+        </div>
+        <label class="entry-sort">
+          <span>排序</span>
+          <select v-model="scoreSort" class="select">
+            <option value="default">默认顺序</option>
+            <option value="score-desc">分数从高到低</option>
+            <option value="score-asc">分数从低到高</option>
+          </select>
+        </label>
+      </div>
       <section v-if="isScoreRoundCaptain && entries.length" :class="['round-checkout', { ready: tableReadyForReview }]">
         <div>
           <strong>{{ tableCheckoutTitle }}</strong>
@@ -167,9 +197,9 @@
           {{ tableCheckoutActionLabel }}
         </button>
       </section>
-      <div v-if="isScoreRoundCaptain && entries.length" class="captain-entry-list">
+      <div v-if="isScoreRoundCaptain && displayedEntries.length" class="captain-entry-list">
         <article
-          v-for="entry in entries"
+          v-for="entry in displayedEntries"
           :key="entry.uuid"
           :class="['captain-entry-card', { finalized: entry.finalized }]"
         >
@@ -177,6 +207,7 @@
             <span>
               <strong>{{ displayShortCode(entry) }}</strong>
               <small>{{ entry.categoryName || '-' }} · {{ styleDisplayName(entry) || '-' }}</small>
+              <small v-if="entryScore(entry) !== null" class="entry-score">评分：{{ entryScore(entry) }}</small>
             </span>
             <em :class="['pill', entryStatus(entry).className]">{{ entryStatus(entry).label }}</em>
           </button>
@@ -197,6 +228,10 @@
           </div>
         </article>
       </div>
+      <section v-else-if="isScoreRoundCaptain && entries.length && !displayedEntries.length" class="empty-diagnostic">
+        <h3>没有符合条件的酒款</h3>
+        <p>请切换评分状态或排序方式查看本桌酒款。</p>
+      </section>
       <section v-else-if="isScoreRoundCaptain" class="empty-diagnostic">
         <h3>{{ emptyStateTitle }}</h3>
         <p>{{ emptyStateMessage }}</p>
@@ -206,7 +241,7 @@
       </section>
       <div v-else class="entry-list">
         <button
-          v-for="entry in entries"
+          v-for="entry in displayedEntries"
           :key="entry.uuid"
           type="button"
           class="entry-row"
@@ -217,12 +252,14 @@
             <small>组别：{{ entry.categoryName || '-' }}</small>
             <small>风格：{{ styleDisplayName(entry) || '-' }}</small>
             <small v-if="isCaptain">我的评分：{{ entry.scored ? '已提交' : '待提交' }}</small>
+            <small v-if="entryScore(entry) !== null" class="entry-score">评分：{{ entryScore(entry) }}</small>
           </span>
           <em :class="['pill', entryStatus(entry).className]">
             {{ entryStatus(entry).label }}
           </em>
         </button>
       </div>
+      <p v-if="entries.length && !displayedEntries.length" class="empty-note">当前筛选条件下暂无酒款。</p>
     </section>
     </template>
 
@@ -247,6 +284,9 @@ const currentRoundTable = ref(null)
 const rankingSlots = ref([])
 const scoreConfirmation = ref(null)
 const rankingConfirmation = ref(null)
+const scoreFilter = ref('all')
+const scoreSort = ref('default')
+const myScoreByEntry = ref(new Map())
 const scannerOpen = ref(false)
 const manualCode = ref('')
 const scannerMessage = ref('将二维码放入取景框内')
@@ -361,6 +401,30 @@ const tableSubmitted = computed(() => (
   captainBoard.value?.roundTable?.status === 'SUBMITTED'
   || currentRoundTable.value?.status === 'SUBMITTED'
 ))
+const scoreFilterOptions = [
+  { value: 'all', label: '全部' },
+  { value: 'scored', label: '已打分' },
+  { value: 'unscored', label: '未打分' },
+]
+const displayedEntries = computed(() => {
+  const filtered = entries.value.filter((entry) => (
+    scoreFilter.value === 'all'
+      || (scoreFilter.value === 'scored' && entry.scored)
+      || (scoreFilter.value === 'unscored' && !entry.scored)
+  ))
+  if (scoreSort.value === 'default') return filtered
+  return filtered
+    .map((entry, index) => ({ entry, index, score: entryScore(entry) }))
+    .sort((left, right) => {
+      const leftMissing = left.score === null
+      const rightMissing = right.score === null
+      if (leftMissing !== rightMissing) return leftMissing ? 1 : -1
+      if (leftMissing) return left.index - right.index
+      const direction = scoreSort.value === 'score-desc' ? -1 : 1
+      return (left.score - right.score) * direction || left.index - right.index
+    })
+    .map(({ entry }) => entry)
+})
 const tableCheckoutTitle = computed(() => {
   if (!entries.value.length) return ''
   if (tableSubmitted.value) return '本桌已提交'
@@ -476,6 +540,19 @@ function displayShortCode(entry) {
 
 function styleDisplayName(entry) {
   return [entry?.styleCode, entry?.style].filter(Boolean).join(' ')
+}
+
+function openEntryDetail(entry) {
+  if (!entry?.uuid) return
+  router.push(`/scan-result/${encodeURIComponent(String(entry.uuid).toUpperCase())}`)
+}
+
+function entryScore(entry) {
+  const value = isScoreRoundCaptain.value
+    ? entry?.finalScore
+    : myScoreByEntry.value.get(entry?.uuid)?.totalScore
+  const score = Number(value)
+  return Number.isFinite(score) ? score : null
 }
 
 function formatSeconds(value) {
@@ -635,6 +712,7 @@ async function syncTaskDashboard(options = {}) {
     rankingSlots.value = []
     scoreConfirmation.value = null
     rankingConfirmation.value = null
+    myScoreByEntry.value = new Map()
     if (!current.value || !current.value.roundTableId) {
       entries.value = []
       return
@@ -657,6 +735,7 @@ async function syncTaskDashboard(options = {}) {
     scoreConfirmation.value = table.scoreConfirmation || null
     rankingConfirmation.value = table.rankingConfirmation || null
     const myScoredUuids = new Set(myScores.map((score) => score.beerUuid))
+    myScoreByEntry.value = new Map(myScores.map((score) => [score.beerUuid, score]))
     entries.value = (table.entries || []).map((entry) => ({
       ...entry,
       scored: myScoredUuids.has(entry.uuid),
@@ -1213,6 +1292,24 @@ onBeforeUnmount(() => {
   cursor: default;
 }
 
+.static-entry-main {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.entry-detail-button {
+  flex: 0 0 auto;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  padding: 8px 11px;
+  color: #344054;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 850;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .entry-row strong,
 .entry-row small {
   display: block;
@@ -1224,9 +1321,75 @@ onBeforeUnmount(() => {
   line-height: 1.35;
 }
 
+.entry-row .entry-score,
+.captain-entry-main .entry-score {
+  color: #a75517;
+  font-weight: 850;
+}
+
 .entry-row em {
   flex: 0 0 auto;
   font-style: normal;
+}
+
+.entry-tools {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  margin: 12px 0;
+  padding: 10px;
+  border: 1px solid #eaecf0;
+  border-radius: 8px;
+  background: #f8faf9;
+}
+
+.entry-filter {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 3px;
+  padding: 3px;
+  border-radius: 8px;
+  background: #e6ece8;
+}
+
+.entry-filter button {
+  min-height: 34px;
+  border: 0;
+  border-radius: 6px;
+  padding: 5px 8px;
+  color: #667085;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.entry-filter button.active {
+  color: #18222f;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(24, 34, 47, 0.12);
+}
+
+.entry-sort {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.entry-sort .select {
+  width: auto;
+  min-width: 106px;
+  min-height: 34px;
+  margin-top: 0;
+  padding: 6px 24px 6px 8px;
+  color: #344054;
+  background: #fff;
+  font-size: 12px;
 }
 
 @media (max-width: 380px) {
@@ -1236,6 +1399,18 @@ onBeforeUnmount(() => {
 
   .entry-row {
     align-items: flex-start;
+  }
+
+  .entry-tools {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .entry-sort {
+    justify-content: space-between;
+  }
+
+  .entry-sort .select {
+    flex: 1;
   }
 }
 </style>

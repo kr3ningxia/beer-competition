@@ -21,7 +21,7 @@
           <el-button type="primary" :loading="saving" @click="saveProfile">保存资料</el-button>
         </div>
 
-        <el-form :model="profileForm" label-position="top" class="profile-form">
+        <el-form ref="profileFormRef" :model="profileForm" :rules="profileRules" label-position="top" class="profile-form">
           <div class="form-row">
             <el-form-item label="账号名称">
               <el-input v-model="profileForm.displayName" maxlength="64" />
@@ -46,7 +46,13 @@
             </el-form-item>
           </div>
 
-          <el-form-item label="微信号">
+          <el-form-item prop="wechat">
+            <template #label>
+              <span class="wechat-label">
+                <span>微信号</span>
+                <el-checkbox v-model="sameAsPhone" @change="applySameAsPhone">与手机号相同</el-checkbox>
+              </span>
+            </template>
             <el-input v-model="profileForm.wechat" maxlength="64" />
           </el-form-item>
         </el-form>
@@ -163,7 +169,12 @@ const profileForm = reactive({
   wechat: '',
   avatarUrl: '',
 })
+const profileFormRef = ref()
+const profileRules = {
+  wechat: [{ required: true, message: '请填写微信号', trigger: 'blur' }],
+}
 const sameAsAccountName = ref(false)
+const sameAsPhone = ref(false)
 const saving = ref(false)
 const uploadingAvatar = ref(false)
 const avatarUploadRef = ref()
@@ -223,6 +234,7 @@ const avatarCropImageStyle = computed(() => ({
 onMounted(async () => {
   Object.assign(profileForm, await fetchPortalProfile())
   sameAsAccountName.value = Boolean(profileForm.displayName && profileForm.companyName === profileForm.displayName)
+  sameAsPhone.value = Boolean(profileForm.phone && profileForm.wechat === profileForm.phone)
 })
 
 onUnmounted(() => {
@@ -253,6 +265,8 @@ watch(() => avatarCrop.open, async (open) => {
 })
 
 async function saveProfile() {
+  const valid = await profileFormRef.value?.validate().catch(() => false)
+  if (!valid) return
   saving.value = true
   try {
     const data = await updatePortalProfile({
@@ -465,6 +479,12 @@ function applySameAsAccountName() {
   }
 }
 
+function applySameAsPhone() {
+  if (sameAsPhone.value) {
+    profileForm.wechat = profileForm.phone
+  }
+}
+
 function resolveAvatarUrl(value) {
   if (!value) return ''
   if (/^https?:\/\//i.test(value) || value.startsWith('data:')) {
@@ -494,7 +514,7 @@ function normalizePortalPath(value) {
   gap: 22px;
 }
 
-.profile-hero {
+.profile-page .profile-hero {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -629,9 +649,30 @@ function normalizePortalPath(value) {
   font-weight: 500;
 }
 
+.wechat-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.wechat-label :deep(.el-checkbox) {
+  height: auto;
+  margin-right: 0;
+  font-weight: 500;
+}
+
 .profile-card :deep(.el-form-item__label) {
+  display: flex;
+  align-items: center;
   color: #5c5045;
   font-weight: 700;
+}
+
+.profile-card :deep(.el-form-item.is-required:not(.is-no-asterisk) > .el-form-item__label::before) {
+  flex: 0 0 auto;
+  margin-right: 4px;
 }
 
 .profile-card :deep(.el-input__wrapper),

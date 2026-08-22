@@ -457,7 +457,7 @@ async function downloadCertificate() {
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = selectedEntry.value.certificateFilename || `${selectedEntry.value.entryName || '证书'}.pdf`
+    link.download = selectedEntry.value.certificateFilename || buildCertificateFilename(blob)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -465,6 +465,16 @@ async function downloadCertificate() {
   } catch {
     ElMessage.error('证书暂未开放下载')
   }
+}
+
+function buildCertificateFilename(blob) {
+  const extensionByType = {
+    'application/pdf': 'pdf',
+    'image/png': 'png',
+    'image/jpeg': 'jpg',
+  }
+  const extension = extensionByType[blob.type] || 'bin'
+  return `${selectedEntry.value?.entryName || '证书'}.${extension}`
 }
 </script>
 

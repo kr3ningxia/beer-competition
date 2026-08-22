@@ -20,6 +20,10 @@ export function fetchCompetitionEntryPool(id) {
   return request.get(`/api/admin/competitions/${id}/entry-pool`, { authScope: 'admin' })
 }
 
+export function fetchCompetitionEntryPoolPage(id, params = {}) {
+  return request.get(`/api/admin/competitions/${id}/entry-pool/page`, { params, authScope: 'admin' })
+}
+
 export function fetchCompetitionQuickSummary(id) {
   return request.get(`/api/admin/competitions/${id}/quick-summary`, { authScope: 'admin' })
 }
@@ -64,6 +68,10 @@ export function uploadCompetitionSponsorLogo(id, file) {
 
 export function fetchCompetitionFeedbackReview(id) {
   return request.get(`/api/admin/competitions/${id}/feedback-review`, { authScope: 'admin' })
+}
+
+export function fetchCompetitionFeedbackReviewPage(id, params = {}) {
+  return request.get(`/api/admin/competitions/${id}/feedback-review/page`, { params, authScope: 'admin' })
 }
 
 export function updateCompetitionFeedbackComment(competitionId, scoreRecordId, payload) {
@@ -207,6 +215,10 @@ export function updateJudgePhone(publicId, payload) {
 
 export function updateJudgeStatus(publicId, payload) {
   return request.patch(`/api/admin/judges/${publicId}/status`, payload, { authScope: 'admin' })
+}
+
+export function deleteJudge(publicId) {
+  return request.delete(`/api/admin/judges/${publicId}`, { authScope: 'admin' })
 }
 
 export function createAssignment(payload) {

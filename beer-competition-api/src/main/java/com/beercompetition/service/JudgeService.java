@@ -30,6 +30,8 @@ public interface JudgeService {
 
     JudgeAccountVO updateJudgeStatus(String publicId, AdminJudgeStatusUpdateRequest request);
 
+    void deleteJudge(String publicId);
+
     void createAssignment(JudgeAssignmentCreateRequest request);
 
     void updateCompetitionAssignments(Long competitionId, JudgeAssignmentBatchUpdateRequest request);

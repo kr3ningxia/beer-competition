@@ -2,7 +2,6 @@
   <div class="analytics-workbench">
     <div v-if="loading" class="analytics-state">
       <strong>正在加载数据分析</strong>
-      <small>请稍等</small>
     </div>
 
     <div v-else-if="!analytics" class="analytics-state empty">
@@ -12,11 +11,6 @@
 
     <template v-else>
       <header class="analytics-hero">
-        <div class="hero-copy">
-          <p class="eyebrow">数据分析</p>
-          <h2>{{ competitionName }}</h2>
-          <p>围绕报名结构、付款构成、送样进度和评语文本做聚合展示，主办方直接看结果。</p>
-        </div>
         <div class="hero-meta">
           <span>生成于 {{ formatDateTime(analytics.generatedAt) }}</span>
           <span>评分记录 {{ summary.scoreRecords || 0 }} 条</span>
@@ -28,7 +22,6 @@
         <article v-for="item in summaryCards" :key="item.key" class="metric-card">
           <small>{{ item.label }}</small>
           <strong>{{ item.value }}</strong>
-          <p>{{ item.hint }}</p>
         </article>
       </section>
 
@@ -37,7 +30,6 @@
           <div class="card-head">
             <div>
               <h3>报名结构</h3>
-              <span>按投递组别、风格、酒精度和厂牌拆分</span>
             </div>
             <small>{{ totalRegisteredText }}</small>
           </div>
@@ -55,7 +47,7 @@
                     <span :style="bucketBarStyle(bucket)"></span>
                   </div>
                   <div class="bucket-foot">
-                    <small>{{ bucket.detail || '按报名分组统计' }}</small>
+                    <small v-if="bucket.detail">{{ bucket.detail }}</small>
                     <small>{{ bucketShare(bucket) }}</small>
                   </div>
                 </div>
@@ -74,7 +66,7 @@
                     <span :style="bucketBarStyle(bucket)"></span>
                   </div>
                   <div class="bucket-foot">
-                    <small>{{ bucket.detail || '按风格配置统计' }}</small>
+                    <small v-if="bucket.detail">{{ bucket.detail }}</small>
                     <small>{{ bucketShare(bucket) }}</small>
                   </div>
                 </div>
@@ -95,7 +87,7 @@
                     <span :style="bucketBarStyle(bucket)"></span>
                   </div>
                   <div class="bucket-foot">
-                    <small>{{ bucket.detail || '按酒精度区间统计' }}</small>
+                    <small v-if="bucket.detail">{{ bucket.detail }}</small>
                     <small>{{ bucketShare(bucket) }}</small>
                   </div>
                 </div>
@@ -114,7 +106,7 @@
                     <span :style="bucketBarStyle(bucket)"></span>
                   </div>
                   <div class="bucket-foot">
-                    <small>{{ bucket.detail || '按厂牌提交量统计' }}</small>
+                    <small v-if="bucket.detail">{{ bucket.detail }}</small>
                     <small>{{ bucketShare(bucket) }}</small>
                   </div>
                 </div>
@@ -127,7 +119,6 @@
           <div class="card-head">
             <div>
               <h3>付款构成</h3>
-              <span>只展示正式渠道，不把测试记录单列为付款结构</span>
             </div>
           </div>
 
@@ -150,7 +141,7 @@
                 <span :style="bucketBarStyle(bucket)"></span>
               </div>
               <div class="bucket-foot">
-                <small>{{ bucket.detail || '按付款状态统计' }}</small>
+                <small v-if="bucket.detail">{{ bucket.detail }}</small>
                 <small>{{ formatMoney(bucket.amount) }}</small>
               </div>
             </div>
@@ -167,7 +158,6 @@
           <div class="card-head">
             <div>
               <h3>送样进度</h3>
-              <span>关注未提交和待入库的酒款</span>
             </div>
           </div>
 
@@ -181,7 +171,7 @@
                 <span :style="bucketBarStyle(bucket)"></span>
               </div>
               <div class="bucket-foot">
-                <small>{{ bucket.detail || '按送样状态统计' }}</small>
+                <small v-if="bucket.detail">{{ bucket.detail }}</small>
                 <small>{{ bucketShare(bucket) }}</small>
               </div>
             </div>
@@ -208,7 +198,6 @@
           <div class="card-head">
             <div>
               <h3>评语文本</h3>
-              <span>词云为辅助阅读，重点看高频短语和样例语句</span>
             </div>
             <small>{{ feedback.commentCount || 0 }} 条有效评语</small>
           </div>
@@ -278,10 +267,6 @@ const props = defineProps({
     type: Object,
     default: null,
   },
-  competitionName: {
-    type: String,
-    default: '',
-  },
   loading: {
     type: Boolean,
     default: false,
@@ -296,15 +281,15 @@ const feedback = computed(() => props.analytics?.feedback || {})
 const warnings = computed(() => props.analytics?.warnings || [])
 
 const summaryCards = computed(() => ([
-  { key: 'total', label: '参赛酒款', value: formatCount(summary.value.totalEntries), hint: '当前保留的报名酒款' },
-  { key: 'stored', label: '已入库', value: formatCount(summary.value.storedEntries), hint: '完成收样确认的酒款' },
-  { key: 'paid', label: '已支付', value: formatCount(summary.value.paidEntries), hint: '正式支付完成的记录' },
-  { key: 'pending', label: '待支付', value: formatCount(summary.value.pendingPaymentEntries), hint: '需要继续跟进的报名' },
-  { key: 'reviewed', label: '已评审酒款', value: formatCount(summary.value.reviewedEntries), hint: '至少有一条评分记录' },
-  { key: 'records', label: '评分记录', value: formatCount(summary.value.scoreRecords), hint: '原始打分条数' },
-  { key: 'awards', label: '奖项数量', value: formatCount(summary.value.awardCount), hint: '最终确认的奖项' },
-  { key: 'comment', label: '平均评语字数', value: formatCount(summary.value.averageCommentChars), hint: '文本反馈的平均长度' },
-  { key: 'duration', label: '平均用时', value: formatDuration(summary.value.averageReviewSeconds), hint: '单条评分平均耗时' },
+  { key: 'total', label: '参赛酒款', value: formatCount(summary.value.totalEntries) },
+  { key: 'stored', label: '已入库', value: formatCount(summary.value.storedEntries) },
+  { key: 'paid', label: '已支付', value: formatCount(summary.value.paidEntries) },
+  { key: 'pending', label: '待支付', value: formatCount(summary.value.pendingPaymentEntries) },
+  { key: 'reviewed', label: '已评审酒款', value: formatCount(summary.value.reviewedEntries) },
+  { key: 'records', label: '评分记录', value: formatCount(summary.value.scoreRecords) },
+  { key: 'awards', label: '奖项数量', value: formatCount(summary.value.awardCount) },
+  { key: 'comment', label: '平均评语字数', value: formatCount(summary.value.averageCommentChars) },
+  { key: 'duration', label: '平均用时', value: formatDuration(summary.value.averageReviewSeconds) },
 ]))
 
 const paymentChannels = computed(() => payment.value.channels || [])
@@ -402,7 +387,6 @@ function formatMoney(value) {
 }
 
 .analytics-state small,
-.hero-copy p,
 .card-head span,
 .sample-card small,
 .phrase-card small {
@@ -411,42 +395,15 @@ function formatMoney(value) {
 
 .analytics-hero {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
+  align-items: center;
+  justify-content: flex-end;
   gap: 18px;
-  padding: 18px 20px;
+  padding: 10px 12px;
   border: 1px solid rgba(216, 169, 53, 0.2);
   border-radius: 8px;
   background:
     linear-gradient(135deg, rgba(216, 169, 53, 0.12), rgba(255, 255, 255, 0.025)),
     rgba(8, 14, 16, 0.94);
-}
-
-.hero-copy {
-  display: grid;
-  gap: 8px;
-  min-width: 0;
-}
-
-.hero-copy h2 {
-  margin: 0;
-  color: var(--gold-soft);
-  font-size: 26px;
-  line-height: 1.2;
-}
-
-.hero-copy p {
-  margin: 0;
-  line-height: 1.7;
-}
-
-.eyebrow {
-  margin: 0;
-  color: #f1bd79;
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: 0;
-  text-transform: uppercase;
 }
 
 .hero-meta {
@@ -477,7 +434,7 @@ function formatMoney(value) {
   display: grid;
   gap: 6px;
   min-width: 0;
-  padding: 14px 15px;
+  padding: 13px 15px;
   border: 1px solid rgba(219, 232, 237, 0.08);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.022);
@@ -492,14 +449,6 @@ function formatMoney(value) {
   color: #fff0c0;
   font-size: 24px;
   line-height: 1;
-}
-
-.metric-card p {
-  margin: 0;
-  min-height: 34px;
-  color: rgba(230, 237, 240, 0.72);
-  font-size: 12px;
-  line-height: 1.55;
 }
 
 .analysis-grid {
@@ -616,6 +565,10 @@ function formatMoney(value) {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+}
+
+.bucket-foot small:last-child {
+  margin-left: auto;
 }
 
 .channel-grid {

@@ -134,7 +134,6 @@
           <article class="panel-card">
             <div class="panel-heading">
               <h2>阶段任务</h2>
-              <span>随比赛阶段推进处理</span>
             </div>
             <div class="future-task-list">
               <button
@@ -157,7 +156,6 @@
         <section v-if="activeTab === 'analysis'" class="tab-panel analysis-panel">
           <CompetitionAnalyticsPanel
             :analytics="competitionAnalytics"
-            :competition-name="competition.name"
             :loading="competitionAnalyticsLoading"
           />
         </section>
@@ -172,7 +170,6 @@
             <div class="panel-heading">
               <div>
                 <h2>基础信息</h2>
-                <span>厂牌端会展示赛事简介、报名窗口和当前应付金额</span>
               </div>
             </div>
             <div class="base-info-groups">
@@ -338,7 +335,6 @@
             <div class="panel-heading">
               <div>
                 <h2>投屏赞助商</h2>
-                <span>公开看板只展示赞助等级、品牌名称和 Logo</span>
               </div>
               <button class="tool-button" type="button" @click="addSponsor">
                 <Plus />
@@ -393,7 +389,6 @@
             </div>
             <div v-else class="empty-state sponsor-empty">
               <strong>还没有赞助商配置</strong>
-              <span>添加后会显示在公开投屏看板顶部区域</span>
             </div>
           </article>
 
@@ -579,23 +574,22 @@
 
         <section v-if="activeTab === 'entries'" class="tab-panel">
           <div class="overview-grid">
-            <article class="metric-card"><small>参赛酒款</small><strong>{{ competition.entriesSummary.total }}</strong><p>当前保留的报名</p></article>
-            <article class="metric-card"><small>待支付</small><strong>{{ competition.entriesSummary.pendingPayment }}</strong><p>需跟进支付</p></article>
-            <article class="metric-card"><small>已入库</small><strong>{{ competition.entriesSummary.stored }}</strong><p>现场已确认</p></article>
-            <article class="metric-card"><small>{{ isFeedbackOnlyCompetition ? '评审轨迹' : '晋级轨迹' }}</small><strong>{{ roundEntryPool.length }}</strong><p>真实轮次分配</p></article>
+            <article class="metric-card compact-metric"><small>参赛酒款</small><strong>{{ competition.entriesSummary.total }}</strong></article>
+            <article class="metric-card compact-metric"><small>待支付</small><strong>{{ competition.entriesSummary.pendingPayment }}</strong></article>
+            <article class="metric-card compact-metric"><small>已入库</small><strong>{{ competition.entriesSummary.stored }}</strong></article>
+            <article class="metric-card compact-metric"><small>{{ isFeedbackOnlyCompetition ? '评审轨迹' : '晋级轨迹' }}</small><strong>{{ roundEntryPool.length }}</strong></article>
           </div>
           <article class="panel-card">
             <div class="panel-heading">
               <div>
                 <h2>参赛酒款</h2>
-                <span>短编号、准备状态和轮次轨迹</span>
               </div>
               <button class="tool-button" type="button" @click="openAdminEntries">
                 打开酒款管理
                 <Right />
               </button>
             </div>
-            <div class="data-table entries-table">
+              <div class="data-table entries-table">
               <div class="table-head">
                 <span>参赛酒款</span>
                 <span>编号</span>
@@ -605,7 +599,7 @@
                 <span>操作</span>
               </div>
               <div
-                v-for="entry in roundEntryPool"
+                v-for="entry in paginatedRoundEntryPool"
                 :key="entry.uuid"
                 :class="['table-row', { refunded: isRefundedEntry(entry), 'refund-priority': hasRefundPriority(entry) }]"
               >
@@ -633,6 +627,30 @@
                   <button v-if="!isRefundedEntry(entry)" class="mini-action" type="button" :disabled="!entry.canMarkStored" @click="markEntryStoredAction(entry)">确认入库</button>
                 </div>
               </div>
+              <footer class="competition-pagination">
+                <span>共 {{ entryPageTotal }} 款</span>
+                <div class="pager-buttons">
+                  <button type="button" :disabled="entryPagination.page <= 1" @click="changeEntryPage(entryPagination.page - 1)">上一页</button>
+                  <button
+                    v-for="page in entryVisiblePages"
+                    :key="page"
+                    :class="{ active: entryPagination.page === page }"
+                    type="button"
+                    @click="changeEntryPage(page)"
+                  >
+                    {{ page }}
+                  </button>
+                  <button type="button" :disabled="entryPagination.page >= entryTotalPages" @click="changeEntryPage(entryPagination.page + 1)">下一页</button>
+                </div>
+                <label>
+                  <span>每页</span>
+                  <select v-model.number="entryPagination.pageSize" @change="changeEntryPageSize">
+                    <option :value="20">20</option>
+                    <option :value="50">50</option>
+                    <option :value="100">100</option>
+                  </select>
+                </label>
+              </footer>
             </div>
           </article>
         </section>
@@ -782,7 +800,6 @@
             <section class="round-workspace">
               <article class="round-current-card">
                 <div class="round-current-main">
-                  <small>{{ currentRound?.name || '未创建轮次' }} · {{ currentRoundTypeLabel }} · {{ currentRoundStatusText }}</small>
                   <h2>{{ roundReadinessTitle }}</h2>
                   <p v-if="roundReadinessDetail">{{ roundReadinessDetail }}</p>
                 </div>
@@ -846,7 +863,6 @@
               <section ref="roundProgressSection" class="round-table-overview">
                 <header>
                   <div>
-                    <small>当前轮次</small>
                     <h3>桌次进度</h3>
                   </div>
                   <span>{{ currentRoundTables.length }} 桌</span>
@@ -885,27 +901,6 @@
                 </div>
               </section>
 
-              <article :class="['round-task-hint', roundTodoHint.tone]">
-                <div>
-                  <strong>{{ roundTodoHint.title }}</strong>
-                  <span>{{ roundTodoHint.detail }}</span>
-                </div>
-                <button v-if="roundTodoHint.action === 'createNextRound'" class="tool-button primary" type="button" @click="openCreateRoundDialog">
-                  {{ createNextRoundButtonText }}
-                </button>
-                <button v-else-if="roundTodoHint.action === 'goToRoundAllocation'" class="tool-button primary" type="button" @click="goToRoundAllocation">
-                  去分桌分配
-                </button>
-                <button v-else-if="roundTodoHint.action === 'focusRoundProgress'" class="tool-button" type="button" @click="focusRoundProgress">
-                  查看桌次进度
-                </button>
-                <button v-else-if="roundTodoHint.action === 'lockSourceRound'" class="tool-button primary" type="button" @click="lockCurrentDraftSourceRound">
-                  确认锁定上一轮
-                </button>
-                <button v-else-if="roundTodoHint.action === 'goToResults'" class="tool-button primary" type="button" @click="goToResults">
-                  去确认结果
-                </button>
-              </article>
             </section>
           </section>
         </section>
@@ -988,17 +983,22 @@
                 </select>
               </label>
               <label class="feedback-select-field">
-                <span>投递组别</span>
-                <select v-model="feedbackFilters.categoryName">
-                  <option v-for="option in feedbackCategoryOptions" :key="option" :value="option">{{ option }}</option>
-                </select>
-              </label>
-              <label class="feedback-select-field">
                 <span>评审类型</span>
                 <select v-model="feedbackFilters.judgeType">
                   <option v-for="option in feedbackJudgeTypeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
                 </select>
               </label>
+              <div v-if="!isFeedbackOnlyCompetition" class="feedback-advance-segments" aria-label="晋级筛选">
+                <button
+                  v-for="option in feedbackAdvanceOptions"
+                  :key="option.value"
+                  type="button"
+                  :class="{ active: feedbackFilters.advanced === option.value }"
+                  @click="feedbackFilters.advanced = option.value"
+                >
+                  {{ option.label }}
+                </button>
+              </div>
               <div class="feedback-status-segments">
                 <button
                   v-for="option in feedbackStatusOptions"
@@ -1019,7 +1019,7 @@
                   <div v-else-if="!feedbackFilteredEntries.length" class="feedback-empty-state">没有符合条件的酒款</div>
                   <template v-else>
                     <button
-                      v-for="entry in feedbackFilteredEntries"
+                      v-for="entry in feedbackPageEntries"
                       :key="feedbackEntryKey(entry)"
                       type="button"
                       :class="['feedback-entry-row', { active: feedbackEntryKey(entry) === feedbackEntryKey(selectedFeedbackEntry) }]"
@@ -1036,14 +1036,43 @@
                     </button>
                   </template>
                 </div>
-                <footer>首轮共 {{ feedbackFilteredEntries.length }} 款（合计 {{ feedbackReviewEntries.length }} 款）</footer>
+                <footer class="feedback-list-footer">
+                  <span>首轮共 {{ feedbackServerMode ? feedbackServerTotal : feedbackFilteredEntries.length }} 款</span>
+                  <div class="pager-buttons">
+                    <button type="button" :disabled="feedbackPagination.page <= 1" @click="changeFeedbackPage(feedbackPagination.page - 1)">上一页</button>
+                    <button
+                      v-for="page in feedbackVisiblePages"
+                      :key="page"
+                      :class="{ active: feedbackPagination.page === page }"
+                      type="button"
+                      @click="changeFeedbackPage(page)"
+                    >
+                      {{ page }}
+                    </button>
+                    <button type="button" :disabled="feedbackPagination.page >= feedbackTotalPages" @click="changeFeedbackPage(feedbackPagination.page + 1)">下一页</button>
+                  </div>
+                  <label>
+                    <span>每页</span>
+                    <select v-model.number="feedbackPagination.pageSize" @change="changeFeedbackPageSize">
+                      <option :value="20">20</option>
+                      <option :value="50">50</option>
+                      <option :value="100">100</option>
+                    </select>
+                  </label>
+                </footer>
               </section>
 
               <section class="feedback-detail-panel">
                 <template v-if="selectedFeedbackEntry">
                   <header class="feedback-detail-head">
-                    <strong>{{ formatFeedbackEntryTitle(selectedFeedbackEntry) }}</strong>
-                    <small>{{ [selectedFeedbackEntry.roundName || '首轮', selectedFeedbackEntry.tableName, selectedFeedbackEntry.categoryName, selectedFeedbackEntry.style].filter(Boolean).join(' · ') }}</small>
+                    <div class="feedback-detail-title">
+                      <strong>{{ formatFeedbackEntryTitle(selectedFeedbackEntry) }}</strong>
+                      <small>{{ [selectedFeedbackEntry.roundName || '首轮', selectedFeedbackEntry.tableName, selectedFeedbackEntry.categoryName, selectedFeedbackEntry.style].filter(Boolean).join(' · ') }}</small>
+                    </div>
+                    <button class="feedback-entry-detail-button" type="button" @click="openFeedbackEntryDetail(selectedFeedbackEntry)">
+                      <Tickets />
+                      <span>详情</span>
+                    </button>
                   </header>
 
                   <div class="feedback-detail-body">
@@ -1229,7 +1258,7 @@
                 </div>
               </div>
               <p v-else class="empty-line">锁定决赛轮后生成奖项</p>
-              <input ref="awardCertificateInput" class="file-input" type="file" accept="application/pdf,.pdf" @change="handleAwardCertificateSelected" />
+              <input ref="awardCertificateInput" class="file-input" type="file" accept="application/pdf,image/png,image/jpeg,.pdf,.png,.jpg,.jpeg" @change="handleAwardCertificateSelected" />
             </article>
 
             <article v-else class="panel-card result-check-card feedback-result-card">
@@ -1584,58 +1613,87 @@
     <el-dialog
       v-model="entryAutoAssignDialogOpen"
       class="entry-auto-assign-dialog-shell"
-      width="420px"
-      :title="entryAutoAssignTable ? `${entryAutoAssignTable.name} · 自动分配` : '自动分配'"
+      width="480px"
+      :title="entryAutoAssignTable ? `${entryAutoAssignTable.name} · 酒款分配` : '酒款分配'"
       align-center
       destroy-on-close
     >
       <div class="entry-auto-assign-dialog">
-        <label class="entry-auto-assign-field">
-          <span>范围</span>
-          <el-select
-            v-model="entryAutoAssignForm.categoryId"
-            placeholder="选择范围"
-            popper-class="entry-auto-assign-popper"
-            style="width: 100%"
+        <div class="entry-assign-mode-switch" aria-label="分配方式">
+          <button
+            :class="{ active: entryAutoAssignForm.mode === 'quick' }"
+            type="button"
+            @click="entryAutoAssignForm.mode = 'quick'"
           >
-            <el-option
-              v-for="option in entryAutoAssignCategoryOptions"
-              :key="option.id"
-              :label="option.name"
-              :value="option.id"
-            >
-              <div class="entry-auto-assign-option">
-                <span>{{ option.name }}</span>
-                <small>{{ option.unassigned }} 款可用</small>
-              </div>
-            </el-option>
-          </el-select>
-        </label>
-
-        <label class="entry-auto-assign-field">
-          <span>数量</span>
-          <el-input-number
-            v-model="entryAutoAssignForm.quantity"
-            :min="1"
-            :max="Math.max(entryAutoAssignStats.unassigned, 1)"
-            controls-position="right"
-          />
-        </label>
-
-        <div class="entry-auto-assign-stats">
-          <span>
-            <strong>{{ entryAutoAssignStats.total }}</strong>
-            总计
-          </span>
-          <span>
-            <strong>{{ entryAutoAssignStats.unassigned }}</strong>
-            未分配
-          </span>
-          <span class="highlight">
-            <strong>{{ entryAutoAssignStats.adding }}</strong>
-            本次加入
-          </span>
+            快速分配
+          </button>
+          <button
+            :class="{ active: entryAutoAssignForm.mode === 'codes' }"
+            type="button"
+            @click="entryAutoAssignForm.mode = 'codes'"
+          >
+            编号分配
+          </button>
         </div>
+
+        <template v-if="entryAutoAssignForm.mode === 'quick'">
+          <label class="entry-auto-assign-field">
+            <span>范围</span>
+            <el-select
+              v-model="entryAutoAssignForm.categoryId"
+              placeholder="选择范围"
+              popper-class="entry-auto-assign-popper"
+              style="width: 100%"
+            >
+              <el-option
+                v-for="option in entryAutoAssignCategoryOptions"
+                :key="option.id"
+                :label="option.name"
+                :value="option.id"
+              >
+                <div class="entry-auto-assign-option">
+                  <span>{{ option.name }}</span>
+                  <small>{{ option.unassigned }} 款可用</small>
+                </div>
+              </el-option>
+            </el-select>
+          </label>
+
+          <label class="entry-auto-assign-field">
+            <span>数量</span>
+            <el-input-number
+              v-model="entryAutoAssignForm.quantity"
+              :min="1"
+              :max="Math.max(entryAutoAssignStats.unassigned, 1)"
+              controls-position="right"
+            />
+          </label>
+
+          <div class="entry-auto-assign-stats">
+            <span><strong>{{ entryAutoAssignStats.total }}</strong>总计</span>
+            <span><strong>{{ entryAutoAssignStats.unassigned }}</strong>未分配</span>
+            <span class="highlight"><strong>{{ entryAutoAssignStats.adding }}</strong>本次加入</span>
+          </div>
+        </template>
+
+        <template v-else>
+          <label class="entry-code-assign-field">
+            <span>参赛编号</span>
+            <textarea
+              v-model="entryAutoAssignForm.codes"
+              rows="5"
+              placeholder="输入参赛编号，使用空格或换行分隔"
+              spellcheck="false"
+            />
+          </label>
+          <div class="entry-code-assign-summary">
+            <span><strong>{{ entryCodeAssignPreview.inputCount }}</strong>已输入</span>
+            <span class="highlight"><strong>{{ entryCodeAssignPreview.entries.length }}</strong>可分配</span>
+          </div>
+          <div v-if="entryCodeAssignPreview.issues.length" class="entry-code-assign-issues">
+            <p v-for="issue in entryCodeAssignPreview.issues" :key="issue">{{ issue }}</p>
+          </div>
+        </template>
       </div>
 
       <template #footer>
@@ -1644,10 +1702,10 @@
           <button
             class="tool-button primary"
             type="button"
-            :disabled="!entryAutoAssignForm.categoryId || entryAutoAssignStats.unassigned === 0"
+            :disabled="entryAutoAssignSubmitDisabled"
             @click="confirmEntryAutoAssign"
           >
-            加入
+            {{ entryAutoAssignForm.mode === 'quick' ? '快速分配' : '分配' }}
           </button>
         </div>
       </template>
@@ -1741,6 +1799,21 @@
             <strong>{{ roundScoreDetailEntries.length }} 款</strong>
           </span>
         </section>
+
+        <section v-if="!isRoundScoreDetailRanking && !isFeedbackOnlyCompetition" class="round-score-detail-advanced">
+          <header>
+            <h3>已选择晋级酒款</h3>
+            <span>{{ roundScoreDetailAdvancedEntries.length }} / {{ roundScoreDetailCaptainStats.advance.total }} 款</span>
+          </header>
+          <div v-if="roundScoreDetailAdvancedEntries.length" class="round-score-detail-advanced-list">
+            <article v-for="entry in roundScoreDetailAdvancedEntries" :key="entry.uuid">
+              <strong>{{ entry.name }}</strong>
+              <span>{{ entry.shortCode || entry.uuid }}</span>
+            </article>
+          </div>
+          <p v-else class="round-score-detail-advanced-empty">暂未选择晋级酒款</p>
+        </section>
+
         <button
           v-if="canOverrideRoundScoreConfirmation"
           class="tool-button primary confirmation-override-button"
@@ -1831,6 +1904,46 @@
         </div>
       </div>
     </el-dialog>
+
+    <div v-if="feedbackEntryDetailOpen" class="feedback-entry-detail-mask" @click.self="closeFeedbackEntryDetail">
+      <aside class="feedback-entry-detail-drawer" role="dialog" aria-modal="true" aria-labelledby="feedback-entry-detail-title">
+        <header class="feedback-entry-detail-drawer-head">
+          <div>
+            <span>酒款详情</span>
+            <h2 id="feedback-entry-detail-title">{{ feedbackEntryDetail?.name || selectedFeedbackEntry?.entryName || '未命名酒款' }}</h2>
+            <small>{{ feedbackEntryDetail?.shortCode || selectedFeedbackEntry?.shortCode || feedbackEntryDetail?.uuid || selectedFeedbackEntry?.beerUuid || '-' }}</small>
+          </div>
+          <button type="button" title="关闭详情" @click="closeFeedbackEntryDetail"><Close /></button>
+        </header>
+
+        <section v-if="feedbackEntryDetailLoading" class="feedback-entry-detail-loading">正在加载酒款详情</section>
+        <div v-else-if="feedbackEntryDetail" class="feedback-entry-detail-content">
+          <section class="feedback-entry-detail-section">
+            <h3>基本信息</h3>
+            <dl class="feedback-entry-detail-grid">
+              <div><dt>酒款名称</dt><dd>{{ feedbackEntryDetail.name || '-' }}</dd></div>
+              <div><dt>短编号</dt><dd>{{ feedbackEntryDetail.shortCode || '-' }}</dd></div>
+              <div><dt>厂牌</dt><dd>{{ feedbackEntryDetail.breweryCompanyName || '-' }}</dd></div>
+              <div><dt>投递组别</dt><dd>{{ feedbackEntryDetail.categoryName || selectedFeedbackEntry?.categoryName || '-' }}</dd></div>
+              <div><dt>基础风格</dt><dd>{{ feedbackEntryDetail.style || selectedFeedbackEntry?.style || '-' }}</dd></div>
+              <div><dt>酒精度</dt><dd>{{ feedbackEntryDetail.abv == null ? '-' : `${feedbackEntryDetail.abv}%` }}</dd></div>
+            </dl>
+          </section>
+
+          <section v-if="feedbackEntryDetail.extraFields?.length" class="feedback-entry-detail-section">
+            <h3>报名补充信息</h3>
+            <dl class="feedback-entry-detail-grid">
+              <div v-for="field in feedbackEntryDetail.extraFields" :key="field.key || field.label">
+                <dt>{{ field.label || field.key }}</dt>
+                <dd>{{ field.value || '-' }}</dd>
+              </div>
+            </dl>
+          </section>
+
+        </div>
+        <div v-else class="feedback-entry-detail-loading">暂无酒款详情</div>
+      </aside>
+    </div>
   </div>
 </template>
 
@@ -1884,7 +1997,10 @@ import {
   fetchCompetitionAwardRules,
   fetchCompetitionAwards,
   fetchCompetitionEntryPool,
+  fetchCompetitionEntryPoolPage,
   fetchCompetitionFeedbackReview,
+  fetchCompetitionFeedbackReviewPage,
+  fetchAdminEntryDetail,
   fetchCompetitionDetail,
   fetchCompetitionOverview,
   fetchCompetitionProgress,
@@ -1995,14 +2111,23 @@ const judgePool = ref([])
 const feedbackReviewEntries = ref([])
 const feedbackReviewLoading = ref(false)
 const feedbackReviewCompetitionId = ref(null)
+const feedbackServerTotal = ref(0)
+const feedbackServerMode = ref(true)
+const feedbackFilterOptions = reactive({ tableNames: [], categoryNames: [] })
 const selectedFeedbackEntryKey = ref('')
+const feedbackEntryDetailOpen = ref(false)
+const feedbackEntryDetailLoading = ref(false)
+const feedbackEntryDetail = ref(null)
 const feedbackFilters = reactive({
   keyword: '',
   tableName: '全部',
   categoryName: '全部',
   judgeType: '全部',
   status: 'all',
+  advanced: 'all',
 })
+const feedbackPagination = reactive({ page: 1, pageSize: 20 })
+const entryPagination = reactive({ page: 1, pageSize: 20 })
 const feedbackEditor = reactive({
   visible: false,
   saving: false,
@@ -2066,6 +2191,8 @@ const businessConfirmDeadlineInvalid = computed(() => Boolean(businessConfirm.de
 
 const rounds = ref([])
 const roundEntryPool = ref([])
+const entryPageRecords = ref([])
+const entryPageTotal = ref(0)
 const firstRoundDraft = reactive({
   id: 'first-round-draft',
   roundNo: 1,
@@ -2092,8 +2219,10 @@ const createRoundForm = reactive({
 const entryAutoAssignDialogOpen = ref(false)
 const entryAutoAssignTableId = ref('')
 const entryAutoAssignForm = reactive({
+  mode: 'quick',
   categoryId: null,
   quantity: 1,
+  codes: '',
 })
 const selectedStyleLibraryVersion = ref('')
 const styleLibraryOptions = ref(normalizeStyleLibraries(fallbackStyleLibraries))
@@ -2237,6 +2366,11 @@ const currentRoundStatusText = computed(() => roundStatusLabels[currentRound.val
 const currentRoundEntryCount = computed(() => new Set(currentRoundTables.value.flatMap((table) => table.entryUuids)).size)
 const currentRoundTargetCount = computed(() => currentRoundTables.value.reduce((sum, table) => sum + Number(table.targetCount || 0), 0))
 const advancedPool = computed(() => roundEntryPool.value.filter((entry) => entry.advanced))
+const entryTotalPages = computed(() => Math.max(Math.ceil(entryPageTotal.value / entryPagination.pageSize), 1))
+const entryVisiblePages = computed(() => buildPaginationPages(entryPagination.page, entryTotalPages.value))
+const paginatedRoundEntryPool = computed(() => {
+  return entryPageRecords.value
+})
 const preplanningNotice = computed(() => {
   if (competition.value?.status === 'REGISTRATION_OPEN') {
     return '报名仍在进行，当前分桌和轮次会保留为预排草稿，不会发布给评审，新增或入库酒款后可继续调整'
@@ -2278,15 +2412,21 @@ const roundScoreDetailJudges = computed(() => {
       return String(left.judgeName || '').localeCompare(String(right.judgeName || ''), 'zh-CN')
     })
 })
-const roundScoreDetailEntries = computed(() => (roundScoreDetailTable.value?.entryUuids || []).map((uuid) => {
-  const entry = entryLookup.value.get(uuid) || {}
-  return {
-    uuid,
-    name: entry.name || '未命名酒款',
-    shortCode: entry.shortCode || '',
-    categoryName: entry.categoryName || entry.category || '-',
-  }
-}))
+const roundScoreDetailEntries = computed(() => {
+  const table = roundScoreDetailTable.value
+  const advancedEntryUuids = new Set(table?.advancedEntryUuids || [])
+  return (table?.entryUuids || []).map((uuid) => {
+    const entry = entryLookup.value.get(uuid) || {}
+    return {
+      uuid,
+      name: entry.name || '未命名酒款',
+      shortCode: entry.shortCode || '',
+      categoryName: entry.categoryName || entry.category || '-',
+      advanced: advancedEntryUuids.has(uuid),
+    }
+  })
+})
+const roundScoreDetailAdvancedEntries = computed(() => roundScoreDetailEntries.value.filter((entry) => entry.advanced))
 const roundRankingDetailSlots = computed(() => getRankingSlots(roundScoreDetailTable.value || {}).map((slot) => {
   const entry = buildRoundDetailEntryDisplay(slot.uuid)
   return {
@@ -2628,7 +2768,7 @@ const publishResultsDisabledReason = computed(() => {
 const certificateUploadedCount = computed(() => awardDrafts.value.filter((award) => award.certificateUploaded).length)
 const certificateTotalCount = computed(() => confirmableAwardDrafts.value.length || awardDrafts.value.length)
 const certificateCheck = computed(() => ({
-  label: `奖状 PDF ${certificateUploadedCount.value} / ${certificateTotalCount.value}`,
+  label: `奖状 ${certificateUploadedCount.value} / ${certificateTotalCount.value}`,
   done: certificateTotalCount.value === 0 || certificateUploadedCount.value === certificateTotalCount.value,
   status: certificateTotalCount.value === 0 || certificateUploadedCount.value === certificateTotalCount.value ? '完成' : '可后补',
 }))
@@ -2696,8 +2836,8 @@ const judgeMetrics = computed(() => ({
   cross: countAssignedRole('CROSS'),
 }))
 const judgeFilterCounts = computed(() => ({
-  ALL: judgePool.value.length,
-  UNASSIGNED: judgePool.value.filter((judge) => !isAssigned(judge.publicId)).length,
+  ALL: judgePool.value.filter((judge) => isJudgeActive(judge)).length,
+  UNASSIGNED: judgePool.value.filter((judge) => isJudgeActive(judge) && !isAssigned(judge.publicId)).length,
 }))
 const validationIssues = computed(() => {
   const issues = []
@@ -2714,6 +2854,7 @@ const validationIssues = computed(() => {
 const filteredJudgePool = computed(() => {
   const query = judgeKeyword.value.toLowerCase()
   const pool = judgePool.value.filter((judge) => {
+    if (!isJudgeActive(judge)) return false
     const matchesKeyword = !query || [
       judge.name,
       judge.maskedPhone,
@@ -2738,19 +2879,28 @@ const feedbackStatusOptions = [
   { value: 'comment_missing', label: '待评价' },
   { value: 'awaiting_captain', label: '待汇总' },
 ]
+const feedbackAdvanceOptions = [
+  { value: 'all', label: '全部' },
+  { value: 'advanced', label: '晋级酒款' },
+]
 const feedbackJudgeTypeOptions = [
   { value: '全部', label: '全部' },
   { value: 'PROFESSIONAL', label: '专业评审' },
   { value: 'CROSS', label: '跨界评审' },
 ]
-const feedbackTableOptions = computed(() => buildFeedbackOptions(feedbackReviewEntries.value.map((entry) => entry.tableName)))
-const feedbackCategoryOptions = computed(() => buildFeedbackOptions(feedbackReviewEntries.value.map((entry) => entry.categoryName)))
+const feedbackTableOptions = computed(() => buildFeedbackOptions(feedbackFilterOptions.tableNames.length
+  ? feedbackFilterOptions.tableNames
+  : feedbackReviewEntries.value.map((entry) => entry.tableName)))
+const feedbackCategoryOptions = computed(() => buildFeedbackOptions(feedbackFilterOptions.categoryNames.length
+  ? feedbackFilterOptions.categoryNames
+  : feedbackReviewEntries.value.map((entry) => entry.categoryName)))
 const feedbackFilteredEntries = computed(() => {
   const keyword = feedbackFilters.keyword.trim().toLowerCase()
   return feedbackReviewEntries.value.filter((entry) => {
     if (feedbackFilters.tableName !== '全部' && entry.tableName !== feedbackFilters.tableName) return false
     if (feedbackFilters.categoryName !== '全部' && entry.categoryName !== feedbackFilters.categoryName) return false
     if (feedbackFilters.status !== 'all' && entry.status !== feedbackFilters.status) return false
+    if (feedbackFilters.advanced === 'advanced' && entry.advanced !== true) return false
     if (feedbackFilters.judgeType !== '全部' && !(entry.judges || []).some((judge) => judge.role === feedbackFilters.judgeType)) return false
     if (!keyword) return true
     return [
@@ -2763,9 +2913,16 @@ const feedbackFilteredEntries = computed(() => {
     ].filter(Boolean).some((value) => String(value).toLowerCase().includes(keyword))
   })
 })
+const feedbackTotalPages = computed(() => Math.max(Math.ceil((feedbackServerMode.value ? feedbackServerTotal.value : feedbackFilteredEntries.value.length) / feedbackPagination.pageSize), 1))
+const feedbackVisiblePages = computed(() => buildPaginationPages(feedbackPagination.page, feedbackTotalPages.value))
+const feedbackPageEntries = computed(() => {
+  if (feedbackServerMode.value) return feedbackReviewEntries.value
+  const start = (feedbackPagination.page - 1) * feedbackPagination.pageSize
+  return feedbackFilteredEntries.value.slice(start, start + feedbackPagination.pageSize)
+})
 const selectedFeedbackEntry = computed(() => {
-  const selected = feedbackFilteredEntries.value.find((entry) => feedbackEntryKey(entry) === selectedFeedbackEntryKey.value)
-  return selected || feedbackFilteredEntries.value[0] || null
+  const selected = feedbackPageEntries.value.find((entry) => feedbackEntryKey(entry) === selectedFeedbackEntryKey.value)
+  return selected || feedbackPageEntries.value[0] || null
 })
 const selectedFeedbackIssues = computed(() => buildFeedbackIssues(selectedFeedbackEntry.value))
 const feedbackEditorTitle = computed(() => (feedbackEditor.type === 'captain' ? '编辑桌长综合评语' : '编辑评审评语'))
@@ -2859,15 +3016,69 @@ watch([styleCategorySummary, activeTab], () => {
   })
 }, { immediate: true })
 watch(feedbackFilteredEntries, (entries) => {
+  feedbackPagination.page = Math.min(feedbackPagination.page, feedbackTotalPages.value)
   if (!entries.length) {
     selectedFeedbackEntryKey.value = ''
     return
   }
-  if (!entries.some((entry) => feedbackEntryKey(entry) === selectedFeedbackEntryKey.value)) {
+  if (!feedbackPageEntries.value.some((entry) => feedbackEntryKey(entry) === selectedFeedbackEntryKey.value)) {
+    selectedFeedbackEntryKey.value = feedbackEntryKey(feedbackPageEntries.value[0] || entries[0])
+  }
+})
+const entryCodeAssignPreview = computed(() => buildEntryCodeAssignPreview(entryAutoAssignForm.codes))
+const entryAutoAssignSubmitDisabled = computed(() => {
+  if (entryAutoAssignForm.mode === 'codes') {
+    return entryCodeAssignPreview.value.entries.length === 0 || entryCodeAssignPreview.value.issues.length > 0
+  }
+  return !entryAutoAssignForm.categoryId || entryAutoAssignStats.value.unassigned === 0
+})
+watch(feedbackPageEntries, (entries) => {
+  if (entries.length && !entries.some((entry) => feedbackEntryKey(entry) === selectedFeedbackEntryKey.value)) {
     selectedFeedbackEntryKey.value = feedbackEntryKey(entries[0])
   }
 })
+watch(feedbackFilters, () => {
+  feedbackPagination.page = 1
+  if (activeTab.value === 'feedback') loadFeedbackReview(true)
+}, { deep: true })
 watch(() => sponsorLogoCrop.scale, clampSponsorLogoCropOffset)
+
+function buildPaginationPages(page, totalPages) {
+  const currentPage = Math.min(Math.max(Number(page) || 1, 1), totalPages)
+  const start = Math.max(1, currentPage - 2)
+  const end = Math.min(totalPages, start + 4)
+  return Array.from({ length: end - start + 1 }, (_, index) => start + index)
+}
+
+function changeEntryPage(page) {
+  entryPagination.page = Math.min(Math.max(page, 1), entryTotalPages.value)
+  loadEntryPage()
+}
+
+function changeEntryPageSize() {
+  entryPagination.page = 1
+  loadEntryPage()
+}
+
+function changeFeedbackPage(page) {
+  feedbackPagination.page = Math.min(Math.max(page, 1), feedbackTotalPages.value)
+  if (feedbackServerMode.value) loadFeedbackReview(true)
+}
+
+function changeFeedbackPageSize() {
+  feedbackPagination.page = 1
+  if (feedbackServerMode.value) loadFeedbackReview(true)
+}
+
+function hasFeedbackFilters() {
+  return Boolean(feedbackFilters.keyword.trim()
+    || feedbackFilters.tableName !== '全部'
+    || feedbackFilters.categoryName !== '全部'
+    || feedbackFilters.judgeType !== '全部'
+    || feedbackFilters.status !== 'all'
+    || feedbackFilters.advanced !== 'all')
+}
+
 async function loadDetail() {
   loading.value = true
   competition.value = null
@@ -2924,7 +3135,7 @@ async function loadActiveTabData(tab) {
     return
   }
   if (tab === 'entries') {
-    await loadEntryPool()
+    await loadEntryPage()
     return
   }
   if (tab === 'judges') {
@@ -2936,7 +3147,7 @@ async function loadActiveTabData(tab) {
     return
   }
   if (tab === 'results') {
-    await Promise.all([loadResultsWorkspace(), refreshRoundProgress(true)])
+    await Promise.all([loadEntryPool(), loadResultsWorkspace(), refreshRoundProgress(true)])
     return
   }
   if (tab === 'feedback') {
@@ -2978,6 +3189,28 @@ async function loadEntryPool() {
   })
   loadedSectionCompetitionIds.entryPool = competitionKey
   roundEntryPool.value = [...competition.value.entryPool]
+  entryPagination.page = 1
+}
+
+async function loadEntryPage() {
+  const competitionKey = currentCompetitionKey()
+  if (!competitionKey) return
+  try {
+    const data = await fetchCompetitionEntryPoolPage(competitionKey, {
+      page: entryPagination.page,
+      pageSize: entryPagination.pageSize,
+    })
+    entryPageRecords.value = data?.records || []
+    entryPageTotal.value = Number(data?.total || 0)
+    if (entryPagination.page > entryTotalPages.value) {
+      entryPagination.page = entryTotalPages.value
+      await loadEntryPage()
+    }
+  } catch {
+    entryPageRecords.value = []
+    entryPageTotal.value = 0
+    ElMessage.error('参赛酒款加载失败')
+  }
 }
 
 async function loadResultsWorkspace() {
@@ -3039,14 +3272,33 @@ async function loadFeedbackReview(force = false) {
   if (feedbackReviewLoading.value) return
   feedbackReviewLoading.value = true
   try {
-    const data = await fetchCompetitionFeedbackReview(competitionId)
-    feedbackReviewEntries.value = data || []
+    if (hasFeedbackFilters()) {
+      const records = await fetchCompetitionFeedbackReview(competitionId)
+      feedbackReviewEntries.value = records || []
+      feedbackServerTotal.value = feedbackReviewEntries.value.length
+      feedbackServerMode.value = false
+      feedbackFilterOptions.tableNames = feedbackReviewEntries.value.map((entry) => entry.tableName)
+      feedbackFilterOptions.categoryNames = feedbackReviewEntries.value.map((entry) => entry.categoryName)
+    } else {
+      const data = await fetchCompetitionFeedbackReviewPage(competitionId, {
+        page: feedbackPagination.page,
+        pageSize: feedbackPagination.pageSize,
+      })
+      feedbackReviewEntries.value = data?.records || []
+      feedbackServerTotal.value = Number(data?.total || 0)
+      feedbackServerMode.value = true
+      feedbackFilterOptions.tableNames = data?.tableNames || []
+      feedbackFilterOptions.categoryNames = data?.categoryNames || []
+    }
     feedbackReviewCompetitionId.value = competitionId
+    feedbackPagination.page = 1
     if (!feedbackReviewEntries.value.some((entry) => feedbackEntryKey(entry) === selectedFeedbackEntryKey.value)) {
       selectedFeedbackEntryKey.value = feedbackEntryKey(feedbackReviewEntries.value[0])
     }
   } catch {
     feedbackReviewEntries.value = []
+    feedbackServerTotal.value = 0
+    feedbackServerMode.value = true
     feedbackReviewCompetitionId.value = competitionId
     ElMessage.error('反馈数据加载失败')
   } finally {
@@ -3127,6 +3379,30 @@ function formatFeedbackTime(value) {
     minute: '2-digit',
     hour12: false,
   }).format(date)
+}
+
+async function openFeedbackEntryDetail(entry) {
+  const entryId = entry?.beerEntryId
+  if (!entryId) {
+    ElMessage.warning('暂无法获取该酒款详情')
+    return
+  }
+  feedbackEntryDetailOpen.value = true
+  feedbackEntryDetailLoading.value = true
+  feedbackEntryDetail.value = null
+  try {
+    feedbackEntryDetail.value = await fetchAdminEntryDetail(entryId)
+  } catch {
+    feedbackEntryDetailOpen.value = false
+    ElMessage.error('酒款详情加载失败')
+  } finally {
+    feedbackEntryDetailLoading.value = false
+  }
+}
+
+function closeFeedbackEntryDetail() {
+  feedbackEntryDetailOpen.value = false
+  feedbackEntryDetail.value = null
 }
 
 function countEffectiveChars(text) {
@@ -3357,6 +3633,7 @@ function resetForms() {
 }
 
 function applyRoundState(preferredRoundId = activeRoundId.value, options = {}) {
+  entryPagination.page = 1
   roundEntryPool.value = (competition.value?.entryPool || competition.value?.entries || [])
     .map((entry) => ({
       ...entry,
@@ -3392,6 +3669,7 @@ function applyRoundState(preferredRoundId = activeRoundId.value, options = {}) {
       categoryMode: table.categoryMode || (table.categoryId != null ? 'CATEGORY' : 'EMPTY'),
       categoryName: table.categoryName || '',
       entryUuids: table.entryUuids || [],
+      advancedEntryUuids: table.advancedEntryUuids || [],
       members: table.members || [],
       participantPublicIds: (table.members || [])
         .filter((member) => member.role !== 'CAPTAIN')
@@ -4068,7 +4346,7 @@ function buildCurrentRoundMetrics() {
   const captainAverage = getAverageProgress(currentRoundTables.value.map((table) => table.captainProgress))
   return [
     { label: '桌数', value: currentRoundTables.value.length },
-    { label: '已评数/总评分酒款', value: `${reviewedEntryCounts.done} / ${reviewedEntryCounts.total}` },
+    { label: '已评数/总数', value: `${reviewedEntryCounts.done} / ${reviewedEntryCounts.total}` },
     { label: '桌长汇总', value: `${captainAverage}%` },
     { label: '待处理', value: roundValidationIssues.value.length },
   ]
@@ -4279,7 +4557,7 @@ function hasRoundTargetMode(round, mode) {
 function getRoundTableProgressSummary(round, table) {
   if (!round) {
     return {
-      primaryLabel: '已评数/总评分酒款',
+      primaryLabel: '已评数/总数',
       primaryValue: '-',
       secondaryLabel: '桌长汇总',
       secondaryValue: '-',
@@ -4311,7 +4589,7 @@ function getRoundTableProgressSummary(round, table) {
   else if (judgeProgress >= 100) statusText = '待桌长汇总'
   else if (judgeProgress > 0) statusText = '评分中'
   return {
-    primaryLabel: '已评数/总评分酒款',
+    primaryLabel: '已评数/总数',
     primaryValue: formatReviewedEntryProgress(table),
     secondaryLabel: '桌长汇总',
     secondaryValue: captainProgress >= 100 ? '已汇总' : '未汇总',
@@ -4570,7 +4848,7 @@ function buildRoundTodoHint() {
       tone: 'ready',
       title: currentRound.value.type === 'SCORE' ? '等待评审评分' : '等待桌长排序',
       detail: currentRound.value.type === 'SCORE'
-        ? '评审评分完成后，由桌长汇总本轮结果'
+        ? ''
         : '桌长提交排序后，再确认并锁定本轮结果',
       action: 'focusRoundProgress',
     }
@@ -4890,8 +5168,40 @@ function getCategoryNameById(categoryId) {
 }
 
 function resetEntryAutoAssignForm(table = null) {
+  entryAutoAssignForm.mode = 'quick'
   entryAutoAssignForm.categoryId = table?.categoryId ?? null
   entryAutoAssignForm.quantity = 1
+  entryAutoAssignForm.codes = ''
+}
+
+function normalizeEntryCode(value) {
+  return String(value || '').trim().toLocaleUpperCase('zh-CN')
+}
+
+function buildEntryCodeAssignPreview(value) {
+  const rawCodes = String(value || '').trim().split(/\s+/u).filter(Boolean)
+  const normalizedCodes = rawCodes.map(normalizeEntryCode)
+  const counts = new Map()
+  normalizedCodes.forEach((code) => counts.set(code, (counts.get(code) || 0) + 1))
+  const duplicateCodes = [...counts.entries()].filter(([, count]) => count > 1).map(([code]) => code)
+  const entryByCode = new Map()
+  currentPoolEntries.value.forEach((entry) => {
+    const code = normalizeEntryCode(entry.shortCode)
+    if (code) entryByCode.set(code, entry)
+  })
+  const uniqueCodes = [...new Set(normalizedCodes)]
+  const missingCodes = uniqueCodes.filter((code) => !entryByCode.has(code))
+  const entries = uniqueCodes.map((code) => entryByCode.get(code)).filter(Boolean)
+  const occupied = entries
+    .map((entry) => ({ code: entry.shortCode, tableName: getRoundEntryAssignment(entry.uuid) }))
+    .filter((item) => item.tableName)
+  const issues = []
+  if (duplicateCodes.length) issues.push(`重复编号：${duplicateCodes.join('、')}`)
+  if (missingCodes.length) issues.push(`当前轮次不可分配：${missingCodes.join('、')}`)
+  if (occupied.length) {
+    issues.push(`已分配：${occupied.map((item) => `${item.code}（${item.tableName}）`).join('、')}`)
+  }
+  return { inputCount: rawCodes.length, entries, issues }
 }
 
 function toggleEntrySelection(uuid) {
@@ -4923,6 +5233,23 @@ function closeEntryAutoAssignDialog() {
 function confirmEntryAutoAssign() {
   const table = entryAutoAssignTable.value
   if (!table) return
+  if (entryAutoAssignForm.mode === 'codes') {
+    const preview = entryCodeAssignPreview.value
+    if (!preview.entries.length) {
+      ElMessage.warning('请输入要分配的参赛编号')
+      return
+    }
+    if (preview.issues.length) {
+      ElMessage.warning('请先处理编号中的异常项')
+      return
+    }
+    table.entryUuids.push(...preview.entries.map((entry) => entry.uuid))
+    syncRoundTableScope(table)
+    clearEntrySelection()
+    closeEntryAutoAssignDialog()
+    ElMessage.success(`${table.name} 已按编号分配 ${preview.entries.length} 款酒`)
+    return
+  }
   const categoryId = entryAutoAssignForm.categoryId
   if (!categoryId) {
     ElMessage.warning('请选择范围')
@@ -5759,7 +6086,7 @@ async function publishResultsAction() {
       ])
       : competitionSummaryItems([
         { label: '奖项确认', value: `${resultChecks.value.filter((item) => item.done).length} / ${resultChecks.value.length}` },
-        { label: '奖状 PDF', value: `${certificateUploadedCount.value} / ${certificateTotalCount.value}` },
+        { label: '奖状', value: `${certificateUploadedCount.value} / ${certificateTotalCount.value}` },
       ]),
     confirmText: feedbackOnly ? '发布诊断结果' : '发布结果',
     loadingText: '发布中',
@@ -5918,8 +6245,8 @@ async function handleAwardCertificateSelected(event) {
   const award = certificateTargetAward.value
   certificateTargetAward.value = null
   if (!file || !award) return
-  if (!isPdfFile(file)) {
-    ElMessage.warning('奖状文件必须是 PDF')
+  if (!isAwardCertificateFile(file)) {
+    ElMessage.warning('奖状文件仅支持 PDF、PNG、JPG 格式')
     input.value = ''
     return
   }
@@ -5939,7 +6266,7 @@ async function previewAwardCertificate(award) {
   setCertificateActionBusy(award.id, true)
   try {
     const blob = await downloadAwardCertificate(competition.value.id, award.id)
-    const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }))
+    const url = window.URL.createObjectURL(blob)
     window.open(url, '_blank', 'noopener,noreferrer')
     window.setTimeout(() => window.URL.revokeObjectURL(url), 30000)
   } finally {
@@ -5999,8 +6326,11 @@ function setCertificateActionBusy(awardId, busy) {
   certificateActionIds.value = next
 }
 
-function isPdfFile(file) {
-  return file.type === 'application/pdf' || file.name?.toLowerCase().endsWith('.pdf')
+function isAwardCertificateFile(file) {
+  const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg']
+  const allowedExtensions = ['.pdf', '.png', '.jpg', '.jpeg']
+  const filename = file.name?.toLowerCase() || ''
+  return allowedTypes.includes(file.type) || allowedExtensions.some((extension) => filename.endsWith(extension))
 }
 
 function downloadBlob(blob, fileName) {
@@ -6258,7 +6588,12 @@ function getJudgeInitial(name) {
 }
 
 function isJudgeActive(judge) {
-  return Number(judge.status) === 1
+  const status = String(judge?.status ?? '').trim().toUpperCase()
+  const statusLabel = String(judge?.statusLabel || '').trim()
+  return status === '1'
+    || status === 'ACTIVE'
+    || statusLabel === '启用'
+    || statusLabel === '已启用'
 }
 
 function isAssigned(judgePublicId) {

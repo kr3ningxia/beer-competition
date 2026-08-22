@@ -208,7 +208,7 @@
                 {{ option.label }}
               </option>
             </select>
-            <small>{{ currentRoundTargetHint }}</small>
+            <span class="help-hint" tabindex="0" role="img" aria-label="查看说明" :data-tooltip="currentRoundTargetHint">i</span>
           </label>
         </section>
         <section class="control-section">
@@ -500,7 +500,7 @@
                 type="button"
                 @click.stop="$emit('openEntryAutoAssign', table.id)"
               >
-                自动分配
+                快速分配
               </button>
             </div>
           </header>
@@ -615,7 +615,7 @@
                 {{ option.label }}
               </option>
             </select>
-            <small>{{ currentRoundTargetHint }}</small>
+            <span class="help-hint" tabindex="0" role="img" aria-label="查看说明" :data-tooltip="currentRoundTargetHint">i</span>
           </label>
         </section>
         <section class="control-section">
@@ -2504,6 +2504,53 @@ p {
 .stack-field {
   display: grid;
   gap: 6px;
+}
+
+.help-hint {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 2px;
+  color: #a9bac2;
+  border: 1px solid rgba(169, 186, 194, 0.55);
+  border-radius: 50%;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1;
+  cursor: help;
+  outline: none;
+}
+
+.help-hint::after {
+  position: absolute;
+  z-index: 5;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  width: max-content;
+  max-width: 260px;
+  padding: 8px 10px;
+  color: #e6edf0;
+  border: 1px solid rgba(219, 232, 237, 0.14);
+  border-radius: 6px;
+  background: #1a252a;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+  content: attr(data-tooltip);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.45;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 4px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.help-hint:hover::after,
+.help-hint:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
 }
 
 .check-panel {

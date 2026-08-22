@@ -37,6 +37,7 @@ import com.beercompetition.pojo.vo.PortalResultSummaryVO;
 import com.beercompetition.pojo.vo.PortalRoundResultVO;
 import com.beercompetition.pojo.vo.PortalScoreDimensionVO;
 import com.beercompetition.pojo.vo.PortalScoreRecordVO;
+import com.beercompetition.service.support.AwardCertificateFileType;
 import com.beercompetition.storage.FileStorageService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -64,8 +65,6 @@ import com.beercompetition.result.PortalResultQueryService;
 @Service
 @RequiredArgsConstructor
 public class PortalResultQueryServiceImpl implements PortalResultQueryService {
-
-    private static final String CONTENT_TYPE_PDF = "application/pdf";
 
     private final PortalAccountMapper portalAccountMapper;
 
@@ -212,7 +211,7 @@ public class PortalResultQueryServiceImpl implements PortalResultQueryService {
         // 3) 读取并返回文件内容
         return FileDownloadVO.builder()
                 .fileName(resolveCertificateFilename(award, asset))
-                .contentType(CONTENT_TYPE_PDF)
+                .contentType(AwardCertificateFileType.resolveContentType(resolveCertificateFilename(award, asset)))
                 .content(fileStorageService.download(asset.getStoragePath()))
                 .build();
     }

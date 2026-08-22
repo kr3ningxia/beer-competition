@@ -37,6 +37,7 @@ import com.beercompetition.pojo.vo.AwardResultVO;
 import com.beercompetition.pojo.vo.AwardRuleVO;
 import com.beercompetition.pojo.vo.FileDownloadVO;
 import com.beercompetition.service.AwardService;
+import com.beercompetition.service.support.AwardCertificateFileType;
 import com.beercompetition.storage.FileStorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -68,7 +69,6 @@ public class AwardServiceImpl implements AwardService {
     private static final String CHAMPION = "总冠军";
     private static final String CATEGORY_ALL_KEY = "ALL";
     private static final String BUSINESS_TYPE_AWARD_CERTIFICATE = "AWARD_CERTIFICATE";
-    private static final String CONTENT_TYPE_PDF = "application/pdf";
     private static final long MAX_CERTIFICATE_SIZE = 20L * 1024L * 1024L;
 
     private final CompetitionMapper competitionMapper;
@@ -105,11 +105,12 @@ public class AwardServiceImpl implements AwardService {
     public AwardResultVO uploadCertificate(Long competitionId, Long awardId, MultipartFile file) {
         // 1) 参数规范化与前置校验
         AwardResult award = requireCertificateEditableAward(competitionId, awardId);
-        validateCertificateFile(file);
+        validateCertificateFileMetadata(file);
         String filename = sanitizeFilename(file.getOriginalFilename());
 
         // 2) 上传文件并记录资产
         byte[] bytes = readFileBytes(file);
+        validateCertificateFileContent(file, filename, bytes);
         String storagePath = fileStorageService.upload(BUSINESS_TYPE_AWARD_CERTIFICATE, filename, bytes);
         FileAsset asset = FileAsset.builder()
                 .businessType(BUSINESS_TYPE_AWARD_CERTIFICATE)
@@ -153,7 +154,7 @@ public class AwardServiceImpl implements AwardService {
         // 2) 读取文件并返回下载数据
         return FileDownloadVO.builder()
                 .fileName(resolveCertificateFilename(award, asset))
-                .contentType(CONTENT_TYPE_PDF)
+                .contentType(AwardCertificateFileType.resolveContentType(resolveCertificateFilename(award, asset)))
                 .content(fileStorageService.download(asset.getStoragePath()))
                 .build();
     }
@@ -780,17 +781,25 @@ public class AwardServiceImpl implements AwardService {
         return asset;
     }
 
-    private void validateCertificateFile(MultipartFile file) {
+    private void validateCertificateFileMetadata(MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new BaseException("请选择奖状 PDF 文件");
+            throw new BaseException("请选择奖状文件");
         }
         if (file.getSize() > MAX_CERTIFICATE_SIZE) {
-            throw new BaseException("奖状 PDF 不能超过 20MB");
+            throw new BaseException("奖状文件不能超过 20MB");
         }
-        String filename = sanitizeFilename(file.getOriginalFilename());
-        String contentType = file.getContentType();
-        if (!filename.toLowerCase().endsWith(".pdf") && !CONTENT_TYPE_PDF.equalsIgnoreCase(contentType)) {
-            throw new BaseException("奖状文件必须是 PDF");
+    }
+
+    private void validateCertificateFileContent(MultipartFile file, String filename, byte[] bytes) {
+        AwardCertificateFileType filenameType = AwardCertificateFileType.fromFilename(filename)
+                .orElseThrow(() -> new BaseException("奖状文件仅支持 PDF、PNG、JPG 格式"));
+        AwardCertificateFileType contentType = AwardCertificateFileType.fromContent(bytes)
+                .orElseThrow(() -> new BaseException("无法识别奖状文件内容，请上传有效的 PDF、PNG 或 JPG 文件"));
+        if (filenameType != contentType) {
+            throw new BaseException("奖状文件扩展名与实际内容不一致");
+        }
+        if (!contentType.matchesDeclaredContentType(file.getContentType())) {
+            throw new BaseException("奖状文件类型与实际内容不一致");
         }
     }
 

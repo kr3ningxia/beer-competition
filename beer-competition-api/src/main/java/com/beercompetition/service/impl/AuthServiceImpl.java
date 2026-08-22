@@ -458,7 +458,9 @@ public class AuthServiceImpl implements AuthService {
         Brewery brewery = account.getBreweryId() == null ? null : breweryMapper.selectById(account.getBreweryId());
         return brewery != null
                 && !isPortalPlaceholderValue(brewery.getCompanyName())
-                && !isPortalPlaceholderValue(brewery.getContactName());
+                && !isPortalPlaceholderValue(brewery.getContactName())
+                && StringUtils.hasText(account.getWechat())
+                && StringUtils.hasText(brewery.getWechat());
     }
 
     private boolean isPortalPlaceholderValue(String value) {

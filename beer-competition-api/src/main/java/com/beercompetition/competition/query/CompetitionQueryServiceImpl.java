@@ -3,6 +3,7 @@ package com.beercompetition.competition.query;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
+import com.beercompetition.common.result.PageResult;
 import com.beercompetition.mapper.BeerEntryMapper;
 import com.beercompetition.mapper.CompetitionCategoryMapper;
 import com.beercompetition.mapper.CompetitionMapper;
@@ -238,6 +239,12 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
     public List<CompetitionEntryVO> getCompetitionEntryPool(Long id) {
         Competition competition = getCompetitionOrThrow(id);
         return competitionWorkspaceQueryService.listEntryPool(competition.getId());
+    }
+
+    @Override
+    public PageResult<CompetitionEntryVO> getCompetitionEntryPoolPage(Long id, Integer page, Integer pageSize) {
+        Competition competition = getCompetitionOrThrow(id);
+        return competitionWorkspaceQueryService.listEntryPoolPage(competition.getId(), page, pageSize);
     }
 
     @Override

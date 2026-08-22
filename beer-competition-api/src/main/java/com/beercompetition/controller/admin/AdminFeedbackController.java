@@ -1,6 +1,7 @@
 package com.beercompetition.controller.admin;
 
 import com.beercompetition.common.result.Result;
+import com.beercompetition.pojo.vo.AdminFeedbackReviewPageVO;
 import com.beercompetition.pojo.dto.AdminFeedbackCommentUpdateRequest;
 import com.beercompetition.pojo.vo.AdminFeedbackReviewEntryVO;
 import com.beercompetition.service.AdminFeedbackService;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -33,6 +35,13 @@ public class AdminFeedbackController {
     @GetMapping
     public Result<List<AdminFeedbackReviewEntryVO>> feedbackReview(@PathVariable Long id) {
         return Result.success(competitionFeedbackQueryService.getFeedbackReviewEntries(id));
+    }
+
+    @GetMapping("/page")
+    public Result<AdminFeedbackReviewPageVO> feedbackReviewPage(@PathVariable Long id,
+                                                                                @RequestParam(defaultValue = "1") Integer page,
+                                                                                @RequestParam(defaultValue = "20") Integer pageSize) {
+        return Result.success(competitionFeedbackQueryService.getFeedbackReviewPage(id, page, pageSize));
     }
 
     /**

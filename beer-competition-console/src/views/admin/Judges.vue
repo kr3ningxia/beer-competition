@@ -9,10 +9,6 @@
           <Refresh />
           刷新名单
         </button>
-        <button class="tool-button primary" type="button" @click="router.push('/admin/assignments')">
-          <Connection />
-          评审编排
-        </button>
       </div>
     </section>
 
@@ -50,6 +46,7 @@
           <span>联系方式</span>
           <span>资质</span>
           <span>利益关系</span>
+          <span>备注</span>
           <span>状态</span>
           <span>操作</span>
         </div>
@@ -75,10 +72,12 @@
                 {{ formatBreweryConflict(judge) }}
               </small>
             </div>
+            <span class="review-remark" :title="judge.reviewRemark || ''">{{ judge.reviewRemark || '-' }}</span>
             <span :class="['status-badge', statusTone(judge)]">
               {{ judge.statusLabel || statusLabel(judge.status) }}
             </span>
             <div class="row-actions">
+              <button class="row-action" type="button" @click="openViewer(judge)">查看</button>
               <button class="row-action" type="button" @click="openEditor(judge)">编辑</button>
               <button
                 v-if="Number(judge.status) === 2"
@@ -103,15 +102,6 @@
                 @click="changeStatus(judge, 1)"
               >
                 启用
-              </button>
-              <button
-                v-if="isActive(judge)"
-                class="row-action"
-                type="button"
-                @click="router.push('/admin/assignments')"
-              >
-                编排
-                <Right />
               </button>
             </div>
           </div>
@@ -153,7 +143,6 @@
           <h2>编辑评审资料</h2>
           <button class="icon-close" type="button" @click="closeEditor">×</button>
         </header>
-        <p class="privacy-hint">完整联系方式仅供内部联络和资料维护使用，系统会记录查看和修改操作</p>
         <label>
           <span>手机号</span>
           <div class="readonly-row">
@@ -174,6 +163,11 @@
           <textarea v-model.trim="editForm.qualification"></textarea>
         </label>
         <label>
+          <span>备注</span>
+          <textarea v-model.trim="editForm.reviewRemark" maxlength="200" placeholder="可填写评审审核备注"></textarea>
+          <small class="field-counter">{{ editForm.reviewRemark.length }} / 200</small>
+        </label>
+        <label>
           <span>是否与酒厂有利益关联</span>
           <div class="conflict-toggle">
             <button :class="{ active: !editForm.breweryConflictFlag }" type="button" @click="setEditorBreweryConflict(false)">无</button>
@@ -184,9 +178,12 @@
           <span>相关酒厂或品牌名称及关系说明</span>
           <textarea v-model.trim="editForm.breweryConflictText" maxlength="500"></textarea>
         </label>
-        <footer>
-          <button class="tool-button" type="button" @click="closeEditor">取消</button>
-          <button class="tool-button primary" type="button" @click="saveEditor">保存</button>
+        <footer class="editor-footer">
+          <button class="row-action danger" type="button" @click="removeEditingJudge">删除</button>
+          <div class="editor-footer-actions">
+            <button class="tool-button" type="button" @click="closeEditor">取消</button>
+            <button class="tool-button primary" type="button" @click="saveEditor">保存</button>
+          </div>
         </footer>
       </section>
     </div>
@@ -212,18 +209,40 @@
         </footer>
       </section>
     </div>
+
+    <div v-if="viewerOpen" class="drawer-mask" @click.self="closeViewer">
+      <aside class="judge-drawer">
+        <header>
+          <div>
+            <span>评委信息</span>
+            <h2>{{ viewingJudge?.name || '未填写姓名' }}</h2>
+            <small>{{ viewingJudge?.statusLabel || statusLabel(viewingJudge?.status) }}</small>
+          </div>
+          <button class="icon-close" type="button" @click="closeViewer">×</button>
+        </header>
+        <div class="drawer-grid">
+          <div><span>手机号</span><strong>{{ viewingJudge?.phone || viewingJudge?.maskedPhone || '-' }}</strong></div>
+          <div><span>微信号</span><strong>{{ viewingJudge?.wechat || viewingJudge?.maskedWechat || '-' }}</strong></div>
+          <div class="wide"><span>资质信息</span><strong>{{ viewingJudge?.qualification || '-' }}</strong></div>
+          <div class="wide"><span>利益关系</span><strong>{{ hasBreweryConflict(viewingJudge) ? formatBreweryConflict(viewingJudge) : '无' }}</strong></div>
+          <div class="wide"><span>备注</span><strong>{{ viewingJudge?.reviewRemark || '-' }}</strong></div>
+        </div>
+        <footer class="drawer-actions">
+          <button class="tool-button primary" type="button" @click="editFromViewer">编辑资料</button>
+        </footer>
+      </aside>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Connection, Refresh, Right, Search } from '@element-plus/icons-vue'
-import { fetchJudgeDetail, fetchJudgesPage, updateJudge, updateJudgePhone, updateJudgeStatus } from '@/api/admin'
+import { Refresh, Search } from '@element-plus/icons-vue'
+import { deleteJudge, fetchJudgeDetail, fetchJudgesPage, updateJudge, updateJudgePhone, updateJudgeStatus } from '@/api/admin'
 
 const route = useRoute()
-const router = useRouter()
 const judges = ref([])
 const keyword = ref('')
 const statusFilter = ref('ALL')
@@ -232,6 +251,8 @@ const totalCount = ref(0)
 const searchTimer = ref(null)
 const editorOpen = ref(false)
 const phoneEditorOpen = ref(false)
+const viewerOpen = ref(false)
+const viewingJudge = ref(null)
 const editingJudgePublicId = ref(null)
 const editForm = reactive({
   phone: '',
@@ -335,10 +356,6 @@ function changePageSize() {
   loadJudges()
 }
 
-function isActive(judge) {
-  return Number(judge.status) === 1
-}
-
 function statusLabel(status) {
   const map = {
     0: '停用',
@@ -369,6 +386,22 @@ async function openEditor(judge) {
   editorOpen.value = true
 }
 
+async function openViewer(judge) {
+  viewingJudge.value = await fetchJudgeDetail(judge.publicId)
+  viewerOpen.value = true
+}
+
+function closeViewer() {
+  viewerOpen.value = false
+  viewingJudge.value = null
+}
+
+function editFromViewer() {
+  const judge = viewingJudge.value
+  closeViewer()
+  if (judge) openEditor(judge)
+}
+
 function closeEditor() {
   editorOpen.value = false
   editingJudgePublicId.value = null
@@ -377,6 +410,10 @@ function closeEditor() {
 async function saveEditor() {
   if (editForm.breweryConflictFlag && !editForm.breweryConflictText) {
     ElMessage.warning('请填写相关酒厂或品牌名称及关系说明')
+    return
+  }
+  if (editForm.reviewRemark.length > 200) {
+    ElMessage.warning('备注不能超过 200 个字符')
     return
   }
   await updateJudge(editingJudgePublicId.value, {
@@ -390,6 +427,24 @@ async function saveEditor() {
   ElMessage.success('评审资料已更新')
   closeEditor()
   await loadJudges()
+}
+
+async function removeEditingJudge() {
+  try {
+    await ElMessageBox.confirm(`确认删除评审“${editForm.name || '未填写姓名'}”吗？删除后无法恢复。`, '删除评审', {
+      confirmButtonText: '确认删除',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+    await deleteJudge(editingJudgePublicId.value)
+    ElMessage.success('评审已删除')
+    closeEditor()
+    if (judges.value.length === 1 && pagination.page > 1) pagination.page -= 1
+    await loadJudges()
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return
+    throw error
+  }
 }
 
 async function changeStatus(judge, status) {
@@ -727,7 +782,7 @@ svg {
 .table-head,
 .table-row {
   display: grid;
-  grid-template-columns: minmax(200px, 1.1fr) minmax(180px, 0.9fr) minmax(220px, 1.1fr) minmax(150px, 0.8fr) 86px minmax(250px, auto);
+  grid-template-columns: minmax(200px, 1.1fr) minmax(180px, 0.9fr) minmax(220px, 1.1fr) minmax(150px, 0.8fr) minmax(150px, 0.8fr) 86px minmax(250px, auto);
   gap: 12px;
   align-items: center;
 }
@@ -760,7 +815,8 @@ svg {
 .judge-cell strong,
 .contact-cell span,
 .qualification,
-.conflict-cell small {
+.conflict-cell small,
+.review-remark {
   display: block;
   min-width: 0;
   overflow: hidden;
@@ -982,6 +1038,95 @@ svg {
   margin-top: 18px;
 }
 
+.editor-footer {
+  justify-content: space-between;
+}
+
+.editor-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.field-counter {
+  justify-self: end;
+  color: var(--faint);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.drawer-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(3, 8, 10, 0.58);
+  backdrop-filter: blur(4px);
+}
+
+.judge-drawer {
+  width: min(560px, 100vw);
+  height: 100vh;
+  padding: 22px;
+  overflow-y: auto;
+  color: var(--text);
+  border-left: 1px solid var(--line);
+  background: rgba(22, 32, 36, 0.98);
+  box-shadow: -24px 0 80px rgba(0, 0, 0, 0.28);
+}
+
+.judge-drawer header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.judge-drawer header span,
+.judge-drawer header small,
+.drawer-grid span {
+  color: var(--muted);
+}
+
+.judge-drawer h2 {
+  margin: 4px 0;
+  font-size: 26px;
+}
+
+.drawer-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.drawer-grid div {
+  display: grid;
+  gap: 7px;
+  padding: 13px;
+  border: 1px solid rgba(218, 232, 237, 0.09);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.drawer-grid .wide {
+  grid-column: 1 / -1;
+}
+
+.drawer-grid strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.drawer-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+
 .empty-state {
   display: grid;
   place-items: center;
@@ -993,7 +1138,7 @@ svg {
 @media (max-width: 1260px) {
   .table-head,
   .table-row {
-    grid-template-columns: minmax(190px, 1fr) minmax(170px, 0.9fr) minmax(180px, 1fr) minmax(130px, 0.8fr) 80px minmax(220px, auto);
+    grid-template-columns: minmax(190px, 1fr) minmax(170px, 0.9fr) minmax(180px, 1fr) minmax(130px, 0.8fr) minmax(130px, 0.8fr) 80px minmax(220px, auto);
   }
 }
 
@@ -1030,6 +1175,14 @@ svg {
 
   .row-actions {
     justify-content: flex-start;
+  }
+
+  .drawer-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .drawer-grid .wide {
+    grid-column: auto;
   }
 }
 </style>

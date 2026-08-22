@@ -189,6 +189,7 @@ public class CompetitionAnalyticsService {
         int awardCount = awardResults.size();
         int testRecordCount = (int) payments.stream().filter(payment -> EntryPayMethod.MOCK.name().equals(payment.getPayMethod())).count();
         int averageCommentChars = averageInt(scoreRecords.stream()
+                .filter(record -> Objects.equals(record.getFinalFlag(), 0))
                 .map(ScoreRecord::getCommentCharCount)
                 .filter(Objects::nonNull)
                 .toList());

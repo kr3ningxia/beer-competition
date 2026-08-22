@@ -771,6 +771,8 @@ onMounted(async () => {
   font-size: 25px;
   line-height: 1;
   font-weight: 450;
+  /* Prevent mobile browsers from treating rapid score taps as double-tap zoom. */
+  touch-action: manipulation;
 }
 
 .score-input {
@@ -813,6 +815,7 @@ onMounted(async () => {
   background: #fff;
   font-size: 18px;
   font-weight: 850;
+  touch-action: manipulation;
 }
 
 .score-options button.active {
@@ -822,10 +825,12 @@ onMounted(async () => {
 }
 
 .range {
-  position: relative;
+  position: absolute;
+  top: 11px;
+  left: 0;
   z-index: 3;
   display: block;
-  height: 28px;
+  height: 6px;
   width: 100%;
   margin: 0;
   appearance: none;
@@ -882,6 +887,7 @@ onMounted(async () => {
 
 .range-wrap {
   position: relative;
+  height: 51px;
   margin-top: 22px;
   padding: 0 0 23px;
 }

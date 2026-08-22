@@ -19,6 +19,7 @@ public class PortalProfileUpdateRequest {
     @Size(max = 64, message = "联系人不能超过64个字符")
     private String contactName;
 
+    @NotBlank(message = "微信号不能为空")
     @Size(max = 64, message = "微信号不能超过64个字符")
     private String wechat;
 }
