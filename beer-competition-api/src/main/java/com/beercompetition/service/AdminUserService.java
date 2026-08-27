@@ -1,6 +1,7 @@
 package com.beercompetition.service;
 
 import com.beercompetition.pojo.dto.AdminPasswordUpdateRequest;
+import com.beercompetition.pojo.dto.AdminCredentialsUpdateRequest;
 import com.beercompetition.pojo.dto.AdminUserCreateRequest;
 import com.beercompetition.pojo.dto.AdminUserPasswordResetRequest;
 import com.beercompetition.pojo.dto.AdminUserStatusUpdateRequest;
@@ -22,4 +23,6 @@ public interface AdminUserService {
     void resetAdminUserPassword(Long id, AdminUserPasswordResetRequest request);
 
     void updateMyPassword(AdminPasswordUpdateRequest request);
+
+    AdminUserVO updateMyCredentials(AdminCredentialsUpdateRequest request);
 }

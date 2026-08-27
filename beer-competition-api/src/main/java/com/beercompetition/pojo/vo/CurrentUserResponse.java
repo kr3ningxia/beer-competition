@@ -9,10 +9,12 @@ public class CurrentUserResponse {
 
     private Long userId;
     private String role;
+    private String username;
     private String displayName;
     private String adminType;
     private Long organizerId;
     private Boolean mustChangePassword;
+    private Boolean mustChangeUsername;
     private String phone;
     private String wechat;
     private String qualification;

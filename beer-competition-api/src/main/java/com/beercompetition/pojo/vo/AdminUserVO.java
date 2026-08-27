@@ -16,6 +16,7 @@ public class AdminUserVO {
     private Long organizerId;
     private Integer status;
     private Boolean mustChangePassword;
+    private Boolean mustChangeUsername;
     private String statusLabel;
     private Boolean currentUser;
     private LocalDateTime createTime;

@@ -14,10 +14,12 @@ public class LoginResponse {
     private String scope;
     private Long userId;
     private String role;
+    private String username;
     private String displayName;
     private String adminType;
     private Long organizerId;
     private Boolean mustChangePassword;
+    private Boolean mustChangeUsername;
     private Integer status;
     private Boolean profileRequired;
     private Boolean profileComplete;

@@ -2,6 +2,7 @@ package com.beercompetition.controller.admin;
 
 import com.beercompetition.common.result.Result;
 import com.beercompetition.pojo.dto.AdminPasswordUpdateRequest;
+import com.beercompetition.pojo.dto.AdminCredentialsUpdateRequest;
 import com.beercompetition.pojo.dto.AdminUserCreateRequest;
 import com.beercompetition.pojo.dto.AdminUserPasswordResetRequest;
 import com.beercompetition.pojo.dto.AdminUserStatusUpdateRequest;
@@ -96,5 +97,13 @@ public class AdminAccountController {
     public Result<String> updateMyPassword(@RequestBody @Valid AdminPasswordUpdateRequest request) {
         adminUserService.updateMyPassword(request);
         return Result.success("密码已更新");
+    }
+
+    /**
+     * 修改当前管理员的登录账号和密码；首次登录时用于完成账号初始化。
+     */
+    @PatchMapping("/me/credentials")
+    public Result<AdminUserVO> updateMyCredentials(@RequestBody @Valid AdminCredentialsUpdateRequest request) {
+        return Result.success(adminUserService.updateMyCredentials(request));
     }
 }

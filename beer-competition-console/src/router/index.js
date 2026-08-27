@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { getAdminType, isLoggedIn } from '@/utils/auth'
+import { getAdminType, isAdminCredentialSetupRequired, isLoggedIn } from '@/utils/auth'
 
 const routes = [
   { path: '/', redirect: '/portal/home' },
@@ -34,7 +34,7 @@ const routes = [
   {
     path: '/admin/login',
     component: () => import('@/views/admin/Login.vue'),
-    meta: { public: true, scope: 'admin' },
+    meta: { public: true, guestOnly: true, scope: 'admin' },
   },
   {
     path: '/admin/live-board',
@@ -73,7 +73,9 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   if (to.meta.public) {
     if (to.meta.guestOnly && to.meta.scope && isLoggedIn(to.meta.scope)) {
-      next(to.meta.scope === 'admin' ? '/admin/dashboard' : '/portal/my')
+      next(to.meta.scope === 'admin'
+        ? (isAdminCredentialSetupRequired() ? { path: '/admin/admin-users', query: { setup: '1' } } : '/admin/dashboard')
+        : '/portal/my')
       return
     }
     next()
@@ -84,6 +86,10 @@ router.beforeEach((to, from, next) => {
     const scope = to.meta.scope
     if (!isLoggedIn(scope)) {
       next(scope === 'admin' ? '/admin/login' : { path: '/portal/login', query: { redirect: to.fullPath } })
+      return
+    }
+    if (scope === 'admin' && isAdminCredentialSetupRequired() && to.path !== '/admin/admin-users') {
+      next({ path: '/admin/admin-users', query: { setup: '1' } })
       return
     }
     if (scope === 'admin' && to.meta.platformSuperAdmin

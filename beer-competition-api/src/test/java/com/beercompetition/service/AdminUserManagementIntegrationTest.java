@@ -112,6 +112,51 @@ class AdminUserManagementIntegrationTest {
                 .andExpect(jsonPath("$.msg").value("不能停用当前登录账号"));
     }
 
+    @Test
+    void distributedAdminCanSetNewUsernameAndPasswordThenLoginAgain() throws Exception {
+        String initialUsername = usernamePrefix + "_distributed";
+        String finalUsername = usernamePrefix + "_official";
+        jdbcTemplate.update("""
+                INSERT INTO admin_user (username, password, name, status, admin_type, must_change_password, must_change_username)
+                VALUES (?, MD5(?), ?, 1, 'PLATFORM_SUPER_ADMIN', 1, 1)
+                """, initialUsername, "123456", "入驻主办方");
+        Long adminId = findAdminId(initialUsername);
+
+        mockMvc.perform(patch("/api/admin/me/credentials")
+                        .header(jwtProperties.getHeaderName(), bearerToken(adminId))
+                        .contentType("application/json")
+                        .content("{\"username\":\"%s\",\"newPassword\":\"654321\"}".formatted(finalUsername)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.username").value(finalUsername))
+                .andExpect(jsonPath("$.data.mustChangeUsername").value(false))
+                .andExpect(jsonPath("$.data.mustChangePassword").value(false));
+
+        mockMvc.perform(post("/api/public/admin/login")
+                        .contentType("application/json")
+                        .content("{\"username\":\"%s\",\"password\":\"654321\"}".formatted(finalUsername)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.username").value(finalUsername))
+                .andExpect(jsonPath("$.data.mustChangeUsername").value(false))
+                .andExpect(jsonPath("$.data.mustChangePassword").value(false));
+    }
+
+    @Test
+    void distributedAdminCannotSkipUsernameSetupWithLegacyPasswordEndpoint() throws Exception {
+        String initialUsername = usernamePrefix + "_blocked";
+        jdbcTemplate.update("""
+                INSERT INTO admin_user (username, password, name, status, admin_type, must_change_password, must_change_username)
+                VALUES (?, MD5(?), ?, 1, 'PLATFORM_SUPER_ADMIN', 1, 1)
+                """, initialUsername, "123456", "待设置主办方");
+        Long adminId = findAdminId(initialUsername);
+
+        mockMvc.perform(patch("/api/admin/me/password")
+                        .header(jwtProperties.getHeaderName(), bearerToken(adminId))
+                        .contentType("application/json")
+                        .content("{\"oldPassword\":\"123456\",\"newPassword\":\"654321\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.msg").value("请先完成账号设置"));
+    }
+
     private Long insertAdmin(String username, String name, Integer status) {
         jdbcTemplate.update("""
                 INSERT INTO admin_user (username, password, name, status)

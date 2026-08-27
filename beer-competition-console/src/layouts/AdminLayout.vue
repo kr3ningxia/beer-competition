@@ -57,12 +57,13 @@ import {
   UserFilled,
 } from '@element-plus/icons-vue'
 import { getAdminMe } from '@/api/auth'
-import { clearSession, getAdminType, getDisplayName, setSession } from '@/utils/auth'
+import { clearSession, getAdminType, getDisplayName, isAdminCredentialSetupRequired, setSession } from '@/utils/auth'
 
 const router = useRouter()
 const route = useRoute()
 const displayName = getDisplayName('admin')
 const adminType = ref(getAdminType())
+const credentialSetupRequired = ref(isAdminCredentialSetupRequired())
 const isDashboard = computed(() => ['/admin/dashboard', '/admin/judges', '/admin/admin-users', '/admin/operation-logs', '/admin/entries', '/admin/bank-transfers', '/admin/style-libraries', '/admin/exports', '/admin/organizer-applications'].includes(route.path) || route.path.startsWith('/admin/competitions'))
 
 const navItems = [
@@ -78,7 +79,12 @@ const navItems = [
   { path: '/admin/exports', label: '数据导出', icon: Download },
 ]
 
-const visibleNavItems = computed(() => navItems.filter((item) => !item.platformOnly || adminType.value === 'PLATFORM_SUPER_ADMIN'))
+const visibleNavItems = computed(() => {
+  if (credentialSetupRequired.value) {
+    return navItems.filter((item) => item.path === '/admin/admin-users')
+  }
+  return navItems.filter((item) => !item.platformOnly || adminType.value === 'PLATFORM_SUPER_ADMIN')
+})
 
 onMounted(async () => {
   try {
@@ -87,6 +93,7 @@ onMounted(async () => {
       adminType.value = currentUser.adminType
       setSession('admin', currentUser)
     }
+    credentialSetupRequired.value = Boolean(currentUser?.mustChangePassword || currentUser?.mustChangeUsername)
   } catch {
     // The request interceptor handles expired sessions and redirects.
   }

@@ -18,4 +18,5 @@ public class SessionUser {
     private String adminType;
     private Long organizerId;
     private Boolean mustChangePassword;
+    private Boolean mustChangeUsername;
 }

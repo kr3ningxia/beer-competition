@@ -16,6 +16,9 @@ const USERNAME_KEYS = {
 }
 
 const ADMIN_TYPE_KEY = 'admin_type'
+const ADMIN_USERNAME_KEY = 'admin_username'
+const ADMIN_MUST_CHANGE_PASSWORD_KEY = 'admin_must_change_password'
+const ADMIN_MUST_CHANGE_USERNAME_KEY = 'admin_must_change_username'
 
 const SESSION_EVENT = 'beer-competition-session-updated'
 const sessionRevision = ref(0)
@@ -40,6 +43,17 @@ export function setSession(scope, session, displayName) {
   }
   if (scope === 'admin' && typeof session !== 'string' && session?.adminType) {
     localStorage.setItem(ADMIN_TYPE_KEY, session.adminType)
+  }
+  if (scope === 'admin' && typeof session !== 'string') {
+    if (Object.prototype.hasOwnProperty.call(session, 'username') && session.username != null) {
+      localStorage.setItem(ADMIN_USERNAME_KEY, session.username)
+    }
+    if (Object.prototype.hasOwnProperty.call(session, 'mustChangePassword')) {
+      localStorage.setItem(ADMIN_MUST_CHANGE_PASSWORD_KEY, session.mustChangePassword ? '1' : '0')
+    }
+    if (Object.prototype.hasOwnProperty.call(session, 'mustChangeUsername')) {
+      localStorage.setItem(ADMIN_MUST_CHANGE_USERNAME_KEY, session.mustChangeUsername ? '1' : '0')
+    }
   }
   setDisplayName(scope, resolvedDisplayName)
 }
@@ -71,6 +85,9 @@ export function clearSession(scope) {
   localStorage.removeItem(USERNAME_KEYS[scope])
   if (scope === 'admin') {
     localStorage.removeItem(ADMIN_TYPE_KEY)
+    localStorage.removeItem(ADMIN_USERNAME_KEY)
+    localStorage.removeItem(ADMIN_MUST_CHANGE_PASSWORD_KEY)
+    localStorage.removeItem(ADMIN_MUST_CHANGE_USERNAME_KEY)
   }
   notifySessionUpdated(scope)
 }
@@ -87,6 +104,15 @@ export function getDisplayName(scope) {
 
 export function getAdminType() {
   return localStorage.getItem(ADMIN_TYPE_KEY) || ''
+}
+
+export function getAdminUsername() {
+  return localStorage.getItem(ADMIN_USERNAME_KEY) || ''
+}
+
+export function isAdminCredentialSetupRequired() {
+  return localStorage.getItem(ADMIN_MUST_CHANGE_PASSWORD_KEY) === '1'
+    || localStorage.getItem(ADMIN_MUST_CHANGE_USERNAME_KEY) === '1'
 }
 
 function isTokenUsable(token, scope) {

@@ -25,6 +25,7 @@ public class AdminUser {
     private Integer status;
     private String adminType;
     private Integer mustChangePassword;
+    private Integer mustChangeUsername;
     private LocalDateTime initialCredentialIssuedTime;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;

@@ -88,6 +88,14 @@ service.interceptors.response.use(
       router.push(scope === 'admin' ? '/admin/login' : '/portal/login')
     }
     const message = error.response?.data?.msg || '请求失败，请稍后重试'
+    if (status === 403 && scope === 'admin' && message.includes('首次登录请先修改密码')) {
+      if (router.currentRoute.value.path !== '/admin/admin-users') {
+        router.replace({ path: '/admin/admin-users', query: { setup: '1' } })
+      }
+      error.userNotified = true
+      error.userMessage = message
+      return Promise.reject(error)
+    }
     ElMessage.error(message)
     error.userNotified = true
     error.userMessage = message

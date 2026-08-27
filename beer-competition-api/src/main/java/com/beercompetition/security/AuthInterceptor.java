@@ -78,7 +78,8 @@ public class AuthInterceptor implements HandlerInterceptor {
                 throw new UnauthorizedException("管理员账号已停用，请重新登录");
             }
             adminIdentity = adminIdentityService.resolve(adminUser);
-            if (adminIdentity.mustChangePassword() && !isPasswordSetupEndpoint(request.getRequestURI())) {
+            if ((adminIdentity.mustChangePassword() || adminIdentity.mustChangeUsername())
+                    && !isPasswordSetupEndpoint(request.getRequestURI())) {
                 throw new ForbiddenException("首次登录请先修改密码");
             }
         }
@@ -92,6 +93,7 @@ public class AuthInterceptor implements HandlerInterceptor {
                 .adminType(adminIdentity == null ? claims.get("adminType", String.class) : adminIdentity.adminType().name())
                 .organizerId(adminIdentity == null ? claimLong(claims, "organizerId") : adminIdentity.organizerId())
                 .mustChangePassword(adminIdentity == null ? claimBoolean(claims, "mustChangePassword") : adminIdentity.mustChangePassword())
+                .mustChangeUsername(adminIdentity == null ? claimBoolean(claims, "mustChangeUsername") : adminIdentity.mustChangeUsername())
                 .build());
         return true;
     }
@@ -159,6 +161,7 @@ public class AuthInterceptor implements HandlerInterceptor {
 
     private boolean isPasswordSetupEndpoint(String uri) {
         return "/api/admin/me".equals(uri)
-                || "/api/admin/me/password".equals(uri);
+                || "/api/admin/me/password".equals(uri)
+                || "/api/admin/me/credentials".equals(uri);
     }
 }

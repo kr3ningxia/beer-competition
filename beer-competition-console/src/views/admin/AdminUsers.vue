@@ -1,14 +1,13 @@
 <template>
-  <div class="admin-users-page">
-    <section class="page-head">
+  <div :class="['admin-users-page', { 'setup-mode': setupMode }]">
+    <section v-if="!setupMode" class="page-head">
       <div>
-        <span>后台安全</span>
         <h1>管理员账号</h1>
       </div>
       <div class="head-actions">
-        <button class="tool-button" type="button" @click="openMyPasswordEditor">
+        <button class="tool-button" type="button" @click="toggleMyAccount">
           <Key />
-          修改我的密码
+          我的账号
         </button>
         <button class="tool-button primary" type="button" @click="openCreateEditor">
           <Plus />
@@ -17,6 +16,42 @@
       </div>
     </section>
 
+    <section :class="['my-account-panel', { expanded: myAccountExpanded, required: setupMode }]">
+      <button class="my-account-toggle" type="button" :aria-expanded="myAccountExpanded" :disabled="setupMode" @click="toggleMyAccount">
+        <span class="my-account-icon"><UserFilled /></span>
+        <span class="my-account-copy">
+          <strong>{{ setupMode ? '设置登录账号与密码' : '我的账号设置' }}</strong>
+          <small v-if="!setupMode">{{ `${currentUser.username || '当前账号'} · ${currentUser.displayName || '管理员'}` }}</small>
+        </span>
+        <ArrowDown v-if="!setupMode" :class="['toggle-arrow', { rotated: myAccountExpanded }]" />
+      </button>
+      <div v-if="myAccountExpanded" class="my-account-body">
+        <div class="credential-grid">
+          <label>
+            <span>登录账号</span>
+            <input v-model.trim="credentialForm.username" :disabled="!setupMode && credentialSaving" autocomplete="username" />
+          </label>
+          <label v-if="!setupMode">
+            <span>当前密码</span>
+            <input v-model.trim="credentialForm.oldPassword" type="password" autocomplete="current-password" />
+          </label>
+          <label>
+            <span>新密码</span>
+            <input v-model.trim="credentialForm.newPassword" type="password" autocomplete="new-password" />
+          </label>
+          <label>
+            <span>确认新密码</span>
+            <input v-model.trim="credentialForm.confirmPassword" type="password" autocomplete="new-password" />
+          </label>
+        </div>
+        <footer class="my-account-footer">
+          <button v-if="!setupMode" class="tool-button" type="button" @click="resetCredentialForm">取消</button>
+          <button class="tool-button primary" type="button" :disabled="credentialSaving" @click="saveMyCredentials">{{ setupMode ? '完成设置' : '保存设置' }}</button>
+        </footer>
+      </div>
+    </section>
+
+    <template v-if="!setupMode">
     <section class="toolbar">
       <label class="search-box">
         <Search />
@@ -64,8 +99,8 @@
               </div>
             </div>
             <span class="code-cell">{{ item.username }}</span>
-            <span :class="['status-badge', Number(item.status) === 1 ? 'active' : 'inactive']">
-              {{ item.statusLabel || statusLabel(item.status) }}
+            <span :class="['status-badge', accountStatusClass(item)]">
+              {{ accountStatusLabel(item) }}
             </span>
             <span class="time-cell">{{ formatTime(item.createTime) }}</span>
             <span class="time-cell">{{ formatTime(item.updateTime) }}</span>
@@ -99,6 +134,7 @@
         </div>
       </div>
     </section>
+    </template>
 
     <div v-if="editorOpen" class="modal-mask" @click.self="closeEditor">
       <section class="modal-card">
@@ -156,10 +192,10 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Key, Plus, Search } from '@element-plus/icons-vue'
+import { ArrowDown, Key, Plus, Search, UserFilled } from '@element-plus/icons-vue'
 import {
   createAdminUser,
   fetchAdminUsers,
@@ -167,9 +203,13 @@ import {
   updateAdminUser,
   updateAdminUserStatus,
   updateMyAdminPassword,
+  updateMyAdminCredentials,
 } from '@/api/admin'
+import { getAdminMe } from '@/api/auth'
+import { getAdminUsername, getDisplayName, isAdminCredentialSetupRequired, setSession } from '@/utils/auth'
 
 const route = useRoute()
+const router = useRouter()
 const users = ref([])
 const loading = ref(false)
 const saving = ref(false)
@@ -182,6 +222,17 @@ const editingUser = ref(null)
 const passwordOpen = ref(false)
 const passwordMode = ref('reset')
 const passwordTarget = ref(null)
+const myAccountExpanded = ref(false)
+const credentialSaving = ref(false)
+const setupMode = computed(() => isAdminCredentialSetupRequired())
+const currentUser = reactive({ username: getAdminUsername(), displayName: getDisplayName('admin') })
+
+const credentialForm = reactive({
+  username: currentUser.username,
+  oldPassword: '',
+  newPassword: '',
+  confirmPassword: '',
+})
 
 const form = reactive({
   username: '',
@@ -212,7 +263,31 @@ if (route.query.keyword) {
   keyword.value = String(route.query.keyword)
 }
 
-onMounted(loadUsers)
+onMounted(initializePage)
+
+watch(setupMode, (required) => {
+  myAccountExpanded.value = required || myAccountExpanded.value
+  if (required) {
+    users.value = []
+  }
+})
+
+async function initializePage() {
+  try {
+    const me = await getAdminMe()
+    setSession('admin', me)
+    currentUser.username = me?.username || currentUser.username
+    currentUser.displayName = me?.displayName || currentUser.displayName
+    credentialForm.username = currentUser.username
+  } catch {
+    return
+  }
+  myAccountExpanded.value = setupMode.value
+  if (setupMode.value) {
+    return
+  }
+  await loadUsers()
+}
 
 async function loadUsers() {
   loading.value = true
@@ -330,6 +405,59 @@ function openMyPasswordEditor() {
   passwordOpen.value = true
 }
 
+function toggleMyAccount() {
+  if (setupMode.value) return
+  myAccountExpanded.value = !myAccountExpanded.value
+}
+
+function resetCredentialForm() {
+  credentialForm.username = currentUser.username
+  credentialForm.oldPassword = ''
+  credentialForm.newPassword = ''
+  credentialForm.confirmPassword = ''
+}
+
+async function saveMyCredentials() {
+  const initialSetup = setupMode.value
+  if (initialSetup && !credentialForm.username) {
+    ElMessage.warning('请输入登录账号')
+    return
+  }
+  if (!initialSetup && !credentialForm.oldPassword) {
+    ElMessage.warning('请输入当前密码')
+    return
+  }
+  if (!credentialForm.newPassword || credentialForm.newPassword.length < 6) {
+    ElMessage.warning('新密码至少 6 位')
+    return
+  }
+  if (credentialForm.newPassword !== credentialForm.confirmPassword) {
+    ElMessage.warning('两次输入的新密码不一致')
+    return
+  }
+  credentialSaving.value = true
+  try {
+    await updateMyAdminCredentials({
+      username: credentialForm.username,
+      oldPassword: initialSetup ? undefined : credentialForm.oldPassword,
+      newPassword: credentialForm.newPassword,
+    })
+    const updatedUser = await getAdminMe()
+    setSession('admin', updatedUser)
+    currentUser.username = updatedUser?.username || credentialForm.username
+    currentUser.displayName = updatedUser?.displayName || currentUser.displayName
+    myAccountExpanded.value = false
+    ElMessage.success('账号设置已保存')
+    if (initialSetup) {
+      await router.replace('/admin/dashboard')
+    } else {
+      resetCredentialForm()
+    }
+  } finally {
+    credentialSaving.value = false
+  }
+}
+
 function closePasswordEditor() {
   passwordOpen.value = false
   passwordTarget.value = null
@@ -380,6 +508,16 @@ function getInitial(name) {
 
 function statusLabel(status) {
   return Number(status) === 1 ? '启用' : '停用'
+}
+
+function accountStatusClass(user) {
+  if (Number(user.status) !== 1) return 'inactive'
+  return user.mustChangeUsername || user.mustChangePassword ? 'pending' : 'active'
+}
+
+function accountStatusLabel(user) {
+  if (Number(user.status) !== 1) return '停用'
+  return user.mustChangeUsername || user.mustChangePassword ? '待首次设置' : '启用'
 }
 
 function formatTime(value) {
@@ -459,22 +597,187 @@ svg {
   border-bottom: 1px solid var(--line);
 }
 
-.page-head span {
-  color: var(--gold-soft);
-  font-size: 12px;
-  font-weight: 850;
-}
-
 .page-head h1 {
   margin-top: 8px;
   font-size: 30px;
   line-height: 1.1;
 }
 
+.admin-users-page.setup-mode {
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px;
+}
+
+.setup-mode .page-head {
+  justify-content: center;
+  width: min(100%, 480px);
+  padding-bottom: 0;
+  border-bottom: 0;
+  text-align: center;
+}
+
+.setup-mode .page-head h1 {
+  margin-top: 0;
+  font-size: 28px;
+}
+
 .head-actions {
   gap: 10px;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.my-account-panel {
+  flex: 0 0 auto;
+  margin-top: 18px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(22, 32, 36, 0.76);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.12);
+}
+
+.my-account-panel.required {
+  border-color: rgba(216, 169, 53, 0.42);
+  background: rgba(28, 38, 40, 0.94);
+  box-shadow: 0 20px 60px rgba(216, 169, 53, 0.09);
+}
+
+.setup-mode .my-account-panel {
+  width: min(100%, 480px);
+  margin-top: 18px;
+}
+
+.setup-mode .my-account-toggle {
+  min-height: 64px;
+  padding-right: 20px;
+  padding-left: 20px;
+}
+
+.my-account-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 70px;
+  padding: 0 16px;
+  color: var(--text);
+  text-align: left;
+  border: 0;
+  background: transparent;
+}
+
+.my-account-toggle:not(:disabled) {
+  cursor: pointer;
+}
+
+.my-account-toggle:disabled {
+  opacity: 1;
+}
+
+.my-account-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  color: var(--gold-soft);
+  border: 1px solid rgba(216, 169, 53, 0.24);
+  border-radius: 8px;
+  background: rgba(216, 169, 53, 0.08);
+}
+
+.my-account-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.my-account-copy strong {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.my-account-copy small {
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toggle-arrow {
+  width: 18px;
+  height: 18px;
+  margin-left: auto;
+  color: var(--muted);
+  transition: transform 0.18s ease;
+}
+
+.toggle-arrow.rotated {
+  transform: rotate(180deg);
+}
+
+.my-account-body {
+  padding: 0 16px 16px;
+  border-top: 1px solid var(--line);
+}
+
+.setup-mode .my-account-body {
+  padding: 0 20px 20px;
+}
+
+.credential-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding-top: 16px;
+}
+
+.setup-mode .credential-grid {
+  grid-template-columns: 1fr;
+  gap: 14px;
+  padding-top: 18px;
+}
+
+.credential-grid label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.credential-grid input {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 11px;
+  color: var(--text);
+  border: 1px solid rgba(219, 232, 237, 0.14);
+  border-radius: 8px;
+  outline: none;
+  background: rgba(7, 14, 17, 0.68);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.credential-grid input:focus {
+  border-color: rgba(224, 184, 74, 0.5);
+  box-shadow: 0 0 0 3px rgba(216, 169, 53, 0.08);
+}
+
+.my-account-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.setup-mode .my-account-footer {
+  margin-top: 18px;
+}
+
+.setup-mode .my-account-footer .tool-button {
+  min-width: 96px;
 }
 
 .tool-button,
@@ -698,6 +1001,12 @@ svg {
   background: rgba(242, 153, 74, 0.09);
 }
 
+.status-badge.pending {
+  color: var(--gold-soft);
+  border: 1px solid rgba(216, 169, 53, 0.28);
+  background: rgba(216, 169, 53, 0.1);
+}
+
 .row-actions {
   display: flex;
   flex-wrap: wrap;
@@ -833,12 +1142,20 @@ svg {
     flex-direction: column;
   }
 
+  .setup-mode .page-head {
+    align-items: center;
+  }
+
   .head-actions {
     justify-content: flex-start;
   }
 
   .search-box {
     max-width: none;
+  }
+
+  .credential-grid {
+    grid-template-columns: 1fr;
   }
 
 }

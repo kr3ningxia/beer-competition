@@ -105,6 +105,7 @@ DELIMITER ;
 
 CALL `saas_add_column_if_missing`('admin_user', 'admin_type', '`admin_type` varchar(32) NOT NULL DEFAULT ''PLATFORM_SUPER_ADMIN'' COMMENT ''后台操作身份'' AFTER `status`');
 CALL `saas_add_column_if_missing`('admin_user', 'must_change_password', '`must_change_password` tinyint NOT NULL DEFAULT 0 COMMENT ''是否必须首次改密'' AFTER `admin_type`');
+CALL `saas_add_column_if_missing`('admin_user', 'must_change_username', '`must_change_username` tinyint NOT NULL DEFAULT 0 COMMENT ''是否必须首次修改登录账号'' AFTER `must_change_password`');
 CALL `saas_add_column_if_missing`('admin_user', 'initial_credential_issued_time', '`initial_credential_issued_time` datetime DEFAULT NULL COMMENT ''初始凭据发放时间'' AFTER `must_change_password`');
 CALL `saas_add_column_if_missing`('competition', 'organizer_id', '`organizer_id` bigint DEFAULT NULL COMMENT ''比赛所属主办方'' AFTER `id`');
 CALL `saas_add_column_if_missing`('file_asset', 'organizer_id', '`organizer_id` bigint DEFAULT NULL COMMENT ''文件所属主办方'' AFTER `id`');

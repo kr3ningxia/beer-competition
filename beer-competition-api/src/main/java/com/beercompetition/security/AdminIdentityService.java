@@ -47,7 +47,8 @@ public class AdminIdentityService {
             organizerId = members.get(0).getOrganizerId();
         }
         return new AdminSessionIdentity(adminType, organizerId,
-                Integer.valueOf(ACTIVE_STATUS).equals(adminUser.getMustChangePassword()));
+                Integer.valueOf(ACTIVE_STATUS).equals(adminUser.getMustChangePassword()),
+                Integer.valueOf(ACTIVE_STATUS).equals(adminUser.getMustChangeUsername()));
     }
 
     /**

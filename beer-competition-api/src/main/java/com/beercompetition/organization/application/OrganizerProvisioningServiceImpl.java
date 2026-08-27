@@ -104,6 +104,7 @@ public class OrganizerProvisioningServiceImpl implements OrganizerProvisioningSe
                 .status(STATUS_ACTIVE)
                 .adminType(AdminType.ORGANIZER_ADMIN.name())
                 .mustChangePassword(STATUS_ACTIVE)
+                .mustChangeUsername(STATUS_ACTIVE)
                 .initialCredentialIssuedTime(now)
                 .build();
         try {

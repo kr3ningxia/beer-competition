@@ -388,3 +388,7 @@ export function resetAdminUserPassword(id, payload) {
 export function updateMyAdminPassword(payload) {
   return request.patch('/api/admin/me/password', payload, { authScope: 'admin' })
 }
+
+export function updateMyAdminCredentials(payload) {
+  return request.patch('/api/admin/me/credentials', payload, { authScope: 'admin' })
+}

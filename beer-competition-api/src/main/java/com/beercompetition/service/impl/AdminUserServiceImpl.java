@@ -10,6 +10,7 @@ import com.beercompetition.mapper.AdminOperationLogMapper;
 import com.beercompetition.mapper.AdminUserMapper;
 import com.beercompetition.mapper.OrganizerMemberMapper;
 import com.beercompetition.pojo.dto.AdminPasswordUpdateRequest;
+import com.beercompetition.pojo.dto.AdminCredentialsUpdateRequest;
 import com.beercompetition.pojo.dto.AdminUserCreateRequest;
 import com.beercompetition.pojo.dto.AdminUserPasswordResetRequest;
 import com.beercompetition.pojo.dto.AdminUserStatusUpdateRequest;
@@ -89,6 +90,7 @@ public class AdminUserServiceImpl implements AdminUserService {
                 .status(STATUS_ACTIVE)
                 .adminType(newAdminType.name())
                 .mustChangePassword(1)
+                .mustChangeUsername(1)
                 .build();
         try {
             adminUserMapper.insert(adminUser);
@@ -155,6 +157,10 @@ public class AdminUserServiceImpl implements AdminUserService {
         // 2) 重置登录密码
         adminUser.setPassword(Md5Util.encode(request.getPassword()));
         adminUser.setMustChangePassword(1);
+        // 已完成首次设置的账号重置密码后只需要再次改密；尚未完成初始化的账号保留用户名设置要求。
+        if (!Integer.valueOf(STATUS_ACTIVE).equals(adminUser.getMustChangeUsername())) {
+            adminUser.setMustChangeUsername(0);
+        }
         adminUserMapper.updateById(adminUser);
         writeAdminLog("ADMIN_USER_PASSWORD_RESET", adminUser.getId(), "重置管理员密码：" + adminUser.getUsername());
     }
@@ -162,20 +168,106 @@ public class AdminUserServiceImpl implements AdminUserService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateMyPassword(AdminPasswordUpdateRequest request) {
-        // 1) 查询当前账号并校验旧密码
-        AdminUser adminUser = requireAdminUser(BaseContext.getCurrentId());
-        if (!Md5Util.encode(request.getOldPassword()).equals(adminUser.getPassword())) {
-            throw new BaseException("当前密码不正确");
+        if (isUsernameSetupRequired(requireAdminUser(BaseContext.getCurrentId()))) {
+            throw new BaseException("请先完成账号设置");
         }
-        if (request.getOldPassword().equals(request.getNewPassword())) {
-            throw new BaseException("新密码不能与当前密码相同");
+        updateMyCredentials(AdminCredentialsUpdateRequest.builder()
+                .oldPassword(request.getOldPassword())
+                .newPassword(request.getNewPassword())
+                .build());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public AdminUserVO updateMyCredentials(AdminCredentialsUpdateRequest request) {
+        // 1) 读取当前账号并判断是首次初始化还是普通设置
+        AdminUser adminUser = requireAdminUser(BaseContext.getCurrentId());
+        boolean firstSetup = isCredentialSetupRequired(adminUser);
+        String username = normalizeUsername(request.getUsername());
+        String newPassword = request.getNewPassword();
+
+        validateCredentialRequest(adminUser, firstSetup, username, newPassword, request.getOldPassword());
+
+        // 2) 只更新提交的凭据字段；首次设置成功后清除两个强制标记
+        boolean usernameChanged = StringUtils.hasText(username) && !username.equals(adminUser.getUsername());
+        if (StringUtils.hasText(username)) {
+            adminUser.setUsername(username);
+        }
+        if (StringUtils.hasText(newPassword)) {
+            adminUser.setPassword(Md5Util.encode(newPassword));
+        }
+        if (firstSetup) {
+            adminUser.setMustChangePassword(0);
+            adminUser.setMustChangeUsername(0);
+        } else if (StringUtils.hasText(newPassword)) {
+            adminUser.setMustChangePassword(0);
+        }
+        try {
+            adminUserMapper.updateById(adminUser);
+        } catch (DuplicateKeyException ex) {
+            throw new BaseException("该登录账号已被使用");
         }
 
-        // 2) 更新当前账号密码
-        adminUser.setPassword(Md5Util.encode(request.getNewPassword()));
-        adminUser.setMustChangePassword(0);
-        adminUserMapper.updateById(adminUser);
-        writeAdminLog("ADMIN_USER_PASSWORD_CHANGE", adminUser.getId(), "修改当前管理员密码");
+        String summary = usernameChanged ? "修改管理员登录账号" : "修改当前管理员密码";
+        writeAdminLog("ADMIN_USER_CREDENTIALS_CHANGE", adminUser.getId(), summary);
+        return toVO(adminUserMapper.selectById(adminUser.getId()));
+    }
+
+    private void validateCredentialRequest(AdminUser adminUser,
+                                           boolean firstSetup,
+                                           String username,
+                                           String newPassword,
+                                           String oldPassword) {
+        if (firstSetup) {
+            if (Integer.valueOf(STATUS_ACTIVE).equals(adminUser.getMustChangeUsername())) {
+                if (!StringUtils.hasText(username)) {
+                    throw new BaseException("请输入新的登录账号");
+                }
+                if (username.equals(adminUser.getUsername())) {
+                    throw new BaseException("登录账号需要设置为新的账号");
+                }
+            }
+            validateNewPassword(newPassword);
+            return;
+        }
+        if (!StringUtils.hasText(oldPassword) || !Md5Util.encode(oldPassword).equals(adminUser.getPassword())) {
+            throw new BaseException("当前密码不正确");
+        }
+        if (!StringUtils.hasText(username) && !StringUtils.hasText(newPassword)) {
+            throw new BaseException("请至少修改登录账号或密码");
+        }
+        if (StringUtils.hasText(newPassword)) {
+            validateNewPassword(newPassword);
+            if (oldPassword.equals(newPassword)) {
+                throw new BaseException("新密码不能与当前密码相同");
+            }
+        }
+    }
+
+    private void validateNewPassword(String newPassword) {
+        if (!StringUtils.hasText(newPassword) || newPassword.length() < 6 || newPassword.length() > 32) {
+            throw new BaseException("密码长度需为6到32位");
+        }
+    }
+
+    private String normalizeUsername(String username) {
+        if (!StringUtils.hasText(username)) {
+            return null;
+        }
+        String normalized = username.trim();
+        if (!normalized.matches("[A-Za-z0-9._-]{4,32}")) {
+            throw new BaseException("登录账号需为4到32位英文、数字或._-");
+        }
+        return normalized;
+    }
+
+    private boolean isCredentialSetupRequired(AdminUser adminUser) {
+        return Integer.valueOf(STATUS_ACTIVE).equals(adminUser.getMustChangePassword())
+                || Integer.valueOf(STATUS_ACTIVE).equals(adminUser.getMustChangeUsername());
+    }
+
+    private boolean isUsernameSetupRequired(AdminUser adminUser) {
+        return Integer.valueOf(STATUS_ACTIVE).equals(adminUser.getMustChangeUsername());
     }
 
     private AdminUser requireAdminUser(Long id) {
@@ -284,6 +376,7 @@ public class AdminUserServiceImpl implements AdminUserService {
                 .adminType(adminUser.getAdminType())
                 .organizerId(adminIdentityService.findOrganizerIdForDisplay(adminUser))
                 .mustChangePassword(Integer.valueOf(STATUS_ACTIVE).equals(adminUser.getMustChangePassword()))
+                .mustChangeUsername(Integer.valueOf(STATUS_ACTIVE).equals(adminUser.getMustChangeUsername()))
                 .status(adminUser.getStatus())
                 .statusLabel(statusLabel(adminUser.getStatus()))
                 .currentUser(adminUser.getId().equals(BaseContext.getCurrentId()))

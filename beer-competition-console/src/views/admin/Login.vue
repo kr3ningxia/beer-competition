@@ -102,7 +102,11 @@ async function submit() {
     const data = await adminLogin(form)
     setSession('admin', data)
     ElMessage.success('登录成功')
-    router.push('/admin/dashboard')
+    if (data?.mustChangePassword || data?.mustChangeUsername) {
+      router.replace({ path: '/admin/admin-users', query: { setup: '1' } })
+    } else {
+      router.replace('/admin/dashboard')
+    }
   } finally {
     loading.value = false
   }

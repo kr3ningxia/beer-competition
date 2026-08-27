@@ -10,5 +10,13 @@ import com.beercompetition.pojo.enums.AdminType;
  */
 public record AdminSessionIdentity(AdminType adminType,
                                    Long organizerId,
-                                   boolean mustChangePassword) {
+                                   boolean mustChangePassword,
+                                   boolean mustChangeUsername) {
+
+    /**
+     * 兼容只关心密码状态的既有调用方。
+     */
+    public AdminSessionIdentity(AdminType adminType, Long organizerId, boolean mustChangePassword) {
+        this(adminType, organizerId, mustChangePassword, false);
+    }
 }

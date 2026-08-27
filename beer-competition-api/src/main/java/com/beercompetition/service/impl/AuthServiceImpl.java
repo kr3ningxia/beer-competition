@@ -119,8 +119,10 @@ public class AuthServiceImpl implements AuthService {
 
         // 3) 组装并返回登录态
         AdminSessionIdentity identity = adminIdentityService.resolve(adminUser);
-        return buildLoginResponse(adminUser.getId(), adminUser.getName(), UserRole.ADMIN,
+        LoginResponse response = buildLoginResponse(adminUser.getId(), adminUser.getName(), UserRole.ADMIN,
                 jwtProperties.getAdminTtl(), jwtProperties.getAdminRefreshTtl(), identity);
+        response.setUsername(adminUser.getUsername());
+        return response;
     }
 
     @Override
@@ -261,8 +263,13 @@ public class AuthServiceImpl implements AuthService {
         }
 
         // 3) 生成新的 access token 和新的 refresh token
-        return buildLoginResponse(subject.userId(), subject.displayName(), subject.role(),
+        LoginResponse response = buildLoginResponse(subject.userId(), subject.displayName(), subject.role(),
                 accessTtlMillis(subject.role()), refreshTtlMillis(subject.role()), subject.adminIdentity());
+        if (subject.role() == UserRole.ADMIN) {
+            AdminUser adminUser = adminUserMapper.selectById(subject.userId());
+            response.setUsername(adminUser == null ? null : adminUser.getUsername());
+        }
+        return response;
     }
 
     @Override
@@ -301,10 +308,12 @@ public class AuthServiceImpl implements AuthService {
                 yield CurrentUserResponse.builder()
                         .userId(adminUser.getId())
                         .role(role.name())
+                        .username(adminUser.getUsername())
                         .displayName(adminUser.getName())
                         .adminType(identity.adminType().name())
                         .organizerId(identity.organizerId())
                         .mustChangePassword(identity.mustChangePassword())
+                        .mustChangeUsername(identity.mustChangeUsername())
                         .build();
             }
             case PORTAL -> {
@@ -435,6 +444,7 @@ public class AuthServiceImpl implements AuthService {
             claims.put("adminType", adminIdentity.adminType().name());
             claims.put("organizerId", adminIdentity.organizerId());
             claims.put("mustChangePassword", adminIdentity.mustChangePassword());
+            claims.put("mustChangeUsername", adminIdentity.mustChangeUsername());
         }
         claims.put("jti", UUID.randomUUID().toString().replace("-", ""));
         String accessToken = JwtUtil.createToken(jwtProperties.getSecretKey(), accessTtlMillis, claims);
@@ -451,6 +461,7 @@ public class AuthServiceImpl implements AuthService {
                 .adminType(adminIdentity == null ? null : adminIdentity.adminType().name())
                 .organizerId(adminIdentity == null ? null : adminIdentity.organizerId())
                 .mustChangePassword(adminIdentity == null ? null : adminIdentity.mustChangePassword())
+                .mustChangeUsername(adminIdentity == null ? null : adminIdentity.mustChangeUsername())
                 .build();
     }
 
@@ -520,6 +531,7 @@ public class AuthServiceImpl implements AuthService {
                 .adminType(adminIdentity == null ? null : adminIdentity.adminType().name())
                 .organizerId(adminIdentity == null ? null : adminIdentity.organizerId())
                 .mustChangePassword(adminIdentity == null ? null : adminIdentity.mustChangePassword())
+                .mustChangeUsername(adminIdentity == null ? null : adminIdentity.mustChangeUsername())
                 .issuedAtMillis(issuedAt)
                 .expiresAtMillis(issuedAt + refreshTtlMillis)
                 .build();
@@ -543,6 +555,7 @@ public class AuthServiceImpl implements AuthService {
                     .adminType(stringValue(map.get("adminType")))
                     .organizerId(longValue(map.get("organizerId")))
                     .mustChangePassword(booleanValue(map.get("mustChangePassword")))
+                    .mustChangeUsername(booleanValue(map.get("mustChangeUsername")))
                     .issuedAtMillis(longValue(map.get("issuedAtMillis")))
                     .expiresAtMillis(longValue(map.get("expiresAtMillis")))
                     .build();
