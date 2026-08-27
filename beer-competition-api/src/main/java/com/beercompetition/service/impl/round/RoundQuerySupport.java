@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ForbiddenException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
+import com.beercompetition.common.context.BaseContext;
+import com.beercompetition.competition.access.CompetitionAccessService;
 import com.beercompetition.mapper.BeerEntryMapper;
 import com.beercompetition.mapper.BreweryMapper;
 import com.beercompetition.mapper.CompetitionCategoryMapper;
@@ -26,6 +28,7 @@ import com.beercompetition.pojo.enums.JudgeRoleType;
 import com.beercompetition.pojo.enums.RoundResultType;
 import com.beercompetition.pojo.enums.RoundStatus;
 import com.beercompetition.pojo.enums.RoundTargetMode;
+import com.beercompetition.pojo.enums.UserRole;
 import com.beercompetition.pojo.po.BeerEntry;
 import com.beercompetition.pojo.po.Brewery;
 import com.beercompetition.pojo.po.Competition;
@@ -65,6 +68,7 @@ import java.util.stream.Collectors;
 public class RoundQuerySupport {
 
     private final CompetitionMapper competitionMapper;
+    private final CompetitionAccessService competitionAccessService;
     private final CompetitionCategoryMapper competitionCategoryMapper;
     private final CompetitionStyleConfigMapper competitionStyleConfigMapper;
     private final BreweryMapper breweryMapper;
@@ -357,6 +361,9 @@ public class RoundQuerySupport {
         Competition competition = competitionMapper.selectById(competitionId);
         if (competition == null) {
             throw new ResourceNotFoundException("比赛不存在");
+        }
+        if (UserRole.ADMIN.name().equals(BaseContext.getCurrentRole())) {
+            competitionAccessService.requireCompetitionAccess(competitionId);
         }
         return competition;
     }

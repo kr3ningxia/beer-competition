@@ -5,6 +5,7 @@ import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.common.result.PageResult;
+import com.beercompetition.competition.access.CompetitionAccessService;
 import com.beercompetition.mapper.AdminOperationLogMapper;
 import com.beercompetition.mapper.BeerEntryExtraFieldMapper;
 import com.beercompetition.mapper.BeerEntryMapper;
@@ -79,10 +80,13 @@ public class AdminEntryServiceImpl implements AdminEntryService {
 
     private final AdminEntryStatusService adminEntryStatusService;
 
+    private final CompetitionAccessService competitionAccessService;
+
     @Override
     public PageResult<AdminEntryVO> listAdminEntries(Long competitionId, String status, String paymentStatus,
                                                      String deliveryStatus, Long categoryId, Boolean assigned,
                                                      String refundStatus, String keyword, Integer page, Integer pageSize) {
+        Long organizerId = resolveListOrganizerId(competitionId);
         // 1) 参数规范化与基础查询
         int currentPage = Math.max(page == null ? 1 : page, 1);
         int currentPageSize = Math.min(Math.max(pageSize == null ? 30 : pageSize, 1), 100);
@@ -90,13 +94,23 @@ public class AdminEntryServiceImpl implements AdminEntryService {
         int offset = (currentPage - 1) * currentPageSize;
 
         // 2) 由数据库完成关联、筛选、排序和分页，避免为当前页以外的酒款反复查询详情。
-        long total = beerEntryMapper.countAdminEntries(competitionId, status, paymentStatus, deliveryStatus,
+        long total = beerEntryMapper.countAdminEntries(competitionId, organizerId, status, paymentStatus, deliveryStatus,
                 categoryId, assigned, refundStatus, normalizedKeyword);
         List<AdminEntryVO> records = total == 0
                 ? List.of()
-                : beerEntryMapper.selectAdminEntryPage(competitionId, status, paymentStatus, deliveryStatus,
+                : beerEntryMapper.selectAdminEntryPage(competitionId, organizerId, status, paymentStatus, deliveryStatus,
                 categoryId, assigned, refundStatus, normalizedKeyword, offset, currentPageSize);
         return new PageResult<>(total, records);
+    }
+
+    private Long resolveListOrganizerId(Long competitionId) {
+        if (competitionId != null) {
+            competitionAccessService.requireCompetitionAccess(competitionId);
+            return null;
+        }
+        return competitionAccessService.canAccessAllOrganizers()
+                ? null
+                : competitionAccessService.requireCurrentOrganizerId();
     }
 
     @Override
@@ -328,6 +342,7 @@ public class AdminEntryServiceImpl implements AdminEntryService {
         if (entry == null) {
             throw new ResourceNotFoundException("酒款不存在");
         }
+        competitionAccessService.requireCompetitionAccess(entry.getCompetitionId());
         return entry;
     }
 

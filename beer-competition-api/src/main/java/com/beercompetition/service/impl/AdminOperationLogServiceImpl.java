@@ -3,6 +3,7 @@ package com.beercompetition.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.beercompetition.common.result.PageResult;
+import com.beercompetition.competition.access.CompetitionAccessService;
 import com.beercompetition.mapper.AdminOperationLogMapper;
 import com.beercompetition.mapper.BeerEntryMapper;
 import com.beercompetition.mapper.CompetitionMapper;
@@ -55,6 +56,7 @@ public class AdminOperationLogServiceImpl implements AdminOperationLogService {
     private static final Map<String, List<String>> ACTION_GROUPS = buildActionGroups();
 
     private final AdminOperationLogMapper adminOperationLogMapper;
+    private final CompetitionAccessService competitionAccessService;
     private final BeerEntryMapper beerEntryMapper;
     private final EntryScanLabelMapper entryScanLabelMapper;
     private final CompetitionMapper competitionMapper;
@@ -78,6 +80,9 @@ public class AdminOperationLogServiceImpl implements AdminOperationLogService {
         String normalizedTargetType = normalizeText(targetType);
         String normalizedKeyword = normalizeText(keyword);
         Collection<String> actions = ACTION_GROUPS.get(normalizeText(actionGroup));
+        Long organizerId = competitionAccessService.canAccessAllOrganizers()
+                ? null
+                : competitionAccessService.requireCurrentOrganizerId();
 
         // 2) 查询日志分页数据
         Page<AdminOperationLogVO> result = adminOperationLogMapper.selectAdminOperationLogPage(
@@ -87,7 +92,8 @@ public class AdminOperationLogServiceImpl implements AdminOperationLogService {
                 adminUserId,
                 normalizedTargetType,
                 actions,
-                normalizedKeyword);
+                normalizedKeyword,
+                organizerId);
 
         // 3) 组装页面展示字段
         TargetLookupContext targetContext = new TargetLookupContext();

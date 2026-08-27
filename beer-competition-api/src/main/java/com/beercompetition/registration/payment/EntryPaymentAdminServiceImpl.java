@@ -5,6 +5,7 @@ import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ForbiddenException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
+import com.beercompetition.competition.access.CompetitionAccessService;
 import com.beercompetition.mapper.AdminOperationLogMapper;
 import com.beercompetition.mapper.BeerEntryMapper;
 import com.beercompetition.mapper.BreweryMapper;
@@ -71,6 +72,8 @@ public class EntryPaymentAdminServiceImpl implements EntryPaymentAdminService {
 
     private final PortalEntryViewAssembler portalEntryViewAssembler;
 
+    private final CompetitionAccessService competitionAccessService;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public EntryDetailVO simulatePayment(Long entryId) {
@@ -117,7 +120,7 @@ public class EntryPaymentAdminServiceImpl implements EntryPaymentAdminService {
     @Transactional(rollbackFor = Exception.class)
     public void confirmPayment(Long entryId, AdminEntryStatusRequest request) {
         // 1) 查询作品并校验状态
-        BeerEntry entry = requireEntry(entryId);
+        BeerEntry entry = requireAdminEntry(entryId);
         if (!EntryStatus.PENDING_PAYMENT.name().equals(entry.getStatus())) {
             throw new BaseException("只有待支付确认的酒款可以确认支付");
         }
@@ -205,18 +208,24 @@ public class EntryPaymentAdminServiceImpl implements EntryPaymentAdminService {
     }
 
     private BeerEntry requireOwnedEntry(Long entryId, Long breweryId) {
-        BeerEntry entry = requireEntry(entryId);
+        BeerEntry entry = requirePortalEntry(entryId);
         if (!entry.getBreweryId().equals(breweryId)) {
             throw new ForbiddenException("无权查看该酒款");
         }
         return entry;
     }
 
-    private BeerEntry requireEntry(Long entryId) {
+    private BeerEntry requirePortalEntry(Long entryId) {
         BeerEntry entry = beerEntryMapper.selectById(entryId);
         if (entry == null) {
             throw new ResourceNotFoundException("酒款不存在");
         }
+        return entry;
+    }
+
+    private BeerEntry requireAdminEntry(Long entryId) {
+        BeerEntry entry = requirePortalEntry(entryId);
+        competitionAccessService.requireCompetitionAccess(entry.getCompetitionId());
         return entry;
     }
 

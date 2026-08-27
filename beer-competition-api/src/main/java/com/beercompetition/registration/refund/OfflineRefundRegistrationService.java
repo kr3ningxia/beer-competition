@@ -3,11 +3,14 @@ package com.beercompetition.registration.refund;
 import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
+import com.beercompetition.competition.access.CompetitionAccessService;
+import com.beercompetition.file.FileAccessService;
 import com.beercompetition.mapper.AdminOperationLogMapper;
 import com.beercompetition.mapper.BeerEntryMapper;
 import com.beercompetition.mapper.EntryPaymentMapper;
 import com.beercompetition.mapper.EntryRefundMapper;
 import com.beercompetition.mapper.FileAssetMapper;
+import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.pojo.dto.AdminOfflineRefundRequest;
 import com.beercompetition.pojo.enums.EntryPayMethod;
 import com.beercompetition.pojo.enums.EntryRefundStatus;
@@ -49,12 +52,15 @@ public class OfflineRefundRegistrationService {
     private final EntryRefundMapper entryRefundMapper;
     private final EntryPaymentMapper entryPaymentMapper;
     private final BeerEntryMapper beerEntryMapper;
+    private final CompetitionMapper competitionMapper;
     private final FileAssetMapper fileAssetMapper;
     private final AdminOperationLogMapper adminOperationLogMapper;
     private final WechatPaymentService wechatPaymentService;
     private final FileStorageService fileStorageService;
+    private final FileAccessService fileAccessService;
     private final StorageProperties storageProperties;
     private final ObjectMapper objectMapper;
+    private final CompetitionAccessService competitionAccessService;
 
     @Transactional(rollbackFor = Exception.class)
     public void register(Long refundId, AdminOfflineRefundRequest request, MultipartFile voucher) {
@@ -69,18 +75,21 @@ public class OfflineRefundRegistrationService {
         if (voucher == null || voucher.isEmpty()) {
             throw new BaseException("请上传打款凭证");
         }
+        BeerEntry entry = requireEntry(refund.getBeerEntryId());
+        com.beercompetition.pojo.po.Competition competition = competitionMapper.selectById(entry.getCompetitionId());
 
         String filename = sanitizeUploadFilename(voucher.getOriginalFilename(), "offline-refund-voucher.pdf");
         byte[] bytes = readUploadBytes(voucher, "读取打款凭证失败");
         String storagePath = fileStorageService.upload(BUSINESS_TYPE, filename, bytes);
         FileAsset asset = FileAsset.builder()
+                .organizerId(competition == null ? null : competition.getOrganizerId())
                 .businessType(BUSINESS_TYPE)
                 .ownerType("ADMIN")
                 .ownerId(BaseContext.getCurrentId())
                 .storageProvider(storageProperties.getProvider())
                 .fileName(filename)
                 .storagePath(storagePath)
-                .publicUrl(resolveUploadPublicUrl(storagePath))
+                .publicUrl(null)
                 .createTime(LocalDateTime.now())
                 .build();
         fileAssetMapper.insert(asset);
@@ -91,7 +100,7 @@ public class OfflineRefundRegistrationService {
         refund.setProcessedTime(LocalDateTime.now());
         refund.setFailReason(null);
         entryRefundMapper.updateById(refund);
-        writeEntryLog(requireEntry(refund.getBeerEntryId()).getUuid(), request.getReason());
+        writeEntryLog(entry.getUuid(), request.getReason());
         wechatPaymentService.completeOfflineRefund(refundId, request.getReason(), BaseContext.getCurrentId());
     }
 
@@ -100,6 +109,11 @@ public class OfflineRefundRegistrationService {
         if (refund == null) {
             throw new ResourceNotFoundException("退款记录不存在");
         }
+        BeerEntry entry = beerEntryMapper.selectById(refund.getBeerEntryId());
+        if (entry == null) {
+            throw new ResourceNotFoundException("酒款不存在");
+        }
+        competitionAccessService.requireCompetitionAccess(entry.getCompetitionId());
         return refund;
     }
 
@@ -142,16 +156,6 @@ public class OfflineRefundRegistrationService {
             return defaultFilename;
         }
         return Path.of(originalFilename).getFileName().toString();
-    }
-
-    private String resolveUploadPublicUrl(String storagePath) {
-        if (!"local".equalsIgnoreCase(storageProperties.getProvider())) {
-            return storagePath;
-        }
-        Path baseDir = Path.of(storageProperties.getLocalBaseDir()).toAbsolutePath().normalize();
-        Path filePath = Path.of(storagePath).toAbsolutePath().normalize();
-        String relativePath = baseDir.relativize(filePath).toString().replace('\\', '/');
-        return "/uploads/" + relativePath;
     }
 
     private String writeObjectJson(Object value) {

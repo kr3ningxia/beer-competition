@@ -13,7 +13,7 @@
       <nav class="nav-list" aria-label="组委会后台导航">
         <component
           :is="item.path ? RouterLink : 'span'"
-          v-for="item in navItems"
+          v-for="item in visibleNavItems"
           :key="item.label"
           :to="item.path"
           :class="['nav-item', { active: item.path === $route.path, disabled: !item.path }]"
@@ -42,7 +42,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
   DataBoard,
@@ -51,16 +51,19 @@ import {
   Files,
   Download,
   Medal,
+  OfficeBuilding,
   SwitchButton,
   User,
   UserFilled,
 } from '@element-plus/icons-vue'
-import { clearSession, getDisplayName } from '@/utils/auth'
+import { getAdminMe } from '@/api/auth'
+import { clearSession, getAdminType, getDisplayName, setSession } from '@/utils/auth'
 
 const router = useRouter()
 const route = useRoute()
 const displayName = getDisplayName('admin')
-const isDashboard = computed(() => ['/admin/dashboard', '/admin/judges', '/admin/admin-users', '/admin/operation-logs', '/admin/entries', '/admin/bank-transfers', '/admin/style-libraries', '/admin/exports'].includes(route.path) || route.path.startsWith('/admin/competitions'))
+const adminType = ref(getAdminType())
+const isDashboard = computed(() => ['/admin/dashboard', '/admin/judges', '/admin/admin-users', '/admin/operation-logs', '/admin/entries', '/admin/bank-transfers', '/admin/style-libraries', '/admin/exports', '/admin/organizer-applications'].includes(route.path) || route.path.startsWith('/admin/competitions'))
 
 const navItems = [
   { path: '/admin/competitions', label: '比赛管理', icon: Medal },
@@ -69,10 +72,25 @@ const navItems = [
   { path: '/admin/entries', label: '酒款管理', icon: Document },
   { path: '/admin/bank-transfers', label: '转账确认', icon: Document },
   { path: '/admin/style-libraries', label: '风格库管理', icon: Files },
+  { path: '/admin/organizer-applications', label: '主办方入驻', icon: OfficeBuilding, platformOnly: true },
   { path: '/admin/admin-users', label: '管理员账号', icon: UserFilled },
   { path: '/admin/operation-logs', label: '操作日志', icon: DocumentChecked },
   { path: '/admin/exports', label: '数据导出', icon: Download },
 ]
+
+const visibleNavItems = computed(() => navItems.filter((item) => !item.platformOnly || adminType.value === 'PLATFORM_SUPER_ADMIN'))
+
+onMounted(async () => {
+  try {
+    const currentUser = await getAdminMe()
+    if (currentUser?.adminType) {
+      adminType.value = currentUser.adminType
+      setSession('admin', currentUser)
+    }
+  } catch {
+    // The request interceptor handles expired sessions and redirects.
+  }
+})
 
 function logout() {
   clearSession('admin')

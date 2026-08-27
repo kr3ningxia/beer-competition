@@ -10,6 +10,7 @@ import com.beercompetition.pojo.vo.CompetitionLiveBoardVO;
 import com.beercompetition.pojo.vo.LiveBoardMetricVO;
 import com.beercompetition.testsupport.BeerCompetitionTestData;
 import com.beercompetition.testsupport.IntegrationTestBase;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -20,6 +21,11 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class LiveBoardIntegrationTest extends IntegrationTestBase {
+
+    @BeforeEach
+    void authenticateAdmin() {
+        asAdmin(1L);
+    }
 
     @Autowired
     private BeerCompetitionTestData testData;
@@ -123,7 +129,8 @@ class LiveBoardIntegrationTest extends IntegrationTestBase {
         assertThat(board.getSponsorGroups().get(0).getTierLabel()).isEqualTo("战略合作");
         assertThat(board.getSponsorGroups().get(0).getFeatured()).isTrue();
         assertThat(board.getSponsorGroups().get(0).getSponsors().get(0).getSponsorName()).isEqualTo("有Logo品牌");
-        assertThat(board.getSponsorGroups().get(0).getSponsors().get(0).getLogoUrl()).isEqualTo("/uploads/sponsor/logo.png");
+        assertThat(board.getSponsorGroups().get(0).getSponsors().get(0).getLogoUrl())
+                .isEqualTo("/api/portal/public/files/" + logoAssetId);
         assertThat(board.getSponsorGroups().get(1).getSponsors())
                 .extracting("sponsorName")
                 .containsExactly("文字品牌", "缺失Logo品牌");

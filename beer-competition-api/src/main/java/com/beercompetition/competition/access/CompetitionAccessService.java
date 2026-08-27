@@ -27,4 +27,15 @@ public interface CompetitionAccessService {
      * @param competitionId 比赛 ID
      */
     void requireCompetitionAccess(Long competitionId);
+
+    /**
+     * 返回当前后台账号默认创建比赛的组织。
+     * 平台身份默认创建啤酒事务局平台赛事，主办方管理员使用所属组织。
+     */
+    Long requireCurrentOrganizerId();
+
+    /**
+     * 判断当前后台账号是否可以跨组织查看比赛。
+     */
+    boolean canAccessAllOrganizers();
 }

@@ -58,6 +58,7 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import com.beercompetition.competition.query.CompetitionQueryService;
+import com.beercompetition.competition.access.CompetitionAccessService;
 import com.beercompetition.service.impl.CompetitionAnalyticsService;
 
 /**
@@ -105,6 +106,8 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
 
     private final CompetitionReadinessEvaluator competitionReadinessEvaluator;
 
+    private final CompetitionAccessService competitionAccessService;
+
     @Override
     public List<CompetitionVO> listCompetitions(boolean includeArchived) {
         // 1) 查询比赛主数据，常用列表默认排除归档赛事
@@ -113,6 +116,9 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
                 .orderByDesc(Competition::getId);
         if (!includeArchived) {
             wrapper.ne(Competition::getStatus, CompetitionStatus.ARCHIVED.name());
+        }
+        if (!competitionAccessService.canAccessAllOrganizers()) {
+            wrapper.eq(Competition::getOrganizerId, competitionAccessService.requireCurrentOrganizerId());
         }
         List<Competition> competitions = competitionMapper.selectList(wrapper);
         if (competitions.isEmpty()) {
@@ -202,7 +208,7 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
     @Override
     public PortalCompetitionVO getPortalCompetitionDetail(Long id) {
         // 1) 查询赛事并校验公开范围
-        Competition competition = getCompetitionOrThrow(id);
+        Competition competition = getPublicCompetitionOrThrow(id);
         CompetitionStatus status = competitionReadinessEvaluator.parseStatus(competition);
         if (status == CompetitionStatus.DRAFT || status == CompetitionStatus.ARCHIVED) {
             throw new ResourceNotFoundException("赛事不存在");
@@ -214,18 +220,18 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
 
     @Override
     public CompetitionDetailVO getCompetitionDetail(Long id) {
-        Competition competition = getCompetitionOrThrow(id);
+        Competition competition = getAdminCompetitionOrThrow(id);
         return competitionDetailAssembler.buildDetail(competition);
     }
 
     @Override
     public CompetitionDetailVO getCompetitionOverview(Long id) {
-        return competitionDetailAssembler.buildOverview(getCompetitionOrThrow(id));
+        return competitionDetailAssembler.buildOverview(getAdminCompetitionOrThrow(id));
     }
 
     @Override
     public CompetitionProgressVO getCompetitionProgress(Long id) {
-        Competition competition = getCompetitionOrThrow(id);
+        Competition competition = getAdminCompetitionOrThrow(id);
         EntrySummaryVO entrySummary = competitionProgressQueryService.getEntrySummary(competition.getId());
         List<CompetitionRoundVO> rounds = competitionWorkspaceQueryService.listRounds(competition.getId());
         return CompetitionProgressVO.builder()
@@ -237,13 +243,13 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
 
     @Override
     public List<CompetitionEntryVO> getCompetitionEntryPool(Long id) {
-        Competition competition = getCompetitionOrThrow(id);
+        Competition competition = getAdminCompetitionOrThrow(id);
         return competitionWorkspaceQueryService.listEntryPool(competition.getId());
     }
 
     @Override
     public PageResult<CompetitionEntryVO> getCompetitionEntryPoolPage(Long id, Integer page, Integer pageSize) {
-        Competition competition = getCompetitionOrThrow(id);
+        Competition competition = getAdminCompetitionOrThrow(id);
         return competitionWorkspaceQueryService.listEntryPoolPage(competition.getId(), page, pageSize);
     }
 
@@ -262,7 +268,7 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
 
     @Override
     public CompetitionAnalyticsVO getCompetitionAnalytics(Long competitionId) {
-        getCompetitionOrThrow(competitionId);
+        getAdminCompetitionOrThrow(competitionId);
         return competitionAnalyticsService.buildAnalytics(competitionId);
     }
 
@@ -456,7 +462,16 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
                 .toList();
     }
 
-    private Competition getCompetitionOrThrow(Long id) {
+    private Competition getAdminCompetitionOrThrow(Long id) {
+        competitionAccessService.requireCompetitionAccess(id);
+        Competition competition = competitionMapper.selectById(id);
+        if (competition == null) {
+            throw new ResourceNotFoundException("比赛不存在");
+        }
+        return competition;
+    }
+
+    private Competition getPublicCompetitionOrThrow(Long id) {
         Competition competition = competitionMapper.selectById(id);
         if (competition == null) {
             throw new ResourceNotFoundException("比赛不存在");

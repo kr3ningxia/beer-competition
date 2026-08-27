@@ -5,6 +5,8 @@ import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ForbiddenException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
+import com.beercompetition.competition.access.CompetitionAccessService;
+import com.beercompetition.file.FileAccessService;
 import com.beercompetition.common.result.PageResult;
 import com.beercompetition.mapper.AdminOperationLogMapper;
 import com.beercompetition.mapper.BeerEntryMapper;
@@ -97,6 +99,9 @@ public class EntryRefundServiceImpl implements EntryRefundService {
 
     private final OfflineRefundRegistrationService offlineRefundRegistrationService;
 
+    private final CompetitionAccessService competitionAccessService;
+    private final FileAccessService fileAccessService;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public EntryDetailVO requestPortalEntryRefund(Long entryId, PortalEntryRefundRequest request) {
@@ -145,10 +150,9 @@ public class EntryRefundServiceImpl implements EntryRefundService {
         // 1) 查询退款记录关联酒款
         int currentPage = Math.max(page == null ? 1 : page, 1);
         int currentPageSize = Math.min(Math.max(pageSize == null ? 30 : pageSize, 1), 100);
-        List<EntryRefund> refunds = entryRefundMapper.selectList(new LambdaQueryWrapper<EntryRefund>()
-                .eq(StringUtils.hasText(status), EntryRefund::getStatus, status)
-                .orderByDesc(EntryRefund::getRequestedTime)
-                .orderByDesc(EntryRefund::getId));
+        List<Long> visibleCompetitionIds = competitionAccessService.canAccessAllOrganizers()
+                ? null : visibleCompetitionIds();
+        List<EntryRefund> refunds = entryRefundMapper.selectAdminRefunds(status, visibleCompetitionIds);
 
         // 2) 组装酒款列表并分页
         List<AdminEntryVO> records = refunds.stream()
@@ -175,7 +179,7 @@ public class EntryRefundServiceImpl implements EntryRefundService {
         if (!EntryRefundStatus.REQUESTED.name().equals(refund.getStatus())) {
             throw new BaseException("只有待处理退款可以驳回");
         }
-        BeerEntry entry = requireEntry(refund.getBeerEntryId());
+        BeerEntry entry = requireAdminEntry(refund.getBeerEntryId());
 
         // 2) 驳回退款并保留报名
         refund.setStatus(EntryRefundStatus.REJECTED.name());
@@ -200,6 +204,15 @@ public class EntryRefundServiceImpl implements EntryRefundService {
     public void retryRefund(Long refundId, AdminEntryStatusRequest request) {
         // 1) 委托微信支付服务重试失败退款
         wechatPaymentService.retryRefund(refundId, normalizeStatusReason(request), BaseContext.getCurrentId());
+    }
+
+    @Override
+    public com.beercompetition.pojo.vo.FileDownloadVO downloadOfflineVoucher(Long refundId) {
+        EntryRefund refund = requireRefund(refundId);
+        if (refund.getOfflineRefundVoucherAssetId() == null) {
+            throw new ResourceNotFoundException("该退款记录没有打款凭证");
+        }
+        return fileAccessService.download(refund.getOfflineRefundVoucherAssetId());
     }
 
     private String buildStatusLogSummary(String action, String reason) {
@@ -245,6 +258,7 @@ public class EntryRefundServiceImpl implements EntryRefundService {
         if (refund == null) {
             throw new ResourceNotFoundException("退款记录不存在");
         }
+        requireAdminEntry(refund.getBeerEntryId());
         return refund;
     }
 
@@ -358,19 +372,34 @@ public class EntryRefundServiceImpl implements EntryRefundService {
     }
 
     private BeerEntry requireOwnedEntry(Long entryId, Long breweryId) {
-        BeerEntry entry = requireEntry(entryId);
+        BeerEntry entry = requirePortalEntry(entryId);
         if (!entry.getBreweryId().equals(breweryId)) {
             throw new ForbiddenException("无权查看该酒款");
         }
         return entry;
     }
 
-    private BeerEntry requireEntry(Long entryId) {
+    private BeerEntry requirePortalEntry(Long entryId) {
         BeerEntry entry = beerEntryMapper.selectById(entryId);
         if (entry == null) {
             throw new ResourceNotFoundException("酒款不存在");
         }
         return entry;
+    }
+
+    private BeerEntry requireAdminEntry(Long entryId) {
+        BeerEntry entry = requirePortalEntry(entryId);
+        competitionAccessService.requireCompetitionAccess(entry.getCompetitionId());
+        return entry;
+    }
+
+    private List<Long> visibleCompetitionIds() {
+        Long organizerId = competitionAccessService.requireCurrentOrganizerId();
+        return competitionMapper.selectList(new LambdaQueryWrapper<Competition>()
+                        .eq(Competition::getOrganizerId, organizerId))
+                .stream()
+                .map(Competition::getId)
+                .toList();
     }
 
     private String generateRefundNo() {

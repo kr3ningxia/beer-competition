@@ -83,6 +83,8 @@ class AuthServiceRefreshTokenTest {
     private SmsAuthProvider smsAuthProvider;
     @Mock
     private PiiService piiService;
+    @Mock
+    private AdminIdentityService adminIdentityService;
 
     private final Map<String, Object> redisStore = new ConcurrentHashMap<>();
     private AuthServiceImpl authService;
@@ -132,7 +134,8 @@ class AuthServiceRefreshTokenTest {
                 jwtProperties,
                 smsProperties,
                 smsAuthProvider,
-                piiService
+                piiService,
+                adminIdentityService
         );
     }
 
@@ -144,18 +147,27 @@ class AuthServiceRefreshTokenTest {
                 .password(Md5Util.encode("123456"))
                 .name("测试管理员")
                 .status(1)
+                .adminType("PLATFORM_SUPER_ADMIN")
                 .build();
+        lenient().when(adminIdentityService.resolve(adminUser)).thenReturn(
+                new AdminSessionIdentity(com.beercompetition.pojo.enums.AdminType.PLATFORM_SUPER_ADMIN, null, false));
         when(adminUserMapper.selectOne(any())).thenReturn(adminUser);
         when(adminUserMapper.selectById(1L)).thenReturn(adminUser);
 
         LoginResponse loginResponse = authService.adminLogin(loginRequest());
         String oldRefreshToken = loginResponse.getRefreshToken();
+        assertThat(loginResponse.getAdminType()).isEqualTo("PLATFORM_SUPER_ADMIN");
+        assertThat(loginResponse.getOrganizerId()).isNull();
+        assertThat(loginResponse.getMustChangePassword()).isFalse();
         assertThat(redisStore).containsKey(refreshKey(oldRefreshToken));
 
         LoginResponse refreshResponse = authService.refreshToken(refreshRequest(oldRefreshToken));
 
         assertThat(refreshResponse.getAccessToken()).isNotBlank();
         assertThat(refreshResponse.getRefreshToken()).isNotBlank();
+        assertThat(refreshResponse.getAdminType()).isEqualTo("PLATFORM_SUPER_ADMIN");
+        assertThat(refreshResponse.getOrganizerId()).isNull();
+        assertThat(refreshResponse.getMustChangePassword()).isFalse();
         assertThat(refreshResponse.getAccessToken()).isNotEqualTo(loginResponse.getAccessToken());
         assertThat(refreshResponse.getRefreshToken()).isNotEqualTo(oldRefreshToken);
         assertThat(redisStore).doesNotContainKey(refreshKey(oldRefreshToken));
@@ -172,7 +184,10 @@ class AuthServiceRefreshTokenTest {
                 .password(Md5Util.encode("123456"))
                 .name("测试管理员")
                 .status(1)
+                .adminType("PLATFORM_SUPER_ADMIN")
                 .build();
+        lenient().when(adminIdentityService.resolve(adminUser)).thenReturn(
+                new AdminSessionIdentity(com.beercompetition.pojo.enums.AdminType.PLATFORM_SUPER_ADMIN, null, false));
         when(adminUserMapper.selectOne(any())).thenReturn(adminUser);
 
         AdminLoginRequest request = loginRequest();

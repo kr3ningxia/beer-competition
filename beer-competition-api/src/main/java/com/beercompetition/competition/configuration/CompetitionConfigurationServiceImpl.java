@@ -61,6 +61,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import com.beercompetition.competition.configuration.CompetitionConfigurationService;
+import com.beercompetition.competition.access.CompetitionAccessService;
 import com.beercompetition.competition.query.CompetitionQueryService;
 
 /**
@@ -120,6 +121,8 @@ public class CompetitionConfigurationServiceImpl implements CompetitionConfigura
     private final ObjectMapper objectMapper;
 
     private final CompetitionQueryService competitionQueryService;
+
+    private final CompetitionAccessService competitionAccessService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -521,6 +524,7 @@ public class CompetitionConfigurationServiceImpl implements CompetitionConfigura
     }
 
     private Competition getCompetitionOrThrow(Long id) {
+        competitionAccessService.requireCompetitionAccess(id);
         Competition competition = competitionMapper.selectById(id);
         if (competition == null) {
             throw new ResourceNotFoundException("比赛不存在");

@@ -5,6 +5,7 @@ import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.common.util.SimpleXlsxBuilder;
+import com.beercompetition.competition.access.CompetitionAccessService;
 import com.beercompetition.mapper.AdminOperationLogMapper;
 import com.beercompetition.mapper.BeerEntryExtraFieldMapper;
 import com.beercompetition.mapper.BeerEntryMapper;
@@ -72,6 +73,7 @@ public class AdminExportServiceImpl implements AdminExportService {
     );
 
     private final CompetitionMapper competitionMapper;
+    private final CompetitionAccessService competitionAccessService;
     private final CompetitionCategoryMapper competitionCategoryMapper;
     private final BeerEntryMapper beerEntryMapper;
     private final BeerEntryExtraFieldMapper beerEntryExtraFieldMapper;
@@ -282,6 +284,7 @@ public class AdminExportServiceImpl implements AdminExportService {
         if (competition == null) {
             throw new ResourceNotFoundException("比赛不存在");
         }
+        competitionAccessService.requireCompetitionAccess(competitionId);
         return competition;
     }
 

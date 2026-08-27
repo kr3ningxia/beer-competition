@@ -3,6 +3,8 @@ package com.beercompetition.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
+import com.beercompetition.competition.access.CompetitionAccessService;
+import com.beercompetition.file.FileAccessService;
 import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.CompetitionSponsorMapper;
 import com.beercompetition.mapper.FileAssetMapper;
@@ -47,6 +49,9 @@ public class CompetitionSponsorServiceImpl implements CompetitionSponsorService 
     private final FileAssetMapper fileAssetMapper;
     private final FileStorageService fileStorageService;
     private final StorageProperties storageProperties;
+    private final FileAccessService fileAccessService;
+
+    private final CompetitionAccessService competitionAccessService;
 
     @Override
     public List<CompetitionSponsorVO> listSponsors(Long competitionId) {
@@ -99,35 +104,37 @@ public class CompetitionSponsorServiceImpl implements CompetitionSponsorService 
     @Override
     public CompetitionSponsorLogoVO uploadSponsorLogo(Long competitionId, MultipartFile file) {
         // 1) 参数规范化与前置校验
-        requireCompetition(competitionId);
+        Competition competition = requireCompetition(competitionId);
         validateLogoFile(file);
         String filename = sanitizeUploadFilename(file.getOriginalFilename(), "sponsor-logo.png");
         byte[] bytes = readUploadBytes(file);
 
         // 2) 上传文件并登记资产
         String storagePath = fileStorageService.upload(BUSINESS_TYPE_SPONSOR_LOGO, filename, bytes);
-        String publicUrl = resolveUploadPublicUrl(storagePath);
         FileAsset asset = FileAsset.builder()
+                .organizerId(competition.getOrganizerId())
                 .businessType(BUSINESS_TYPE_SPONSOR_LOGO)
                 .ownerType(OWNER_TYPE_COMPETITION)
                 .ownerId(competitionId)
                 .storageProvider(storageProperties.getProvider())
                 .fileName(filename)
                 .storagePath(storagePath)
-                .publicUrl(publicUrl)
+                .publicUrl(null)
                 .createTime(LocalDateTime.now())
                 .build();
         fileAssetMapper.insert(asset);
+        String publicUrl = fileAccessService.publicUrl(asset.getId());
 
         // 3) 返回前端可绑定的文件信息
         return CompetitionSponsorLogoVO.builder()
                 .fileAssetId(asset.getId())
                 .fileName(asset.getFileName())
-                .publicUrl(asset.getPublicUrl())
+                .publicUrl(publicUrl)
                 .build();
     }
 
     private Competition requireCompetition(Long competitionId) {
+        competitionAccessService.requireCompetitionAccess(competitionId);
         Competition competition = competitionMapper.selectById(competitionId);
         if (competition == null) {
             throw new ResourceNotFoundException("比赛不存在");
@@ -182,7 +189,7 @@ public class CompetitionSponsorServiceImpl implements CompetitionSponsorService 
                 .tierLabel(sponsor.getTierLabel())
                 .sponsorName(sponsor.getSponsorName())
                 .logoAssetId(sponsor.getLogoAssetId())
-                .logoUrl(asset == null ? null : asset.getPublicUrl())
+                .logoUrl(asset == null ? null : fileAccessService.publicUrl(asset.getId()))
                 .sortOrder(sponsor.getSortOrder())
                 .featured(Objects.equals(sponsor.getFeaturedFlag(), 1))
                 .enabled(Objects.equals(sponsor.getEnabledFlag(), 1))
@@ -214,20 +221,6 @@ public class CompetitionSponsorServiceImpl implements CompetitionSponsorService 
         String raw = StringUtils.hasText(originalFilename) ? originalFilename : fallback;
         String filename = Path.of(raw).getFileName().toString().replaceAll("[\\\\/:*?\"<>|]", "_");
         return UUID.randomUUID() + "-" + filename;
-    }
-
-    private String resolveUploadPublicUrl(String storagePath) {
-        if (!StringUtils.hasText(storagePath)) {
-            return "";
-        }
-        if (storagePath.startsWith("http://") || storagePath.startsWith("https://")) {
-            return storagePath;
-        }
-        String relativePath = storagePath.replace("\\", "/");
-        if (relativePath.startsWith("uploads/")) {
-            relativePath = relativePath.substring("uploads/".length());
-        }
-        return "/uploads/" + relativePath;
     }
 
     private String normalizeRequired(String value, String message) {

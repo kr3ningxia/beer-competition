@@ -19,6 +19,7 @@ public class FileAsset {
 
     @TableId(type = IdType.AUTO)
     private Long id;
+    private Long organizerId;
     private String businessType;
     private String ownerType;
     private Long ownerId;

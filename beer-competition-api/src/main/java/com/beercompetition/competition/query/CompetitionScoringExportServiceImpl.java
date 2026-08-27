@@ -3,6 +3,7 @@ package com.beercompetition.competition.query;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
+import com.beercompetition.competition.access.CompetitionAccessService;
 import com.beercompetition.mapper.BeerEntryMapper;
 import com.beercompetition.mapper.BeerEntryExtraFieldMapper;
 import com.beercompetition.mapper.AwardResultMapper;
@@ -65,6 +66,8 @@ public class CompetitionScoringExportServiceImpl implements CompetitionScoringEx
 
     private final CompetitionMapper competitionMapper;
 
+    private final CompetitionAccessService competitionAccessService;
+
     private final CompetitionCategoryMapper competitionCategoryMapper;
 
     private final JudgeAccountMapper judgeAccountMapper;
@@ -92,6 +95,7 @@ public class CompetitionScoringExportServiceImpl implements CompetitionScoringEx
     @Override
     public byte[] exportScoringData(Long competitionId) {
         // 1) 查询比赛、酒款和导出关联数据
+        competitionAccessService.requireCompetitionAccess(competitionId);
         getCompetitionOrThrow(competitionId);
         List<BeerEntry> entries = beerEntryMapper.selectList(new LambdaQueryWrapper<BeerEntry>()
                 .eq(BeerEntry::getCompetitionId, competitionId)

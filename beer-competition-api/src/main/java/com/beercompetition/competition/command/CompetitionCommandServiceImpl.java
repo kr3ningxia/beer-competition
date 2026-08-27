@@ -34,6 +34,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.time.LocalDateTime;
 import com.beercompetition.competition.command.CompetitionCommandService;
+import com.beercompetition.competition.access.CompetitionAccessService;
 import com.beercompetition.competition.query.CompetitionQueryService;
 
 /**
@@ -62,6 +63,8 @@ public class CompetitionCommandServiceImpl implements CompetitionCommandService 
     private final CompetitionQueryService competitionQueryService;
 
     private final CompetitionCreationService competitionCreationService;
+
+    private final CompetitionAccessService competitionAccessService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -293,6 +296,8 @@ public class CompetitionCommandServiceImpl implements CompetitionCommandService 
         payload.put("newMode", newMode);
         adminOperationLogMapper.insert(AdminOperationLog.builder()
                 .adminUserId(BaseContext.getCurrentId())
+                .organizerId(competitionMapper.selectById(competitionId).getOrganizerId())
+                .competitionId(competitionId)
                 .action("COMPETITION_REFUND_POLICY_UPDATE")
                 .targetType(LOG_TARGET_COMPETITION)
                 .targetPublicId(String.valueOf(competitionId))
@@ -316,6 +321,7 @@ public class CompetitionCommandServiceImpl implements CompetitionCommandService 
     }
 
     private Competition getCompetitionOrThrow(Long id) {
+        competitionAccessService.requireCompetitionAccess(id);
         Competition competition = competitionMapper.selectById(id);
         if (competition == null) {
             throw new ResourceNotFoundException("比赛不存在");

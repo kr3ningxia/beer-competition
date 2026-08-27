@@ -1,6 +1,7 @@
 package com.beercompetition.service.impl;
 
 import com.beercompetition.mapper.AdminOperationLogMapper;
+import com.beercompetition.competition.access.CompetitionAccessService;
 import com.beercompetition.mapper.BeerEntryExtraFieldMapper;
 import com.beercompetition.mapper.BeerEntryMapper;
 import com.beercompetition.mapper.BreweryMapper;
@@ -38,6 +39,8 @@ class AdminExportServiceImplTest {
 
     @Mock
     private CompetitionMapper competitionMapper;
+    @Mock
+    private CompetitionAccessService competitionAccessService;
     @Mock
     private CompetitionCategoryMapper competitionCategoryMapper;
     @Mock

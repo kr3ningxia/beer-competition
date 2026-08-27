@@ -2,6 +2,7 @@ package com.beercompetition.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.beercompetition.common.exception.ResourceNotFoundException;
+import com.beercompetition.competition.access.CompetitionAccessService;
 import com.beercompetition.mapper.BeerEntryMapper;
 import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.CompetitionRoundMapper;
@@ -67,9 +68,12 @@ public class LiveBoardServiceImpl implements LiveBoardService {
     private final ScoreRecordMapper scoreRecordMapper;
     private final CompetitionSponsorService competitionSponsorService;
 
+    private final CompetitionAccessService competitionAccessService;
+
     @Override
     public CompetitionLiveBoardVO getCompetitionLiveBoard(Long competitionId) {
         // 1) 参数规范化与前置校验
+        competitionAccessService.requireCompetitionAccess(competitionId);
         Competition competition = competitionMapper.selectById(competitionId);
         if (competition == null) {
             throw new ResourceNotFoundException("比赛不存在");

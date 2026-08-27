@@ -13,6 +13,8 @@ import com.beercompetition.mapper.CompetitionRoundMapper;
 import com.beercompetition.mapper.FileAssetMapper;
 import com.beercompetition.mapper.RoundResultMapper;
 import com.beercompetition.mapper.RoundTableMapper;
+import com.beercompetition.competition.access.CompetitionAccessService;
+import com.beercompetition.file.FileAccessService;
 import com.beercompetition.properties.StorageProperties;
 import com.beercompetition.pojo.dto.AwardConfirmItemRequest;
 import com.beercompetition.pojo.dto.AwardConfirmRequest;
@@ -82,6 +84,8 @@ public class AwardServiceImpl implements AwardService {
     private final FileAssetMapper fileAssetMapper;
     private final FileStorageService fileStorageService;
     private final StorageProperties storageProperties;
+    private final CompetitionAccessService competitionAccessService;
+    private final FileAccessService fileAccessService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -105,6 +109,7 @@ public class AwardServiceImpl implements AwardService {
     public AwardResultVO uploadCertificate(Long competitionId, Long awardId, MultipartFile file) {
         // 1) 参数规范化与前置校验
         AwardResult award = requireCertificateEditableAward(competitionId, awardId);
+        Competition competition = requireCompetition(competitionId);
         validateCertificateFileMetadata(file);
         String filename = sanitizeFilename(file.getOriginalFilename());
 
@@ -113,7 +118,10 @@ public class AwardServiceImpl implements AwardService {
         validateCertificateFileContent(file, filename, bytes);
         String storagePath = fileStorageService.upload(BUSINESS_TYPE_AWARD_CERTIFICATE, filename, bytes);
         FileAsset asset = FileAsset.builder()
+                .organizerId(competition.getOrganizerId())
                 .businessType(BUSINESS_TYPE_AWARD_CERTIFICATE)
+                .ownerType("AWARD_RESULT")
+                .ownerId(award.getId())
                 .storageProvider(storageProperties.getProvider())
                 .fileName(filename)
                 .storagePath(storagePath)
@@ -155,7 +163,7 @@ public class AwardServiceImpl implements AwardService {
         return FileDownloadVO.builder()
                 .fileName(resolveCertificateFilename(award, asset))
                 .contentType(AwardCertificateFileType.resolveContentType(resolveCertificateFilename(award, asset)))
-                .content(fileStorageService.download(asset.getStoragePath()))
+                .content(fileAccessService.download(asset.getId()).getContent())
                 .build();
     }
 
@@ -746,6 +754,7 @@ public class AwardServiceImpl implements AwardService {
     }
 
     private Competition requireCompetition(Long competitionId) {
+        competitionAccessService.requireCompetitionAccess(competitionId);
         Competition competition = competitionMapper.selectById(competitionId);
         if (competition == null) {
             throw new ResourceNotFoundException("比赛不存在");

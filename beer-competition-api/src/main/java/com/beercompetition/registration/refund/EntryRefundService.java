@@ -6,6 +6,7 @@ import com.beercompetition.pojo.dto.AdminOfflineRefundRequest;
 import com.beercompetition.pojo.dto.PortalEntryRefundRequest;
 import com.beercompetition.pojo.vo.AdminEntryVO;
 import com.beercompetition.pojo.vo.EntryDetailVO;
+import com.beercompetition.pojo.vo.FileDownloadVO;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -26,4 +27,6 @@ public interface EntryRefundService {
     void registerOfflineRefund(Long refundId, AdminOfflineRefundRequest request, MultipartFile voucher);
 
     void retryRefund(Long refundId, AdminEntryStatusRequest request);
+
+    FileDownloadVO downloadOfflineVoucher(Long refundId);
 }

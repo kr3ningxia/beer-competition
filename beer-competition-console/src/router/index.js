@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { isLoggedIn } from '@/utils/auth'
+import { getAdminType, isLoggedIn } from '@/utils/auth'
 
 const routes = [
   { path: '/', redirect: '/portal/home' },
@@ -15,6 +15,8 @@ const routes = [
     meta: { scope: 'portal' },
     children: [
       { path: 'home', component: () => import('@/views/portal/Home.vue'), meta: { public: true, scope: 'portal' } },
+      { path: 'organizer-application', component: () => import('@/views/portal/OrganizerApplication.vue'), meta: { public: true, scope: 'portal' } },
+      { path: 'organizer-application/status', component: () => import('@/views/portal/OrganizerApplication.vue'), meta: { public: true, scope: 'portal' } },
       { path: 'events', component: () => import('@/views/portal/Events.vue'), meta: { public: true, scope: 'portal' } },
       { path: 'events/:id', component: () => import('@/views/portal/EventDetail.vue'), meta: { public: true, scope: 'portal' } },
       { path: 'competition-results', component: () => import('@/views/portal/CompetitionResults.vue'), meta: { public: true, scope: 'portal' } },
@@ -52,6 +54,7 @@ const routes = [
       { path: 'entries', component: () => import('@/views/admin/AdminEntries.vue') },
       { path: 'bank-transfers', component: () => import('@/views/admin/AdminBankTransfers.vue') },
       { path: 'judges', component: () => import('@/views/admin/Judges.vue') },
+      { path: 'organizer-applications', component: () => import('@/views/admin/OrganizerApplications.vue'), meta: { platformSuperAdmin: true } },
       { path: 'admin-users', component: () => import('@/views/admin/AdminUsers.vue') },
       { path: 'operation-logs', component: () => import('@/views/admin/AdminOperationLogs.vue') },
       { path: 'style-libraries', component: () => import('@/views/admin/StyleLibraries.vue') },
@@ -83,11 +86,20 @@ router.beforeEach((to, from, next) => {
       next(scope === 'admin' ? '/admin/login' : { path: '/portal/login', query: { redirect: to.fullPath } })
       return
     }
+    if (scope === 'admin' && to.meta.platformSuperAdmin
+      && getAdminType() && getAdminType() !== 'PLATFORM_SUPER_ADMIN') {
+      next('/admin/dashboard')
+      return
+    }
   }
   next()
 })
 
 router.afterEach((to) => {
+  if (to.path.includes('organizer-application')) {
+    document.title = '主办方入驻｜啤酒事务局'
+    return
+  }
   document.title = to.path.startsWith('/admin')
     ? '赛事后台｜啤酒事务局'
     : '赛事平台｜啤酒事务局'

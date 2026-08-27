@@ -14,6 +14,7 @@ import com.beercompetition.mapper.FileAssetMapper;
 import com.beercompetition.mapper.PortalAccountMapper;
 import com.beercompetition.mapper.RoundResultMapper;
 import com.beercompetition.mapper.ScoreRecordMapper;
+import com.beercompetition.file.FileAccessService;
 import com.beercompetition.pojo.enums.CompetitionStatus;
 import com.beercompetition.pojo.enums.CompetitionType;
 import com.beercompetition.pojo.enums.AwardResultStatus;
@@ -38,7 +39,6 @@ import com.beercompetition.pojo.vo.PortalRoundResultVO;
 import com.beercompetition.pojo.vo.PortalScoreDimensionVO;
 import com.beercompetition.pojo.vo.PortalScoreRecordVO;
 import com.beercompetition.service.support.AwardCertificateFileType;
-import com.beercompetition.storage.FileStorageService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -86,7 +86,7 @@ public class PortalResultQueryServiceImpl implements PortalResultQueryService {
 
     private final ObjectMapper objectMapper;
 
-    private final FileStorageService fileStorageService;
+    private final FileAccessService fileAccessService;
 
     @Override
     public List<PortalCompetitionResultVO> listPublishedCompetitionResults() {
@@ -212,7 +212,7 @@ public class PortalResultQueryServiceImpl implements PortalResultQueryService {
         return FileDownloadVO.builder()
                 .fileName(resolveCertificateFilename(award, asset))
                 .contentType(AwardCertificateFileType.resolveContentType(resolveCertificateFilename(award, asset)))
-                .content(fileStorageService.download(asset.getStoragePath()))
+                .content(fileAccessService.download(asset.getId()).getContent())
                 .build();
     }
 

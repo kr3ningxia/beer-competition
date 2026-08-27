@@ -2,6 +2,7 @@ package com.beercompetition.controller.admin;
 
 import com.beercompetition.common.result.PageResult;
 import com.beercompetition.common.result.Result;
+import com.beercompetition.controller.support.FileResponseHelper;
 import com.beercompetition.pojo.dto.AdminEntryStatusRequest;
 import com.beercompetition.pojo.dto.AdminOfflineRefundRequest;
 import com.beercompetition.pojo.dto.AdminEntryDeleteRequest;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.http.MediaType;
@@ -190,5 +192,10 @@ public class AdminEntryController {
                                       @RequestBody(required = false) @Valid AdminEntryStatusRequest request) {
         entryRefundService.retryRefund(id, request);
         return Result.success("退款重试成功");
+    }
+
+    @GetMapping("/refunds/{id}/offline-voucher")
+    public ResponseEntity<byte[]> downloadOfflineRefundVoucher(@PathVariable Long id) {
+        return FileResponseHelper.attachment(entryRefundService.downloadOfflineVoucher(id));
     }
 }

@@ -23,6 +23,9 @@ public class AdminUser {
     private String password;
     private String name;
     private Integer status;
+    private String adminType;
+    private Integer mustChangePassword;
+    private LocalDateTime initialCredentialIssuedTime;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

@@ -46,6 +46,8 @@ import com.beercompetition.properties.JwtProperties;
 import com.beercompetition.properties.SmsProperties;
 import com.beercompetition.security.RefreshSession;
 import com.beercompetition.security.JwtUtil;
+import com.beercompetition.security.AdminIdentityService;
+import com.beercompetition.security.AdminSessionIdentity;
 import com.beercompetition.service.AuthService;
 import com.beercompetition.service.SmsAuthProvider;
 import lombok.RequiredArgsConstructor;
@@ -97,6 +99,7 @@ public class AuthServiceImpl implements AuthService {
     private final SmsProperties smsProperties;
     private final SmsAuthProvider smsAuthProvider;
     private final PiiService piiService;
+    private final AdminIdentityService adminIdentityService;
 
     @Override
     public LoginResponse adminLogin(AdminLoginRequest request) {
@@ -115,8 +118,9 @@ public class AuthServiceImpl implements AuthService {
         }
 
         // 3) 组装并返回登录态
+        AdminSessionIdentity identity = adminIdentityService.resolve(adminUser);
         return buildLoginResponse(adminUser.getId(), adminUser.getName(), UserRole.ADMIN,
-                jwtProperties.getAdminTtl(), jwtProperties.getAdminRefreshTtl());
+                jwtProperties.getAdminTtl(), jwtProperties.getAdminRefreshTtl(), identity);
     }
 
     @Override
@@ -258,7 +262,7 @@ public class AuthServiceImpl implements AuthService {
 
         // 3) 生成新的 access token 和新的 refresh token
         return buildLoginResponse(subject.userId(), subject.displayName(), subject.role(),
-                accessTtlMillis(subject.role()), refreshTtlMillis(subject.role()));
+                accessTtlMillis(subject.role()), refreshTtlMillis(subject.role()), subject.adminIdentity());
     }
 
     @Override
@@ -293,10 +297,14 @@ public class AuthServiceImpl implements AuthService {
                 if (adminUser.getStatus() == null || adminUser.getStatus() != ADMIN_STATUS_ACTIVE) {
                     throw new BaseException("管理员账号已停用，请重新登录");
                 }
+                AdminSessionIdentity identity = adminIdentityService.resolve(adminUser);
                 yield CurrentUserResponse.builder()
                         .userId(adminUser.getId())
                         .role(role.name())
                         .displayName(adminUser.getName())
+                        .adminType(identity.adminType().name())
+                        .organizerId(identity.organizerId())
+                        .mustChangePassword(identity.mustChangePassword())
                         .build();
             }
             case PORTAL -> {
@@ -409,14 +417,28 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private LoginResponse buildLoginResponse(Long userId, String displayName, UserRole role, long accessTtlMillis, long refreshTtlMillis) {
+        return buildLoginResponse(userId, displayName, role, accessTtlMillis, refreshTtlMillis, null);
+    }
+
+    private LoginResponse buildLoginResponse(Long userId,
+                                             String displayName,
+                                             UserRole role,
+                                             long accessTtlMillis,
+                                             long refreshTtlMillis,
+                                             AdminSessionIdentity adminIdentity) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("uid", userId);
         claims.put("role", role.name());
         claims.put("scope", role.name().toLowerCase());
         claims.put("displayName", displayName);
+        if (role == UserRole.ADMIN && adminIdentity != null) {
+            claims.put("adminType", adminIdentity.adminType().name());
+            claims.put("organizerId", adminIdentity.organizerId());
+            claims.put("mustChangePassword", adminIdentity.mustChangePassword());
+        }
         claims.put("jti", UUID.randomUUID().toString().replace("-", ""));
         String accessToken = JwtUtil.createToken(jwtProperties.getSecretKey(), accessTtlMillis, claims);
-        String refreshToken = createRefreshSession(userId, displayName, role, refreshTtlMillis);
+        String refreshToken = createRefreshSession(userId, displayName, role, refreshTtlMillis, adminIdentity);
         return LoginResponse.builder()
                 .token(accessToken)
                 .accessToken(accessToken)
@@ -426,6 +448,9 @@ public class AuthServiceImpl implements AuthService {
                 .userId(userId)
                 .role(role.name())
                 .displayName(displayName)
+                .adminType(adminIdentity == null ? null : adminIdentity.adminType().name())
+                .organizerId(adminIdentity == null ? null : adminIdentity.organizerId())
+                .mustChangePassword(adminIdentity == null ? null : adminIdentity.mustChangePassword())
                 .build();
     }
 
@@ -477,7 +502,11 @@ public class AuthServiceImpl implements AuthService {
         return response;
     }
 
-    private String createRefreshSession(Long userId, String displayName, UserRole role, long refreshTtlMillis) {
+    private String createRefreshSession(Long userId,
+                                        String displayName,
+                                        UserRole role,
+                                        long refreshTtlMillis,
+                                        AdminSessionIdentity adminIdentity) {
         String sessionId = UUID.randomUUID().toString().replace("-", "");
         String refreshToken = sessionId + REFRESH_TOKEN_SEPARATOR + randomTokenSecret();
         long issuedAt = System.currentTimeMillis();
@@ -488,6 +517,9 @@ public class AuthServiceImpl implements AuthService {
                 .role(role.name())
                 .scope(role.name().toLowerCase())
                 .displayName(displayName)
+                .adminType(adminIdentity == null ? null : adminIdentity.adminType().name())
+                .organizerId(adminIdentity == null ? null : adminIdentity.organizerId())
+                .mustChangePassword(adminIdentity == null ? null : adminIdentity.mustChangePassword())
                 .issuedAtMillis(issuedAt)
                 .expiresAtMillis(issuedAt + refreshTtlMillis)
                 .build();
@@ -508,6 +540,9 @@ public class AuthServiceImpl implements AuthService {
                     .role(stringValue(map.get("role")))
                     .scope(stringValue(map.get("scope")))
                     .displayName(stringValue(map.get("displayName")))
+                    .adminType(stringValue(map.get("adminType")))
+                    .organizerId(longValue(map.get("organizerId")))
+                    .mustChangePassword(booleanValue(map.get("mustChangePassword")))
                     .issuedAtMillis(longValue(map.get("issuedAtMillis")))
                     .expiresAtMillis(longValue(map.get("expiresAtMillis")))
                     .build();
@@ -528,21 +563,22 @@ public class AuthServiceImpl implements AuthService {
                 if (adminUser == null || adminUser.getStatus() == null || adminUser.getStatus() != ADMIN_STATUS_ACTIVE) {
                     throw new UnauthorizedException("管理员账号已停用，请重新登录");
                 }
-                yield new SessionSubject(adminUser.getId(), adminUser.getName(), role);
+                yield new SessionSubject(adminUser.getId(), adminUser.getName(), role,
+                        adminIdentityService.resolve(adminUser));
             }
             case PORTAL -> {
                 PortalAccount account = portalAccountMapper.selectById(session.getUserId());
                 if (account == null || account.getStatus() == null || account.getStatus() != PORTAL_STATUS_ACTIVE) {
                     throw new UnauthorizedException("厂牌账号已禁用，请重新登录");
                 }
-                yield new SessionSubject(account.getId(), account.getDisplayName(), role);
+                yield new SessionSubject(account.getId(), account.getDisplayName(), role, null);
             }
             case JUDGE -> {
                 JudgeAccount account = judgeAccountMapper.selectById(session.getUserId());
                 if (account == null || !JudgeAccountStatus.of(account.getStatus()).canLogin()) {
                     throw new UnauthorizedException("评审账号已停用，请重新登录");
                 }
-                yield new SessionSubject(account.getId(), resolveJudgeDisplayName(account), role);
+                yield new SessionSubject(account.getId(), resolveJudgeDisplayName(account), role, null);
             }
         };
     }
@@ -617,7 +653,20 @@ public class AuthServiceImpl implements AuthService {
         return Long.valueOf(String.valueOf(value));
     }
 
-    private record SessionSubject(Long userId, String displayName, UserRole role) {
+    private Boolean booleanValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Boolean booleanValue) {
+            return booleanValue;
+        }
+        return Boolean.valueOf(String.valueOf(value));
+    }
+
+    private record SessionSubject(Long userId,
+                                  String displayName,
+                                  UserRole role,
+                                  AdminSessionIdentity adminIdentity) {
     }
 
     private String resolveJudgeDisplayName(JudgeAccount account) {

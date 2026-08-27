@@ -15,6 +15,9 @@ public class LoginResponse {
     private Long userId;
     private String role;
     private String displayName;
+    private String adminType;
+    private Long organizerId;
+    private Boolean mustChangePassword;
     private Integer status;
     private Boolean profileRequired;
     private Boolean profileComplete;

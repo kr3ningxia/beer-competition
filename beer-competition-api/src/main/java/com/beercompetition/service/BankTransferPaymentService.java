@@ -38,4 +38,6 @@ public interface BankTransferPaymentService {
     BankTransferVO rejectTransfer(Long id, AdminBankTransferProcessRequest request);
 
     FileDownloadVO downloadVoucher(Long id);
+
+    FileDownloadVO downloadPortalVoucher(Long id);
 }

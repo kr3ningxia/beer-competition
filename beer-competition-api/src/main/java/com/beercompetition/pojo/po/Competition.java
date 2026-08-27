@@ -24,6 +24,7 @@ public class Competition {
 
     @TableId(type = IdType.AUTO)
     private Long id;
+    private Long organizerId;
     private String code;
     private String name;
     private LocalDate competitionDate;

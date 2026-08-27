@@ -7,6 +7,8 @@ import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ForbiddenException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.common.result.PageResult;
+import com.beercompetition.competition.access.CompetitionAccessService;
+import com.beercompetition.file.FileAccessService;
 import com.beercompetition.mapper.AdminOperationLogMapper;
 import com.beercompetition.mapper.BankTransferPaymentMapper;
 import com.beercompetition.mapper.BeerEntryMapper;
@@ -58,7 +60,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
@@ -96,7 +97,9 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
     private final RegistrationBatchMapper registrationBatchMapper;
     private final BatchPaymentService batchPaymentService;
     private final FileStorageService fileStorageService;
+    private final FileAccessService fileAccessService;
     private final StorageProperties storageProperties;
+    private final CompetitionAccessService competitionAccessService;
 
     @Override
     public BankTransferAccountVO getAccount() {
@@ -121,7 +124,6 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
 
         // 2) 上传 OSS/本地存储并登记 file_asset
         String storagePath = fileStorageService.upload(BUSINESS_TYPE_BANK_TRANSFER_VOUCHER, filename, bytes);
-        String publicUrl = resolveUploadPublicUrl(storagePath);
         FileAsset asset = FileAsset.builder()
                 .businessType(BUSINESS_TYPE_BANK_TRANSFER_VOUCHER)
                 .ownerType(OWNER_TYPE_PORTAL_ACCOUNT)
@@ -129,7 +131,7 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
                 .storageProvider(storageProperties.getProvider())
                 .fileName(filename)
                 .storagePath(storagePath)
-                .publicUrl(publicUrl)
+                .publicUrl(null)
                 .createTime(LocalDateTime.now())
                 .build();
         fileAssetMapper.insert(asset);
@@ -138,7 +140,7 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
         return BankTransferVoucherVO.builder()
                 .fileAssetId(asset.getId())
                 .fileName(asset.getFileName())
-                .publicUrl(asset.getPublicUrl())
+                .publicUrl(null)
                 .build();
     }
 
@@ -179,6 +181,7 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
                 .submittedTime(submittedTime)
                 .build();
         bankTransferPaymentMapper.insert(transfer);
+        attachOrganizer(voucher, entry.getCompetitionId());
         payment.setStatus(EntryPaymentStatus.PENDING_CONFIRM.name());
         payment.setPayMethod(EntryPayMethod.BANK_TRANSFER.name());
         payment.setBankTransferId(transfer.getId());
@@ -222,6 +225,7 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
                 .submittedTime(submittedTime)
                 .build();
         bankTransferPaymentMapper.insert(transfer);
+        attachOrganizer(voucher, batch.getCompetitionId());
 
         // 3) 锁定聚合订单和全部酒款付款状态
         batchPaymentService.markBankTransferPending(order.getId(), transfer.getId());
@@ -260,6 +264,7 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
         transfer.setRemark(defaultString(normalizeNullable(request.getRemark())));
         transfer.setVoucherAssetId(voucher.getId());
         bankTransferPaymentMapper.updateById(transfer);
+        attachOrganizer(voucher, transfer.getCompetitionId());
 
         // 3) 返回最新转账详情
         return toBankTransferVO(bankTransferPaymentMapper.selectById(transfer.getId()), true);
@@ -307,6 +312,7 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
         transfer.setRemark(remark);
         transfer.setVoucherAssetId(voucher.getId());
         bankTransferPaymentMapper.updateById(transfer);
+        attachOrganizer(voucher, transfer.getCompetitionId());
 
         // 3) 返回更新后的转账详情
         return toBankTransferVO(bankTransferPaymentMapper.selectById(id), true);
@@ -342,11 +348,12 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
         int currentPage = Math.max(page == null ? 1 : page, 1);
         int currentPageSize = Math.min(Math.max(pageSize == null ? 30 : pageSize, 1), 100);
         String normalizedKeyword = normalizeNullable(keyword);
-        List<BankTransferVO> filtered = bankTransferPaymentMapper.selectList(new LambdaQueryWrapper<BankTransferPayment>()
-                        .eq(StringUtils.hasText(status), BankTransferPayment::getStatus, status)
-                        .eq(competitionId != null, BankTransferPayment::getCompetitionId, competitionId)
-                        .orderByDesc(BankTransferPayment::getSubmittedTime)
-                        .orderByDesc(BankTransferPayment::getId))
+        Long organizerId = competitionAccessService.canAccessAllOrganizers()
+                ? null : competitionAccessService.requireCurrentOrganizerId();
+        if (competitionId != null) {
+            competitionAccessService.requireCompetitionAccess(competitionId);
+        }
+        List<BankTransferVO> filtered = bankTransferPaymentMapper.selectAdminTransfers(status, competitionId, organizerId)
                 .stream()
                 .map(transfer -> toBankTransferVO(transfer, false))
                 .filter(item -> !StringUtils.hasText(normalizedKeyword) || matchesKeyword(item, normalizedKeyword))
@@ -361,14 +368,14 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
     @Override
     public BankTransferVO getAdminTransfer(Long id) {
         // 1) 查询转账详情
-        return toBankTransferVO(requireTransfer(id), true);
+        return toBankTransferVO(requireAdminTransfer(id), true);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public BankTransferVO confirmTransfer(Long id, AdminBankTransferProcessRequest request) {
         // 1) 校验转账状态
-        BankTransferPayment transfer = requireTransfer(id);
+        BankTransferPayment transfer = requireAdminTransfer(id);
         if (!BankTransferPaymentStatus.SUBMITTED.name().equals(transfer.getStatus())) {
             throw new BaseException("只有待确认的转账可以确认到账");
         }
@@ -410,7 +417,7 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
     @Transactional(rollbackFor = Exception.class)
     public BankTransferVO rejectTransfer(Long id, AdminBankTransferProcessRequest request) {
         // 1) 校验转账状态
-        BankTransferPayment transfer = requireTransfer(id);
+        BankTransferPayment transfer = requireAdminTransfer(id);
         if (!BankTransferPaymentStatus.SUBMITTED.name().equals(transfer.getStatus())) {
             throw new BaseException("只有待确认的转账可以驳回");
         }
@@ -431,7 +438,7 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
     @Override
     public FileDownloadVO downloadVoucher(Long id) {
         // 1) 查询转账与凭证资产
-        BankTransferPayment transfer = requireTransfer(id);
+        BankTransferPayment transfer = requireAdminTransfer(id);
         if (transfer.getVoucherAssetId() == null) {
             throw new ResourceNotFoundException("该转账记录没有上传凭证");
         }
@@ -441,11 +448,20 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
         }
 
         // 2) 读取文件内容并返回
-        return FileDownloadVO.builder()
-                .fileName(asset.getFileName())
-                .contentType(resolveContentType(asset.getFileName()))
-                .content(fileStorageService.download(asset.getStoragePath()))
-                .build();
+        return fileAccessService.download(asset.getId());
+    }
+
+    @Override
+    public FileDownloadVO downloadPortalVoucher(Long id) {
+        PortalAccount account = requirePortalAccount();
+        BankTransferPayment transfer = requireTransfer(id);
+        if (!Objects.equals(transfer.getPortalAccountId(), account.getId())) {
+            throw new ForbiddenException("无权查看该转账记录");
+        }
+        if (transfer.getVoucherAssetId() == null) {
+            throw new ResourceNotFoundException("该转账记录没有上传凭证");
+        }
+        return fileAccessService.download(transfer.getVoucherAssetId());
     }
 
     private void resetRelatedPayment(BankTransferPayment transfer, String actionStatus, String note) {
@@ -541,7 +557,7 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
                 .remark(transfer.getRemark())
                 .voucherAssetId(transfer.getVoucherAssetId())
                 .voucherFileName(voucher == null ? null : voucher.getFileName())
-                .voucherPublicUrl(voucher == null ? null : voucher.getPublicUrl())
+                .voucherPublicUrl(null)
                 .status(transfer.getStatus())
                 .adminId(transfer.getAdminId())
                 .adminNote(transfer.getAdminNote())
@@ -626,6 +642,12 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
         return transfer;
     }
 
+    private BankTransferPayment requireAdminTransfer(Long id) {
+        BankTransferPayment transfer = requireTransfer(id);
+        competitionAccessService.requireCompetitionAccess(transfer.getCompetitionId());
+        return transfer;
+    }
+
     private FileAsset requireVoucherAsset(Long assetId, Long portalAccountId) {
         if (assetId == null) {
             throw new BaseException("请上传付款凭证");
@@ -688,28 +710,15 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
         return index >= 0 ? filename.substring(index + 1) : filename;
     }
 
-    private String resolveUploadPublicUrl(String storagePath) {
-        if (!"local".equalsIgnoreCase(storageProperties.getProvider())) {
-            return storagePath;
+    private void attachOrganizer(FileAsset asset, Long competitionId) {
+        if (asset == null || competitionId == null) {
+            return;
         }
-        Path baseDir = Path.of(storageProperties.getLocalBaseDir()).toAbsolutePath().normalize();
-        Path storedFile = Path.of(storagePath).toAbsolutePath().normalize();
-        String relativePath = baseDir.relativize(storedFile).toString().replace("\\", "/");
-        return "/uploads/" + relativePath;
-    }
-
-    private String resolveContentType(String filename) {
-        String normalized = filename == null ? "" : filename.toLowerCase(Locale.ROOT);
-        if (normalized.endsWith(".pdf")) {
-            return "application/pdf";
+        Competition competition = competitionMapper.selectById(competitionId);
+        if (competition != null && !Objects.equals(asset.getOrganizerId(), competition.getOrganizerId())) {
+            asset.setOrganizerId(competition.getOrganizerId());
+            fileAssetMapper.updateById(asset);
         }
-        if (normalized.endsWith(".png")) {
-            return "image/png";
-        }
-        if (normalized.endsWith(".webp")) {
-            return "image/webp";
-        }
-        return "image/jpeg";
     }
 
     private String normalizeRequired(String value, String message) {

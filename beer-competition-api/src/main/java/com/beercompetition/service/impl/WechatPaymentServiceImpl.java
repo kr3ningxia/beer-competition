@@ -5,6 +5,7 @@ import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ForbiddenException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
+import com.beercompetition.competition.access.CompetitionAccessService;
 import com.beercompetition.mapper.AdminOperationLogMapper;
 import com.beercompetition.mapper.BeerEntryMapper;
 import com.beercompetition.mapper.BreweryMapper;
@@ -96,6 +97,7 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
     private final AdminOperationLogMapper adminOperationLogMapper;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
+    private final CompetitionAccessService competitionAccessService;
 
     @Override
     public WechatNativePayVO createNativePayment(Long entryId) {
@@ -275,6 +277,7 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
     @Override
     public void approveRefund(Long refundId, String reason, Long adminId) {
         // 1) 查询退款上下文并按付款方式分流
+        requireAdminRefund(refundId);
         RefundContext context = transactionTemplate.execute(status -> prepareRefund(refundId, reason, adminId));
         if (isManualRefundPayment(context.payment())) {
             return;
@@ -299,7 +302,7 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
 
     @Override
     public void retryRefund(Long refundId, String reason, Long adminId) {
-        EntryRefund refund = requireRefund(refundId);
+        EntryRefund refund = requireAdminRefund(refundId);
         if (!EntryRefundStatus.FAILED.name().equals(refund.getStatus())) {
             throw new BaseException("只有退款失败记录可以重试");
         }
@@ -362,7 +365,7 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
 
     @Override
     public void completeOfflineRefund(Long refundId, String reason, Long adminId) {
-        EntryRefund refund = requireRefund(refundId);
+        EntryRefund refund = requireAdminRefund(refundId);
         if (!EntryRefundStatus.PROCESSING.name().equals(refund.getStatus())) {
             throw new BaseException("只有已登记银行卡退款的记录可以确认完成");
         }
@@ -842,6 +845,13 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
         if (refund == null) {
             throw new ResourceNotFoundException("退款申请不存在");
         }
+        return refund;
+    }
+
+    private EntryRefund requireAdminRefund(Long refundId) {
+        EntryRefund refund = requireRefund(refundId);
+        BeerEntry entry = requireEntry(refund.getBeerEntryId());
+        competitionAccessService.requireCompetitionAccess(entry.getCompetitionId());
         return refund;
     }
 

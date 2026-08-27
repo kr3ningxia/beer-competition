@@ -20,6 +20,8 @@ public class AdminOperationLog {
     @TableId(type = IdType.AUTO)
     private Long id;
     private Long adminUserId;
+    private Long organizerId;
+    private Long competitionId;
     private String action;
     private String targetType;
     private String targetPublicId;

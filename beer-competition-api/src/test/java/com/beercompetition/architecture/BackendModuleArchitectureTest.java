@@ -2,12 +2,12 @@ package com.beercompetition.architecture;
 
 import com.beercompetition.billing.beercoin.BeerCoinSettlementService;
 import com.beercompetition.competition.access.CompetitionAccessService;
+import com.beercompetition.competition.access.CompetitionAccessServiceImpl;
 import com.beercompetition.competition.command.CompetitionCommandService;
 import com.beercompetition.competition.configuration.CompetitionConfigurationService;
 import com.beercompetition.competition.lifecycle.CompetitionLifecycleService;
 import com.beercompetition.competition.query.CompetitionQueryService;
 import com.beercompetition.competition.query.CompetitionScoringExportService;
-import com.beercompetition.file.FileAccessService;
 import com.beercompetition.judging.assignment.RoundAllocationService;
 import com.beercompetition.judging.round.JudgeRoundTaskService;
 import com.beercompetition.judging.round.RoundLifecycleService;
@@ -15,7 +15,6 @@ import com.beercompetition.judging.round.RoundQueryService;
 import com.beercompetition.judging.scoring.JudgeEntryQueryService;
 import com.beercompetition.judging.scoring.RankingService;
 import com.beercompetition.judging.scoring.ScoreConfirmationService;
-import com.beercompetition.organization.application.OrganizerProvisioningService;
 import com.beercompetition.registration.delivery.EntryDeliveryService;
 import com.beercompetition.registration.entry.AdminEntryService;
 import com.beercompetition.registration.entry.EntryDocumentService;
@@ -44,12 +43,9 @@ class BackendModuleArchitectureTest {
             "com.beercompetition.service.impl.RoundServiceImpl"
     );
 
-    private static final List<Class<?>> PHASE_TWO_EXTENSION_POINTS = List.of(
-            CompetitionAccessService.class,
-            OrganizerProvisioningService.class,
+    private static final List<Class<?>> UNIMPLEMENTED_PHASE_TWO_EXTENSION_POINTS = List.of(
             CompetitionPaymentPolicy.class,
-            BeerCoinSettlementService.class,
-            FileAccessService.class
+            BeerCoinSettlementService.class
     );
 
     private static final List<Class<?>> SPLIT_SERVICE_INTERFACES = List.of(
@@ -90,13 +86,20 @@ class BackendModuleArchitectureTest {
     }
 
     @Test
-    void phaseTwoExtensionPointsHaveNoPlaceholderImplementations() {
-        for (Class<?> extensionPoint : PHASE_TWO_EXTENSION_POINTS) {
+    void competitionAccessExtensionPointHasConcreteGuard() {
+        assertThat(CompetitionAccessService.class.isInterface()).isTrue();
+        assertThat(findImplementations(CompetitionAccessService.class))
+                .contains(CompetitionAccessServiceImpl.class.getName());
+    }
+
+    @Test
+    void futurePhaseTwoExtensionPointsHaveNoPlaceholderImplementations() {
+        for (Class<?> extensionPoint : UNIMPLEMENTED_PHASE_TWO_EXTENSION_POINTS) {
             assertThat(extensionPoint.isInterface())
                     .as("二期扩展点必须保持为接口：%s", extensionPoint.getName())
                     .isTrue();
             assertThat(findImplementations(extensionPoint))
-                    .as("组织表和可信租户身份落地前不得提供默认实现：%s", extensionPoint.getName())
+                    .as("未进入当前开发切片的扩展点不应提供默认实现：%s", extensionPoint.getName())
                     .isEmpty();
         }
     }

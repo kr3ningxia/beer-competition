@@ -15,4 +15,7 @@ public class SessionUser {
     private String role;
     private String displayName;
     private Long competitionId;
+    private String adminType;
+    private Long organizerId;
+    private Boolean mustChangePassword;
 }

@@ -81,6 +81,7 @@ public interface BeerEntryMapper extends BaseMapper<BeerEntry> {
               e.deleted_flag = 0
               AND e.status != 'CANCELED'
               <if test="competitionId != null">AND e.competition_id = #{competitionId}</if>
+              <if test="organizerId != null">AND c.organizer_id = #{organizerId}</if>
               <if test="status != null and status != ''">AND e.status = #{status}</if>
               <if test="categoryId != null">AND e.category_id = #{categoryId}</if>
               <if test="paymentStatus != null and paymentStatus != ''">
@@ -133,6 +134,7 @@ public interface BeerEntryMapper extends BaseMapper<BeerEntry> {
             """)
     List<AdminEntryVO> selectAdminEntryPage(
             @Param("competitionId") Long competitionId,
+            @Param("organizerId") Long organizerId,
             @Param("status") String status,
             @Param("paymentStatus") String paymentStatus,
             @Param("deliveryStatus") String deliveryStatus,
@@ -166,6 +168,7 @@ public interface BeerEntryMapper extends BaseMapper<BeerEntry> {
               e.deleted_flag = 0
               AND e.status != 'CANCELED'
               <if test="competitionId != null">AND e.competition_id = #{competitionId}</if>
+              <if test="organizerId != null">AND c.organizer_id = #{organizerId}</if>
               <if test="status != null and status != ''">AND e.status = #{status}</if>
               <if test="categoryId != null">AND e.category_id = #{categoryId}</if>
               <if test="paymentStatus != null and paymentStatus != ''">
@@ -204,6 +207,7 @@ public interface BeerEntryMapper extends BaseMapper<BeerEntry> {
             """)
     long countAdminEntries(
             @Param("competitionId") Long competitionId,
+            @Param("organizerId") Long organizerId,
             @Param("status") String status,
             @Param("paymentStatus") String paymentStatus,
             @Param("deliveryStatus") String deliveryStatus,

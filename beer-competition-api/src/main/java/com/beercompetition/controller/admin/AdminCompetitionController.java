@@ -12,6 +12,7 @@ import com.beercompetition.pojo.dto.CompetitionStyleLibraryUpdateRequest;
 import com.beercompetition.pojo.dto.ConfigNameBatchUpdateRequest;
 import com.beercompetition.pojo.dto.EntryFieldBatchUpdateRequest;
 import com.beercompetition.pojo.dto.JudgeTableBatchUpdateRequest;
+import com.beercompetition.pojo.dto.CompetitionCollectionConfigUpdateRequest;
 import com.beercompetition.pojo.vo.CompetitionAnalyticsVO;
 import com.beercompetition.pojo.vo.CompetitionDetailVO;
 import com.beercompetition.pojo.vo.CompetitionEntryVO;
@@ -21,9 +22,12 @@ import com.beercompetition.pojo.vo.CompetitionQuickSummaryVO;
 import com.beercompetition.pojo.vo.CompetitionSponsorLogoVO;
 import com.beercompetition.pojo.vo.CompetitionSponsorVO;
 import com.beercompetition.pojo.vo.CompetitionVO;
+import com.beercompetition.pojo.vo.CompetitionCollectionConfigVO;
+import com.beercompetition.pojo.vo.CompetitionCollectionQrVO;
 import com.beercompetition.service.CompetitionSponsorService;
 import com.beercompetition.competition.command.CompetitionCommandService;
 import com.beercompetition.competition.configuration.CompetitionConfigurationService;
+import com.beercompetition.competition.collection.CompetitionCollectionService;
 import com.beercompetition.competition.lifecycle.CompetitionLifecycleService;
 import com.beercompetition.competition.query.CompetitionQueryService;
 import com.beercompetition.service.LiveBoardService;
@@ -53,6 +57,7 @@ public class AdminCompetitionController {
     private final CompetitionQueryService competitionQueryService;
     private final CompetitionCommandService competitionCommandService;
     private final CompetitionConfigurationService competitionConfigurationService;
+    private final CompetitionCollectionService competitionCollectionService;
     private final CompetitionLifecycleService competitionLifecycleService;
     private final CompetitionSponsorService competitionSponsorService;
     private final LiveBoardService liveBoardService;
@@ -174,6 +179,24 @@ public class AdminCompetitionController {
     public Result<CompetitionDetailVO> updateJudgeTables(@PathVariable Long id,
                                                          @RequestBody @Valid JudgeTableBatchUpdateRequest request) {
         return Result.success(competitionConfigurationService.updateJudgeTables(id, request));
+    }
+
+    @GetMapping("/{id}/collection")
+    public Result<CompetitionCollectionConfigVO> collectionConfig(@PathVariable Long id) {
+        return Result.success(competitionCollectionService.getAdminConfig(id));
+    }
+
+    @PutMapping("/{id}/collection")
+    public Result<CompetitionCollectionConfigVO> updateCollectionConfig(
+            @PathVariable Long id,
+            @RequestBody @Valid CompetitionCollectionConfigUpdateRequest request) {
+        return Result.success(competitionCollectionService.updateAdminConfig(id, request));
+    }
+
+    @PostMapping("/{id}/collection/wechat-qr")
+    public Result<CompetitionCollectionQrVO> uploadCollectionQr(@PathVariable Long id,
+                                                                 @RequestParam("file") MultipartFile file) {
+        return Result.success(competitionCollectionService.uploadWechatQr(id, file));
     }
 
     /**

@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
+import com.beercompetition.competition.access.CompetitionAccessService;
 import com.beercompetition.judging.scoring.EntryEvaluationDataService;
 import com.beercompetition.mapper.AdminOperationLogMapper;
 import com.beercompetition.mapper.BeerEntryMapper;
@@ -67,6 +68,8 @@ public class AdminEntryStatusService {
     private final EntryEvaluationDataService entryEvaluationDataService;
 
     private final ObjectMapper objectMapper;
+
+    private final CompetitionAccessService competitionAccessService;
 
     @Transactional(rollbackFor = Exception.class)
     public void markStored(Long entryId) {
@@ -286,6 +289,7 @@ public class AdminEntryStatusService {
         if (entry == null) {
             throw new ResourceNotFoundException("酒款不存在");
         }
+        competitionAccessService.requireCompetitionAccess(entry.getCompetitionId());
         return entry;
     }
 

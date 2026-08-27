@@ -15,6 +15,8 @@ const USERNAME_KEYS = {
   portal: 'portal_display_name',
 }
 
+const ADMIN_TYPE_KEY = 'admin_type'
+
 const SESSION_EVENT = 'beer-competition-session-updated'
 const sessionRevision = ref(0)
 
@@ -35,6 +37,9 @@ export function setSession(scope, session, displayName) {
   }
   if (refreshToken) {
     localStorage.setItem(REFRESH_TOKEN_KEYS[scope], refreshToken)
+  }
+  if (scope === 'admin' && typeof session !== 'string' && session?.adminType) {
+    localStorage.setItem(ADMIN_TYPE_KEY, session.adminType)
   }
   setDisplayName(scope, resolvedDisplayName)
 }
@@ -64,6 +69,9 @@ export function clearSession(scope) {
   localStorage.removeItem(TOKEN_KEYS[scope])
   localStorage.removeItem(REFRESH_TOKEN_KEYS[scope])
   localStorage.removeItem(USERNAME_KEYS[scope])
+  if (scope === 'admin') {
+    localStorage.removeItem(ADMIN_TYPE_KEY)
+  }
   notifySessionUpdated(scope)
 }
 
@@ -75,6 +83,10 @@ export function isLoggedIn(scope) {
 
 export function getDisplayName(scope) {
   return localStorage.getItem(USERNAME_KEYS[scope]) || ''
+}
+
+export function getAdminType() {
+  return localStorage.getItem(ADMIN_TYPE_KEY) || ''
 }
 
 function isTokenUsable(token, scope) {

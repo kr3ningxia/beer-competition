@@ -54,6 +54,64 @@ public interface AdminOperationLogMapper extends BaseMapper<AdminOperationLog> {
                 OR u.name LIKE CONCAT('%', #{keyword}, '%')
               )
             </if>
+            <if test="organizerId != null">
+              AND (
+                l.organizer_id = #{organizerId}
+                OR l.competition_id IN (
+                  SELECT c_scope.id
+                    FROM competition c_scope
+                   WHERE c_scope.organizer_id = #{organizerId}
+                )
+                OR EXISTS (
+                  SELECT 1
+                    FROM competition c_scope
+                   WHERE c_scope.organizer_id = #{organizerId}
+                     AND l.target_type = 'COMPETITION'
+                     AND l.target_public_id = CAST(c_scope.id AS CHAR)
+                )
+                OR EXISTS (
+                  SELECT 1
+                    FROM beer_entry e_scope
+                    JOIN competition c_scope ON c_scope.id = e_scope.competition_id
+                   WHERE c_scope.organizer_id = #{organizerId}
+                     AND l.target_type = 'BEER_ENTRY'
+                     AND e_scope.uuid = l.target_public_id
+                )
+                OR EXISTS (
+                  SELECT 1
+                    FROM score_record sr_scope
+                    JOIN competition c_scope ON c_scope.id = sr_scope.competition_id
+                   WHERE c_scope.organizer_id = #{organizerId}
+                     AND l.target_type = 'SCORE_RECORD'
+                     AND sr_scope.id = CAST(l.target_public_id AS UNSIGNED)
+                )
+                OR EXISTS (
+                  SELECT 1
+                    FROM competition_judge_assignment ja_scope
+                    JOIN competition c_scope ON c_scope.id = ja_scope.competition_id
+                    JOIN judge_account j_scope ON j_scope.id = ja_scope.judge_account_id
+                   WHERE c_scope.organizer_id = #{organizerId}
+                     AND l.target_type = 'JUDGE'
+                     AND j_scope.public_id = l.target_public_id
+                )
+                OR EXISTS (
+                  SELECT 1
+                    FROM competition c_scope
+                   WHERE c_scope.organizer_id = #{organizerId}
+                     AND l.target_type = 'JUDGE'
+                     AND l.target_public_id LIKE 'COMP-%'
+                     AND c_scope.id = CAST(SUBSTRING(l.target_public_id, 6) AS UNSIGNED)
+                )
+                OR EXISTS (
+                  SELECT 1
+                    FROM organizer_member om_scope
+                   WHERE om_scope.organizer_id = #{organizerId}
+                     AND om_scope.status = 1
+                     AND l.target_type = 'ADMIN_USER'
+                     AND om_scope.admin_user_id = CAST(l.target_public_id AS UNSIGNED)
+                )
+              )
+            </if>
             ORDER BY l.id DESC
             </script>
             """)
@@ -63,5 +121,6 @@ public interface AdminOperationLogMapper extends BaseMapper<AdminOperationLog> {
                                                           @Param("adminUserId") Long adminUserId,
                                                           @Param("targetType") String targetType,
                                                           @Param("actions") Collection<String> actions,
-                                                          @Param("keyword") String keyword);
+                                                          @Param("keyword") String keyword,
+                                                          @Param("organizerId") Long organizerId);
 }

@@ -3,10 +3,12 @@ package com.beercompetition.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.exception.BaseException;
+import com.beercompetition.common.exception.ForbiddenException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.common.util.Md5Util;
 import com.beercompetition.mapper.AdminOperationLogMapper;
 import com.beercompetition.mapper.AdminUserMapper;
+import com.beercompetition.mapper.OrganizerMemberMapper;
 import com.beercompetition.pojo.dto.AdminPasswordUpdateRequest;
 import com.beercompetition.pojo.dto.AdminUserCreateRequest;
 import com.beercompetition.pojo.dto.AdminUserPasswordResetRequest;
@@ -14,7 +16,11 @@ import com.beercompetition.pojo.dto.AdminUserStatusUpdateRequest;
 import com.beercompetition.pojo.dto.AdminUserUpdateRequest;
 import com.beercompetition.pojo.po.AdminOperationLog;
 import com.beercompetition.pojo.po.AdminUser;
+import com.beercompetition.pojo.po.OrganizerMember;
+import com.beercompetition.pojo.enums.AdminType;
 import com.beercompetition.pojo.vo.AdminUserVO;
+import com.beercompetition.security.AdminIdentityService;
+import com.beercompetition.security.AdminSessionIdentity;
 import com.beercompetition.service.AdminUserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
@@ -34,11 +40,19 @@ public class AdminUserServiceImpl implements AdminUserService {
 
     private final AdminUserMapper adminUserMapper;
     private final AdminOperationLogMapper adminOperationLogMapper;
+    private final OrganizerMemberMapper organizerMemberMapper;
+    private final AdminIdentityService adminIdentityService;
 
     @Override
     public List<AdminUserVO> listAdminUsers(Integer status, String keyword) {
+        AdminSessionIdentity currentIdentity = adminIdentityService.requireCurrentIdentity();
+        List<Long> manageableIds = manageableAdminIds(currentIdentity);
         // 1) 构造查询条件
         LambdaQueryWrapper<AdminUser> wrapper = new LambdaQueryWrapper<>();
+        if (manageableIds != null) {
+            wrapper.in(!manageableIds.isEmpty(), AdminUser::getId, manageableIds)
+                    .eq(manageableIds.isEmpty(), AdminUser::getId, -1L);
+        }
         if (status != null) {
             validateStatus(status);
             wrapper.eq(AdminUser::getStatus, status);
@@ -61,6 +75,8 @@ public class AdminUserServiceImpl implements AdminUserService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public AdminUserVO createAdminUser(AdminUserCreateRequest request) {
+        AdminSessionIdentity currentIdentity = adminIdentityService.requireCurrentIdentity();
+        AdminType newAdminType = resolveCreatedAdminType(currentIdentity);
         // 1) 参数规范化与账号唯一性前置校验
         String username = request.getUsername().trim();
         ensureUsernameAvailable(username);
@@ -71,11 +87,20 @@ public class AdminUserServiceImpl implements AdminUserService {
                 .name(request.getName().trim())
                 .password(Md5Util.encode(request.getPassword()))
                 .status(STATUS_ACTIVE)
+                .adminType(newAdminType.name())
+                .mustChangePassword(1)
                 .build();
         try {
             adminUserMapper.insert(adminUser);
         } catch (DuplicateKeyException ex) {
             throw new BaseException("登录账号已存在");
+        }
+        if (newAdminType == AdminType.ORGANIZER_ADMIN) {
+            organizerMemberMapper.insert(OrganizerMember.builder()
+                    .organizerId(currentIdentity.organizerId())
+                    .adminUserId(adminUser.getId())
+                    .status(STATUS_ACTIVE)
+                    .build());
         }
         writeAdminLog("ADMIN_USER_CREATE", adminUser.getId(), "新增管理员账号：" + adminUser.getUsername());
 
@@ -87,7 +112,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     @Transactional(rollbackFor = Exception.class)
     public AdminUserVO updateAdminUser(Long id, AdminUserUpdateRequest request) {
         // 1) 查询目标账号
-        AdminUser adminUser = requireAdminUser(id);
+        AdminUser adminUser = requireManageableAdmin(id);
 
         // 2) 更新显示姓名
         adminUser.setName(request.getName().trim());
@@ -103,7 +128,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     public AdminUserVO updateAdminUserStatus(Long id, AdminUserStatusUpdateRequest request) {
         // 1) 查询目标账号并校验状态
         validateStatus(request.getStatus());
-        AdminUser adminUser = requireAdminUser(id);
+        AdminUser adminUser = requireManageableAdmin(id);
         if (adminUser.getStatus() != null && adminUser.getStatus().equals(request.getStatus())) {
             return toVO(adminUser);
         }
@@ -125,10 +150,11 @@ public class AdminUserServiceImpl implements AdminUserService {
     @Transactional(rollbackFor = Exception.class)
     public void resetAdminUserPassword(Long id, AdminUserPasswordResetRequest request) {
         // 1) 查询目标账号
-        AdminUser adminUser = requireAdminUser(id);
+        AdminUser adminUser = requireManageableAdmin(id);
 
         // 2) 重置登录密码
         adminUser.setPassword(Md5Util.encode(request.getPassword()));
+        adminUser.setMustChangePassword(1);
         adminUserMapper.updateById(adminUser);
         writeAdminLog("ADMIN_USER_PASSWORD_RESET", adminUser.getId(), "重置管理员密码：" + adminUser.getUsername());
     }
@@ -147,6 +173,7 @@ public class AdminUserServiceImpl implements AdminUserService {
 
         // 2) 更新当前账号密码
         adminUser.setPassword(Md5Util.encode(request.getNewPassword()));
+        adminUser.setMustChangePassword(0);
         adminUserMapper.updateById(adminUser);
         writeAdminLog("ADMIN_USER_PASSWORD_CHANGE", adminUser.getId(), "修改当前管理员密码");
     }
@@ -162,6 +189,56 @@ public class AdminUserServiceImpl implements AdminUserService {
         return adminUser;
     }
 
+    private AdminUser requireManageableAdmin(Long id) {
+        AdminUser adminUser = requireAdminUser(id);
+        AdminSessionIdentity currentIdentity = adminIdentityService.requireCurrentIdentity();
+        if (currentIdentity.adminType() == AdminType.PLATFORM_SUPER_ADMIN) {
+            return adminUser;
+        }
+        if (currentIdentity.adminType() != AdminType.ORGANIZER_ADMIN
+                || !AdminType.ORGANIZER_ADMIN.name().equals(adminUser.getAdminType())
+                || !hasActiveMembership(currentIdentity.organizerId(), adminUser.getId())) {
+            throw new ForbiddenException("当前账号无权管理该管理员");
+        }
+        return adminUser;
+    }
+
+    private boolean hasActiveMembership(Long organizerId, Long adminUserId) {
+        return organizerId != null && adminUserId != null
+                && organizerMemberMapper.selectOne(new LambdaQueryWrapper<OrganizerMember>()
+                .eq(OrganizerMember::getOrganizerId, organizerId)
+                .eq(OrganizerMember::getAdminUserId, adminUserId)
+                .eq(OrganizerMember::getStatus, STATUS_ACTIVE)
+                .last("LIMIT 1")) != null;
+    }
+
+    private List<Long> manageableAdminIds(AdminSessionIdentity identity) {
+        if (identity.adminType() == AdminType.PLATFORM_SUPER_ADMIN) {
+            return null;
+        }
+        if (identity.adminType() != AdminType.ORGANIZER_ADMIN || identity.organizerId() == null) {
+            throw new ForbiddenException("当前账号无权管理管理员账号");
+        }
+        return organizerMemberMapper.selectList(new LambdaQueryWrapper<OrganizerMember>()
+                        .eq(OrganizerMember::getOrganizerId, identity.organizerId())
+                        .eq(OrganizerMember::getStatus, STATUS_ACTIVE)
+                        .orderByAsc(OrganizerMember::getId))
+                .stream()
+                .map(OrganizerMember::getAdminUserId)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+    }
+
+    private AdminType resolveCreatedAdminType(AdminSessionIdentity identity) {
+        if (identity.adminType() == AdminType.PLATFORM_SUPER_ADMIN) {
+            return AdminType.PLATFORM_EVENT_ADMIN;
+        }
+        if (identity.adminType() == AdminType.ORGANIZER_ADMIN && identity.organizerId() != null) {
+            return AdminType.ORGANIZER_ADMIN;
+        }
+        throw new ForbiddenException("当前账号无权新增管理员账号");
+    }
+
     private void ensureUsernameAvailable(String username) {
         AdminUser existing = adminUserMapper.selectOne(new LambdaQueryWrapper<AdminUser>()
                 .eq(AdminUser::getUsername, username));
@@ -175,8 +252,15 @@ public class AdminUserServiceImpl implements AdminUserService {
         if (adminUser.getId().equals(currentId)) {
             throw new BaseException("不能停用当前登录账号");
         }
-        Long activeCount = adminUserMapper.selectCount(new LambdaQueryWrapper<AdminUser>()
-                .eq(AdminUser::getStatus, STATUS_ACTIVE));
+        AdminSessionIdentity identity = adminIdentityService.requireCurrentIdentity();
+        LambdaQueryWrapper<AdminUser> countWrapper = new LambdaQueryWrapper<AdminUser>()
+                .eq(AdminUser::getStatus, STATUS_ACTIVE);
+        List<Long> manageableIds = manageableAdminIds(identity);
+        if (manageableIds != null) {
+            countWrapper.in(!manageableIds.isEmpty(), AdminUser::getId, manageableIds)
+                    .eq(manageableIds.isEmpty(), AdminUser::getId, -1L);
+        }
+        Long activeCount = adminUserMapper.selectCount(countWrapper);
         if (activeCount <= 1) {
             throw new BaseException("至少保留一个启用的管理员账号");
         }
@@ -197,6 +281,9 @@ public class AdminUserServiceImpl implements AdminUserService {
                 .id(adminUser.getId())
                 .username(adminUser.getUsername())
                 .name(adminUser.getName())
+                .adminType(adminUser.getAdminType())
+                .organizerId(adminIdentityService.findOrganizerIdForDisplay(adminUser))
+                .mustChangePassword(Integer.valueOf(STATUS_ACTIVE).equals(adminUser.getMustChangePassword()))
                 .status(adminUser.getStatus())
                 .statusLabel(statusLabel(adminUser.getStatus()))
                 .currentUser(adminUser.getId().equals(BaseContext.getCurrentId()))

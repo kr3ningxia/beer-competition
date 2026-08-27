@@ -7,6 +7,7 @@ import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ForbiddenException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.competition.FeedbackCommentEditPolicy;
+import com.beercompetition.competition.access.CompetitionAccessService;
 import com.beercompetition.mapper.AdminOperationLogMapper;
 import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.CompetitionRoundMapper;
@@ -58,6 +59,7 @@ public class AdminFeedbackServiceImpl implements AdminFeedbackService {
     private static final String ACTION_SCORE_COMMENT_UPDATE = "SCORE_COMMENT_UPDATE";
 
     private final CompetitionMapper competitionMapper;
+    private final CompetitionAccessService competitionAccessService;
     private final CompetitionRoundMapper competitionRoundMapper;
     private final CompetitionScoreConfigMapper competitionScoreConfigMapper;
     private final RoundTableMapper roundTableMapper;
@@ -200,6 +202,7 @@ public class AdminFeedbackServiceImpl implements AdminFeedbackService {
         if (competition == null) {
             throw new ResourceNotFoundException("比赛不存在");
         }
+        competitionAccessService.requireCompetitionAccess(competitionId);
         return competition;
     }
 

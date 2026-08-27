@@ -1,6 +1,8 @@
 package com.beercompetition.controller.portal;
 
 import com.beercompetition.common.result.Result;
+import com.beercompetition.controller.support.FileResponseHelper;
+import com.beercompetition.file.FileAccessService;
 import com.beercompetition.pojo.vo.PortalCompetitionResultVO;
 import com.beercompetition.pojo.vo.PortalCompetitionVO;
 import com.beercompetition.pojo.vo.PortalHomeVO;
@@ -11,6 +13,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.ResponseEntity;
 
 import java.util.List;
 
@@ -24,6 +27,15 @@ public class PortalPublicController {
 
     private final CompetitionQueryService competitionQueryService;
     private final PortalResultQueryService portalResultQueryService;
+    private final FileAccessService fileAccessService;
+
+    /**
+     * 公开文件仅允许访问头像、赞助商 Logo 和已发布奖状。
+     */
+    @GetMapping("/files/{fileAssetId}")
+    public ResponseEntity<byte[]> publicFile(@PathVariable Long fileAssetId) {
+        return FileResponseHelper.inline(fileAccessService.downloadPublic(fileAssetId));
+    }
 
     /**
      * 查询厂商端首页展示数据。

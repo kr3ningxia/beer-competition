@@ -53,6 +53,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import com.beercompetition.competition.query.CompetitionQueryService;
+import com.beercompetition.competition.access.CompetitionAccessService;
 
 /**
  * 在一个事务中创建赛事主记录及其初始配置快照。
@@ -116,6 +117,8 @@ public class CompetitionCreationService {
 
     private final CompetitionQueryService competitionQueryService;
 
+    private final CompetitionAccessService competitionAccessService;
+
     @Transactional(rollbackFor = Exception.class)
     public CompetitionVO createCompetition(CompetitionCreateRequest request) {
         // 1) 参数规范化与完整性校验
@@ -129,6 +132,7 @@ public class CompetitionCreationService {
 
         // 2) 构造草稿比赛主记录
         Competition competition = Competition.builder()
+                .organizerId(competitionAccessService.requireCurrentOrganizerId())
                 .name(normalizeRequired(request.getName(), "比赛名称不能为空"))
                 .competitionDate(request.getCompetitionDate())
                 .registrationStart(request.getRegistrationStart())

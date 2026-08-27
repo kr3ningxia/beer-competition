@@ -1,6 +1,8 @@
 package com.beercompetition.controller.portal;
 
 import com.beercompetition.common.result.Result;
+import com.beercompetition.controller.support.FileResponseHelper;
+import com.beercompetition.file.FileAccessService;
 import com.beercompetition.pojo.dto.PortalBankTransferSubmitRequest;
 import com.beercompetition.pojo.dto.PortalPaymentOrderBankTransferRequest;
 import com.beercompetition.pojo.dto.WechatJsapiPayRequest;
@@ -12,6 +14,8 @@ import com.beercompetition.pojo.vo.PaymentOrderStatusVO;
 import com.beercompetition.pojo.vo.WechatJsapiPayVO;
 import com.beercompetition.pojo.vo.WechatNativePayVO;
 import com.beercompetition.pojo.vo.WechatPayClientConfigVO;
+import com.beercompetition.pojo.vo.CompetitionCollectionConfigVO;
+import com.beercompetition.competition.collection.CompetitionCollectionService;
 import com.beercompetition.service.BankTransferPaymentService;
 import com.beercompetition.service.BatchPaymentService;
 import com.beercompetition.service.WechatPaymentService;
@@ -26,6 +30,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -39,6 +44,18 @@ public class PortalPaymentController {
     private final BankTransferPaymentService bankTransferPaymentService;
     private final BatchPaymentService batchPaymentService;
     private final WechatPaymentService wechatPaymentService;
+    private final CompetitionCollectionService competitionCollectionService;
+    private final FileAccessService fileAccessService;
+
+    @GetMapping("/competitions/{competitionId}/collection")
+    public Result<CompetitionCollectionConfigVO> competitionCollection(@PathVariable Long competitionId) {
+        return Result.success(competitionCollectionService.getPortalConfig(competitionId));
+    }
+
+    @GetMapping("/collection/files/{fileAssetId}")
+    public ResponseEntity<byte[]> collectionQr(@PathVariable Long fileAssetId) {
+        return FileResponseHelper.inline(fileAccessService.download(fileAssetId));
+    }
 
     /**
      * 为多酒款报名订单创建一个微信 Native 支付二维码。
@@ -154,6 +171,11 @@ public class PortalPaymentController {
     @GetMapping("/payment/bank-transfer/{id}")
     public Result<BankTransferVO> bankTransferDetail(@PathVariable Long id) {
         return Result.success(bankTransferPaymentService.getPortalTransfer(id));
+    }
+
+    @GetMapping("/payment/bank-transfer/{id}/voucher")
+    public ResponseEntity<byte[]> bankTransferVoucher(@PathVariable Long id) {
+        return FileResponseHelper.attachment(bankTransferPaymentService.downloadPortalVoucher(id));
     }
 
     /**

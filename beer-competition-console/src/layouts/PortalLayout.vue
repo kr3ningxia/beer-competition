@@ -12,12 +12,12 @@
           </span>
         </RouterLink>
 
-        <nav class="nav-list" aria-label="厂牌导航">
+        <nav class="nav-list" aria-label="赛事平台导航">
           <RouterLink
             v-for="item in visibleNavItems"
             :key="item.path"
             :to="item.path"
-            :class="['nav-item', { active: isNavActive(item) }]"
+            :class="['nav-item', { active: isNavActive(item), 'nav-item-prominent': item.prominent }]"
           >
             <component :is="item.icon" />
             <span>{{ item.label }}</span>
@@ -85,12 +85,12 @@
 
           <RouterLink v-else class="mobile-login-card" to="/portal/login">登录后报名参赛</RouterLink>
 
-          <nav class="mobile-nav-list" aria-label="厂牌移动菜单">
+        <nav class="mobile-nav-list" aria-label="赛事平台移动菜单">
             <RouterLink
               v-for="item in visibleNavItems"
               :key="item.path"
               :to="item.path"
-              :class="['mobile-nav-item', { active: isNavActive(item) }]"
+              :class="['mobile-nav-item', { active: isNavActive(item), 'mobile-nav-item-prominent': item.prominent }]"
             >
               <component :is="item.icon" />
               <span>{{ item.label }}</span>
@@ -118,6 +118,7 @@ import {
   Document,
   Medal,
   Menu,
+  OfficeBuilding,
   Trophy,
   Tickets,
 } from '@element-plus/icons-vue'
@@ -146,6 +147,7 @@ const navItems = [
   { path: '/portal/competition-results', label: '赛事结果', icon: Trophy, public: true, match: ['/portal/competition-results'] },
   { path: '/portal/my', label: '我的参赛', icon: CircleCheck, auth: true },
   { path: '/portal/results', label: '我的结果', icon: Medal, auth: true },
+  { path: '/portal/organizer-application', label: '主办方入驻', icon: OfficeBuilding, public: true, prominent: true },
 ]
 
 const visibleNavItems = computed(() => navItems.filter((item) => item.public || loggedIn.value))
@@ -419,6 +421,19 @@ watch(
   border-color: rgba(184, 117, 23, 0.28);
 }
 
+.nav-item-prominent {
+  color: #7b4c0f;
+  background: rgba(243, 217, 120, 0.28);
+  border-color: rgba(184, 117, 23, 0.2);
+}
+
+.nav-item-prominent:hover,
+.nav-item-prominent.active {
+  color: #2b1d10;
+  background: #f3d978;
+  border-color: rgba(184, 117, 23, 0.36);
+}
+
 .account-actions {
   display: flex;
   align-items: center;
@@ -609,6 +624,12 @@ watch(
 
 .mobile-nav-item.active {
   color: #2b1d10;
+  background: #fff0c2;
+  border-color: rgba(184, 117, 23, 0.24);
+}
+
+.mobile-nav-item-prominent {
+  color: #7b4c0f;
   background: #fff0c2;
   border-color: rgba(184, 117, 23, 0.24);
 }

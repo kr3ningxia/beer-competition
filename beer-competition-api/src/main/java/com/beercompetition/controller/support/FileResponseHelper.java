@@ -30,6 +30,19 @@ public final class FileResponseHelper {
     }
 
     /**
+     * 生成公开文件响应，不强制浏览器下载。
+     */
+    public static ResponseEntity<byte[]> inline(FileDownloadVO file) {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline()
+                        .filename(file.getFileName(), StandardCharsets.UTF_8)
+                        .build()
+                        .toString())
+                .contentType(MediaType.parseMediaType(file.getContentType()))
+                .body(file.getContent());
+    }
+
+    /**
      * 生成固定文件名的 Excel 下载响应。
      */
     public static ResponseEntity<byte[]> xlsx(String filename, byte[] content) {

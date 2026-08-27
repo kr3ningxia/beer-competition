@@ -81,14 +81,18 @@
 <script setup>
 import { reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { Lock, Right, User } from '@element-plus/icons-vue'
 import { adminLogin } from '@/api/auth'
 import SiteFilingFooter from '@/components/SiteFilingFooter.vue'
 import { setSession } from '@/utils/auth'
 
 const router = useRouter()
-const form = reactive({ username: '', password: '' })
+const route = useRoute()
+const form = reactive({
+  username: typeof route.query.username === 'string' ? route.query.username : '',
+  password: '',
+})
 const loading = ref(false)
 
 async function submit() {

@@ -1,6 +1,6 @@
 # Beer Competition System
 
-啤酒大赛管理系统采用单仓多项目结构。一期业务系统已完成，二期进入 SaaS 化设计阶段。
+啤酒大赛管理系统采用单仓多项目结构。一期业务系统已完成，二期 SaaS 总体方案和后端模块化改造已完成，当前按功能切片进入实施阶段。
 
 ```text
 beer-competition-system

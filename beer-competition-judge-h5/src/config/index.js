@@ -1,5 +1,5 @@
 function normalizeApiBaseUrl(value) {
-  const fallback = import.meta.env.PROD ? '' : 'http://localhost:8080'
+  const fallback = import.meta.env.PROD ? '' : 'http://localhost:8084'
   const normalized = (value ?? fallback).trim().replace(/\/+$/, '')
   return normalized.endsWith('/api') ? normalized.slice(0, -4) : normalized
 }

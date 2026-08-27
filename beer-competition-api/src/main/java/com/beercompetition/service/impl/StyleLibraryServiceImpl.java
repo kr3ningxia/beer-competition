@@ -3,6 +3,7 @@ package com.beercompetition.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
+import com.beercompetition.competition.access.CompetitionAccessService;
 import com.beercompetition.mapper.StyleCategoryMapper;
 import com.beercompetition.mapper.StyleItemMapper;
 import com.beercompetition.mapper.StyleLibraryMapper;
@@ -45,9 +46,11 @@ public class StyleLibraryServiceImpl implements StyleLibraryService {
     private final StyleCategoryMapper styleCategoryMapper;
     private final StyleItemMapper styleItemMapper;
     private final ObjectMapper objectMapper;
+    private final CompetitionAccessService competitionAccessService;
 
     @Override
     public List<StyleLibraryVO> listLibraries() {
+        competitionAccessService.requirePlatformSuperAdmin();
         // 1) 查询风格库主记录
         List<StyleLibrary> libraries = styleLibraryMapper.selectList(new LambdaQueryWrapper<StyleLibrary>()
                 .orderByDesc(StyleLibrary::getStatus)
@@ -62,6 +65,7 @@ public class StyleLibraryServiceImpl implements StyleLibraryService {
 
     @Override
     public StyleLibraryVO getLibrary(String code) {
+        competitionAccessService.requirePlatformSuperAdmin();
         // 1) 校验编码并查询风格库
         StyleLibrary library = getLibraryOrThrow(normalizeRequired(code, "风格库编码不能为空"));
 
@@ -72,6 +76,7 @@ public class StyleLibraryServiceImpl implements StyleLibraryService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public StyleLibraryVO saveLibrary(StyleLibraryUpsertRequest request) {
+        competitionAccessService.requirePlatformSuperAdmin();
         // 1) 参数规范化与重复校验
         String code = normalizeRequired(request.getCode(), "风格库编码不能为空");
         List<StyleCategoryRequest> categories = normalizeCategories(request.getCategories() == null ? List.of() : request.getCategories());

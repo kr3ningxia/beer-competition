@@ -17,6 +17,9 @@ public class RefreshSession {
     private String role;
     private String scope;
     private String displayName;
+    private String adminType;
+    private Long organizerId;
+    private Boolean mustChangePassword;
     private Long issuedAtMillis;
     private Long expiresAtMillis;
 }

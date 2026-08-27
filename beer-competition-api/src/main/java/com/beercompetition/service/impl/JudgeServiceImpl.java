@@ -43,6 +43,7 @@ import com.beercompetition.pojo.po.PortalAccount;
 import com.beercompetition.pojo.vo.CompetitionVO;
 import com.beercompetition.pojo.vo.JudgeAccountVO;
 import com.beercompetition.pojo.vo.JudgeTaskVO;
+import com.beercompetition.judging.access.JudgeAccessService;
 import com.beercompetition.service.JudgeService;
 import com.beercompetition.judging.round.JudgeRoundTaskService;
 import lombok.RequiredArgsConstructor;
@@ -77,12 +78,13 @@ public class JudgeServiceImpl implements JudgeService {
     private final BreweryMapper breweryMapper;
     private final AdminOperationLogMapper adminOperationLogMapper;
     private final PiiService piiService;
+    private final JudgeAccessService judgeAccessService;
     private final JudgeRoundTaskService judgeRoundTaskService;
 
     @Override
     public List<JudgeAccountVO> listJudges(Integer status, String keyword) {
         // 1) 构造查询条件
-        LambdaQueryWrapper<JudgeAccount> wrapper = buildJudgeQuery(status, keyword);
+        LambdaQueryWrapper<JudgeAccount> wrapper = buildJudgeQuery(status, keyword, judgeAccessService.currentScope());
 
         // 2) 查询并组装全量脱敏评审池
         List<JudgeAccount> judges = judgeAccountMapper.selectList(wrapper.orderByDesc(JudgeAccount::getId));
@@ -97,7 +99,8 @@ public class JudgeServiceImpl implements JudgeService {
         // 1) 参数规范化与查询条件
         int currentPage = Math.max(page == null ? 1 : page, 1);
         int currentPageSize = Math.min(Math.max(pageSize == null ? 20 : pageSize, 1), 100);
-        LambdaQueryWrapper<JudgeAccount> wrapper = buildJudgeQuery(status, keyword).orderByDesc(JudgeAccount::getId);
+        LambdaQueryWrapper<JudgeAccount> wrapper = buildJudgeQuery(status, keyword, judgeAccessService.currentScope())
+                .orderByDesc(JudgeAccount::getId);
 
         // 2) 分页查询并组装列表
         Page<JudgeAccount> result = judgeAccountMapper.selectPage(new Page<>(currentPage, currentPageSize), wrapper);
@@ -113,7 +116,7 @@ public class JudgeServiceImpl implements JudgeService {
     @Override
     public JudgeAccountVO getJudgeDetail(String publicId) {
         // 1) 查询评审详情
-        JudgeAccount account = requireJudgeByPublicId(publicId);
+        JudgeAccount account = requireAdminJudgeByPublicId(publicId);
 
         // 2) 记录完整联系方式查看审计
         writeAdminLog("JUDGE_CONTACT_VIEW", account.getPublicId(), "查看评审完整联系方式");
@@ -155,7 +158,7 @@ public class JudgeServiceImpl implements JudgeService {
     @Transactional(rollbackFor = Exception.class)
     public JudgeAccountVO updateJudge(String publicId, AdminJudgeUpdateRequest request) {
         // 1) 查询目标评审
-        JudgeAccount account = requireJudgeByPublicId(publicId);
+        JudgeAccount account = requireAdminJudgeByPublicId(publicId);
 
         // 2) 后台更新非手机号资料
         applyProfile(account, request.getWechat(), request.getName(), request.getQualification(),
@@ -172,7 +175,7 @@ public class JudgeServiceImpl implements JudgeService {
     @Transactional(rollbackFor = Exception.class)
     public JudgeAccountVO updateJudgePhone(String publicId, AdminJudgePhoneUpdateRequest request) {
         // 1) 查询目标评审并校验是否已分配
-        JudgeAccount account = requireJudgeByPublicId(publicId);
+        JudgeAccount account = requireAdminJudgeByPublicId(publicId);
         if (hasAssignments(account.getId())) {
             throw new BaseException("已分配比赛的评审不能直接更正手机号");
         }
@@ -195,7 +198,7 @@ public class JudgeServiceImpl implements JudgeService {
     @Transactional(rollbackFor = Exception.class)
     public JudgeAccountVO updateJudgeStatus(String publicId, AdminJudgeStatusUpdateRequest request) {
         // 1) 查询目标评审并校验目标状态
-        JudgeAccount account = requireJudgeByPublicId(publicId);
+        JudgeAccount account = requireAdminJudgeByPublicId(publicId);
         JudgeAccountStatus currentStatus = JudgeAccountStatus.of(account.getStatus());
         JudgeAccountStatus nextStatus = JudgeAccountStatus.of(request.getStatus());
         validateStatusTransition(currentStatus, nextStatus);
@@ -216,7 +219,7 @@ public class JudgeServiceImpl implements JudgeService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteJudge(String publicId) {
-        JudgeAccount account = requireJudgeByPublicId(publicId);
+        JudgeAccount account = requireAdminJudgeByPublicId(publicId);
         Long judgeId = account.getId();
         if (hasAssignments(judgeId)
                 || judgeScoreSessionMapper.selectCount(new LambdaQueryWrapper<JudgeScoreSession>()
@@ -238,7 +241,8 @@ public class JudgeServiceImpl implements JudgeService {
     @Override
     public void createAssignment(JudgeAssignmentCreateRequest request) {
         // 1) 查询并校验比赛、评审和桌次
-        JudgeAccount judge = requireJudgeByPublicId(request.getJudgePublicId());
+        judgeAccessService.requireCompetitionAccess(request.getCompetitionId());
+        JudgeAccount judge = requireAdminJudgeByPublicId(request.getJudgePublicId());
         if (JudgeAccountStatus.of(judge.getStatus()) != JudgeAccountStatus.ACTIVE) {
             throw new BaseException("只有启用评审可以加入比赛编排");
         }
@@ -274,6 +278,7 @@ public class JudgeServiceImpl implements JudgeService {
     @Transactional(rollbackFor = Exception.class)
     public void updateCompetitionAssignments(Long competitionId, JudgeAssignmentBatchUpdateRequest request) {
         // 1) 查询比赛与评审桌上下文
+        judgeAccessService.requireCompetitionAccess(competitionId);
         if (competitionMapper.selectById(competitionId) == null) {
             throw new ResourceNotFoundException("比赛不存在");
         }
@@ -287,7 +292,7 @@ public class JudgeServiceImpl implements JudgeService {
         Map<String, JudgeAccount> judgeMap = items.stream()
                 .map(JudgeAssignmentItemRequest::getJudgePublicId)
                 .distinct()
-                .map(this::requireJudgeByPublicId)
+                .map(this::requireAdminJudgeByPublicId)
                 .collect(Collectors.toMap(JudgeAccount::getPublicId, item -> item));
         for (JudgeAssignmentItemRequest item : items) {
             if (!tableMap.containsKey(item.getTableId())) {
@@ -381,7 +386,7 @@ public class JudgeServiceImpl implements JudgeService {
         return account;
     }
 
-    private JudgeAccount requireJudgeByPublicId(String publicId) {
+    private JudgeAccount requireAdminJudgeByPublicId(String publicId) {
         if (!StringUtils.hasText(publicId)) {
             throw new BaseException("评审不能为空");
         }
@@ -390,6 +395,7 @@ public class JudgeServiceImpl implements JudgeService {
         if (account == null) {
             throw new ResourceNotFoundException("评审账号不存在");
         }
+        judgeAccessService.requireJudgeAccess(account.getId());
         return account;
     }
 
@@ -428,11 +434,20 @@ public class JudgeServiceImpl implements JudgeService {
         }
     }
 
-    private LambdaQueryWrapper<JudgeAccount> buildJudgeQuery(Integer status, String keyword) {
+    private LambdaQueryWrapper<JudgeAccount> buildJudgeQuery(Integer status,
+                                                             String keyword,
+                                                             JudgeAccessService.JudgeScope scope) {
         String query = StringUtils.hasText(keyword) ? keyword.trim() : null;
         String digits = query == null ? "" : query.replaceAll("\\D", "");
         LambdaQueryWrapper<JudgeAccount> wrapper = new LambdaQueryWrapper<JudgeAccount>()
                 .ne(JudgeAccount::getStatus, JudgeAccountStatus.PROFILE_INCOMPLETE.getCode());
+        if (!scope.all()) {
+            if (scope.judgeIds().isEmpty()) {
+                wrapper.eq(JudgeAccount::getId, -1L);
+            } else {
+                wrapper.in(JudgeAccount::getId, scope.judgeIds());
+            }
+        }
         if (status != null) {
             JudgeAccountStatus.of(status);
             wrapper.eq(JudgeAccount::getStatus, status);

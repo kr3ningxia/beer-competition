@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.competition.FeedbackCommentEditPolicy;
+import com.beercompetition.competition.access.CompetitionAccessService;
 import com.beercompetition.mapper.BeerEntryMapper;
 import com.beercompetition.mapper.CompetitionRoundMapper;
 import com.beercompetition.mapper.CompetitionCategoryMapper;
@@ -84,6 +85,8 @@ public class CompetitionFeedbackQueryServiceImpl implements CompetitionFeedbackQ
 
     private final CompetitionMapper competitionMapper;
 
+    private final CompetitionAccessService competitionAccessService;
+
     private final CompetitionCategoryMapper competitionCategoryMapper;
 
     private final JudgeAccountMapper judgeAccountMapper;
@@ -124,6 +127,7 @@ public class CompetitionFeedbackQueryServiceImpl implements CompetitionFeedbackQ
 
     private FeedbackPageData buildFeedbackReviewPage(Long competitionId, Integer page, Integer pageSize) {
         // 1) 校验比赛并定位第一轮评分制轮次
+        competitionAccessService.requireCompetitionAccess(competitionId);
         Competition competition = getCompetitionOrThrow(competitionId);
         boolean feedbackEditable = isFeedbackCommentEditable(competition);
         CompetitionRound firstScoreRound = competitionRoundMapper.selectOne(new LambdaQueryWrapper<CompetitionRound>()

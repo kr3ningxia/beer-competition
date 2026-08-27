@@ -12,7 +12,10 @@ public class AdminUserVO {
     private Long id;
     private String username;
     private String name;
+    private String adminType;
+    private Long organizerId;
     private Integer status;
+    private Boolean mustChangePassword;
     private String statusLabel;
     private Boolean currentUser;
     private LocalDateTime createTime;

@@ -193,6 +193,7 @@ class RankingAndAwardGuardrailIntegrationTest extends IntegrationTestBase {
         jdbcTemplate.update("UPDATE competition SET status = ? WHERE id = ?",
                 CompetitionStatus.RESULT_CONFIRMING.name(), fixture.competition().getId());
 
+        asAdmin(1L);
         assertThatThrownBy(() -> awardService.publishAwards(fixture.competition().getId()))
                 .isInstanceOf(BaseException.class)
                 .hasMessageContaining("生成并确认");

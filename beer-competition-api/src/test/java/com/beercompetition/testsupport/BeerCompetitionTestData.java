@@ -1,10 +1,12 @@
 package com.beercompetition.testsupport;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.beercompetition.common.util.PiiService;
 import com.beercompetition.mapper.BeerEntryMapper;
 import com.beercompetition.mapper.BreweryMapper;
 import com.beercompetition.mapper.CompetitionCategoryMapper;
 import com.beercompetition.mapper.CompetitionMapper;
+import com.beercompetition.mapper.OrganizerMapper;
 import com.beercompetition.mapper.CompetitionRoundMapper;
 import com.beercompetition.mapper.CompetitionScoreConfigMapper;
 import com.beercompetition.mapper.CompetitionStyleConfigMapper;
@@ -36,6 +38,8 @@ import com.beercompetition.pojo.enums.RoundType;
 import com.beercompetition.pojo.po.BeerEntry;
 import com.beercompetition.pojo.po.Brewery;
 import com.beercompetition.pojo.po.Competition;
+import com.beercompetition.pojo.po.Organizer;
+import com.beercompetition.pojo.enums.OrganizerType;
 import com.beercompetition.pojo.po.CompetitionCategory;
 import com.beercompetition.pojo.po.CompetitionRound;
 import com.beercompetition.pojo.po.CompetitionScoreConfig;
@@ -63,6 +67,7 @@ import java.util.List;
 public class BeerCompetitionTestData {
 
     @Autowired private CompetitionMapper competitionMapper;
+    @Autowired private OrganizerMapper organizerMapper;
     @Autowired private CompetitionCategoryMapper competitionCategoryMapper;
     @Autowired private CompetitionStyleConfigMapper competitionStyleConfigMapper;
     @Autowired private CompetitionScoreConfigMapper competitionScoreConfigMapper;
@@ -119,6 +124,7 @@ public class BeerCompetitionTestData {
 
     public Competition createCompetition(String prefix, CompetitionStatus status) {
         Competition competition = Competition.builder()
+                .organizerId(platformOrganizerId())
                 .code(prefix + "-COMP")
                 .name(prefix + "-测试比赛")
                 .competitionDate(LocalDate.now().plusDays(30))
@@ -141,6 +147,16 @@ public class BeerCompetitionTestData {
                 .build();
         competitionMapper.insert(competition);
         return competition;
+    }
+
+    private Long platformOrganizerId() {
+        Organizer organizer = organizerMapper.selectOne(new LambdaQueryWrapper<Organizer>()
+                .eq(Organizer::getOrganizerType, OrganizerType.PLATFORM.name())
+                .last("LIMIT 1"));
+        if (organizer == null) {
+            throw new IllegalStateException("测试数据库缺少平台组织");
+        }
+        return organizer.getId();
     }
 
     public CompetitionCategory createCategory(Long competitionId, String name) {

@@ -79,6 +79,7 @@ class WechatRefundRecoveryIntegrationTest extends IntegrationTestBase {
                         testRun + "-OUT-TRADE", testRun + "-OUT-REFUND", testRun + "-WX-REFUND",
                         "SUCCESS", LocalDateTime.now()));
 
+        asAdmin(1L);
         wechatPaymentService.retryRefund(fixture.refundId(), "重新查询", 1L);
 
         assertThat(loadRefund(fixture.refundId()).get("status")).isEqualTo(EntryRefundStatus.SUCCESS.name());

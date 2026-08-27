@@ -3,6 +3,7 @@ package com.beercompetition.registration.entry;
 import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
+import com.beercompetition.file.FileAccessService;
 import com.beercompetition.mapper.BreweryMapper;
 import com.beercompetition.mapper.FileAssetMapper;
 import com.beercompetition.mapper.PortalAccountMapper;
@@ -19,7 +20,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
-import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.Locale;
 import java.util.Set;
@@ -45,6 +45,8 @@ public class PortalProfileServiceImpl implements PortalProfileService {
     private final BreweryMapper breweryMapper;
 
     private final FileStorageService fileStorageService;
+
+    private final FileAccessService fileAccessService;
 
     private final StorageProperties storageProperties;
 
@@ -97,16 +99,18 @@ public class PortalProfileServiceImpl implements PortalProfileService {
         String filename = sanitizeUploadFilename(file.getOriginalFilename(), "avatar.png");
         byte[] bytes = readUploadBytes(file, "读取头像文件失败");
         String storagePath = fileStorageService.upload(BUSINESS_TYPE_BREWERY_AVATAR, filename, bytes);
-        String publicUrl = resolveUploadPublicUrl(storagePath);
         FileAsset asset = FileAsset.builder()
                 .businessType(BUSINESS_TYPE_BREWERY_AVATAR)
+                .ownerType("PORTAL_ACCOUNT")
+                .ownerId(account.getId())
                 .storageProvider(storageProperties.getProvider())
                 .fileName(filename)
                 .storagePath(storagePath)
-                .publicUrl(publicUrl)
+                .publicUrl(null)
                 .createTime(LocalDateTime.now())
                 .build();
         fileAssetMapper.insert(asset);
+        String publicUrl = fileAccessService.publicUrl(asset.getId());
 
         // 3) 绑定头像到厂牌资料
         brewery.setAvatarAssetId(asset.getId());
@@ -138,8 +142,15 @@ public class PortalProfileServiceImpl implements PortalProfileService {
                 .contactName(brewery == null ? null : brewery.getContactName())
                 .phone(account.getPhone())
                 .wechat(StringUtils.hasText(account.getWechat()) ? account.getWechat() : brewery == null ? null : brewery.getWechat())
-                .avatarUrl(brewery == null ? null : brewery.getAvatarUrl())
+                .avatarUrl(resolveAvatarUrl(brewery))
                 .build();
+    }
+
+    private String resolveAvatarUrl(Brewery brewery) {
+        if (brewery == null || brewery.getAvatarAssetId() == null) {
+            return null;
+        }
+        return fileAccessService.publicUrl(brewery.getAvatarAssetId());
     }
 
     private void validateAvatarFile(MultipartFile file) {
@@ -174,16 +185,6 @@ public class PortalProfileServiceImpl implements PortalProfileService {
         filename = filename.replace("\\", "/");
         int index = filename.lastIndexOf('/');
         return index >= 0 ? filename.substring(index + 1) : filename;
-    }
-
-    private String resolveUploadPublicUrl(String storagePath) {
-        if (!"local".equalsIgnoreCase(storageProperties.getProvider())) {
-            return storagePath;
-        }
-        Path baseDir = Path.of(storageProperties.getLocalBaseDir()).toAbsolutePath().normalize();
-        Path storedFile = Path.of(storagePath).toAbsolutePath().normalize();
-        String relativePath = baseDir.relativize(storedFile).toString().replace("\\", "/");
-        return "/uploads/" + relativePath;
     }
 
     private String normalizeRequired(String value, String message) {

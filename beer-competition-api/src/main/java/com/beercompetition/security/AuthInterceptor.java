@@ -30,6 +30,7 @@ public class AuthInterceptor implements HandlerInterceptor {
 
     private final JwtProperties jwtProperties;
     private final AdminUserMapper adminUserMapper;
+    private final AdminIdentityService adminIdentityService;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
@@ -65,20 +66,32 @@ public class AuthInterceptor implements HandlerInterceptor {
             throw new ForbiddenException("当前账号无权访问该资源");
         }
 
+        Long userId = parseUserId(claims);
+        if (userId == null) {
+            throw new UnauthorizedException("未登录或登录状态已失效");
+        }
+        AdminSessionIdentity adminIdentity = null;
         if (requiredRole == UserRole.ADMIN) {
-            Long adminId = Long.valueOf(claims.get("uid").toString());
+            Long adminId = userId;
             AdminUser adminUser = adminUserMapper.selectById(adminId);
             if (adminUser == null || adminUser.getStatus() == null || adminUser.getStatus() != ADMIN_STATUS_ACTIVE) {
                 throw new UnauthorizedException("管理员账号已停用，请重新登录");
+            }
+            adminIdentity = adminIdentityService.resolve(adminUser);
+            if (adminIdentity.mustChangePassword() && !isPasswordSetupEndpoint(request.getRequestURI())) {
+                throw new ForbiddenException("首次登录请先修改密码");
             }
         }
 
         // 将用户信息写入当前线程上下文，后续 Controller/Service 通过 BaseContext 即可获取
         BaseContext.setCurrentUser(SessionUser.builder()
-                .userId(Long.valueOf(claims.get("uid").toString()))
+                .userId(userId)
                 .role(role)
                 .displayName(claims.get("displayName", String.class))
-                .competitionId(claims.get("competitionId", Long.class))
+                .competitionId(claimLong(claims, "competitionId"))
+                .adminType(adminIdentity == null ? claims.get("adminType", String.class) : adminIdentity.adminType().name())
+                .organizerId(adminIdentity == null ? claimLong(claims, "organizerId") : adminIdentity.organizerId())
+                .mustChangePassword(adminIdentity == null ? claimBoolean(claims, "mustChangePassword") : adminIdentity.mustChangePassword())
                 .build());
         return true;
     }
@@ -107,5 +120,45 @@ public class AuthInterceptor implements HandlerInterceptor {
             return UserRole.JUDGE;
         }
         return null;
+    }
+
+    private Long parseUserId(Claims claims) {
+        return claimLong(claims, "uid");
+    }
+
+    private Long claimLong(Claims claims, String name) {
+        Object value = claims.get(name);
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Long.valueOf(String.valueOf(value));
+        } catch (NumberFormatException ex) {
+            throw new UnauthorizedException("未登录或登录状态已失效");
+        }
+    }
+
+    private Boolean claimBoolean(Claims claims, String name) {
+        Object value = claims.get(name);
+        if (value == null) {
+            // 该声明仅用于管理员强制改密；普通用户令牌缺少此字段时按 false 处理
+            return false;
+        }
+        if (value instanceof Boolean booleanValue) {
+            return booleanValue;
+        }
+        String text = String.valueOf(value);
+        if ("true".equalsIgnoreCase(text) || "1".equals(text)) {
+            return true;
+        }
+        if ("false".equalsIgnoreCase(text) || "0".equals(text)) {
+            return false;
+        }
+        throw new UnauthorizedException("未登录或登录状态已失效");
+    }
+
+    private boolean isPasswordSetupEndpoint(String uri) {
+        return "/api/admin/me".equals(uri)
+                || "/api/admin/me/password".equals(uri);
     }
 }
