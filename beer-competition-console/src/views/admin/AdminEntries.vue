@@ -1,11 +1,7 @@
 ﻿<template>
   <div class="admin-entries-page">
-    <section class="page-head">
-      <div>
-        <span>酒款运营</span>
-        <h1>酒款管理</h1>
-      </div>
-      <div class="head-actions">
+    <AdminPageHeader title="酒款管理">
+      <template #actions>
         <button class="tool-button" type="button" @click="resetFilters">
           <RefreshLeft />
           重置筛选
@@ -14,8 +10,8 @@
           <Refresh />
           刷新
         </button>
-      </div>
-    </section>
+      </template>
+    </AdminPageHeader>
 
     <section class="filter-panel">
       <label class="field search-field">
@@ -439,6 +435,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import { Refresh, RefreshLeft, Search } from '@element-plus/icons-vue'
 import QRCode from 'qrcode'
 import {
@@ -1278,7 +1275,7 @@ function triggerDownload(objectUrl, fileName) {
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  padding: 28px 28px 18px;
+  padding: 0 28px 18px;
   overflow: hidden;
   color: #e9f2f5;
   background:
@@ -1288,33 +1285,11 @@ function triggerDownload(objectUrl, fileName) {
   background-size: 68px 68px;
 }
 
-.page-head,
 .filter-panel,
 .table-card {
   width: 100%;
   max-width: none;
   margin: 0 auto;
-}
-
-.page-head {
-  flex: 0 0 auto;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-bottom: 20px;
-  border-bottom: 1px solid rgba(218, 232, 237, 0.1);
-}
-
-.page-head span {
-  color: #d8ae3f;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.page-head h1 {
-  margin: 5px 0 0;
-  font-size: 30px;
-  line-height: 1.12;
 }
 
 .head-actions,

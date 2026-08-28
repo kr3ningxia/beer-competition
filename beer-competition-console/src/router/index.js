@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { getAdminType, isAdminCredentialSetupRequired, isLoggedIn } from '@/utils/auth'
+import { ADMIN_TYPES, ALL_ADMIN_TYPES, canAccessAdminTypes, getDefaultAdminPath } from '@/config/adminAccess'
 
 const routes = [
   { path: '/', redirect: '/portal/home' },
@@ -39,7 +40,7 @@ const routes = [
   {
     path: '/admin/live-board',
     component: () => import('@/views/admin/LiveBoard.vue'),
-    meta: { requiresAuth: true, scope: 'admin' },
+    meta: { requiresAuth: true, scope: 'admin', adminTypes: ALL_ADMIN_TYPES },
   },
   {
     path: '/admin',
@@ -47,18 +48,20 @@ const routes = [
     redirect: '/admin/dashboard',
     meta: { requiresAuth: true, scope: 'admin' },
     children: [
-      { path: 'dashboard', component: () => import('@/views/admin/Dashboard.vue') },
-      { path: 'competitions', component: () => import('@/views/admin/Competitions.vue') },
-      { path: 'competitions/new', component: () => import('@/views/admin/CompetitionCreate.vue') },
-      { path: 'competitions/:id', component: () => import('@/views/admin/CompetitionDetail.vue') },
-      { path: 'entries', component: () => import('@/views/admin/AdminEntries.vue') },
-      { path: 'bank-transfers', component: () => import('@/views/admin/AdminBankTransfers.vue') },
-      { path: 'judges', component: () => import('@/views/admin/Judges.vue') },
-      { path: 'organizer-applications', component: () => import('@/views/admin/OrganizerApplications.vue'), meta: { platformSuperAdmin: true } },
-      { path: 'admin-users', component: () => import('@/views/admin/AdminUsers.vue') },
-      { path: 'operation-logs', component: () => import('@/views/admin/AdminOperationLogs.vue') },
-      { path: 'style-libraries', component: () => import('@/views/admin/StyleLibraries.vue') },
-      { path: 'exports', component: () => import('@/views/admin/AdminExports.vue') },
+      { path: 'dashboard', component: () => import('@/views/admin/Dashboard.vue'), meta: { adminTypes: ALL_ADMIN_TYPES } },
+      { path: 'account-setup', component: () => import('@/views/admin/AdminUsers.vue'), meta: { adminTypes: ALL_ADMIN_TYPES, credentialSetup: true } },
+      { path: 'account', component: () => import('@/views/admin/AdminUsers.vue'), meta: { adminTypes: ALL_ADMIN_TYPES } },
+      { path: 'competitions', component: () => import('@/views/admin/Competitions.vue'), meta: { adminTypes: ALL_ADMIN_TYPES } },
+      { path: 'competitions/new', component: () => import('@/views/admin/CompetitionCreate.vue'), meta: { adminTypes: ALL_ADMIN_TYPES } },
+      { path: 'competitions/:id', component: () => import('@/views/admin/CompetitionDetail.vue'), meta: { adminTypes: ALL_ADMIN_TYPES } },
+      { path: 'entries', component: () => import('@/views/admin/AdminEntries.vue'), meta: { adminTypes: ALL_ADMIN_TYPES } },
+      { path: 'bank-transfers', component: () => import('@/views/admin/AdminBankTransfers.vue'), meta: { adminTypes: ALL_ADMIN_TYPES } },
+      { path: 'judges', component: () => import('@/views/admin/Judges.vue'), meta: { adminTypes: ALL_ADMIN_TYPES } },
+      { path: 'organizer-applications', component: () => import('@/views/admin/OrganizerApplications.vue'), meta: { adminTypes: [ADMIN_TYPES.PLATFORM_SUPER_ADMIN] } },
+      { path: 'admin-users', component: () => import('@/views/admin/AdminUsers.vue'), meta: { adminTypes: [ADMIN_TYPES.PLATFORM_SUPER_ADMIN, ADMIN_TYPES.ORGANIZER_ADMIN] } },
+      { path: 'operation-logs', component: () => import('@/views/admin/AdminOperationLogs.vue'), meta: { adminTypes: ALL_ADMIN_TYPES } },
+      { path: 'style-libraries', component: () => import('@/views/admin/StyleLibraries.vue'), meta: { adminTypes: ALL_ADMIN_TYPES } },
+      { path: 'exports', component: () => import('@/views/admin/AdminExports.vue'), meta: { adminTypes: ALL_ADMIN_TYPES } },
       { path: 'assignments', redirect: '/admin/competitions' },
       { path: 'score-config', redirect: '/admin/competitions' },
     ],
@@ -74,7 +77,7 @@ router.beforeEach((to, from, next) => {
   if (to.meta.public) {
     if (to.meta.guestOnly && to.meta.scope && isLoggedIn(to.meta.scope)) {
       next(to.meta.scope === 'admin'
-        ? (isAdminCredentialSetupRequired() ? { path: '/admin/admin-users', query: { setup: '1' } } : '/admin/dashboard')
+        ? (isAdminCredentialSetupRequired() ? '/admin/account-setup' : getDefaultAdminPath())
         : '/portal/my')
       return
     }
@@ -88,13 +91,17 @@ router.beforeEach((to, from, next) => {
       next(scope === 'admin' ? '/admin/login' : { path: '/portal/login', query: { redirect: to.fullPath } })
       return
     }
-    if (scope === 'admin' && isAdminCredentialSetupRequired() && to.path !== '/admin/admin-users') {
-      next({ path: '/admin/admin-users', query: { setup: '1' } })
+    if (scope === 'admin' && isAdminCredentialSetupRequired() && !to.meta.credentialSetup) {
+      next('/admin/account-setup')
       return
     }
-    if (scope === 'admin' && to.meta.platformSuperAdmin
-      && getAdminType() && getAdminType() !== 'PLATFORM_SUPER_ADMIN') {
-      next('/admin/dashboard')
+    if (scope === 'admin' && !isAdminCredentialSetupRequired() && to.meta.credentialSetup) {
+      next(getDefaultAdminPath())
+      return
+    }
+    if (scope === 'admin' && getAdminType()
+      && !canAccessAdminTypes(getAdminType(), to.meta.adminTypes)) {
+      next(getDefaultAdminPath())
       return
     }
   }

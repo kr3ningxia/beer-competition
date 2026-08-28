@@ -14,6 +14,15 @@ public interface CompetitionAccessService {
      */
     void requirePlatformSuperAdmin();
 
+    /** 允许平台超级管理员或组织管理员维护其组织私有风格库。 */
+    void requireStyleLibraryWriteAccess();
+
+    /** 判断当前后台账号是否为平台超级管理员。 */
+    boolean isPlatformSuperAdmin();
+
+    /** 判断当前后台账号是否为主办方管理员。 */
+    boolean isOrganizerAdmin();
+
     /**
      * 要求当前账号可以访问指定主办方。
      *

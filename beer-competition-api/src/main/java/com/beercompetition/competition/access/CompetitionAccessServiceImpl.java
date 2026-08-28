@@ -45,6 +45,24 @@ public class CompetitionAccessServiceImpl implements CompetitionAccessService {
     }
 
     @Override
+    public void requireStyleLibraryWriteAccess() {
+        AdminType type = resolveAdminType(requireCurrentAdmin());
+        if (type != AdminType.PLATFORM_SUPER_ADMIN && type != AdminType.ORGANIZER_ADMIN) {
+            throw new ForbiddenException("当前账号无风格库维护权限");
+        }
+    }
+
+    @Override
+    public boolean isPlatformSuperAdmin() {
+        return resolveAdminType(requireCurrentAdmin()) == AdminType.PLATFORM_SUPER_ADMIN;
+    }
+
+    @Override
+    public boolean isOrganizerAdmin() {
+        return resolveAdminType(requireCurrentAdmin()) == AdminType.ORGANIZER_ADMIN;
+    }
+
+    @Override
     public void requireOrganizerAccess(Long organizerId) {
         if (organizerId == null) {
             throw new ForbiddenException("资源未关联主办方");

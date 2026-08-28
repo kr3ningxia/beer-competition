@@ -133,6 +133,10 @@ export function fetchStyleLibraries() {
   return request.get('/api/admin/style-libraries', { authScope: 'admin' })
 }
 
+export function fetchEnabledStyleLibraries() {
+  return request.get('/api/admin/style-libraries/enabled', { authScope: 'admin' })
+}
+
 export function fetchStyleLibraryDetail(code) {
   return request.get(`/api/admin/style-libraries/${code}`, { authScope: 'admin' })
 }
@@ -143,6 +147,10 @@ export function saveStyleLibrary(payload) {
 
 export function updateStyleLibrary(code, payload) {
   return request.put(`/api/admin/style-libraries/${code}`, payload, { authScope: 'admin' })
+}
+
+export function updateStyleLibraryVisibility(code, visibility) {
+  return request.patch(`/api/admin/style-libraries/${code}/visibility`, { visibility }, { authScope: 'admin' })
 }
 
 export function updateCompetitionBaseInfo(id, payload) {

@@ -1,21 +1,13 @@
 <template>
   <div class="operation-logs-page">
-    <section class="page-head">
-      <div>
-        <span>后台审计</span>
-        <h1>操作日志</h1>
-      </div>
-      <div class="head-actions">
-        <button class="tool-button" type="button" @click="resetFilters">
-          <RefreshLeft />
-          重置
-        </button>
+    <AdminPageHeader title="操作日志">
+      <template #actions>
         <button class="tool-button primary" type="button" :disabled="loading" @click="loadLogs">
           <Refresh />
           刷新
         </button>
-      </div>
-    </section>
+      </template>
+    </AdminPageHeader>
 
     <section class="filter-panel" aria-label="操作日志筛选">
       <label class="field time-field">
@@ -104,7 +96,6 @@
       <div class="table-title">
         <div>
           <h2>日志明细</h2>
-          <span>当前 {{ logs.length }} 条，共 {{ total }} 条</span>
         </div>
         <div class="audit-summary">
           <strong v-if="loading">加载中</strong>
@@ -116,7 +107,6 @@
         <div class="table-head">
           <span>时间</span>
           <span>操作者</span>
-          <span>操作</span>
           <span>对象</span>
           <span>摘要</span>
           <span>风险</span>
@@ -132,10 +122,6 @@
             <div class="actor-cell">
               <strong>{{ displayAdminName(item) }}</strong>
               <small>{{ item.adminUsername || item.adminUserId || '-' }}</small>
-            </div>
-            <div class="action-cell">
-              <span>{{ item.actionLabel || item.action }}</span>
-              <small>{{ actionGroupLabel(item.actionGroup) }}</small>
             </div>
             <div class="target-cell">
               <strong>{{ item.targetLabel || item.targetType || '-' }}</strong>
@@ -217,7 +203,8 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Refresh, RefreshLeft, Search } from '@element-plus/icons-vue'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
+import { Refresh, Search } from '@element-plus/icons-vue'
 import { fetchAdminOperationLogs, fetchAdminUsers } from '@/api/admin'
 
 const router = useRouter()
@@ -392,10 +379,6 @@ function riskTone(level) {
   return 'is-normal'
 }
 
-function actionGroupLabel(value) {
-  return actionGroupOptions.find((item) => item.value === value)?.label || value || '-'
-}
-
 function targetActionLabel(item) {
   const map = {
     BEER_ENTRY: '打开酒款',
@@ -445,7 +428,7 @@ function formatClock(value) {
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  padding: 28px 28px 18px;
+  padding: 0 28px 18px;
   overflow: hidden;
   color: var(--text);
   background:
@@ -474,28 +457,6 @@ button {
 button:disabled {
   cursor: not-allowed;
   opacity: 0.46;
-}
-
-.page-head {
-  flex: 0 0 auto;
-  display: flex;
-  justify-content: space-between;
-  gap: 20px;
-  align-items: center;
-  padding-bottom: 20px;
-  border-bottom: 1px solid var(--line);
-}
-
-.page-head span {
-  color: var(--gold);
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.page-head h1 {
-  margin-top: 5px;
-  font-size: 30px;
-  line-height: 1.12;
 }
 
 .head-actions,
@@ -673,10 +634,10 @@ button:disabled {
 .table-head,
 .table-row {
   display: grid;
-  grid-template-columns: 126px minmax(120px, 0.7fr) minmax(150px, 0.8fr) minmax(180px, 1fr) minmax(300px, 1.7fr) 74px 150px;
+  grid-template-columns: 126px minmax(120px, 0.8fr) minmax(180px, 1fr) minmax(360px, 2fr) 74px 150px;
   gap: 12px;
   align-items: center;
-  min-width: 1220px;
+  min-width: 1080px;
 }
 
 .table-head {
@@ -692,7 +653,7 @@ button:disabled {
   display: grid;
   align-content: start;
   gap: 8px;
-  min-width: 1220px;
+  min-width: 1080px;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -746,7 +707,6 @@ button:disabled {
 
 .time-cell,
 .actor-cell,
-.action-cell,
 .target-cell,
 .summary-cell {
   display: grid;
@@ -766,28 +726,11 @@ button:disabled {
 
 .time-cell small,
 .actor-cell small,
-.action-cell small,
 .target-cell small,
 .summary-cell small {
   overflow: hidden;
   color: var(--muted);
   font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.action-cell span {
-  overflow: hidden;
-  width: fit-content;
-  max-width: 100%;
-  min-height: 26px;
-  padding: 5px 9px;
-  color: var(--gold);
-  border-radius: 8px;
-  background: var(--gold-soft);
-  font-size: 13px;
-  font-weight: 800;
-  line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1034,11 +977,10 @@ button:disabled {
   .operation-logs-page {
     height: auto;
     min-height: 100%;
-    padding: 22px 16px;
+    padding: 0 16px 16px;
     overflow: visible;
   }
 
-  .page-head,
   .table-title {
     align-items: stretch;
     flex-direction: column;

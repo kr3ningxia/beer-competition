@@ -26,6 +26,7 @@ public class StyleLibraryUpsertRequest {
     private String source;
 
     private Integer status = 1;
+    private String visibility;
     private List<String> tags;
 
     @Valid

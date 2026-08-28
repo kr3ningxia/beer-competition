@@ -41,6 +41,8 @@ import java.util.stream.Collectors;
 public class StyleLibraryServiceImpl implements StyleLibraryService {
 
     private static final int ENABLED_STATUS = 1;
+    private static final String PUBLIC_VISIBILITY = "PUBLIC";
+    private static final String PRIVATE_VISIBILITY = "PRIVATE";
 
     private final StyleLibraryMapper styleLibraryMapper;
     private final StyleCategoryMapper styleCategoryMapper;
@@ -50,12 +52,19 @@ public class StyleLibraryServiceImpl implements StyleLibraryService {
 
     @Override
     public List<StyleLibraryVO> listLibraries() {
-        competitionAccessService.requirePlatformSuperAdmin();
+        final boolean platformSuperAdmin = competitionAccessService.isPlatformSuperAdmin();
+        final Long organizerId = platformSuperAdmin ? null : competitionAccessService.requireCurrentOrganizerId();
         // 1) 查询风格库主记录
-        List<StyleLibrary> libraries = styleLibraryMapper.selectList(new LambdaQueryWrapper<StyleLibrary>()
+        LambdaQueryWrapper<StyleLibrary> query = new LambdaQueryWrapper<StyleLibrary>()
                 .orderByDesc(StyleLibrary::getStatus)
                 .orderByDesc(StyleLibrary::getUpdateTime)
-                .orderByAsc(StyleLibrary::getId));
+                .orderByAsc(StyleLibrary::getId);
+        if (!platformSuperAdmin) {
+            query.and(w -> w.isNull(StyleLibrary::getVisibility)
+                    .or().eq(StyleLibrary::getVisibility, PUBLIC_VISIBILITY)
+                    .or().eq(StyleLibrary::getOrganizerId, organizerId));
+        }
+        List<StyleLibrary> libraries = styleLibraryMapper.selectList(query);
 
         // 2) 组装每套风格库的统计和预览
         return libraries.stream()
@@ -65,18 +74,38 @@ public class StyleLibraryServiceImpl implements StyleLibraryService {
 
     @Override
     public StyleLibraryVO getLibrary(String code) {
-        competitionAccessService.requirePlatformSuperAdmin();
         // 1) 校验编码并查询风格库
         StyleLibrary library = getLibraryOrThrow(normalizeRequired(code, "风格库编码不能为空"));
+        assertReadable(library);
 
         // 2) 组装完整风格库详情
         return buildLibraryVO(library);
     }
 
     @Override
+    public List<StyleLibraryVO> listEnabledLibraries() {
+        final boolean platformSuperAdmin = competitionAccessService.isPlatformSuperAdmin();
+        final Long organizerId = platformSuperAdmin ? null : competitionAccessService.requireCurrentOrganizerId();
+        LambdaQueryWrapper<StyleLibrary> query = new LambdaQueryWrapper<StyleLibrary>()
+                        .eq(StyleLibrary::getStatus, ENABLED_STATUS);
+        if (!platformSuperAdmin) {
+            query.and(w -> w.isNull(StyleLibrary::getVisibility)
+                    .or().eq(StyleLibrary::getVisibility, PUBLIC_VISIBILITY)
+                    .or().eq(StyleLibrary::getOrganizerId, organizerId));
+        }
+        return styleLibraryMapper.selectList(query
+                        .orderByAsc(StyleLibrary::getId))
+                .stream()
+                .map(this::buildLibraryVO)
+                .toList();
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public StyleLibraryVO saveLibrary(StyleLibraryUpsertRequest request) {
-        competitionAccessService.requirePlatformSuperAdmin();
+        competitionAccessService.requireStyleLibraryWriteAccess();
+        final boolean platformSuperAdmin = competitionAccessService.isPlatformSuperAdmin();
+        final Long organizerId = competitionAccessService.requireCurrentOrganizerId();
         // 1) 参数规范化与重复校验
         String code = normalizeRequired(request.getCode(), "风格库编码不能为空");
         List<StyleCategoryRequest> categories = normalizeCategories(request.getCategories() == null ? List.of() : request.getCategories());
@@ -90,13 +119,20 @@ public class StyleLibraryServiceImpl implements StyleLibraryService {
         StyleLibrary library = styleLibraryMapper.selectOne(new LambdaQueryWrapper<StyleLibrary>()
                 .eq(StyleLibrary::getCode, code));
         if (library == null) {
-            library = StyleLibrary.builder().code(code).build();
+            library = StyleLibrary.builder().code(code).organizerId(organizerId).build();
+        } else if (!Objects.equals(library.getOrganizerId(), organizerId)) {
+            throw new BaseException("当前账号不能修改该风格库");
         }
         library.setName(normalizeRequired(request.getName(), "风格库名称不能为空"));
         library.setVersion(normalizeRequired(request.getVersion(), "版本不能为空"));
         library.setLanguage(normalizeRequired(request.getLanguage(), "语言不能为空"));
         library.setSource(normalizeRequired(request.getSource(), "来源不能为空"));
         library.setStatus(resolveStatus(request.getStatus()));
+        String requestedVisibility = request.getVisibility();
+        if (library.getId() != null && requestedVisibility == null) {
+            requestedVisibility = library.getVisibility();
+        }
+        library.setVisibility(platformSuperAdmin ? normalizeVisibility(requestedVisibility) : PRIVATE_VISIBILITY);
         library.setTagsJson(writeTags(request.getTags()));
         try {
             if (library.getId() == null) {
@@ -117,9 +153,28 @@ public class StyleLibraryServiceImpl implements StyleLibraryService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
+    public StyleLibraryVO setVisibility(String code, String visibility) {
+        competitionAccessService.requirePlatformSuperAdmin();
+        StyleLibrary library = getLibraryOrThrow(normalizeRequired(code, "风格库编码不能为空"));
+        Long platformOrganizerId = competitionAccessService.requireCurrentOrganizerId();
+        if (!Objects.equals(library.getOrganizerId(), platformOrganizerId)) {
+            throw new BaseException("只能发布啤酒事务局创建的风格库");
+        }
+        String normalizedVisibility = normalizeVisibility(visibility);
+        if (PUBLIC_VISIBILITY.equals(normalizedVisibility) && !Objects.equals(library.getStatus(), ENABLED_STATUS)) {
+            throw new BaseException("启用风格库后才能设为公共库");
+        }
+        library.setVisibility(normalizedVisibility);
+        styleLibraryMapper.updateById(library);
+        return buildLibraryVO(library);
+    }
+
+    @Override
     public List<StyleItemVO> listEnabledStyles(String code) {
         // 1) 查询启用风格库
         StyleLibrary library = getLibraryOrThrow(normalizeRequired(code, "风格库编码不能为空"));
+        assertReadable(library);
         if (!Objects.equals(library.getStatus(), ENABLED_STATUS)) {
             throw new BaseException("当前风格库未启用");
         }
@@ -161,6 +216,23 @@ public class StyleLibraryServiceImpl implements StyleLibraryService {
         return library;
     }
 
+    private void assertReadable(StyleLibrary library) {
+        if (PUBLIC_VISIBILITY.equals(normalizeVisibility(library.getVisibility()))) {
+            return;
+        }
+        Long organizerId = library.getOrganizerId();
+        if (organizerId == null) {
+            return;
+        }
+        if (competitionAccessService.isPlatformSuperAdmin()) {
+            return;
+        }
+        Long currentOrganizerId = competitionAccessService.requireCurrentOrganizerId();
+        if (!Objects.equals(currentOrganizerId, organizerId)) {
+            throw new com.beercompetition.common.exception.ForbiddenException("当前账号无权访问该风格库");
+        }
+    }
+
     private StyleLibraryVO buildLibraryVO(StyleLibrary library) {
         List<StyleCategory> categories = listCategories(library.getId());
         Map<Long, StyleCategory> categoryMap = categories.stream()
@@ -179,6 +251,11 @@ public class StyleLibraryServiceImpl implements StyleLibraryService {
         List<String> styleNames = styleItems.stream().map(StyleItemVO::getName).toList();
         return StyleLibraryVO.builder()
                 .id(library.getId())
+                .organizerId(library.getOrganizerId())
+                .visibility(normalizeVisibility(library.getVisibility()))
+                .visibilityLabel(PUBLIC_VISIBILITY.equals(normalizeVisibility(library.getVisibility())) ? "公共" : "内部")
+                .canEdit(canEdit(library))
+                .canPublish(canPublish(library))
                 .value(library.getCode())
                 .label(library.getName())
                 .code(library.getCode())
@@ -297,6 +374,34 @@ public class StyleLibraryServiceImpl implements StyleLibraryService {
 
     private Integer resolveStatus(Integer status) {
         return Objects.equals(status, ENABLED_STATUS) ? ENABLED_STATUS : 0;
+    }
+
+    private String normalizeVisibility(String visibility) {
+        if (!StringUtils.hasText(visibility)) {
+            return PRIVATE_VISIBILITY;
+        }
+        if (PUBLIC_VISIBILITY.equalsIgnoreCase(visibility.trim())) {
+            return PUBLIC_VISIBILITY;
+        }
+        if (PRIVATE_VISIBILITY.equalsIgnoreCase(visibility.trim())) {
+            return PRIVATE_VISIBILITY;
+        }
+        throw new BaseException("风格库可见范围不正确");
+    }
+
+    private boolean canEdit(StyleLibrary library) {
+        if (library.getOrganizerId() == null) return false;
+        boolean platformSuperAdmin = competitionAccessService.isPlatformSuperAdmin();
+        if (!platformSuperAdmin && !competitionAccessService.isOrganizerAdmin()) return false;
+        Long currentOrganizerId = competitionAccessService.requireCurrentOrganizerId();
+        if (!Objects.equals(currentOrganizerId, library.getOrganizerId())) return false;
+        return platformSuperAdmin
+                || PRIVATE_VISIBILITY.equals(normalizeVisibility(library.getVisibility()));
+    }
+
+    private boolean canPublish(StyleLibrary library) {
+        return competitionAccessService.isPlatformSuperAdmin()
+                && Objects.equals(library.getOrganizerId(), competitionAccessService.requireCurrentOrganizerId());
     }
 
     private int resolveSort(Integer value, int defaultValue) {

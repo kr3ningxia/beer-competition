@@ -1,20 +1,19 @@
 <template>
   <div class="competition-detail">
-    <section v-if="competition" class="detail-head">
-      <button class="breadcrumb-link" type="button" @click="router.push('/admin/competitions')">
-        <Back />
-        比赛管理
-      </button>
-      <div class="head-main">
-        <div class="title-block">
-          <div class="title-line">
-            <h1>{{ competition.name }}</h1>
-          </div>
-          <div class="meta-line">
-            <span :class="['state-badge', statusInfo.tone]">{{ statusInfo.label }}</span>
-            <span v-for="item in headerMetaItems" :key="item.key">{{ item.label }}</span>
-          </div>
+    <AdminPageHeader v-if="competition" :title="competition.name">
+      <template #leading>
+        <button class="breadcrumb-link" type="button" @click="router.push('/admin/competitions')">
+          <Back />
+          比赛管理
+        </button>
+      </template>
+      <template #meta>
+        <div class="meta-line">
+          <span :class="['state-badge', statusInfo.tone]">{{ statusInfo.label }}</span>
+          <span v-for="item in headerMetaItems" :key="item.key">{{ item.label }}</span>
         </div>
+      </template>
+      <template #actions>
         <div class="head-action-group">
           <span
             class="disabled-action-tip"
@@ -46,8 +45,8 @@
             </div>
           </details>
         </div>
-      </div>
-    </section>
+      </template>
+    </AdminPageHeader>
 
     <section v-if="competition" class="detail-shell">
       <div class="detail-tabbar">
@@ -1951,6 +1950,7 @@
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import {
   Back,
   Calendar,
@@ -2007,7 +2007,7 @@ import {
   fetchCompetitionResultDrafts,
   fetchCompetitionSponsors,
   fetchJudges,
-  fetchStyleLibraries,
+  fetchEnabledStyleLibraries,
   generateCompetitionAwards,
   lockRound,
   markEntryStored,
@@ -3822,7 +3822,7 @@ async function loadStyleLibraries() {
   const competitionKey = currentCompetitionKey()
   if (!competitionKey || loadedSectionCompetitionIds.styleLibraries === competitionKey) return
   try {
-    const data = await fetchStyleLibraries()
+    const data = await fetchEnabledStyleLibraries()
     styleLibraryOptions.value = normalizeStyleLibraries(data)
     loadedSectionCompetitionIds.styleLibraries = competitionKey
   } catch {

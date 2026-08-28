@@ -10,6 +10,7 @@ import com.beercompetition.mapper.CompetitionRoundMapper;
 import com.beercompetition.mapper.JudgeAccountMapper;
 import com.beercompetition.mapper.JudgeAssignmentMapper;
 import com.beercompetition.mapper.JudgeTableMapper;
+import com.beercompetition.mapper.OrganizerMapper;
 import com.beercompetition.mapper.PortalAccountMapper;
 import com.beercompetition.mapper.RoundTableMapper;
 import com.beercompetition.mapper.RoundTableMemberMapper;
@@ -72,6 +73,8 @@ class AuthServiceRefreshTokenTest {
     @Mock
     private RoundTableMemberMapper roundTableMemberMapper;
     @Mock
+    private OrganizerMapper organizerMapper;
+    @Mock
     private SmsCodeLogMapper smsCodeLogMapper;
     @Mock
     private RedisTemplate<String, Object> redisTemplate;
@@ -129,6 +132,7 @@ class AuthServiceRefreshTokenTest {
                 competitionRoundMapper,
                 roundTableMapper,
                 roundTableMemberMapper,
+                organizerMapper,
                 smsCodeLogMapper,
                 redisTemplate,
                 jwtProperties,

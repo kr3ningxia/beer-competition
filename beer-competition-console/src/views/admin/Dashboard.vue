@@ -1,143 +1,172 @@
 <template>
-  <main class="dashboard-shell">
-    <section class="hero-panel">
-      <div>
-        <p class="eyebrow">当前比赛</p>
-        <h1>{{ currentCompetition?.name || '暂无比赛' }}</h1>
-        <div class="meta-row">
-          <span>{{ currentCompetition?.competitionDate || currentCompetition?.date || '-' }}</span>
-          <span>{{ statusText(currentCompetition?.status) }}</span>
-          <span>{{ currentRound?.name || '未创建轮次' }}</span>
-        </div>
-      </div>
-      <div class="toolbar">
-        <button class="toolbar-button" type="button" @click="loadDashboard">刷新数据</button>
-        <button class="toolbar-button primary" type="button" :disabled="!currentCompetition" @click="openCompetition">
-          进入比赛详情
+  <main class="workspace-page">
+    <AdminPageHeader title="工作台">
+      <template #actions>
+        <button class="icon-button" type="button" title="刷新工作台" aria-label="刷新工作台" :disabled="loading" @click="loadDashboard">
+          <Refresh :class="{ spinning: loading }" />
         </button>
-      </div>
-    </section>
+        <button class="primary-button" type="button" @click="router.push('/admin/competitions/new')">
+          <Plus />
+          新建比赛
+        </button>
+      </template>
+    </AdminPageHeader>
 
-    <section class="summary-grid">
+    <section class="summary-grid" aria-label="赛事概览">
       <article v-for="item in summaryCards" :key="item.label" :class="['metric-card', item.tone]">
         <span>{{ item.label }}</span>
         <strong>{{ item.value }}</strong>
-        <small>{{ item.hint }}</small>
       </article>
     </section>
 
-    <section class="content-grid">
-      <article class="panel-card">
-        <header>
-          <div>
-            <small>当前轮次</small>
-            <h2>桌次进度</h2>
-          </div>
-          <span>{{ roundTables.length }} 桌</span>
-        </header>
-        <div class="table-list">
-          <div v-for="table in tableRows" :key="table.id || table.name" class="table-row">
-            <strong>{{ table.name }}</strong>
-            <span>{{ table.entryCount }} 款酒</span>
-            <span>{{ table.primary }}</span>
-            <em>{{ table.status }}</em>
-          </div>
-          <p v-if="!tableRows.length" class="empty-line">当前还没有可展示的轮次桌</p>
-        </div>
-      </article>
+    <section v-if="!loading && !competitions.length" class="empty-workspace">
+      <span class="empty-icon"><Medal /></span>
+      <strong>暂无比赛</strong>
+      <button class="primary-button" type="button" @click="router.push('/admin/competitions/new')">
+        <Plus />
+        新建第一场比赛
+      </button>
+    </section>
 
-      <article class="panel-card">
-        <header>
-          <div>
-            <small>现场关注</small>
+    <template v-else-if="competitions.length">
+      <section class="focus-layout">
+        <article class="focus-panel">
+          <header>
+            <div>
+              <span class="status-badge">{{ statusText(currentCompetition?.status) }}</span>
+              <h2>{{ currentCompetition?.name }}</h2>
+            </div>
+            <button class="text-button" type="button" @click="openCompetition">
+              进入比赛
+              <Right />
+            </button>
+          </header>
+
+          <div class="focus-stats">
+            <div>
+              <span>参赛酒款</span>
+              <strong>{{ currentEntries.total || 0 }}</strong>
+            </div>
+            <div>
+              <span>已入库</span>
+              <strong>{{ currentEntries.stored || 0 }}</strong>
+            </div>
+            <div>
+              <span>评审桌</span>
+              <strong>{{ roundTables.length }}</strong>
+            </div>
+            <div>
+              <span>结果发布</span>
+              <strong class="state-value">{{ detail?.resultSetup?.published ? '已发布' : '未发布' }}</strong>
+            </div>
+          </div>
+        </article>
+
+        <article class="issues-panel">
+          <header>
             <h2>待处理事项</h2>
+            <span>{{ issueRows.length }} 项</span>
+          </header>
+          <div class="issue-list">
+            <button v-for="issue in issueRows" :key="issue" type="button" @click="openCompetition">
+              <span>{{ issue }}</span>
+              <Right />
+            </button>
+            <p v-if="!issueRows.length">当前没有待处理事项</p>
           </div>
-          <span>{{ issueRows.length }} 项</span>
-        </header>
-        <div class="issue-list">
-          <div v-for="issue in issueRows" :key="issue" class="issue-row">{{ issue }}</div>
-          <p v-if="!issueRows.length" class="empty-line">暂无需要处理的事项</p>
-        </div>
-      </article>
-    </section>
+        </article>
+      </section>
 
-    <section class="panel-card">
-      <header>
-        <div>
-          <small>比赛台账</small>
+      <section class="competition-ledger">
+        <header>
           <h2>近期比赛</h2>
+          <button class="text-button" type="button" @click="router.push('/admin/competitions')">
+            全部比赛
+            <Right />
+          </button>
+        </header>
+        <div class="ledger-head">
+          <span>比赛</span>
+          <span>状态</span>
+          <span>比赛日期</span>
+          <span>报名酒款</span>
+          <span>操作</span>
         </div>
-        <span>{{ competitions.length }} 场</span>
-      </header>
-      <div class="competition-list">
-        <button v-for="item in competitions" :key="item.id" type="button" @click="selectCompetition(item)">
+        <button
+          v-for="item in competitions.slice(0, 6)"
+          :key="item.id"
+          class="ledger-row"
+          type="button"
+          @click="selectCompetition(item, true)"
+        >
           <strong>{{ item.name }}</strong>
           <span>{{ statusText(item.status) }}</span>
+          <span>{{ formatDate(item.competitionDate || item.date) }}</span>
+          <span>{{ item.entriesSummary?.total || 0 }}</span>
           <em>查看</em>
         </button>
-        <p v-if="!competitions.length" class="empty-line">暂无比赛</p>
-      </div>
-    </section>
+      </section>
+    </template>
   </main>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { Medal, Plus, Refresh, Right } from '@element-plus/icons-vue'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import { fetchCompetitionProgress, fetchCompetitions } from '@/api/admin'
+import { getAdminType } from '@/utils/auth'
+import { ADMIN_TYPES } from '@/config/adminAccess'
 
 const router = useRouter()
 const competitions = ref([])
 const detail = ref(null)
 const selectedId = ref(null)
+const loading = ref(false)
 
-const currentCompetition = computed(() => detail.value || competitions.value.find((item) => item.id === selectedId.value) || competitions.value[0] || null)
-const rounds = computed(() => detail.value?.rounds || [])
-const currentRound = computed(() => detail.value?.currentRound || rounds.value.find((round) => ['PUBLISHED', 'IN_PROGRESS', 'SUBMITTED'].includes(round.status)) || rounds.value[rounds.value.length - 1] || null)
-const roundTables = computed(() => currentRound.value?.tables || [])
-
-const summaryCards = computed(() => {
-  const entries = detail.value?.entriesSummary || {}
-  const progress = detail.value?.progressSummary || {}
-  const rankingSubmitted = roundTables.value.filter((table) => ['SUBMITTED', 'LOCKED'].includes(table.status)).length
-  const isRanking = currentRound.value?.type === 'RANKING'
-  return [
-    { label: '参赛酒款', value: entries.total || 0, hint: '本场全部酒款', tone: 'neutral' },
-    { label: '已入库', value: entries.stored || 0, hint: '可进入评审', tone: 'success' },
-    { label: isRanking ? '排序桌提交' : '桌长汇总', value: isRanking ? `${rankingSubmitted} / ${roundTables.value.length}` : `${progress.finalized || 0} / ${progress.total || 0}`, hint: isRanking ? '等待组委会确认' : '首轮评分制', tone: 'gold' },
-    { label: '平均耗时', value: formatMinutes(progress.averageReviewMinutes), hint: '本轮提交', tone: 'neutral' },
-    { label: '反馈异常', value: progress.commentWarnings || 0, hint: '复核兜底', tone: (progress.commentWarnings || 0) > 0 ? 'warning' : 'success' },
-    { label: '结果发布', value: detail.value?.resultSetup?.published ? '已发布' : '未发布', hint: detail.value?.resultSetup?.canPublishResults ? '可发布' : '按流程推进', tone: detail.value?.resultSetup?.published ? 'success' : 'warning' },
-  ]
+const currentCompetition = computed(() => detail.value
+  || competitions.value.find((item) => item.id === selectedId.value)
+  || competitions.value[0]
+  || null)
+const currentEntries = computed(() => detail.value?.entriesSummary || currentCompetition.value?.entriesSummary || {})
+const currentRound = computed(() => {
+  const rounds = detail.value?.rounds || []
+  return detail.value?.currentRound
+    || rounds.find((round) => ['PUBLISHED', 'IN_PROGRESS', 'SUBMITTED'].includes(round.status))
+    || rounds[rounds.length - 1]
+    || null
 })
-
-const tableRows = computed(() => roundTables.value.map((table) => {
-  const isRanking = currentRound.value?.type === 'RANKING'
-  const selected = (table.rankings || []).filter((slot) => slot.uuid).length
-  return {
-    id: table.id,
-    name: table.name,
-    entryCount: table.entryUuids?.length || 0,
-    primary: isRanking ? `排序 ${selected} / ${table.targetCount || 0}` : `桌长汇总 ${Math.round(Number(table.captainProgress || 0))}%`,
-    status: roundStatusText(table.status),
-  }
-}))
-
+const roundTables = computed(() => currentRound.value?.tables || [])
+const summaryCards = computed(() => [
+  { label: '全部比赛', value: competitions.value.length, tone: 'gold' },
+  { label: '报名中', value: competitions.value.filter((item) => item.status === 'REGISTRATION_OPEN').length, tone: 'green' },
+  { label: '待确认收款', value: competitions.value.reduce((total, item) => total + Number(item.entriesSummary?.pendingPayment || 0), 0), tone: 'orange' },
+  { label: '评审进行中', value: competitions.value.filter((item) => ['JUDGING_PREP', 'JUDGING', 'RESULT_CONFIRMING'].includes(item.status)).length, tone: 'blue' },
+])
 const issueRows = computed(() => {
   const issues = [...(detail.value?.dataIntegrityIssues || [])]
   roundTables.value.forEach((table) => {
     if (!table.captainPublicId) issues.push(`${table.name}缺少桌长`)
     if (!(table.entryUuids || []).length) issues.push(`${table.name}尚未分配酒款`)
   })
-  return issues.slice(0, 8)
+  return issues.slice(0, 6)
 })
 
 onMounted(loadDashboard)
 
 async function loadDashboard() {
-  competitions.value = await fetchCompetitions()
-  const target = competitions.value.find((item) => ['JUDGING', 'RESULT_CONFIRMING', 'JUDGING_PREP'].includes(item.status)) || competitions.value[0]
-  if (target) await selectCompetition(target, false)
+  loading.value = true
+  try {
+    competitions.value = await fetchCompetitions() || []
+    const target = competitions.value.find((item) => ['JUDGING', 'RESULT_CONFIRMING', 'JUDGING_PREP'].includes(item.status))
+      || competitions.value.find((item) => item.status === 'REGISTRATION_OPEN')
+      || competitions.value[0]
+    if (target) await selectCompetition(target, false)
+    else detail.value = null
+  } finally {
+    loading.value = false
+  }
 }
 
 async function selectCompetition(item, navigate = false) {
@@ -147,8 +176,7 @@ async function selectCompetition(item, navigate = false) {
 }
 
 function openCompetition() {
-  if (!currentCompetition.value?.id) return
-  router.push(`/admin/competitions/${currentCompetition.value.id}`)
+  if (currentCompetition.value?.id) router.push(`/admin/competitions/${currentCompetition.value.id}`)
 }
 
 function statusText(status) {
@@ -165,226 +193,101 @@ function statusText(status) {
   return labels[status] || status || '-'
 }
 
-function roundStatusText(status) {
-  const labels = {
-    DRAFT: '草稿',
-    PUBLISHED: '已发布',
-    IN_PROGRESS: '进行中',
-    SUBMITTED: '待确认',
-    LOCKED: '已锁定',
-  }
-  return labels[status] || status || '-'
-}
-
-function formatMinutes(value) {
-  const minutes = Number(value || 0)
-  if (minutes <= 0) return '-'
-  if (minutes < 60) return `${minutes} 分钟`
-  const hours = Math.floor(minutes / 60)
-  const rest = minutes % 60
-  return rest ? `${hours} 小时 ${rest} 分钟` : `${hours} 小时`
+function formatDate(value) {
+  return value ? String(value).slice(0, 10) : '-'
 }
 </script>
 
 <style scoped>
-.dashboard-shell {
-  min-height: 100vh;
-  padding: 28px;
-  color: #e6edf0;
+.workspace-page {
+  --panel: rgba(21, 31, 35, 0.92);
+  --line: rgba(218, 231, 236, 0.1);
+  --text: #e6edf0;
+  --muted: #8da1aa;
+  --gold: #d8a935;
+  height: 100vh;
+  padding: 0 28px 18px;
+  overflow-y: auto;
+  color: var(--text);
   background:
-    radial-gradient(circle at 92% 0%, rgba(216, 169, 53, 0.12), transparent 24rem),
-    linear-gradient(180deg, #0f171c 0%, #0a1014 100%);
+    linear-gradient(rgba(255, 255, 255, 0.026) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    #0d1519;
+  background-size: 48px 48px;
 }
 
-.hero-panel,
-.panel-card,
-.metric-card {
-  border: 1px solid rgba(218, 231, 236, 0.1);
-  border-radius: 8px;
-  background: rgba(22, 32, 36, 0.84);
-}
-
-.hero-panel {
-  display: flex;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 24px;
-}
-
-.eyebrow,
-.panel-card small {
-  margin: 0 0 8px;
-  color: #d8a935;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-h1,
-h2 {
-  margin: 0;
-}
-
-h1 {
-  font-size: 34px;
-}
-
-h2 {
-  font-size: 20px;
-}
-
-.meta-row,
-.toolbar,
-.panel-card header {
+.head-actions, .focus-panel header, .issues-panel header, .competition-ledger header, .text-button, .primary-button, .icon-button {
   display: flex;
   align-items: center;
-  gap: 12px;
 }
 
-.meta-row {
-  margin-top: 12px;
-  color: #9fb1b9;
+h1, h2 { margin: 0; letter-spacing: 0; }
+h2 { font-size: 18px; }
+.head-actions { gap: 9px; }
+.primary-button, .icon-button, .text-button { justify-content: center; gap: 7px; min-height: 40px; border-radius: 7px; font-weight: 800; }
+.primary-button { padding: 0 13px; color: #1a1509; border: 1px solid #d8a935; background: #d8a935; }
+.primary-button svg, .icon-button svg, .text-button svg { width: 17px; height: 17px; }
+.icon-button { width: 40px; padding: 0; color: #b6c6cc; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.03); }
+.icon-button:disabled { opacity: 0.55; }
+.spinning { animation: spin 0.8s linear infinite; }
+
+.summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
+.metric-card { min-height: 108px; padding: 17px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); }
+.metric-card span { color: var(--muted); font-size: 13px; }
+.metric-card strong { display: block; margin-top: 15px; font-size: 29px; }
+.metric-card.gold strong { color: #e0b84a; }
+.metric-card.green strong { color: #70cf7c; }
+.metric-card.orange strong { color: #f2a65a; }
+.metric-card.blue strong { color: #76b9d2; }
+
+.empty-workspace { display: grid; place-items: center; align-content: center; gap: 16px; min-height: calc(100vh - 240px); margin-top: 16px; border: 1px solid var(--line); border-radius: 7px; background: rgba(21, 31, 35, 0.72); }
+.empty-workspace > strong { font-size: 21px; }
+.empty-icon { display: grid; place-items: center; width: 54px; height: 54px; color: #d8a935; border: 1px solid rgba(216, 169, 53, 0.22); border-radius: 8px; background: rgba(216, 169, 53, 0.07); }
+.empty-icon svg { width: 25px; }
+
+.focus-layout { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.55fr); gap: 14px; margin-top: 14px; }
+.focus-panel, .issues-panel, .competition-ledger { border: 1px solid var(--line); border-radius: 7px; background: var(--panel); }
+.focus-panel, .issues-panel { min-height: 220px; padding: 18px; }
+.focus-panel header, .issues-panel header, .competition-ledger header { justify-content: space-between; gap: 16px; }
+.focus-panel header > div { display: grid; gap: 10px; min-width: 0; }
+.focus-panel h2 { overflow: hidden; font-size: 23px; text-overflow: ellipsis; white-space: nowrap; }
+.status-badge { width: fit-content; padding: 5px 8px; color: #e0b84a; border: 1px solid rgba(216, 169, 53, 0.22); border-radius: 6px; background: rgba(216, 169, 53, 0.07); font-size: 12px; }
+.text-button { padding: 0; color: #d8a935; border: 0; background: transparent; }
+.focus-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 30px; }
+.focus-stats > div { display: grid; gap: 8px; padding: 12px; border-left: 2px solid rgba(216, 169, 53, 0.24); background: rgba(255, 255, 255, 0.025); }
+.focus-stats span { color: var(--muted); font-size: 12px; }
+.focus-stats strong { font-size: 23px; }
+.focus-stats .state-value { font-size: 16px; }
+.issues-panel header > span { color: var(--muted); font-size: 12px; }
+.issue-list { display: grid; gap: 7px; margin-top: 16px; }
+.issue-list button { display: grid; grid-template-columns: minmax(0, 1fr) 16px; align-items: center; gap: 8px; min-height: 38px; padding: 0 10px; color: #e7c381; text-align: left; border: 1px solid rgba(216, 169, 53, 0.1); border-radius: 6px; background: rgba(216, 169, 53, 0.04); }
+.issue-list button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.issue-list button svg { width: 15px; }
+.issue-list p { margin: 26px 0 0; color: #6fcf7a; text-align: center; }
+
+.competition-ledger { margin-top: 14px; padding: 18px; }
+.competition-ledger header { margin-bottom: 14px; }
+.ledger-head, .ledger-row { display: grid; grid-template-columns: minmax(220px, 1.4fr) 140px 150px 120px 70px; gap: 12px; align-items: center; }
+.ledger-head { padding: 0 12px 8px; color: #69808a; font-size: 12px; }
+.ledger-row { width: 100%; min-height: 48px; padding: 0 12px; color: #c7d5da; text-align: left; border: 1px solid rgba(218, 231, 236, 0.07); border-radius: 6px; background: rgba(255, 255, 255, 0.022); }
+.ledger-row + .ledger-row { margin-top: 7px; }
+.ledger-row:hover { border-color: rgba(216, 169, 53, 0.17); background: rgba(255, 255, 255, 0.035); }
+.ledger-row strong, .ledger-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ledger-row em { color: #d8a935; font-style: normal; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 1180px) {
+  .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .focus-layout { grid-template-columns: 1fr; }
+  .focus-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ledger-head, .ledger-row { grid-template-columns: minmax(180px, 1fr) 120px 130px 100px 60px; }
 }
 
-.toolbar {
-  align-self: flex-start;
-}
-
-.toolbar-button {
-  min-height: 42px;
-  border: 1px solid rgba(218, 231, 236, 0.16);
-  border-radius: 8px;
-  padding: 0 16px;
-  color: #dce9ed;
-  background: rgba(255, 255, 255, 0.04);
-  font-weight: 800;
-}
-
-.toolbar-button.primary {
-  color: #1b1408;
-  background: #d8a935;
-}
-
-.toolbar-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-  margin-top: 16px;
-}
-
-.metric-card {
-  padding: 18px;
-}
-
-.metric-card span,
-.metric-card small {
-  color: #9fb1b9;
-}
-
-.metric-card strong {
-  display: block;
-  margin: 8px 0;
-  font-size: 30px;
-}
-
-.metric-card.gold strong {
-  color: #d8a935;
-}
-
-.metric-card.success strong {
-  color: #6fcf7a;
-}
-
-.metric-card.warning strong {
-  color: #f2994a;
-}
-
-.content-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.6fr);
-  gap: 16px;
-  margin-top: 16px;
-}
-
-.panel-card {
-  padding: 18px;
-}
-
-.panel-card header {
-  justify-content: space-between;
-  margin-bottom: 14px;
-}
-
-.panel-card header > span {
-  color: #9fb1b9;
-}
-
-.table-list,
-.issue-list,
-.competition-list {
-  display: grid;
-  gap: 10px;
-}
-
-.table-row,
-.issue-row,
-.competition-list button {
-  display: grid;
-  grid-template-columns: 1fr auto auto auto;
-  gap: 12px;
-  align-items: center;
-  min-height: 46px;
-  border: 1px solid rgba(218, 231, 236, 0.08);
-  border-radius: 8px;
-  padding: 0 12px;
-  color: #dce9ed;
-  background: rgba(255, 255, 255, 0.035);
-}
-
-.issue-row {
-  display: block;
-  min-height: 0;
-  padding: 12px;
-  color: #ffd08a;
-}
-
-.competition-list button {
-  width: 100%;
-  text-align: left;
-}
-
-.table-row span,
-.competition-list span {
-  color: #9fb1b9;
-}
-
-.table-row em,
-.competition-list em {
-  color: #d8a935;
-  font-style: normal;
-}
-
-.panel-card + .panel-card {
-  margin-top: 16px;
-}
-
-.empty-line {
-  margin: 0;
-  color: #7d9199;
-}
-
-@media (max-width: 1100px) {
-  .summary-grid,
-  .content-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .hero-panel {
-    display: grid;
-  }
+@media (max-width: 760px) {
+  .workspace-page { height: auto; padding: 0 16px 16px; }
+  .summary-grid { grid-template-columns: 1fr 1fr; }
+  .ledger-head { display: none; }
+  .ledger-row { grid-template-columns: 1fr; gap: 5px; padding: 11px; }
 }
 </style>

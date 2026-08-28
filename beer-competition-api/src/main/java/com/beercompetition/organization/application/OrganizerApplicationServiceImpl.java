@@ -367,14 +367,19 @@ public class OrganizerApplicationServiceImpl implements OrganizerApplicationServ
                 || current == OrganizerApplicationStatus.REJECTED) {
             return false;
         }
+        // Keep accepting the legacy intermediate state for existing clients and records.
         if (next == OrganizerApplicationStatus.UNDER_REVIEW) {
             return current == OrganizerApplicationStatus.SUBMITTED
                     || current == OrganizerApplicationStatus.NEED_MORE_INFO;
         }
-        return current == OrganizerApplicationStatus.UNDER_REVIEW
-                && (next == OrganizerApplicationStatus.NEED_MORE_INFO
+        if (current != OrganizerApplicationStatus.SUBMITTED
+                && current != OrganizerApplicationStatus.NEED_MORE_INFO
+                && current != OrganizerApplicationStatus.UNDER_REVIEW) {
+            return false;
+        }
+        return next == OrganizerApplicationStatus.NEED_MORE_INFO
                 || next == OrganizerApplicationStatus.APPROVED
-                || next == OrganizerApplicationStatus.REJECTED);
+                || next == OrganizerApplicationStatus.REJECTED;
     }
 
     private void checkQueryRateLimit(String applicationNo, String phone) {
@@ -442,13 +447,16 @@ public class OrganizerApplicationServiceImpl implements OrganizerApplicationServ
                 .applicationNo(application.getApplicationNo())
                 .organizationName(application.getOrganizationName())
                 .contactName(application.getContactName())
+                .contactPhone(piiService.decrypt(application.getContactPhoneEnc()))
                 .maskedContactPhone(piiService.maskPhone(piiService.decrypt(application.getContactPhoneEnc())))
                 .contactEmail(application.getContactEmail())
+                .wechat(piiService.decrypt(application.getWechatEnc()))
                 .maskedWechat(piiService.maskWechat(piiService.decrypt(application.getWechatEnc())))
                 .businessDescription(application.getBusinessDescription())
                 .expectedScale(application.getExpectedScale())
                 .supplementalNote(application.getSupplementalNote())
                 .materialAssetId(application.getMaterialAssetId())
+                .materialFileName(findMaterialFileName(application.getMaterialAssetId()))
                 .status(status.name())
                 .statusLabel(statusLabel(status.name()))
                 .reviewRemark(application.getReviewRemark())
@@ -458,6 +466,14 @@ public class OrganizerApplicationServiceImpl implements OrganizerApplicationServ
                 .reviewedTime(application.getReviewedTime())
                 .accountIssuedTime(application.getAccountIssuedTime())
                 .build();
+    }
+
+    private String findMaterialFileName(Long assetId) {
+        if (assetId == null) {
+            return null;
+        }
+        FileAsset asset = fileAssetMapper.selectById(assetId);
+        return asset == null ? null : asset.getFileName();
     }
 
     private void writeReviewLog(OrganizerApplication application,

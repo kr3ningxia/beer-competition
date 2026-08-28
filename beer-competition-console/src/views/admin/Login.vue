@@ -103,7 +103,7 @@ async function submit() {
     setSession('admin', data)
     ElMessage.success('登录成功')
     if (data?.mustChangePassword || data?.mustChangeUsername) {
-      router.replace({ path: '/admin/admin-users', query: { setup: '1' } })
+      router.replace('/admin/account-setup')
     } else {
       router.replace('/admin/dashboard')
     }

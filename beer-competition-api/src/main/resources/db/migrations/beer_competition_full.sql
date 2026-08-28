@@ -1300,6 +1300,8 @@ DROP TABLE IF EXISTS `style_library`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `style_library` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `organizer_id` bigint NOT NULL COMMENT '所属主办方，啤酒事务局为平台组织',
+  `visibility` varchar(16) NOT NULL DEFAULT 'PRIVATE' COMMENT 'PUBLIC 公共库，PRIVATE 内部库',
   `code` varchar(64) NOT NULL COMMENT '风格库编码',
   `name` varchar(128) NOT NULL COMMENT '风格库名称',
   `version` varchar(64) NOT NULL COMMENT '风格库版本',
@@ -1310,7 +1312,8 @@ CREATE TABLE `style_library` (
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_style_library_code` (`code`)
+  UNIQUE KEY `uk_style_library_code` (`code`),
+  KEY `idx_style_library_organizer` (`organizer_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=26 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='啤酒风格库表';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -1320,7 +1323,7 @@ CREATE TABLE `style_library` (
 
 LOCK TABLES `style_library` WRITE;
 /*!40000 ALTER TABLE `style_library` DISABLE KEYS */;
-INSERT INTO `style_library` VALUES (1,'BJCP_2021_CN','BJCP 2021 中文标准库','2021','中文','BJCP',1,'[\"报名必填\", \"支持搜索\", \"评审可见\"]','2026-06-02 19:16:27','2026-06-04 19:54:23'),(2,'CUSTOM_STANDARD','主办方标准风格库','2026A','中文','主办方',1,'[\"自定义分类\", \"报名可搜\", \"评审可见\"]','2026-06-02 19:16:27','2026-06-03 09:32:27'),(3,'BJCP_2021_EN','BJCP 2021 Beer Style Guidelines','2021','English','BJCP',1,'[\"Official directory\", \"English styles\", \"Competition-ready\"]','2026-06-02 19:16:27','2026-06-03 09:33:56'),(23,'BBC_2026_CN','布鲁塞尔挑战赛 2026 中文风格库','2026','中文','Brussels Beer Challenge',1,'[\"BBC 2026\", \"报名可搜\", \"评审可见\"]','2026-06-25 15:26:54','2026-06-25 15:26:54'),(24,'BJCP_2021_FULL_CN','BJCP 2021 中英风格库','2021','中文/English','BJCP',1,'[\"报名必填\", \"支持搜索\", \"评审可见\"]','2026-07-02 20:39:10','2026-07-02 20:39:10'),(25,'BJCP_BA_2026_CN','BJCP 2021 + BA 2026 中英风格库','2021+2026','中文/English','BJCP + Brewers Association',1,'[\"BJCP+BA\", \"报名必填\", \"支持搜索\", \"评审可见\"]','2026-07-02 20:39:11','2026-07-02 20:39:11');
+INSERT INTO `style_library` (`id`,`organizer_id`,`visibility`,`code`,`name`,`version`,`language`,`source`,`status`,`tags_json`,`create_time`,`update_time`) VALUES (1,1,'PUBLIC','BJCP_2021_CN','BJCP 2021 中文标准库','2021','中文','BJCP',1,'[\"报名必填\", \"支持搜索\", \"评审可见\"]','2026-06-02 19:16:27','2026-06-04 19:54:23'),(2,1,'PRIVATE','CUSTOM_STANDARD','主办方标准风格库','2026A','中文','主办方',1,'[\"自定义分类\", \"报名可搜\", \"评审可见\"]','2026-06-02 19:16:27','2026-06-03 09:32:27'),(3,1,'PUBLIC','BJCP_2021_EN','BJCP 2021 Beer Style Guidelines','2021','English','BJCP',1,'[\"Official directory\", \"English styles\", \"Competition-ready\"]','2026-06-02 19:16:27','2026-06-03 09:33:56'),(23,1,'PUBLIC','BBC_2026_CN','布鲁塞尔挑战赛 2026 中文风格库','2026','中文','Brussels Beer Challenge',1,'[\"BBC 2026\", \"报名可搜\", \"评审可见\"]','2026-06-25 15:26:54','2026-06-25 15:26:54'),(24,1,'PUBLIC','BJCP_2021_FULL_CN','BJCP 2021 中英风格库','2021','中文/English','BJCP',1,'[\"报名必填\", \"支持搜索\", \"评审可见\"]','2026-07-02 20:39:10','2026-07-02 20:39:10'),(25,1,'PUBLIC','BJCP_BA_2026_CN','BJCP 2021 + BA 2026 中英风格库','2021+2026','中文/English','BJCP + Brewers Association',1,'[\"BJCP+BA\", \"报名必填\", \"支持搜索\", \"评审可见\"]','2026-07-02 20:39:11','2026-07-02 20:39:11');
 /*!40000 ALTER TABLE `style_library` ENABLE KEYS */;
 UNLOCK TABLES;
 

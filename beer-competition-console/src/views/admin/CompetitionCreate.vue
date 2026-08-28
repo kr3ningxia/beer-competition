@@ -1,14 +1,13 @@
 ﻿<template>
   <div class="competition-create">
-    <section class="create-head">
-      <button class="breadcrumb-link" type="button" @click="leaveCreatePage">
-        <Back />
-        比赛管理
-      </button>
-      <div class="head-main">
-        <div>
-          <h1>新建比赛</h1>
-        </div>
+    <AdminPageHeader title="新建比赛">
+      <template #leading>
+        <button class="breadcrumb-link" type="button" @click="leaveCreatePage">
+          <Back />
+          比赛管理
+        </button>
+      </template>
+      <template #actions>
         <div class="head-actions">
           <button class="tool-button" type="button" @click="leaveCreatePage">取消</button>
           <button class="tool-button primary" type="button" @click="submitDraft">
@@ -16,8 +15,8 @@
             保存草稿
           </button>
         </div>
-      </div>
-    </section>
+      </template>
+    </AdminPageHeader>
 
     <nav class="anchor-bar" aria-label="新建比赛分区导航">
       <button :class="{ active: activeSection === 'base-info', issue: sectionIssueMap['base-info'] }" type="button" @click="scrollToSection('base-info')">基础信息</button>
@@ -505,6 +504,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Back, CircleCheck, Delete, Plus, Warning } from '@element-plus/icons-vue'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import {
   defaultScoreConfigs,
   formatDateTime,
@@ -513,7 +513,7 @@ import {
 } from './competitionStore'
 import {
   createCompetition,
-  fetchStyleLibraries,
+  fetchEnabledStyleLibraries,
 } from '@/api/admin'
 import { defaultStyleLibraryValue, fallbackStyleLibraries, formatStyleItemName, getStyleLibrary, normalizeStyleLibraries } from './styleLibraries'
 
@@ -788,7 +788,7 @@ onBeforeUnmount(() => {
 
 async function loadStyleLibraries() {
   try {
-    const data = await fetchStyleLibraries()
+    const data = await fetchEnabledStyleLibraries()
     styleLibraryOptions.value = normalizeStyleLibraries(data)
     if (!styleLibraryOptions.value.some((library) => library.value === draft.styleLibraryVersion)) {
       draft.styleLibraryVersion = styleLibraryOptions.value[0]?.value || defaultStyleLibraryValue
@@ -1127,7 +1127,7 @@ function buildReviewItems(source) {
   --orange: #f2994a;
   --red: #e05252;
   height: 100vh;
-  padding: 20px 28px;
+  padding: 0 28px 18px;
   color: var(--text);
   overflow: hidden;
   display: flex;
@@ -1139,6 +1139,10 @@ function buildReviewItems(source) {
     radial-gradient(circle at 16% 8%, rgba(216, 169, 53, 0.12), transparent 18rem),
     linear-gradient(135deg, #0d1418 0%, #111c20 50%, #0c1519 100%);
   background-size: 48px 48px, 48px 48px, auto, auto;
+}
+
+.competition-create > .admin-page-header {
+  width: min(100%, 1180px);
 }
 
 h1,
@@ -1169,7 +1173,6 @@ svg {
   height: 1em;
 }
 
-.create-head,
 .breadcrumb-link,
 .head-actions,
 .tool-button,
@@ -1181,31 +1184,10 @@ svg {
   align-items: center;
 }
 
-.create-head {
-  flex: 0 0 auto;
-  display: grid;
-  gap: 8px;
-  width: min(100%, 1180px);
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--line);
-}
-
-.head-main {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 18px;
-  align-items: center;
-}
-
 p,
 small,
 label span {
   color: var(--muted);
-}
-
-h1 {
-  font-size: 24px;
-  line-height: 1.15;
 }
 
 .tool-button,
@@ -2201,12 +2183,7 @@ textarea::placeholder {
 }
 
 @media (max-width: 720px) {
-  .create-head,
-  .head-main {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-  }
+  .competition-create > .admin-page-header { align-items: stretch; }
 }
 
 @media (max-width: 820px) {

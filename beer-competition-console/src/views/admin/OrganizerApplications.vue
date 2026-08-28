@@ -1,15 +1,12 @@
 <template>
   <div class="applications-page">
-    <header class="page-toolbar">
-      <div class="title-line">
-        <h1>主办方入驻</h1>
-        <span class="count-pill">{{ actionableCount }} 待处理</span>
-        <span class="total-count">{{ filteredApplications.length }} 条申请</span>
-      </div>
-      <button class="icon-button" type="button" aria-label="刷新申请列表" title="刷新申请列表" :disabled="loading" @click="loadApplications">
-        <Refresh :class="{ spinning: loading }" />
-      </button>
-    </header>
+    <AdminPageHeader title="主办方入驻">
+      <template #actions>
+        <button class="icon-button" type="button" aria-label="刷新申请列表" title="刷新申请列表" :disabled="loading" @click="loadApplications">
+          <Refresh :class="{ spinning: loading }" />
+        </button>
+      </template>
+    </AdminPageHeader>
 
     <section class="filter-bar">
       <label class="search-box">
@@ -78,7 +75,6 @@
           >
             <span class="organization-cell">
               <strong>{{ application.organizationName || '未填写主体名称' }}</strong>
-              <small>{{ application.applicationNo }}</small>
             </span>
             <span class="contact-cell">
               <strong>{{ application.contactName || '-' }}</strong>
@@ -86,7 +82,7 @@
             </span>
             <span :class="['status-badge', statusTone(application.status)]">
               <i></i>
-              {{ application.statusLabel || statusLabel(application.status) }}
+              {{ statusLabel(application.status) }}
             </span>
             <span class="time-cell">{{ formatTime(application.submittedTime) }}</span>
             <span class="account-cell">
@@ -124,7 +120,7 @@
             <div class="drawer-status-line">
               <span :class="['status-badge', statusTone(selectedApplication.status)]">
                 <i></i>
-                {{ selectedApplication.statusLabel || statusLabel(selectedApplication.status) }}
+                {{ statusLabel(selectedApplication.status) }}
               </span>
               <span v-if="selectedApplication.reviewedTime" class="muted-time">审核于 {{ formatTime(selectedApplication.reviewedTime) }}</span>
             </div>
@@ -136,7 +132,7 @@
               </div>
               <div class="detail-item">
                 <span>手机号</span>
-                <strong>{{ selectedApplication.maskedContactPhone || '-' }}</strong>
+                <strong>{{ selectedApplication.contactPhone || selectedApplication.maskedContactPhone || '-' }}</strong>
               </div>
               <div class="detail-item">
                 <span>邮箱</span>
@@ -144,7 +140,7 @@
               </div>
               <div class="detail-item">
                 <span>微信号</span>
-                <strong>{{ selectedApplication.maskedWechat || '-' }}</strong>
+                <strong>{{ selectedApplication.wechat || selectedApplication.maskedWechat || '-' }}</strong>
               </div>
               <div class="detail-item">
                 <span>预计规模</span>
@@ -163,11 +159,14 @@
 
             <div class="detail-material">
               <span>主体证明材料</span>
-              <button v-if="selectedApplication.materialAssetId" class="material-link" type="button" :disabled="materialLoading" @click="downloadMaterial">
-                <Loading v-if="materialLoading" class="spinning" />
-                <Download v-else />
-                {{ materialLoading ? '读取中' : '下载材料' }}
-              </button>
+              <div v-if="selectedApplication.materialAssetId" class="material-actions">
+                <span class="material-name">{{ selectedApplication.materialFileName || '已上传材料' }}</span>
+                <button class="material-link" type="button" :disabled="materialLoading" @click="downloadMaterial">
+                  <Loading v-if="materialLoading" class="spinning" />
+                  <Download v-else />
+                  {{ materialLoading ? '读取中' : '下载材料' }}
+                </button>
+              </div>
               <em v-else>未上传</em>
             </div>
 
@@ -196,11 +195,7 @@
 
           <footer v-if="selectedApplication" class="drawer-actions">
             <template v-if="!reviewAction">
-              <button v-if="selectedApplication.status === 'SUBMITTED' || selectedApplication.status === 'NEED_MORE_INFO'" class="ghost-button" type="button" :disabled="actionLoading" @click="submitReviewAction('UNDER_REVIEW')">
-                <Loading v-if="actionLoading" class="spinning" />
-                进入审核
-              </button>
-              <template v-if="selectedApplication.status === 'UNDER_REVIEW'">
+              <template v-if="['SUBMITTED', 'NEED_MORE_INFO', 'UNDER_REVIEW'].includes(selectedApplication.status)">
                 <button class="ghost-button warning" type="button" :disabled="actionLoading" @click="reviewAction = 'NEED_MORE_INFO'">退回补充</button>
                 <button class="ghost-button danger" type="button" :disabled="actionLoading" @click="reviewAction = 'REJECTED'">拒绝申请</button>
                 <button class="primary-button" type="button" :disabled="actionLoading" @click="approveApplication">审核通过</button>
@@ -251,8 +246,9 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import {
   ArrowRight,
   Check,
@@ -293,7 +289,6 @@ const credentialData = ref(null)
 const statusFilters = [
   { label: '全部', value: 'ALL' },
   { label: '待处理', value: 'SUBMITTED' },
-  { label: '审核中', value: 'UNDER_REVIEW' },
   { label: '待补资料', value: 'NEED_MORE_INFO' },
   { label: '待发放', value: 'APPROVED' },
   { label: '已开通', value: 'ACCOUNT_ISSUED' },
@@ -315,8 +310,6 @@ const statusCounts = computed(() => applications.value.reduce((counts, item) => 
   counts[item.status] = (counts[item.status] || 0) + 1
   return counts
 }, {}))
-
-const actionableCount = computed(() => applications.value.filter((item) => ['SUBMITTED', 'UNDER_REVIEW', 'NEED_MORE_INFO', 'APPROVED'].includes(item.status)).length)
 
 onMounted(loadApplications)
 
@@ -381,7 +374,7 @@ async function submitReviewAction(explicitStatus) {
       remark: reviewRemark.value.trim() || undefined,
     })
     replaceApplication(updated)
-    ElMessage.success(status === 'UNDER_REVIEW' ? '已进入审核' : statusLabel(status))
+    ElMessage.success(statusLabel(status))
     cancelReview()
   } finally {
     actionLoading.value = false
@@ -427,7 +420,8 @@ async function downloadMaterial() {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `${selectedApplication.value.applicationNo || 'organizer-application'}-material`
+    link.download = selectedApplication.value.materialFileName
+      || `${selectedApplication.value.applicationNo || 'organizer-application'}-material`
     document.body.appendChild(link)
     link.click()
     link.remove()
@@ -473,8 +467,7 @@ function closeCredential() {
 }
 
 function actionLabel(application) {
-  if (application.status === 'SUBMITTED' || application.status === 'NEED_MORE_INFO') return '开始审核'
-  if (application.status === 'UNDER_REVIEW') return '继续处理'
+  if (application.status === 'SUBMITTED' || application.status === 'NEED_MORE_INFO' || application.status === 'UNDER_REVIEW') return '处理申请'
   if (application.status === 'APPROVED') return '发放账号'
   return '查看详情'
 }
@@ -482,7 +475,7 @@ function actionLabel(application) {
 function statusLabel(status) {
   return {
     SUBMITTED: '待处理',
-    UNDER_REVIEW: '审核中',
+    UNDER_REVIEW: '待处理',
     NEED_MORE_INFO: '待补充资料',
     APPROVED: '待发放账号',
     ACCOUNT_ISSUED: '账号已发放',
@@ -493,7 +486,7 @@ function statusLabel(status) {
 function statusTone(status) {
   return {
     SUBMITTED: 'pending',
-    UNDER_REVIEW: 'reviewing',
+    UNDER_REVIEW: 'pending',
     NEED_MORE_INFO: 'warning',
     APPROVED: 'approved',
     ACCOUNT_ISSUED: 'issued',
@@ -527,7 +520,7 @@ function formatTime(value) {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 25px 28px 27px;
+  padding: 0 28px 18px;
   overflow: hidden;
   color: var(--text);
   background:
@@ -564,8 +557,6 @@ svg {
   height: 1em;
 }
 
-.page-toolbar,
-.title-line,
 .filter-bar,
 .search-box,
 .filter-tabs,
@@ -585,26 +576,6 @@ svg {
 .credential-issued {
   display: flex;
   align-items: center;
-}
-
-.page-toolbar {
-  flex: 0 0 auto;
-  justify-content: space-between;
-  gap: 18px;
-  min-height: 44px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid var(--line);
-}
-
-.title-line {
-  gap: 12px;
-  min-width: 0;
-}
-
-.title-line h1 {
-  color: #f1f6f7;
-  font-size: 28px;
-  line-height: 1.15;
 }
 
 .count-pill,
@@ -1205,6 +1176,23 @@ svg {
   gap: 18px;
 }
 
+.material-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  min-width: 0;
+}
+
+.material-name {
+  overflow: hidden;
+  max-width: 220px;
+  color: #c8d5d9;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .detail-material em {
   color: var(--faint);
   font-size: 12px;
@@ -1625,21 +1613,7 @@ svg {
 
 @media (max-width: 560px) {
   .applications-page {
-    padding: 16px 12px 18px;
-  }
-
-  .page-toolbar {
-    padding-bottom: 15px;
-  }
-
-  .title-line {
-    flex-wrap: wrap;
-    gap: 7px 9px;
-  }
-
-  .title-line h1 {
-    width: 100%;
-    font-size: 24px;
+    padding: 0 12px 18px;
   }
 
   .filter-tabs {

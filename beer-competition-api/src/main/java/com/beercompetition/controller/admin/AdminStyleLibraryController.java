@@ -2,6 +2,7 @@ package com.beercompetition.controller.admin;
 
 import com.beercompetition.common.result.Result;
 import com.beercompetition.pojo.dto.StyleLibraryUpsertRequest;
+import com.beercompetition.pojo.dto.StyleLibraryVisibilityRequest;
 import com.beercompetition.pojo.vo.StyleLibraryVO;
 import com.beercompetition.service.StyleLibraryService;
 import jakarta.validation.Valid;
@@ -9,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -35,6 +37,14 @@ public class AdminStyleLibraryController {
     }
 
     /**
+     * 查询创建比赛时可引用的启用风格库。
+     */
+    @GetMapping("/enabled")
+    public Result<List<StyleLibraryVO>> enabledStyleLibraries() {
+        return Result.success(styleLibraryService.listEnabledLibraries());
+    }
+
+    /**
      * 查询单个风格库详情。
      */
     @GetMapping("/{code}")
@@ -58,5 +68,12 @@ public class AdminStyleLibraryController {
                                                      @RequestBody @Valid StyleLibraryUpsertRequest request) {
         request.setCode(code);
         return Result.success(styleLibraryService.saveLibrary(request));
+    }
+
+    /** 设置平台风格库的公共/内部可见范围。 */
+    @PatchMapping("/{code}/visibility")
+    public Result<StyleLibraryVO> updateVisibility(@PathVariable String code,
+                                                   @RequestBody @Valid StyleLibraryVisibilityRequest request) {
+        return Result.success(styleLibraryService.setVisibility(code, request.getVisibility()));
     }
 }

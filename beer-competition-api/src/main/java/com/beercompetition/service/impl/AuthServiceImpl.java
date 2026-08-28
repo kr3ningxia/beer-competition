@@ -14,6 +14,7 @@ import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.JudgeAccountMapper;
 import com.beercompetition.mapper.JudgeAssignmentMapper;
 import com.beercompetition.mapper.JudgeTableMapper;
+import com.beercompetition.mapper.OrganizerMapper;
 import com.beercompetition.mapper.PortalAccountMapper;
 import com.beercompetition.mapper.CompetitionRoundMapper;
 import com.beercompetition.mapper.RoundTableMapper;
@@ -36,6 +37,7 @@ import com.beercompetition.pojo.po.CompetitionRound;
 import com.beercompetition.pojo.po.JudgeAccount;
 import com.beercompetition.pojo.po.JudgeAssignment;
 import com.beercompetition.pojo.po.JudgeTable;
+import com.beercompetition.pojo.po.Organizer;
 import com.beercompetition.pojo.po.PortalAccount;
 import com.beercompetition.pojo.po.RoundTable;
 import com.beercompetition.pojo.po.RoundTableMember;
@@ -93,6 +95,7 @@ public class AuthServiceImpl implements AuthService {
     private final CompetitionRoundMapper competitionRoundMapper;
     private final RoundTableMapper roundTableMapper;
     private final RoundTableMemberMapper roundTableMemberMapper;
+    private final OrganizerMapper organizerMapper;
     private final SmsCodeLogMapper smsCodeLogMapper;
     private final RedisTemplate<String, Object> redisTemplate;
     private final JwtProperties jwtProperties;
@@ -305,6 +308,9 @@ public class AuthServiceImpl implements AuthService {
                     throw new BaseException("管理员账号已停用，请重新登录");
                 }
                 AdminSessionIdentity identity = adminIdentityService.resolve(adminUser);
+                Organizer organizer = identity.organizerId() == null
+                        ? null
+                        : organizerMapper.selectById(identity.organizerId());
                 yield CurrentUserResponse.builder()
                         .userId(adminUser.getId())
                         .role(role.name())
@@ -312,6 +318,7 @@ public class AuthServiceImpl implements AuthService {
                         .displayName(adminUser.getName())
                         .adminType(identity.adminType().name())
                         .organizerId(identity.organizerId())
+                        .organizerName(organizer == null ? null : organizer.getName())
                         .mustChangePassword(identity.mustChangePassword())
                         .mustChangeUsername(identity.mustChangeUsername())
                         .build();

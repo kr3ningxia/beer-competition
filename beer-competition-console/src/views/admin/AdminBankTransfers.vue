@@ -1,11 +1,7 @@
 ﻿<template>
   <div class="bank-transfer-page">
-    <section class="page-head">
-      <div>
-        <span>财务确认</span>
-        <h1>转账确认</h1>
-      </div>
-      <div class="head-actions">
+    <AdminPageHeader title="转账确认">
+      <template #actions>
         <button class="tool-button" type="button" @click="resetFilters">
           <RefreshLeft />
           重置筛选
@@ -14,8 +10,8 @@
           <Refresh />
           刷新
         </button>
-      </div>
-    </section>
+      </template>
+    </AdminPageHeader>
 
     <section class="filter-panel">
       <label class="field search-field">
@@ -187,6 +183,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import { Refresh, RefreshLeft, Search } from '@element-plus/icons-vue'
 import {
   confirmAdminBankTransfer,
@@ -495,7 +492,7 @@ function entryDescription(entry) {
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  padding: 28px 28px 18px;
+  padding: 0 28px 18px;
   overflow: hidden;
   color: #e9f2f5;
   background:
@@ -505,31 +502,9 @@ function entryDescription(entry) {
   background-size: 68px 68px;
 }
 
-.page-head,
 .filter-panel,
 .table-card {
   width: 100%;
-}
-
-.page-head {
-  flex: 0 0 auto;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-bottom: 20px;
-  border-bottom: 1px solid rgba(218, 232, 237, 0.1);
-}
-
-.page-head span {
-  color: #d8ae3f;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.page-head h1 {
-  margin: 5px 0 0;
-  font-size: 30px;
-  line-height: 1.12;
 }
 
 .head-actions,

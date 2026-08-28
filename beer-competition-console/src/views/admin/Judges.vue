@@ -1,16 +1,13 @@
 <template>
   <div class="judges-page">
-    <section class="page-head">
-      <div>
-        <h1>评审列表</h1>
-      </div>
-      <div class="head-actions">
+    <AdminPageHeader title="评审列表">
+      <template #actions>
         <button class="tool-button" type="button" @click="loadJudges">
           <Refresh />
           刷新名单
         </button>
-      </div>
-    </section>
+      </template>
+    </AdminPageHeader>
 
     <section class="toolbar">
       <label class="search-box">
@@ -239,6 +236,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import { Refresh, Search } from '@element-plus/icons-vue'
 import { deleteJudge, fetchJudgeDetail, fetchJudgesPage, updateJudge, updateJudgePhone, updateJudgeStatus } from '@/api/admin'
 
@@ -512,7 +510,7 @@ async function savePhoneEditor() {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 28px;
+  padding: 0 28px 18px;
   color: var(--text);
   background:
     linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
@@ -543,7 +541,6 @@ svg {
   height: 1em;
 }
 
-.page-head,
 .head-actions,
 .tool-button,
 .toolbar,
@@ -554,19 +551,6 @@ svg {
 .row-action {
   display: flex;
   align-items: center;
-}
-
-.page-head {
-  flex: 0 0 auto;
-  justify-content: space-between;
-  gap: 20px;
-  padding-bottom: 24px;
-  border-bottom: 1px solid var(--line);
-}
-
-.page-head h1 {
-  font-size: 30px;
-  line-height: 1.1;
 }
 
 .head-actions {
@@ -1144,10 +1128,9 @@ svg {
 
 @media (max-width: 980px) {
   .judges-page {
-    padding: 22px 16px;
+    padding: 0 16px 16px;
   }
 
-  .page-head,
   .toolbar {
     align-items: stretch;
     flex-direction: column;

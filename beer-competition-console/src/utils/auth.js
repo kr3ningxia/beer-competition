@@ -17,6 +17,8 @@ const USERNAME_KEYS = {
 
 const ADMIN_TYPE_KEY = 'admin_type'
 const ADMIN_USERNAME_KEY = 'admin_username'
+const ADMIN_ORGANIZER_ID_KEY = 'admin_organizer_id'
+const ADMIN_ORGANIZER_NAME_KEY = 'admin_organizer_name'
 const ADMIN_MUST_CHANGE_PASSWORD_KEY = 'admin_must_change_password'
 const ADMIN_MUST_CHANGE_USERNAME_KEY = 'admin_must_change_username'
 
@@ -45,6 +47,12 @@ export function setSession(scope, session, displayName) {
     localStorage.setItem(ADMIN_TYPE_KEY, session.adminType)
   }
   if (scope === 'admin' && typeof session !== 'string') {
+    if (Object.prototype.hasOwnProperty.call(session, 'organizerId')) {
+      setOptionalValue(ADMIN_ORGANIZER_ID_KEY, session.organizerId)
+    }
+    if (Object.prototype.hasOwnProperty.call(session, 'organizerName')) {
+      setOptionalValue(ADMIN_ORGANIZER_NAME_KEY, session.organizerName)
+    }
     if (Object.prototype.hasOwnProperty.call(session, 'username') && session.username != null) {
       localStorage.setItem(ADMIN_USERNAME_KEY, session.username)
     }
@@ -86,6 +94,8 @@ export function clearSession(scope) {
   if (scope === 'admin') {
     localStorage.removeItem(ADMIN_TYPE_KEY)
     localStorage.removeItem(ADMIN_USERNAME_KEY)
+    localStorage.removeItem(ADMIN_ORGANIZER_ID_KEY)
+    localStorage.removeItem(ADMIN_ORGANIZER_NAME_KEY)
     localStorage.removeItem(ADMIN_MUST_CHANGE_PASSWORD_KEY)
     localStorage.removeItem(ADMIN_MUST_CHANGE_USERNAME_KEY)
   }
@@ -99,20 +109,43 @@ export function isLoggedIn(scope) {
 }
 
 export function getDisplayName(scope) {
+  sessionRevision.value
   return localStorage.getItem(USERNAME_KEYS[scope]) || ''
 }
 
 export function getAdminType() {
+  sessionRevision.value
   return localStorage.getItem(ADMIN_TYPE_KEY) || ''
 }
 
 export function getAdminUsername() {
+  sessionRevision.value
   return localStorage.getItem(ADMIN_USERNAME_KEY) || ''
 }
 
+export function getAdminOrganizerId() {
+  sessionRevision.value
+  const value = localStorage.getItem(ADMIN_ORGANIZER_ID_KEY)
+  return value ? Number(value) : null
+}
+
+export function getAdminOrganizerName() {
+  sessionRevision.value
+  return localStorage.getItem(ADMIN_ORGANIZER_NAME_KEY) || ''
+}
+
 export function isAdminCredentialSetupRequired() {
+  sessionRevision.value
   return localStorage.getItem(ADMIN_MUST_CHANGE_PASSWORD_KEY) === '1'
     || localStorage.getItem(ADMIN_MUST_CHANGE_USERNAME_KEY) === '1'
+}
+
+function setOptionalValue(key, value) {
+  if (value === undefined || value === null || value === '') {
+    localStorage.removeItem(key)
+    return
+  }
+  localStorage.setItem(key, String(value))
 }
 
 function isTokenUsable(token, scope) {

@@ -1,11 +1,7 @@
 ﻿<template>
   <div class="admin-exports-page">
-    <section class="page-head">
-      <div>
-        <span>运营文件</span>
-        <h1>导出中心</h1>
-      </div>
-      <div class="head-actions">
+    <AdminPageHeader title="数据导出">
+      <template #actions>
         <button class="tool-button" type="button" @click="resetFilters">
           <RefreshLeft />
           重置筛选
@@ -14,8 +10,8 @@
           <Refresh />
           刷新数量
         </button>
-      </div>
-    </section>
+      </template>
+    </AdminPageHeader>
 
     <section class="filter-panel">
       <label class="field competition-field">
@@ -132,6 +128,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import {
   Box,
   DataAnalysis,
@@ -393,7 +390,7 @@ function statusLabel(status) {
   display: flex;
   flex-direction: column;
   min-height: 100%;
-  padding: 28px;
+  padding: 0 28px 18px;
   color: var(--text);
   background:
     linear-gradient(rgba(218, 232, 237, 0.035) 1px, transparent 1px),
@@ -403,7 +400,6 @@ function statusLabel(status) {
   background-size: 68px 68px, 68px 68px, auto, auto;
 }
 
-.page-head,
 .head-actions,
 .filter-panel,
 .summary-strip,
@@ -413,14 +409,6 @@ function statusLabel(status) {
   align-items: center;
 }
 
-.page-head {
-  justify-content: space-between;
-  gap: 18px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid var(--line);
-}
-
-.page-head span,
 .template-facts dt,
 .field span,
 .card-head small,
@@ -430,21 +418,11 @@ function statusLabel(status) {
   font-weight: 800;
 }
 
-.page-head > div:first-child span {
-  color: var(--gold);
-}
-
 h1,
 h2,
 p,
 dl {
   margin: 0;
-}
-
-h1 {
-  margin-top: 5px;
-  font-size: 30px;
-  line-height: 1.1;
 }
 
 button,
@@ -691,18 +669,13 @@ svg {
 
 @media (max-width: 900px) {
   .admin-exports-page {
-    padding: 18px;
+    padding: 0 18px 18px;
   }
 
-  .page-head,
   .summary-strip,
   .filter-panel,
   .export-grid {
     grid-template-columns: 1fr;
-  }
-
-  .page-head {
-    align-items: stretch;
   }
 
   .head-actions {

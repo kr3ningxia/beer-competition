@@ -19,6 +19,8 @@ public class StyleLibrary {
 
     @TableId(type = IdType.AUTO)
     private Long id;
+    private Long organizerId;
+    private String visibility;
     private String code;
     private String name;
     private String version;

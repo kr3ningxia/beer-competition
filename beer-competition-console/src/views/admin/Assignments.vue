@@ -1,16 +1,13 @@
 <template>
   <div class="assignment-entry-page">
-    <section class="page-head">
-      <div>
-        <small>评审编排入口</small>
-        <h1>选择比赛后编排评审</h1>
-        <p>进入比赛后，把评审和酒款安排到对应桌</p>
-      </div>
-      <button class="tool-button" type="button" @click="loadCompetitions">
-        <Refresh />
-        刷新比赛
-      </button>
-    </section>
+    <AdminPageHeader title="评审编排">
+      <template #actions>
+        <button class="tool-button" type="button" @click="loadCompetitions">
+          <Refresh />
+          刷新比赛
+        </button>
+      </template>
+    </AdminPageHeader>
 
     <section class="toolbar">
       <label class="search-box">
@@ -71,6 +68,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Connection, Refresh, Search } from '@element-plus/icons-vue'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import { fetchCompetitions } from '@/api/admin'
 import { formatDate, statusMeta } from './competitionStore'
 
@@ -126,7 +124,7 @@ function openWorkbench(id) {
   --gold-soft: #e0b84a;
   --green: #6fcf7a;
   min-height: 100vh;
-  padding: 28px;
+  padding: 0 28px 18px;
   color: var(--text);
   background:
     linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
@@ -158,7 +156,6 @@ svg {
   height: 1em;
 }
 
-.page-head,
 .toolbar,
 .search-box,
 .filter-tabs,
@@ -167,26 +164,6 @@ svg {
   align-items: center;
 }
 
-.page-head {
-  justify-content: space-between;
-  gap: 20px;
-  padding-bottom: 24px;
-  border-bottom: 1px solid var(--line);
-}
-
-.page-head small {
-  color: var(--gold-soft);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.page-head h1 {
-  margin-top: 7px;
-  font-size: 30px;
-  line-height: 1.1;
-}
-
-.page-head p,
 .competition-card p,
 dt,
 .empty-state p {
@@ -361,10 +338,9 @@ dd {
 
 @media (max-width: 980px) {
   .assignment-entry-page {
-    padding: 22px 16px;
+    padding: 0 16px 16px;
   }
 
-  .page-head,
   .toolbar {
     align-items: stretch;
     flex-direction: column;

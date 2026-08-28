@@ -1,28 +1,22 @@
 <template>
   <div class="competition-ledger">
-    <section class="page-head">
-      <div>
-        <h1>比赛管理</h1>
-      </div>
-
-      <button v-if="focusCompetition" class="focus-brief" type="button" @click="openQuickView(focusCompetition)">
-        <span>当前重点</span>
-        <strong>{{ focusCompetition.name }}</strong>
-        <em>{{ statusMeta[focusCompetition.status].label }}</em>
-        <small>{{ focusCompetition.dataIntegrityIssues.length ? '数据需修正' : `${focusCompetition.alerts.length || '无'} 项待处理` }} · {{ getNextAction(focusCompetition) }}</small>
-      </button>
-
-      <div class="head-actions">
-        <button class="tool-button" type="button" @click="exportLedger">
-          <Download />
-          导出筛选
+    <AdminPageHeader title="比赛管理">
+      <template #actions>
+        <button v-if="focusCompetition" class="focus-brief" type="button" @click="openQuickView(focusCompetition)">
+          <span>当前重点</span>
+          <strong>{{ focusCompetition.name }}</strong>
+          <em>{{ statusMeta[focusCompetition.status].label }}</em>
+          <small>{{ focusCompetition.dataIntegrityIssues.length ? '数据需修正' : `${focusCompetition.alerts.length || '无'} 项待处理` }} · {{ getNextAction(focusCompetition) }}</small>
         </button>
-        <button class="tool-button primary" type="button" @click="router.push('/admin/competitions/new')">
-          <Plus />
-          新建比赛
-        </button>
-      </div>
-    </section>
+
+        <div class="head-actions">
+          <button class="tool-button primary" type="button" @click="router.push('/admin/competitions/new')">
+            <Plus />
+            新建比赛
+          </button>
+        </div>
+      </template>
+    </AdminPageHeader>
 
     <section class="filter-bar">
       <label class="search-field">
@@ -196,11 +190,11 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import {
   CircleCheck,
   Clock,
   Close,
-  Download,
   Plus,
   Right,
   Search,
@@ -354,11 +348,6 @@ function getConfigHint(competition) {
   return '待确认'
 }
 
-function exportLedger() {
-  const query = focusCompetition.value?.id ? { competitionId: focusCompetition.value.id } : {}
-  router.push({ path: '/admin/exports', query })
-}
-
 function getReadyCount(competition) {
   return Number(competition.readyCount || 0)
 }
@@ -395,7 +384,7 @@ function formatDateTime(value) {
   --red: #e05252;
   position: relative;
   height: 100vh;
-  padding: 26px 28px;
+  padding: 0 28px 18px;
   color: var(--text);
   overflow: hidden;
   display: flex;
@@ -422,15 +411,6 @@ function formatDateTime(value) {
   z-index: 1;
 }
 
-.page-head {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 22px;
-  align-items: center;
-  padding-bottom: 22px;
-  border-bottom: 1px solid var(--line);
-}
-
 p,
 small,
 .ledger-row,
@@ -445,11 +425,6 @@ h2,
 h3,
 p {
   margin: 0;
-}
-
-h1 {
-  font-size: 28px;
-  line-height: 1.1;
 }
 
 button,
@@ -896,11 +871,10 @@ svg {
   .competition-ledger {
     height: auto;
     min-height: 100vh;
-    padding: 18px;
+    padding: 0 18px 18px;
     overflow: visible;
   }
 
-  .page-head,
   .filter-bar {
     display: flex;
     flex-direction: column;

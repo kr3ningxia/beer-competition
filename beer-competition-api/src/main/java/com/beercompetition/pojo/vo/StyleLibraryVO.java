@@ -11,6 +11,11 @@ import java.util.List;
 public class StyleLibraryVO {
 
     private Long id;
+    private Long organizerId;
+    private String visibility;
+    private String visibilityLabel;
+    private Boolean canEdit;
+    private Boolean canPublish;
     private String value;
     private String label;
     private String code;

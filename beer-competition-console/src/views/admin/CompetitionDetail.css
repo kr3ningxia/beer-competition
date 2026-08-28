@@ -13,7 +13,7 @@
   width: 100%;
   min-width: 0;
   height: 100vh;
-  padding: 26px 28px;
+  padding: 0 28px 18px;
   color: var(--text);
   overflow: hidden;
   display: flex;
@@ -57,7 +57,6 @@ svg {
   height: 1em;
 }
 
-.detail-head,
 .breadcrumb-link,
 .tool-button,
 .head-action-group,
@@ -72,34 +71,6 @@ svg {
 .edit-banner {
   display: flex;
   align-items: center;
-}
-
-.detail-head {
-  flex: 0 0 auto;
-  display: grid;
-  gap: 12px;
-  padding-bottom: 22px;
-  border-bottom: 1px solid var(--line);
-}
-
-.head-main {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 18px;
-  align-items: start;
-}
-
-.title-line {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 9px;
-  align-items: baseline;
-  min-width: 0;
-}
-
-.title-line h1 {
-  font-size: 28px;
-  line-height: 1.15;
 }
 
 .meta-line {
@@ -5132,11 +5103,10 @@ button.pyramid-placeholder-mark {
 
 @media (max-width: 1100px) {
   .competition-detail {
-    padding: 18px;
+    padding: 0 18px 18px;
     overflow: auto;
   }
 
-  .head-main,
   .detail-tabbar,
   .two-column,
   .judge-workbench,

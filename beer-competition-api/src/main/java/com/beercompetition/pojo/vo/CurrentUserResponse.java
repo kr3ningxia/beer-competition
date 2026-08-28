@@ -13,6 +13,7 @@ public class CurrentUserResponse {
     private String displayName;
     private String adminType;
     private Long organizerId;
+    private String organizerName;
     private Boolean mustChangePassword;
     private Boolean mustChangeUsername;
     private String phone;

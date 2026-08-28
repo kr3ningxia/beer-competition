@@ -1,10 +1,7 @@
 <template>
-  <div :class="['admin-users-page', { 'setup-mode': setupMode }]">
-    <section v-if="!setupMode" class="page-head">
-      <div>
-        <h1>管理员账号</h1>
-      </div>
-      <div class="head-actions">
+  <div :class="['admin-users-page', { 'setup-mode': setupMode, 'account-only': accountOnly }]">
+    <AdminPageHeader v-if="!setupMode" :title="accountOnly ? '账号设置' : '管理员账号'">
+      <template v-if="!accountOnly" #actions>
         <button class="tool-button" type="button" @click="toggleMyAccount">
           <Key />
           我的账号
@@ -13,14 +10,14 @@
           <Plus />
           新增管理员
         </button>
-      </div>
-    </section>
+      </template>
+    </AdminPageHeader>
 
     <section :class="['my-account-panel', { expanded: myAccountExpanded, required: setupMode }]">
-      <button class="my-account-toggle" type="button" :aria-expanded="myAccountExpanded" :disabled="setupMode" @click="toggleMyAccount">
+      <button class="my-account-toggle" type="button" :aria-expanded="myAccountExpanded" :disabled="setupMode || accountOnly" @click="toggleMyAccount">
         <span class="my-account-icon"><UserFilled /></span>
         <span class="my-account-copy">
-          <strong>{{ setupMode ? '设置登录账号与密码' : '我的账号设置' }}</strong>
+          <strong>{{ setupMode ? '设置登录账号与密码' : '登录账号与密码' }}</strong>
           <small v-if="!setupMode">{{ `${currentUser.username || '当前账号'} · ${currentUser.displayName || '管理员'}` }}</small>
         </span>
         <ArrowDown v-if="!setupMode" :class="['toggle-arrow', { rotated: myAccountExpanded }]" />
@@ -51,7 +48,7 @@
       </div>
     </section>
 
-    <template v-if="!setupMode">
+    <template v-if="!setupMode && !accountOnly">
     <section class="toolbar">
       <label class="search-box">
         <Search />
@@ -92,7 +89,6 @@
         <div class="table-body">
           <div v-for="item in users" :key="item.id" :class="['table-row', { current: item.currentUser }]">
             <div class="admin-cell">
-              <span class="avatar">{{ getInitial(item.name) }}</span>
               <div>
                 <strong>{{ item.name || '未命名管理员' }}</strong>
                 <small>{{ item.currentUser ? '当前登录账号' : '组委会后台账号' }}</small>
@@ -196,6 +192,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, Key, Plus, Search, UserFilled } from '@element-plus/icons-vue'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import {
   createAdminUser,
   fetchAdminUsers,
@@ -224,7 +221,8 @@ const passwordMode = ref('reset')
 const passwordTarget = ref(null)
 const myAccountExpanded = ref(false)
 const credentialSaving = ref(false)
-const setupMode = computed(() => isAdminCredentialSetupRequired())
+const setupMode = computed(() => route.path === '/admin/account-setup' && isAdminCredentialSetupRequired())
+const accountOnly = computed(() => route.path === '/admin/account')
 const currentUser = reactive({ username: getAdminUsername(), displayName: getDisplayName('admin') })
 
 const credentialForm = reactive({
@@ -266,10 +264,14 @@ if (route.query.keyword) {
 onMounted(initializePage)
 
 watch(setupMode, (required) => {
-  myAccountExpanded.value = required || myAccountExpanded.value
+  myAccountExpanded.value = required || accountOnly.value || myAccountExpanded.value
   if (required) {
     users.value = []
   }
+})
+
+watch(() => route.path, () => {
+  myAccountExpanded.value = setupMode.value || accountOnly.value
 })
 
 async function initializePage() {
@@ -282,8 +284,8 @@ async function initializePage() {
   } catch {
     return
   }
-  myAccountExpanded.value = setupMode.value
-  if (setupMode.value) {
+  myAccountExpanded.value = setupMode.value || accountOnly.value
+  if (setupMode.value || accountOnly.value) {
     return
   }
   await loadUsers()
@@ -406,7 +408,7 @@ function openMyPasswordEditor() {
 }
 
 function toggleMyAccount() {
-  if (setupMode.value) return
+  if (setupMode.value || accountOnly.value) return
   myAccountExpanded.value = !myAccountExpanded.value
 }
 
@@ -502,10 +504,6 @@ async function savePassword() {
   }
 }
 
-function getInitial(name) {
-  return name?.trim()?.slice(0, 1) || '管'
-}
-
 function statusLabel(status) {
   return Number(status) === 1 ? '启用' : '停用'
 }
@@ -540,7 +538,7 @@ function formatTime(value) {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 28px;
+  padding: 0 28px 18px;
   color: var(--text);
   background:
     linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
@@ -576,7 +574,6 @@ svg {
   height: 1em;
 }
 
-.page-head,
 .head-actions,
 .tool-button,
 .toolbar,
@@ -589,37 +586,24 @@ svg {
   align-items: center;
 }
 
-.page-head {
-  flex: 0 0 auto;
-  justify-content: space-between;
-  gap: 20px;
-  padding-bottom: 24px;
-  border-bottom: 1px solid var(--line);
-}
-
-.page-head h1 {
-  margin-top: 8px;
-  font-size: 30px;
-  line-height: 1.1;
-}
-
 .admin-users-page.setup-mode {
   align-items: center;
   justify-content: center;
   padding: 32px 24px;
 }
 
-.setup-mode .page-head {
-  justify-content: center;
-  width: min(100%, 480px);
-  padding-bottom: 0;
-  border-bottom: 0;
-  text-align: center;
+.admin-users-page.account-only {
+  align-items: center;
+  padding-top: 48px;
 }
 
-.setup-mode .page-head h1 {
-  margin-top: 0;
-  font-size: 28px;
+.account-only .admin-page-header,
+.account-only .my-account-panel {
+  width: min(100%, 720px);
+}
+
+.account-only .my-account-panel {
+  margin-top: 18px;
 }
 
 .head-actions {
@@ -921,7 +905,7 @@ svg {
 .table-head,
 .table-row {
   display: grid;
-  grid-template-columns: minmax(220px, 1.2fr) minmax(180px, 0.9fr) 88px minmax(150px, 0.8fr) minmax(150px, 0.8fr) minmax(290px, auto);
+  grid-template-columns: minmax(190px, 1fr) minmax(155px, 0.9fr) 96px minmax(165px, 0.9fr) minmax(165px, 0.9fr) minmax(286px, auto);
   gap: 12px;
   align-items: center;
 }
@@ -951,7 +935,6 @@ svg {
 }
 
 .admin-cell {
-  gap: 12px;
   min-width: 0;
 }
 
@@ -964,19 +947,6 @@ svg {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.avatar {
-  display: grid;
-  flex: 0 0 auto;
-  place-items: center;
-  width: 38px;
-  height: 38px;
-  color: var(--gold-soft);
-  font-weight: 850;
-  border: 1px solid rgba(216, 169, 53, 0.26);
-  border-radius: 8px;
-  background: rgba(216, 169, 53, 0.09);
 }
 
 .status-badge {
@@ -1133,17 +1103,12 @@ svg {
 
 @media (max-width: 980px) {
   .admin-users-page {
-    padding: 22px 16px;
+    padding: 0 16px 16px;
   }
 
-  .page-head,
   .toolbar {
     align-items: stretch;
     flex-direction: column;
-  }
-
-  .setup-mode .page-head {
-    align-items: center;
   }
 
   .head-actions {
