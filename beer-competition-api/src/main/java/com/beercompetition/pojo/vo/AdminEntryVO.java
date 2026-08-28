@@ -32,6 +32,7 @@ public class AdminEntryVO {
     private BigDecimal abv;
     private String status;
     private String paymentStatus;
+    private String payMethod;
     private String refundStatus;
     private String refundReason;
     private LocalDateTime refundRequestedAt;

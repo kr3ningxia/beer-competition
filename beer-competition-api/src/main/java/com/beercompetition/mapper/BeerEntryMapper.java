@@ -35,6 +35,7 @@ public interface BeerEntryMapper extends BaseMapper<BeerEntry> {
                      WHEN e.status IN ('REGISTERED', 'STORED', 'RESULT_PUBLISHED') THEN 'PAID'
                      ELSE 'UNPAID'
                    END AS payment_status,
+                   ep.pay_method AS pay_method,
                    er.status AS refund_status,
                    er.reason AS refund_reason,
                    er.requested_time AS refund_requested_at,
@@ -54,11 +55,12 @@ public interface BeerEntryMapper extends BaseMapper<BeerEntry> {
                             COALESCE(ed.update_time, e.update_time),
                             COALESCE(er.update_time, e.update_time)) AS last_modified_at,
                    CASE
-                     WHEN e.status != 'RESULT_PUBLISHED' AND COALESCE(c.status, '') != 'PUBLISHED'
+                     WHEN e.status NOT IN ('RESULT_PUBLISHED', 'CANCELED')
+                       AND COALESCE(c.status, '') != 'PUBLISHED'
                      THEN TRUE ELSE FALSE
                    END AS can_edit,
                    CASE
-                     WHEN er.status = 'APPROVED' AND ep.pay_method IN ('BANK_TRANSFER', 'MANUAL')
+                     WHEN er.status = 'APPROVED' AND ep.pay_method IN ('BANK_TRANSFER', 'MANUAL', 'WECHAT_QR')
                      THEN TRUE ELSE FALSE
                    END AS can_confirm_offline_refund
             FROM beer_entry e
@@ -75,11 +77,10 @@ public interface BeerEntryMapper extends BaseMapper<BeerEntry> {
             LEFT JOIN entry_scan_label l ON l.id = (
               SELECT MAX(active_label.id)
               FROM entry_scan_label active_label
-              WHERE active_label.beer_entry_id = e.id AND active_label.status = 'ACTIVE'
+              WHERE active_label.beer_entry_id = e.id
             )
             <where>
               e.deleted_flag = 0
-              AND e.status != 'CANCELED'
               <if test="competitionId != null">AND e.competition_id = #{competitionId}</if>
               <if test="organizerId != null">AND c.organizer_id = #{organizerId}</if>
               <if test="status != null and status != ''">AND e.status = #{status}</if>
@@ -118,7 +119,7 @@ public interface BeerEntryMapper extends BaseMapper<BeerEntry> {
             </where>
             ORDER BY CASE
                        WHEN er.status IN ('REQUESTED', 'FAILED')
-                         OR (er.status = 'APPROVED' AND ep.pay_method IN ('BANK_TRANSFER', 'MANUAL')) THEN 0
+                         OR (er.status = 'APPROVED' AND ep.pay_method IN ('BANK_TRANSFER', 'MANUAL', 'WECHAT_QR')) THEN 0
                        WHEN er.status = 'SUCCESS'
                          OR (CASE
                            WHEN ep.status IS NOT NULL AND ep.status != '' THEN ep.status
@@ -162,11 +163,10 @@ public interface BeerEntryMapper extends BaseMapper<BeerEntry> {
             LEFT JOIN entry_scan_label l ON l.id = (
               SELECT MAX(active_label.id)
               FROM entry_scan_label active_label
-              WHERE active_label.beer_entry_id = e.id AND active_label.status = 'ACTIVE'
+              WHERE active_label.beer_entry_id = e.id
             )
             <where>
               e.deleted_flag = 0
-              AND e.status != 'CANCELED'
               <if test="competitionId != null">AND e.competition_id = #{competitionId}</if>
               <if test="organizerId != null">AND c.organizer_id = #{organizerId}</if>
               <if test="status != null and status != ''">AND e.status = #{status}</if>

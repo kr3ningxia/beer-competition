@@ -4,5 +4,6 @@ public enum EntryPayMethod {
     MANUAL,
     MOCK,
     WECHAT,
-    BANK_TRANSFER
+    BANK_TRANSFER,
+    WECHAT_QR
 }

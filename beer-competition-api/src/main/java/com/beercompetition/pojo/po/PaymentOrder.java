@@ -39,4 +39,8 @@ public class PaymentOrder {
     private LocalDateTime paidTime;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
+    private LocalDateTime manualSubmitTime;
+    private Long manualConfirmedByAdminId;
+    private LocalDateTime manualConfirmedTime;
+    private String manualConfirmRemark;
 }

@@ -20,6 +20,16 @@ export function fetchCompetitionEntryPool(id) {
   return request.get(`/api/admin/competitions/${id}/entry-pool`, { authScope: 'admin' })
 }
 
+export function uploadCompetitionCollectionQr(id, file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post(`/api/admin/competitions/${id}/collection/wechat-qr`, formData, { authScope: 'admin' })
+}
+
+export function updateCompetitionCollection(id, payload) {
+  return request.put(`/api/admin/competitions/${id}/collection`, payload, { authScope: 'admin' })
+}
+
 export function fetchCompetitionEntryPoolPage(id, params = {}) {
   return request.get(`/api/admin/competitions/${id}/entry-pool/page`, { params, authScope: 'admin' })
 }

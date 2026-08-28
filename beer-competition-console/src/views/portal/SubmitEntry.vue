@@ -205,7 +205,6 @@
               @click="payMode = 'WECHAT'"
             >
               <span>微信支付</span>
-              <small>支付成功后完成报名</small>
             </button>
             <button
               :class="['payment-option', { active: payMode === 'BANK_TRANSFER' }]"
@@ -215,7 +214,6 @@
               @click="payMode = 'BANK_TRANSFER'"
             >
               <span>银行转账</span>
-              <small>转账后等待到账确认</small>
             </button>
           </div>
         </section>
@@ -380,7 +378,17 @@ watch(() => entries.value.length, () => {
 
 watch(activeIndex, async () => {
   await nextTick()
-  entryTabsRef.value?.querySelector('.entry-tab.active')?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' })
+  const tabs = entryTabsRef.value
+  const activeTab = tabs?.querySelector('.entry-tab.active')
+  if (!tabs || !activeTab) return
+
+  // Keep tab navigation inside its own horizontal scroller. scrollIntoView()
+  // also adjusts ancestor/page scroll positions, which makes the long form jump.
+  const targetLeft = activeTab.offsetLeft - (tabs.clientWidth - activeTab.offsetWidth) / 2
+  tabs.scrollTo({
+    left: Math.max(0, targetLeft),
+    behavior: 'smooth',
+  })
 })
 
 function createEmptyEntry() {
@@ -575,9 +583,14 @@ function formatCurrency(value) {
   grid-template-columns: minmax(0, 1fr) 350px;
   gap: 20px;
   align-items: start;
+  min-width: 0;
 }
 
-.batch-workbench { padding: 24px; }
+.batch-workbench {
+  min-width: 0;
+  padding: 24px;
+  box-sizing: border-box;
+}
 
 .page-heading,
 .competition-strip,
@@ -703,14 +716,13 @@ function formatCurrency(value) {
 .rules-panel a { color: #83520f; font-weight: 900; text-underline-offset: 3px; }
 .rules-panel p { margin: 6px 0 0 24px; color: #c45656; font-size: 12px; }
 
-.payment-panel { margin-top: 16px; padding-top: 18px; border-top: 1px solid rgba(87, 58, 26, .1); align-items: flex-start; }
+.payment-panel { margin-top: 16px; padding-top: 18px; border-top: 1px solid rgba(87, 58, 26, .1); align-items: center; }
 .payment-panel h3 { font-size: 17px; }
 .payment-options { display: grid; grid-template-columns: repeat(2, minmax(170px, 1fr)); gap: 10px; }
-.payment-option { display: grid; gap: 3px; padding: 12px 14px; text-align: left; color: #493a2d; background: #fffdf8; border: 1px solid rgba(87, 58, 26, .16); border-radius: 7px; cursor: pointer; }
+.payment-option { display: grid; min-height: 48px; place-items: center; padding: 10px 16px; text-align: center; color: #493a2d; background: #fffdf8; border: 1px solid rgba(87, 58, 26, .16); border-radius: 7px; cursor: pointer; }
 .payment-option:hover { border-color: rgba(166, 101, 20, .48); }
 .payment-option.active { background: #fff1c7; border-color: #ae6f19; box-shadow: 0 0 0 2px rgba(174, 111, 25, .09); }
 .payment-option span { font-weight: 900; }
-.payment-option small { color: #7d6a56; }
 
 .receipt-column { position: sticky; top: 116px; }
 .receipt-card { overflow: hidden; padding: 22px; color: #2d2115; background: linear-gradient(180deg, #fffaf0 0%, #f3d58f 72%, #e8bd60 100%); border: 1px solid rgba(87, 58, 26, .2); border-radius: 8px; box-shadow: 0 22px 44px rgba(83, 51, 17, .14); }

@@ -39,6 +39,7 @@ public class AdminEntryDetailVO {
     private Long offlineRefundVoucherAssetId;
     private String refundStatus;
     private String refundReason;
+    private String refundContactWechat;
     private LocalDateTime refundRequestedAt;
     private LocalDateTime refundProcessedAt;
     private String deliveryStatus;

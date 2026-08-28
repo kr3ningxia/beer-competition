@@ -12,6 +12,8 @@ public interface EntryScanLabelService {
 
     EntryScanLabel requireActiveLabel(Long beerEntryId);
 
+    EntryScanLabel requireLatestLabel(Long beerEntryId);
+
     EntryScanLabel resolveActiveLabel(String code);
 
     Map<Long, EntryScanLabel> listActiveLabels(Collection<Long> beerEntryIds);

@@ -72,7 +72,7 @@
             </div>
             <div class="soft-cell">
               <strong class="remark-preview" :title="item.remark || ''">{{ item.remark || '-' }}</strong>
-              <small>{{ item.voucherFileName ? '付款凭证已上传' : '付款凭证缺失' }}</small>
+              <small>{{ item.transferNo?.startsWith('QR-') ? '赛事收款码付款' : (item.voucherFileName ? '付款凭证已上传' : '付款凭证缺失') }}</small>
             </div>
             <span :class="['state-pill', statusTone(item.status)]">{{ statusLabel(item.status) }}</span>
             <span class="time-cell">{{ formatTime(item.submittedTime) }}</span>
@@ -118,7 +118,7 @@
           <section class="summary-grid">
             <article><small>状态</small><strong>{{ statusLabel(detail.status) }}</strong></article>
             <article><small>金额</small><strong>{{ formatMoney(detail.amount) }}</strong></article>
-            <article><small>付款凭证</small><strong>{{ detail.voucherFileName ? '已上传' : '缺失' }}</strong></article>
+            <article v-if="!isOrganizerQrPayment(detail)"><small>付款凭证</small><strong>{{ detail.voucherFileName ? '已上传' : '缺失' }}</strong></article>
             <article><small>提交时间</small><strong>{{ formatTime(detail.submittedTime) }}</strong></article>
           </section>
 
@@ -126,12 +126,14 @@
             <div class="section-title">
               <strong>付款信息</strong>
               <div class="section-actions">
-                <button type="button" :disabled="!detail.voucherAssetId || previewingVoucher" @click="previewVoucher">查看凭证</button>
-                <button type="button" :disabled="!detail.voucherAssetId" @click="downloadVoucher">下载凭证</button>
+                <template v-if="!isOrganizerQrPayment(detail)">
+                  <button type="button" :disabled="!detail.voucherAssetId || previewingVoucher" @click="previewVoucher">查看凭证</button>
+                  <button type="button" :disabled="!detail.voucherAssetId" @click="downloadVoucher">下载凭证</button>
+                </template>
               </div>
             </div>
             <dl>
-              <div><dt>凭证文件</dt><dd>{{ detail.voucherFileName || '未上传' }}</dd></div>
+              <div v-if="!isOrganizerQrPayment(detail)"><dt>凭证文件</dt><dd>{{ detail.voucherFileName || '未上传' }}</dd></div>
               <div class="full-info-row"><dt>转账备注</dt><dd>{{ detail.remark || '-' }}</dd></div>
               <div><dt>处理时间</dt><dd>{{ formatTime(detail.processedTime) }}</dd></div>
               <div><dt>处理说明</dt><dd>{{ detail.adminNote || '-' }}</dd></div>
@@ -454,6 +456,10 @@ function statusTone(value) {
 function formatMoney(value) {
   if (value === null || value === undefined || value === '') return '-'
   return `¥${Number(value).toFixed(2)}`
+}
+
+function isOrganizerQrPayment(transfer) {
+  return String(transfer?.transferNo || '').startsWith('QR-')
 }
 
 function formatTime(value) {

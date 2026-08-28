@@ -68,6 +68,14 @@ export function submitPortalBatchBankTransfer(orderId, data) {
   return request.post(`/api/portal/payment-orders/${orderId}/bank-transfer`, data, { authScope: 'portal' })
 }
 
+export function submitPortalOrganizerPayment(orderId, data = {}) {
+  return request.post(`/api/portal/payment-orders/${orderId}/organizer-payment`, data, { authScope: 'portal' })
+}
+
+export function fetchPortalCompetitionCollection(competitionId) {
+  return request.get(`/api/portal/competitions/${competitionId}/collection`, { authScope: 'portal' })
+}
+
 export function updatePortalBatchBankTransfer(orderId, data) {
   return request.put(`/api/portal/payment-orders/${orderId}/bank-transfer`, data, { authScope: 'portal' })
 }

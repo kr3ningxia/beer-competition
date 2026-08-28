@@ -319,6 +319,7 @@ public class AuthServiceImpl implements AuthService {
                         .adminType(identity.adminType().name())
                         .organizerId(identity.organizerId())
                         .organizerName(organizer == null ? null : organizer.getName())
+                        .organizerType(organizer == null ? null : organizer.getOrganizerType())
                         .mustChangePassword(identity.mustChangePassword())
                         .mustChangeUsername(identity.mustChangeUsername())
                         .build();

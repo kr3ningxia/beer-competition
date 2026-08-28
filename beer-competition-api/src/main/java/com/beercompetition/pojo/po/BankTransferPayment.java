@@ -39,4 +39,5 @@ public class BankTransferPayment {
     private LocalDateTime processedTime;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
+    private String collectionSnapshotJson;
 }

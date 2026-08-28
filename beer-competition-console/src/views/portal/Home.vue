@@ -11,7 +11,10 @@
 
     <section class="site-hero">
       <div v-if="activeCompetition" class="hero-copy">
-        <span class="label-chip tone-green">{{ activeCompetition.currentStageLabel }}</span>
+        <div class="hero-labels">
+          <span class="label-chip tone-green">{{ activeCompetition.currentStageLabel }}</span>
+          <span v-if="isThirdPartyCompetition(activeCompetition)" class="label-chip tone-third-party" :title="activeCompetition.organizerName ? `发起方：${activeCompetition.organizerName}` : ''">第三方赛事</span>
+        </div>
         <h1>{{ activeCompetition.name }}</h1>
         <p>{{ activeCompetition.description || '查看报名窗口、投递组别、基础风格和当前应付金额，确认后报名参赛' }}</p>
         <div class="hero-facts">
@@ -91,9 +94,12 @@
       </div>
       <div class="event-grid">
         <article v-for="competition in openCompetitions" :key="competition.id" class="event-card brewer-card">
-          <span :class="['label-chip', competition.id === activeCompetition?.id ? 'tone-green' : 'tone-amber']">
-            {{ competition.id === activeCompetition?.id ? '重点赛事' : competition.currentStageLabel }}
-          </span>
+          <div class="event-card-labels">
+            <span :class="['label-chip', competition.id === activeCompetition?.id ? 'tone-green' : 'tone-amber']">
+              {{ competition.id === activeCompetition?.id ? '重点赛事' : competition.currentStageLabel }}
+            </span>
+            <span v-if="isThirdPartyCompetition(competition)" class="label-chip tone-third-party" :title="competition.organizerName ? `发起方：${competition.organizerName}` : ''">第三方赛事</span>
+          </div>
           <h3>{{ competition.name }}</h3>
           <p>{{ competition.description || competition.code }}</p>
           <dl>
@@ -272,6 +278,10 @@ function earlyBirdDeadlineText(competition) {
   return isEarlyBirdActive(competition) ? formatDateTime(competition.earlyBirdDeadline) : ''
 }
 
+function isThirdPartyCompetition(competition) {
+  return competition?.organizerType === 'TENANT'
+}
+
 function openCategoryDialog(event) {
   categoryDialogTriggerRef.value = event?.currentTarget || null
   categoryDialogOpen.value = true
@@ -364,6 +374,19 @@ onBeforeUnmount(() => {
 .hero-copy {
   align-self: end;
   max-width: 860px;
+}
+
+.hero-labels,
+.event-card-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.tone-third-party {
+  color: #704c1b;
+  background: #f3dfb0;
 }
 
 .hero-copy h1 {
@@ -635,14 +658,13 @@ onBeforeUnmount(() => {
   padding: 22px 24px;
 }
 
-.event-card .label-chip,
 .event-card h3,
 .event-card > p,
 .event-card .card-actions {
   grid-column: 1;
 }
 
-.event-card .label-chip {
+.event-card-labels {
   justify-self: start;
 }
 

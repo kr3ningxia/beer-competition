@@ -79,6 +79,18 @@ public class EntryScanLabelServiceImpl implements EntryScanLabelService {
     }
 
     @Override
+    public EntryScanLabel requireLatestLabel(Long beerEntryId) {
+        EntryScanLabel label = entryScanLabelMapper.selectOne(new LambdaQueryWrapper<EntryScanLabel>()
+                .eq(EntryScanLabel::getBeerEntryId, beerEntryId)
+                .orderByDesc(EntryScanLabel::getId)
+                .last("LIMIT 1"));
+        if (label == null) {
+            throw new ResourceNotFoundException("现场标签不存在");
+        }
+        return label;
+    }
+
+    @Override
     public EntryScanLabel resolveActiveLabel(String code) {
         // 1) 规范化扫码或手输内容
         String normalized = normalizeCode(code);

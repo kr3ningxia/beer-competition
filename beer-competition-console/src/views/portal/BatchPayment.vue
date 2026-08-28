@@ -35,6 +35,21 @@
             </div>
           </div>
 
+          <template v-else-if="bankPending && organizerQrPending">
+            <div class="pending-panel organizer-qr-pending">
+              <el-icon><Clock /></el-icon>
+              <div>
+                <span>付款信息已提交</span>
+                <h2>等待主办方确认</h2>
+                <p>主办方确认收款后，这批酒款会一起完成报名</p>
+                <p v-if="organizerPaymentRemark" class="submitted-remark">付款备注：{{ organizerPaymentRemark }}</p>
+                <p v-else class="submitted-remark">未填写付款备注</p>
+                <p v-if="collectionConfig?.collectionNote" class="collection-note">
+                  收款备注：{{ collectionConfig.collectionNote }}
+                </p>
+              </div>
+            </div>
+          </template>
           <template v-else-if="bankPending && !editingBankTransfer">
             <div class="pending-panel">
               <el-icon><Clock /></el-icon>
@@ -42,7 +57,7 @@
                 <span>付款信息已提交</span>
                 <h2>等待组委会核对到账</h2>
                 <p>确认到账后，这批酒款会一起完成报名</p>
-                <el-button class="pending-edit-button" @click="editBankTransfer">修改转账信息</el-button>
+                <el-button v-if="!organizerQrPending" class="pending-edit-button" @click="editBankTransfer">修改转账信息</el-button>
               </div>
             </div>
           </template>
@@ -51,7 +66,7 @@
             <div class="method-head">
               <div>
                 <span class="section-kicker">当前付款方式</span>
-                <h2>{{ payMode === 'BANK_TRANSFER' ? '银行转账' : isWechatPayEnv ? '微信支付' : '微信扫码支付' }}</h2>
+                <h2>{{ payMode === 'BANK_TRANSFER' ? '银行转账' : payMode === 'WECHAT_QR' ? '赛事收款码' : isWechatPayEnv ? '微信支付' : '微信扫码支付' }}</h2>
               </div>
               <el-dropdown v-if="!editingBankTransfer" placement="bottom-end" trigger="click" @command="switchPayMode">
                 <button class="change-method-button" type="button">
@@ -60,15 +75,36 @@
                 </button>
                 <template #dropdown>
                   <el-dropdown-menu>
-                    <el-dropdown-item :command="payMode === 'WECHAT' ? 'BANK_TRANSFER' : 'WECHAT'">
-                      {{ payMode === 'WECHAT' ? '改用银行转账' : '改用微信支付' }}
+                    <el-dropdown-item :command="payMode === 'BANK_TRANSFER' ? 'WECHAT' : 'BANK_TRANSFER'">
+                      {{ payMode === 'BANK_TRANSFER' ? '改用微信支付' : '改用银行转账' }}
                     </el-dropdown-item>
                   </el-dropdown-menu>
                 </template>
               </el-dropdown>
             </div>
 
-            <section v-if="payMode === 'WECHAT'" class="wechat-panel">
+            <section v-if="payMode === 'WECHAT_QR'" class="wechat-panel">
+              <div class="qr-side">
+                <div class="qr-frame">
+                  <img v-if="organizerQrUrl" :src="organizerQrUrl" width="220" height="220" alt="赛事收款码" />
+                  <span v-else class="qr-loading">收款码加载中…</span>
+                </div>
+                <span class="qr-caption">请使用微信扫码付款</span>
+              </div>
+              <div class="wechat-copy">
+                <span>本批应付</span><strong>{{ formatCurrency(batch.totalAmount) }}</strong>
+                <p>{{ collectionConfig?.collectionNote || '请扫码完成付款后提交确认' }}</p>
+                <el-input
+                  v-model.trim="bankForm.remark"
+                  class="organizer-payment-remark"
+                  maxlength="255"
+                  placeholder="付款备注（选填）"
+                />
+                <el-button type="primary" :loading="paying" @click="submitOrganizerPayment">我已完成付款</el-button>
+                <el-button text :loading="checking" @click="checkPayment">查看确认结果</el-button>
+              </div>
+            </section>
+            <section v-else-if="payMode === 'WECHAT'" class="wechat-panel">
               <div v-if="!isWechatPayEnv" class="qr-frame">
                 <img v-if="qrDataUrl" :src="qrDataUrl" width="220" height="220" alt="微信支付二维码" />
                 <div v-else class="qr-loading">正在生成支付码…</div>
@@ -161,10 +197,13 @@ import {
   fetchPortalWechatPayClientConfig,
   simulatePortalBatchPayment,
   submitPortalBatchBankTransfer,
+  submitPortalOrganizerPayment,
+  fetchPortalCompetitionCollection,
   updatePortalBatchBankTransfer,
   uploadPortalBankTransferVoucher,
 } from '@/api/portal'
 import { buildWechatOauthUrl, currentUrlWithoutWechatCode, invokeWechatPay, isWechatBrowser } from '@/utils/wechatPay'
+import { BASE_URL } from '@/config'
 
 const route = useRoute()
 const router = useRouter()
@@ -175,6 +214,7 @@ const batch = ref(null)
 const paymentStatus = ref(null)
 const paymentOrder = ref(null)
 const bankAccount = ref(null)
+const collectionConfig = ref(null)
 const qrDataUrl = ref('')
 const wechatPayConfig = ref(null)
 const wechatAuthCode = ref(String(route.query.code || ''))
@@ -200,6 +240,14 @@ const orderStatus = computed(() => paymentStatus.value?.status || batch.value?.p
 const paid = computed(() => orderStatus.value === 'PAID')
 const refunded = computed(() => ['PARTIALLY_REFUNDED', 'REFUNDED'].includes(orderStatus.value))
 const bankPending = computed(() => orderStatus.value === 'PENDING_CONFIRM')
+const organizerQrPending = computed(() => bankPending.value && paymentStatus.value?.payMethod === 'WECHAT_QR')
+const organizerPaymentRemark = ref('')
+const organizerManaged = computed(() => collectionConfig.value?.tenantCompetition === true)
+const organizerQrUrl = computed(() => {
+  const value = collectionConfig.value?.wechatQrUrl || ''
+  if (!value || /^https?:\/\//i.test(value) || value.startsWith('data:')) return value
+  return `${BASE_URL}${value.startsWith('/') ? value : `/${value}`}`
+})
 const isWechatPayEnv = computed(() => isWechatBrowser())
 const wechatPayAppId = computed(() => wechatPayConfig.value?.appId || '')
 const fulfillmentEntry = computed(() => batch.value?.entries?.find((entry) => !hasDeliveryProgress(entry)) || batch.value?.entries?.[0] || null)
@@ -228,10 +276,24 @@ onMounted(async () => {
     if (!batchId.value) throw new Error('付款订单缺少报名批次')
     paymentStatus.value = statusData
     batch.value = await fetchPortalEntryBatch(batchId.value)
+    collectionConfig.value = await fetchPortalCompetitionCollection(batch.value.competitionId)
+    if (paymentStatus.value?.payMethod === 'WECHAT_QR' && paymentStatus.value?.bankTransferId) {
+      try {
+        const transfer = await fetchPortalBankTransfer(paymentStatus.value.bankTransferId)
+        organizerPaymentRemark.value = transfer?.remark || ''
+      } catch {
+        organizerPaymentRemark.value = ''
+      }
+    }
     if (bankPending.value) {
       startPolling()
     } else if (!paid.value && !refunded.value) {
-      if (payMode.value === 'BANK_TRANSFER') await loadBankAccount()
+      if (organizerManaged.value && collectionConfig.value?.enabledMethods?.includes('WECHAT_QR')) {
+        payMode.value = 'WECHAT_QR'
+      } else if (organizerManaged.value) {
+        payMode.value = 'BANK_TRANSFER'
+        await loadBankAccount()
+      } else if (payMode.value === 'BANK_TRANSFER') await loadBankAccount()
       else await startWechatPayment({ silent: true })
     }
   } catch (error) {
@@ -258,6 +320,22 @@ async function switchPayMode(mode) {
     return
   }
   await startWechatPayment({ silent: true })
+}
+
+async function submitOrganizerPayment() {
+  if (paying.value || paid.value) return
+  paying.value = true
+  try {
+    await submitPortalOrganizerPayment(orderId, { remark: bankForm.remark || '' })
+    paymentStatus.value = await fetchPortalBatchPaymentStatus(orderId)
+    batch.value = await fetchPortalEntryBatch(batchId.value)
+    startPolling()
+    ElMessage.success('付款信息已提交，等待赛事主办方确认')
+  } catch (error) {
+    ElMessage.warning(error?.message || '付款信息提交失败')
+  } finally {
+    paying.value = false
+  }
 }
 
 async function createQr() {
@@ -367,6 +445,15 @@ async function simulatePayment() {
 
 async function loadBankAccount() {
   if (bankAccount.value) return
+  if (organizerManaged.value && collectionConfig.value?.enabledMethods?.includes('BANK_TRANSFER')) {
+    bankAccount.value = {
+      accountName: collectionConfig.value.bankAccountName,
+      bankName: collectionConfig.value.bankName,
+      accountNo: collectionConfig.value.bankAccountNo,
+      remarkTip: collectionConfig.value.collectionNote || '请在转账备注中填写厂牌名',
+    }
+    return
+  }
   bankAccount.value = await fetchPortalBankTransferAccount()
 }
 
@@ -491,8 +578,11 @@ function formatCurrency(value) {
 .change-method-button { display: inline-flex; gap: 5px; align-items: center; padding: 7px 2px; color: #806c55; background: transparent; border: 0; cursor: pointer; font-weight: 700; }
 .change-method-button:hover { color: #80500f; }
 .change-method-button:focus-visible { color: #80500f; outline: 2px solid rgba(174, 111, 25, .35); outline-offset: 3px; border-radius: 3px; }
-.wechat-panel { display: flex; justify-content: center; gap: 34px; align-items: center; min-height: 330px; margin-top: 20px; padding: 28px; background: #fff8e8; border: 1px solid rgba(87,58,26,.12); border-radius: 8px; }
-.qr-frame { display: grid; width: min(240px, 100%); aspect-ratio: 1; height: auto; min-width: 0; place-items: center; background: #fff; border: 1px solid rgba(87,58,26,.14); border-radius: 8px; box-sizing: border-box; }
+.wechat-panel { display: flex; justify-content: center; gap: 42px; align-items: center; min-height: 330px; margin-top: 20px; padding: 30px 32px; background: #fff8e8; border: 1px solid rgba(87,58,26,.12); border-radius: 8px; }
+.qr-side { display: grid; justify-items: center; gap: 10px; flex: 0 0 240px; }
+.qr-frame { display: grid; width: 240px; aspect-ratio: 1; height: auto; min-width: 0; place-items: center; overflow: hidden; padding: 9px; background: #fff; border: 1px solid rgba(87,58,26,.14); border-radius: 8px; box-sizing: border-box; box-shadow: 0 8px 18px rgba(87,58,26,.08); }
+.qr-frame img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.qr-caption { color: #806c55; font-size: 13px; font-weight: 700; }
 .qr-loading { color: #8a7864; }
 .jsapi-mark { display: grid; width: 210px; min-height: 210px; place-items: center; align-content: center; gap: 10px; color: #2f6f46; background: #fff; border: 1px solid rgba(87,58,26,.14); border-radius: 8px; text-align: center; }
 .jsapi-mark .el-icon { font-size: 52px; }
@@ -501,6 +591,7 @@ function formatCurrency(value) {
 .wechat-copy > span { color: #806c55; font-size: 13px; }
 .wechat-copy > strong { color: #744709; font-size: 34px; font-variant-numeric: tabular-nums; }
 .wechat-copy p { margin: 0 0 8px; color: #74624d; }
+.organizer-payment-remark { max-width: 420px; }
 .bank-panel { margin-top: 20px; }
 .bank-account { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 1px; overflow: hidden; background: rgba(87,58,26,.12); border: 1px solid rgba(87,58,26,.12); border-radius: 8px; }
 .bank-account div { padding: 13px 15px; background: #fff8e8; }
@@ -518,6 +609,8 @@ function formatCurrency(value) {
 .success-panel p, .pending-panel p { margin: 0; color: #76644f; }
 .success-actions { display: flex; gap: 8px; margin-top: 16px; }
 .pending-edit-button { margin-top: 16px; }
+.organizer-qr-pending .submitted-remark { margin-top: 12px; color: #80500f; font-weight: 800; }
+.organizer-qr-pending .collection-note { margin-top: 8px; font-size: 13px; }
 .bank-cancel-edit { width: 100%; margin-top: 10px; }
 .order-summary { position: sticky; top: 116px; }
 .order-summary > header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 14px; border-bottom: 1px solid rgba(87,58,26,.12); }
@@ -533,5 +626,5 @@ function formatCurrency(value) {
 .summary-actions a { display: flex; min-height: 42px; align-items: center; justify-content: center; color: #fff; background: #875515; border-radius: 7px; font-weight: 900; text-decoration: none; }
 .loading-state { padding: 80px; text-align: center; }
 @media (max-width: 1000px) { .payment-layout { grid-template-columns: 1fr; } .order-summary { position: static; } }
-@media (max-width: 700px) { .payment-heading, .method-head, .wechat-panel { align-items: flex-start; flex-direction: column; } .wechat-panel { width: 100%; box-sizing: border-box; } .bank-account { grid-template-columns: 1fr; } .qr-frame { align-self: center; } }
+@media (max-width: 700px) { .payment-heading, .method-head, .wechat-panel { align-items: flex-start; flex-direction: column; } .wechat-panel { width: 100%; box-sizing: border-box; gap: 24px; } .qr-side { align-self: center; flex-basis: auto; width: min(100%, 240px); } .qr-frame { width: 100%; } .bank-account { grid-template-columns: 1fr; } }
 </style>

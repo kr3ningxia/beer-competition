@@ -5,6 +5,7 @@ import com.beercompetition.controller.support.FileResponseHelper;
 import com.beercompetition.file.FileAccessService;
 import com.beercompetition.pojo.dto.PortalBankTransferSubmitRequest;
 import com.beercompetition.pojo.dto.PortalPaymentOrderBankTransferRequest;
+import com.beercompetition.pojo.dto.PortalOrganizerPaymentRequest;
 import com.beercompetition.pojo.dto.WechatJsapiPayRequest;
 import com.beercompetition.pojo.vo.BankTransferAccountVO;
 import com.beercompetition.pojo.vo.BankTransferVO;
@@ -153,6 +154,13 @@ public class PortalPaymentController {
             @PathVariable Long id,
             @RequestBody @Valid PortalPaymentOrderBankTransferRequest request) {
         return Result.success(bankTransferPaymentService.submitPortalOrderTransfer(id, request));
+    }
+
+    @PostMapping("/payment-orders/{id}/organizer-payment")
+    public Result<BankTransferVO> submitOrganizerPayment(
+            @PathVariable Long id,
+            @RequestBody @Valid PortalOrganizerPaymentRequest request) {
+        return Result.success(bankTransferPaymentService.submitPortalOrganizerPayment(id, request));
     }
 
     /**

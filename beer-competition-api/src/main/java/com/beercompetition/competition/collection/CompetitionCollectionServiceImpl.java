@@ -177,7 +177,7 @@ public class CompetitionCollectionServiceImpl implements CompetitionCollectionSe
                 .enabledMethods(methods)
                 .wechatQrAssetId(qrAssetId)
                 .wechatQrUrl(qrAssetId == null ? null
-                        : (portal ? "/api/portal/collection/files/" : "/api/admin/files/") + qrAssetId)
+                        : (portal ? "/api/portal/public/files/" : "/api/admin/files/") + qrAssetId)
                 .bankAccountName(config == null ? null : config.getBankAccountName())
                 .bankAccountNo(config == null ? null : config.getBankAccountNo())
                 .bankName(config == null ? null : config.getBankName())

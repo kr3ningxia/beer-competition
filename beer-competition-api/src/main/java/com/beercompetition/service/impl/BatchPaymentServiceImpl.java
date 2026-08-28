@@ -11,6 +11,8 @@ import com.beercompetition.mapper.PaymentOrderItemMapper;
 import com.beercompetition.mapper.PaymentOrderMapper;
 import com.beercompetition.mapper.PortalAccountMapper;
 import com.beercompetition.mapper.RegistrationBatchMapper;
+import com.beercompetition.mapper.CompetitionMapper;
+import com.beercompetition.mapper.OrganizerMapper;
 import com.beercompetition.pay.WechatPayClient;
 import com.beercompetition.properties.WechatPayProperties;
 import com.beercompetition.pojo.enums.EntryPayMethod;
@@ -24,6 +26,9 @@ import com.beercompetition.pojo.po.PaymentOrder;
 import com.beercompetition.pojo.po.PaymentOrderItem;
 import com.beercompetition.pojo.po.PortalAccount;
 import com.beercompetition.pojo.po.RegistrationBatch;
+import com.beercompetition.pojo.po.Competition;
+import com.beercompetition.pojo.po.Organizer;
+import com.beercompetition.pojo.enums.OrganizerType;
 import com.beercompetition.pojo.vo.PaymentOrderStatusVO;
 import com.beercompetition.pojo.vo.WechatJsapiPayVO;
 import com.beercompetition.pojo.vo.WechatNativePayVO;
@@ -55,12 +60,15 @@ public class BatchPaymentServiceImpl implements BatchPaymentService {
     private final EntryPaymentMapper entryPaymentMapper;
     private final BeerEntryMapper beerEntryMapper;
     private final PortalAccountMapper portalAccountMapper;
+    private final CompetitionMapper competitionMapper;
+    private final OrganizerMapper organizerMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public WechatNativePayVO createNativePayment(Long orderId) {
         // 1) 校验订单归属和支付资格
         PaymentOrder order = requireOwnedOrderForUpdate(orderId);
+        rejectTenantWechatPayment(order);
         order = reconcileOrderFromItemPayments(order);
         if (PaymentOrderStatus.PAID.name().equals(order.getStatus())) {
             return toNativePayVO(order);
@@ -109,6 +117,7 @@ public class BatchPaymentServiceImpl implements BatchPaymentService {
     public WechatJsapiPayVO createJsapiPayment(Long orderId, String code) {
         // 1) 校验订单归属、支付资格和微信授权
         PaymentOrder order = requireOwnedOrderForUpdate(orderId);
+        rejectTenantWechatPayment(order);
         order = reconcileOrderFromItemPayments(order);
         if (PaymentOrderStatus.PAID.name().equals(order.getStatus())) {
             return toJsapiPayVO(order, null);
@@ -241,6 +250,21 @@ public class BatchPaymentServiceImpl implements BatchPaymentService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public void markOrganizerPaymentPending(Long orderId, Long transferId) {
+        PaymentOrder order = requireOrder(orderId);
+        if (!PaymentOrderStatus.UNPAID.name().equals(order.getStatus())) {
+            throw new BaseException("当前订单不能提交付款确认");
+        }
+        order.setStatus(PaymentOrderStatus.PENDING_CONFIRM.name());
+        order.setPayMethod(EntryPayMethod.WECHAT_QR.name());
+        order.setBankTransferId(transferId);
+        order.setManualSubmitTime(LocalDateTime.now());
+        paymentOrderMapper.updateById(order);
+        updateItemPayments(orderId, EntryPaymentStatus.PENDING_CONFIRM.name(), EntryPayMethod.WECHAT_QR.name(), null);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public void confirmBankTransfer(Long orderId, Long transferId, Long adminId) {
         // 1) 校验转账记录与聚合订单关联
         PaymentOrder order = requireOrder(orderId);
@@ -252,6 +276,21 @@ public class BatchPaymentServiceImpl implements BatchPaymentService {
         // 2) 推进订单和所有酒款为已支付
         applyPaymentSuccess(order, EntryPayMethod.BANK_TRANSFER.name(), null,
                 order.getAmount(), LocalDateTime.now(), null);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void confirmOrganizerPayment(Long orderId, Long transferId, Long adminId) {
+        PaymentOrder order = requireOrder(orderId);
+        if (!PaymentOrderStatus.PENDING_CONFIRM.name().equals(order.getStatus())
+                || !Objects.equals(order.getBankTransferId(), transferId)) {
+            throw new BaseException("收款确认关联订单状态异常");
+        }
+        applyPaymentSuccess(order, EntryPayMethod.WECHAT_QR.name(), null,
+                order.getAmount(), LocalDateTime.now(), null);
+        order.setManualConfirmedByAdminId(adminId);
+        order.setManualConfirmedTime(LocalDateTime.now());
+        paymentOrderMapper.updateById(order);
     }
 
     @Override
@@ -353,6 +392,15 @@ public class BatchPaymentServiceImpl implements BatchPaymentService {
             throw new ResourceNotFoundException("支付订单不存在");
         }
         return order;
+    }
+
+    private void rejectTenantWechatPayment(PaymentOrder order) {
+        RegistrationBatch batch = requireBatch(order.getRegistrationBatchId());
+        Competition competition = competitionMapper.selectById(batch.getCompetitionId());
+        Organizer organizer = competition == null ? null : organizerMapper.selectById(competition.getOrganizerId());
+        if (organizer != null && OrganizerType.TENANT.name().equals(organizer.getOrganizerType())) {
+            throw new BaseException("该赛事请使用主办方收款码或银行转账");
+        }
     }
 
     private RegistrationBatch requireBatch(Long batchId) {

@@ -19,7 +19,11 @@ public interface BatchPaymentService {
 
     void markBankTransferPending(Long orderId, Long transferId);
 
+    void markOrganizerPaymentPending(Long orderId, Long transferId);
+
     void confirmBankTransfer(Long orderId, Long transferId, Long adminId);
+
+    void confirmOrganizerPayment(Long orderId, Long transferId, Long adminId);
 
     void resetBankTransfer(Long orderId, Long transferId);
 }

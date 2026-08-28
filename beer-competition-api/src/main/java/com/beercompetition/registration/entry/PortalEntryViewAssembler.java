@@ -86,7 +86,7 @@ public class PortalEntryViewAssembler {
         PaymentOrder paymentOrder = findPaymentOrder(payment);
         EntryDelivery delivery = findEntryDelivery(entry.getId());
         EntryRefund refund = findLatestRefund(entry.getId());
-        EntryScanLabel label = entryScanLabelService.requireActiveLabel(entry.getId());
+        EntryScanLabel label = entryScanLabelService.requireLatestLabel(entry.getId());
         boolean activeRefund = isActiveRefund(refund);
         boolean resultPublished = isResultPublished(competition, entry);
         PortalEntryEditPolicy.EditDecision editDecision =
@@ -148,7 +148,7 @@ public class PortalEntryViewAssembler {
         PaymentOrder paymentOrder = findPaymentOrder(payment);
         EntryDelivery delivery = findEntryDelivery(entry.getId());
         EntryRefund refund = findLatestRefund(entry.getId());
-        EntryScanLabel label = entryScanLabelService.requireActiveLabel(entry.getId());
+        EntryScanLabel label = entryScanLabelService.requireLatestLabel(entry.getId());
         boolean activeRefund = isActiveRefund(refund);
         boolean resultPublished = isResultPublished(competition, entry);
         PortalEntryEditPolicy.EditDecision editDecision =

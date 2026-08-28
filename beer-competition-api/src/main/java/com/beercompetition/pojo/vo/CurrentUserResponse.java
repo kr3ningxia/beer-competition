@@ -14,6 +14,7 @@ public class CurrentUserResponse {
     private String adminType;
     private Long organizerId;
     private String organizerName;
+    private String organizerType;
     private Boolean mustChangePassword;
     private Boolean mustChangeUsername;
     private String phone;

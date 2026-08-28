@@ -128,6 +128,9 @@ public class AdminEntryServiceImpl implements AdminEntryService {
         // 1) 查询上下文与前置校验
         BeerEntry entry = requireEntry(entryId);
         Competition competition = competitionMapper.selectById(entry.getCompetitionId());
+        if (EntryStatus.CANCELED.name().equals(entry.getStatus())) {
+            throw new BaseException("已取消或已退款的报名不能修改");
+        }
         if (EntryStatus.RESULT_PUBLISHED.name().equals(entry.getStatus()) || isResultPublished(competition, entry)) {
             throw new BaseException("结果已发布，不能直接修改报名信息");
         }

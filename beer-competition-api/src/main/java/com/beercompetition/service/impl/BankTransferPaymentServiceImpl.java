@@ -25,11 +25,13 @@ import com.beercompetition.mapper.RegistrationBatchMapper;
 import com.beercompetition.pojo.dto.AdminBankTransferProcessRequest;
 import com.beercompetition.pojo.dto.PortalBankTransferSubmitRequest;
 import com.beercompetition.pojo.dto.PortalPaymentOrderBankTransferRequest;
+import com.beercompetition.pojo.dto.PortalOrganizerPaymentRequest;
 import com.beercompetition.pojo.enums.BankTransferPaymentStatus;
 import com.beercompetition.pojo.enums.EntryPayMethod;
 import com.beercompetition.pojo.enums.EntryPaymentStatus;
 import com.beercompetition.pojo.enums.EntryScanLabelStatus;
 import com.beercompetition.pojo.enums.EntryStatus;
+import com.beercompetition.pojo.enums.PaymentOrderStatus;
 import com.beercompetition.pojo.po.AdminOperationLog;
 import com.beercompetition.pojo.po.BankTransferPayment;
 import com.beercompetition.pojo.po.BeerEntry;
@@ -236,6 +238,34 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public BankTransferVO submitPortalOrganizerPayment(Long orderId, PortalOrganizerPaymentRequest request) {
+        PortalAccount account = requirePortalAccount();
+        PaymentOrder order = paymentOrderMapper.selectById(orderId);
+        if (order == null) throw new ResourceNotFoundException("支付订单不存在");
+        RegistrationBatch batch = registrationBatchMapper.selectById(order.getRegistrationBatchId());
+        if (batch == null || !Objects.equals(batch.getBreweryId(), account.getBreweryId())) {
+            throw new ForbiddenException("无权操作该支付订单");
+        }
+        if (!PaymentOrderStatus.UNPAID.name().equals(order.getStatus())) {
+            throw new BaseException("当前订单不能提交付款确认");
+        }
+        LocalDateTime submittedTime = LocalDateTime.now();
+        BankTransferPayment transfer = BankTransferPayment.builder()
+                .transferNo("QR-" + UUID.randomUUID().toString().replace("-", "").substring(0, 24).toUpperCase(Locale.ROOT))
+                .breweryId(batch.getBreweryId()).portalAccountId(account.getId())
+                .competitionId(batch.getCompetitionId()).paymentOrderId(order.getId())
+                .amount(order.getAmount()).remark(defaultString(normalizeNullable(request == null ? null : request.getRemark())))
+                .status(BankTransferPaymentStatus.SUBMITTED.name())
+                .transferTime(submittedTime)
+                .submittedTime(submittedTime)
+                .build();
+        bankTransferPaymentMapper.insert(transfer);
+        batchPaymentService.markOrganizerPaymentPending(order.getId(), transfer.getId());
+        return toBankTransferVO(bankTransferPaymentMapper.selectById(transfer.getId()), true);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public BankTransferVO updatePortalOrderTransfer(Long orderId, PortalPaymentOrderBankTransferRequest request) {
         // 1) 校验当前厂商、聚合订单和待确认转账记录
         PortalAccount account = requirePortalAccount();
@@ -388,7 +418,11 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
         transfer.setProcessedTime(now);
         bankTransferPaymentMapper.updateById(transfer);
         if (transfer.getPaymentOrderId() != null && transfer.getEntryPaymentId() == null) {
-            batchPaymentService.confirmBankTransfer(transfer.getPaymentOrderId(), transfer.getId(), BaseContext.getCurrentId());
+            if (transfer.getTransferNo() != null && transfer.getTransferNo().startsWith("QR-")) {
+                batchPaymentService.confirmOrganizerPayment(transfer.getPaymentOrderId(), transfer.getId(), BaseContext.getCurrentId());
+            } else {
+                batchPaymentService.confirmBankTransfer(transfer.getPaymentOrderId(), transfer.getId(), BaseContext.getCurrentId());
+            }
             return toBankTransferVO(bankTransferPaymentMapper.selectById(id), true);
         }
         EntryPayment payment = entryPaymentMapper.selectById(transfer.getEntryPaymentId());

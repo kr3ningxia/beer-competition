@@ -12,6 +12,7 @@ import com.beercompetition.mapper.CompetitionStyleConfigMapper;
 import com.beercompetition.mapper.EntryFieldConfigMapper;
 import com.beercompetition.mapper.JudgeAssignmentMapper;
 import com.beercompetition.mapper.JudgeTableMapper;
+import com.beercompetition.mapper.OrganizerMapper;
 import com.beercompetition.pojo.dto.DimensionRequest;
 import com.beercompetition.pojo.enums.CompetitionStatus;
 import com.beercompetition.pojo.enums.EntryStatus;
@@ -24,6 +25,8 @@ import com.beercompetition.pojo.po.CompetitionStyleConfig;
 import com.beercompetition.pojo.po.EntryFieldConfig;
 import com.beercompetition.pojo.po.JudgeAssignment;
 import com.beercompetition.pojo.po.JudgeTable;
+import com.beercompetition.pojo.po.Organizer;
+import com.beercompetition.pojo.enums.OrganizerType;
 import com.beercompetition.pojo.vo.CompetitionAlertVO;
 import com.beercompetition.pojo.vo.CompetitionAnalyticsVO;
 import com.beercompetition.pojo.vo.CompetitionCheckVO;
@@ -108,6 +111,10 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
 
     private final CompetitionAccessService competitionAccessService;
 
+    private final OrganizerMapper organizerMapper;
+
+    private static final String ENDED_STATUS = "PUBLISHED";
+
     @Override
     public List<CompetitionVO> listCompetitions(boolean includeArchived) {
         // 1) 查询比赛主数据，常用列表默认排除归档赛事
@@ -174,10 +181,11 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
                 .filter(item -> CompetitionStatus.REGISTRATION_OPEN.name().equals(item.getStatus()))
                 .toList();
 
-        // 2) 选择首页主赛事
-        PortalCompetitionVO activeCompetition = openCompetitions.stream()
+        // 2) 平台赛事在主宣传位拥有优先权。只要平台赛事尚未结束，租户赛事不占用主位。
+        PortalCompetitionVO activeCompetition = competitions.stream()
+                .filter(this::isOngoingPlatformCompetition)
                 .findFirst()
-                .orElse(competitions.stream().findFirst().orElse(null));
+                .orElse(openCompetitions.stream().findFirst().orElse(competitions.stream().findFirst().orElse(null)));
 
         // 3) 组装首页数据
         return PortalHomeVO.builder()
@@ -326,6 +334,31 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
                 .build();
     }
 
+    private String resolveOrganizerType(Long organizerId) {
+        if (organizerId == null) return null;
+        Organizer organizer = organizerMapper.selectById(organizerId);
+        return organizer == null ? null : organizer.getOrganizerType();
+    }
+
+    private String resolveOrganizerName(Long organizerId) {
+        if (organizerId == null) return null;
+        Organizer organizer = organizerMapper.selectById(organizerId);
+        if (organizer == null) return null;
+        // 租户赛事对外展示发布账号的联系人姓名，避免把企业内部组织名当作发起方。
+        if (OrganizerType.TENANT.name().equals(organizer.getOrganizerType())
+                && StringUtils.hasText(organizer.getContactName())) {
+            return organizer.getContactName();
+        }
+        return organizer.getName();
+    }
+
+    private boolean isOngoingPlatformCompetition(PortalCompetitionVO competition) {
+        return OrganizerType.PLATFORM.name().equals(competition.getOrganizerType())
+                && !ENDED_STATUS.equals(competition.getStatus())
+                && !CompetitionStatus.ARCHIVED.name().equals(competition.getStatus())
+                && !CompetitionStatus.DRAFT.name().equals(competition.getStatus());
+    }
+
     private EntrySummaryVO buildListEntriesSummary(CompetitionEntryStatsVO stats) {
         if (stats == null) {
             return EntrySummaryVO.builder()
@@ -358,6 +391,8 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
                 .code(competition.getCode())
                 .name(competition.getName())
                 .competitionType(competitionReadinessEvaluator.resolveCompetitionType(competition).name())
+                .organizerType(resolveOrganizerType(competition.getOrganizerId()))
+                .organizerName(resolveOrganizerName(competition.getOrganizerId()))
                 .competitionDate(competition.getCompetitionDate())
                 .registrationStart(competition.getRegistrationStart())
                 .registrationDeadline(competition.getRegistrationDeadline())

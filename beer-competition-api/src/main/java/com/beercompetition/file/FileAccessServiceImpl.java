@@ -53,7 +53,7 @@ public class FileAccessServiceImpl implements FileAccessService {
     private static final String OWNER_COMPETITION = "COMPETITION";
     private static final String OWNER_AWARD = "AWARD_RESULT";
     private static final String OWNER_APPLICATION = "ORGANIZER_APPLICATION";
-    private static final Set<String> PUBLIC_BUSINESS_TYPES = Set.of(BUSINESS_BREWERY_AVATAR, BUSINESS_SPONSOR_LOGO);
+    private static final Set<String> PUBLIC_BUSINESS_TYPES = Set.of(BUSINESS_BREWERY_AVATAR, BUSINESS_SPONSOR_LOGO, BUSINESS_COLLECTION_QR);
 
     private final FileAssetMapper fileAssetMapper;
     private final BankTransferPaymentMapper bankTransferPaymentMapper;
@@ -222,6 +222,15 @@ public class FileAccessServiceImpl implements FileAccessService {
             }
             if (BUSINESS_SPONSOR_LOGO.equals(asset.getBusinessType())) {
                 requireCompetitionAsset(asset.getOwnerId(), "赞助商 Logo 关联比赛不存在", asset);
+            }
+            if (BUSINESS_COLLECTION_QR.equals(asset.getBusinessType())) {
+                if (!OWNER_COMPETITION.equals(asset.getOwnerType())) {
+                    throw new ForbiddenException("公开文件归属不正确");
+                }
+                Competition competition = requireCompetitionAsset(asset.getOwnerId(), "收款码关联比赛不存在", asset);
+                if ("DRAFT".equals(competition.getStatus()) || "ARCHIVED".equals(competition.getStatus())) {
+                    throw new ResourceNotFoundException("赛事收款码暂未公开");
+                }
             }
             return;
         }

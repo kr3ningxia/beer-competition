@@ -13,6 +13,7 @@ import com.beercompetition.mapper.BeerEntryMapper;
 import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.EntryPaymentMapper;
 import com.beercompetition.mapper.EntryRefundMapper;
+import com.beercompetition.mapper.OrganizerMapper;
 import com.beercompetition.mapper.PaymentOrderItemMapper;
 import com.beercompetition.pojo.dto.AdminEntryStatusRequest;
 import com.beercompetition.pojo.dto.AdminOfflineRefundRequest;
@@ -22,6 +23,8 @@ import com.beercompetition.pojo.enums.EntryPaymentStatus;
 import com.beercompetition.pojo.enums.EntryRefundStatus;
 import com.beercompetition.pojo.enums.EntryStatus;
 import com.beercompetition.pojo.enums.RefundApprovalMode;
+import com.beercompetition.pojo.enums.OrganizerType;
+import com.beercompetition.pojo.po.Organizer;
 import com.beercompetition.pojo.po.AdminOperationLog;
 import com.beercompetition.pojo.po.BeerEntry;
 import com.beercompetition.pojo.po.Competition;
@@ -80,6 +83,8 @@ public class EntryRefundServiceImpl implements EntryRefundService {
     private final BeerEntryMapper beerEntryMapper;
 
     private final CompetitionMapper competitionMapper;
+
+    private final OrganizerMapper organizerMapper;
 
     private final EntryPaymentMapper entryPaymentMapper;
 
@@ -330,6 +335,10 @@ public class EntryRefundServiceImpl implements EntryRefundService {
     }
 
     private RefundApprovalMode resolveRefundApprovalMode(Competition competition) {
+        Organizer organizer = competition == null ? null : organizerMapper.selectById(competition.getOrganizerId());
+        if (organizer != null && OrganizerType.TENANT.name().equals(organizer.getOrganizerType())) {
+            return RefundApprovalMode.MANUAL_REVIEW;
+        }
         return RefundApprovalMode.of(competition == null ? null : competition.getRefundApprovalMode());
     }
 

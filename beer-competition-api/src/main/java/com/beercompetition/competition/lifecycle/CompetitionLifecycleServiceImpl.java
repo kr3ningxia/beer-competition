@@ -33,6 +33,11 @@ import java.time.format.DateTimeFormatter;
 import com.beercompetition.competition.lifecycle.CompetitionLifecycleService;
 import com.beercompetition.competition.access.CompetitionAccessService;
 import com.beercompetition.competition.query.CompetitionQueryService;
+import com.beercompetition.competition.collection.CompetitionCollectionService;
+import com.beercompetition.mapper.OrganizerMapper;
+import com.beercompetition.pojo.enums.OrganizerType;
+import com.beercompetition.pojo.po.Organizer;
+import com.beercompetition.pojo.vo.CompetitionCollectionConfigVO;
 
 /**
  * 校验并推进赛事状态，所有状态变更在事务内完成审计。
@@ -60,6 +65,9 @@ public class CompetitionLifecycleServiceImpl implements CompetitionLifecycleServ
     private final CompetitionQueryService competitionQueryService;
 
     private final CompetitionAccessService competitionAccessService;
+
+    private final OrganizerMapper organizerMapper;
+    private final CompetitionCollectionService competitionCollectionService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -95,6 +103,13 @@ public class CompetitionLifecycleServiceImpl implements CompetitionLifecycleServ
 
         // 2) 执行完整性检查
         CompetitionDetailVO detail = competitionQueryService.getCompetitionOverview(competition.getId());
+        Organizer organizer = organizerMapper.selectById(competition.getOrganizerId());
+        if (organizer != null && OrganizerType.TENANT.name().equals(organizer.getOrganizerType())) {
+            CompetitionCollectionConfigVO collection = competitionCollectionService.getAdminConfig(competition.getId());
+            if (collection.getEnabledMethods() == null || collection.getEnabledMethods().isEmpty()) {
+                throw new BaseException("请先配置报名收款方式");
+            }
+        }
         List<CompetitionCheckVO> blockingChecks = detail.getChecks().stream()
                 .filter(check -> isBlockingCheck(check.getKey()))
                 .filter(check -> !CHECK_DONE.equals(check.getState()))

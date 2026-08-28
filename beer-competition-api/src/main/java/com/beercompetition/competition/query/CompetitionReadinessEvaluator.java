@@ -7,6 +7,7 @@ import com.beercompetition.mapper.RoundTableMapper;
 import com.beercompetition.mapper.RoundResultMapper;
 import com.beercompetition.mapper.RoundTableEntryMapper;
 import com.beercompetition.mapper.ScoreRecordMapper;
+import com.beercompetition.mapper.OrganizerMapper;
 import com.beercompetition.pojo.dto.DimensionRequest;
 import com.beercompetition.pojo.enums.CompetitionStatus;
 import com.beercompetition.pojo.enums.CompetitionType;
@@ -14,6 +15,7 @@ import com.beercompetition.pojo.enums.AwardResultStatus;
 import com.beercompetition.pojo.enums.AwardType;
 import com.beercompetition.pojo.enums.JudgeRoleType;
 import com.beercompetition.pojo.enums.RefundApprovalMode;
+import com.beercompetition.pojo.enums.OrganizerType;
 import com.beercompetition.pojo.enums.RoundStatus;
 import com.beercompetition.pojo.enums.RoundResultType;
 import com.beercompetition.pojo.enums.RoundTargetMode;
@@ -100,6 +102,8 @@ public class CompetitionReadinessEvaluator {
     private final RoundTableEntryMapper roundTableEntryMapper;
 
     private final AwardService awardService;
+
+    private final OrganizerMapper organizerMapper;
 
     private void validateEarlyBirdConfig(BigDecimal earlyBirdFee,
                                          LocalDateTime earlyBirdDeadline,
@@ -515,6 +519,12 @@ public class CompetitionReadinessEvaluator {
     }
 
     public RefundApprovalMode resolveRefundApprovalMode(Competition competition) {
+        if (competition != null) {
+            var organizer = organizerMapper.selectById(competition.getOrganizerId());
+            if (organizer != null && OrganizerType.TENANT.name().equals(organizer.getOrganizerType())) {
+                return RefundApprovalMode.MANUAL_REVIEW;
+            }
+        }
         return RefundApprovalMode.of(competition == null ? null : competition.getRefundApprovalMode());
     }
 

@@ -691,6 +691,7 @@ function formatCurrency(value) {
 
 function paymentStatusText(entry) {
   if (entry?.refundStatus === 'REQUESTED') return '待组委会审核'
+  if (entry?.refundStatus === 'APPROVED' && isWechatQrRefund(entry)) return '待主办方确认退款'
   if (entry?.refundStatus === 'APPROVED' && isManualRefundPayment(entry)) return '待银行卡退款'
   if (isEntryRefundActive(entry)) return '退款处理中'
   if (isEntryRefunded(entry)) return '已退款'
@@ -702,6 +703,7 @@ function paymentStatusText(entry) {
 }
 
 function refundStatusText(status, entry) {
+  if (status === 'APPROVED' && isWechatQrRefund(entry)) return '待主办方确认退款'
   if (status === 'APPROVED') return isManualRefundPayment(entry) ? '待银行卡退款' : '准备提交微信退款'
   if (status === 'PROCESSING') return isManualRefundPayment(entry) ? '银行卡退款处理中' : '微信退款处理中'
   return {
@@ -762,6 +764,10 @@ function refundUnavailableText(entry) {
 
 function isManualRefundPayment(entry) {
   return ['BANK_TRANSFER', 'MANUAL'].includes(entry?.payment?.payMethod)
+}
+
+function isWechatQrRefund(entry) {
+  return entry?.payment?.payMethod === 'WECHAT_QR'
 }
 
 onMounted(async () => {

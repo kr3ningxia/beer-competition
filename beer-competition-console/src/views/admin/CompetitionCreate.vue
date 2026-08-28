@@ -22,6 +22,7 @@
       <button :class="{ active: activeSection === 'base-info', issue: sectionIssueMap['base-info'] }" type="button" @click="scrollToSection('base-info')">基础信息</button>
       <button :class="{ active: activeSection === 'logistics-info', issue: sectionIssueMap['logistics-info'] }" type="button" @click="scrollToSection('logistics-info')">送样信息</button>
       <button :class="{ active: activeSection === 'entry-config', issue: sectionIssueMap['entry-config'] }" type="button" @click="scrollToSection('entry-config')">报名表</button>
+      <button v-if="isTenantOrganizer" :class="{ active: activeSection === 'collection-config' }" type="button" @click="scrollToSection('collection-config')">报名收款</button>
       <button :class="{ active: activeSection === 'score-config', issue: sectionIssueMap['score-config'] }" type="button" @click="scrollToSection('score-config')">评分表</button>
       <button :class="{ active: activeSection === 'review-draft' }" type="button" @click="scrollToSection('review-draft')">确认</button>
     </nav>
@@ -38,7 +39,17 @@
             </label>
 
             <section class="form-subgroup">
-              <h3>赛事属性</h3>
+              <div class="subgroup-heading competition-type-heading">
+                <h3>赛制选择</h3>
+                <button
+                  class="hint-marker info-hint"
+                  type="button"
+                  aria-label="赛制选择说明：风格对齐会在第一轮评选后发布结果，不产生奖项"
+                  data-tooltip="风格对齐会在第一轮评选后发布结果，不产生奖项"
+                >
+                  <InfoFilled aria-hidden="true" />
+                </button>
+              </div>
               <div class="competition-type-switch">
                 <button
                   v-for="option in competitionTypeOptions"
@@ -48,7 +59,6 @@
                   @click="draft.competitionType = option.value"
                 >
                   <strong>{{ option.label }}</strong>
-                  <span>{{ option.description }}</span>
                 </button>
               </div>
               <div class="form-grid two">
@@ -94,34 +104,6 @@
                   <span>早鸟截止时间</span>
                   <input v-model="draft.earlyBirdDeadline" type="datetime-local" />
                 </label>
-              </div>
-            </section>
-
-            <section class="form-subgroup refund-policy-group">
-              <div class="subgroup-heading">
-                <h3>退款审批</h3>
-                <el-tooltip
-                  content="报名截止前可调整；修改后仅影响新提交的退款申请。银行转账退款仍需确认实际退款完成。"
-                  placement="top"
-                >
-                  <button class="hint-marker" type="button" aria-label="查看退款审批说明">?</button>
-                </el-tooltip>
-              </div>
-              <div class="refund-mode-switch" role="radiogroup" aria-label="退款审批方式">
-                <button
-                  :class="{ active: draft.refundApprovalMode === 'AUTO_APPROVE' }"
-                  type="button"
-                  @click="draft.refundApprovalMode = 'AUTO_APPROVE'"
-                >
-                  自动同意
-                </button>
-                <button
-                  :class="{ active: draft.refundApprovalMode === 'MANUAL_REVIEW' }"
-                  type="button"
-                  @click="draft.refundApprovalMode = 'MANUAL_REVIEW'"
-                >
-                  管理员审批
-                </button>
               </div>
             </section>
 
@@ -342,6 +324,22 @@
           </section>
         </section>
 
+        <section v-if="isTenantOrganizer" id="collection-config" class="form-section">
+          <header class="section-head"><h2>报名收款</h2></header>
+          <div class="collection-config-grid">
+            <div class="collection-upload wide-field">
+              <span class="field-label">微信收款码 <b>*</b></span>
+              <input ref="collectionQrInput" class="collection-file-input" type="file" accept="image/jpeg,image/png,image/webp" @change="selectCollectionQr" />
+              <button v-if="!collectionDraft.qrFile" class="upload-dropzone" type="button" @click="collectionQrInput?.click()"><span class="upload-icon">↑</span><strong>上传收款码</strong><small>支持 JPG、PNG、WEBP，建议使用清晰的个人或企业收款码</small></button>
+              <div v-else class="qr-preview-card"><img :src="collectionDraft.qrPreviewUrl" alt="微信收款码预览" /><div><strong>{{ collectionDraft.qrFile.name }}</strong><small>已选择，可直接保存草稿</small><button type="button" @click="collectionQrInput?.click()">更换图片</button></div></div>
+            </div>
+            <label><span>账户名 <b>*</b></span><input v-model.trim="collectionDraft.bankAccountName" placeholder="请输入收款账户名称" /></label>
+            <label><span>账号 <b>*</b></span><input v-model.trim="collectionDraft.bankAccountNo" placeholder="请输入银行卡号" /></label>
+            <label class="wide-field"><span>开户行 <b>*</b></span><input v-model.trim="collectionDraft.bankName" placeholder="请输入开户银行及支行" /></label>
+            <label class="wide-field"><span>收款备注</span><input v-model.trim="collectionDraft.collectionNote" maxlength="255" placeholder="展示给报名厂商的转账备注要求" /></label>
+          </div>
+        </section>
+
         <section id="score-config" class="form-section">
           <header class="section-head">
             <h2>评分表配置</h2>
@@ -350,9 +348,16 @@
           <div class="score-stack">
             <article v-for="config in draft.scoreConfigs" :key="config.role" class="config-card score-card">
               <div class="card-title">
-                <div>
+                <div class="score-title">
                   <h3>{{ roleLabels[config.role] }}</h3>
-                  <small>{{ scoreDescriptions[config.role] }}</small>
+                  <button
+                    class="hint-marker info-hint score-info-hint"
+                    type="button"
+                    :aria-label="`${roleLabels[config.role]}说明：${scoreDescriptions[config.role]}`"
+                    :data-tooltip="scoreDescriptions[config.role]"
+                  >
+                    <InfoFilled aria-hidden="true" />
+                  </button>
                 </div>
                 <span :class="['score-total', { ok: getScoreTotal(config) === 50 }]">{{ getScoreTotal(config) }} / 50</span>
               </div>
@@ -463,10 +468,6 @@
                   <dd>{{ formatDateTime(draft.earlyBirdDeadline) }}</dd>
                 </div>
                 <div>
-                  <dt>退款审批</dt>
-                  <dd>{{ refundApprovalModeLabel }}</dd>
-                </div>
-                <div>
                   <dt>赛事简介</dt>
                   <dd>{{ draft.description || '-' }}</dd>
                 </div>
@@ -502,8 +503,9 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { getAdminMe } from '@/api/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Back, CircleCheck, Delete, Plus, Warning } from '@element-plus/icons-vue'
+import { Back, CircleCheck, Delete, InfoFilled, Plus, Warning } from '@element-plus/icons-vue'
 import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import {
   defaultScoreConfigs,
@@ -514,11 +516,15 @@ import {
 import {
   createCompetition,
   fetchEnabledStyleLibraries,
+  uploadCompetitionCollectionQr,
+  updateCompetitionCollection,
 } from '@/api/admin'
 import { defaultStyleLibraryValue, fallbackStyleLibraries, formatStyleItemName, getStyleLibrary, normalizeStyleLibraries } from './styleLibraries'
 
 const router = useRouter()
 const activeSection = ref('base-info')
+const collectionQrInput = ref(null)
+const isTenantOrganizer = ref(false)
 
 const deliveryMethodOptions = [
   { label: '快递寄送 / 现场送样', value: 'BOTH' },
@@ -533,8 +539,8 @@ const logisticsVisibilityOptions = [
 ]
 
 const competitionTypeOptions = [
-  { label: '正式评奖比赛', value: 'AWARD', description: '晋级、排序、奖项和证书' },
-  { label: '风格对齐会', value: 'FEEDBACK_ONLY', description: '首轮评审后发布诊断结果' },
+  { label: '正式评奖比赛', value: 'AWARD' },
+  { label: '风格对齐会', value: 'FEEDBACK_ONLY' },
 ]
 
 const fieldTypeOptions = [
@@ -554,7 +560,6 @@ const draft = reactive({
   entryFee: 199,
   earlyBirdFee: 159,
   earlyBirdDeadline: '2026-06-30T18:00',
-  refundApprovalMode: 'AUTO_APPROVE',
   description: '',
   rulesUrl: 'https://mp.weixin.qq.com/s/iGxSnomHIXvdOyMO9xgd2Q',
   deliveryMethod: 'BOTH',
@@ -584,6 +589,7 @@ const draft = reactive({
   ],
   scoreConfigs: createScoreConfigs(),
 })
+const collectionDraft = reactive({ enabledMethods: ['WECHAT_QR', 'BANK_TRANSFER'], qrFile: null, qrPreviewUrl: '', qrAssetId: null, bankAccountName: '', bankAccountNo: '', bankName: '', collectionNote: '' })
 const initialDraftSnapshot = JSON.stringify(toDraftSnapshot(draft))
 
 const scoreDescriptions = {
@@ -601,7 +607,6 @@ const reviewItems = computed(() => buildReviewItems(draft))
 const reviewBlockingItems = computed(() => reviewItems.value.filter((item) => item.status !== 'done'))
 const reviewBlockingText = computed(() => `请先处理：${reviewBlockingItems.value.map((item) => item.label).join('、')}`)
 const competitionTypeLabel = computed(() => competitionTypeOptions.find((item) => item.value === draft.competitionType)?.label || '正式评奖比赛')
-const refundApprovalModeLabel = computed(() => draft.refundApprovalMode === 'MANUAL_REVIEW' ? '管理员审批' : '自动同意')
 const reviewReadyText = computed(() => (
   draft.competitionType === 'FEEDBACK_ONLY'
     ? '保存后进入工作台配置评审桌、首轮评审和诊断发布'
@@ -610,10 +615,23 @@ const reviewReadyText = computed(() => (
 const sectionIssueMap = computed(() => reviewBlockingItems.value.reduce((map, item) => ({ ...map, [item.target]: true }), {}))
 const categorySummary = computed(() => summarizeList(getCategoryNames(draft), '未配置'))
 const judgeVisibleFieldSummary = computed(() => summarizeList(getJudgeVisibleFields(draft), '无'))
-const isDraftDirty = computed(() => JSON.stringify(toDraftSnapshot(draft)) !== initialDraftSnapshot)
+const isDraftDirty = computed(() => JSON.stringify(toDraftSnapshot(draft)) !== initialDraftSnapshot || (isTenantOrganizer.value && (collectionDraft.qrFile !== null || collectionDraft.bankAccountName || collectionDraft.bankAccountNo || collectionDraft.bankName || collectionDraft.collectionNote)))
 
 function removeItem(list, index) {
   list.splice(index, 1)
+}
+
+function selectCollectionQr(event) {
+  const file = event.target.files?.[0] || null
+  if (!file) return
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    ElMessage.warning('收款码仅支持 JPG、PNG 或 WEBP 图片')
+    event.target.value = ''
+    return
+  }
+  if (collectionDraft.qrPreviewUrl) URL.revokeObjectURL(collectionDraft.qrPreviewUrl)
+  collectionDraft.qrFile = file
+  collectionDraft.qrPreviewUrl = URL.createObjectURL(file)
 }
 
 function addCategory() {
@@ -681,6 +699,16 @@ async function submitDraft() {
     ElMessage.warning(`“${invalidOptionField.label || '未命名字段'}”至少需要 2 个不重复候选项`)
     return
   }
+  if (isTenantOrganizer.value && !collectionDraft.qrFile && !collectionDraft.qrAssetId) {
+    ElMessage.warning('请上传微信收款码')
+    scrollToSection('collection-config')
+    return
+  }
+  if (isTenantOrganizer.value && (!collectionDraft.bankAccountName || !collectionDraft.bankAccountNo || !collectionDraft.bankName)) {
+    ElMessage.warning('请完整填写银行账户名、账号和开户行')
+    scrollToSection('collection-config')
+    return
+  }
   try {
     const created = await createCompetition({
       name: draft.name,
@@ -691,7 +719,6 @@ async function submitDraft() {
       entryFee: Number(draft.entryFee || 0),
       earlyBirdFee: draft.earlyBirdFee === '' || draft.earlyBirdFee === null ? null : Number(draft.earlyBirdFee),
       earlyBirdDeadline: toBackendDateTime(draft.earlyBirdDeadline),
-      refundApprovalMode: draft.refundApprovalMode,
       description: draft.description,
       rulesUrl: draft.rulesUrl || null,
       deliveryMethod: draft.deliveryMethod,
@@ -731,6 +758,11 @@ async function submitDraft() {
       })),
     })
     const competitionId = created.id
+    let qrAssetId = collectionDraft.qrAssetId
+    if (isTenantOrganizer.value && collectionDraft.qrFile) qrAssetId = (await uploadCompetitionCollectionQr(competitionId, collectionDraft.qrFile)).fileAssetId
+    if (isTenantOrganizer.value) {
+      await updateCompetitionCollection(competitionId, { enabledMethods: collectionDraft.enabledMethods, wechatQrAssetId: qrAssetId, bankAccountName: collectionDraft.bankAccountName, bankAccountNo: collectionDraft.bankAccountNo, bankName: collectionDraft.bankName, collectionNote: collectionDraft.collectionNote })
+    }
     ElMessage.success('比赛草稿已创建，下一步进入工作台完成评审编排')
     router.push(`/admin/competitions/${competitionId}`)
   } catch {
@@ -764,11 +796,14 @@ async function leaveCreatePage() {
 
 function scrollToSection(id) {
   activeSection.value = id
-  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  const panel = document.querySelector('.create-panel')
+  const section = document.getElementById(id)
+  if (!panel || !section) return
+  panel.scrollTo({ top: Math.max(0, section.offsetTop - 4), behavior: 'smooth' })
 }
 
 function syncActiveSection() {
-  const sections = ['base-info', 'logistics-info', 'entry-config', 'score-config', 'review-draft']
+  const sections = ['base-info', 'logistics-info', 'entry-config', 'collection-config', 'score-config', 'review-draft']
   const current = sections
     .map((id) => ({ id, top: Math.abs(document.getElementById(id)?.getBoundingClientRect().top ?? Number.POSITIVE_INFINITY) }))
     .sort((a, b) => a.top - b.top)[0]
@@ -779,10 +814,12 @@ function syncActiveSection() {
 
 onMounted(() => {
   loadStyleLibraries()
+  getAdminMe().then((user) => { isTenantOrganizer.value = user?.organizerType === 'TENANT' }).catch(() => {})
   document.querySelector('.create-panel')?.addEventListener('scroll', syncActiveSection, { passive: true })
 })
 
 onBeforeUnmount(() => {
+  if (collectionDraft.qrPreviewUrl) URL.revokeObjectURL(collectionDraft.qrPreviewUrl)
   document.querySelector('.create-panel')?.removeEventListener('scroll', syncActiveSection)
 })
 
@@ -890,7 +927,6 @@ function toDraftSnapshot(source) {
     entryFee: source.entryFee,
     earlyBirdFee: source.earlyBirdFee,
     earlyBirdDeadline: source.earlyBirdDeadline,
-    refundApprovalMode: source.refundApprovalMode,
     description: source.description,
     rulesUrl: source.rulesUrl,
     deliveryMethod: source.deliveryMethod,
@@ -1127,6 +1163,7 @@ function buildReviewItems(source) {
   --orange: #f2994a;
   --red: #e05252;
   height: 100vh;
+  box-sizing: border-box;
   padding: 0 28px 18px;
   color: var(--text);
   overflow: hidden;
@@ -1392,6 +1429,10 @@ label span {
   gap: 12px;
 }
 
+.competition-type-heading {
+  justify-content: flex-start;
+}
+
 .hint-marker {
   display: inline-grid;
   width: 20px;
@@ -1412,6 +1453,43 @@ label span {
   color: var(--gold-soft);
   border-color: rgba(224, 184, 74, 0.48);
   outline: none;
+}
+
+.info-hint {
+  position: relative;
+}
+
+.info-hint svg {
+  width: 13px;
+  height: 13px;
+}
+
+.info-hint::after {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  z-index: 20;
+  width: min(280px, calc(100vw - 80px));
+  padding: 10px 12px;
+  color: var(--text);
+  border: 1px solid rgba(216, 169, 53, 0.26);
+  border-radius: 8px;
+  background: rgba(18, 27, 31, 0.98);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.26);
+  content: attr(data-tooltip);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.55;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.info-hint:hover::after,
+.info-hint:focus::after {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .refund-mode-switch {
@@ -1445,10 +1523,11 @@ label span {
 }
 
 .competition-type-switch button {
-  display: grid;
-  gap: 4px;
-  min-height: 66px;
-  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 52px;
+  padding: 0 16px;
   text-align: left;
   color: #c7d5db;
   border: 1px solid rgba(219, 232, 237, 0.12);
@@ -1461,20 +1540,23 @@ label span {
   color: #10191d;
   border-color: rgba(224, 184, 74, 0.78);
   background: #e0b84a;
+  box-shadow: 0 4px 14px rgba(224, 184, 74, 0.12);
 }
 
-.competition-type-switch strong,
-.competition-type-switch span {
-  overflow-wrap: anywhere;
+.competition-type-switch button:hover:not(.active) {
+  border-color: rgba(224, 184, 74, 0.42);
+  background: rgba(224, 184, 74, 0.06);
+}
+
+.competition-type-switch button:focus-visible {
+  outline: 2px solid rgba(224, 184, 74, 0.8);
+  outline-offset: 2px;
 }
 
 .competition-type-switch strong {
+  overflow-wrap: anywhere;
   font-size: 14px;
-}
-
-.competition-type-switch span {
-  font-size: 12px;
-  opacity: 0.78;
+  line-height: 1.2;
 }
 
 .form-grid.two {
@@ -1535,6 +1617,127 @@ textarea::placeholder {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.04);
+}
+
+.collection-config-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  max-width: 1000px;
+}
+
+.collection-config-grid .wide-field {
+  grid-column: 1 / -1;
+}
+
+.collection-upload {
+  display: grid;
+  gap: 9px;
+}
+
+.field-label {
+  color: #c7d5db;
+}
+
+.field-label b,
+.collection-config-grid label b {
+  color: #e0b84a;
+}
+
+.collection-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.upload-dropzone {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 12px;
+  align-items: center;
+  min-height: 94px;
+  padding: 16px;
+  color: #c7d5db;
+  text-align: left;
+  border: 1px dashed rgba(224, 184, 74, 0.42);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  cursor: pointer;
+}
+
+.upload-dropzone:hover {
+  border-color: var(--gold-soft);
+  background: rgba(224, 184, 74, 0.08);
+}
+
+.upload-icon {
+  grid-row: 1 / span 2;
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  color: #10191d;
+  border-radius: 50%;
+  background: var(--gold-soft);
+  font-size: 22px;
+}
+
+.upload-dropzone small,
+.qr-preview-card small {
+  color: var(--muted);
+}
+
+.qr-preview-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 140px;
+  padding: 12px;
+  border: 1px solid rgba(219, 232, 237, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.qr-preview-card img {
+  width: 116px;
+  height: 116px;
+  object-fit: contain;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.qr-preview-card div {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.qr-preview-card strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qr-preview-card button {
+  width: fit-content;
+  padding: 0;
+  color: var(--gold-soft);
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.collection-config-grid small {
+  color: var(--muted);
+}
+
+@media (max-width: 720px) {
+  .collection-config-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .fee-field input {
@@ -1617,6 +1820,38 @@ textarea::placeholder {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
+}
+
+.score-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.score-title h3 {
+  min-width: 0;
+}
+
+.score-info-hint {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  border: 0;
+  background: transparent;
+  font-size: 0;
+}
+
+.score-info-hint svg {
+  width: 12px;
+  height: 12px;
+}
+
+.score-info-hint::after {
+  top: calc(100% + 8px);
+  left: 0;
+  width: min(280px, calc(100vw - 64px));
+  font-size: 12px;
 }
 
 .title-with-count {
@@ -2194,6 +2429,7 @@ textarea::placeholder {
   }
 
   .form-grid.two,
+  .competition-type-switch,
   .score-stack,
   .review-layout,
   .built-in-strip,
@@ -2220,6 +2456,11 @@ textarea::placeholder {
 
   .built-in-fields {
     justify-content: flex-start;
+  }
+
+  .competition-type-switch {
+    grid-template-columns: 1fr;
+    max-width: 100%;
   }
 
   .library-tags {

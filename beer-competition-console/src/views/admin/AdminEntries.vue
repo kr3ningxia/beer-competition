@@ -244,7 +244,7 @@
             </footer>
           </section>
 
-          <section v-if="activeTab === 'status'" class="drawer-panel status-panel">
+          <section v-if="activeTab === 'status' && !isRefundedEntry(detail)" class="drawer-panel status-panel">
             <div class="status-grid">
               <article>
                 <small>报名状态</small>
@@ -285,21 +285,22 @@
                 <div><dt>退款状态</dt><dd>{{ refundStatusText(detail.refundStatus, detail) }}</dd></div>
                 <div><dt>支付方式</dt><dd>{{ paymentMethodLabel(detail.payment?.payMethod) }}</dd></div>
                 <div><dt>金额</dt><dd>{{ formatMoney(detail.refund?.amount || detail.payment?.amount) }}</dd></div>
+                <div v-if="isThirdPartyWechatRefund(detail)"><dt>退款接收微信</dt><dd class="refund-contact-wechat">{{ detail.refundContactWechat || '未配置' }}</dd></div>
                 <div><dt>申请时间</dt><dd>{{ formatTime(detail.refundRequestedAt || detail.refund?.requestedTime) }}</dd></div>
                 <div><dt>处理时间</dt><dd>{{ formatTime(detail.refundProcessedAt || detail.refund?.processedTime) }}</dd></div>
                 <div v-if="detail.refund?.failReason"><dt>失败原因</dt><dd>{{ detail.refund.failReason }}</dd></div>
               </dl>
-              <dl v-if="detail.bankTransfer" class="refund-source">
+              <dl v-if="detail.bankTransfer && !isThirdPartyWechatRefund(detail)" class="refund-source">
                 <div><dt>原转账单号</dt><dd>{{ detail.bankTransfer.transferNo || '-' }}</dd></div>
                 <div><dt>付款人</dt><dd>{{ detail.bankTransfer.payerName || '-' }}</dd></div>
                 <div><dt>转账时间</dt><dd>{{ formatTime(detail.bankTransfer.transferTime) }}</dd></div>
                 <div><dt>原转账金额</dt><dd>{{ formatMoney(detail.bankTransfer.amount) }}</dd></div>
                 <div><dt>付款凭证</dt><dd><a v-if="detail.bankTransfer.voucherPublicUrl" :href="detail.bankTransfer.voucherPublicUrl" target="_blank" rel="noreferrer">查看凭证</a><span v-else>-</span></dd></div>
               </dl>
-              <dl v-if="detail.bankTransfer?.entryCount > 1" class="refund-source">
+              <dl v-if="detail.bankTransfer?.entryCount > 1 && !isThirdPartyWechatRefund(detail)" class="refund-source">
                 <div><dt>批量转账</dt><dd>共 {{ detail.bankTransfer.entryCount }} 款，本次退当前酒款 {{ formatMoney(detail.refund?.amount) }}</dd></div>
               </dl>
-              <dl v-if="detail.offlineRefundTransferNo" class="refund-source">
+              <dl v-if="detail.offlineRefundTransferNo && !isThirdPartyWechatRefund(detail)" class="refund-source">
                 <div><dt>退款收款人</dt><dd>{{ detail.offlineRefundAccountName || '-' }}</dd></div>
                 <div><dt>收款银行</dt><dd>{{ detail.offlineRefundBankName || '-' }}</dd></div>
                 <div><dt>收款账号</dt><dd>尾号 {{ detail.offlineRefundAccountNoLast4 || '-' }}</dd></div>
@@ -312,14 +313,15 @@
               <textarea v-model.trim="statusReason" placeholder="可填写退款处理说明"></textarea>
             </label>
             <div class="status-actions">
-              <button v-if="detail.canApproveRefund" type="button" @click="runRefundAction('approve')">通过申请</button>
+              <button v-if="detail.canApproveRefund" type="button" @click="runRefundAction('approve')">{{ isThirdPartyWechatRefund(detail) ? '确认退款' : '通过申请' }}</button>
               <button v-if="detail.canRejectRefund" type="button" @click="runRefundAction('reject')">驳回退款</button>
               <button v-if="detail.canRetryRefund" type="button" @click="runRefundAction('retry')">重试退款</button>
-              <button v-if="detail.refundStatus === 'APPROVED' && isManualRefundPayment(detail)" type="button" @click="openOfflineRefundDialog">确认银行卡退款</button>
+              <button v-if="detail.canConfirmOfflineRefund && isThirdPartyWechatRefund(detail)" type="button" @click="runRefundAction('completeWechat')">确认微信退款已完成</button>
+              <button v-if="detail.refundStatus === 'APPROVED' && isManualRefundPayment(detail) && !isThirdPartyWechatRefund(detail)" type="button" @click="openOfflineRefundDialog">确认银行卡退款</button>
             </div>
           </section>
 
-          <section v-if="activeTab === 'label'" class="drawer-panel label-panel">
+          <section v-if="activeTab === 'label' && !isRefundedEntry(detail)" class="drawer-panel label-panel">
             <div class="label-preview-card">
               <div class="admin-label-preview" v-html="adminLabelSvg" />
               <button class="tool-button primary" type="button" @click="downloadAdminLabelPng">下载 PNG</button>
@@ -523,6 +525,7 @@ const entryStatusOptions = [
   { value: 'REGISTERED', label: '报名成功' },
   { value: 'STORED', label: '已入库' },
   { value: 'RESULT_PUBLISHED', label: '结果已出' },
+  { value: 'CANCELED', label: '已取消' },
 ]
 
 const totalPages = computed(() => Math.max(Math.ceil(total.value / filters.pageSize), 1))
@@ -534,15 +537,14 @@ const visiblePages = computed(() => {
   return pages
 })
 const drawerTabs = computed(() => {
-  const tabs = [
-    { key: 'profile', label: '报名信息' },
-    { key: 'status', label: '状态处理' },
-  ]
+  const refunded = isRefundedEntry(detail.value)
+  const tabs = [{ key: 'profile', label: '报名信息' }]
+  if (!refunded) tabs.push({ key: 'status', label: '状态处理' })
   if (detail.value?.refundStatus) {
     tabs.push({ key: 'refund', label: '退款处理' })
   }
+  if (!refunded) tabs.push({ key: 'label', label: '二维码' })
   tabs.push(
-    { key: 'label', label: '二维码' },
     { key: 'trace', label: '分桌轨迹' },
     { key: 'logs', label: '修改记录' },
   )
@@ -976,7 +978,7 @@ async function runRefundAction(type) {
   const current = detail.value
   const refundId = current?.refund?.id
   if (!current || !refundId) return
-  if (['approve', 'retry', 'completeOffline'].includes(type)) {
+  if (['approve', 'retry', 'completeOffline', 'completeWechat'].includes(type)) {
     openEntryConfirm({
       action: 'refund',
       kicker: '退款处理',
@@ -989,9 +991,11 @@ async function runRefundAction(type) {
       ]),
       confirmText: type === 'retry'
         ? '重试退款'
-        : type === 'completeOffline'
+        : type === 'completeOffline' || type === 'completeWechat'
           ? '确认已完成'
-          : '通过申请',
+          : isThirdPartyWechatRefund(current)
+            ? '确认退款'
+            : '通过申请',
       loadingText: type === 'retry' ? '重试中' : '确认中',
       reasonLabel: '处理原因',
       reasonPlaceholder: '可填写退款处理说明',
@@ -1006,19 +1010,21 @@ async function executeRefundAction(type, reason = statusReason.value) {
   const current = detail.value
   const refundId = current?.refund?.id
   if (!current || !refundId) return
+  const thirdPartyWechatRefund = isThirdPartyWechatRefund(current)
   const payload = { reason }
   if (type === 'approve') await approveEntryRefund(refundId, payload)
   if (type === 'reject') await rejectEntryRefund(refundId, payload)
   if (type === 'retry') await retryEntryRefund(refundId, payload)
-  if (type === 'completeOffline') await confirmOfflineEntryRefund(refundId, payload)
+  if (type === 'completeOffline' || type === 'completeWechat') await confirmOfflineEntryRefund(refundId, payload)
   detail.value = await fetchAdminEntryDetail(current.id)
   syncEditForm()
   await loadEntries()
-  ElMessage.success(refundActionLabel(type))
+  ElMessage.success(refundActionLabel(type, thirdPartyWechatRefund))
 }
 
-function refundActionLabel(type) {
-  if (type === 'approve') return '退款申请已通过'
+function refundActionLabel(type, thirdPartyWechatRefund = false) {
+  if (type === 'approve') return thirdPartyWechatRefund ? '退款已完成' : '退款申请已通过'
+  if (type === 'completeWechat') return '微信退款已确认'
   if (type === 'completeOffline') return '银行卡退款已确认'
   return type === 'reject' ? '退款已驳回' : '退款已重试'
 }
@@ -1039,12 +1045,18 @@ function paymentLabel(value) {
 }
 
 function paymentMethodLabel(value) {
-  return { WECHAT: '微信支付', BANK_TRANSFER: '银行转账', MANUAL: '人工确认', MOCK: '测试支付' }[value] || '未记录'
+  return { WECHAT: '微信支付', WECHAT_QR: '微信收款码', BANK_TRANSFER: '银行转账', MANUAL: '人工确认', MOCK: '测试支付' }[value] || '未记录'
 }
 
 function refundStatusText(value, entry) {
-  if (value === 'APPROVED') return isManualRefundPayment(entry) ? '待银行卡退款' : '准备提交微信退款'
-  if (value === 'PROCESSING') return isManualRefundPayment(entry) ? '已登记银行卡退款' : '微信退款处理中'
+  if (value === 'APPROVED') {
+    if (isThirdPartyWechatRefund(entry)) return '待确认退款'
+    return isManualRefundPayment(entry) ? '待银行卡退款' : '准备提交微信退款'
+  }
+  if (value === 'PROCESSING') {
+    if (isThirdPartyWechatRefund(entry)) return '退款处理中'
+    return isManualRefundPayment(entry) ? '已登记银行卡退款' : '微信退款处理中'
+  }
   return {
     REQUESTED: '待处理',
     APPROVED: '处理中',
@@ -1056,8 +1068,8 @@ function refundStatusText(value, entry) {
 
 function paymentRefundLabel(entry) {
   if (!entry?.refundStatus) return paymentLabel(entry?.paymentStatus)
-  if (entry.refundStatus === 'APPROVED') return isManualRefundPayment(entry) ? '待银行卡退款' : '准备提交微信退款'
-  if (entry.refundStatus === 'PROCESSING') return isManualRefundPayment(entry) ? '已登记银行卡退款' : '微信退款处理中'
+  if (entry.refundStatus === 'APPROVED') return isThirdPartyWechatRefund(entry) ? '待确认退款' : (isManualRefundPayment(entry) ? '待银行卡退款' : '准备提交微信退款')
+  if (entry.refundStatus === 'PROCESSING') return isThirdPartyWechatRefund(entry) ? '退款处理中' : (isManualRefundPayment(entry) ? '已登记银行卡退款' : '微信退款处理中')
   return {
     REQUESTED: '待退款审核',
     APPROVED: '退款处理中',
@@ -1070,8 +1082,8 @@ function paymentRefundLabel(entry) {
 function paymentRefundMeta(entry) {
   if (!entry?.refundStatus) return ''
   if (entry.refundStatus === 'REQUESTED') return '等待处理'
-  if (entry.refundStatus === 'APPROVED') return isManualRefundPayment(entry) ? '等待银行卡退款' : '等待提交微信'
-  if (entry.refundStatus === 'PROCESSING') return isManualRefundPayment(entry) ? '银行卡退款待完成' : '等待微信处理结果'
+  if (entry.refundStatus === 'APPROVED') return isThirdPartyWechatRefund(entry) ? '退款待确认' : (isManualRefundPayment(entry) ? '等待银行卡退款' : '等待提交微信')
+  if (entry.refundStatus === 'PROCESSING') return isThirdPartyWechatRefund(entry) ? '等待确认完成' : (isManualRefundPayment(entry) ? '银行卡退款待完成' : '等待微信处理结果')
   if (entry.refundStatus === 'SUCCESS') return '报名已取消'
   if (entry.refundStatus === 'FAILED') return '需要重试'
   if (entry.refundStatus === 'REJECTED') return '支付仍有效'
@@ -1079,18 +1091,30 @@ function paymentRefundMeta(entry) {
 }
 
 function isManualRefundPayment(entry) {
-  return ['BANK_TRANSFER', 'MANUAL'].includes(entry?.payment?.payMethod)
+  return ['BANK_TRANSFER', 'MANUAL'].includes(resolveEntryPayMethod(entry))
+}
+
+function isThirdPartyWechatRefund(entry) {
+  return resolveEntryPayMethod(entry) === 'WECHAT_QR'
+}
+
+function resolveEntryPayMethod(entry) {
+  return entry?.payment?.payMethod || entry?.payMethod || null
 }
 
 function refundConfirmTitle(entry, type) {
   if (type === 'retry') return '确认重试退款？'
+  if (type === 'completeWechat') return '确认微信退款已完成？'
   if (type === 'completeOffline') return '确认银行卡退款已完成？'
+  if (type === 'approve' && isThirdPartyWechatRefund(entry)) return '确认已完成退款？'
   return '确认通过退款申请？'
 }
 
 function refundConfirmCopy(entry, type) {
   if (type === 'retry') return '将重新提交微信退款，退款成功后，这款酒会取消报名并退出后续流程'
+  if (type === 'completeWechat') return '确认后，这款酒会取消报名，支付记录将更新为已退款'
   if (type === 'completeOffline') return '确认后，这款酒会取消报名，支付记录将更新为已退款'
+  if (isThirdPartyWechatRefund(entry)) return '确认后将立即完成退款记录，这款酒会取消报名并退出后续流程'
   if (isManualRefundPayment(entry)) return '通过后等待银行卡退款，实际转账并上传凭证后完成退款'
   return '通过后将提交微信退款，退款成功后这款酒会取消报名'
 }

@@ -3,6 +3,9 @@
     <RouterLink class="back-link" to="/portal/events">&lt; 返回</RouterLink>
 
     <section class="detail-hero">
+      <span v-if="competition.organizerType === 'TENANT'" class="detail-organizer">
+        第三方赛事&nbsp;&nbsp;发起方：{{ competition.organizerName || '—' }}
+      </span>
       <div class="hero-copy">
         <span :class="['label-chip', stageTone(competition.status)]">
           {{ stageLabel }}
@@ -281,6 +284,7 @@ function deliveryMethodText(value) {
 }
 
 .detail-hero {
+  position: relative;
   display: grid;
   min-height: 360px;
   padding: 30px;
@@ -291,6 +295,23 @@ function deliveryMethodText(value) {
   background-position: center;
   background-size: cover;
   border-radius: 8px;
+}
+
+.detail-organizer {
+  position: absolute;
+  top: 26px;
+  right: 30px;
+  max-width: min(42%, 360px);
+  padding: 8px 12px;
+  color: #fff8e8;
+  background: rgba(43, 29, 16, 0.58);
+  border: 1px solid rgba(255, 250, 240, 0.26);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .hero-copy {

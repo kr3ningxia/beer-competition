@@ -78,7 +78,7 @@ public class AdminEntryListAssembler {
         EntryPayment payment = findEntryPayment(entry.getId());
         EntryDelivery delivery = findEntryDelivery(entry.getId());
         EntryRefund refund = findLatestRefund(entry.getId());
-        EntryScanLabel label = entryScanLabelService.requireActiveLabel(entry.getId());
+        EntryScanLabel label = entryScanLabelService.requireLatestLabel(entry.getId());
         EntryEvaluationDataService.EntryEvaluationData evaluationData =
                 entryEvaluationDataService.loadEntryEvaluationData(entry.getId());
         List<AdminEntryTraceVO> traces = evaluationData.traces();
@@ -102,6 +102,7 @@ public class AdminEntryListAssembler {
                 .abv(entry.getAbv())
                 .status(entry.getStatus())
                 .paymentStatus(resolvePaymentStatus(entry, payment))
+                .payMethod(payment == null ? null : payment.getPayMethod())
                 .refundStatus(refund == null ? null : refund.getStatus())
                 .refundReason(refund == null ? null : refund.getReason())
                 .refundRequestedAt(refund == null ? null : refund.getRequestedTime())
@@ -124,7 +125,8 @@ public class AdminEntryListAssembler {
                 .canRejectRefund(canRejectRefund(refund))
                 .canRetryRefund(canRetryRefund(refund, payment))
                 .canConfirmOfflineRefund(canConfirmOfflineRefund(refund, payment))
-                .canEdit(!EntryStatus.RESULT_PUBLISHED.name().equals(entry.getStatus()) && !resultPublished)
+                .canEdit(!EntryStatus.CANCELED.name().equals(entry.getStatus())
+                        && !EntryStatus.RESULT_PUBLISHED.name().equals(entry.getStatus()) && !resultPublished)
                 .traces(traces)
                 .build();
     }
@@ -197,8 +199,13 @@ public class AdminEntryListAssembler {
     }
 
     private boolean canConfirmOfflineRefund(EntryRefund refund, EntryPayment payment) {
-        return refund != null && EntryRefundStatus.PROCESSING.name().equals(refund.getStatus())
-                && isManualRefundPayment(payment);
+        if (refund == null || !isManualRefundPayment(payment)) {
+            return false;
+        }
+        if (EntryPayMethod.WECHAT_QR.name().equals(payment.getPayMethod())) {
+            return EntryRefundStatus.APPROVED.name().equals(refund.getStatus());
+        }
+        return EntryRefundStatus.PROCESSING.name().equals(refund.getStatus());
     }
 
     private boolean canUnmarkStored(BeerEntry entry,
@@ -225,7 +232,8 @@ public class AdminEntryListAssembler {
 
     private boolean isManualRefundPayment(EntryPayment payment) {
         return payment != null && (EntryPayMethod.BANK_TRANSFER.name().equals(payment.getPayMethod())
-                || EntryPayMethod.MANUAL.name().equals(payment.getPayMethod()));
+                || EntryPayMethod.MANUAL.name().equals(payment.getPayMethod())
+                || EntryPayMethod.WECHAT_QR.name().equals(payment.getPayMethod()));
     }
 
     private boolean isResultPublished(Competition competition, BeerEntry entry) {

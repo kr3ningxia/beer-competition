@@ -165,14 +165,14 @@ public class AdminEntryController {
     }
 
     /**
-     * 兼容确认已登记的银行卡退款已经实际完成。
+     * 确认人工处理的退款已经实际完成（银行卡或微信收款码）。
      */
     @PostMapping("/refunds/{id}/confirm-offline")
     public Result<String> completeOfflineRefund(
             @PathVariable Long id,
             @RequestBody(required = false) @Valid AdminEntryStatusRequest request) {
         entryRefundService.completeOfflineRefund(id, request);
-        return Result.success("银行卡退款已确认");
+        return Result.success("退款已确认");
     }
 
     @PostMapping(value = "/refunds/{id}/register-offline", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
