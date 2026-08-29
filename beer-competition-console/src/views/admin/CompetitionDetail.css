@@ -1284,6 +1284,75 @@ svg {
   font-size: 24px;
 }
 
+.beer-coin-settlement-card {
+  display: grid;
+  gap: 14px;
+}
+
+.beer-coin-settlement-card .panel-heading {
+  margin-bottom: 0;
+}
+
+.beer-coin-settlement-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid rgba(219, 232, 237, 0.08);
+  border-radius: 7px;
+  background: rgba(219, 232, 237, 0.08);
+}
+
+.beer-coin-settlement-grid > div {
+  display: grid;
+  align-content: center;
+  gap: 7px;
+  min-height: 70px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.beer-coin-settlement-grid strong {
+  color: #e6edf0;
+  font-size: 17px;
+}
+
+.beer-coin-pending-value {
+  color: var(--orange) !important;
+}
+
+.beer-coin-settlement-status {
+  padding: 5px 9px;
+  border: 1px solid rgba(111, 207, 122, 0.28);
+  border-radius: 6px;
+  color: var(--green);
+  background: rgba(111, 207, 122, 0.08);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.beer-coin-settlement-status.pending {
+  border-color: rgba(242, 153, 74, 0.3);
+  color: var(--orange);
+  background: rgba(242, 153, 74, 0.08);
+}
+
+.beer-coin-settlement-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 2px;
+  color: var(--orange);
+  font-size: 12px;
+}
+
+.beer-coin-settlement-footer .link-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .metric-card.compact-metric {
   gap: 4px;
   padding-block: 14px;
@@ -5091,7 +5160,8 @@ button.pyramid-placeholder-mark {
   .future-task-list,
   .overview-grid,
   .sponsor-editor-row,
-  .sponsor-fields {
+  .sponsor-fields,
+  .beer-coin-settlement-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

@@ -338,6 +338,13 @@
             <label class="wide-field"><span>开户行 <b>*</b></span><input v-model.trim="collectionDraft.bankName" placeholder="请输入开户银行及支行" /></label>
             <label class="wide-field"><span>收款备注</span><input v-model.trim="collectionDraft.collectionNote" maxlength="255" placeholder="展示给报名厂商的转账备注要求" /></label>
           </div>
+          <div v-if="beerCoinOverview" class="beer-coin-create-hint" :class="{ insufficient: beerCoinInsufficient }">
+            <div>
+              <span>啤酒币</span>
+              <strong>开放报名时扣除 1 枚，当前余额 {{ formatInteger(beerCoinWallet?.availableQuantity) }} 枚</strong>
+            </div>
+            <button v-if="beerCoinInsufficient" class="text-button" type="button" @click="router.push('/admin/beer-coins')">购买啤酒币</button>
+          </div>
         </section>
 
         <section id="score-config" class="form-section">
@@ -519,12 +526,15 @@ import {
   uploadCompetitionCollectionQr,
   updateCompetitionCollection,
 } from '@/api/admin'
+import { fetchBeerCoinOverview } from '@/api/beerCoin'
 import { defaultStyleLibraryValue, fallbackStyleLibraries, formatStyleItemName, getStyleLibrary, normalizeStyleLibraries } from './styleLibraries'
 
 const router = useRouter()
 const activeSection = ref('base-info')
 const collectionQrInput = ref(null)
 const isTenantOrganizer = ref(false)
+const beerCoinOverview = ref(null)
+const beerCoinWalletLoading = ref(false)
 
 const deliveryMethodOptions = [
   { label: '快递寄送 / 现场送样', value: 'BOTH' },
@@ -615,6 +625,8 @@ const reviewReadyText = computed(() => (
 const sectionIssueMap = computed(() => reviewBlockingItems.value.reduce((map, item) => ({ ...map, [item.target]: true }), {}))
 const categorySummary = computed(() => summarizeList(getCategoryNames(draft), '未配置'))
 const judgeVisibleFieldSummary = computed(() => summarizeList(getJudgeVisibleFields(draft), '无'))
+const beerCoinWallet = computed(() => beerCoinOverview.value?.wallet || null)
+const beerCoinInsufficient = computed(() => Number(beerCoinWallet.value?.availableQuantity || 0) < 1)
 const isDraftDirty = computed(() => JSON.stringify(toDraftSnapshot(draft)) !== initialDraftSnapshot || (isTenantOrganizer.value && (collectionDraft.qrFile !== null || collectionDraft.bankAccountName || collectionDraft.bankAccountNo || collectionDraft.bankName || collectionDraft.collectionNote)))
 
 function removeItem(list, index) {
@@ -814,7 +826,10 @@ function syncActiveSection() {
 
 onMounted(() => {
   loadStyleLibraries()
-  getAdminMe().then((user) => { isTenantOrganizer.value = user?.organizerType === 'TENANT' }).catch(() => {})
+  getAdminMe().then((user) => {
+    isTenantOrganizer.value = user?.organizerType === 'TENANT'
+    if (isTenantOrganizer.value) loadBeerCoinOverview()
+  }).catch(() => {})
   document.querySelector('.create-panel')?.addEventListener('scroll', syncActiveSection, { passive: true })
 })
 
@@ -833,6 +848,22 @@ async function loadStyleLibraries() {
   } catch {
     styleLibraryOptions.value = normalizeStyleLibraries(fallbackStyleLibraries)
   }
+}
+
+async function loadBeerCoinOverview() {
+  beerCoinWalletLoading.value = true
+  try {
+    beerCoinOverview.value = await fetchBeerCoinOverview()
+  } catch {
+    beerCoinOverview.value = null
+  } finally {
+    beerCoinWalletLoading.value = false
+  }
+}
+
+function formatInteger(value) {
+  const amount = Number(value)
+  return Number.isFinite(amount) ? amount.toLocaleString('zh-CN', { maximumFractionDigits: 0 }) : '0'
 }
 
 function getStyleLibraryCategoryNames(library) {
@@ -1734,9 +1765,48 @@ textarea::placeholder {
   color: var(--muted);
 }
 
+.beer-coin-create-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 1000px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  color: var(--muted);
+  border: 1px solid rgba(219, 232, 237, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.beer-coin-create-hint > div {
+  display: grid;
+  gap: 5px;
+}
+
+.beer-coin-create-hint strong {
+  color: #dce8eb;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.beer-coin-create-hint.insufficient {
+  border-color: rgba(242, 153, 74, 0.35);
+  background: rgba(242, 153, 74, 0.06);
+}
+
+.beer-coin-create-hint.insufficient strong {
+  color: var(--orange);
+}
+
 @media (max-width: 720px) {
   .collection-config-grid {
     grid-template-columns: 1fr;
+  }
+
+  .beer-coin-create-hint {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 

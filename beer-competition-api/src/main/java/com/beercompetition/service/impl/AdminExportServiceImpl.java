@@ -5,6 +5,7 @@ import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.common.util.SimpleXlsxBuilder;
+import com.beercompetition.billing.beercoin.BeerCoinSettlementService;
 import com.beercompetition.competition.access.CompetitionAccessService;
 import com.beercompetition.mapper.AdminOperationLogMapper;
 import com.beercompetition.mapper.BeerEntryExtraFieldMapper;
@@ -83,6 +84,7 @@ public class AdminExportServiceImpl implements AdminExportService {
     private final AdminOperationLogMapper adminOperationLogMapper;
     private final EntryScanLabelService entryScanLabelService;
     private final EntryLabelFileGenerator entryLabelFileGenerator;
+    private final BeerCoinSettlementService beerCoinSettlementService;
 
     @Override
     public FileDownloadVO exportEntries(Long competitionId, Long categoryId, String entryStatus, String paymentStatus,
@@ -182,6 +184,7 @@ public class AdminExportServiceImpl implements AdminExportService {
     public FileDownloadVO exportLabels(Long competitionId, Long categoryId, String entryStatus, String paymentStatus,
                                        String deliveryStatus, String keyword, Integer copies, String format) {
         // 1) 查询比赛与瓶贴候选数据
+        beerCoinSettlementService.requireJudgingSettlementCompleted(competitionId);
         int normalizedCopies = Math.min(Math.max(copies == null ? LABEL_COPY_DEFAULT : copies, LABEL_COPY_MIN), LABEL_COPY_MAX);
         ExportContext context = loadContext(competitionId, categoryId, entryStatus, paymentStatus, deliveryStatus, keyword);
         List<BeerEntry> labelEntries = context.entries().stream()

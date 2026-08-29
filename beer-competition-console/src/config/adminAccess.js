@@ -35,6 +35,12 @@ export const ADMIN_NAV_GROUPS = Object.freeze([
         icon: 'accounts',
         adminTypes: [ADMIN_TYPES.PLATFORM_SUPER_ADMIN, ADMIN_TYPES.ORGANIZER_ADMIN],
       },
+      {
+        path: '/admin/beer-coins',
+        label: '啤酒币',
+        icon: 'beerCoins',
+        adminTypes: [ADMIN_TYPES.PLATFORM_SUPER_ADMIN, ADMIN_TYPES.ORGANIZER_ADMIN],
+      },
       { path: '/admin/operation-logs', label: '操作日志', icon: 'logs', adminTypes: ALL_ADMIN_TYPES },
     ],
   },

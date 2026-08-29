@@ -28,4 +28,13 @@ public interface BeerCoinSettlementService {
      * @param competitionId 比赛 ID
      */
     void requireJudgingSettlementCompleted(Long competitionId);
+
+    /**
+     * 比赛进入评审阶段后，要求酒款已经纳入最终结算快照。
+     * 报名阶段的送样标签不受此门槛影响，平台赛事直接跳过。
+     *
+     * @param competitionId 比赛 ID
+     * @param beerEntryId 酒款 ID
+     */
+    void requireEntryIncludedAfterSettlement(Long competitionId, Long beerEntryId);
 }

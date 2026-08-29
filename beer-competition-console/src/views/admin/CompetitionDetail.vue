@@ -97,6 +97,45 @@
             </article>
           </div>
 
+          <article v-if="beerCoinApplicable" class="panel-card beer-coin-settlement-card">
+            <div class="panel-heading">
+              <div>
+                <h2>啤酒币结算</h2>
+                <span>租户赛事</span>
+              </div>
+              <span :class="['beer-coin-settlement-status', beerCoinSettlementTone]">{{ beerCoinSettlementLabel }}</span>
+            </div>
+            <div class="beer-coin-settlement-grid">
+              <div>
+                <small>当前可用余额</small>
+                <strong>{{ beerCoinWalletLoading ? '读取中' : `${formatInteger(beerCoinWallet?.availableQuantity)} 枚` }}</strong>
+              </div>
+              <div>
+                <small>{{ competition.status === 'DRAFT' ? '发布最低消耗' : '预计总消耗' }}</small>
+                <strong>{{ formatInteger(beerCoinSettlement.requiredQuantity) }} 枚</strong>
+              </div>
+              <div>
+                <small>已扣除</small>
+                <strong>{{ formatInteger(beerCoinSettlement.chargedQuantity) }} 枚</strong>
+              </div>
+              <div v-if="competition.status !== 'DRAFT'">
+                <small>有效酒款</small>
+                <strong>{{ formatInteger(beerCoinSettlement.effectiveEntryCount) }} 款</strong>
+              </div>
+              <div v-if="competition.status !== 'DRAFT' && beerCoinSettlement.pendingQuantity > 0">
+                <small>待补扣</small>
+                <strong class="beer-coin-pending-value">{{ formatInteger(beerCoinSettlement.pendingQuantity) }} 枚</strong>
+              </div>
+            </div>
+            <div v-if="beerCoinWalletInsufficient" class="beer-coin-settlement-footer">
+              <span>{{ competition.status === 'DRAFT' ? '当前余额不足，无法发布报名' : '当前余额不足，无法进入评审准备' }}</span>
+              <button class="link-action" type="button" @click="goToBeerCoins">
+                购买啤酒币
+                <Right />
+              </button>
+            </div>
+          </article>
+
           <div class="two-column">
             <article class="panel-card">
               <div class="panel-heading">
@@ -1386,6 +1425,10 @@
               <small>开放准备</small>
               <strong>{{ registrationReadyCount }} / {{ registrationRequiredChecks.length }}</strong>
             </span>
+            <span v-if="beerCoinApplicable">
+              <small>啤酒币</small>
+              <strong>{{ beerCoinWalletLoading ? '读取中' : `${formatInteger(beerCoinWallet?.availableQuantity)} / 扣 1 枚` }}</strong>
+            </span>
           </div>
           <footer>
             <button class="confirm-button ghost" type="button" :disabled="publishRegistrationLoading" @click="closePublishRegistrationConfirm">取消</button>
@@ -2032,6 +2075,9 @@ import {
   uploadAwardCertificate,
   uploadCompetitionSponsorLogo,
 } from '@/api/admin'
+import { fetchBeerCoinOverview } from '@/api/beerCoin'
+import { ADMIN_TYPES } from '@/config/adminAccess'
+import { getAdminType } from '@/utils/auth'
 import { fallbackStyleLibraries, formatStyleItemName, getStyleLibrary, normalizeStyleLibraries } from './styleLibraries'
 import CreateRoundWizard from './components/competition-detail/CreateRoundWizard.vue'
 import CompetitionAnalyticsPanel from './components/competition-detail/CompetitionAnalyticsPanel.vue'
@@ -2044,6 +2090,8 @@ const roundProgressPollIntervalMs = 8000
 const activeTab = ref(normalizeDetailTab(route.query.tab))
 const loading = ref(false)
 const competition = ref(null)
+const beerCoinOverview = ref(null)
+const beerCoinWalletLoading = ref(false)
 const loadedSectionCompetitionIds = reactive({
   sponsors: '',
   styleLibraries: '',
@@ -2282,6 +2330,32 @@ const roundStatusLabels = {
 }
 
 const statusInfo = computed(() => statusMeta[competition.value?.status] || statusMeta.DRAFT)
+const adminType = computed(() => getAdminType())
+const isOrganizerAdmin = computed(() => adminType.value === ADMIN_TYPES.ORGANIZER_ADMIN)
+const beerCoinSettlement = computed(() => competition.value?.beerCoinSettlement || {})
+const beerCoinApplicable = computed(() => (
+  isOrganizerAdmin.value && beerCoinSettlement.value.applicable === true
+))
+const beerCoinWallet = computed(() => beerCoinOverview.value?.wallet || null)
+const beerCoinWalletInsufficient = computed(() => (
+  beerCoinApplicable.value
+  && beerCoinWallet.value
+  && Number(beerCoinWallet.value.availableQuantity || 0) < (
+    competition.value?.status === 'DRAFT'
+      ? Math.max(Number(beerCoinSettlement.value.requiredQuantity || 1), 1)
+      : Math.max(Number(beerCoinSettlement.value.pendingQuantity || 0), 0)
+  )
+))
+const beerCoinSettlementTone = computed(() => {
+  if (beerCoinSettlement.value.pendingQuantity > 0) return 'pending'
+  if (beerCoinSettlement.value.completed) return 'complete'
+  return 'ready'
+})
+const beerCoinSettlementLabel = computed(() => {
+  if (beerCoinSettlement.value.pendingQuantity > 0) return '待补扣'
+  if (beerCoinSettlement.value.completed) return '已完成'
+  return competition.value?.status === 'DRAFT' ? '发布时扣除' : '待结算'
+})
 const editable = computed(() => competition.value?.editableScopes || {})
 const refundPolicyDirty = computed(() => (
   baseForm.refundApprovalMode !== (competition.value?.refundApprovalMode || 'AUTO_APPROVE')
@@ -2991,6 +3065,16 @@ watch(() => competition.value?.id, () => {
   if (activeTab.value === 'feedback') loadFeedbackReview()
   if (activeTab.value === 'analysis') loadCompetitionAnalytics(true)
 })
+watch(
+  () => [
+    competition.value?.id,
+    competition.value?.status,
+    competition.value?.beerCoinSettlement?.chargedQuantity,
+    competition.value?.beerCoinSettlement?.requiredQuantity,
+  ].join(':'),
+  () => loadBeerCoinOverview(),
+  { immediate: true },
+)
 watch(() => currentRound.value?.status, () => {
   if (activeTab.value === 'rounds') refreshRoundProgress()
 })
@@ -3082,6 +3166,7 @@ function hasFeedbackFilters() {
 async function loadDetail() {
   loading.value = true
   competition.value = null
+  beerCoinOverview.value = null
   resetLoadedSections()
   try {
     const data = await fetchCompetitionOverview(route.params.id)
@@ -3211,6 +3296,31 @@ async function loadEntryPage() {
     entryPageTotal.value = 0
     ElMessage.error('参赛酒款加载失败')
   }
+}
+
+async function loadBeerCoinOverview() {
+  beerCoinOverview.value = null
+  if (!isOrganizerAdmin.value || competition.value?.beerCoinSettlement?.applicable !== true) {
+    beerCoinWalletLoading.value = false
+    return
+  }
+  beerCoinWalletLoading.value = true
+  try {
+    beerCoinOverview.value = await fetchBeerCoinOverview()
+  } catch {
+    // 余额读取失败时保留赛事详情，发布动作仍由后端结算门槛校验
+  } finally {
+    beerCoinWalletLoading.value = false
+  }
+}
+
+function goToBeerCoins() {
+  router.push('/admin/beer-coins')
+}
+
+function formatInteger(value) {
+  const amount = Number(value)
+  return Number.isFinite(amount) ? amount.toLocaleString('zh-CN', { maximumFractionDigits: 0 }) : '0'
 }
 
 async function loadResultsWorkspace() {
@@ -3955,16 +4065,31 @@ function toChineseNumber(value) {
 function resolveStagePrimaryAction() {
   if (!competition.value) return { text: '加载中', enabled: false, action: 'noop' }
   if (competition.value.status === 'DRAFT') {
-    return { text: '发布报名', enabled: true, action: 'publishRegistration' }
+    return {
+      text: '发布报名',
+      enabled: !beerCoinWalletInsufficient.value,
+      disabledReason: beerCoinWalletInsufficient.value ? '余额不足，请先购买啤酒币' : '',
+      action: 'publishRegistration',
+    }
   }
   if (competition.value.status === 'REGISTRATION_OPEN') {
     return { text: '截止报名', enabled: true, action: 'closeRegistration' }
   }
   if (competition.value.status === 'REGISTRATION_CLOSED') {
-    return { text: '完成样品入库核对，进入评审准备中', enabled: true, action: 'prepareJudging' }
+    return {
+      text: '完成样品入库核对，进入评审准备中',
+      enabled: !beerCoinWalletInsufficient.value,
+      disabledReason: beerCoinWalletInsufficient.value ? '余额不足，请先购买啤酒币' : '',
+      action: 'prepareJudging',
+    }
   }
   if (competition.value.status === 'JUDGING_PREP' && !rounds.value.length) {
-    return { text: '安排首轮', enabled: true, action: 'goToRoundAllocation' }
+    return {
+      text: '安排首轮',
+      enabled: !beerCoinWalletInsufficient.value,
+      disabledReason: beerCoinWalletInsufficient.value ? '余额不足，请先购买啤酒币' : '',
+      action: 'goToRoundAllocation',
+    }
   }
   if (canLockCurrentDraftSourceRound.value) {
     return { text: '确认锁定上一轮', enabled: true, action: 'lockSourceRound' }

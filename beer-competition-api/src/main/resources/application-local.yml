@@ -1,5 +1,7 @@
 app:
   sms:
     mock-enabled: ${APP_SMS_MOCK_ENABLED:true}
+  beer-coin:
+    payment-mode: ${APP_BEER_COIN_PAYMENT_MODE:MOCK}
   wechat-pay:
-    mode: MOCK
+    mode: ${APP_WECHAT_PAY_MODE:MOCK}

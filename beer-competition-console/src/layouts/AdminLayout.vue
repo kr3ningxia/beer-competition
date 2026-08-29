@@ -73,6 +73,7 @@ const iconComponents = {
   judges: User,
   exports: Download,
   accounts: UserFilled,
+  beerCoins: Money,
   logs: DocumentChecked,
   applications: OfficeBuilding,
   styles: Files,

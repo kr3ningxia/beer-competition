@@ -2,6 +2,7 @@ package com.beercompetition.judging.round;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.beercompetition.common.exception.BaseException;
+import com.beercompetition.billing.beercoin.BeerCoinSettlementService;
 import com.beercompetition.mapper.BeerEntryMapper;
 import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.CompetitionRoundMapper;
@@ -79,6 +80,8 @@ public class RoundLifecycleServiceImpl implements RoundLifecycleService {
 
     private final RoundCandidateSyncService roundCandidateSyncService;
 
+    private final BeerCoinSettlementService beerCoinSettlementService;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void publishRound(Long competitionId, Long roundId) {
@@ -88,6 +91,7 @@ public class RoundLifecycleServiceImpl implements RoundLifecycleService {
         if (!RoundStatus.DRAFT.name().equals(round.getStatus())) {
             throw new BaseException("只有草稿轮次可以发布");
         }
+        beerCoinSettlementService.requireJudgingSettlementCompleted(competitionId);
         roundValidationPolicy.validateCompetitionStageForRoundPublish(competition, round);
         roundValidationPolicy.validateRoundReady(competition, round);
 

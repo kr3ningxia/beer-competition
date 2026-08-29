@@ -1,6 +1,7 @@
 package com.beercompetition.architecture;
 
 import com.beercompetition.billing.beercoin.BeerCoinSettlementService;
+import com.beercompetition.billing.beercoin.BeerCoinServiceImpl;
 import com.beercompetition.competition.access.CompetitionAccessService;
 import com.beercompetition.competition.access.CompetitionAccessServiceImpl;
 import com.beercompetition.competition.command.CompetitionCommandService;
@@ -44,8 +45,7 @@ class BackendModuleArchitectureTest {
     );
 
     private static final List<Class<?>> UNIMPLEMENTED_PHASE_TWO_EXTENSION_POINTS = List.of(
-            CompetitionPaymentPolicy.class,
-            BeerCoinSettlementService.class
+            CompetitionPaymentPolicy.class
     );
 
     private static final List<Class<?>> SPLIT_SERVICE_INTERFACES = List.of(
@@ -90,6 +90,13 @@ class BackendModuleArchitectureTest {
         assertThat(CompetitionAccessService.class.isInterface()).isTrue();
         assertThat(findImplementations(CompetitionAccessService.class))
                 .contains(CompetitionAccessServiceImpl.class.getName());
+    }
+
+    @Test
+    void beerCoinSettlementExtensionPointHasConcreteService() {
+        assertThat(BeerCoinSettlementService.class.isInterface()).isTrue();
+        assertThat(findImplementations(BeerCoinSettlementService.class))
+                .contains(BeerCoinServiceImpl.class.getName());
     }
 
     @Test

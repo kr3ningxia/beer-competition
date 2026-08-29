@@ -2,6 +2,7 @@ package com.beercompetition.competition.query;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.beercompetition.common.exception.BaseException;
+import com.beercompetition.billing.beercoin.BeerCoinService;
 import com.beercompetition.mapper.CompetitionCategoryMapper;
 import com.beercompetition.mapper.CompetitionScoreConfigMapper;
 import com.beercompetition.mapper.CompetitionStyleConfigMapper;
@@ -91,6 +92,8 @@ public class CompetitionDetailAssembler {
 
     private final CompetitionReadinessEvaluator competitionReadinessEvaluator;
 
+    private final BeerCoinService beerCoinService;
+
     private String categoryName(BeerEntry entry, Map<Long, CompetitionCategory> categoryById) {
         CompetitionCategory category = categoryById.get(entry.getCategoryId());
         return category == null ? "" : firstText(category.getName(), "");
@@ -166,6 +169,7 @@ public class CompetitionDetailAssembler {
                 .resultSetup(resultSetup)
                 .alerts(alerts)
                 .dataIntegrityIssues(dataIntegrityIssues)
+                .beerCoinSettlement(beerCoinService.getSettlement(competitionId))
                 .build();
     }
 

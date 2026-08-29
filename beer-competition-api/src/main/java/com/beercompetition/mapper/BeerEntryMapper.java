@@ -13,6 +13,15 @@ import java.util.List;
 public interface BeerEntryMapper extends BaseMapper<BeerEntry> {
 
     @Select("""
+            SELECT COUNT(*)
+            FROM beer_entry
+            WHERE competition_id = #{competitionId}
+              AND deleted_flag = 0
+              AND status IN ('REGISTERED', 'STORED', 'RESULT_PUBLISHED')
+            """)
+    long countEffectiveEntries(@Param("competitionId") Long competitionId);
+
+    @Select("""
             <script>
             SELECT e.id,
                    e.uuid,

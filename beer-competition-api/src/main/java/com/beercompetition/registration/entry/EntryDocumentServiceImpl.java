@@ -23,6 +23,7 @@ import com.beercompetition.pojo.po.PortalAccount;
 import com.beercompetition.pojo.vo.FileDownloadVO;
 import com.beercompetition.pojo.vo.PortalEntryLabelVO;
 import com.beercompetition.service.EntryScanLabelService;
+import com.beercompetition.billing.beercoin.BeerCoinSettlementService;
 import com.beercompetition.service.support.EntryLabelFileGenerator;
 import com.beercompetition.service.support.EntryLabelFileGenerator.LabelRenderItem;
 import lombok.RequiredArgsConstructor;
@@ -68,6 +69,8 @@ public class EntryDocumentServiceImpl implements EntryDocumentService {
     private final EntryScanLabelService entryScanLabelService;
 
     private final EntryLabelFileGenerator entryLabelFileGenerator;
+
+    private final BeerCoinSettlementService beerCoinSettlementService;
 
     @Override
     public PortalEntryLabelVO getPortalEntryLabel(Long entryId) {
@@ -152,6 +155,7 @@ public class EntryDocumentServiceImpl implements EntryDocumentService {
         if (hasActiveRefund(entry.getId())) {
             throw new BaseException("退款处理中，不能下载现场参赛标签");
         }
+        beerCoinSettlementService.requireEntryIncludedAfterSettlement(entry.getCompetitionId(), entry.getId());
     }
 
     private LabelRenderItem toLabelRenderItem(BeerEntry entry, EntryScanLabel label, String categoryName) {

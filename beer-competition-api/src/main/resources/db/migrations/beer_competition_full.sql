@@ -1338,7 +1338,7 @@ CREATE TABLE `wechat_pay_notify` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
   `notify_id` varchar(128) NOT NULL COMMENT '微信回调通知ID',
   `event_type` varchar(64) NOT NULL COMMENT '微信回调事件类型',
-  `business_type` varchar(32) NOT NULL COMMENT '回调业务类型',
+  `business_type` varchar(32) NOT NULL COMMENT '回调业务类型：PAYMENT/REFUND/BEER_COIN_PURCHASE',
   `out_trade_no` varchar(64) DEFAULT NULL COMMENT '商户支付单号',
   `out_refund_no` varchar(64) DEFAULT NULL COMMENT '商户退款单号',
   `wechat_transaction_id` varchar(64) DEFAULT NULL COMMENT '微信支付交易号',
@@ -1365,6 +1365,184 @@ LOCK TABLES `wechat_pay_notify` WRITE;
 INSERT INTO `wechat_pay_notify` VALUES (31,'5d5f692d-8653-58e0-bfbf-f5a9b03c99dc','TRANSACTION.SUCCESS','PAYMENT','BC178245504235806EA942C',NULL,'4200003177202606262333847997',NULL,'{\"id\": \"5d5f692d-8653-58e0-bfbf-f5a9b03c99dc\", \"summary\": \"支付成功\", \"resource\": {\"nonce\": \"oHjYUsUdfPyT\", \"algorithm\": \"AEAD_AES_256_GCM\", \"ciphertext\": \"2iOZ/vdnHz2OoxkeznMnNkIUbGsgvbc6xJhfvhNmto+bek/al3rt0VZOubat8btGTtjaUPpw45OhCZ6+LbpRHA4E2JM5JHLzs7YsstSTDRTRR4QEOACRoYwCJaTqvmkF7KIKQX8Vie8kxyhG7VdeVCTdVdJ8ScpffScbHdYuXBHfvjMSpi5YDYYvOJ6l6oIwFe8Hw+CyDDWfNeKZfdkqzYEQFlEHdwWL3rfxdf/QeLMPrjfUyxTSeOzKYvJG5OUqoGbPZe/e25V9lv5gJEjJcEkXXdRHMaqyrc7dIK/f07oYfP74gD4bEa1MIxxlaqJsEXm921fvzQLExFcF87nCUBXYtLW/rARkYTziiaHGVRtZNnrKDPLj9dlKOCVMRdpF3B2MFFuJyaVnLhshrJSp2sA0Pus8Eet6AHRh24HxVo7Fug3Kfq+QCVEJmm5+eo5+Jh9r/O/U4z3SDWHw7EV9XRhr+purEqAIv9RHFu7axb7iXTXUit/afnEf7TBXcDbOyeOeO1C4pzB8lorWIlBcjE7QxhF/6Yw2bgl4p1Km+pYn2vyNQnPCF7I7PNSf1t/ifCO8Oc77zQ==\", \"original_type\": \"transaction\", \"associated_data\": \"transaction\"}, \"event_type\": \"TRANSACTION.SUCCESS\", \"create_time\": \"2026-06-26T14:24:18+08:00\", \"resource_type\": \"encrypt-resource\"}',1,'OK','2026-06-26 14:24:19','2026-06-26 14:24:19'),(32,'9f8685fd-1a75-589a-a17b-9ee87c1273c1','REFUND.SUCCESS','REFUND','BC178245504235806EA942C','WRF17824552267016620B366',NULL,'50303707672026062620494079728','{\"id\": \"9f8685fd-1a75-589a-a17b-9ee87c1273c1\", \"summary\": \"退款成功\", \"resource\": {\"nonce\": \"iMDlJefcpfBl\", \"algorithm\": \"AEAD_AES_256_GCM\", \"ciphertext\": \"kYK3kt40gVRVN43n0Z1W0NwidJy8OkMco+i6TkhC5VfUfsFHOmpX3OSlKQ8Ho32FS7iJ7xg9rWhn+nFvLukINFvUWqelVhV0d7SJfSufBshrLHQ1ziNJEqSEdRY5V4iJq45aVVGOvIgspWuIDTaZj0bTSQ0wxkvreRCZq6QlDpcHUKAwgO2Lqexo/qcgiwlVGuOE0sppYNbfzqeZqjH87kwR+1Ieoh8el2SLfX9f7CnrPo2HKU0mpJUgljECcixLU9+6c8cg9JadvTALdunGHwlAXQNgtBOwAxvEla4zrplS4W0zRGFSkO1beE+p2imjezPvtLhyoVj+vz/tzKorrDCK/T9DLPpNGdwpQcc8r3BaJSb9VsjWxxjgVaz3y6CM4wGOcfQsjzpJoKKcVm6M1oVq57jFnnyzgQxD1tRmzAg5UH5vdqX+nlC0y52l8WGT/ttvrYlh8oTXjkp3F36y1dTtkOmqC8LZMiczf9/2X75lqgTzQ9RO01oy803tzthVlSmPDx1S120J\", \"original_type\": \"refund\", \"associated_data\": \"refund\"}, \"event_type\": \"REFUND.SUCCESS\", \"create_time\": \"2026-06-26T14:27:10+08:00\", \"resource_type\": \"encrypt-resource\"}',1,'OK','2026-06-26 14:27:13','2026-06-26 14:27:13'),(33,'d8cb5aa7-97d1-5be0-9548-405901d2828b','TRANSACTION.SUCCESS','PAYMENT','BC178289358192772C59F66',NULL,'4200003216202607018927327375',NULL,'{\"id\": \"d8cb5aa7-97d1-5be0-9548-405901d2828b\", \"summary\": \"支付成功\", \"resource\": {\"nonce\": \"j5ICojSI85e4\", \"algorithm\": \"AEAD_AES_256_GCM\", \"ciphertext\": \"kcCKqhVbgbRkGhX2aRrtEsqZSLOzowCQfzlpFbCHUIGdFHT11wsRe59qlvj8UI2iasFW2zc8zbeFO4FF9PeJlNQD7NZv58tOL4kvwnaavKeAvA5uhcd99QnaSm4cyo07+RlEetCJIcuQZupq0TJIrIMyFMJRrV/Vzwk3RUSyUqXaffQ574lyW7tnh9RNHmEpowptlZH52XRVgYitt1TrD0NxcI4ovGL/wS7gG1nZlQShW3PXdRYO1wXXtHeqZFYha/cgv27LkUtKtw2lBE6dS5GBkd2zZw3mOTqHuySCsLOoZGP/Em1ueS03Ao6uGJjIC3zAT8AmQ3U3PbgwzMGrbPKTKjzSa53jXxARWLF3HQhwm8Ani91AAzPsZz7j7aM6bl0DKVJBREEmpewZNv/0DkU09yJSYLsTcaDyrB/YnCUBVkg+oOrsZHE9AVMpOV8YFUjYsUYRYFqXsZQi7uLLIJliQABiljLc5BpX/8mpek5dsk6TH+XSk0ML02lJHuZOKIL10a1LWybAQDS4PwuD4AopkMYvSH+yyulLGzluO+W41D4c/Zu6HBscJrAzzScblhJOkNAvHVjeMkNk\", \"original_type\": \"transaction\", \"associated_data\": \"transaction\"}, \"event_type\": \"TRANSACTION.SUCCESS\", \"create_time\": \"2026-07-01T16:13:18+08:00\", \"resource_type\": \"encrypt-resource\"}',1,'OK','2026-07-01 16:13:19','2026-07-01 16:13:19'),(34,'4edaa571-22b6-5fec-a50a-3cc9369b177c','REFUND.SUCCESS','REFUND','BC178289358192772C59F66','WRF17828940009720C3994EE',NULL,'50301507692026070173750900796','{\"id\": \"4edaa571-22b6-5fec-a50a-3cc9369b177c\", \"summary\": \"退款成功\", \"resource\": {\"nonce\": \"0B5tlycgi4yY\", \"algorithm\": \"AEAD_AES_256_GCM\", \"ciphertext\": \"A6SOkYarAp/UM6t/zf4HS8SnHBSEa0qSCjY+xwvvfWKknJIP+7w68qKJpkUf71Qs5EZFxtu5kZ8a+nj+IZ7UZuCHbJre5xpw+f1+6wc6GP6g/T8zlXnsRlL8Cihx91tx0dCS+f1/8qRoy10JoV+WVFl+AYsIayl2bh+LNHAdC7N+7yg5q/xzd5sMvl/4qfXyAAAxz9jMO+A+J7pxmrCefFuy0SaNDb3auGKPGDmmM2tYuex7GI1pLSQ4dpuzKj1YzaEM9A3Uo2v6xbubKeD/4ik+buGB8XjOXFPgrOjpUHxD+dpd1ZorrnNjkKDoR1dFWwgKtbiNMCQL/aKPzYHQG8kZmufRWHqiftrPOV2TT8dR+16YVNflounLC8GMd7V5Z/lLlorxxfbsfqCBSBgRhofdkpx28gA7kAd7EaUSEfhe8n+aoVw/UW/xmq64X1kiLMW0ss1VwmbidD6zNYasKi4SBdoOEdJDSLyD85f3fIEIFsgSHf4Z/32bwAXPENwlMugAlI+tIkIQ8+ZI\", \"original_type\": \"refund\", \"associated_data\": \"refund\"}, \"event_type\": \"REFUND.SUCCESS\", \"create_time\": \"2026-07-01T16:20:04+08:00\", \"resource_type\": \"encrypt-resource\"}',1,'OK','2026-07-01 16:20:08','2026-07-01 16:20:08'),(35,'84e9bcbb-b822-5f3b-a3ce-faa85219b3e1','TRANSACTION.SUCCESS','PAYMENT','BC1782903030573B758C9E5',NULL,'4200003199202607014706923839',NULL,'{\"id\": \"84e9bcbb-b822-5f3b-a3ce-faa85219b3e1\", \"summary\": \"支付成功\", \"resource\": {\"nonce\": \"Y4rv46jGwAYb\", \"algorithm\": \"AEAD_AES_256_GCM\", \"ciphertext\": \"K+SSvKgUK6WS7l9ivgwMrRAAQuvgOIOv7SgRCjN3i+kH8XROfPhet1gA+UfL9z7TH1ZL9fvvzEdGotmamYvWxtGJ0jJehaEhs5e0ZR61jnqAg374lQFQlP9MNDWMYEbTFfuWq2Hy1bKRP+hipCwOs7lGteXzWF4b6TTmU4QTV0RVd0k53S/hrh5pk8kAe7IpDG1cMbHGSm30rMw2OrRhAxkwh3hIM5VlqYvHJCxfvUZPM9AThWIF86oELVl6PDT/XlrERTyYgK2Zvug04f9k/o/Ls1q1RlclNM+NcNoKd+fZ7bj3tOu+iHrBdyTV2dHpXDJk3vxFzXy7bDoMqn0UaNrFk+xQ0VJwGgGceV5ZMwnNGvH44lPhOlSjSDwFZ6hOz6K5wHw7E1JB56HgKLmdvapjC/qD9jZQYBzX0Otj3t/c4+CIgnKZ5AV+WdQLfcMFOh4cbCh5B26UgPiPlMdn7HSlFuc3P7baNknztig6RGPLruDi6O8ExdfsY235OwqkyrrbrALpY7W4yuGovCWMH7hgIygWNuZf1M2yslffT7OwDEoyH8AWrgNcOJEdelAzyfK36mZUAXoQd0Y=\", \"original_type\": \"transaction\", \"associated_data\": \"transaction\"}, \"event_type\": \"TRANSACTION.SUCCESS\", \"create_time\": \"2026-07-01T18:50:40+08:00\", \"resource_type\": \"encrypt-resource\"}',1,'OK','2026-07-01 18:50:41','2026-07-01 18:50:41'),(36,'0cef139e-54b6-5211-8e93-f54d0af9a32b','TRANSACTION.SUCCESS','PAYMENT','BC1782903190211036CFE4F',NULL,'4200003192202607015939259452',NULL,'{\"id\": \"0cef139e-54b6-5211-8e93-f54d0af9a32b\", \"summary\": \"支付成功\", \"resource\": {\"nonce\": \"kLZ9XGHjNgh3\", \"algorithm\": \"AEAD_AES_256_GCM\", \"ciphertext\": \"rHOAjR0+vr/0ybTQTxvLKgptyMN6gvjrQvaIx2VpAHU6+vSV+TF0/fQFibmGwyGDJJtX1/hN/OCCn84/sviW6o6vTFKyRvG3xshSRSB64HSNH4/Izc6t+Q/+FtC7QPgPpqqoSu/OyBLbtTcfLkIiL2vP3ZSeB6sSgj53z341ZCvEjDExdzI6hXKeuOYHgbq04RGZ6CXUDoWj0de/0SvQk3EKomaaG0+3Ka4IfA6kMqa7yz6OwGguh/JuFD9fURIbFGugOIJ04xM16aI7f/l8M+d/E9SQBgAEVdo2qYEb0HifF16KAzX8l0sA69r8f5eb19jQDudnDH8QTN7hZqL2wJm1Wi6iWcyqhZTDDVgaqWMXxg+i5wzZ4jzz5oyb3RCwJkGgE5MGJD94LbY5BxbGr8zdAiSgLzwzbEytf5l3g8UBD9Mc6jM92CptNNSbpJYXsEG0k9P4fF0fmEDrF+FgQH+48n6qTD3fOqk0Ax0hh4j1KHRA73ZRQhL2cvFRWfWdx/N/cmkGKAcokQtzlkMKVhUDzkr4gdpEDLvB8wzrkXYIVWNGk9P2bqjJDmc319ZoaUTFeBtpICN6fHM=\", \"original_type\": \"transaction\", \"associated_data\": \"transaction\"}, \"event_type\": \"TRANSACTION.SUCCESS\", \"create_time\": \"2026-07-01T18:53:20+08:00\", \"resource_type\": \"encrypt-resource\"}',1,'OK','2026-07-01 18:53:20','2026-07-01 18:53:20'),(37,'1029ef65-78b6-5c89-bb16-980a5b080b3b','TRANSACTION.SUCCESS','PAYMENT','BC1782903491474B895E96E',NULL,'4200003184202607019388006371',NULL,'{\"id\": \"1029ef65-78b6-5c89-bb16-980a5b080b3b\", \"summary\": \"支付成功\", \"resource\": {\"nonce\": \"CGi4xnAowqCV\", \"algorithm\": \"AEAD_AES_256_GCM\", \"ciphertext\": \"MlFFzZUEpfuUylUXn/7q9hUMOLw8CpiOK/RURXpiohTBgA5/vSBGExzIJzklhZ+fWMGOHtgcMXujzYx1Acpm4ooAkGR99/JR2GCPVn+ZCmMnEAXb8cacVFfgdMFu+5YCr0XLrNJVnjSFvXciVBSXokbCnNF+pKqkH12T/CIyueUgZjVSqpPKa6ktfqwIo76hLEheFXboP7KCf7IUsI+EvfoSQUGH/RpQ4iTCP5puZqMbsq81CeYdcLrzQfF+W/6RJlQ078CcQ/35aPByuN2PXG1oEdEmQLyzZRpiQxcfLLFv1EuszwZsw8bt/T9Zp6oE6oSs2ZYCMI803u0V3/NeWRrMrRHJFkoYmwK5lO9VKjConDXlCDK+1pKmw5WBYDgcmpDiCJwqApj4lMaXJIwPGUqDrcjPR5odoNWh2vnmzAkisWu6res1KjAo5FM3NDnTLyC2RAUd3nEy9xnNX5gAoF2xztHRGUJMTnSLlUvvsCBoSv47hGAG964VKmrVQeuIz8mc+g0LIuhWXZM5VsrPcwiVTkUX915k8Pr1zJ1zUswhcNhEiRlRmm+hqKaV49fnQfQzmnHoOA==\", \"original_type\": \"transaction\", \"associated_data\": \"transaction\"}, \"event_type\": \"TRANSACTION.SUCCESS\", \"create_time\": \"2026-07-01T18:58:39+08:00\", \"resource_type\": \"encrypt-resource\"}',1,'OK','2026-07-01 18:58:40','2026-07-01 18:58:40'),(38,'4b07b97c-b952-5f38-8665-a794b87556ce','TRANSACTION.SUCCESS','PAYMENT','BC1782903702820D0797374',NULL,'4200003219202607016227316455',NULL,'{\"id\": \"4b07b97c-b952-5f38-8665-a794b87556ce\", \"summary\": \"支付成功\", \"resource\": {\"nonce\": \"xoMx1WUfICZ0\", \"algorithm\": \"AEAD_AES_256_GCM\", \"ciphertext\": \"Q88qTu4oOYEjbgDXTv3XXYgDMNTYLKpPcSECdK6WIN3AjwzDQCLk1MJ9HJRW518Gf9HO9WnC4gi51/eHGpBNrBewNTyc+jxr2PPRLFRXs0i3K3o1aG0Cn4yXbv69Vd4RQSYT6hVWF8GQgU9B5nAzu33dzAShsdZ/z3ik1SbVRrxQ7jsaYmIBglcqoy+gFD4iJQGS9Mx5sxSnkUAW2JgdZJ9sxcJX0rq1JQN81Y4oyNx0LnBdEZqkPjYf2qfOTVvF+wpsVS/kBw1mXklkc86RgglIL0SQnuICG/jvFoDOVcMrFGCbKP6CLwa1QJkXLgdTtkzTG6y1NPcgsm5mwgPECUJr2mZGSxE+eWFRTp+G985lu55OUcKCuky/JiqWNi4viRPgrevA/A/CT05cXx67skg2D2lK9oqUFqLUw+J1f+R0XAeZGqkE6INUaqR+DnDebzFbVM5id0Lo3fyg/XHFOKJnR8/pEM7ejUZCNWSZlK0f7CNmSjGiVwctMB9bQCBDl/WjApC9TCr9hoPzmdEudfl8/19//2t81UCCGyzPRkBa4TVCoEcJ21LN+Cc8sMiGdGiPeKHdNA==\", \"original_type\": \"transaction\", \"associated_data\": \"transaction\"}, \"event_type\": \"TRANSACTION.SUCCESS\", \"create_time\": \"2026-07-01T19:01:57+08:00\", \"resource_type\": \"encrypt-resource\"}',1,'OK','2026-07-01 19:01:58','2026-07-01 19:01:58'),(39,'032778af-bd7a-5f3f-ac6d-c7b59f844bf1','TRANSACTION.SUCCESS','PAYMENT','BC178290396692460313E3E',NULL,'4200003222202607014760741105',NULL,'{\"id\": \"032778af-bd7a-5f3f-ac6d-c7b59f844bf1\", \"summary\": \"支付成功\", \"resource\": {\"nonce\": \"yfbaP0R4Sz55\", \"algorithm\": \"AEAD_AES_256_GCM\", \"ciphertext\": \"MMk/FBPtrh31gJfH/3tmF5YO6kue8Al4zjzKNWDMcfqxhNg+YFuVNILqPEZBjuCH6W1ESWZYpPdy4myNX/X+yxyaAwJLmVy4Lc4Sf+bezi02x/9P4Dg3wvjuXnbAyorlgVECCoVRUGZ6A6LjRpkR1bgq2y009/p5JtRhTf6NO6gE96dwFJ6KlMxxA/2NrY193T9JFw4TXY2XiPpCIg8mE7KhYu4h30iVbkUtbg1hE/XWQH8qU8nIzUqXD6c0aM6zA40ekIzMldBSj2yT8m5DZ1uXgddSgyY2HoEgKWaBo5PNGFI+72M34w3BJvticdfn/VbCR2kP2iTpJSCMm3pazlZzOIU7rIQYoBGpdoKpWxeqa7AT5JHCWWCY6kZBLlCY5aTv4+Oh5+81sTqBxzjggBCYkVig2eVAX1i216evZqhe38n6v64ivioti+LgJF2IytLtAI2sxRUx++ippklnswA5VWQPgQPB5uu0pagHD3mTHMrzGBscE51M3CGW892gHgPpme6YNALeNYtZLOWPT50EKp8PWc6Y4/VLuYI5l83cjx9h2a0tlUJtiOUpf3/QUUYleYI0qcNjzq0=\", \"original_type\": \"transaction\", \"associated_data\": \"transaction\"}, \"event_type\": \"TRANSACTION.SUCCESS\", \"create_time\": \"2026-07-01T19:06:26+08:00\", \"resource_type\": \"encrypt-resource\"}',1,'OK','2026-07-01 19:06:26','2026-07-01 19:06:26'),(40,'a52985a7-fc11-54b6-855c-4e0a3e508638','TRANSACTION.SUCCESS','PAYMENT','BC1782904018049D24B0C73',NULL,'4200003126202607013008409673',NULL,'{\"id\": \"a52985a7-fc11-54b6-855c-4e0a3e508638\", \"summary\": \"支付成功\", \"resource\": {\"nonce\": \"EjLm1nzvZeV0\", \"algorithm\": \"AEAD_AES_256_GCM\", \"ciphertext\": \"FKt98Sz4PFYP9h6LRS04ZoPq8pYX8UUqU/XwSUwfiawPx2zhWdSFns0M6U3D4eeLRHa0MmPoWUl4wSQpRhSg3cMUR6w1tY4G9aQf7AYXKg2rHxHtyTpAesndtLYBFKzjvLuvaC5UBWrO/ZkPqswTYdFu9/T2Kh2mMrtoJzUpDg6Kw2njf63cBet1YlEZUKnTwA7lfpeuv+qnsru0qUCO2sN3nu0NA4VX1JoVPKSNL40087MF3JnwWcVTgWAtf7B25QbCtcU8/qE0lZi/Iv4AjQc4z72KmYdeUilF48Ksfu1DHFP1smVBFaabvYxd8BCKmbvRdZn3xBnzoxN0CXWYK33htGsL50+oZdkdBvKvka+ASoRS7m6cLH4ewlXWiolPNOwEgGZ3zQat4hFvdrBBwovg0r11/4qnocXlxNE/WAcDDtmjAIdYqiCL/g7q+1BPtaEEHg6/MrlpAsnYWZrNk/2OQ2y/yaNNo0gQbQA3a9K+fSAP/BcsofAt8ZvllJgHBy8LJ59KgcxaGam3MEHNLilitaCjCJFapj/H9f2/gmI9ulKJvWvMcyR40cvvCq9YfaR6LoRge5t5JzLd\", \"original_type\": \"transaction\", \"associated_data\": \"transaction\"}, \"event_type\": \"TRANSACTION.SUCCESS\", \"create_time\": \"2026-07-01T19:07:12+08:00\", \"resource_type\": \"encrypt-resource\"}',1,'OK','2026-07-01 19:07:13','2026-07-01 19:07:13'),(41,'f1ce578b-6f92-5460-a589-d156071ba4cb','TRANSACTION.SUCCESS','PAYMENT','BC1782904018288B62187C5',NULL,'4200003203202607018667849399',NULL,'{\"id\": \"f1ce578b-6f92-5460-a589-d156071ba4cb\", \"summary\": \"支付成功\", \"resource\": {\"nonce\": \"WxvG36kxDZ0B\", \"algorithm\": \"AEAD_AES_256_GCM\", \"ciphertext\": \"FnwG3SNxVAJImo1pr2iZ/eEd7Y45iXQdIlWSMyRBS5o58MbstvWv/LIApRchepGq9B8THtIV7hrmQVPnLwmKm9FtG89Gu5Cia8SCHgf2Ou2N48E5EW6A8OGfwBgoI1SOgx6qxZP5YssbWFwb4oZPZ16L4KN3E0ArPUkrfw9EUQ3IIKKgNCIj6FPB25BaVRwue44NWhoSKjrKSNPy/Hg9ps9TBYmnyPVQ0eD1ZSTnkzXQxt/mNP/AiC5IH65lyo0ISh1CqlgFrO0KOh1wZ6Jw0+N2R/RrUAhyFYKQhgHg90WaMT8wSEiE9B5Yv3MdMtURnqqwwhVhm1C+uERwY5vtPBT0rp/dmO+MS24TJaSwNT8daEjGombhpsyV+VBvNOKMbTWwcoKCfSIFxj3+2U8kHSXxOBAeJ2VOQQsWnwe8eXqvZ6V66iqB/mLUJZltvG6QRFF0LN3fi2pAyrao82ccHIgKEbpocXLfA1Jb9on7qSQM8uWS+eEwKQxQc/lVMW6wJ1jNRv3Kngivk8kWqUBNjNxGIaE2jIEAEemvvEm4x6bguZN4sn/7VkAdgXWbFcJia3/Yhs5VoBIQN3o=\", \"original_type\": \"transaction\", \"associated_data\": \"transaction\"}, \"event_type\": \"TRANSACTION.SUCCESS\", \"create_time\": \"2026-07-01T19:07:18+08:00\", \"resource_type\": \"encrypt-resource\"}',1,'OK','2026-07-01 19:07:19','2026-07-01 19:07:19'),(42,'3d97ca32-9ebb-5450-8491-4590fd1e3ef9','TRANSACTION.SUCCESS','PAYMENT','BC1782904024327A540AA35',NULL,'4200003216202607014643655554',NULL,'{\"id\": \"3d97ca32-9ebb-5450-8491-4590fd1e3ef9\", \"summary\": \"支付成功\", \"resource\": {\"nonce\": \"3b0lQThXjSvq\", \"algorithm\": \"AEAD_AES_256_GCM\", \"ciphertext\": \"DmuQ5DtlboE5/+uHunUVIBlMkUgyRAqh0PeZprG7nfbK/Ak4q7lWE24GAtFNTLm6a+EIAO+KAP0OxqgjfMobQ5/8gel85uH5I9oDZ46b5GhHSTISBYuSjLmIXJcG7sxf+KHzyxSzLc1UmnNxrwtli7ORzLrDuEssvAe+Yg1nsXC0ZRDcrtDmjNzKJG72Co6Ks5/gTvvorGMMB8YmZPV2iWB4Wz4w88bJf8mYFZF9j2SlufiAzp9A6jQpe0/b8lPsXMGRZh/vRkpf9vv4jwuqPlSd6jDBZ5jE7Tr2mYpdIyg5fSIYnRRh9iyUayJN0mmw8JlPtVThoBWcki1a4qKyHyRPrhcR03fmWu6Qx5ax+lRggGI5OPOAOvDO0Nip0Ofv8XgURMGnsQBZNetqimXTGkP8E/RLuS9nkaZXORYIEj/ErSq5nq2mOyX6ePSBftChYooPICxNmHUlc61q6pyjZFtwAjCnNtY2VvF1zE6bxLSOdbWKvwj4iX0IiZx6lW/3cWRl33xne8IYnX0fABczfPkMW5ohCXRh9I8/qyvi1CL82bhApafjfpbutyvvRXgMfradiuuq3g==\", \"original_type\": \"transaction\", \"associated_data\": \"transaction\"}, \"event_type\": \"TRANSACTION.SUCCESS\", \"create_time\": \"2026-07-01T19:07:22+08:00\", \"resource_type\": \"encrypt-resource\"}',1,'OK','2026-07-01 19:07:22','2026-07-01 19:07:22'),(43,'06b2adde-4186-59d2-b06a-7e147e5361b4','TRANSACTION.SUCCESS','PAYMENT','BC178290436108299315176',NULL,'4200003196202607012417369392',NULL,'{\"id\": \"06b2adde-4186-59d2-b06a-7e147e5361b4\", \"summary\": \"支付成功\", \"resource\": {\"nonce\": \"yBLloqR6fOgK\", \"algorithm\": \"AEAD_AES_256_GCM\", \"ciphertext\": \"C0Agqa5RXIfiyCHKtGW6w/fJwElp7Rz7+5yStN1397u9apcX1LCtLeveSygU5uC2Pm6dGMv4NnxQs527K1MuKmpOYcNMq85tKQGOOiuJBOjQb+qmi7QdEAdycVLatFOIMGviAQzkd7nlsNzsa9FX97ycYrJdxwNlHEhMyimH6XelXKGYAkC09anS8jPdPFrRG+/fcGFRfzBNSa/V2mDNI26Bhi5F7SN0An1gnbFkt88Pr4wM8JcThsWqqIncN1sPM9BfFRIkJKH3BDe5eBX+jxVvppvDPmQF6hhhzbJR3/lljpPTZCJv0UTLqQkiON6ffPtpnnNHHdaf0FmWK/SJIohLqPqzHSas7+3iufyTfdwpm7Bu2/pevBSnunx1q4aWYMCJmypjqV2v9dyrLuL80FC1I5gTE4TTHRJpW3KCf7Y5Jv0MWcYw4EVNbwNBgue3nUmU+CqjcRa7WxEPREScjeHxvsu+HVHOzL8QJtYuSYR9i4oCuDVAqZYJ6dET67IQm6PMLr1CB4m2ob+yEHRBd/vVSMha778JbuCHbltekC7AymSXpUhZR9eFBQPfPkjtfiePJyoq8dFnBFs=\", \"original_type\": \"transaction\", \"associated_data\": \"transaction\"}, \"event_type\": \"TRANSACTION.SUCCESS\", \"create_time\": \"2026-07-01T19:13:02+08:00\", \"resource_type\": \"encrypt-resource\"}',1,'OK','2026-07-01 19:13:03','2026-07-01 19:13:03'),(44,'baf8bd94-e17f-563d-9d48-02271faa78fa','TRANSACTION.SUCCESS','PAYMENT','BC17829044268627573C963',NULL,'4200003206202607014416314776',NULL,'{\"id\": \"baf8bd94-e17f-563d-9d48-02271faa78fa\", \"summary\": \"支付成功\", \"resource\": {\"nonce\": \"napS4ycCrkAx\", \"algorithm\": \"AEAD_AES_256_GCM\", \"ciphertext\": \"7XzZ2o09f39glpOi20FLfRWjMKDUu+92IIWUqDvjFkFGZZGAi4u31+ITpux+s90/ZOjMCKvxJ5XNgrQzkTzor0DdHfl2+8Mhib/9AoCd86ONuDNAtgEqj3CLIe9GL057WpDIuNmkW08p+7mk5+pXCAmbsQ7qXWYmKac25Qfs3YxmVNAffyV3oRogy+necD/mqlwcAlAMqwFOC5Ggo2Nife0e/MbBL8Cwa/LV/jLvL4cQsQsxGjnwGtiVcrbCv4XeuwKpdrz1UIXh5NlU/uCVpP4AlxfO/EQvp63SvzIFW0BkN/Oo3Dg0oYgC6nFhvDFBrSoB0c3R27u3nVXKjNOoZwZRjMAGBXfXRFVjpGhq4YzGPTV9JMZuOypIb2RJr4B++MT3C3RZtuq4J5qBLUIGlyABfk3DGk8CqL1hJSApp3IVokXMleWVTM6DZDRGm7oidVCIu6lTBRzGp2h/x5VRhNL6PAfCZcFXpM6pcS3bjslASujnV13KoklyegnmJK/Qu2ihaGRNzsiEX5iWDPPD4BDseHSzfNJaQ1Wi2xyPzt7fcvZcHTm1lGcaYe8mpqY4NRp+xnNCSQ==\", \"original_type\": \"transaction\", \"associated_data\": \"transaction\"}, \"event_type\": \"TRANSACTION.SUCCESS\", \"create_time\": \"2026-07-01T19:13:59+08:00\", \"resource_type\": \"encrypt-resource\"}',1,'OK','2026-07-01 19:14:00','2026-07-01 19:14:00'),(45,'a37b7589-481b-58fd-96f5-9d9d577b78da','TRANSACTION.SUCCESS','PAYMENT','BC1782905079901CB83277E',NULL,'4200003180202607014894132611',NULL,'{\"id\": \"a37b7589-481b-58fd-96f5-9d9d577b78da\", \"summary\": \"支付成功\", \"resource\": {\"nonce\": \"0wAy9u0KSpWl\", \"algorithm\": \"AEAD_AES_256_GCM\", \"ciphertext\": \"RbSKH7ZqlJOAXsFqJFB5oor2qgVdDo0+MN2VdN74ZKUrEdZXPm5xBR3/9ApB9vJnb74vwhA+AKcceQ2hBAth3rqQKOwEH1Jznl3ids76t8k0+23DLkc/kb/yh9rqcLkhORBMZua1BbRH0btXY0KZtpBGU/AFNW+Dom5Ij1r9l9Nxl5yDoyJjrNGad8fBmhaObJp0VuZNOR0a3gafJO4pHgKVnfudY9KCx6KEENLi3y14ezidEI+a24zQrJv7fN38NUkbtFMIzkcEA2cOVWkKHLnV8t5+cuBOWgvDpa4SH786965xoYoC6ukzsjdOQZnHUT7plNLYOV0kq57XbU8BpPZ56jMqUGbcPoPRUJ6LoiNIa7cZuKUU1+TACzBac0etMl06wnFwp/N8N4bwp/fOLr0mY87WnbOzbYNglndP80xmUOG+p5tM3qo2Bemr5Nnk2udVXJsf0Ifhr3bNX73wwzRl/9L/tiqvfTLeQEtC1fTUFT9TS2iLvLJQhKyyIEgA/AG0bIh9WoBAfhLlms2yv9nu/tFNPeNBDVr628j+tkRpN6J5uSMyJqWZebIGLGLDbBpzQxXaFg==\", \"original_type\": \"transaction\", \"associated_data\": \"transaction\"}, \"event_type\": \"TRANSACTION.SUCCESS\", \"create_time\": \"2026-07-01T19:24:59+08:00\", \"resource_type\": \"encrypt-resource\"}',1,'OK','2026-07-01 19:25:00','2026-07-01 19:25:00');
 /*!40000 ALTER TABLE `wechat_pay_notify` ENABLE KEYS */;
 UNLOCK TABLES;
+
+--
+-- Table structure for table `beer_coin_product`
+--
+
+DROP TABLE IF EXISTS `beer_coin_product`;
+CREATE TABLE `beer_coin_product` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '全局价格设置主键',
+  `product_code` varchar(64) NOT NULL COMMENT '全局价格设置编码',
+  `name` varchar(128) NOT NULL COMMENT '内部兼容名称',
+  `status` varchar(32) NOT NULL DEFAULT 'INACTIVE' COMMENT '内部状态：ACTIVE/INACTIVE',
+  `active_guard` tinyint GENERATED ALWAYS AS (if((`status` = _utf8mb4'ACTIVE'),1,NULL)) STORED,
+  `effective_time` datetime DEFAULT NULL COMMENT '生效时间',
+  `version_no` int NOT NULL DEFAULT '1' COMMENT '方案版本号',
+  `created_by_admin_id` bigint DEFAULT NULL COMMENT '创建人',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_beer_coin_product_code` (`product_code`),
+  UNIQUE KEY `uk_beer_coin_product_active_guard` (`active_guard`),
+  KEY `idx_beer_coin_product_status` (`status`,`effective_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='啤酒币全局价格设置';
+
+--
+-- Table structure for table `beer_coin_product_tier`
+--
+
+DROP TABLE IF EXISTS `beer_coin_product_tier`;
+CREATE TABLE `beer_coin_product_tier` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '阶梯主键',
+  `product_id` bigint NOT NULL COMMENT '全局价格设置ID',
+  `start_quantity` bigint NOT NULL COMMENT '起始数量（含）',
+  `end_quantity` bigint DEFAULT NULL COMMENT '结束数量（含），为空表示以上',
+  `unit_price` decimal(10,2) NOT NULL COMMENT '单枚价格',
+  `sort_order` int NOT NULL COMMENT '阶梯顺序',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_beer_coin_product_tier_order` (`product_id`,`sort_order`),
+  KEY `idx_beer_coin_product_tier_range` (`product_id`,`start_quantity`,`end_quantity`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='啤酒币价格阶梯';
+
+--
+-- Table structure for table `beer_coin_purchase_order`
+--
+
+DROP TABLE IF EXISTS `beer_coin_purchase_order`;
+CREATE TABLE `beer_coin_purchase_order` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '购买订单主键',
+  `order_no` varchar(64) NOT NULL COMMENT '业务订单号',
+  `enterprise_account_id` bigint NOT NULL COMMENT '企业账户ID',
+  `product_id` bigint NOT NULL COMMENT '下单时全局价格设置ID',
+  `product_snapshot_json` json NOT NULL COMMENT '下单时价格和阶梯快照',
+  `quantity` bigint NOT NULL COMMENT '购买数量',
+  `amount` decimal(12,2) NOT NULL COMMENT '订单金额',
+  `status` varchar(32) NOT NULL COMMENT '订单状态',
+  `out_trade_no` varchar(64) DEFAULT NULL COMMENT '微信商户订单号',
+  `wechat_transaction_id` varchar(64) DEFAULT NULL COMMENT '微信交易号',
+  `code_url` varchar(512) DEFAULT NULL COMMENT 'Native 支付二维码链接',
+  `expire_time` datetime DEFAULT NULL COMMENT '支付过期时间',
+  `wechat_trade_state` varchar(32) DEFAULT NULL COMMENT '微信交易状态',
+  `wechat_trade_state_desc` varchar(128) DEFAULT NULL COMMENT '微信交易状态描述',
+  `notify_raw_json` json DEFAULT NULL COMMENT '支付通知原始JSON',
+  `paid_time` datetime DEFAULT NULL COMMENT '支付完成时间',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_beer_coin_purchase_order_no` (`order_no`),
+  UNIQUE KEY `uk_beer_coin_purchase_out_trade_no` (`out_trade_no`),
+  UNIQUE KEY `uk_beer_coin_purchase_wechat_transaction_id` (`wechat_transaction_id`),
+  KEY `idx_beer_coin_purchase_account_status` (`enterprise_account_id`,`status`,`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='啤酒币购买订单';
+
+--
+-- Table structure for table `beer_coin_lot`
+--
+
+DROP TABLE IF EXISTS `beer_coin_lot`;
+CREATE TABLE `beer_coin_lot` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '到账批次主键',
+  `lot_no` varchar(64) NOT NULL COMMENT '到账批次号',
+  `enterprise_account_id` bigint NOT NULL COMMENT '企业账户ID',
+  `purchase_order_id` bigint DEFAULT NULL COMMENT '购买订单ID',
+  `total_quantity` bigint NOT NULL COMMENT '到账总数',
+  `remaining_quantity` bigint NOT NULL COMMENT '剩余数量',
+  `available_from` datetime NOT NULL COMMENT '可用时间',
+  `expires_at` datetime NOT NULL COMMENT '失效时间',
+  `source_type` varchar(32) NOT NULL COMMENT '来源类型',
+  `source_order_id` varchar(64) DEFAULT NULL COMMENT '来源业务单号',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_beer_coin_lot_no` (`lot_no`),
+  UNIQUE KEY `uk_beer_coin_lot_purchase_order` (`purchase_order_id`),
+  KEY `idx_beer_coin_lot_account_expire` (`enterprise_account_id`,`expires_at`,`available_from`,`remaining_quantity`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='啤酒币到账批次';
+
+--
+-- Table structure for table `beer_coin_ledger`
+--
+
+DROP TABLE IF EXISTS `beer_coin_ledger`;
+CREATE TABLE `beer_coin_ledger` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '流水主键',
+  `ledger_no` varchar(64) NOT NULL COMMENT '流水号',
+  `enterprise_account_id` bigint NOT NULL COMMENT '企业账户ID',
+  `direction` varchar(32) NOT NULL COMMENT '方向：CREDIT/DEBIT/REVERSAL',
+  `quantity` bigint NOT NULL COMMENT '流水数量',
+  `business_type` varchar(64) NOT NULL COMMENT '业务类型',
+  `business_id` varchar(64) DEFAULT NULL COMMENT '业务ID',
+  `idempotency_key` varchar(128) NOT NULL COMMENT '幂等键',
+  `operator_admin_id` bigint DEFAULT NULL COMMENT '操作管理员',
+  `reason` varchar(500) DEFAULT NULL COMMENT '操作原因',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_beer_coin_ledger_no` (`ledger_no`),
+  UNIQUE KEY `uk_beer_coin_ledger_idempotency` (`enterprise_account_id`,`idempotency_key`),
+  KEY `idx_beer_coin_ledger_account_time` (`enterprise_account_id`,`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='啤酒币账户流水';
+
+--
+-- Table structure for table `beer_coin_consumption_allocation`
+--
+
+DROP TABLE IF EXISTS `beer_coin_consumption_allocation`;
+CREATE TABLE `beer_coin_consumption_allocation` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '分配明细主键',
+  `ledger_id` bigint NOT NULL COMMENT '扣减流水ID',
+  `lot_id` bigint NOT NULL COMMENT '到账批次ID',
+  `quantity` bigint NOT NULL COMMENT '本批次扣减数量',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_beer_coin_allocation_ledger_lot` (`ledger_id`,`lot_id`),
+  KEY `idx_beer_coin_allocation_lot` (`lot_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='啤酒币消费批次分配';
+
+--
+-- Table structure for table `competition_coin_settlement`
+--
+
+DROP TABLE IF EXISTS `competition_coin_settlement`;
+CREATE TABLE `competition_coin_settlement` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '赛事结算主键',
+  `competition_id` bigint NOT NULL COMMENT '比赛ID',
+  `enterprise_account_id` bigint NOT NULL COMMENT '企业账户ID',
+  `settlement_type` varchar(32) NOT NULL COMMENT '结算类型',
+  `effective_entry_count` int NOT NULL DEFAULT '0' COMMENT '有效酒款数',
+  `billing_tier` varchar(128) DEFAULT NULL COMMENT '计费说明',
+  `required_quantity` bigint NOT NULL DEFAULT '0' COMMENT '应消耗数量',
+  `charged_quantity` bigint NOT NULL DEFAULT '0' COMMENT '本次扣除数量',
+  `status` varchar(32) NOT NULL COMMENT '结算状态',
+  `ledger_id` bigint DEFAULT NULL COMMENT '扣减流水ID',
+  `idempotency_key` varchar(128) NOT NULL COMMENT '幂等键',
+  `settled_by_admin_id` bigint DEFAULT NULL COMMENT '操作管理员',
+  `settled_time` datetime DEFAULT NULL COMMENT '结算时间',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_competition_coin_settlement_type` (`competition_id`,`settlement_type`),
+  UNIQUE KEY `uk_competition_coin_settlement_idempotency` (`enterprise_account_id`,`idempotency_key`),
+  KEY `idx_competition_coin_settlement_account` (`enterprise_account_id`,`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='赛事啤酒币结算';
+
+--
+-- Table structure for table `competition_coin_settlement_entry`
+--
+
+DROP TABLE IF EXISTS `competition_coin_settlement_entry`;
+CREATE TABLE `competition_coin_settlement_entry` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '结算酒款快照主键',
+  `settlement_id` bigint NOT NULL COMMENT '结算ID',
+  `beer_entry_id` bigint NOT NULL COMMENT '酒款ID',
+  `entry_status_snapshot` varchar(32) NOT NULL COMMENT '结算时酒款状态',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_competition_coin_settlement_entry` (`settlement_id`,`beer_entry_id`),
+  KEY `idx_competition_coin_settlement_entry_entry` (`beer_entry_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='结算酒款快照';
 
 --
 -- Dumping events for database 'beer_competition'

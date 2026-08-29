@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
+import com.beercompetition.billing.beercoin.BeerCoinSettlementService;
 import com.beercompetition.mapper.AdminOperationLogMapper;
 import com.beercompetition.mapper.CompetitionRoundMapper;
 import com.beercompetition.mapper.CompetitionMapper;
@@ -69,6 +70,8 @@ public class CompetitionLifecycleServiceImpl implements CompetitionLifecycleServ
     private final OrganizerMapper organizerMapper;
     private final CompetitionCollectionService competitionCollectionService;
 
+    private final BeerCoinSettlementService beerCoinSettlementService;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public int closeExpiredRegistrations() {
@@ -121,6 +124,9 @@ public class CompetitionLifecycleServiceImpl implements CompetitionLifecycleServ
             throw new BaseException("配置未完整，暂不能开放报名：" + message);
         }
 
+        // 租户赛事在开放报名时扣除最低啤酒币，平台赛事由结算服务自动跳过。
+        beerCoinSettlementService.settleRegistrationOpening(competition.getId());
+
         // 3) 更新比赛状态为报名中
         CompetitionStatus oldStatus = status;
         competition.setStatus(CompetitionStatus.REGISTRATION_OPEN.name());
@@ -165,6 +171,9 @@ public class CompetitionLifecycleServiceImpl implements CompetitionLifecycleServ
         // 2) 校验评审准备必需配置
         CompetitionDetailVO detail = competitionQueryService.getCompetitionOverview(competition.getId());
         assertChecksDone(detail.getChecks(), Set.of("judgeTables", "scoreForms", "storedEntries"), "评审准备");
+
+        // 报名截止后按有效酒款数量补扣啤酒币，余额不足时保持报名截止状态。
+        beerCoinSettlementService.settleJudgingPreparation(competition.getId());
 
         // 3) 更新比赛状态为评审准备
         CompetitionStatus oldStatus = parseStatus(competition);

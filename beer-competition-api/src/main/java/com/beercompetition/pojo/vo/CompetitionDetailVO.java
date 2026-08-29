@@ -53,4 +53,5 @@ public class CompetitionDetailVO {
     private ResultSetupVO resultSetup;
     private List<CompetitionAlertVO> alerts;
     private List<String> dataIntegrityIssues;
+    private BeerCoinSettlementVO beerCoinSettlement;
 }

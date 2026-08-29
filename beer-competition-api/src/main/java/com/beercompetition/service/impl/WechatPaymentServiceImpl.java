@@ -18,6 +18,7 @@ import com.beercompetition.mapper.PaymentOrderMapper;
 import com.beercompetition.mapper.RegistrationBatchMapper;
 import com.beercompetition.mapper.OrganizerMapper;
 import com.beercompetition.mapper.WechatPayNotifyMapper;
+import com.beercompetition.billing.beercoin.BeerCoinService;
 import com.beercompetition.pay.WechatPayClient;
 import com.beercompetition.properties.WechatPayProperties;
 import com.beercompetition.pojo.enums.EntryPayMethod;
@@ -50,6 +51,7 @@ import com.beercompetition.service.WechatOAuthService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
@@ -79,6 +81,7 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
     );
     private static final String TARGET_ENTRY = "BEER_ENTRY";
     private static final String BUSINESS_PAYMENT = "PAYMENT";
+    private static final String BUSINESS_BEER_COIN_PURCHASE = "BEER_COIN_PURCHASE";
     private static final String BUSINESS_REFUND = "REFUND";
     private static final int NATIVE_PAY_EXPIRE_MINUTES = 30;
     private static final int JSAPI_PAY_EXPIRE_MINUTES = 30;
@@ -104,6 +107,7 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
     private final TransactionTemplate transactionTemplate;
     private final CompetitionAccessService competitionAccessService;
     private final EntryScanLabelService entryScanLabelService;
+    private final BeerCoinService beerCoinService;
 
     @Override
     public WechatNativePayVO createNativePayment(Long entryId) {
@@ -246,14 +250,32 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
     @Override
     public void handlePaymentNotify(WechatPayClient.WechatNotifyRequest request) {
         WechatPayClient.PaymentNotifyResult result = wechatPayClient.parsePaymentNotify(request);
-        if (isDuplicateNotify(result.notifyId())) {
+        WechatPayNotify existingNotify = findNotify(result.notifyId());
+        if (existingNotify != null && Objects.equals(existingNotify.getProcessedFlag(), 1)) {
             return;
         }
-        WechatPayNotify notify = insertNotify(result.notifyId(), result.eventType(), BUSINESS_PAYMENT,
-                result.outTradeNo(), null, result.transactionId(), null, result.rawJson());
+        boolean beerCoinPurchase = beerCoinService.isPurchaseOrder(result.outTradeNo());
+        WechatPayNotify notify = existingNotify;
+        if (notify == null) {
+            try {
+                notify = insertNotify(result.notifyId(), result.eventType(),
+                        beerCoinPurchase ? BUSINESS_BEER_COIN_PURCHASE : BUSINESS_PAYMENT,
+                        result.outTradeNo(), null, result.transactionId(), null, result.rawJson());
+            } catch (DuplicateKeyException ex) {
+                notify = findNotify(result.notifyId());
+                if (notify == null) {
+                    throw ex;
+                }
+                if (Objects.equals(notify.getProcessedFlag(), 1)) {
+                    return;
+                }
+            }
+        }
         try {
             transactionTemplate.executeWithoutResult(status -> {
-                if (!batchPaymentService.applyWechatPaymentSuccess(result)) {
+                if (beerCoinPurchase) {
+                    beerCoinService.applyWechatPaymentSuccess(result);
+                } else if (!batchPaymentService.applyWechatPaymentSuccess(result)) {
                     applyPaymentSuccess(result);
                 }
             });
@@ -267,11 +289,25 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
     @Override
     public void handleRefundNotify(WechatPayClient.WechatNotifyRequest request) {
         WechatPayClient.RefundNotifyResult result = wechatPayClient.parseRefundNotify(request);
-        if (isDuplicateNotify(result.notifyId())) {
+        WechatPayNotify existingNotify = findNotify(result.notifyId());
+        if (existingNotify != null && Objects.equals(existingNotify.getProcessedFlag(), 1)) {
             return;
         }
-        WechatPayNotify notify = insertNotify(result.notifyId(), result.eventType(), BUSINESS_REFUND,
-                result.outTradeNo(), result.outRefundNo(), null, result.refundId(), result.rawJson());
+        WechatPayNotify notify = existingNotify;
+        if (notify == null) {
+            try {
+                notify = insertNotify(result.notifyId(), result.eventType(), BUSINESS_REFUND,
+                        result.outTradeNo(), result.outRefundNo(), null, result.refundId(), result.rawJson());
+            } catch (DuplicateKeyException ex) {
+                notify = findNotify(result.notifyId());
+                if (notify == null) {
+                    throw ex;
+                }
+                if (Objects.equals(notify.getProcessedFlag(), 1)) {
+                    return;
+                }
+            }
+        }
         try {
             transactionTemplate.executeWithoutResult(status -> applyRefundResult(result.outRefundNo(), result.refundId(),
                     result.refundStatus(), result.successTime(), result.rawJson()));
@@ -940,9 +976,13 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
         return LABEL_ALLOWED_STATUSES.contains(entry.getStatus());
     }
 
-    private boolean isDuplicateNotify(String notifyId) {
-        return StringUtils.hasText(notifyId) && wechatPayNotifyMapper.selectCount(new LambdaQueryWrapper<WechatPayNotify>()
-                .eq(WechatPayNotify::getNotifyId, notifyId)) > 0;
+    private WechatPayNotify findNotify(String notifyId) {
+        if (!StringUtils.hasText(notifyId)) {
+            return null;
+        }
+        return wechatPayNotifyMapper.selectOne(new LambdaQueryWrapper<WechatPayNotify>()
+                .eq(WechatPayNotify::getNotifyId, notifyId)
+                .last("LIMIT 1"));
     }
 
     private WechatPayNotify insertNotify(String notifyId, String eventType, String businessType,

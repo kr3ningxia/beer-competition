@@ -2,6 +2,7 @@ package com.beercompetition.judging.assignment;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.beercompetition.common.exception.BaseException;
+import com.beercompetition.billing.beercoin.BeerCoinSettlementService;
 import com.beercompetition.mapper.CompetitionRoundMapper;
 import com.beercompetition.mapper.JudgeAssignmentMapper;
 import com.beercompetition.mapper.JudgeTableMapper;
@@ -81,19 +82,25 @@ public class RoundAllocationServiceImpl implements RoundAllocationService {
 
     private final RoundCandidateSyncService roundCandidateSyncService;
 
+    private final BeerCoinSettlementService beerCoinSettlementService;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void createFirstRound(Long competitionId, FirstRoundCreateRequest request) {
         // 1) 查询比赛、基础桌和可分配酒款
         Competition competition = roundQuerySupport.requireCompetition(competitionId);
+        CompetitionStatus competitionStatus = roundValidationPolicy.parseCompetitionStatus(competition);
         if (!Set.of(
                 CompetitionStatus.DRAFT,
                 CompetitionStatus.REGISTRATION_OPEN,
                 CompetitionStatus.REGISTRATION_CLOSED,
                 CompetitionStatus.JUDGING_PREP
-        ).contains(roundValidationPolicy.parseCompetitionStatus(competition))) {
+        ).contains(competitionStatus)) {
             throw new BaseException("评审已开始，不能再创建首轮编排");
         }
+        // 首轮创建和后续分桌都属于正式评审准备动作，租户赛事必须先完成最终结算。
+        // 平台赛事由结算服务按赛事归属自动跳过该门槛。
+        beerCoinSettlementService.requireJudgingSettlementCompleted(competitionId);
         if (competitionRoundMapper.selectCount(new LambdaQueryWrapper<CompetitionRound>()
                 .eq(CompetitionRound::getCompetitionId, competitionId)
                 .eq(CompetitionRound::getRoundNo, 1)) > 0) {
@@ -160,6 +167,7 @@ public class RoundAllocationServiceImpl implements RoundAllocationService {
         // 1) 查询轮次并校验编辑状态
         Competition competition = roundQuerySupport.requireCompetition(competitionId);
         CompetitionRound round = roundQuerySupport.requireRound(competitionId, roundId);
+        beerCoinSettlementService.requireJudgingSettlementCompleted(competitionId);
         roundValidationPolicy.validateCompetitionStageForRoundAllocation(competition, round);
         if (!RoundStatus.DRAFT.name().equals(round.getStatus())) {
             throw new BaseException("只有草稿轮次可以保存编排");
@@ -272,6 +280,7 @@ public class RoundAllocationServiceImpl implements RoundAllocationService {
     public void createNextRound(Long competitionId, NextRoundCreateRequest request) {
         // 1) 查询来源轮次和晋级候选
         Competition competition = roundQuerySupport.requireCompetition(competitionId);
+        beerCoinSettlementService.requireJudgingSettlementCompleted(competitionId);
         if (resolveCompetitionType(competition) == CompetitionType.FEEDBACK_ONLY) {
             throw new BaseException("风格对齐会不创建后续轮");
         }

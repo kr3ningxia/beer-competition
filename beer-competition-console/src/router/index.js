@@ -59,6 +59,7 @@ const routes = [
       { path: 'judges', component: () => import('@/views/admin/Judges.vue'), meta: { adminTypes: ALL_ADMIN_TYPES } },
       { path: 'organizer-applications', component: () => import('@/views/admin/OrganizerApplications.vue'), meta: { adminTypes: [ADMIN_TYPES.PLATFORM_SUPER_ADMIN] } },
       { path: 'admin-users', component: () => import('@/views/admin/AdminUsers.vue'), meta: { adminTypes: [ADMIN_TYPES.PLATFORM_SUPER_ADMIN, ADMIN_TYPES.ORGANIZER_ADMIN] } },
+      { path: 'beer-coins', component: () => import('@/views/admin/BeerCoins.vue'), meta: { adminTypes: [ADMIN_TYPES.PLATFORM_SUPER_ADMIN, ADMIN_TYPES.ORGANIZER_ADMIN] } },
       { path: 'operation-logs', component: () => import('@/views/admin/AdminOperationLogs.vue'), meta: { adminTypes: ALL_ADMIN_TYPES } },
       { path: 'style-libraries', component: () => import('@/views/admin/StyleLibraries.vue'), meta: { adminTypes: ALL_ADMIN_TYPES } },
       { path: 'exports', component: () => import('@/views/admin/AdminExports.vue'), meta: { adminTypes: ALL_ADMIN_TYPES } },

@@ -85,6 +85,8 @@ app:
     bucket-name: ${APP_ALIOSS_BUCKET_NAME:}
   export:
     judge-h5-base-url: ${APP_JUDGE_H5_BASE_URL:http://localhost:5174}
+  beer-coin:
+    payment-mode: ${APP_BEER_COIN_PAYMENT_MODE:${APP_WECHAT_PAY_MODE:MOCK}}
   wechat-pay:
     mode: ${APP_WECHAT_PAY_MODE:MOCK}
     app-id: ${APP_WECHAT_PAY_APP_ID:}
