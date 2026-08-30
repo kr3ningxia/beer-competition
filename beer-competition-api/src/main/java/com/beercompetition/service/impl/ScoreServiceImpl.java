@@ -14,6 +14,7 @@ import com.beercompetition.mapper.CompetitionScoreConfigMapper;
 import com.beercompetition.mapper.EntryScanLabelMapper;
 import com.beercompetition.mapper.JudgeAccountMapper;
 import com.beercompetition.mapper.JudgeAssignmentMapper;
+import com.beercompetition.mapper.JudgeRecruitmentApplicationMapper;
 import com.beercompetition.mapper.JudgeTableMapper;
 import com.beercompetition.mapper.JudgeScoreSessionMapper;
 import com.beercompetition.mapper.RoundResultMapper;
@@ -91,6 +92,8 @@ public class ScoreServiceImpl implements ScoreService {
     private final EntryScanLabelMapper entryScanLabelMapper;
     private final JudgeAccountMapper judgeAccountMapper;
     private final JudgeAssignmentMapper judgeAssignmentMapper;
+
+    private final JudgeRecruitmentApplicationMapper judgeRecruitmentApplicationMapper;
     private final JudgeTableMapper judgeTableMapper;
     private final JudgeScoreSessionMapper judgeScoreSessionMapper;
     private final RoundTableMapper roundTableMapper;
@@ -698,6 +701,8 @@ public class ScoreServiceImpl implements ScoreService {
                     .competitionId(competitionId)
                     .tableId(baseTable.getId())
                     .judgeAccountId(judgeId)
+                    .recruitmentApplicationId(judgeRecruitmentApplicationMapper
+                            .selectAcceptedApplicationId(competitionId, judgeId))
                     .role(member.getRole())
                     .build();
             judgeAssignmentMapper.insert(created);

@@ -1,0 +1,3 @@
+package com.beercompetition.pojo.vo;
+import lombok.Builder; import lombok.Data; import java.time.LocalDate; import java.time.LocalDateTime;
+@Data @Builder public class JudgeRecruitmentApplicationVO { private Long id; private String publicId; private Long recruitmentId; private Long competitionId; private String competitionName; private String competitionCode; private LocalDate competitionDate; private String judgePublicId; private String judgeName; private String maskedPhone; private String qualification; private Boolean breweryConflictFlag; private String breweryConflictText; private String status; private Boolean availabilityConfirmed; private String note; private String reviewRemark; private LocalDateTime createTime; private LocalDateTime processedTime; }

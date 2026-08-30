@@ -5,6 +5,7 @@ import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.billing.beercoin.BeerCoinSettlementService;
 import com.beercompetition.mapper.CompetitionRoundMapper;
 import com.beercompetition.mapper.JudgeAssignmentMapper;
+import com.beercompetition.mapper.JudgeRecruitmentApplicationMapper;
 import com.beercompetition.mapper.JudgeTableMapper;
 import com.beercompetition.mapper.RoundResultMapper;
 import com.beercompetition.mapper.RoundTableEntryMapper;
@@ -65,6 +66,8 @@ public class RoundAllocationServiceImpl implements RoundAllocationService {
     private final JudgeTableMapper judgeTableMapper;
 
     private final JudgeAssignmentMapper judgeAssignmentMapper;
+
+    private final JudgeRecruitmentApplicationMapper judgeRecruitmentApplicationMapper;
 
     private final CompetitionRoundMapper competitionRoundMapper;
 
@@ -506,6 +509,8 @@ public class RoundAllocationServiceImpl implements RoundAllocationService {
                 .competitionId(table.getCompetitionId())
                 .tableId(baseTable.getId())
                 .judgeAccountId(judgeId)
+                .recruitmentApplicationId(judgeRecruitmentApplicationMapper
+                        .selectAcceptedApplicationId(table.getCompetitionId(), judgeId))
                 .role(role)
                 .build());
     }

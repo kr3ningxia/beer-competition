@@ -49,8 +49,8 @@
         <div class="table-head">
           <span>主体</span>
           <span>联系人</span>
+          <span>手机号</span>
           <span>状态</span>
-          <span>提交时间</span>
           <span>账号</span>
           <span>操作</span>
         </div>
@@ -78,13 +78,14 @@
             </span>
             <span class="contact-cell">
               <strong>{{ application.contactName || '-' }}</strong>
-              <small>{{ application.maskedContactPhone || '-' }}</small>
+            </span>
+            <span class="phone-cell">
+              {{ application.maskedContactPhone || '-' }}
             </span>
             <span :class="['status-badge', statusTone(application.status)]">
               <i></i>
               {{ statusLabel(application.status) }}
             </span>
-            <span class="time-cell">{{ formatTime(application.submittedTime) }}</span>
             <span class="account-cell">
               <template v-if="application.status === 'ACCOUNT_ISSUED'">
                 <Check />
@@ -109,7 +110,6 @@
           <header class="drawer-head">
             <div>
               <h2 id="detail-title">{{ selectedApplication?.organizationName || '入驻申请' }}</h2>
-              <code>{{ selectedApplication?.applicationNo }}</code>
             </div>
             <button class="icon-button" type="button" aria-label="关闭详情" title="关闭详情" @click="closeDetail">
               <Close />
@@ -145,6 +145,10 @@
               <div class="detail-item">
                 <span>预计规模</span>
                 <strong>{{ selectedApplication.expectedScale || '-' }}</strong>
+              </div>
+              <div class="detail-item">
+                <span>提交时间</span>
+                <strong>{{ formatTime(selectedApplication.submittedTime) }}</strong>
               </div>
             </div>
 
@@ -773,7 +777,7 @@ svg {
 .application-row,
 .skeleton-row {
   display: grid;
-  grid-template-columns: minmax(230px, 1.6fr) minmax(150px, 1fr) minmax(110px, 0.68fr) minmax(145px, 0.88fr) minmax(90px, 0.6fr) minmax(130px, 0.84fr);
+  grid-template-columns: minmax(230px, 1.65fr) minmax(120px, 0.85fr) minmax(140px, 0.95fr) minmax(110px, 0.78fr) minmax(90px, 0.65fr) minmax(130px, 0.9fr);
   gap: 14px;
   align-items: center;
 }
@@ -826,15 +830,13 @@ svg {
 .contact-cell {
   align-items: flex-start;
   flex-direction: column;
-  gap: 4px;
   min-width: 0;
 }
 
 .organization-cell strong,
 .contact-cell strong,
 .organization-cell small,
-.contact-cell small,
-.time-cell,
+.phone-cell,
 .account-cell {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -847,9 +849,14 @@ svg {
   font-size: 13px;
 }
 
-.organization-cell small,
-.contact-cell small,
-.time-cell {
+.phone-cell {
+  color: var(--muted);
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+.organization-cell small {
   color: var(--muted);
   font-size: 11px;
 }
@@ -1077,14 +1084,6 @@ svg {
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.drawer-head code {
-  display: block;
-  margin-top: 7px;
-  color: var(--muted);
-  font-family: 'SFMono-Regular', Consolas, monospace;
-  font-size: 11px;
 }
 
 .drawer-body {
@@ -1565,7 +1564,7 @@ svg {
   }
 
   .application-row {
-    grid-template-columns: minmax(220px, 1.5fr) minmax(140px, 1fr) minmax(110px, 0.8fr) minmax(135px, 0.9fr) minmax(80px, 0.6fr) minmax(120px, 0.8fr);
+    grid-template-columns: minmax(220px, 1.5fr) minmax(110px, 0.85fr) minmax(125px, 0.95fr) minmax(105px, 0.8fr) minmax(80px, 0.6fr) minmax(120px, 0.85fr);
   }
 }
 

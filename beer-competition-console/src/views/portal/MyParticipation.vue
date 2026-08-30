@@ -4,7 +4,6 @@
       <div>
         <span class="label-chip tone-green">我的参赛</span>
         <h1>{{ breweryProfile.breweryName || '完善厂牌资料' }}</h1>
-        <p>{{ heroCopy }}</p>
       </div>
       <RouterLink class="hero-reminder" :to="heroReminder.to">
         {{ heroReminder.label }}
@@ -109,21 +108,6 @@ const breweryProfile = computed(() => ({
 }))
 const highestPriorityEntry = computed(() => priorityEntry(entries.value))
 const heroAction = computed(() => entryPrimaryAction(highestPriorityEntry.value))
-const heroCopy = computed(() => {
-  if (unpaidEntries.value.length > 0) {
-    return `有 ${unpaidEntries.value.length} 款酒需要支付报名费`
-  }
-  if (labelEntries.value.length > 0) {
-    return `有 ${labelEntries.value.length} 款酒需要办理送样`
-  }
-  if (waitingDeliveryEntries.value.length > 0) {
-    return `有 ${waitingDeliveryEntries.value.length} 款酒等待组委会确认入库`
-  }
-  if (resultEntries.value.length > 0) {
-    return `有 ${resultEntries.value.length} 款酒的结果已经发布`
-  }
-  return '目前没有待处理的参赛事项，请浏览开放报名赛事'
-})
 
 const unpaidEntries = computed(() => entries.value.filter((entry) => isEntryPaymentPending(entry)))
 const labelEntries = computed(() => entries.value.filter((entry) => isEntryDeliveryActionPending(entry)))

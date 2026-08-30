@@ -21,6 +21,7 @@ export const ADMIN_NAV_GROUPS = Object.freeze([
       { path: '/admin/competitions', label: '比赛管理', icon: 'competitions', adminTypes: ALL_ADMIN_TYPES, matchPrefix: true },
       { path: '/admin/entries', label: '酒款管理', icon: 'entries', adminTypes: ALL_ADMIN_TYPES },
       { path: '/admin/bank-transfers', label: '收款确认', icon: 'payments', adminTypes: ALL_ADMIN_TYPES },
+      { path: '/admin/judge-recruitments', label: '裁判招募', icon: 'judges', adminTypes: ALL_ADMIN_TYPES, matchPrefix: true },
       { path: '/admin/judges', label: '评审人员', icon: 'judges', adminTypes: ALL_ADMIN_TYPES },
       { path: '/admin/exports', label: '数据导出', icon: 'exports', adminTypes: ALL_ADMIN_TYPES },
     ],

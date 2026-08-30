@@ -8,6 +8,7 @@ const routes = [
   { path: '/review-status', component: () => import('@/views/ReviewStatus.vue'), meta: { requiresAuth: true } },
   { path: '/profile/edit', component: () => import('@/views/ProfileEdit.vue'), meta: { requiresAuth: true } },
   { path: '/competitions', component: () => import('@/views/Competitions.vue'), meta: { requiresAuth: true } },
+  { path: '/recruitments', component: () => import('@/views/Recruitments.vue'), meta: { requiresAuth: true } },
   { path: '/judged', component: () => import('@/views/Judged.vue'), meta: { requiresAuth: true } },
   { path: '/q/:code', component: () => import('@/views/ScanResult.vue'), meta: { requiresAuth: true } },
   { path: '/scan-result/:uuid', component: () => import('@/views/ScanResult.vue'), meta: { requiresAuth: true } },

@@ -620,6 +620,9 @@ function applyQuery() {
     filters.competitionId = String(route.query.competitionId)
   }
   if (route.query.keyword) filters.keyword = String(route.query.keyword)
+  for (const key of ['status', 'paymentStatus', 'deliveryStatus', 'refundStatus', 'assigned', 'categoryId']) {
+    if (route.query[key]) filters[key] = String(route.query[key])
+  }
 }
 
 async function onCompetitionChange() {

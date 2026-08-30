@@ -239,6 +239,16 @@ export function deleteJudge(publicId) {
   return request.delete(`/api/admin/judges/${publicId}`, { authScope: 'admin' })
 }
 
+export function fetchJudgeRecruitments(params = {}) { return request.get('/api/admin/judge-recruitments', { params, authScope: 'admin' }) }
+export function fetchJudgeRecruitment(id) { return request.get(`/api/admin/judge-recruitments/${id}`, { authScope: 'admin' }) }
+export function createJudgeRecruitment(payload) { return request.post('/api/admin/judge-recruitments', payload, { authScope: 'admin' }) }
+export function updateJudgeRecruitment(id, payload) { return request.put(`/api/admin/judge-recruitments/${id}`, payload, { authScope: 'admin' }) }
+export function publishJudgeRecruitment(id) { return request.post(`/api/admin/judge-recruitments/${id}/publish`, {}, { authScope: 'admin' }) }
+export function closeJudgeRecruitment(id) { return request.post(`/api/admin/judge-recruitments/${id}/close`, {}, { authScope: 'admin' }) }
+export function reopenJudgeRecruitment(id) { return request.post(`/api/admin/judge-recruitments/${id}/reopen`, {}, { authScope: 'admin' }) }
+export function fetchJudgeRecruitmentApplications(id, params = {}) { return request.get(`/api/admin/judge-recruitments/${id}/applications`, { params, authScope: 'admin' }) }
+export function reviewJudgeRecruitmentApplication(id, payload) { return request.patch(`/api/admin/judge-recruitments/applications/${id}/status`, payload, { authScope: 'admin' }) }
+
 export function createAssignment(payload) {
   return request.post('/api/admin/judge-assignments', payload, { authScope: 'admin' })
 }

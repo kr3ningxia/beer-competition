@@ -23,6 +23,12 @@
         <path d="M5 14h5v5H5v-5Z" />
         <path d="M14 14h5v5h-5v-5Z" />
       </svg>
+      <svg v-else-if="item.icon === 'recruit'" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
+        <path d="M3.5 20a5.5 5.5 0 0 1 11 0" />
+        <path d="M18 13v7" />
+        <path d="M14.5 16.5h7" />
+      </svg>
       <svg v-else viewBox="0 0 24 24" aria-hidden="true">
         <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
         <path d="M4 21a8 8 0 0 1 16 0" />
@@ -60,6 +66,7 @@ const items = computed(() => {
   if (props.role === 'CAPTAIN' && !props.hideTable) {
     nav.push({ label: '本桌', to: '/captain', icon: 'table', key: 'table' })
   }
+  nav.push({ label: '评审报名', to: '/recruitments', icon: 'recruit', key: 'recruitments' })
   nav.push({ label: '我的', to: '/profile', icon: 'profile', key: 'profile' })
   return nav
 })

@@ -16,6 +16,8 @@ public interface JudgeService {
 
     List<JudgeAccountVO> listJudges(Integer status, String keyword);
 
+    List<JudgeAccountVO> listJudges(Integer status, String keyword, Long competitionId);
+
     PageResult<JudgeAccountVO> pageJudges(Integer status, String keyword, Integer page, Integer pageSize);
 
     JudgeAccountVO getJudgeDetail(String publicId);

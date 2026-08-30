@@ -5,19 +5,8 @@
         <button class="icon-button" type="button" title="刷新工作台" aria-label="刷新工作台" :disabled="loading" @click="loadDashboard">
           <Refresh :class="{ spinning: loading }" />
         </button>
-        <button class="primary-button" type="button" @click="router.push('/admin/competitions/new')">
-          <Plus />
-          新建比赛
-        </button>
       </template>
     </AdminPageHeader>
-
-    <section class="summary-grid" aria-label="赛事概览">
-      <article v-for="item in summaryCards" :key="item.label" :class="['metric-card', item.tone]">
-        <span>{{ item.label }}</span>
-        <strong>{{ item.value }}</strong>
-      </article>
-    </section>
 
     <section v-if="!loading && !competitions.length" class="empty-workspace">
       <span class="empty-icon"><Medal /></span>
@@ -29,82 +18,45 @@
     </section>
 
     <template v-else-if="competitions.length">
-      <section class="focus-layout">
-        <article class="focus-panel">
-          <header>
-            <div>
-              <span class="status-badge">{{ statusText(currentCompetition?.status) }}</span>
-              <h2>{{ currentCompetition?.name }}</h2>
-            </div>
-            <button class="text-button" type="button" @click="openCompetition">
-              进入比赛
-              <Right />
-            </button>
-          </header>
-
-          <div class="focus-stats">
-            <div>
-              <span>参赛酒款</span>
-              <strong>{{ currentEntries.total || 0 }}</strong>
-            </div>
-            <div>
-              <span>已入库</span>
-              <strong>{{ currentEntries.stored || 0 }}</strong>
-            </div>
-            <div>
-              <span>评审桌</span>
-              <strong>{{ roundTables.length }}</strong>
-            </div>
-            <div>
-              <span>结果发布</span>
-              <strong class="state-value">{{ detail?.resultSetup?.published ? '已发布' : '未发布' }}</strong>
-            </div>
-          </div>
-        </article>
-
-        <article class="issues-panel">
-          <header>
-            <h2>待处理事项</h2>
-            <span>{{ issueRows.length }} 项</span>
-          </header>
-          <div class="issue-list">
-            <button v-for="issue in issueRows" :key="issue" type="button" @click="openCompetition">
-              <span>{{ issue }}</span>
-              <Right />
-            </button>
-            <p v-if="!issueRows.length">当前没有待处理事项</p>
-          </div>
-        </article>
+      <section class="todo-summary" aria-label="待办总览">
+        <button v-for="card in summaryCards" :key="card.key" :class="['todo-card', card.tone]" type="button" @click="selectTodoType(card.key)">
+          <span class="todo-card-icon"><component :is="card.icon" /></span>
+          <span class="todo-card-copy"><small>{{ card.label }}</small><strong>{{ card.count }}</strong></span>
+          <Right />
+        </button>
       </section>
 
-      <section class="competition-ledger">
-        <header>
-          <h2>近期比赛</h2>
-          <button class="text-button" type="button" @click="router.push('/admin/competitions')">
-            全部比赛
-            <Right />
-          </button>
-        </header>
-        <div class="ledger-head">
-          <span>比赛</span>
-          <span>状态</span>
-          <span>比赛日期</span>
-          <span>报名酒款</span>
-          <span>操作</span>
-        </div>
-        <button
-          v-for="item in competitions.slice(0, 6)"
-          :key="item.id"
-          class="ledger-row"
-          type="button"
-          @click="selectCompetition(item, true)"
-        >
-          <strong>{{ item.name }}</strong>
-          <span>{{ statusText(item.status) }}</span>
-          <span>{{ formatDate(item.competitionDate || item.date) }}</span>
-          <span>{{ item.entriesSummary?.total || 0 }}</span>
-          <em>查看</em>
-        </button>
+      <section class="dashboard-grid">
+        <article class="todo-panel">
+          <header class="section-header">
+            <div><h2>待处理</h2><span>{{ todoCountByFilter }} 项</span></div>
+            <button v-if="todoFilter !== 'ALL'" class="text-button" type="button" @click="todoFilter = 'ALL'">查看全部</button>
+          </header>
+          <nav class="todo-tabs" aria-label="待办类型筛选">
+            <button v-for="tab in todoTabs" :key="tab.key" :class="{ active: todoFilter === tab.key }" type="button" @click="todoFilter = tab.key">{{ tab.label }}<b v-if="tab.count">{{ tab.count }}</b></button>
+          </nav>
+          <div class="todo-list">
+            <button v-for="todo in filteredTodos" :key="todo.id" class="todo-row" type="button" @click="openTodo(todo)">
+              <span :class="['todo-type', todo.tone]">{{ todo.type }}</span>
+              <span class="todo-main"><strong>{{ todo.title }}</strong><small>{{ todo.detail }}</small></span>
+              <span class="todo-time">{{ todo.time }}</span>
+              <Right />
+            </button>
+            <p v-if="!filteredTodos.length" class="todo-empty">当前没有待处理事项</p>
+          </div>
+        </article>
+
+        <article class="active-panel">
+          <header class="section-header"><div><h2>赛事</h2><span>{{ activeCompetitions.length }} 场</span></div><button class="text-button" type="button" @click="router.push('/admin/competitions')">全部比赛<Right /></button></header>
+          <div class="active-list">
+            <button v-for="item in activeCompetitions.slice(0, 6)" :key="item.id" class="active-row" type="button" @click="router.push(`/admin/competitions/${item.id}`)">
+              <span class="active-main"><strong>{{ item.name }}</strong><small>{{ statusText(item.status) }} · {{ formatDate(item.competitionDate || item.date) }}</small></span>
+              <span class="active-progress"><b>{{ item.entriesSummary?.registered || item.entriesSummary?.total || 0 }}</b><small>报名</small></span>
+              <Right />
+            </button>
+            <p v-if="!activeCompetitions.length" class="todo-empty">暂无赛事</p>
+          </div>
+        </article>
       </section>
     </template>
   </main>
@@ -113,71 +65,62 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Medal, Plus, Refresh, Right } from '@element-plus/icons-vue'
+import { Document, Medal, Money, Plus, Refresh, Right, User } from '@element-plus/icons-vue'
 import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
-import { fetchCompetitionProgress, fetchCompetitions } from '@/api/admin'
-import { getAdminType } from '@/utils/auth'
-import { ADMIN_TYPES } from '@/config/adminAccess'
+import { fetchAdminBankTransfers, fetchAdminEntries, fetchCompetitions, fetchJudgeRecruitments } from '@/api/admin'
 
 const router = useRouter()
 const competitions = ref([])
-const detail = ref(null)
-const selectedId = ref(null)
+const recruitments = ref([])
+const transfers = ref([])
+const transferTotal = ref(0)
+const entryQueues = ref({ payment: null, storage: null, refund: null })
 const loading = ref(false)
-
-const currentCompetition = computed(() => detail.value
-  || competitions.value.find((item) => item.id === selectedId.value)
-  || competitions.value[0]
-  || null)
-const currentEntries = computed(() => detail.value?.entriesSummary || currentCompetition.value?.entriesSummary || {})
-const currentRound = computed(() => {
-  const rounds = detail.value?.rounds || []
-  return detail.value?.currentRound
-    || rounds.find((round) => ['PUBLISHED', 'IN_PROGRESS', 'SUBMITTED'].includes(round.status))
-    || rounds[rounds.length - 1]
-    || null
-})
-const roundTables = computed(() => currentRound.value?.tables || [])
+const todoFilter = ref('ALL')
+const entryQueueCount = computed(() => Object.values(entryQueues.value)
+  .filter((queue) => queue && queue !== entryQueues.value.payment)
+  .reduce((sum, item) => sum + Number(item?.total || 0), 0))
+const judgePendingTotal = computed(() => recruitments.value.reduce((sum, item) => sum + Number(item.pendingCount || 0), 0))
 const summaryCards = computed(() => [
-  { label: '全部比赛', value: competitions.value.length, tone: 'gold' },
-  { label: '报名中', value: competitions.value.filter((item) => item.status === 'REGISTRATION_OPEN').length, tone: 'green' },
-  { label: '待确认收款', value: competitions.value.reduce((total, item) => total + Number(item.entriesSummary?.pendingPayment || 0), 0), tone: 'orange' },
-  { label: '评审进行中', value: competitions.value.filter((item) => ['JUDGING_PREP', 'JUDGING', 'RESULT_CONFIRMING'].includes(item.status)).length, tone: 'blue' },
+  { key: 'JUDGE', label: '评委报名待审核', count: judgePendingTotal.value, tone: 'gold', icon: User },
+  { key: 'TRANSFER', label: '转账待确认', count: transferTotal.value, tone: 'orange', icon: Money },
+  { key: 'ENTRY', label: '酒款待处理', count: entryQueueCount.value, tone: 'blue', icon: Document },
 ])
-const issueRows = computed(() => {
-  const issues = [...(detail.value?.dataIntegrityIssues || [])]
-  roundTables.value.forEach((table) => {
-    if (!table.captainPublicId) issues.push(`${table.name}缺少桌长`)
-    if (!(table.entryUuids || []).length) issues.push(`${table.name}尚未分配酒款`)
-  })
-  return issues.slice(0, 6)
-})
+const todos = computed(() => [
+  ...recruitments.value.filter((item) => item.pendingCount).map((item) => ({ id: `judge-${item.id}`, type: '评委报名', tone: 'gold', title: `${item.competitionName}待审核 ${item.pendingCount} 人`, detail: `招募${item.status === 'OPEN' ? '进行中' : '已截止'}`, time: formatTime(item.recruitmentDeadline), path: `/admin/judge-recruitments/${item.id}` })),
+  ...transfers.value.slice(0, 6).map((item) => ({ id: `transfer-${item.id}`, type: '转账', tone: 'orange', title: `${item.breweryName || '厂牌'} · ${item.competitionName || '赛事'}`, detail: `${formatMoney(item.amount)} · ${item.voucherFileName ? '凭证已上传' : '缺少付款凭证'}`, time: formatTime(item.submittedTime), path: '/admin/bank-transfers' })),
+  ...(entryQueues.value.storage?.records || []).slice(0, 4).map((item) => ({ id: `storage-${item.id}`, type: '酒款', tone: 'blue', title: `${item.name || '未命名酒款'}待入库`, detail: `${item.breweryCompanyName || '未关联厂牌'} · ${item.competitionName || '赛事'}`, time: formatTime(item.submittedAt), path: '/admin/entries?deliveryStatus=SUBMITTED' })),
+  ...(entryQueues.value.refund?.records || []).slice(0, 4).map((item) => ({ id: `refund-${item.id}`, type: '酒款', tone: 'red', title: `${item.name || '未命名酒款'}退款待处理`, detail: `${item.breweryCompanyName || '未关联厂牌'} · ${item.competitionName || '赛事'}`, time: formatTime(item.refundRequestedAt), path: '/admin/entries?refundStatus=REQUESTED' })),
+])
+const todoTabs = computed(() => [{ key: 'ALL', label: '全部', count: judgePendingTotal.value + transferTotal.value + entryQueueCount.value }, { key: 'JUDGE', label: '评委报名', count: judgePendingTotal.value }, { key: 'TRANSFER', label: '转账', count: transferTotal.value }, { key: 'ENTRY', label: '酒款', count: entryQueueCount.value }])
+const todoCountByFilter = computed(() => todoTabs.value.find((tab) => tab.key === todoFilter.value)?.count || 0)
+const filteredTodos = computed(() => todos.value.filter((item) => todoFilter.value === 'ALL' || (todoFilter.value === 'JUDGE' && item.type === '评委报名') || (todoFilter.value === 'TRANSFER' && item.type === '转账') || (todoFilter.value === 'ENTRY' && item.type === '酒款')).slice(0, 8))
+const activeCompetitions = computed(() => competitions.value.filter((item) => !['PUBLISHED', 'ARCHIVED'].includes(item.status)))
 
 onMounted(loadDashboard)
 
 async function loadDashboard() {
   loading.value = true
   try {
-    competitions.value = await fetchCompetitions() || []
-    const target = competitions.value.find((item) => ['JUDGING', 'RESULT_CONFIRMING', 'JUDGING_PREP'].includes(item.status))
-      || competitions.value.find((item) => item.status === 'REGISTRATION_OPEN')
-      || competitions.value[0]
-    if (target) await selectCompetition(target, false)
-    else detail.value = null
+    const [competitionData, recruitmentData, transferData, storageData, refundData] = await Promise.all([
+      fetchCompetitions({ includeArchived: false }),
+      fetchJudgeRecruitments(),
+      fetchAdminBankTransfers({ status: 'SUBMITTED', page: 1, pageSize: 20 }),
+      fetchAdminEntries({ deliveryStatus: 'SUBMITTED', page: 1, pageSize: 8 }),
+      fetchAdminEntries({ refundStatus: 'REQUESTED', page: 1, pageSize: 8 }),
+    ])
+    competitions.value = competitionData || []
+    recruitments.value = recruitmentData || []
+    transfers.value = transferData?.records || []
+    transferTotal.value = transferData?.total || 0
+    entryQueues.value = { payment: null, storage: storageData, refund: refundData }
   } finally {
     loading.value = false
   }
 }
 
-async function selectCompetition(item, navigate = false) {
-  selectedId.value = item.id
-  detail.value = await fetchCompetitionProgress(item.id)
-  if (navigate) openCompetition()
-}
-
-function openCompetition() {
-  if (currentCompetition.value?.id) router.push(`/admin/competitions/${currentCompetition.value.id}`)
-}
+function selectTodoType(type) { todoFilter.value = type === 'ENTRY' ? 'ENTRY' : type }
+function openTodo(todo) { router.push(todo.path) }
 
 function statusText(status) {
   const labels = {
@@ -195,6 +138,14 @@ function statusText(status) {
 
 function formatDate(value) {
   return value ? String(value).slice(0, 10) : '-'
+}
+
+function formatTime(value) {
+  return value ? new Date(value).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }) : '-'
+}
+
+function formatMoney(value) {
+  return value === undefined || value === null ? '-' : `¥${Number(value).toFixed(2)}`
 }
 </script>
 
@@ -231,63 +182,67 @@ h2 { font-size: 18px; }
 .icon-button:disabled { opacity: 0.55; }
 .spinning { animation: spin 0.8s linear infinite; }
 
-.summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
-.metric-card { min-height: 108px; padding: 17px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); }
-.metric-card span { color: var(--muted); font-size: 13px; }
-.metric-card strong { display: block; margin-top: 15px; font-size: 29px; }
-.metric-card.gold strong { color: #e0b84a; }
-.metric-card.green strong { color: #70cf7c; }
-.metric-card.orange strong { color: #f2a65a; }
-.metric-card.blue strong { color: #76b9d2; }
+.todo-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
+.todo-card { display: flex; align-items: center; gap: 12px; min-height: 94px; padding: 15px; color: var(--text); text-align: left; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); cursor: pointer; }
+.todo-card:hover { border-color: rgba(216, 169, 53, 0.35); background: rgba(28, 40, 44, 0.96); }
+.todo-card-icon { display: grid; flex: 0 0 auto; place-items: center; width: 36px; height: 36px; border-radius: 7px; background: rgba(216, 169, 53, 0.1); }
+.todo-card-icon svg { width: 19px; height: 19px; }
+.todo-card-copy { display: flex; flex: 1; min-width: 0; align-items: baseline; gap: 10px; }
+.todo-card-copy small { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.todo-card-copy strong { flex: 0 0 auto; font-size: 27px; line-height: 1; }
+.todo-card.orange .todo-card-icon { color: #f2a65a; background: rgba(242, 166, 90, 0.1); }
+.todo-card.blue .todo-card-icon { color: #76b9d2; background: rgba(118, 185, 210, 0.1); }
+.todo-card.orange strong { color: #f2a65a; }
+.todo-card.blue strong { color: #76b9d2; }
+.todo-card > svg { flex: 0 0 auto; width: 15px; height: 15px; color: #71858d; }
+.dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(330px, 0.65fr); gap: 14px; margin-top: 14px; }
+.todo-panel, .active-panel { min-width: 0; padding: 18px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); }
+.section-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.section-header > div { display: flex; align-items: baseline; gap: 10px; }
+.section-header h2 { font-size: 18px; }
+.section-header span { color: var(--muted); font-size: 12px; }
+.todo-tabs { display: flex; gap: 6px; margin-top: 16px; border-bottom: 1px solid rgba(218, 231, 236, 0.08); }
+.todo-tabs button { min-height: 34px; padding: 0 9px; color: var(--muted); border: 0; border-bottom: 2px solid transparent; background: transparent; cursor: pointer; font-size: 12px; }
+.todo-tabs button.active { color: #e0b84a; border-bottom-color: #d8a935; }
+.todo-tabs b { margin-left: 5px; color: inherit; font-weight: 700; }
+.todo-list, .active-list { display: grid; gap: 7px; margin-top: 12px; }
+.todo-row, .active-row { display: grid; align-items: center; gap: 10px; width: 100%; min-width: 0; padding: 10px; color: var(--text); text-align: left; border: 1px solid rgba(218, 231, 236, 0.07); border-radius: 6px; background: rgba(255, 255, 255, 0.022); cursor: pointer; }
+.todo-row { grid-template-columns: 66px minmax(0, 1fr) 54px 15px; }
+.todo-row:hover, .active-row:hover { border-color: rgba(216, 169, 53, 0.2); background: rgba(255, 255, 255, 0.04); }
+.todo-type { width: fit-content; padding: 4px 6px; border-radius: 4px; color: #e0b84a; background: rgba(216, 169, 53, 0.1); font-size: 11px; }
+.todo-type.orange { color: #f2a65a; background: rgba(242, 166, 90, 0.1); }
+.todo-type.blue { color: #76b9d2; background: rgba(118, 185, 210, 0.1); }
+.todo-type.red { color: #ffaaa0; background: rgba(255, 122, 107, 0.1); }
+.todo-main, .active-main { display: grid; gap: 3px; min-width: 0; }
+.todo-main strong, .todo-main small, .active-main strong, .active-main small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.todo-main strong, .active-main strong { font-size: 13px; }
+.todo-main small, .active-main small { color: var(--muted); font-size: 11px; }
+.todo-time { color: var(--muted); font-size: 11px; text-align: right; white-space: nowrap; }
+.todo-row svg, .active-row svg { width: 15px; color: #71858d; }
+.todo-empty { margin: 34px 0 26px; color: #70cf7c; text-align: center; font-size: 13px; }
+.active-row { grid-template-columns: minmax(0, 1fr) 48px 15px; }
+.active-progress { display: grid; justify-items: end; gap: 2px; }
+.active-progress b { color: #e0b84a; font-size: 17px; }
+.active-progress small { color: var(--muted); font-size: 10px; }
 
-.empty-workspace { display: grid; place-items: center; align-content: center; gap: 16px; min-height: calc(100vh - 240px); margin-top: 16px; border: 1px solid var(--line); border-radius: 7px; background: rgba(21, 31, 35, 0.72); }
+.empty-workspace { display: grid; place-items: center; align-content: center; gap: 16px; min-height: calc(100vh - 160px); margin-top: 16px; border: 1px solid var(--line); border-radius: 7px; background: rgba(21, 31, 35, 0.72); }
 .empty-workspace > strong { font-size: 21px; }
 .empty-icon { display: grid; place-items: center; width: 54px; height: 54px; color: #d8a935; border: 1px solid rgba(216, 169, 53, 0.22); border-radius: 8px; background: rgba(216, 169, 53, 0.07); }
 .empty-icon svg { width: 25px; }
 
-.focus-layout { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.55fr); gap: 14px; margin-top: 14px; }
-.focus-panel, .issues-panel, .competition-ledger { border: 1px solid var(--line); border-radius: 7px; background: var(--panel); }
-.focus-panel, .issues-panel { min-height: 220px; padding: 18px; }
-.focus-panel header, .issues-panel header, .competition-ledger header { justify-content: space-between; gap: 16px; }
-.focus-panel header > div { display: grid; gap: 10px; min-width: 0; }
-.focus-panel h2 { overflow: hidden; font-size: 23px; text-overflow: ellipsis; white-space: nowrap; }
 .status-badge { width: fit-content; padding: 5px 8px; color: #e0b84a; border: 1px solid rgba(216, 169, 53, 0.22); border-radius: 6px; background: rgba(216, 169, 53, 0.07); font-size: 12px; }
 .text-button { padding: 0; color: #d8a935; border: 0; background: transparent; }
-.focus-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 30px; }
-.focus-stats > div { display: grid; gap: 8px; padding: 12px; border-left: 2px solid rgba(216, 169, 53, 0.24); background: rgba(255, 255, 255, 0.025); }
-.focus-stats span { color: var(--muted); font-size: 12px; }
-.focus-stats strong { font-size: 23px; }
-.focus-stats .state-value { font-size: 16px; }
-.issues-panel header > span { color: var(--muted); font-size: 12px; }
-.issue-list { display: grid; gap: 7px; margin-top: 16px; }
-.issue-list button { display: grid; grid-template-columns: minmax(0, 1fr) 16px; align-items: center; gap: 8px; min-height: 38px; padding: 0 10px; color: #e7c381; text-align: left; border: 1px solid rgba(216, 169, 53, 0.1); border-radius: 6px; background: rgba(216, 169, 53, 0.04); }
-.issue-list button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.issue-list button svg { width: 15px; }
-.issue-list p { margin: 26px 0 0; color: #6fcf7a; text-align: center; }
-
-.competition-ledger { margin-top: 14px; padding: 18px; }
-.competition-ledger header { margin-bottom: 14px; }
-.ledger-head, .ledger-row { display: grid; grid-template-columns: minmax(220px, 1.4fr) 140px 150px 120px 70px; gap: 12px; align-items: center; }
-.ledger-head { padding: 0 12px 8px; color: #69808a; font-size: 12px; }
-.ledger-row { width: 100%; min-height: 48px; padding: 0 12px; color: #c7d5da; text-align: left; border: 1px solid rgba(218, 231, 236, 0.07); border-radius: 6px; background: rgba(255, 255, 255, 0.022); }
-.ledger-row + .ledger-row { margin-top: 7px; }
-.ledger-row:hover { border-color: rgba(216, 169, 53, 0.17); background: rgba(255, 255, 255, 0.035); }
-.ledger-row strong, .ledger-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ledger-row em { color: #d8a935; font-style: normal; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 1180px) {
-  .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .focus-layout { grid-template-columns: 1fr; }
-  .focus-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .ledger-head, .ledger-row { grid-template-columns: minmax(180px, 1fr) 120px 130px 100px 60px; }
+  .todo-summary { grid-template-columns: 1fr; }
+  .dashboard-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 760px) {
   .workspace-page { height: auto; padding: 0 16px 16px; }
-  .summary-grid { grid-template-columns: 1fr 1fr; }
-  .ledger-head { display: none; }
-  .ledger-row { grid-template-columns: 1fr; gap: 5px; padding: 11px; }
+  .todo-row { grid-template-columns: 58px minmax(0, 1fr) 15px; }
+  .todo-time { display: none; }
 }
 </style>

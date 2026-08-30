@@ -6,7 +6,6 @@
       <div class="hero-copy">
         <span class="label-chip tone-gold">赛事结果</span>
         <h1>赛事结果</h1>
-        <p>已发布赛事结果与诊断名单</p>
       </div>
     </section>
 

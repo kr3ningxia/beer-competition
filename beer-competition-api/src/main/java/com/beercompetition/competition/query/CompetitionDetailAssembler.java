@@ -303,6 +303,12 @@ public class CompetitionDetailAssembler {
                                             .judgePublicId(judgeById.get(assignment.getJudgeAccountId()) == null
                                                     ? null
                                                     : judgeById.get(assignment.getJudgeAccountId()).getPublicId())
+                                            .judgeName(judgeById.get(assignment.getJudgeAccountId()) == null
+                                                    ? null
+                                                    : judgeById.get(assignment.getJudgeAccountId()).getName())
+                                            .qualification(judgeById.get(assignment.getJudgeAccountId()) == null
+                                                    ? null
+                                                    : judgeById.get(assignment.getJudgeAccountId()).getQualification())
                                             .role(assignment.getRole())
                                             .build())
                                     .toList())

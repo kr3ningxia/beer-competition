@@ -39,8 +39,9 @@ public class AdminJudgeController {
      */
     @GetMapping("/judges")
     public Result<List<JudgeAccountVO>> judges(@RequestParam(required = false) Integer status,
-                                               @RequestParam(required = false) String keyword) {
-        return Result.success(judgeService.listJudges(status, keyword));
+                                               @RequestParam(required = false) String keyword,
+                                               @RequestParam(required = false) Long competitionId) {
+        return Result.success(judgeService.listJudges(status, keyword, competitionId));
     }
 
     /**

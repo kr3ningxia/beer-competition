@@ -22,6 +22,7 @@ public class JudgeAssignment {
     private Long id;
     private Long competitionId;
     private Long judgeAccountId;
+    private Long recruitmentApplicationId;
     @TableField("base_table_id")
     private Long tableId;
     private String role;

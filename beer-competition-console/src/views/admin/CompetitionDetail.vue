@@ -3367,7 +3367,7 @@ async function loadJudgePool() {
   const competitionKey = currentCompetitionKey()
   if (!competitionKey || loadedSectionCompetitionIds.judges === competitionKey) return
   try {
-    const data = await fetchJudges()
+    const data = await fetchJudges({ competitionId: competitionKey })
     judgePool.value = data || []
     loadedSectionCompetitionIds.judges = competitionKey
   } catch {
@@ -3721,6 +3721,8 @@ function resetForms() {
     tableLocalId: table.localId,
     tableId: table.id,
     judgePublicId: assignment.judgePublicId,
+    judgeName: assignment.judgeName,
+    qualification: assignment.qualification,
     role: assignment.role,
   })))
   judgeAssignmentForm.splice(0, judgeAssignmentForm.length, ...persistedAssignments)
@@ -6705,7 +6707,12 @@ function getJudgeAssignmentSummary(judgePublicId) {
 }
 
 function getJudge(judgePublicId) {
-  return judgePool.value.find((judge) => judge.publicId === judgePublicId)
+  const judge = judgePool.value.find((item) => item.publicId === judgePublicId)
+  if (judge) return judge
+  const assignment = judgeAssignmentForm.find((item) => item.judgePublicId === judgePublicId)
+  return assignment?.judgeName
+    ? { publicId: judgePublicId, name: assignment.judgeName, qualification: assignment.qualification, status: 1 }
+    : null
 }
 
 function getJudgeInitial(name) {

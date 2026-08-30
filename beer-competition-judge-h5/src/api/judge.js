@@ -111,6 +111,13 @@ export function fetchJudgeTasks() {
   return request.get('/api/judge/tasks')
 }
 
+export function fetchRecruitments() { return request.get('/api/judge/recruitments') }
+export function fetchRecruitment(id) { return request.get(`/api/judge/recruitments/${id}`) }
+export function fetchMyRecruitmentApplications() { return request.get('/api/judge/recruitments/applications') }
+export function applyRecruitment(id, payload) { return request.post(`/api/judge/recruitments/${id}/applications`, payload) }
+export function updateRecruitmentApplication(id, payload) { return request.put(`/api/judge/recruitments/applications/${id}`, payload) }
+export function withdrawRecruitmentApplication(id) { return request.post(`/api/judge/recruitments/applications/${id}/withdraw`) }
+
 export function fetchRoundTable(roundTableId) {
   return request.get(`/api/judge/round-tables/${roundTableId}`).then(normalizeRoundTable)
 }

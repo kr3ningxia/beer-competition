@@ -13,6 +13,7 @@ import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.JudgeAccountMapper;
 import com.beercompetition.mapper.JudgeAssignmentMapper;
 import com.beercompetition.mapper.JudgeTableMapper;
+import com.beercompetition.mapper.JudgeRecruitmentApplicationMapper;
 import com.beercompetition.mapper.JudgeScoreSessionMapper;
 import com.beercompetition.mapper.RoundJudgeRankingDraftMapper;
 import com.beercompetition.mapper.RoundTableConfirmationMapper;
@@ -67,6 +68,7 @@ public class JudgeServiceImpl implements JudgeService {
 
     private final JudgeAccountMapper judgeAccountMapper;
     private final JudgeAssignmentMapper judgeAssignmentMapper;
+    private final JudgeRecruitmentApplicationMapper judgeRecruitmentApplicationMapper;
     private final JudgeTableMapper judgeTableMapper;
     private final JudgeScoreSessionMapper judgeScoreSessionMapper;
     private final RoundJudgeRankingDraftMapper roundJudgeRankingDraftMapper;
@@ -83,8 +85,24 @@ public class JudgeServiceImpl implements JudgeService {
 
     @Override
     public List<JudgeAccountVO> listJudges(Integer status, String keyword) {
+        return listJudges(status, keyword, null);
+    }
+
+    @Override
+    public List<JudgeAccountVO> listJudges(Integer status, String keyword, Long competitionId) {
+        if (competitionId != null) {
+            judgeAccessService.requireCompetitionAccess(competitionId);
+        }
         // 1) 构造查询条件
         LambdaQueryWrapper<JudgeAccount> wrapper = buildJudgeQuery(status, keyword, judgeAccessService.currentScope());
+        if (competitionId != null) {
+            List<Long> acceptedJudgeIds = judgeRecruitmentApplicationMapper
+                    .selectAcceptedJudgeIdsByCompetition(competitionId);
+            if (acceptedJudgeIds == null || acceptedJudgeIds.isEmpty()) {
+                return List.of();
+            }
+            wrapper.in(JudgeAccount::getId, acceptedJudgeIds);
+        }
 
         // 2) 查询并组装全量脱敏评审池
         List<JudgeAccount> judges = judgeAccountMapper.selectList(wrapper.orderByDesc(JudgeAccount::getId));
@@ -261,6 +279,8 @@ public class JudgeServiceImpl implements JudgeService {
         if (existing != null) {
             existing.setTableId(request.getTableId());
             existing.setRole(request.getRole().name());
+            existing.setRecruitmentApplicationId(judgeRecruitmentApplicationMapper
+                    .selectAcceptedApplicationId(request.getCompetitionId(), judge.getId()));
             judgeAssignmentMapper.updateById(existing);
             writeAdminLog("JUDGE_ASSIGNMENT_UPDATE", judge.getPublicId(), "更新单个评审编排");
             return;
@@ -268,6 +288,8 @@ public class JudgeServiceImpl implements JudgeService {
         judgeAssignmentMapper.insert(JudgeAssignment.builder()
                 .competitionId(request.getCompetitionId())
                 .judgeAccountId(judge.getId())
+                .recruitmentApplicationId(judgeRecruitmentApplicationMapper
+                        .selectAcceptedApplicationId(request.getCompetitionId(), judge.getId()))
                 .tableId(request.getTableId())
                 .role(request.getRole().name())
                 .build());
@@ -325,6 +347,8 @@ public class JudgeServiceImpl implements JudgeService {
                     .competitionId(competitionId)
                     .tableId(item.getTableId())
                     .judgeAccountId(judge.getId())
+                    .recruitmentApplicationId(judgeRecruitmentApplicationMapper
+                            .selectAcceptedApplicationId(competitionId, judge.getId()))
                     .role(item.getRole().name())
                     .build());
         }
