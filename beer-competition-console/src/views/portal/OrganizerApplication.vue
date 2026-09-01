@@ -1,42 +1,8 @@
 <template>
-  <div class="organizer-application-page">
-    <section class="application-hero" aria-labelledby="application-hero-title">
-      <div class="hero-media" aria-hidden="true"></div>
-      <div class="hero-overlay" aria-hidden="true"></div>
-      <div class="hero-content">
-        <div class="hero-kicker">
-          <span>BEER COMPETITION PLATFORM</span>
-          <span class="kicker-dot" aria-hidden="true"></span>
-          <span>主办方合作入口</span>
-        </div>
-        <h1 id="application-hero-title">
-          让每一场好赛事<br>
-          <em>都值得被认真对待</em>
-        </h1>
-        <p>提交您的主办方资料，审核通过后即可拥有一套专业、稳定、可持续运营的赛事后台。</p>
-        <div class="hero-actions">
-          <button v-if="pageMode === 'status'" class="hero-primary-action" type="button" @click="openApply">
-            <OfficeBuilding />
-            开始申请
-          </button>
-          <a v-else class="hero-primary-action" href="#application-form">
-            <ArrowDown />
-            开始填写
-          </a>
-          <RouterLink class="hero-status-link" to="/portal/organizer-application/status">
-            <Search />
-            查询申请进度
-          </RouterLink>
-        </div>
-      </div>
-      <div class="hero-aside">
-        <span class="hero-aside-label">OPEN TO ORGANIZERS</span>
-        <strong>从一次申请开始</strong>
-        <span class="hero-aside-rule" aria-hidden="true"></span>
-        <p>平台审核通过后，我们会为您开通专属赛事后台。</p>
-      </div>
-    </section>
+  <div :class="['organizer-application-page', { 'workspace-open': !showLanding }]">
+    <OrganizerApplicationLanding v-if="showLanding" @apply="openApply" />
 
+    <template v-else>
     <section class="application-intro" aria-labelledby="application-section-title">
       <div>
         <span class="section-eyebrow">主办方入驻</span>
@@ -46,9 +12,18 @@
       </div>
       <p>
         {{ pageMode === 'status'
-          ? portalLoggedIn ? '当前登录账号的申请会优先显示。' : '使用申请编号和联系人手机号查询最新处理进度。'
+          ? portalLoggedIn ? '已登录的账号，会自动带出您的申请。' : '用申请编号和联系人手机号，找回您的申请。'
           : '用几分钟时间留下基本资料，后续由平台团队与您联系。' }}
       </p>
+      <button
+        v-if="pageMode === 'apply' && !submittedApplication && !resubmitContext"
+        class="experience-back"
+        type="button"
+        @click="closeApplication"
+      >
+        <ArrowLeft />
+        返回了解平台
+      </button>
     </section>
 
     <Transition name="stage" mode="out-in">
@@ -56,7 +31,7 @@
         <aside class="status-side">
           <span class="side-number">01</span>
           <h3 id="status-title">申请进度</h3>
-          <p>{{ portalLoggedIn ? '当前登录账号的申请会自动显示在这里。' : '申请提交后，请使用相同手机号进行查询。' }}</p>
+          <p>{{ portalLoggedIn ? '已登录的账号，会自动带出您的申请。' : '申请提交后，请用相同手机号进行查询。' }}</p>
           <RouterLink class="side-link" to="/portal/organizer-application">
             <ArrowLeft />
             返回入驻申请
@@ -79,7 +54,7 @@
                 :aria-selected="application.applicationNo === selectedApplicationNo"
                 @click="selectMyApplication(application.applicationNo)"
               >
-                <span>{{ application.organizationName || '未命名主体' }}</span>
+                <span>{{ application.organizationName || '未命名机构' }}</span>
                 <small>{{ application.statusLabel || application.status }}</small>
               </button>
             </div>
@@ -127,7 +102,7 @@
               <span class="form-section-index">A</span>
               <div>
                 <h3>验证申请信息</h3>
-                <p>申请编号和手机号仅用于匹配您的申请记录。</p>
+                <p>靠申请编号 + 手机号，找回您的申请。</p>
               </div>
             </div>
             <div class="field-grid field-grid-status">
@@ -243,7 +218,7 @@
         <div class="success-copy">
           <span class="section-eyebrow">APPLICATION RECEIVED</span>
           <h2 id="success-title">申请已提交，感谢您的信任</h2>
-          <p>平台团队会在审核后与联系人取得联系。请保存申请编号，后续可随时查询进度。</p>
+          <p>审核通过后，我们会主动联系这位联系人。请保存申请编号，随时可查进度。</p>
         </div>
         <div class="application-number-block">
           <span>您的申请编号</span>
@@ -306,13 +281,13 @@
               <div class="form-section-heading">
                 <span class="form-section-index">01</span>
                 <div>
-                  <h3 id="step-one-title">先让我们认识您的主体</h3>
-                  <p>填写实际负责组织赛事的企业或组织名称。</p>
+                  <h3 id="step-one-title">先说说，这场赛由谁来办</h3>
+                  <p>填办赛挂靠的公司或机构名称。</p>
                 </div>
               </div>
               <div class="field-grid">
                 <label class="field field-span-two">
-                  <span class="field-label">主体 / 组织名称 <b>*</b></span>
+                  <span class="field-label">公司 / 机构名称 <b>*</b></span>
                   <span class="field-control field-control-large">
                     <OfficeBuilding />
                     <input
@@ -333,8 +308,8 @@
               <div class="upload-block">
                 <div class="upload-heading">
                   <div>
-                    <span class="field-label">主体证明材料</span>
-                    <p>可上传营业执照、组织证明或其他主体资料。</p>
+                    <span class="field-label">机构证明文件 <i>选填</i></span>
+                    <p>营业执照、机构证明或办赛相关资料都可以。</p>
                   </div>
                   <span class="upload-limit">PDF / JPG / PNG · 10MB 内</span>
                 </div>
@@ -343,7 +318,7 @@
                   :class="{ 'is-dragging': isDragging, 'has-file': material }"
                   tabindex="0"
                   role="button"
-                  aria-label="上传主体证明材料"
+                  aria-label="上传机构证明文件"
                   @click="openFilePicker"
                   @keydown.enter.prevent="openFilePicker"
                   @keydown.space.prevent="openFilePicker"
@@ -380,7 +355,7 @@
                 <span class="form-section-index">02</span>
                 <div>
                   <h3 id="step-two-title">留下可以联系到您的方式</h3>
-                  <p>我们会用联系人信息同步审核进度和账号开通安排。</p>
+                  <p>审核进度和开号通知，都会发到这位联系人。</p>
                 </div>
               </div>
               <div class="field-grid">
@@ -460,29 +435,21 @@
                   <span class="field-label">办赛介绍 <i>选填</i></span>
                   <textarea
                     v-model="form.businessDescription"
-                    maxlength="1000"
+                    maxlength="500"
                     rows="5"
                     placeholder="可以介绍过往办赛经验、赛事方向，或这次计划中的亮点。"
                   ></textarea>
-                  <span class="character-count">{{ form.businessDescription.length }} / 1000</span>
+                  <span class="character-count">{{ form.businessDescription.length }} / 500</span>
                 </label>
-                <label class="field">
+                <fieldset class="field scale-field">
                   <span class="field-label">预计赛事规模 <i>选填</i></span>
-                  <span class="field-control">
-                    <TrendCharts />
-                    <input v-model="form.expectedScale" type="text" maxlength="255" placeholder="例如：约 80 个品牌，120 款酒">
-                  </span>
-                </label>
-                <label class="field">
-                  <span class="field-label">补充说明 <i>选填</i></span>
-                  <textarea
-                    v-model="form.supplementalNote"
-                    maxlength="1000"
-                    rows="4"
-                    placeholder="还有任何希望平台提前了解的内容，可以写在这里。"
-                  ></textarea>
-                  <span class="character-count">{{ form.supplementalNote.length }} / 1000</span>
-                </label>
+                  <div class="scale-options">
+                    <label v-for="option in scaleOptions" :key="option.value" :class="{ selected: form.expectedScale === option.value }">
+                      <input v-model="form.expectedScale" type="radio" name="expectedScale" :value="option.value">
+                      <span>{{ option.label }}</span>
+                    </label>
+                  </div>
+                </fieldset>
               </div>
             </section>
           </Transition>
@@ -507,14 +474,15 @@
         </form>
       </section>
     </Transition>
+    </template>
   </div>
 </template>
 
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
+import OrganizerApplicationLanding from './components/OrganizerApplicationLanding.vue'
 import {
-  ArrowDown,
   ArrowLeft,
   ArrowRight,
   ChatDotRound,
@@ -533,7 +501,6 @@ import {
   Plus,
   Right,
   Search,
-  TrendCharts,
   UploadFilled,
   User,
   Warning,
@@ -553,20 +520,27 @@ const route = useRoute()
 const router = useRouter()
 
 const steps = [
-  { number: 1, title: '主体资料', description: '先认识您的组织' },
+  { number: 1, title: '机构资料', description: '先认识您的机构' },
   { number: 2, title: '联系方式', description: '保持顺畅沟通' },
   { number: 3, title: '办赛计划', description: '分享您的想法' },
 ]
 
+const scaleOptions = [
+  { value: '50款以内', label: '50 款以内' },
+  { value: '50-100款', label: '50 至 100 款' },
+  { value: '100款以上', label: '100 款以上' },
+]
+
 const statusTimeline = [
   { key: 'SUBMITTED', label: '申请已提交', description: '资料已收到，等待平台处理' },
-  { key: 'UNDER_REVIEW', label: '平台审核中', description: '平台团队正在了解您的申请' },
-  { key: 'NEED_MORE_INFO', label: '资料补充', description: '如需补充，平台会在这里留下说明' },
+  { key: 'UNDER_REVIEW', label: '平台审核中', description: '我们正在审阅您的资料' },
+  { key: 'NEED_MORE_INFO', label: '资料补充', description: '需要补充的，我们会在下面说明' },
   { key: 'APPROVED', label: '审核通过', description: '申请已通过，正在准备账号' },
-  { key: 'ACCOUNT_ISSUED', label: '账号已发放', description: '专属赛事后台已经准备好' },
+  { key: 'ACCOUNT_ISSUED', label: '账号已开通', description: '主办方后台已经能进' },
 ]
 
 const pageMode = ref(route.path.endsWith('/status') ? 'status' : 'apply')
+const applicationOpen = ref(false)
 const portalLoggedIn = computed(() => isLoggedIn('portal'))
 const currentStep = ref(1)
 const materialInput = ref(null)
@@ -590,6 +564,12 @@ const portalProfile = ref(null)
 const statusSource = ref('none')
 const applyIntent = ref(false)
 const preserveFallbackStatus = ref(false)
+const showLanding = computed(() => (
+  pageMode.value === 'apply'
+  && !applicationOpen.value
+  && !submittedApplication.value
+  && !resubmitContext.value
+))
 
 const form = reactive(createEmptyForm())
 const errors = reactive({})
@@ -608,6 +588,7 @@ watch(
   (path) => {
     pageMode.value = path.endsWith('/status') ? 'status' : 'apply'
     if (pageMode.value === 'status') {
+      applicationOpen.value = false
       const applicationNo = typeof route.query.applicationNo === 'string' ? route.query.applicationNo : ''
       if (applicationNo) statusForm.applicationNo = applicationNo
       if (portalLoggedIn.value) {
@@ -620,10 +601,11 @@ watch(
     } else if (portalLoggedIn.value && !resubmitContext.value) {
       if (applyIntent.value) {
         applyIntent.value = false
+        applicationOpen.value = true
         showFallbackLookup.value = false
         loadPortalProfile()
       } else {
-        loadMyApplications(true)
+        loadPortalProfile()
       }
     }
   },
@@ -664,6 +646,7 @@ function createEmptyForm() {
 
 function openApply() {
   applyIntent.value = true
+  applicationOpen.value = true
   pageMode.value = 'apply'
   statusResult.value = null
   statusSource.value = 'none'
@@ -673,6 +656,13 @@ function openApply() {
     return
   }
   router.push('/portal/organizer-application')
+}
+
+function closeApplication() {
+  if (resubmitContext.value || isSubmitting.value) return
+  applicationOpen.value = false
+  currentStep.value = 1
+  window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 function fieldError(key) {
@@ -687,7 +677,7 @@ function validateField(key) {
   touched[key] = true
   const value = String(form[key] || '').trim()
   let message = ''
-  if (key === 'organizationName' && !value) message = '请填写主体或组织名称'
+  if (key === 'organizationName' && !value) message = '请填写公司或机构名称'
   if (key === 'contactName' && !value) message = '请填写联系人姓名'
   if (key === 'contactPhone' && !/^1\d{10}$/.test(value)) message = '请输入正确的 11 位手机号'
   if (key === 'contactEmail' && value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) message = '请输入正确的邮箱地址'
@@ -881,6 +871,7 @@ function startResubmit() {
     authenticated: portalLoggedIn.value && statusSource.value === 'mine',
   }
   applyIntent.value = true
+  applicationOpen.value = true
   currentStep.value = 1
   pageMode.value = 'apply'
   router.replace('/portal/organizer-application')
@@ -897,6 +888,7 @@ function startNewApplication() {
   resubmitContext.value = null
   statusSource.value = 'none'
   applyIntent.value = true
+  applicationOpen.value = true
   isCopied.value = false
   if (portalLoggedIn.value) {
     loadPortalProfile()
@@ -1002,6 +994,52 @@ function selectMyApplication(applicationNo) {
   --green: #3d7d50;
   --line: rgba(87, 58, 26, 0.14);
   color: var(--ink);
+}
+
+.workspace-open {
+  min-height: calc(100svh - 72px);
+  padding: 0 max(3vw, 24px) 72px;
+  color: var(--ink);
+  background:
+    linear-gradient(90deg, rgba(97, 69, 34, 0.04) 1px, transparent 1px),
+    #f3eee4;
+  background-size: 30px 30px;
+}
+
+.workspace-open .application-hero,
+.workspace-open .application-intro,
+.workspace-open .application-layout,
+.workspace-open .status-layout,
+.workspace-open .success-layout {
+  width: min(1560px, 100%);
+  margin-inline: auto;
+}
+
+.experience-back {
+  order: -1;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 42px;
+  padding: 0 15px;
+  color: #2d281f;
+  background: transparent;
+  border: 1px solid rgba(45, 40, 31, 0.24);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.experience-back svg {
+  width: 16px;
+  height: 16px;
+}
+
+.experience-back:hover {
+  background: #fffaf0;
+  border-color: rgba(45, 40, 31, 0.42);
 }
 
 .application-hero {
@@ -1196,7 +1234,13 @@ function selectMyApplication(applicationNo) {
   align-items: flex-end;
   justify-content: space-between;
   gap: 28px;
-  padding: 34px 4px 24px;
+  padding: 44px 4px 28px;
+}
+
+.workspace-open .application-intro {
+  display: grid;
+  grid-template-columns: minmax(300px, 1fr) minmax(300px, auto) auto;
+  align-items: end;
 }
 
 .application-intro h2 {
@@ -1458,6 +1502,57 @@ function selectMyApplication(applicationNo) {
   align-content: start;
   gap: 9px;
   min-width: 0;
+}
+
+fieldset.field {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.scale-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.scale-options label {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 52px;
+  padding: 8px 12px;
+  color: #6c5e4e;
+  background: rgba(255, 252, 245, 0.72);
+  border: 1px solid rgba(87, 58, 26, 0.17);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: color 180ms ease, background 180ms ease, border-color 180ms ease, transform 180ms ease;
+}
+
+.scale-options label:hover,
+.scale-options label.selected {
+  color: #2b2117;
+  background: #fff0c2;
+  border-color: rgba(184, 117, 23, 0.58);
+}
+
+.scale-options label:hover {
+  transform: translateY(-2px);
+}
+
+.scale-options input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.scale-options label:has(input:focus-visible) {
+  outline: 3px solid rgba(216, 144, 33, 0.22);
+  outline-offset: 2px;
 }
 
 .field-label {
@@ -2324,6 +2419,19 @@ function selectMyApplication(applicationNo) {
 }
 
 @media (max-width: 820px) {
+  .workspace-open {
+    padding-inline: 20px;
+  }
+
+  .workspace-open .application-intro {
+    grid-template-columns: 1fr auto;
+  }
+
+  .workspace-open .application-intro > p {
+    grid-column: 1 / -1;
+    text-align: left;
+  }
+
   .application-hero {
     display: block;
     min-height: 470px;
@@ -2408,6 +2516,23 @@ function selectMyApplication(applicationNo) {
 }
 
 @media (max-width: 620px) {
+  .workspace-open {
+    min-height: calc(100svh - 60px);
+    padding: 0 14px 44px;
+  }
+
+  .workspace-open .application-intro {
+    grid-template-columns: 1fr;
+  }
+
+  .experience-back {
+    width: fit-content;
+  }
+
+  .scale-options {
+    grid-template-columns: 1fr;
+  }
+
   .application-hero {
     min-height: 520px;
     padding: 34px 23px;

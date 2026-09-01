@@ -1,5 +1,5 @@
 ﻿<template>
-  <div class="portal-shell">
+  <div :class="['portal-shell', { 'organizer-experience': organizerExperience }]">
     <header class="portal-header">
       <div class="header-inner">
         <RouterLink class="brand" to="/portal/home" aria-label="赛事首页">
@@ -102,7 +102,7 @@
       </div>
     </Transition>
 
-    <main class="page-frame">
+    <main :class="['page-frame', { 'page-frame-immersive': organizerExperience }]">
       <router-view />
     </main>
     <SiteFilingFooter />
@@ -137,6 +137,7 @@ const mobileMenuTriggerRef = ref(null)
 const mobileMenuPanelRef = ref(null)
 let bodyOverflowBeforeMenu = ''
 const loggedIn = computed(() => isLoggedIn('portal'))
+const organizerExperience = computed(() => route.path.includes('/organizer-application'))
 const accountName = computed(() => isQuestionPlaceholder(displayName.value) ? '完善厂牌资料' : displayName.value || '完善厂牌资料')
 const accountInitial = computed(() => getAccountInitial(accountName.value))
 const accountAvatarPreviewUrl = computed(() => resolveAvatarUrl(accountAvatarUrl.value))
@@ -536,6 +537,50 @@ watch(
   padding: 28px 28px 48px;
 }
 
+.organizer-experience {
+  background: #0a0b08;
+}
+
+.organizer-experience .portal-header {
+  color: #f2ecdf;
+  background: rgba(10, 11, 8, 0.9);
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+.organizer-experience .brand small,
+.organizer-experience .nav-item {
+  color: rgba(242, 236, 223, 0.62);
+}
+
+.organizer-experience .nav-item:hover,
+.organizer-experience .nav-item.active {
+  color: #fff9eb;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.organizer-experience .nav-item-prominent,
+.organizer-experience .nav-item-prominent:hover,
+.organizer-experience .nav-item-prominent.active {
+  color: #16150d;
+  background: #f5c64d;
+  border-color: #f5c64d;
+}
+
+.organizer-experience .account-actions {
+  color: #211912;
+}
+
+.organizer-experience .login-link {
+  color: #16150d;
+  background: #f5c64d;
+}
+
+.page-frame-immersive {
+  max-width: none;
+  padding: 0;
+}
+
 .mobile-menu-layer {
   position: fixed;
   inset: 0;
@@ -777,6 +822,10 @@ watch(
 
   .page-frame {
     padding: 16px 14px 34px;
+  }
+
+  .page-frame-immersive {
+    padding: 0;
   }
 }
 
