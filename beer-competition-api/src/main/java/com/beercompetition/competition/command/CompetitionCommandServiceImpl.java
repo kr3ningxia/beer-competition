@@ -7,6 +7,7 @@ import com.beercompetition.mapper.BeerEntryMapper;
 import com.beercompetition.mapper.AdminOperationLogMapper;
 import com.beercompetition.mapper.CompetitionRoundMapper;
 import com.beercompetition.mapper.CompetitionMapper;
+import com.beercompetition.mapper.CompetitionFeeTierMapper;
 import com.beercompetition.pojo.dto.CompetitionBaseInfoUpdateRequest;
 import com.beercompetition.pojo.dto.CompetitionCreateRequest;
 import com.beercompetition.pojo.dto.CompetitionRefundPolicyUpdateRequest;
@@ -18,6 +19,7 @@ import com.beercompetition.pojo.po.BeerEntry;
 import com.beercompetition.pojo.po.AdminOperationLog;
 import com.beercompetition.pojo.po.Competition;
 import com.beercompetition.pojo.po.CompetitionRound;
+import com.beercompetition.pojo.po.CompetitionFeeTier;
 import com.beercompetition.pojo.vo.CompetitionDetailVO;
 import com.beercompetition.pojo.vo.CompetitionVO;
 import com.beercompetition.common.context.BaseContext;
@@ -31,6 +33,7 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.List;
 import java.util.Objects;
 import java.time.LocalDateTime;
 import com.beercompetition.competition.command.CompetitionCommandService;
@@ -64,6 +67,8 @@ public class CompetitionCommandServiceImpl implements CompetitionCommandService 
 
     private final CompetitionCreationService competitionCreationService;
 
+    private final CompetitionFeeTierMapper competitionFeeTierMapper;
+
     private final CompetitionAccessService competitionAccessService;
 
     @Override
@@ -95,6 +100,7 @@ public class CompetitionCommandServiceImpl implements CompetitionCommandService 
         Competition competition = getCompetitionOrThrow(id);
         validateEarlyBirdConfig(request.getEarlyBirdFee(), request.getEarlyBirdDeadline(),
                 request.getEntryFee(), request.getRegistrationStart(), request.getRegistrationDeadline());
+        competitionCreationService.validateFeeTiers(request.getTierPricingEnabled(), request.getFeeTiers());
         assertBaseInfoEditable(competition, request);
         String nextCode = normalizeRequired(request.getCode(), "比赛编号不能为空");
         assertCompetitionCodeUnique(nextCode, id);
@@ -108,6 +114,7 @@ public class CompetitionCommandServiceImpl implements CompetitionCommandService 
         competition.setEntryFee(request.getEntryFee());
         competition.setEarlyBirdFee(request.getEarlyBirdFee());
         competition.setEarlyBirdDeadline(request.getEarlyBirdDeadline());
+        competition.setTierPricingEnabled(Boolean.TRUE.equals(request.getTierPricingEnabled()) ? 1 : 0);
         competition.setDescription(normalizeRequired(request.getDescription(), "赛事简介不能为空"));
         competition.setRulesUrl(normalizeRulesUrl(request.getRulesUrl()));
         applyBaseInfoLogistics(competition, request);
@@ -118,6 +125,7 @@ public class CompetitionCommandServiceImpl implements CompetitionCommandService 
         } catch (DuplicateKeyException ex) {
             throw new BaseException("比赛编号已存在");
         }
+        competitionCreationService.replaceFeeTiers(id, request.getTierPricingEnabled(), request.getFeeTiers());
 
         // 4) 重新计算配置检查并返回详情
         return competitionQueryService.getCompetitionDetail(id);
@@ -257,9 +265,28 @@ public class CompetitionCommandServiceImpl implements CompetitionCommandService 
                 || !Objects.equals(competition.getRegistrationStart(), request.getRegistrationStart())) {
             throw new BaseException("报名已开放，仅允许修改比赛日期、报名截止时间、费用、简介和送样信息");
         }
-        if (competition.getEntryFee().compareTo(request.getEntryFee()) != 0 && hasEntries(competition.getId())) {
-            throw new BaseException("已有报名酒款，报名费已锁定");
+        if (hasEntries(competition.getId()) && pricingChanged(competition, request)) {
+            throw new BaseException("已有报名酒款，报名费用规则已锁定");
         }
+    }
+
+    private boolean pricingChanged(Competition competition, CompetitionBaseInfoUpdateRequest request) {
+        if (!compareBigDecimal(competition.getEntryFee(), request.getEntryFee())
+                || !compareBigDecimal(competition.getEarlyBirdFee(), request.getEarlyBirdFee())
+                || !Objects.equals(competition.getEarlyBirdDeadline(), request.getEarlyBirdDeadline())
+                || !Objects.equals(Integer.valueOf(1).equals(competition.getTierPricingEnabled()), Boolean.TRUE.equals(request.getTierPricingEnabled()))) {
+            return true;
+        }
+        List<CompetitionFeeTier> current = competitionFeeTierMapper.selectList(new LambdaQueryWrapper<CompetitionFeeTier>()
+                .eq(CompetitionFeeTier::getCompetitionId, competition.getId()).eq(CompetitionFeeTier::getEnabled, 1)
+                .orderByAsc(CompetitionFeeTier::getStartQuantity));
+        var requested = request.getFeeTiers() == null ? java.util.List.<com.beercompetition.pojo.dto.CompetitionFeeTierRequest>of() : request.getFeeTiers();
+        if (current.size() != requested.size()) return true;
+        for (int i = 0; i < current.size(); i++) {
+            if (!Objects.equals(current.get(i).getStartQuantity(), requested.get(i).getStartQuantity())
+                    || !compareBigDecimal(current.get(i).getDiscountRate(), requested.get(i).getDiscountRate())) return true;
+        }
+        return false;
     }
 
     private boolean onlyDescriptionChangedOrUnchanged(Competition competition, CompetitionBaseInfoUpdateRequest request) {
@@ -271,6 +298,7 @@ public class CompetitionCommandServiceImpl implements CompetitionCommandService 
                 && compareBigDecimal(competition.getEntryFee(), request.getEntryFee())
                 && compareBigDecimal(competition.getEarlyBirdFee(), request.getEarlyBirdFee())
                 && Objects.equals(competition.getEarlyBirdDeadline(), request.getEarlyBirdDeadline())
+                && Objects.equals(Integer.valueOf(1).equals(competition.getTierPricingEnabled()), Boolean.TRUE.equals(request.getTierPricingEnabled()))
                 && Objects.equals(competition.getDeliveryMethod(), normalizeDeliveryMethod(request.getDeliveryMethod()))
                 && Objects.equals(competition.getSampleArrivalStart(), request.getSampleArrivalStart())
                 && Objects.equals(competition.getSampleArrivalDeadline(), request.getSampleArrivalDeadline())

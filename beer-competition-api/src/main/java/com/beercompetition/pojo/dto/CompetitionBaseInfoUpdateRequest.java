@@ -9,6 +9,8 @@ import lombok.Data;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
+import jakarta.validation.Valid;
 
 @Data
 public class CompetitionBaseInfoUpdateRequest {
@@ -35,6 +37,12 @@ public class CompetitionBaseInfoUpdateRequest {
     private BigDecimal earlyBirdFee;
 
     private LocalDateTime earlyBirdDeadline;
+
+    private Boolean tierPricingEnabled;
+
+    @Valid
+    @Size(max = 10, message = "阶梯价格最多配置 10 档")
+    private List<CompetitionFeeTierRequest> feeTiers;
 
     @NotBlank(message = "赛事简介不能为空")
     @Size(max = 1000, message = "赛事简介不能超过 1000 个字符")

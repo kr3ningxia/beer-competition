@@ -37,6 +37,7 @@ public class Competition {
     private BigDecimal earlyBirdFee;
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private LocalDateTime earlyBirdDeadline;
+    private Integer tierPricingEnabled;
     private String refundApprovalMode;
     private String description;
     @TableField(updateStrategy = FieldStrategy.ALWAYS)

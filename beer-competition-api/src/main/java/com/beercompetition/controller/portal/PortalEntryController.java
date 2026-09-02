@@ -10,6 +10,7 @@ import com.beercompetition.pojo.vo.EntryDetailVO;
 import com.beercompetition.pojo.vo.EntrySummaryVO;
 import com.beercompetition.pojo.vo.PortalEntryLabelVO;
 import com.beercompetition.pojo.vo.PortalMyParticipationVO;
+import com.beercompetition.pojo.vo.RefundPreviewVO;
 import com.beercompetition.registration.delivery.EntryDeliveryService;
 import com.beercompetition.registration.entry.EntryDocumentService;
 import com.beercompetition.registration.entry.PortalEntryService;
@@ -99,6 +100,11 @@ public class PortalEntryController {
     public Result<EntryDetailVO> requestRefund(@PathVariable Long id,
                                                @RequestBody @Valid PortalEntryRefundRequest request) {
         return Result.success(entryRefundService.requestPortalEntryRefund(id, request));
+    }
+
+    @GetMapping("/entries/{id}/refund-preview")
+    public Result<RefundPreviewVO> refundPreview(@PathVariable Long id) {
+        return Result.success(entryRefundService.previewPortalEntryRefund(id));
     }
 
     /**

@@ -36,7 +36,7 @@
     <section id="competition-journey" ref="journeySection" class="journey-section">
       <div class="journey-heading" data-reveal>
         <h2>办一场赛，别再东一处西一处</h2>
-        <p>从报名到发榜，同一本账对到底</p>
+        <p>从报名到发榜，一站式解决</p>
       </div>
 
       <div
@@ -533,22 +533,25 @@ onUnmounted(() => {
 .journey-heading {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.65fr);
-  align-items: end;
+  align-items: start;
   gap: 56px;
   max-width: 1440px;
-  margin: 0 auto 62px;
+  margin: 0 auto 24px;
 }
 
 .journey-heading h2 {
-  font-size: clamp(38px, 4.6vw, 72px);
+  font-size: clamp(36px, 3.8vw, 58px);
   line-height: 1.2;
+  white-space: nowrap;
 }
 
 .journey-heading p {
-  margin: 0 0 8px;
-  color: #67675f;
-  font-size: 17px;
-  line-height: 1.8;
+  margin: 112px 0 0;
+  color: #3f4438;
+  font-family: "Noto Serif SC", "Songti SC", serif;
+  font-size: clamp(20px, 2vw, 30px);
+  font-weight: 600;
+  line-height: 1.45;
 }
 
 .journey-stage {
@@ -1227,6 +1230,7 @@ onUnmounted(() => {
   .landing-hero { min-height: 760px; }
   .hero-copy { width: min(760px, 84vw); }
   .journey-heading { grid-template-columns: 1fr; gap: 22px; }
+  .journey-heading p { margin-top: 18px; }
   .journey-window { grid-template-columns: 1fr; }
   .journey-copy { min-height: 380px; }
   .journey-visual { min-height: 500px; }
@@ -1247,8 +1251,9 @@ onUnmounted(() => {
   .hero-index { display: none; }
   .scroll-cue { left: 22px; }
   .journey-section { padding: 72px 18px; }
-  .journey-heading { margin-bottom: 34px; }
-  .journey-heading h2 { font-size: 36px; }
+   .journey-heading { margin-bottom: 34px; }
+   .journey-heading h2 { font-size: clamp(18px, 6.5vw, 26px); }
+   .journey-heading p { margin-top: 16px; font-size: 20px; }
   .journey-nav { display: flex; overflow-x: auto; scrollbar-width: none; }
   .journey-nav button { flex: 0 0 122px; min-height: 82px; }
   .journey-window { min-height: 0; }

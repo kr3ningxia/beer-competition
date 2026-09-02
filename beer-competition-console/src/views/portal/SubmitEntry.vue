@@ -248,13 +248,14 @@
               <CircleCheck v-if="entryErrorCount(entry) === 0" />
               <WarningFilled v-else />
             </span>
-            <b>{{ formatCurrency(unitAmount) }}</b>
+            <b>{{ formatCurrency(priceForEntry(index)) }}</b>
           </button>
         </div>
 
         <div class="receipt-totals">
-          <div><span>报名费</span><b>{{ formatCurrency(unitAmount) }} × {{ entries.length }}</b></div>
-          <div v-if="discountAmount > 0"><span>早鸟优惠</span><b>-{{ formatCurrency(discountAmount) }}</b></div>
+          <div><span>本场累计</span><b>{{ quote?.existingEntryCount || 0 }} 款 + 本次 {{ entries.length }} 款</b></div>
+          <div><span>基础单价</span><b>{{ formatCurrency(quote?.earlyBirdUnitAmount ?? unitAmount) }} / 款</b></div>
+          <div v-if="discountAmount > 0"><span>优惠金额</span><b>-{{ formatCurrency(discountAmount) }}</b></div>
           <div class="receipt-total"><span>应付总额</span><strong>{{ formatCurrency(totalAmount) }}</strong></div>
           <div><span>付款方式</span><b>{{ payMode === 'WECHAT' ? '微信支付' : '银行转账' }}</b></div>
         </div>
@@ -499,6 +500,10 @@ function entryMeta(entry) {
   const category = competition.value?.categories?.find((item) => item.id === entry.categoryId)?.name
   if (entryErrorCount(entry) > 0) return `还缺 ${entryErrorCount(entry)} 项`
   return [category, entry.style].filter(Boolean).join(' · ')
+}
+
+function priceForEntry(index) {
+  return Number(quote.value?.priceItems?.[index]?.amount ?? unitAmount.value)
 }
 
 function saveDraft() {

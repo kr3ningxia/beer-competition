@@ -15,20 +15,15 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@TableName("payment_order_item")
-public class PaymentOrderItem {
-
+@TableName("competition_fee_tier")
+public class CompetitionFeeTier {
     @TableId(type = IdType.AUTO)
     private Long id;
-    private Long paymentOrderId;
-    private Long beerEntryId;
-    private Long entryPaymentId;
-    private BigDecimal amount;
-    private BigDecimal pricingBaseAmount;
+    private Long competitionId;
+    private Integer startQuantity;
     private BigDecimal discountRate;
-    private Integer pricingSequence;
-    private BigDecimal refundedAmount;
-    private String status;
+    private Integer sortOrder;
+    private Integer enabled;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

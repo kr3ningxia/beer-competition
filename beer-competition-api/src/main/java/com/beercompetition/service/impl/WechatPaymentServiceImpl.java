@@ -811,8 +811,12 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
         if (item == null) {
             return;
         }
-        item.setRefundedAmount(item.getAmount());
-        item.setStatus(EntryPaymentStatus.REFUNDED.name());
+        BigDecimal previousRefunded = item.getRefundedAmount() == null ? BigDecimal.ZERO : item.getRefundedAmount();
+        BigDecimal refundAmount = refund.getAmount() == null ? BigDecimal.ZERO : refund.getAmount();
+        BigDecimal itemRefunded = previousRefunded.add(refundAmount).min(item.getAmount());
+        item.setRefundedAmount(itemRefunded);
+        item.setStatus(itemRefunded.compareTo(item.getAmount()) >= 0
+                ? EntryPaymentStatus.REFUNDED.name() : EntryPaymentStatus.PAID.name());
         paymentOrderItemMapper.updateById(item);
 
         PaymentOrder order = paymentOrderMapper.selectById(item.getPaymentOrderId());

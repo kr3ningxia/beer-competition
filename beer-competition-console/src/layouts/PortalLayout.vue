@@ -568,7 +568,62 @@ watch(
 }
 
 .organizer-experience .account-actions {
-  color: #211912;
+  color: #f2ecdf;
+  background: rgba(255, 249, 235, 0.07);
+  border-color: rgba(255, 249, 235, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 249, 235, 0.08),
+    0 12px 28px rgba(0, 0, 0, 0.2);
+}
+
+.organizer-experience .account-pill {
+  color: rgba(242, 236, 223, 0.9);
+}
+
+.organizer-experience .account-pill:hover,
+.organizer-experience .account-pill.active {
+  color: #fff9eb;
+  background: rgba(245, 198, 77, 0.16);
+}
+
+.organizer-experience .account-actions .avatar {
+  color: #17130d;
+  background: #f5c64d;
+  border: 2px solid rgba(255, 249, 235, 0.86);
+  box-shadow: 0 0 0 1px rgba(245, 198, 77, 0.45);
+}
+
+.organizer-experience .logout-button {
+  color: rgba(242, 236, 223, 0.6) !important;
+}
+
+.organizer-experience .logout-button:hover,
+.organizer-experience .logout-button:focus-visible {
+  color: #fff9eb !important;
+  background: rgba(255, 249, 235, 0.1) !important;
+}
+
+.organizer-experience .mobile-account-card {
+  color: #f2ecdf;
+  background: #171712;
+  border-color: rgba(255, 249, 235, 0.16);
+}
+
+.organizer-experience .mobile-account-card small {
+  color: rgba(242, 236, 223, 0.58);
+}
+
+.organizer-experience .mobile-account-card .avatar {
+  color: #17130d;
+  background: #f5c64d;
+  border: 2px solid rgba(255, 249, 235, 0.86);
+  box-shadow: 0 0 0 1px rgba(245, 198, 77, 0.45);
+}
+
+.organizer-experience .mobile-logout-button {
+  color: #f2ecdf;
+  background: rgba(255, 249, 235, 0.07);
+  border-color: rgba(255, 249, 235, 0.16);
 }
 
 .organizer-experience .login-link {

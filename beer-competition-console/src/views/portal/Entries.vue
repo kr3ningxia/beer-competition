@@ -312,6 +312,11 @@
       :close-on-click-modal="!refunding"
     >
       <div class="refund-confirm-body">
+        <div v-if="refundPreview" class="refund-preview-summary">
+          <p>退款前累计 {{ refundPreview.activeEntryCountBefore }} 款，退款后剩余 {{ refundPreview.activeEntryCountAfter }} 款</p>
+          <p>本次退款金额：<strong>{{ formatCurrency(refundPreview.refundAmount) }}</strong></p>
+          <p>{{ refundPreview.pricingNote }}</p>
+        </div>
         <el-tooltip :content="refundConfirmTip" placement="top">
           <button class="refund-hint-marker" type="button" aria-label="查看退款说明">?</button>
         </el-tooltip>
@@ -350,6 +355,7 @@ import {
   fetchPortalEntries,
   fetchPortalEntryDetail,
   requestPortalEntryRefund,
+  fetchPortalEntryRefundPreview,
   updatePortalEntry,
 } from '@/api/portal'
 import { formatAbvValue, formatAbvWithUnit, isValidAbvInput, normalizeAbvInput } from '@/utils/formatters'
@@ -374,6 +380,7 @@ const DEFAULT_REFUND_REASON = '退赛退款'
 const refundForm = reactive({
   reason: '',
 })
+const refundPreview = ref(null)
 const editForm = reactive({
   name: '',
   style: '',
@@ -726,7 +733,14 @@ async function submitRefundRequest(entry) {
   }
   pendingRefundEntry.value = entry
   refundForm.reason = ''
+  refundPreview.value = null
   refundDialogVisible.value = true
+  try {
+    refundPreview.value = await fetchPortalEntryRefundPreview(entry.id)
+  } catch (error) {
+    refundDialogVisible.value = false
+    ElMessage.warning(error?.message || '退款金额计算失败，请稍后重试')
+  }
 }
 
 function editEntryFromRefundDialog() {

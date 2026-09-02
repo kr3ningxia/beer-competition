@@ -34,7 +34,9 @@ import com.beercompetition.pojo.po.PortalAccount;
 import com.beercompetition.pojo.po.PaymentOrderItem;
 import com.beercompetition.pojo.vo.AdminEntryVO;
 import com.beercompetition.pojo.vo.EntryDetailVO;
+import com.beercompetition.pojo.vo.RefundPreviewVO;
 import com.beercompetition.service.WechatPaymentService;
+import com.beercompetition.registration.payment.CompetitionPricingService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -107,6 +109,8 @@ public class EntryRefundServiceImpl implements EntryRefundService {
     private final CompetitionAccessService competitionAccessService;
     private final FileAccessService fileAccessService;
 
+    private final CompetitionPricingService competitionPricingService;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public EntryDetailVO requestPortalEntryRefund(Long entryId, PortalEntryRefundRequest request) {
@@ -116,6 +120,8 @@ public class EntryRefundServiceImpl implements EntryRefundService {
         Competition competition = competitionMapper.selectById(entry.getCompetitionId());
         EntryPayment payment = lockEntryPayment(ensureEntryPayment(entry.getId(), entry.getCompetitionId()).getId());
         assertCanRequestRefund(entry, competition, payment);
+        int activeCount = countActiveEntries(entry.getCompetitionId(), entry.getBreweryId());
+        BigDecimal refundAmount = calculateRefundAmount(competition, payment, activeCount);
         RefundApprovalMode approvalMode = resolveRefundApprovalMode(competition);
 
         // 2) 创建退款申请记录
@@ -124,7 +130,7 @@ public class EntryRefundServiceImpl implements EntryRefundService {
                 .entryPaymentId(payment.getId())
                 .paymentOrderItemId(findPaymentOrderItemId(payment))
                 .refundNo(generateRefundNo())
-                .amount(payment.getAmount())
+                .amount(refundAmount)
                 .status(EntryRefundStatus.REQUESTED.name())
                 .approvalModeSnapshot(approvalMode.name())
                 .reason(normalizeRequired(request.getReason(), "请填写退款原因"))
@@ -138,6 +144,43 @@ public class EntryRefundServiceImpl implements EntryRefundService {
 
         // 3) 返回最新酒款详情
         return portalEntryViewAssembler.toEntryDetailVO(beerEntryMapper.selectById(entry.getId()));
+    }
+
+    @Override
+    public RefundPreviewVO previewPortalEntryRefund(Long entryId) {
+        PortalAccount account = portalAccountAccessService.requireCurrentAccount();
+        BeerEntry entry = requireOwnedEntry(entryId, account.getBreweryId());
+        Competition competition = competitionMapper.selectById(entry.getCompetitionId());
+        EntryPayment payment = ensureEntryPayment(entry.getId(), entry.getCompetitionId());
+        assertCanRequestRefund(entry, competition, payment);
+        int before = countActiveEntries(entry.getCompetitionId(), entry.getBreweryId());
+        BigDecimal amount = calculateRefundAmount(competition, payment, before);
+        return RefundPreviewVO.builder()
+                .beerEntryId(entry.getId()).competitionId(entry.getCompetitionId())
+                .activeEntryCountBefore(before).activeEntryCountAfter(Math.max(0, before - 1))
+                .currentPaidAmount(payment.getAmount()).refundAmount(amount)
+                .remainingAmountAfterRefund(payment.getAmount().subtract(amount).max(BigDecimal.ZERO))
+                .pricingNote("退款按退款前累计数量的最后一档边际价格计算，不按被退酒款原价计算")
+                .build();
+    }
+
+    private int countActiveEntries(Long competitionId, Long breweryId) {
+        return Math.toIntExact(beerEntryMapper.selectCount(new LambdaQueryWrapper<BeerEntry>()
+                .eq(BeerEntry::getCompetitionId, competitionId)
+                .eq(BeerEntry::getBreweryId, breweryId)
+                .ne(BeerEntry::getStatus, EntryStatus.CANCELED.name())));
+    }
+
+    private BigDecimal calculateRefundAmount(Competition competition, EntryPayment payment, int activeCount) {
+        if (activeCount <= 0) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal base = payment.getPricingBaseAmount();
+        if (base == null) {
+            base = payment.getAmount();
+        }
+        BigDecimal amount = competitionPricingService.priceForSequence(competition, base, activeCount);
+        return amount.min(payment.getAmount()).setScale(2, java.math.RoundingMode.HALF_UP);
     }
 
     private Long findPaymentOrderItemId(EntryPayment payment) {

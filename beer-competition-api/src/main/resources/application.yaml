@@ -73,6 +73,13 @@ app:
     code-length: ${APP_SMS_CODE_LENGTH:6}
     code-type: ${APP_SMS_CODE_TYPE:1}
     duplicate-policy: ${APP_SMS_DUPLICATE_POLICY:1}
+  mail:
+    access-key-id: ${APP_ALIYUN_ACCESS_KEY_ID:}
+    access-key-secret: ${APP_ALIYUN_ACCESS_KEY_SECRET:}
+    endpoint: ${APP_ALIYUN_MAIL_ENDPOINT:dm.aliyuncs.com}
+    from-address: ${APP_ALIYUN_MAIL_FROM:beernotice@notify.beermatters.cn}
+    from-alias: ${APP_ALIYUN_MAIL_FROM_ALIAS:啤酒大赛}
+    reply-address: ${APP_ALIYUN_MAIL_REPLY_TO:}
   pii:
     aes-key: ${APP_PII_AES_KEY:dev-beer-competition-pii-aes-key-change-me}
     hash-key: ${APP_PII_HASH_KEY:dev-beer-competition-pii-hash-key-change-me}

@@ -5,6 +5,7 @@ import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.billing.beercoin.BeerCoinService;
 import com.beercompetition.mapper.CompetitionCategoryMapper;
 import com.beercompetition.mapper.CompetitionScoreConfigMapper;
+import com.beercompetition.mapper.CompetitionFeeTierMapper;
 import com.beercompetition.mapper.CompetitionStyleConfigMapper;
 import com.beercompetition.mapper.EntryFieldConfigMapper;
 import com.beercompetition.mapper.JudgeAccountMapper;
@@ -17,6 +18,7 @@ import com.beercompetition.pojo.po.BeerEntry;
 import com.beercompetition.pojo.po.Competition;
 import com.beercompetition.pojo.po.CompetitionCategory;
 import com.beercompetition.pojo.po.CompetitionScoreConfig;
+import com.beercompetition.pojo.po.CompetitionFeeTier;
 import com.beercompetition.pojo.po.CompetitionStyleConfig;
 import com.beercompetition.pojo.po.EntryFieldConfig;
 import com.beercompetition.pojo.po.JudgeAccount;
@@ -37,6 +39,7 @@ import com.beercompetition.pojo.vo.JudgeTableVO;
 import com.beercompetition.pojo.vo.ProgressSummaryVO;
 import com.beercompetition.pojo.vo.ResultSetupVO;
 import com.beercompetition.pojo.vo.ScoreConfigVO;
+import com.beercompetition.pojo.vo.CompetitionFeeTierVO;
 import com.beercompetition.service.impl.competition.CompetitionProgressQueryService;
 import com.beercompetition.service.impl.competition.CompetitionWorkspaceQueryService;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -81,6 +84,8 @@ public class CompetitionDetailAssembler {
     private final JudgeAssignmentMapper judgeAssignmentMapper;
 
     private final CompetitionScoreConfigMapper competitionScoreConfigMapper;
+
+    private final CompetitionFeeTierMapper competitionFeeTierMapper;
 
     private final ScoreRecordMapper scoreRecordMapper;
 
@@ -140,6 +145,8 @@ public class CompetitionDetailAssembler {
                 .entryFee(competition.getEntryFee())
                 .earlyBirdFee(competition.getEarlyBirdFee())
                 .earlyBirdDeadline(competition.getEarlyBirdDeadline())
+                .tierPricingEnabled(Integer.valueOf(1).equals(competition.getTierPricingEnabled()))
+                .feeTiers(listFeeTiers(competitionId))
                 .refundApprovalMode(competitionReadinessEvaluator.resolveRefundApprovalMode(competition).name())
                 .refundPolicyEditable(competitionReadinessEvaluator.isRefundPolicyEditable(competition, LocalDateTime.now()))
                 .refundPolicyEditableUntil(competition.getRegistrationDeadline())
@@ -171,6 +178,17 @@ public class CompetitionDetailAssembler {
                 .dataIntegrityIssues(dataIntegrityIssues)
                 .beerCoinSettlement(beerCoinService.getSettlement(competitionId))
                 .build();
+    }
+
+    private List<CompetitionFeeTierVO> listFeeTiers(Long competitionId) {
+        return competitionFeeTierMapper.selectList(new LambdaQueryWrapper<CompetitionFeeTier>()
+                        .eq(CompetitionFeeTier::getCompetitionId, competitionId)
+                        .eq(CompetitionFeeTier::getEnabled, FLAG_TRUE)
+                        .orderByAsc(CompetitionFeeTier::getStartQuantity))
+                .stream()
+                .map(item -> CompetitionFeeTierVO.builder().id(item.getId()).startQuantity(item.getStartQuantity())
+                        .discountRate(item.getDiscountRate()).sortOrder(item.getSortOrder()).enabled(item.getEnabled()).build())
+                .toList();
     }
 
     private CompetitionLogisticsVO toCompetitionLogisticsVO(Competition competition) {

@@ -32,6 +32,7 @@ import com.beercompetition.pojo.vo.EntryDetailVO;
 import com.beercompetition.pojo.vo.RegistrationBatchQuoteVO;
 import com.beercompetition.pojo.vo.RegistrationBatchVO;
 import com.beercompetition.registration.entry.PortalEntryService;
+import com.beercompetition.registration.payment.CompetitionPricingService;
 import com.beercompetition.service.RegistrationBatchService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -57,6 +58,8 @@ public class RegistrationBatchServiceImpl implements RegistrationBatchService {
     private final EntryPaymentMapper entryPaymentMapper;
     private final PortalEntryService portalEntryService;
 
+    private final CompetitionPricingService competitionPricingService;
+
     @Override
     public RegistrationBatchQuoteVO quote(Long competitionId, PortalEntryBatchQuoteRequest request) {
         // 1) 校验账号、赛事和报名窗口
@@ -64,13 +67,12 @@ public class RegistrationBatchServiceImpl implements RegistrationBatchService {
         Competition competition = requireOpenCompetition(competitionId);
         LocalDateTime quotedAt = LocalDateTime.now();
 
-        // 2) 按当前计价时点计算单价、优惠和总额
-        BigDecimal unitAmount = resolveEntryFee(competition, quotedAt);
+        // 2) 按同一厂商在本场比赛的累计数量计算早鸟与阶梯价格
+        int existingCount = countActiveEntries(competitionId, requirePortalAccount().getBreweryId());
+        CompetitionPricingService.PricingQuote pricing = competitionPricingService.quote(
+                competition, existingCount, request.getEntryCount(), quotedAt);
+        BigDecimal unitAmount = pricing.items().isEmpty() ? pricing.baseUnitAmount() : pricing.items().get(0).getAmount();
         BigDecimal standardAmount = defaultAmount(competition.getEntryFee());
-        BigDecimal totalAmount = unitAmount.multiply(BigDecimal.valueOf(request.getEntryCount()));
-        BigDecimal discountAmount = standardAmount.subtract(unitAmount)
-                .max(BigDecimal.ZERO)
-                .multiply(BigDecimal.valueOf(request.getEntryCount()));
 
         // 3) 返回服务端报价
         return RegistrationBatchQuoteVO.builder()
@@ -78,9 +80,13 @@ public class RegistrationBatchServiceImpl implements RegistrationBatchService {
                 .entryCount(request.getEntryCount())
                 .unitAmount(unitAmount)
                 .standardUnitAmount(standardAmount)
-                .totalAmount(totalAmount)
-                .discountAmount(discountAmount)
-                .earlyBirdActive(isEarlyBirdActive(competition, quotedAt))
+                .totalAmount(pricing.totalAmount())
+                .discountAmount(pricing.discountAmount())
+                .existingEntryCount(existingCount)
+                .earlyBirdUnitAmount(pricing.baseUnitAmount())
+                .tierDiscountAmount(pricing.tierDiscountAmount())
+                .priceItems(pricing.items())
+                .earlyBirdActive(pricing.earlyBirdActive())
                 .earlyBirdDeadline(competition.getEarlyBirdDeadline())
                 .quotedAt(quotedAt)
                 .build();
@@ -91,7 +97,7 @@ public class RegistrationBatchServiceImpl implements RegistrationBatchService {
     public RegistrationBatchVO submit(Long competitionId, PortalEntryBatchSubmitRequest request) {
         // 1) 校验账号、赛事并处理幂等重放
         PortalAccount account = requirePortalAccount();
-        requireOpenCompetition(competitionId);
+        Competition competition = requireOpenCompetition(competitionId);
         RegistrationBatch existing = registrationBatchMapper.selectOne(new LambdaQueryWrapper<RegistrationBatch>()
                 .eq(RegistrationBatch::getPortalAccountId, account.getId())
                 .eq(RegistrationBatch::getIdempotencyKey, request.getIdempotencyKey())
@@ -99,6 +105,11 @@ public class RegistrationBatchServiceImpl implements RegistrationBatchService {
         if (existing != null) {
             return toBatchVO(existing);
         }
+
+        competition = lockCompetition(competitionId);
+        int existingCount = countActiveEntries(competitionId, account.getBreweryId());
+        CompetitionPricingService.PricingQuote pricing = competitionPricingService.quote(
+                competition, existingCount, request.getEntries().size(), LocalDateTime.now());
 
         // 2) 创建批次并逐款复用现有报名校验和写入流程
         RegistrationBatch batch = RegistrationBatch.builder()
@@ -126,9 +137,7 @@ public class RegistrationBatchServiceImpl implements RegistrationBatchService {
         }
 
         // 3) 创建聚合订单与逐款分摊明细
-        BigDecimal totalAmount = entryPayments.stream()
-                .map(EntryPayment::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalAmount = pricing.totalAmount();
         if (request.getExpectedTotalAmount() != null
                 && totalAmount.compareTo(request.getExpectedTotalAmount()) != 0) {
             throw new BaseException("报名费已更新，请重新确认应付金额后提交");
@@ -147,7 +156,13 @@ public class RegistrationBatchServiceImpl implements RegistrationBatchService {
                 .build();
         paymentOrderMapper.insert(order);
 
-        for (EntryPayment payment : entryPayments) {
+        for (int index = 0; index < entryPayments.size(); index++) {
+            EntryPayment payment = entryPayments.get(index);
+            var price = pricing.items().get(index);
+            payment.setAmount(price.getAmount());
+            payment.setPricingBaseAmount(price.getBaseAmount());
+            payment.setDiscountRate(price.getDiscountRate());
+            payment.setPricingSequence(price.getSequence());
             payment.setPaymentOrderId(order.getId());
             if (freeRegistration) {
                 payment.setStatus(EntryPaymentStatus.PAID.name());
@@ -163,6 +178,9 @@ public class RegistrationBatchServiceImpl implements RegistrationBatchService {
                     .beerEntryId(payment.getBeerEntryId())
                     .entryPaymentId(payment.getId())
                     .amount(payment.getAmount())
+                    .pricingBaseAmount(payment.getPricingBaseAmount())
+                    .discountRate(payment.getDiscountRate())
+                    .pricingSequence(payment.getPricingSequence())
                     .refundedAmount(BigDecimal.ZERO)
                     .status(payment.getStatus())
                     .build());
@@ -270,16 +288,20 @@ public class RegistrationBatchServiceImpl implements RegistrationBatchService {
         return payment;
     }
 
-    private BigDecimal resolveEntryFee(Competition competition, LocalDateTime now) {
-        return isEarlyBirdActive(competition, now)
-                ? competition.getEarlyBirdFee()
-                : defaultAmount(competition.getEntryFee());
+    private int countActiveEntries(Long competitionId, Long breweryId) {
+        return Math.toIntExact(beerEntryMapper.selectCount(new LambdaQueryWrapper<BeerEntry>()
+                .eq(BeerEntry::getCompetitionId, competitionId)
+                .eq(BeerEntry::getBreweryId, breweryId)
+                .ne(BeerEntry::getStatus, EntryStatus.CANCELED.name())));
     }
 
-    private boolean isEarlyBirdActive(Competition competition, LocalDateTime now) {
-        return competition.getEarlyBirdFee() != null
-                && competition.getEarlyBirdDeadline() != null
-                && !now.isAfter(competition.getEarlyBirdDeadline());
+    private Competition lockCompetition(Long competitionId) {
+        Competition competition = competitionMapper.selectOne(new LambdaQueryWrapper<Competition>()
+                .eq(Competition::getId, competitionId).last("FOR UPDATE"));
+        if (competition == null) {
+            throw new ResourceNotFoundException("赛事不存在");
+        }
+        return competition;
     }
 
     private BigDecimal defaultAmount(BigDecimal amount) {

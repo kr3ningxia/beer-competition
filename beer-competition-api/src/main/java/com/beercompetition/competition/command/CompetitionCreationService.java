@@ -7,6 +7,7 @@ import com.beercompetition.mapper.CompetitionCategoryMapper;
 import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.CompetitionScoreConfigMapper;
 import com.beercompetition.mapper.CompetitionStyleConfigMapper;
+import com.beercompetition.mapper.CompetitionFeeTierMapper;
 import com.beercompetition.mapper.EntryFieldConfigMapper;
 import com.beercompetition.pojo.dto.CompetitionCreateRequest;
 import com.beercompetition.pojo.dto.ConfigNameItemRequest;
@@ -24,6 +25,9 @@ import com.beercompetition.pojo.po.Competition;
 import com.beercompetition.pojo.po.CompetitionCategory;
 import com.beercompetition.pojo.po.CompetitionScoreConfig;
 import com.beercompetition.pojo.po.CompetitionStyleConfig;
+import com.beercompetition.pojo.po.CompetitionFeeTier;
+import com.beercompetition.pojo.dto.CompetitionFeeTierRequest;
+import com.beercompetition.pojo.vo.CompetitionFeeTierVO;
 import com.beercompetition.pojo.po.EntryFieldConfig;
 import com.beercompetition.pojo.vo.CompetitionCheckVO;
 import com.beercompetition.pojo.vo.CompetitionDetailVO;
@@ -111,6 +115,8 @@ public class CompetitionCreationService {
 
     private final CompetitionScoreConfigMapper competitionScoreConfigMapper;
 
+    private final CompetitionFeeTierMapper competitionFeeTierMapper;
+
     private final StyleLibraryService styleLibraryService;
 
     private final ObjectMapper objectMapper;
@@ -129,6 +135,7 @@ public class CompetitionCreationService {
         List<ConfigNameItemRequest> categories = normalizeNameItems(
                 request.getCategories() == null ? List.of() : request.getCategories(), "投递组别");
         validateScoreConfigs(request.getScoreConfigs());
+        validateFeeTiers(request.getTierPricingEnabled(), request.getFeeTiers());
 
         // 2) 构造草稿比赛主记录
         Competition competition = Competition.builder()
@@ -142,6 +149,7 @@ public class CompetitionCreationService {
                 .entryFee(request.getEntryFee())
                 .earlyBirdFee(request.getEarlyBirdFee())
                 .earlyBirdDeadline(request.getEarlyBirdDeadline())
+                .tierPricingEnabled(Boolean.TRUE.equals(request.getTierPricingEnabled()) ? FLAG_TRUE : FLAG_FALSE)
                 .refundApprovalMode(RefundApprovalMode.of(request.getRefundApprovalMode()).name())
                 .description(normalizeRequired(request.getDescription(), "赛事简介不能为空"))
                 .rulesUrl(normalizeRulesUrl(request.getRulesUrl()))
@@ -155,10 +163,57 @@ public class CompetitionCreationService {
         replaceStyleSnapshot(competition.getId(), styleLibraryVersion, snapshotStyles);
         replaceEntryFields(competition.getId(), entryFields);
         replaceScoreConfigs(competition.getId(), request.getScoreConfigs());
+        replaceFeeTiers(competition.getId(), request.getTierPricingEnabled(), request.getFeeTiers());
 
         // 4) 返回列表口径摘要
         Competition saved = competitionMapper.selectById(competition.getId());
         return toCompetitionVO(saved, competitionQueryService.getCompetitionOverview(saved.getId()));
+    }
+
+    public void replaceFeeTiers(Long competitionId, Boolean enabled, List<CompetitionFeeTierRequest> requests) {
+        competitionFeeTierMapper.delete(new LambdaQueryWrapper<CompetitionFeeTier>()
+                .eq(CompetitionFeeTier::getCompetitionId, competitionId));
+        if (!Boolean.TRUE.equals(enabled)) {
+            return;
+        }
+        int sort = 0;
+        for (CompetitionFeeTierRequest item : requests == null ? List.<CompetitionFeeTierRequest>of() : requests) {
+            competitionFeeTierMapper.insert(CompetitionFeeTier.builder()
+                    .competitionId(competitionId)
+                    .startQuantity(item.getStartQuantity())
+                    .discountRate(item.getDiscountRate())
+                    .sortOrder(sort++)
+                    .enabled(FLAG_TRUE)
+                    .build());
+        }
+    }
+
+    public void validateFeeTiers(Boolean enabled, List<CompetitionFeeTierRequest> requests) {
+        if (!Boolean.TRUE.equals(enabled)) {
+            return;
+        }
+        if (requests == null || requests.isEmpty()) {
+            throw new BaseException("启用阶梯报名价后至少配置一档优惠");
+        }
+        int previousStart = 1;
+        BigDecimal previousRate = BigDecimal.ONE;
+        Set<Integer> starts = new LinkedHashSet<>();
+        for (CompetitionFeeTierRequest item : requests) {
+            if (item == null || item.getStartQuantity() == null || item.getDiscountRate() == null) {
+                throw new BaseException("阶梯价格配置不完整");
+            }
+            if (item.getStartQuantity() <= 1 || item.getStartQuantity() <= previousStart || !starts.add(item.getStartQuantity())) {
+                throw new BaseException("阶梯起始数量必须从第 2 款起按升序配置，且不能重复");
+            }
+            if (item.getDiscountRate().compareTo(BigDecimal.ZERO) <= 0 || item.getDiscountRate().compareTo(BigDecimal.ONE) > 0) {
+                throw new BaseException("阶梯折扣必须在 0.01 到 1.00 之间");
+            }
+            if (item.getDiscountRate().compareTo(previousRate) > 0) {
+                throw new BaseException("后续阶梯折扣不能高于前一档");
+            }
+            previousStart = item.getStartQuantity();
+            previousRate = item.getDiscountRate();
+        }
     }
 
     private void replaceStyleSnapshot(Long competitionId, List<StyleItemVO> styles) {
@@ -330,6 +385,8 @@ public class CompetitionCreationService {
                 .entryFee(competition.getEntryFee())
                 .earlyBirdFee(competition.getEarlyBirdFee())
                 .earlyBirdDeadline(competition.getEarlyBirdDeadline())
+                .tierPricingEnabled(Integer.valueOf(1).equals(competition.getTierPricingEnabled()))
+                .feeTiers(listFeeTiers(competition.getId()))
                 .refundApprovalMode(resolveRefundApprovalMode(competition).name())
                 .description(competition.getDescription())
                 .rulesUrl(competition.getRulesUrl())
@@ -347,6 +404,17 @@ public class CompetitionCreationService {
                 .judgeTableCount(detail.getJudgeTables().size())
                 .judgeCount(judgeCount)
                 .build();
+    }
+
+    private List<CompetitionFeeTierVO> listFeeTiers(Long competitionId) {
+        return competitionFeeTierMapper.selectList(new LambdaQueryWrapper<CompetitionFeeTier>()
+                        .eq(CompetitionFeeTier::getCompetitionId, competitionId)
+                        .eq(CompetitionFeeTier::getEnabled, FLAG_TRUE)
+                        .orderByAsc(CompetitionFeeTier::getStartQuantity))
+                .stream()
+                .map(item -> CompetitionFeeTierVO.builder().id(item.getId()).startQuantity(item.getStartQuantity())
+                        .discountRate(item.getDiscountRate()).sortOrder(item.getSortOrder()).enabled(item.getEnabled()).build())
+                .toList();
     }
 
     private void applyCreateLogistics(Competition competition, CompetitionCreateRequest request) {

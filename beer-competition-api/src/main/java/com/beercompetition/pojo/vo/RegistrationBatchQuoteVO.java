@@ -5,6 +5,7 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @Builder
@@ -16,6 +17,10 @@ public class RegistrationBatchQuoteVO {
     private BigDecimal standardUnitAmount;
     private BigDecimal totalAmount;
     private BigDecimal discountAmount;
+    private Integer existingEntryCount;
+    private BigDecimal earlyBirdUnitAmount;
+    private BigDecimal tierDiscountAmount;
+    private List<QuotePriceItemVO> priceItems;
     private Boolean earlyBirdActive;
     private LocalDateTime earlyBirdDeadline;
     private LocalDateTime quotedAt;

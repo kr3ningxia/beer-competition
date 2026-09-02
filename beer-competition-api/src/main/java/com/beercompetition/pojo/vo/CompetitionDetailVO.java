@@ -24,6 +24,8 @@ public class CompetitionDetailVO {
     private BigDecimal entryFee;
     private BigDecimal earlyBirdFee;
     private LocalDateTime earlyBirdDeadline;
+    private Boolean tierPricingEnabled;
+    private List<CompetitionFeeTierVO> feeTiers;
     private String refundApprovalMode;
     private Boolean refundPolicyEditable;
     private LocalDateTime refundPolicyEditableUntil;

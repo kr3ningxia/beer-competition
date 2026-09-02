@@ -142,6 +142,10 @@ export function requestPortalEntryRefund(entryId, data) {
   return request.post(`/api/portal/entries/${entryId}/refund`, data, { authScope: 'portal' })
 }
 
+export function fetchPortalEntryRefundPreview(entryId) {
+  return request.get(`/api/portal/entries/${entryId}/refund-preview`, { authScope: 'portal' })
+}
+
 export function fetchPortalEntryLabel(id) {
   return request.get(`/api/portal/entries/${id}/label`, { authScope: 'portal' })
 }

@@ -23,6 +23,9 @@ public class EntryPayment {
     private Long beerEntryId;
     private Long paymentOrderId;
     private BigDecimal amount;
+    private BigDecimal pricingBaseAmount;
+    private BigDecimal discountRate;
+    private Integer pricingSequence;
     private String status;
     private String payMethod;
     private String outTradeNo;

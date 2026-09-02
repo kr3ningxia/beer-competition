@@ -39,6 +39,12 @@ public class CompetitionCreateRequest {
 
     private LocalDateTime earlyBirdDeadline;
 
+    private Boolean tierPricingEnabled;
+
+    @Valid
+    @Size(max = 10, message = "阶梯价格最多配置 10 档")
+    private List<CompetitionFeeTierRequest> feeTiers;
+
     private String refundApprovalMode;
 
     @NotBlank(message = "赛事简介不能为空")

@@ -29,6 +29,7 @@ import com.beercompetition.pojo.po.EntryPayment;
 import com.beercompetition.pojo.po.PortalAccount;
 import com.beercompetition.pojo.vo.EntryDetailVO;
 import com.beercompetition.service.EntryScanLabelService;
+import com.beercompetition.registration.payment.CompetitionPricingService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -81,14 +82,23 @@ public class PortalEntryCreationService {
 
     private final PortalAccountAccessService portalAccountAccessService;
 
+    private final CompetitionPricingService competitionPricingService;
+
     @Transactional(rollbackFor = Exception.class)
     public EntryDetailVO submitPortalEntry(Long competitionId, PortalEntrySubmitRequest request) {
         // 1) 参数规范化与前置校验
         PortalAccount account = portalAccountAccessService.requireCurrentAccount();
         Competition competition = requireOpenCompetition(competitionId);
+        competition = lockCompetition(competitionId);
         requireRulesAcceptedIfConfigured(competition, request);
         CompetitionCategory category = requireCompetitionCategory(competitionId, request.getCategoryId());
         CompetitionStyleConfig selectedStyle = requireCompetitionStyle(competitionId, request.getStyle());
+        int existingCount = Math.toIntExact(beerEntryMapper.selectCount(new LambdaQueryWrapper<BeerEntry>()
+                .eq(BeerEntry::getCompetitionId, competitionId)
+                .eq(BeerEntry::getBreweryId, account.getBreweryId())
+                .ne(BeerEntry::getStatus, EntryStatus.CANCELED.name())));
+        CompetitionPricingService.PricingQuote pricing = competitionPricingService.quote(competition, existingCount, 1, LocalDateTime.now());
+        var price = pricing.items().get(0);
         List<EntryFieldConfig> fieldConfigs = listEntryFieldConfigs(competitionId);
         Map<String, String> normalizedExtraFields = normalizeExtraFields(fieldConfigs, request.getExtraFields());
 
@@ -112,7 +122,10 @@ public class PortalEntryCreationService {
         // 3) 初始化支付与送样记录
         entryPaymentMapper.insert(EntryPayment.builder()
                 .beerEntryId(entry.getId())
-                .amount(resolveEntryFee(competition, LocalDateTime.now()))
+                .amount(price.getAmount())
+                .pricingBaseAmount(price.getBaseAmount())
+                .discountRate(price.getDiscountRate())
+                .pricingSequence(price.getSequence())
                 .status(EntryPaymentStatus.UNPAID.name())
                 .payMethod(EntryPayMethod.MANUAL.name())
                 .build());
@@ -224,16 +237,13 @@ public class PortalEntryCreationService {
         return competition;
     }
 
-    private BigDecimal resolveEntryFee(Competition competition, LocalDateTime now) {
+    private Competition lockCompetition(Long competitionId) {
+        Competition competition = competitionMapper.selectOne(new LambdaQueryWrapper<Competition>()
+                .eq(Competition::getId, competitionId).last("FOR UPDATE"));
         if (competition == null) {
-            return BigDecimal.ZERO;
+            throw new ResourceNotFoundException("赛事不存在");
         }
-        if (competition.getEarlyBirdFee() != null
-                && competition.getEarlyBirdDeadline() != null
-                && !now.isAfter(competition.getEarlyBirdDeadline())) {
-            return competition.getEarlyBirdFee();
-        }
-        return competition.getEntryFee() == null ? BigDecimal.ZERO : competition.getEntryFee();
+        return competition;
     }
 
     private CompetitionCategory requireCompetitionCategory(Long competitionId, Long categoryId) {

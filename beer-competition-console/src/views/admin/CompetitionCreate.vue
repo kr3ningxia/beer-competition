@@ -105,6 +105,30 @@
                   <input v-model="draft.earlyBirdDeadline" type="datetime-local" />
                 </label>
               </div>
+              <label class="tier-toggle" :class="{ enabled: draft.tierPricingEnabled }">
+                <span>启用阶梯报价</span>
+                <el-switch v-model="draft.tierPricingEnabled" aria-label="启用阶梯报价" />
+              </label>
+              <div v-if="draft.tierPricingEnabled" class="tier-editor">
+                <div class="tier-editor-head">
+                  <span aria-hidden="true">起始款数</span>
+                  <span aria-hidden="true">折扣率</span>
+                  <span aria-hidden="true">示例单价</span>
+                  <button type="button" class="text-button tier-add-button" @click="addFeeTier">添加阶梯</button>
+                </div>
+                <div v-for="(tier, index) in draft.feeTiers" :key="tier.id" class="tier-editor-row">
+                  <div class="fee-field">
+                    <input v-model.number="tier.startQuantity" :aria-label="`第 ${index + 1} 档起始款数`" min="2" step="1" type="number" />
+                    <span>款起</span>
+                  </div>
+                  <div class="fee-field">
+                    <input v-model.number="tier.discountRatePercent" :aria-label="`第 ${index + 1} 档折扣率`" min="1" max="100" step="0.01" type="number" />
+                    <span>%</span>
+                  </div>
+                  <span class="tier-example-price">{{ formatTierAmount(tier.discountRatePercent) }}<small>元 / 款</small></span>
+                  <button class="icon-button tier-remove-button" title="删除阶梯" :aria-label="`删除第 ${index + 1} 档阶梯`" type="button" @click="draft.feeTiers.splice(index, 1)"><Delete /></button>
+                </div>
+              </div>
             </section>
 
             <section class="form-subgroup">
@@ -570,6 +594,8 @@ const draft = reactive({
   entryFee: 199,
   earlyBirdFee: 159,
   earlyBirdDeadline: '2026-06-30T18:00',
+  tierPricingEnabled: false,
+  feeTiers: [{ id: 'tier-initial', startQuantity: 3, discountRatePercent: 80 }],
   description: '',
   rulesUrl: 'https://mp.weixin.qq.com/s/iGxSnomHIXvdOyMO9xgd2Q',
   deliveryMethod: 'BOTH',
@@ -631,6 +657,15 @@ const isDraftDirty = computed(() => JSON.stringify(toDraftSnapshot(draft)) !== i
 
 function removeItem(list, index) {
   list.splice(index, 1)
+}
+
+function addFeeTier() {
+  const last = draft.feeTiers[draft.feeTiers.length - 1]
+  draft.feeTiers.push({ id: `tier-${Date.now()}`, startQuantity: (last?.startQuantity || 1) + 2, discountRatePercent: 80 })
+}
+
+function formatTierAmount(ratePercent) {
+  return (Number(draft.entryFee || 0) * Number(ratePercent ?? 100) / 100).toFixed(2)
 }
 
 function selectCollectionQr(event) {
@@ -731,6 +766,8 @@ async function submitDraft() {
       entryFee: Number(draft.entryFee || 0),
       earlyBirdFee: draft.earlyBirdFee === '' || draft.earlyBirdFee === null ? null : Number(draft.earlyBirdFee),
       earlyBirdDeadline: toBackendDateTime(draft.earlyBirdDeadline),
+      tierPricingEnabled: draft.tierPricingEnabled,
+      feeTiers: draft.tierPricingEnabled ? draft.feeTiers.map(({ startQuantity, discountRatePercent }) => ({ startQuantity: Number(startQuantity), discountRate: Number(discountRatePercent) / 100 })) : [],
       description: draft.description,
       rulesUrl: draft.rulesUrl || null,
       deliveryMethod: draft.deliveryMethod,
@@ -958,6 +995,8 @@ function toDraftSnapshot(source) {
     entryFee: source.entryFee,
     earlyBirdFee: source.earlyBirdFee,
     earlyBirdDeadline: source.earlyBirdDeadline,
+    tierPricingEnabled: Boolean(source.tierPricingEnabled),
+    feeTiers: (source.feeTiers || []).map((tier) => ({ ...tier })),
     description: source.description,
     rulesUrl: source.rulesUrl,
     deliveryMethod: source.deliveryMethod,
@@ -1081,6 +1120,11 @@ function buildReviewItems(source) {
       || !isOptionalDeadlineAfterStart(source.earlyBirdDeadline, source.registrationDeadline)
       || Number(source.earlyBirdFee) > Number(source.entryFee)
       || Number(source.earlyBirdFee) < 0)
+  const tierInvalid = source.tierPricingEnabled && (!source.feeTiers?.length
+    || source.feeTiers.some((tier, index) => Number(tier.startQuantity) <= 1
+      || (index > 0 && Number(tier.startQuantity) <= Number(source.feeTiers[index - 1].startQuantity))
+      || Number(tier.discountRatePercent) <= 0 || Number(tier.discountRatePercent) > 100
+      || (index > 0 && Number(tier.discountRatePercent) > Number(source.feeTiers[index - 1].discountRatePercent))))
   const categoryNames = getCategoryNames(source)
   const duplicatedCategories = getDuplicateItems(categoryNames)
   const scoreErrors = source.scoreConfigs
@@ -1133,6 +1177,13 @@ function buildReviewItems(source) {
         : isValidHttpUrl(source.rulesUrl)
           ? '已设置参赛细则链接'
           : '参赛细则链接需以 http:// 或 https:// 开头',
+    },
+    {
+      key: 'tierPricing',
+      label: '阶梯报价',
+      target: 'base-info',
+      status: !tierInvalid ? 'done' : 'pending',
+      detail: !source.tierPricingEnabled ? '未启用阶梯报价' : (tierInvalid ? '请按起始款数升序配置折扣率' : `已配置 ${source.feeTiers.length} 档`),
     },
     {
       key: 'logistics',
@@ -1648,6 +1699,124 @@ textarea::placeholder {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.04);
+}
+
+.tier-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: fit-content;
+  min-height: 38px;
+  margin-top: 2px;
+  padding: 0 10px 0 13px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tier-toggle > span {
+  color: inherit;
+}
+
+.tier-toggle :deep(.el-switch) {
+  --el-switch-on-color: var(--gold-soft);
+  --el-switch-off-color: rgba(255, 255, 255, 0.16);
+}
+
+.tier-toggle :deep(.el-switch__core) {
+  min-width: 40px;
+}
+
+.tier-toggle.enabled {
+  color: var(--gold-soft);
+  border-color: rgba(216, 169, 53, 0.32);
+  background: rgba(216, 169, 53, 0.08);
+}
+
+.tier-editor {
+  display: grid;
+  gap: 0;
+  max-width: 840px;
+  margin-top: 0;
+  padding: 0 16px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.tier-editor-head,
+.tier-editor-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(140px, 1fr) minmax(160px, 1fr) minmax(76px, auto);
+  align-items: center;
+  gap: 12px;
+}
+
+.tier-editor-head {
+  padding: 12px 0 8px;
+  color: var(--muted);
+  border-bottom: 1px solid rgba(219, 232, 237, 0.08);
+  font-size: 12px;
+}
+
+.tier-editor-row {
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(219, 232, 237, 0.08);
+}
+
+.tier-editor-row:last-of-type {
+  border-bottom: 0;
+}
+
+.tier-editor .fee-field {
+  min-width: 0;
+}
+
+.tier-editor .fee-field input {
+  min-height: 40px;
+}
+
+.tier-example-price {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  gap: 4px;
+  min-height: 40px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.tier-example-price small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.tier-remove-button {
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  color: var(--muted);
+}
+
+.tier-remove-button:hover:not(:disabled) {
+  color: #ffb4aa;
+  border-color: rgba(255, 132, 116, 0.35);
+  background: rgba(255, 132, 116, 0.08);
+}
+
+.tier-add-button {
+  justify-self: end;
+  margin-top: 0;
+  padding: 0 4px;
+  white-space: nowrap;
 }
 
 .collection-config-grid {
@@ -2547,6 +2716,27 @@ textarea::placeholder {
 
   .review-head {
     align-items: stretch;
+  }
+
+  .tier-editor {
+    padding: 0 12px 10px;
+  }
+
+  .tier-editor-head {
+    grid-template-columns: 1fr;
+  }
+
+  .tier-editor-head > span {
+    display: none;
+  }
+
+  .tier-editor-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .tier-remove-button {
+    justify-self: end;
   }
 
   .inline-actions {

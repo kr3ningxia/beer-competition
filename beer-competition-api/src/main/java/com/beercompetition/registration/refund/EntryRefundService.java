@@ -7,6 +7,7 @@ import com.beercompetition.pojo.dto.PortalEntryRefundRequest;
 import com.beercompetition.pojo.vo.AdminEntryVO;
 import com.beercompetition.pojo.vo.EntryDetailVO;
 import com.beercompetition.pojo.vo.FileDownloadVO;
+import com.beercompetition.pojo.vo.RefundPreviewVO;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -15,6 +16,8 @@ import org.springframework.web.multipart.MultipartFile;
 public interface EntryRefundService {
 
     EntryDetailVO requestPortalEntryRefund(Long entryId, PortalEntryRefundRequest request);
+
+    RefundPreviewVO previewPortalEntryRefund(Long entryId);
 
     PageResult<AdminEntryVO> listAdminRefunds(String status, Integer page, Integer pageSize);
 
