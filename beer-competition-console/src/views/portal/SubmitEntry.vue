@@ -254,11 +254,14 @@
 
         <div class="receipt-totals">
           <div><span>本场累计</span><b>{{ quote?.existingEntryCount || 0 }} 款 + 本次 {{ entries.length }} 款</b></div>
-          <div><span>基础单价</span><b>{{ formatCurrency(quote?.earlyBirdUnitAmount ?? unitAmount) }} / 款</b></div>
-          <div v-if="discountAmount > 0"><span>优惠金额</span><b>-{{ formatCurrency(discountAmount) }}</b></div>
+          <div><span>基础单价</span><b>{{ formatCurrency(baseUnitAmount) }} / 款</b></div>
+          <div v-if="earlyBirdSaving > 0"><span>早鸟优惠</span><b>-{{ formatCurrency(earlyBirdSaving) }}</b></div>
+          <div v-if="tierSaving > 0"><span>批量优惠</span><b>-{{ formatCurrency(tierSaving) }}</b></div>
           <div class="receipt-total"><span>应付总额</span><strong>{{ formatCurrency(totalAmount) }}</strong></div>
           <div><span>付款方式</span><b>{{ payMode === 'WECHAT' ? '微信支付' : '银行转账' }}</b></div>
         </div>
+        <div v-if="tierNudge" class="tier-nudge">{{ tierNudge }}</div>
+        <div v-if="batchSpansTierRates" class="tier-meter">本批按累计序号分档计价，请以逐款明细为准</div>
 
         <el-button class="submit-batch-button" type="primary" :loading="submitting" @click="submitBatch">
           {{ submitButtonLabel }}
@@ -279,6 +282,7 @@ import { ArrowRight, CircleCheck, Delete, Plus, WarningFilled } from '@element-p
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { fetchPortalCompetitionDetail, quotePortalEntryBatch, submitPortalEntryBatch } from '@/api/portal'
 import { isValidAbvInput, normalizeAbvInput } from '@/utils/formatters'
+import { nextTierHint, tierRateAt } from './portalViewModels'
 
 const MAX_BATCH_ENTRIES = 20
 const route = useRoute()
@@ -311,7 +315,23 @@ const activeEntry = computed(() => entries.value[activeIndex.value] || entries.v
 const hasRulesUrl = computed(() => Boolean(competition.value?.rulesUrl))
 const unitAmount = computed(() => Number(quote.value?.unitAmount ?? competition.value?.entryFee ?? 0))
 const totalAmount = computed(() => Number(quote.value?.totalAmount ?? unitAmount.value * entries.value.length))
-const discountAmount = computed(() => Number(quote.value?.discountAmount || 0))
+const baseUnitAmount = computed(() => Number(quote.value?.earlyBirdUnitAmount ?? competition.value?.entryFee ?? 0))
+const earlyBirdSaving = computed(() => round2(Math.max(0, Number(quote.value?.discountAmount || 0) - Number(quote.value?.tierDiscountAmount || 0))))
+const tierSaving = computed(() => round2(Math.max(0, Number(quote.value?.tierDiscountAmount || 0))))
+const batchSpansTierRates = computed(() => {
+  const q = quote.value
+  if (!q || !competition.value) return false
+  const start = Number(q.existingEntryCount || 0) + 1
+  const end = Number(q.existingEntryCount || 0) + Number(q.entryCount || 0)
+  const rates = new Set()
+  for (let s = start; s <= end; s++) rates.add(tierRateAt(competition.value, s))
+  return rates.size > 1
+})
+const tierNudge = computed(() => {
+  const q = quote.value
+  if (!q || !competition.value) return ''
+  return nextTierHint(competition.value, Number(q.existingEntryCount || 0) + Number(q.entryCount || 0))
+})
 const feeText = computed(() => `${formatCurrency(unitAmount.value)} / 款`)
 const submitButtonLabel = computed(() => {
   if (totalAmount.value <= 0) return `提交 ${entries.value.length} 款报名`
@@ -580,6 +600,10 @@ function styleLabel(item) {
 function formatCurrency(value) {
   return currencyFormatter.format(Number(value || 0))
 }
+
+function round2(value) {
+  return Math.round(Number(value || 0) * 100) / 100
+}
 </script>
 
 <style scoped>
@@ -756,6 +780,18 @@ function formatCurrency(value) {
 .submit-batch-button { width: 100%; min-height: 50px; margin-top: 16px; border: 0; border-radius: 7px; background: #7d4d12; font-size: 15px; font-weight: 900; }
 .submit-batch-button:hover { background: #925d19; }
 .price-note { margin: 10px 0 0; color: #725b3d; text-align: center; font-size: 12px; }
+.tier-nudge {
+  margin-top: 10px;
+  padding: 9px 11px;
+  color: #6b4710;
+  text-align: center;
+  background: #fff4d9;
+  border: 1px solid rgba(184, 120, 32, .18);
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 800;
+}
+.tier-meter { margin-top: 8px; color: #725b3d; text-align: center; font-size: 11px; line-height: 1.5; }
 .page-state { display: grid; gap: 12px; padding: 40px; text-align: center; }
 
 :global(.entry-delete-dialog) {

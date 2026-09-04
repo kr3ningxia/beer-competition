@@ -112,6 +112,81 @@ export function formatCompetitionFee(competition) {
   return `报名费 ${formatMoney(competition.entryFee)} / 款`
 }
 
+export function normalizeTiers(competition) {
+  if (!competition?.tierPricingEnabled) return []
+  return (competition?.feeTiers || [])
+    .filter((tier) => Number(tier?.discountRate) > 0)
+    .sort((a, b) => Number(a.startQuantity) - Number(b.startQuantity))
+}
+
+export function tierRateToZhe(rate) {
+  const zhe = Math.round(Number(rate) * 100) / 10
+  const text = Number.isInteger(zhe) ? String(zhe) : zhe.toFixed(1)
+  return `${text} 折`
+}
+
+export function buildTierLadder(competition) {
+  const tiers = normalizeTiers(competition)
+  if (!tiers.length) return { visible: false, segments: [], pillText: '', base: null }
+  const base = currentEntryFee(competition) ?? 0
+  const first = tiers[0]
+  const firstStart = Number(first.startQuantity)
+  const segments = []
+  if (firstStart > 1) {
+    segments.push({
+      key: 'base',
+      label: firstStart === 2 ? '累计第 1 款' : `累计第 1–${firstStart - 1} 款`,
+      rateText: '',
+      amount: base,
+      saved: 0,
+      isBase: true,
+    })
+  }
+  tiers.forEach((tier) => {
+    const amount = Math.round(base * Number(tier.discountRate) * 100) / 100
+    const saved = Math.round((base - amount) * 100) / 100
+    segments.push({
+      key: `tier-${tier.startQuantity}`,
+      label: `累计第 ${tier.startQuantity} 款起`,
+      rateText: tierRateToZhe(tier.discountRate),
+      amount,
+      saved,
+      isBase: false,
+    })
+  })
+  return {
+    visible: true,
+    segments,
+    pillText: `第 ${firstStart} 款起 ${tierRateToZhe(first.discountRate)}`,
+    base,
+  }
+}
+
+export function tierRateAt(competition, sequence) {
+  const tiers = normalizeTiers(competition)
+  if (!tiers.length) return 1
+  let rate = 1
+  for (const tier of tiers) {
+    if (Number(tier.startQuantity) <= sequence) rate = Number(tier.discountRate)
+    else break
+  }
+  return rate
+}
+
+export function nextTierHint(competition, currentTotal) {
+  const tiers = normalizeTiers(competition)
+  if (!tiers.length || !Number.isFinite(currentTotal)) return ''
+  const next = tiers.find((tier) => Number(tier.startQuantity) > currentTotal)
+  if (next) {
+    const gap = Number(next.startQuantity) - currentTotal
+    return gap <= 0
+      ? `累计第 ${next.startQuantity} 款起享 ${tierRateToZhe(next.discountRate)}`
+      : `再报 ${gap} 款，累计第 ${next.startQuantity} 款起享 ${tierRateToZhe(next.discountRate)}`
+  }
+  const last = tiers[tiers.length - 1]
+  return `已是最高档 · 累计第 ${last.startQuantity} 款起享 ${tierRateToZhe(last.discountRate)}`
+}
+
 export function isEntryAwarded(entry) {
   return isEntryResultPublished(entry) && Boolean(entry?.awardName || entry?.roundResult?.awardName || entry?.champion)
 }

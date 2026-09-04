@@ -15,6 +15,7 @@
         <div class="hero-facts" aria-label="赛事关键时间和费用">
           <span>报名截止 {{ formatMonthDayTime(competition.registrationDeadline) }}</span>
           <span>{{ feeText }}</span>
+          <span v-if="tierLadder.visible">{{ tierLadder.pillText }}</span>
           <span>送样截止 {{ formatMonthDayTime(logistics.sampleArrivalDeadline) }}</span>
         </div>
         <div class="hero-actions">
@@ -76,6 +77,19 @@
           <div><dt>送样截止</dt><dd>{{ formatDateTime(logistics.sampleArrivalDeadline) }}</dd></div>
           <div v-if="earlyBirdDeadlineText"><dt>早鸟截止</dt><dd>{{ earlyBirdDeadlineText }}</dd></div>
           <div v-if="showNormalFee"><dt>普通报名费</dt><dd>¥{{ competition.entryFee }} / 款</dd></div>
+          <div v-if="tierLadder.visible" class="tier-info-item">
+            <dt>批量优惠</dt>
+            <dd class="tier-ladder">
+              <span v-for="seg in tierLadder.segments" :key="seg.key" :class="{ base: seg.isBase }">
+                <b>{{ seg.label }}</b>
+                <em v-if="seg.rateText">{{ seg.rateText }}</em>
+                <span class="tier-price">
+                  <strong>{{ formatMoney(seg.amount) }} / 款</strong>
+                  <small v-if="!seg.isBase">省 {{ formatMoney(seg.saved) }} / 款</small>
+                </span>
+              </span>
+            </dd>
+          </div>
         </dl>
       </article>
 
@@ -158,10 +172,12 @@ import { RouterLink, useRoute } from 'vue-router'
 import { isLoggedIn } from '@/utils/auth'
 import { fetchPortalCompetitionDetail, fetchPortalEntries } from '@/api/portal'
 import {
+  buildTierLadder,
   canSubmitEntry,
   competitionResultPath,
   entrySummaryForCompetition,
   formatCompetitionFee,
+  formatMoney,
   isCompetitionResultPublished,
   isEarlyBirdActive,
 } from './portalViewModels'
@@ -179,6 +195,7 @@ const eventEntries = computed(() => entries.value.filter((entry) => entry.compet
 const hasEventEntries = computed(() => eventEntries.value.length > 0)
 const eventSummary = computed(() => entrySummaryForCompetition(competition.value.id, entries.value))
 const feeText = computed(() => formatCompetitionFee(competition.value))
+const tierLadder = computed(() => buildTierLadder(competition.value))
 const earlyBirdDeadlineText = computed(() => (isEarlyBirdActive(competition.value) ? formatDateTime(competition.value.earlyBirdDeadline) : ''))
 const showNormalFee = computed(() => isEarlyBirdActive(competition.value) && competition.value.entryFee !== undefined && competition.value.entryFee !== null)
 const stageLabel = computed(() => (isCompetitionResultPublished(competition.value) ? '结果已发布' : competition.value.currentStageLabel) || '赛事详情')
@@ -686,6 +703,62 @@ dd {
   border-radius: 8px;
   font-size: 14px;
   line-height: 1.45;
+}
+
+.tier-info-item {
+  grid-column: 1 / -1;
+}
+
+.tier-ladder {
+  display: grid;
+  gap: 8px;
+  margin: 2px 0 0;
+}
+
+.tier-ladder > span {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  background: #fff7e6;
+  border: 1px solid rgba(87, 58, 26, 0.1);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.tier-ladder > span.base {
+  color: #8a765f;
+}
+
+.tier-ladder b {
+  color: #2b1d10;
+  font-weight: 800;
+}
+
+.tier-ladder em {
+  color: #8b5c19;
+  font-style: normal;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.tier-ladder .tier-price {
+  display: grid;
+  gap: 2px;
+  margin-left: auto;
+  text-align: right;
+}
+
+.tier-ladder .tier-price strong {
+  color: #2b1d10;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.tier-ladder .tier-price small {
+  color: #3d7750;
+  font-size: 12px;
 }
 
 .card-link {
