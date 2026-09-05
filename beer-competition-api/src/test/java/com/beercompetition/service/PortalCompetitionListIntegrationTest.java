@@ -1,9 +1,13 @@
 package com.beercompetition.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.beercompetition.competition.query.CompetitionQueryService;
 import com.beercompetition.pojo.enums.CompetitionStatus;
+import com.beercompetition.pojo.enums.OrganizerType;
 import com.beercompetition.pojo.po.Competition;
+import com.beercompetition.pojo.po.Organizer;
 import com.beercompetition.pojo.vo.PortalCompetitionVO;
+import com.beercompetition.mapper.OrganizerMapper;
 import com.beercompetition.testsupport.BeerCompetitionTestData;
 import com.beercompetition.testsupport.IntegrationTestBase;
 import org.junit.jupiter.api.Test;
@@ -23,6 +27,9 @@ class PortalCompetitionListIntegrationTest extends IntegrationTestBase {
 
     @Autowired
     private CompetitionQueryService competitionQueryService;
+
+    @Autowired
+    private OrganizerMapper organizerMapper;
 
     @Test
     void portalListsOpenCompetitionsFirstByEarliestRegistrationDeadline() {
@@ -45,6 +52,23 @@ class PortalCompetitionListIntegrationTest extends IntegrationTestBase {
                 openSooner.getId(),
                 openLater.getId(),
                 registrationClosed.getId());
+    }
+
+    @Test
+    void portalUsesTenantOrganizationNameAsThirdPartyInitiator() {
+        Organizer tenant = organizerMapper.selectOne(new LambdaQueryWrapper<Organizer>()
+                .eq(Organizer::getOrganizerType, OrganizerType.TENANT.name())
+                .last("LIMIT 1"));
+        assertThat(tenant).isNotNull();
+        assertThat(tenant.getName()).isNotEqualTo(tenant.getContactName());
+
+        Competition competition = testData.createCompetition(testRun + "-tenant", CompetitionStatus.REGISTRATION_CLOSED);
+        jdbcTemplate.update("UPDATE competition SET organizer_id = ? WHERE id = ?", tenant.getId(), competition.getId());
+
+        PortalCompetitionVO result = competitionQueryService.getPortalCompetitionDetail(competition.getId());
+
+        assertThat(result.getOrganizerType()).isEqualTo(OrganizerType.TENANT.name());
+        assertThat(result.getOrganizerName()).isEqualTo(tenant.getName());
     }
 
     private void updateCompetitionSchedule(Competition competition, LocalDateTime registrationDeadline,

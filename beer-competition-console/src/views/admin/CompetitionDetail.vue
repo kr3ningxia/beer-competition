@@ -78,32 +78,24 @@
             <article class="metric-card">
               <small>开放报名准备</small>
               <strong>{{ registrationReadyCount }} / {{ registrationRequiredChecks.length }}</strong>
-              <p>{{ registrationBlockText }}</p>
             </article>
             <article class="metric-card">
               <small>当前轮次</small>
               <strong>{{ currentRound?.name || '-' }}</strong>
-              <p>{{ currentRoundTypeLabel }} · {{ currentRoundStatusText }}</p>
             </article>
             <article class="metric-card">
               <small>当前轮次桌数</small>
               <strong>{{ currentRoundTables.length }} 桌</strong>
-              <p>{{ isFeedbackOnlyCompetition ? `${currentRoundEntryCount} 款酒` : `${currentRoundEntryCount} 款酒 · 目标 ${currentRoundTargetCount} 款` }}</p>
             </article>
             <article class="metric-card">
               <small>{{ isFeedbackOnlyCompetition ? '诊断发布' : (currentRoundIsTerminal ? '结果确认' : '晋级名单') }}</small>
               <strong>{{ isFeedbackOnlyCompetition ? (canPublishResults ? '可发布' : feedbackFinalizedCount) : (currentRoundIsTerminal ? (canPublishResults ? '可发布' : '待确认') : advancedPool.length) }}</strong>
-              <p>{{ isFeedbackOnlyCompetition ? '首轮锁定后发布诊断结果' : (currentRoundIsTerminal ? '确认奖项后发布结果' : '锁定上一轮后用于创建下一轮') }}</p>
             </article>
           </div>
 
           <article v-if="beerCoinApplicable" class="panel-card beer-coin-settlement-card">
             <div class="panel-heading">
-              <div>
-                <h2>啤酒币结算</h2>
-                <span>租户赛事</span>
-              </div>
-              <span :class="['beer-coin-settlement-status', beerCoinSettlementTone]">{{ beerCoinSettlementLabel }}</span>
+              <h2>啤酒币结算</h2>
             </div>
             <div class="beer-coin-settlement-grid">
               <div>
@@ -121,10 +113,6 @@
               <div v-if="competition.status !== 'DRAFT'">
                 <small>有效酒款</small>
                 <strong>{{ formatInteger(beerCoinSettlement.effectiveEntryCount) }} 款</strong>
-              </div>
-              <div v-if="competition.status !== 'DRAFT' && beerCoinSettlement.pendingQuantity > 0">
-                <small>待补扣</small>
-                <strong class="beer-coin-pending-value">{{ formatInteger(beerCoinSettlement.pendingQuantity) }} 枚</strong>
               </div>
             </div>
             <div v-if="beerCoinWalletInsufficient" class="beer-coin-settlement-footer">
@@ -2372,16 +2360,6 @@ const beerCoinWalletInsufficient = computed(() => (
       : Math.max(Number(beerCoinSettlement.value.pendingQuantity || 0), 0)
   )
 ))
-const beerCoinSettlementTone = computed(() => {
-  if (beerCoinSettlement.value.pendingQuantity > 0) return 'pending'
-  if (beerCoinSettlement.value.completed) return 'complete'
-  return 'ready'
-})
-const beerCoinSettlementLabel = computed(() => {
-  if (beerCoinSettlement.value.pendingQuantity > 0) return '待补扣'
-  if (beerCoinSettlement.value.completed) return '已完成'
-  return competition.value?.status === 'DRAFT' ? '发布时扣除' : '待结算'
-})
 const editable = computed(() => competition.value?.editableScopes || {})
 const refundPolicyDirty = computed(() => (
   baseForm.refundApprovalMode !== (competition.value?.refundApprovalMode || 'AUTO_APPROVE')
@@ -2397,11 +2375,6 @@ const hasDataIssues = computed(() => Boolean(competition.value?.dataIntegrityIss
 const registrationRequiredKeys = ['baseInfo', 'categories', 'styleLibrary']
 const registrationRequiredChecks = computed(() => (competition.value?.checks || []).filter((check) => registrationRequiredKeys.includes(check.key)))
 const registrationReadyCount = computed(() => registrationRequiredChecks.value.filter((check) => check.state === 'done').length)
-const registrationBlockText = computed(() => {
-  if (hasDataIssues.value) return '系统数据需修正'
-  const pending = registrationRequiredChecks.value.filter((check) => check.state !== 'done')
-  return pending.length ? `还差 ${pending.map((check) => check.label).join('、')}` : '可开放报名'
-})
 const selectedStyleLibrary = computed(() => getStyleLibrary(selectedStyleLibraryVersion.value || competition.value?.styleLibraryVersion, styleLibraryOptions.value))
 const styleSnapshot = computed(() => competition.value?.styles || [])
 const selectedStyleItems = computed(() => {

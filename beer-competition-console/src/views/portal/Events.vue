@@ -10,7 +10,13 @@
     <section class="event-list">
       <article v-for="competition in competitions" :key="competition.id" class="event-card brewer-card">
         <div class="event-main">
-          <span :class="['label-chip', stageTone(competition.status)]">{{ stageLabel(competition) }}</span>
+          <div class="event-meta">
+            <span :class="['label-chip', stageTone(competition.status)]">{{ stageLabel(competition) }}</span>
+            <div v-if="competition.organizerType === 'TENANT'" class="event-source">
+              <span class="source-label">第三方赛事</span>
+              <span v-if="competition.organizerName" class="source-name">发起方：{{ competition.organizerName }}</span>
+            </div>
+          </div>
           <h2>{{ competition.name }}</h2>
           <p>{{ competition.description || competition.code }}</p>
           <div class="fact-row">
@@ -175,6 +181,13 @@ function entryFeeText(competition) {
   line-height: 1.12;
   overflow-wrap: anywhere;
 }
+
+.event-meta { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px 14px; }
+.event-meta > .label-chip { flex-shrink: 0; }
+.event-source { display: flex; align-items: baseline; min-width: 0; max-width: 100%; gap: 8px; color: #746a5f; font-size: 14px; line-height: 1.8; }
+.source-label { flex-shrink: 0; padding: 1px 8px; border: 1px solid #cfc5b4; border-radius: 4px; font-size: 12px; line-height: 22px; }
+.source-name { overflow-wrap: anywhere; }
+.source-name::before { content: '·'; margin-right: 8px; }
 
 .event-main p,
 .event-side p {

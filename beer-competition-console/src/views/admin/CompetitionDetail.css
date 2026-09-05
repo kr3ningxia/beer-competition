@@ -79,6 +79,33 @@ svg {
   margin-top: 12px;
 }
 
+/* Keep the competition identity on one readable line in the detail header. */
+.competition-detail :deep(.admin-page-header-title-content) {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.competition-detail :deep(.admin-page-header-title-content h1) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.competition-detail :deep(.admin-page-header-title-content .meta-line) {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  gap: 6px;
+  margin-top: 0;
+  white-space: nowrap;
+}
+
+.competition-detail :deep(.admin-page-header-title-content .meta-line > span) {
+  white-space: nowrap;
+}
+
 .meta-line > span:not(.state-badge) {
   padding: 6px 8px;
   border: 1px solid var(--line);
@@ -1295,7 +1322,7 @@ svg {
 
 .beer-coin-settlement-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 1px;
   overflow: hidden;
   border: 1px solid rgba(219, 232, 237, 0.08);
@@ -1315,26 +1342,6 @@ svg {
 .beer-coin-settlement-grid strong {
   color: #e6edf0;
   font-size: 17px;
-}
-
-.beer-coin-pending-value {
-  color: var(--orange) !important;
-}
-
-.beer-coin-settlement-status {
-  padding: 5px 9px;
-  border: 1px solid rgba(111, 207, 122, 0.28);
-  border-radius: 6px;
-  color: var(--green);
-  background: rgba(111, 207, 122, 0.08);
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.beer-coin-settlement-status.pending {
-  border-color: rgba(242, 153, 74, 0.3);
-  color: var(--orange);
-  background: rgba(242, 153, 74, 0.08);
 }
 
 .beer-coin-settlement-footer {
@@ -5175,6 +5182,19 @@ button.pyramid-placeholder-mark {
   .competition-detail {
     padding: 0 18px 18px;
     overflow: auto;
+  }
+
+  .competition-detail :deep(.admin-page-header-title-content) {
+    gap: 8px;
+  }
+
+  .competition-detail :deep(.admin-page-header-title-content h1) {
+    font-size: 24px;
+  }
+
+  .competition-detail :deep(.admin-page-header-title-content .meta-line > span:not(.state-badge)) {
+    padding-right: 6px;
+    padding-left: 6px;
   }
 
   .detail-tabbar,

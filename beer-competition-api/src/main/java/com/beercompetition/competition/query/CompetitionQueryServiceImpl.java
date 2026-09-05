@@ -350,13 +350,7 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
     private String resolveOrganizerName(Long organizerId) {
         if (organizerId == null) return null;
         Organizer organizer = organizerMapper.selectById(organizerId);
-        if (organizer == null) return null;
-        // 租户赛事对外展示发布账号的联系人姓名，避免把企业内部组织名当作发起方。
-        if (OrganizerType.TENANT.name().equals(organizer.getOrganizerType())
-                && StringUtils.hasText(organizer.getContactName())) {
-            return organizer.getContactName();
-        }
-        return organizer.getName();
+        return organizer == null ? null : organizer.getName();
     }
 
     private boolean isOngoingPlatformCompetition(PortalCompetitionVO competition) {
