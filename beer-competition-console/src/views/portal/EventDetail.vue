@@ -1,861 +1,344 @@
-﻿<template>
-  <div class="event-detail-page">
-    <RouterLink class="back-link" to="/portal/events">&lt; 返回</RouterLink>
-
-    <section class="detail-hero">
-      <span v-if="competition.organizerType === 'TENANT'" class="detail-organizer">
-        第三方赛事&nbsp;&nbsp;发起方：{{ competition.organizerName || '—' }}
-      </span>
-      <div class="hero-copy">
-        <span :class="['label-chip', stageTone(competition.status)]">
-          {{ stageLabel }}
-        </span>
-        <h1>{{ competition.name || '赛事详情' }}</h1>
-        <p>{{ competition.description || competition.code || '-' }}</p>
-        <div class="hero-facts" aria-label="赛事关键时间和费用">
-          <span>报名截止 {{ formatMonthDayTime(competition.registrationDeadline) }}</span>
-          <span>{{ feeText }}</span>
-          <span v-if="tierLadder.visible">{{ tierLadder.pillText }}</span>
-          <span>送样截止 {{ formatMonthDayTime(logistics.sampleArrivalDeadline) }}</span>
-        </div>
+<template>
+  <div ref="pageRoot" class="event-detail-page" :style="{ '--header-offset': headerHeight + 'px', '--section-offset': (headerHeight + navHeight + 16) + 'px' }">
+    <RouterLink class="back-link" to="/portal/events"><el-icon><ArrowLeft /></el-icon> 返回赛事列表</RouterLink>
+    <p v-if="loading" class="page-state" role="status">正在加载赛事…</p>
+    <div v-else-if="loadError" class="page-state" role="alert">
+      <p>{{ loadError }}</p><button class="text-link" @click="loadCompetition">重新加载</button>
+    </div>
+    <template v-else>
+      <header class="detail-hero">
+        <span :class="['label-chip', stageTone(competition.status)]">{{ stageLabel }}</span>
+        <h1>{{ competition.name }}</h1>
+        <p v-if="competition.organizerName" class="organizer">主办方：{{ competition.organizerName }}</p>
         <div class="hero-actions">
-          <RouterLink
-            v-if="heroPrimaryAction"
-            class="primary-action"
-            :to="heroPrimaryAction.to"
-          >
-            {{ heroPrimaryAction.label }}
-          </RouterLink>
+          <RouterLink v-if="primaryAction" class="primary-action" :to="primaryAction.to">{{ primaryAction.label }}</RouterLink>
+          <RouterLink v-if="hasEventEntries && canSubmitEntry(competition)" class="secondary-action" :to="submitPath">继续报名</RouterLink>
+          <a v-if="competition.rulesUrl" class="secondary-action" :href="competition.rulesUrl" target="_blank" rel="noopener noreferrer">查看参赛细则</a>
         </div>
-      </div>
-    </section>
-
-    <section class="detail-section brewer-card">
-      <div class="section-heading">
-        <div>
-          <h2 class="portal-section-title">赛事简介</h2>
+      </header>
+      <dl class="date-summary">
+        <div><dt>报名截止</dt><dd>{{ formatDateTime(competition.registrationDeadline) }}</dd></div>
+        <div><dt>送样截止</dt><dd>{{ formatDateTime(logistics.sampleArrivalDeadline) }}</dd></div>
+        <div><dt>比赛日期</dt><dd>{{ competition.competitionDate || '待公布' }}</dd></div>
+      </dl>
+      <section v-if="hasEventEntries || entriesError" class="participation">
+        <h2>本场参赛</h2>
+        <div v-if="!entriesError" class="participation-counts">
+          <span v-for="item in participationCounts" :key="item.label">{{ item.label }} <b>{{ item.count }}</b> 款</span>
+          <span v-if="!participationCounts.length">已有酒款记录</span>
         </div>
-        <a
-          v-if="competition.rulesUrl"
-          class="rules-link"
-          :href="competition.rulesUrl"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          查看参赛细则
-        </a>
-      </div>
-      <article class="description-panel">
-        <p>{{ fullDescription }}</p>
-      </article>
-    </section>
-
-    <section class="content-grid">
-      <article class="brewer-card info-panel">
-        <h2 class="portal-section-title">赛事关键信息</h2>
-        <dl class="key-info-list">
-          <div :class="['category-info-item', { 'is-expanded': categoryListExpanded }]">
-            <dt>投递组别</dt>
-            <dd class="category-info-content">
-              <span>{{ categorySummaryText }}</span>
-              <button
-                v-if="showCategorySummaryExpand"
-                class="category-toggle"
-                type="button"
-                @click="categoryListExpanded = !categoryListExpanded"
-              >
-                {{ categoryListExpanded ? '收起组别' : '查看全部组别' }}
-              </button>
-              <ul v-if="categoryListExpanded" class="category-list">
-                <li v-for="name in categoryNames" :key="name">{{ name }}</li>
-              </ul>
-            </dd>
+        <span v-else role="status">参赛记录暂时无法加载</span>
+        <RouterLink class="text-link" :to="entriesPath">查看本场酒款 <el-icon><ArrowRight /></el-icon></RouterLink>
+      </section>
+      <nav ref="sectionNav" class="section-nav" aria-label="赛事详情分区">
+        <div class="nav-links">
+          <a v-for="section in navigationSections" :key="section.id" :href="'#' + section.id" :class="{ active: activeSection === section.id }" :aria-current="activeSection === section.id ? 'location' : undefined" @click="activeSection = section.id">{{ section.label }}</a>
+        </div>
+        <RouterLink v-if="primaryAction" class="primary-action compact" :to="primaryAction.to">{{ primaryAction.label }}</RouterLink>
+      </nav>
+      <section v-if="competition.description" id="event-description" class="detail-section">
+        <h2 class="portal-section-title">赛事简介</h2>
+        <p class="long-copy">{{ competition.description }}</p>
+      </section>
+      <section id="event-requirements" class="detail-section">
+        <div class="category-heading">
+          <h2 class="portal-section-title">投递组别</h2>
+          <span>{{ competition.categories?.length || 0 }} 个组别</span>
+        </div>
+          <div class="category-main">
+            <ul class="category-list">
+              <li v-for="category in visibleCategories" :key="category.id">{{ category.name }}</li>
+            </ul>
+            <span v-if="!competition.categories?.length" class="muted">暂未配置</span>
+            <button v-if="competition.categories?.length > 9" class="text-link expand-link" :aria-expanded="categoriesExpanded" @click="categoriesExpanded = !categoriesExpanded">
+              {{ categoriesExpanded ? '收起组别' : '查看全部组别（共 ' + competition.categories.length + ' 个）' }}
+            </button>
           </div>
-          <div><dt>比赛日期</dt><dd>{{ formatDate(competition.competitionDate) }}</dd></div>
-          <div><dt>报名截止</dt><dd>{{ formatDateTime(competition.registrationDeadline) }}</dd></div>
-          <div><dt>当前应付</dt><dd>{{ feeText }}</dd></div>
-          <div><dt>送样截止</dt><dd>{{ formatDateTime(logistics.sampleArrivalDeadline) }}</dd></div>
-          <div v-if="earlyBirdDeadlineText"><dt>早鸟截止</dt><dd>{{ earlyBirdDeadlineText }}</dd></div>
-          <div v-if="showNormalFee"><dt>普通报名费</dt><dd>¥{{ competition.entryFee }} / 款</dd></div>
-          <div v-if="tierLadder.visible" class="tier-info-item">
-            <dt>批量优惠</dt>
-            <dd class="tier-ladder">
-              <span v-for="seg in tierLadder.segments" :key="seg.key" :class="{ base: seg.isBase }">
-                <b>{{ seg.label }}</b>
-                <em v-if="seg.rateText">{{ seg.rateText }}</em>
-                <span class="tier-price">
-                  <strong>{{ formatMoney(seg.amount) }} / 款</strong>
-                  <small v-if="!seg.isBase">省 {{ formatMoney(seg.saved) }} / 款</small>
-                </span>
-              </span>
-            </dd>
-          </div>
-        </dl>
-      </article>
-
-      <article class="brewer-card info-panel">
-        <h2 class="portal-section-title">送样与标签</h2>
-        <dl>
-          <div><dt>送样方式</dt><dd>{{ deliveryMethodText(logistics.deliveryMethod) }}</dd></div>
+        <div class="requirements-meta">
+        <div class="field-row">
+          <h3>基础风格</h3>
+          <div class="inline-content"><span>{{ competition.styles?.length || 0 }} 种</span><button v-if="competition.styles?.length" class="text-link" @click="stylesOpen = true">查看基础风格 <el-icon><ArrowRight /></el-icon></button></div>
+        </div>
+        <div class="field-row">
+          <h3>报名资料</h3>
+          <div><p class="field-copy">酒款名称、投递组别、基础风格、ABV</p><p v-if="requiredFields.length" class="field-copy extra-fields">其他必填：{{ requiredFields.map(field => field.fieldLabel).join('、') }}</p></div>
+        </div>
+        </div>
+      </section>
+      <section id="event-fees" class="detail-section">
+        <h2 class="portal-section-title">报名费用</h2>
+        <div class="fee-summary">
+          <strong>{{ feeText }}</strong>
+          <span v-if="earlyBirdActive">早鸟截止 {{ formatDateTime(competition.earlyBirdDeadline) }}</span>
+          <span v-if="earlyBirdActive">普通报名费 {{ formatMoney(competition.entryFee) }} / 款</span>
+        </div>
+        <table v-if="tierRows.length" class="fee-table">
+          <caption class="sr-only">阶梯报名价格</caption>
+          <colgroup><col class="quantity-column" /><col class="discount-column" /><col class="price-column" /></colgroup>
+          <thead><tr><th scope="col">累计酒款序号</th><th scope="col">折扣</th><th scope="col">单价</th></tr></thead>
+          <tbody><tr v-for="row in tierRows" :key="row.key"><td>{{ row.label }}</td><td>{{ row.rateText || '原价' }}</td><td><strong>{{ tierMoneyFormatter.format(row.amount) }}</strong><span class="price-unit"> / 款</span></td></tr></tbody>
+        </table>
+      </section>
+      <section id="event-delivery" class="detail-section">
+        <h2 class="portal-section-title">送样要求</h2>
+        <dl class="delivery-summary">
+          <div><dt>送样方式</dt><dd>{{ deliveryMethodText }}</dd></div>
           <div><dt>送达时间</dt><dd>{{ arrivalWindowText }}</dd></div>
-          <div><dt>样品要求</dt><dd>{{ logistics.sampleQuantityNote || '以组委会后续通知为准' }}</dd></div>
-          <div v-if="logistics.deliveryNote"><dt>包装说明</dt><dd>{{ logistics.deliveryNote }}</dd></div>
         </dl>
-      </article>
-    </section>
-
-    <section class="detail-section brewer-card">
-      <div class="section-heading">
-        <div>
-          <h2 class="portal-section-title">参赛流程</h2>
-          <p>从报名资料到结果发布，厂牌端按这些节点推进</p>
-        </div>
-      </div>
-      <div class="process-strip">
-        <span v-for="(step, index) in processSteps" :key="step.title">
-          <small>{{ String(index + 1).padStart(2, '0') }}</small>
-          <b>{{ step.title }}</b>
-          <em>{{ step.text }}</em>
-        </span>
-      </div>
-    </section>
-
-    <section class="brewer-card participation-brief">
-      <template v-if="loggedIn && hasEventEntries">
-        <div>
-          <span class="label-chip tone-blue">你已参加本赛事</span>
-          <h2>本场参赛状态</h2>
-          <p>具体酒款、标签和送样处理请进入“我的参赛”</p>
-        </div>
-        <div class="brief-stats">
-          <span><small>已提交</small><b>{{ eventSummary.submitted }}</b></span>
-          <span><small>待支付</small><b>{{ eventSummary.pendingPayment }}</b></span>
-          <span><small>已入库</small><b>{{ eventSummary.stored }}</b></span>
-          <span><small>结果可查</small><b>{{ eventSummary.result }}</b></span>
-        </div>
-        <div class="brief-actions">
-          <RouterLink to="/portal/my">进入我的参赛</RouterLink>
-          <RouterLink v-if="canSubmitEntry(competition)" :to="`/portal/submit?competitionId=${competition.id}`">再报一款酒</RouterLink>
-          <RouterLink v-if="eventSummary.result > 0" :to="competitionResultPath(competition.id)">查看我的结果</RouterLink>
-        </div>
-      </template>
-
-      <template v-else-if="loggedIn">
-        <div>
-          <span class="label-chip tone-amber">尚未参加本赛事</span>
-          <h2>确认规则后报名参赛</h2>
-          <p>先核对组别、基础风格、费用和送样要求</p>
-        </div>
-        <div class="brief-actions">
-          <RouterLink v-if="canSubmitEntry(competition)" :to="`/portal/submit?competitionId=${competition.id}`">报名参赛</RouterLink>
-          <RouterLink to="/portal/my">查看我的参赛</RouterLink>
-        </div>
-      </template>
-
-      <template v-else>
-        <div>
-          <span class="label-chip tone-amber">公开赛事详情</span>
-          <h2>登录后报名并追踪参赛酒款</h2>
-          <p>登录前请先核对赛事规则、费用和送样要求</p>
-        </div>
-        <div class="brief-actions">
-          <RouterLink to="/portal/login">登录报名</RouterLink>
-        </div>
-      </template>
-    </section>
+        <div v-if="logistics.sampleQuantityNote" class="field-row"><h3>样品要求</h3><p class="long-copy">{{ logistics.sampleQuantityNote }}</p></div>
+        <div v-if="logistics.deliveryAddress" class="field-row"><h3>送样地址</h3><p class="long-copy">{{ logistics.deliveryAddress }}</p></div>
+        <div v-if="logistics.deliveryRecipient || logistics.deliveryPhone" class="field-row"><h3>收件信息</h3><p class="long-copy">{{ [logistics.deliveryRecipient, logistics.deliveryPhone].filter(Boolean).join(' · ') }}</p></div>
+        <div v-if="logistics.deliveryNote" class="field-row"><h3>包装说明</h3><p class="long-copy">{{ logistics.deliveryNote }}</p></div>
+      </section>
+      <section class="detail-section process-section">
+        <h2 class="portal-section-title">参赛流程</h2>
+        <ol class="process-list"><li v-for="(step, index) in processSteps" :key="step"><span>{{ String(index + 1).padStart(2, '0') }}</span>{{ step }}</li></ol>
+      </section>
+      <el-drawer v-model="stylesOpen" title="基础风格" size="min(560px, 100vw)">
+        <el-input v-model="styleSearch" placeholder="搜索风格名称或代码" clearable :prefix-icon="Search" aria-label="搜索基础风格" />
+        <ul class="style-list"><li v-for="style in filteredStyles" :key="style.id || style.name"><h3>{{ [style.styleCode, style.name].filter(Boolean).join(' ') }}</h3><p v-if="style.description">{{ style.description }}</p></li></ul>
+        <p v-if="!filteredStyles.length" role="status">未找到匹配的风格</p>
+      </el-drawer>
+    </template>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onBeforeUnmount, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
+import { ArrowLeft, ArrowRight, Search } from '@element-plus/icons-vue'
 import { isLoggedIn } from '@/utils/auth'
 import { fetchPortalCompetitionDetail, fetchPortalEntries } from '@/api/portal'
 import {
-  buildTierLadder,
-  canSubmitEntry,
-  competitionResultPath,
-  entrySummaryForCompetition,
-  formatCompetitionFee,
-  formatMoney,
-  isCompetitionResultPublished,
-  isEarlyBirdActive,
+  buildTierLadder, canSubmitEntry, competitionResultPath, entrySummaryForCompetition,
+  formatCompetitionFee, formatMoney, isCompetitionResultPublished, isEarlyBirdActive,
+  isEntryPaymentPending, normalizeTiers,
 } from './portalViewModels'
 
 const route = useRoute()
-const loggedIn = computed(() => isLoggedIn('portal'))
-const competition = ref({ categories: [], styles: [], entryFields: [] })
+const competition = ref({})
 const entries = ref([])
-const categoryListExpanded = ref(false)
-const categorySummaryLimit = 4
-const categoryPreviewLimit = 3
-
+const loading = ref(true)
+const loadError = ref('')
+const entriesError = ref(false)
+const categoriesExpanded = ref(false)
+const stylesOpen = ref(false)
+const styleSearch = ref('')
+const pageRoot = ref(null)
+const sectionNav = ref(null)
+const headerHeight = ref(0)
+const navHeight = ref(64)
+const activeSection = ref('event-description')
+const navigationSections = computed(() => [
+  ...(competition.value.description ? [{ id: 'event-description', label: '赛事简介' }] : []),
+  { id: 'event-requirements', label: '投递组别' },
+  { id: 'event-fees', label: '报名费用' },
+  { id: 'event-delivery', label: '送样要求' },
+])
+let layoutObserver
+let scrollFrame = 0
+function updateActiveSection() {
+  scrollFrame = 0
+  const threshold = headerHeight.value + navHeight.value + 24
+  let current = navigationSections.value[0]?.id
+  for (const section of navigationSections.value) {
+    const element = pageRoot.value?.querySelector('#' + section.id)
+    if (element && element.getBoundingClientRect().top <= threshold) current = section.id
+  }
+  activeSection.value = current
+}
+function handleScroll() {
+  if (!scrollFrame) scrollFrame = requestAnimationFrame(updateActiveSection)
+}
+async function observeLayout() {
+  await nextTick()
+  layoutObserver?.disconnect()
+  const header = pageRoot.value?.closest('.portal-layout')?.querySelector('.portal-header') || document.querySelector('.portal-header')
+  layoutObserver = new ResizeObserver(() => {
+    headerHeight.value = header?.getBoundingClientRect().height || 0
+    navHeight.value = sectionNav.value?.getBoundingClientRect().height || 64
+    handleScroll()
+  })
+  for (const element of [header, sectionNav.value, pageRoot.value]) {
+    if (element) layoutObserver.observe(element)
+  }
+}
+const loggedIn = computed(() => isLoggedIn('portal'))
 const logistics = computed(() => competition.value.logistics || {})
-const eventEntries = computed(() => entries.value.filter((entry) => entry.competitionId === competition.value.id))
+const eventEntries = computed(() => entries.value.filter(entry => entry.competitionId === competition.value.id))
 const hasEventEntries = computed(() => eventEntries.value.length > 0)
-const eventSummary = computed(() => entrySummaryForCompetition(competition.value.id, entries.value))
+const entriesPath = computed(() => '/portal/entries?competitionId=' + competition.value.id)
+const submitPath = computed(() => '/portal/submit?competitionId=' + competition.value.id)
+const stageLabel = computed(() => isCompetitionResultPublished(competition.value) ? '结果已发布' : competition.value.currentStageLabel)
+const visibleCategories = computed(() => categoriesExpanded.value ? competition.value.categories : competition.value.categories?.slice(0, 9))
+const requiredFields = computed(() => (competition.value.entryFields || []).filter(field => field.required))
+const filteredStyles = computed(() => {
+  const query = styleSearch.value.trim().toLowerCase()
+  return (competition.value.styles || []).filter(style => [style.name, style.styleCode].filter(Boolean).join(' ').toLowerCase().includes(query))
+})
 const feeText = computed(() => formatCompetitionFee(competition.value))
-const tierLadder = computed(() => buildTierLadder(competition.value))
-const earlyBirdDeadlineText = computed(() => (isEarlyBirdActive(competition.value) ? formatDateTime(competition.value.earlyBirdDeadline) : ''))
-const showNormalFee = computed(() => isEarlyBirdActive(competition.value) && competition.value.entryFee !== undefined && competition.value.entryFee !== null)
-const stageLabel = computed(() => (isCompetitionResultPublished(competition.value) ? '结果已发布' : competition.value.currentStageLabel) || '赛事详情')
-const categoryNames = computed(() => competition.value.categories?.map((item) => item.name).filter(Boolean) || [])
-const showCategorySummaryExpand = computed(() => categoryNames.value.length > categorySummaryLimit)
-const categorySummaryText = computed(() => {
-  const names = categoryNames.value
-  if (!names.length) return '暂未配置'
-  if (names.length <= categorySummaryLimit) return names.join('、')
-  return `${names.slice(0, categoryPreviewLimit).join('、')} 等 ${names.length} 个组别`
-})
-const fullDescription = computed(() => {
-  return competition.value.description || '组委会暂未填写赛事简介，请以参赛细则和后续通知为准'
-})
-const heroPrimaryAction = computed(() => {
-  if (isCompetitionResultPublished(competition.value)) {
-    return {
-      label: loggedIn.value ? '查看我的结果' : '登录查看结果',
-      to: loggedIn.value ? competitionResultPath(competition.value.id) : '/portal/login',
+const tierMoneyFormatter = new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY', minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const earlyBirdActive = computed(() => isEarlyBirdActive(competition.value))
+const tierRows = computed(() => {
+  const tiers = normalizeTiers(competition.value)
+  const ladder = buildTierLadder(competition.value)
+  return ladder.segments.map(segment => {
+    if (segment.isBase) {
+      const end = Number(tiers[0].startQuantity) - 1
+      return { ...segment, label: end === 1 ? '第 1 款' : '第 1–' + end + ' 款' }
     }
-  }
-  if (canSubmitEntry(competition.value)) {
-    return {
-      label: loggedIn.value ? '报名参赛' : '登录后报名',
-      to: loggedIn.value ? `/portal/submit?competitionId=${competition.value.id}` : '/portal/login',
-    }
-  }
+    const index = tiers.findIndex(tier => 'tier-' + tier.startQuantity === segment.key)
+    const start = Number(tiers[index].startQuantity)
+    const end = tiers[index + 1] ? Number(tiers[index + 1].startQuantity) - 1 : null
+    return { ...segment, label: end === null ? '第 ' + start + ' 款起' : end === start ? '第 ' + start + ' 款' : '第 ' + start + '–' + end + ' 款' }
+  })
+})
+const summary = computed(() => entrySummaryForCompetition(competition.value.id, entries.value))
+const participationCounts = computed(() => {
+  const pending = eventEntries.value.filter(isEntryPaymentPending)
+  return [
+    { label: '待支付', count: pending.filter(entry => entry.paymentStatus !== 'PENDING_CONFIRM').length },
+    { label: '转账待确认', count: pending.filter(entry => entry.paymentStatus === 'PENDING_CONFIRM').length },
+    { label: '待办理送样', count: summary.value.deliveryActionPending },
+    { label: '待确认入库', count: summary.value.deliverySubmitted },
+    { label: '已入库', count: summary.value.stored },
+    { label: '结果可查', count: summary.value.result },
+  ].filter(item => item.count > 0)
+})
+const primaryAction = computed(() => {
+  if (summary.value.result > 0) return { label: '查看我的结果', to: competitionResultPath(competition.value.id) }
+  if (hasEventEntries.value) return { label: '查看本场酒款', to: entriesPath.value }
+  if (isCompetitionResultPublished(competition.value)) return { label: '查看赛事结果', to: '/portal/competition-results/' + competition.value.id }
+  if (canSubmitEntry(competition.value)) return { label: loggedIn.value ? '报名参赛' : '登录后报名', to: loggedIn.value ? submitPath.value : '/portal/login' }
   return null
 })
 const arrivalWindowText = computed(() => {
-  const start = formatDateTime(logistics.value.sampleArrivalStart)
-  const deadline = formatDateTime(logistics.value.sampleArrivalDeadline)
-  if (start !== '-' && deadline !== '-') return `${start} 至 ${deadline}`
-  if (deadline !== '-') return `${deadline} 前送达`
-  return '以组委会通知为准'
+  const { sampleArrivalStart: start, sampleArrivalDeadline: end } = logistics.value
+  if (start && end) return formatDateTime(start) + ' 至 ' + formatDateTime(end)
+  if (end) return formatDateTime(end) + ' 前送达'
+  if (start) return formatDateTime(start) + ' 起'
+  return '待公布'
 })
-const processSteps = computed(() => [
-  { title: '提交资料', text: '填写酒名、组别、基础风格、ABV 和补充字段' },
-  { title: '支付报名费', text: '支付成功后报名完成，并开放标签相关操作' },
-  { title: '下载标签', text: '将现场标签贴在酒瓶或外箱，便于组委会核对' },
-  { title: '送样入库', text: '按送样时间寄送或现场交样，并跟进入库状态' },
-  {
-    title: '查看结果',
-    text: competition.value.competitionType === 'FEEDBACK_ONLY'
-      ? '结果发布后查看评分、评语和诊断'
-      : '结果发布后查看评分、评语、奖项和证书',
-  },
-])
-
-onMounted(async () => {
-  competition.value = await fetchPortalCompetitionDetail(route.params.id)
-  if (loggedIn.value) {
-    entries.value = await fetchPortalEntries()
+const deliveryMethodText = computed(() => logistics.value.deliveryMethod === 'EXPRESS' ? '快递寄送' : logistics.value.deliveryMethod === 'ONSITE' ? '现场送样' : '快递寄送 / 现场送样')
+const processSteps = ['提交资料', '支付报名费', '下载标签', '送样入库', '查看结果']
+async function loadCompetition() {
+  loading.value = true
+  loadError.value = ''
+  entriesError.value = false
+  try {
+    competition.value = await fetchPortalCompetitionDetail(route.params.id)
+    if (loggedIn.value) {
+      try { entries.value = await fetchPortalEntries() } catch { entriesError.value = true }
+    }
+  } catch {
+    loadError.value = '赛事加载失败，请稍后重试'
+  } finally {
+    loading.value = false
+    observeLayout()
   }
+}
+onMounted(() => {
+  loadCompetition()
+  window.addEventListener('scroll', handleScroll, { passive: true })
 })
-
-function stageTone(status) {
-  if (status === 'PUBLISHED') return 'tone-gold'
-  if (status === 'REGISTRATION_OPEN') return 'tone-green'
-  if (status === 'JUDGING') return 'tone-blue'
-  return 'tone-amber'
-}
-
-function formatDate(value) {
-  return value || '-'
-}
-
-function formatDateTime(value) {
-  return value ? String(value).replace('T', ' ').slice(0, 16) : '-'
-}
-
-function formatMonthDayTime(value) {
-  if (!value) return '-'
-  const normalized = String(value).replace('T', ' ')
-  const match = normalized.match(/^\d{4}-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/)
-  if (!match) return formatDateTime(value)
-  const [, month, day, hour, minute] = match
-  return `${Number(month)}月${Number(day)}日 ${hour}:${minute}`
-}
-
-function deliveryMethodText(value) {
-  if (value === 'EXPRESS') return '快递寄送'
-  if (value === 'ONSITE') return '现场送样'
-  return '快递寄送 / 现场送样'
-}
+onBeforeUnmount(() => {
+  layoutObserver?.disconnect()
+  window.removeEventListener('scroll', handleScroll)
+  cancelAnimationFrame(scrollFrame)
+})
+function formatDateTime(value) { return value ? String(value).replace('T', ' ').slice(0, 16) : '待公布' }
+function stageTone(status) { return ({ PUBLISHED: 'tone-gold', REGISTRATION_OPEN: 'tone-green', JUDGING: 'tone-blue' })[status] || 'tone-amber' }
 </script>
 
 <style scoped>
-.event-detail-page {
-  display: grid;
-  gap: 14px;
-}
-
-.back-link {
-  justify-self: start;
-  color: #7d705f;
-  font-weight: 800;
-  text-decoration: none;
-}
-
-.back-link:hover {
-  color: #2b1d10;
-}
-
-.detail-hero {
-  position: relative;
-  display: grid;
-  min-height: 360px;
-  padding: 30px;
-  color: #fff6df;
-  background:
-    linear-gradient(135deg, rgba(31, 21, 14, 0.94), rgba(86, 48, 18, 0.82)),
-    url("https://images.unsplash.com/photo-1518099074172-2e47ee6cfdc0?auto=format&fit=crop&w=1200&q=72");
-  background-position: center;
-  background-size: cover;
-  border-radius: 8px;
-}
-
-.detail-organizer {
-  position: absolute;
-  top: 26px;
-  right: 30px;
-  max-width: min(42%, 360px);
-  padding: 8px 12px;
-  color: #fff8e8;
-  background: rgba(43, 29, 16, 0.58);
-  border: 1px solid rgba(255, 250, 240, 0.26);
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 800;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.hero-copy {
-  align-self: end;
-}
-
-.detail-hero h1 {
-  max-width: 880px;
-  margin: 18px 0 10px;
-  overflow-wrap: anywhere;
-  font-size: 48px;
-  line-height: 1.05;
-}
-
-.detail-hero p {
-  display: -webkit-box;
-  max-width: 760px;
-  margin: 0;
-  overflow: hidden;
-  color: #ead9b7;
-  font-size: 16px;
-  line-height: 1.7;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
-}
-
-.hero-facts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 24px;
-}
-
-.hero-facts span {
-  min-height: 34px;
-  padding: 7px 12px;
-  color: #fff8e8;
-  background: rgba(255, 250, 240, 0.12);
-  border: 1px solid rgba(255, 250, 240, 0.22);
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 800;
-  line-height: 18px;
-  white-space: nowrap;
-}
-
-.hero-actions,
-.brief-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 24px;
-}
-
-.primary-action,
-.brief-actions a,
-.card-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 40px;
-  padding: 0 15px;
-  color: #2b1d10;
-  background: #e1a23d;
-  border-radius: 8px;
-  font-weight: 800;
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.participation-brief {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 18px;
-  align-items: center;
-  padding: 22px;
-}
-
-.participation-brief h2 {
-  margin: 12px 0 6px;
-  font-size: 26px;
-  line-height: 1.18;
-}
-
-.participation-brief p,
-.section-heading p,
-.requirement-block p,
-dt,
-.process-strip em,
-.requirement-list small {
-  color: #746a5f;
-  line-height: 1.65;
-}
-
-.brief-stats {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(82px, 1fr));
-  gap: 8px;
-}
-
-.brief-stats span {
-  min-height: 72px;
-  padding: 11px;
-  background: #fff7e6;
-  border: 1px solid rgba(87, 58, 26, 0.1);
-  border-radius: 8px;
-}
-
-.brief-stats small,
-.brief-stats b {
-  display: block;
-}
-
-.brief-stats small {
-  color: #746a5f;
-}
-
-.brief-stats b {
-  margin-top: 7px;
-  font-size: 25px;
-  line-height: 1;
-}
-
-.brief-actions {
-  grid-column: 1 / -1;
-  margin-top: 0;
-}
-
-.brief-actions a + a {
-  color: #6b4710;
-  background: #fff7e6;
-  border: 1px solid rgba(87, 58, 26, 0.14);
-}
-
-.detail-section,
-.info-panel {
-  padding: 24px;
-}
-
-.section-heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
-  margin-bottom: 18px;
-}
-
-.section-heading .portal-section-title {
-  margin: 0 0 8px;
-}
-
-.section-heading p {
-  margin: 0;
-}
-
-.rules-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  min-height: 38px;
-  padding: 0 13px;
-  color: #6b4710;
-  border: 1px solid rgba(87, 58, 26, 0.16);
-  border-radius: 8px;
-  background: #fff7e6;
-  font-size: 14px;
-  font-weight: 800;
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.description-panel {
-  max-width: 920px;
-  padding: 22px 24px;
-  background:
-    linear-gradient(180deg, rgba(255, 253, 247, 0.96), rgba(255, 247, 230, 0.92));
-  border: 1px solid rgba(87, 58, 26, 0.1);
-  border-radius: 8px;
-}
-
-.description-panel p {
-  max-width: 820px;
-  margin: 0;
-  color: #4f463b;
-  font-size: 16px;
-  line-height: 1.9;
-  text-align: justify;
-}
-
-.requirement-grid {
-  display: grid;
-  grid-template-columns: 0.9fr 1.6fr;
-  gap: 14px;
-}
-
-.requirement-block {
-  display: grid;
-  align-content: start;
-  gap: 12px;
-  min-height: 180px;
-  padding: 18px;
-  background: #fff7e6;
-  border: 1px solid rgba(87, 58, 26, 0.1);
-  border-radius: 8px;
-}
-
-.requirement-block > span {
-  color: #746a5f;
-  font-size: 13px;
-}
-
-.requirement-block strong {
-  overflow-wrap: anywhere;
-  color: #2b1d10;
-  font-size: 23px;
-  line-height: 1.25;
-}
-
-.entry-requirements {
-  gap: 14px;
-}
-
-.requirement-list {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.requirement-list span {
-  display: grid;
-  gap: 4px;
-  min-height: 82px;
-  padding: 12px;
-  background: #fffdf7;
-  border: 1px solid rgba(87, 58, 26, 0.08);
-  border-radius: 8px;
-}
-
-.requirement-list b {
-  color: #2b1d10;
-}
-
-.chip-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.chip-list em {
-  padding: 6px 9px;
-  color: #6b4710;
-  background: #fffdf7;
-  border: 1px solid rgba(87, 58, 26, 0.1);
-  border-radius: 8px;
-  font-style: normal;
-  font-weight: 800;
-}
-
-.style-details {
-  margin-top: 2px;
-}
-
-.style-details summary {
-  cursor: pointer;
-  color: #8b5c19;
-  font-weight: 900;
-}
-
-.style-groups {
-  display: grid;
-  gap: 10px;
-  max-height: 360px;
-  margin-top: 12px;
-  overflow: auto;
-}
-
-.style-group {
-  padding: 12px;
-  background: #fffdf7;
-  border: 1px solid rgba(87, 58, 26, 0.08);
-  border-radius: 8px;
-}
-
-.style-group h3 {
-  margin: 0 0 6px;
-  font-size: 15px;
-}
-
-.style-group p,
-.requirement-block p {
-  margin: 0;
-}
-
-.content-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
-  align-items: start;
-}
-
-dl {
-  display: grid;
-  gap: 12px;
-  margin: 0;
-}
-
-.key-info-list {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px 16px;
-}
-
-dl div {
-  padding-bottom: 12px;
-  border-bottom: 1px dashed rgba(87, 58, 26, 0.16);
-}
-
-dt,
-dd {
-  margin: 0;
-}
-
-dd {
-  margin-top: 6px;
-  overflow-wrap: anywhere;
-  font-weight: 800;
-  line-height: 1.55;
-}
-
-.category-info-item.is-expanded {
-  grid-column: 1 / -1;
-}
-
-.category-info-content {
-  display: grid;
-  gap: 8px;
-}
-
-.category-toggle {
-  justify-self: start;
-  padding: 0;
-  color: #8b5c19;
-  background: transparent;
-  border: 0;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 900;
-  line-height: 1.4;
-  cursor: pointer;
-}
-
-.category-toggle:hover,
-.category-toggle:focus-visible {
-  color: #2b1d10;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.category-list {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin: 4px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.category-list li {
-  padding: 10px 12px;
-  background: #fff7e6;
-  border: 1px solid rgba(87, 58, 26, 0.1);
-  border-radius: 8px;
-  font-size: 14px;
-  line-height: 1.45;
-}
-
-.tier-info-item {
-  grid-column: 1 / -1;
-}
-
-.tier-ladder {
-  display: grid;
-  gap: 8px;
-  margin: 2px 0 0;
-}
-
-.tier-ladder > span {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 11px;
-  background: #fff7e6;
-  border: 1px solid rgba(87, 58, 26, 0.1);
-  border-radius: 8px;
-  font-size: 13px;
-}
-
-.tier-ladder > span.base {
-  color: #8a765f;
-}
-
-.tier-ladder b {
-  color: #2b1d10;
-  font-weight: 800;
-}
-
-.tier-ladder em {
-  color: #8b5c19;
-  font-style: normal;
-  font-weight: 900;
-  font-variant-numeric: tabular-nums;
-}
-
-.tier-ladder .tier-price {
-  display: grid;
-  gap: 2px;
-  margin-left: auto;
-  text-align: right;
-}
-
-.tier-ladder .tier-price strong {
-  color: #2b1d10;
-  font-weight: 900;
-  font-variant-numeric: tabular-nums;
-}
-
-.tier-ladder .tier-price small {
-  color: #3d7750;
-  font-size: 12px;
-}
-
-.card-link {
-  margin-top: 16px;
-}
-
-.process-strip {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.process-strip span {
-  display: grid;
-  align-content: start;
-  gap: 8px;
-  min-height: 132px;
-  padding: 16px;
-  background: #fff7e6;
-  border: 1px solid rgba(87, 58, 26, 0.1);
-  border-radius: 8px;
-}
-
-.process-strip small {
-  color: #a76b18;
-  font-weight: 900;
-}
-
-.process-strip b {
-  color: #2b1d10;
-  font-size: 18px;
-}
-
-.process-strip em {
-  font-style: normal;
-}
-
-@media (max-width: 1120px) {
-  .participation-brief,
-  .requirement-grid,
-  .content-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .brief-stats,
-  .requirement-list,
-  .process-strip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 680px) {
-  .detail-hero {
-    min-height: auto;
-    padding: 24px;
-  }
-
-  .detail-hero h1 {
-    font-size: 34px;
-    overflow-wrap: anywhere;
-  }
-
-  .hero-facts {
-    display: grid;
-    grid-template-columns: 1fr;
-  }
-
-  .hero-facts span {
-    min-width: 0;
-    white-space: normal;
-    overflow-wrap: anywhere;
-  }
-
-  .section-heading {
-    display: grid;
-  }
-
-  .rules-link {
-    justify-self: start;
-    max-width: 100%;
-    white-space: normal;
-    text-align: center;
-  }
-
-  .brief-actions a,
-  .card-link {
-    max-width: 100%;
-    white-space: normal;
-    text-align: center;
-  }
-
-  .brief-stats,
-  .key-info-list,
-  .category-list,
-  .requirement-list,
-  .process-strip {
-    grid-template-columns: 1fr;
-  }
+:global(body:has(.event-detail-page)),
+:global(body .portal-shell:has(.event-detail-page)) { overflow-x: clip; }
+.event-detail-page { min-width: 0; }
+.back-link { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 18px; color: #746a5f; text-decoration: none; }
+.detail-hero { padding: 28px 30px; min-height: 250px; box-sizing: border-box; color: #fff6df; background: linear-gradient(90deg, rgba(31,21,14,.92), rgba(60,40,20,.65)), url("https://images.unsplash.com/photo-1518099074172-2e47ee6cfdc0?auto=format&fit=crop&w=1200&q=72") center / cover; }
+.detail-hero h1 { margin: 18px 0 12px; font-size: 36px; line-height: 1.3; overflow-wrap: anywhere; }
+.organizer { margin: 0; color: #ead9b7; overflow-wrap: anywhere; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
+.primary-action, .secondary-action { display: inline-flex; justify-content: center; align-items: center; min-height: 40px; padding: 8px 16px; box-sizing: border-box; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 700; }
+.primary-action { background: #e1a23d; color: #2b1d10; }
+.primary-action:hover { background: #efb453; }
+.secondary-action { color: #fff6df; border: 1px solid #a89b86; }
+.date-summary { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); margin: 0; padding: 22px 30px; gap: 24px; background: rgba(255,250,240,.9); border-bottom: 1px solid #ded6c7; }
+dt { color: #746a5f; font-size: 14px; }
+dd { margin: 7px 0 0; font-weight: 600; overflow-wrap: anywhere; line-height: 1.6; }
+.participation { display: flex; align-items: center; flex-wrap: wrap; gap: 16px 24px; padding: 20px 30px; background: #f4f7ef; border-bottom: 1px solid #ded6c7; }
+.participation h2 { font-size: 16px; margin: 0; }
+.participation-counts { display: flex; flex-wrap: wrap; gap: 10px 20px; flex: 1; font-size: 14px; }
+.participation-counts b { color: #1f5a34; }
+.section-nav { position: sticky; top: var(--header-offset); z-index: 7; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 0 30px; min-height: 66px; background: #fffaf0; border-bottom: 1px solid #ded6c7; box-shadow: 0 3px 6px rgba(67,43,17,.04); }
+.nav-links { display: flex; align-self: stretch; gap: 32px; }
+.nav-links a { display: flex; align-items: center; justify-content: center; min-height: 66px; color: #746a5f; text-decoration: none; font-size: 15px; font-weight: 600; padding: 0 4px; border-bottom: 3px solid transparent; box-sizing: border-box; }
+.nav-links a:hover { color: #8f5100; }
+.nav-links a.active { color: #7c4e0f; border-bottom-color: #ce912f; }
+.detail-section { padding: 28px 30px; background: rgba(255,250,240,.9); border-bottom: 1px solid #ded6c7; scroll-margin-top: var(--section-offset); }
+.long-copy { max-width: 60em; margin: 0; font-size: 15px; line-height: 1.85; white-space: pre-wrap; overflow-wrap: anywhere; color: #4f463b; }
+.field-row { display: grid; grid-template-columns: 112px minmax(0,1fr); gap: 20px; margin-top: 20px; }
+.field-row h3 { margin: 0; font-size: 14px; font-weight: 400; line-height: 1.8; color: #746a5f; }
+.category-heading { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
+.category-heading .portal-section-title { margin: 0; }
+.category-heading > span { font-size: 13px; color: #746a5f; }
+.category-list { display: flex; flex-wrap: wrap; gap: 10px; list-style: none; margin: 0; padding: 0; }
+.category-list li { display: flex; align-items: center; max-width: 100%; min-height: 36px; box-sizing: border-box; padding: 7px 16px; border: 1px solid #dfd3b9; border-radius: 4px; background: #fffdf7; font-size: 15px; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
+.requirements-meta { margin-top: 24px; padding-top: 18px; border-top: 1px solid #e8e0d1; }
+.requirements-meta .field-row { margin-top: 12px; grid-template-columns: 88px minmax(0,1fr); gap: 16px; }
+.requirements-meta .field-row:first-child { margin-top: 0; }
+.requirements-meta .field-copy, .requirements-meta .inline-content { font-size: 14px; color: #625646; }
+.text-link { display: inline-flex; align-items: center; gap: 6px; border: 0; padding: 0; background: none; color: #875716; font: inherit; font-size: 14px; cursor: pointer; text-decoration: none; line-height: 1.8; }
+.text-link:hover { text-decoration: underline; }
+.expand-link { margin-top: 14px; }
+.inline-content { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+.field-copy { margin: 0; line-height: 1.8; overflow-wrap: anywhere; }
+.extra-fields { margin-top: 8px; font-size: 14px; color: #746a5f; }
+.fee-summary { display: flex; align-items: baseline; flex-wrap: wrap; gap: 12px 24px; }
+.fee-summary strong { font-size: 24px; color: #795015; }
+.fee-summary span, .rule-copy, .muted { font-size: 14px; color: #746a5f; }
+.fee-table { width: 100%; max-width: 640px; border-collapse: collapse; table-layout: fixed; margin-top: 20px; font-size: 15px; }
+.quantity-column { width: 42%; }
+.discount-column { width: 22%; }
+.price-column { width: 36%; }
+.fee-table th, .fee-table td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #e6dece; overflow-wrap: anywhere; }
+.fee-table th { font-size: 14px; background: #f7f0df; font-weight: 500; color: #746a5f; }
+.fee-table td:last-child, .fee-table th:last-child { text-align: right; }
+.fee-table td:last-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fee-table td:first-child { font-weight: 500; }
+.fee-table td:nth-child(2) { color: #746a5f; }
+.price-unit { font-size: 13px; color: #746a5f; font-weight: 400; }
+.rule-copy { margin: 14px 0 0; line-height: 1.8; }
+.delivery-summary { display: grid; grid-template-columns: minmax(160px,1fr) minmax(0,2fr); margin: 0 0 24px; gap: 24px; }
+.process-list { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 18px; list-style: none; padding: 0; margin: 24px 0 0; }
+.process-list li { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 15px; border-top: 2px solid #dac393; padding-top: 14px; }
+.process-list span { color: #967024; font-size: 13px; }
+.style-list { list-style: none; padding: 0; margin: 20px 0; }
+.style-list li { padding: 16px 0; border-bottom: 1px solid #e6dece; }
+.style-list h3 { font-size: 16px; margin: 0; overflow-wrap: anywhere; }
+.style-list p { font-size: 14px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; color: #746a5f; margin: 8px 0 0; }
+.page-state { padding: 40px 0; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+a:focus-visible, button:focus-visible { outline: 2px solid #875716; outline-offset: 4px; }
+@media (max-width: 720px) {
+  .detail-hero { padding: 24px 20px; }
+  .detail-hero h1 { font-size: 28px; }
+  .date-summary { grid-template-columns: 1fr; gap: 14px; padding: 20px; }
+  .date-summary div { display: flex; justify-content: space-between; gap: 12px; }
+  .date-summary dd { margin: 0; text-align: right; }
+  .date-summary dt { flex-shrink: 0; }
+  .detail-section, .participation { padding: 24px 20px; }
+  .section-nav { padding: 0 12px 10px; flex-wrap: wrap; gap: 0; }
+  .nav-links { gap: 16px; width: 100%; }
+  .nav-links a { min-height: 48px; font-size: 13px; padding: 0; }
+  .compact { min-height: 34px; padding: 6px 10px; }
+  .field-row { grid-template-columns: 1fr; gap: 8px; }
+  .category-list li { font-size: 14px; padding: 7px 12px; }
+  .requirements-meta .field-row { grid-template-columns: 1fr; gap: 4px; }
+  .delivery-summary { grid-template-columns: 1fr; gap: 16px; }
+  .fee-summary strong { font-size: 21px; }
+  .fee-table th, .fee-table td { padding: 12px 6px; font-size: 13px; }
+  .process-list { grid-template-columns: 1fr; gap: 12px; }
+  .process-list li { border-top: 0; padding-top: 0; }
 }
 </style>
