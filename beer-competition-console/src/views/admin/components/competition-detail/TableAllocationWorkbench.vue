@@ -1325,7 +1325,7 @@ function getOverviewTableIssues(roundTable) {
 .allocation-workbench {
   min-height: 0;
   height: 100%;
-  max-height: calc(100vh - 254px);
+  max-height: none;
   overflow: hidden;
 }
 

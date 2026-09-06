@@ -659,7 +659,6 @@
                 </div>
                 <div class="entry-code-cell">
                   <strong>{{ entry.shortCode }}</strong>
-                  <small>{{ entry.uuid }}</small>
                 </div>
                 <div class="entry-style-cell">
                   <strong>{{ entry.categoryName }}</strong>
@@ -705,7 +704,7 @@
           </article>
         </section>
 
-        <section v-if="activeTab === 'judges'" class="tab-panel">
+        <section v-if="activeTab === 'judges'" class="tab-panel judges-panel">
           <div v-if="preplanningNotice" class="edit-banner preplanning-banner">
             <span>{{ preplanningNotice }}</span>
           </div>

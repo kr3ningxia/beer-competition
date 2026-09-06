@@ -1,0 +1,36 @@
+- generic [active] [ref=f2e1]:
+  - generic [ref=f2e51]:
+    - generic [ref=f2e52]:
+      - generic [ref=f2e57]:
+        - paragraph [ref=f2e58]: 啤酒事务局
+        - heading "赛事后台" [level=1] [ref=f2e59]
+      - generic [ref=f2e86]:
+        - heading "赛事后台登录" [level=2] [ref=f2e88]
+        - generic [ref=f2e89]:
+          - generic [ref=f2e90]:
+            - generic [ref=f2e91]: "*账号"
+            - textbox "*账号" [ref=f2e97]:
+              - /placeholder: 请输入账号
+              - text: xialin
+          - generic [ref=f2e98]:
+            - generic [ref=f2e99]: "*密码"
+            - generic [ref=f2e102]:
+              - textbox "*密码" [ref=f2e106]:
+                - /placeholder: 请输入密码
+                - text: password
+              - generic [ref=f2e127] [cursor=pointer]
+          - generic [ref=f2e108] [cursor=pointer]:
+            - generic [ref=f2e109]:
+              - checkbox "记住账号"
+            - generic [ref=f2e111]: 记住账号
+          - button "登录" [ref=f2e112] [cursor=pointer]
+    - contentinfo "网站备案信息" [ref=f2e117]:
+      - generic [ref=f2e118]:
+        - generic [ref=f2e119]: © 上海啤事文化传播有限公司
+        - navigation "备案查询" [ref=f2e121]:
+          - link "沪ICP备2024061956号-3" [ref=f2e122] [cursor=pointer]:
+            - /url: https://beian.miit.gov.cn/
+          - link "沪公网安备31011702892028号" [ref=f2e124] [cursor=pointer]:
+            - /url: https://beian.mps.gov.cn/#/query/webSearch?code=31011702892028
+  - alert [ref=f2e142]:
+    - paragraph [ref=f2e146]: 操作失败

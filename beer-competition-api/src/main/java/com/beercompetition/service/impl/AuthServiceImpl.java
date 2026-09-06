@@ -59,6 +59,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -227,13 +228,19 @@ public class AuthServiceImpl implements AuthService {
                     .qualification("")
                     .breweryConflictFlag(false)
                     .breweryConflictText(null)
-                    .status(JudgeAccountStatus.PROFILE_INCOMPLETE.getCode())
+                    .status(JudgeAccountStatus.ACTIVE.getCode())
                     .build();
             judgeAccountMapper.insert(account);
             return buildJudgeLoginResponse(judgeAccountMapper.selectById(account.getId()));
         }
 
         JudgeAccountStatus status = JudgeAccountStatus.of(account.getStatus());
+        if (status == JudgeAccountStatus.PENDING_REVIEW) {
+            account.setStatus(JudgeAccountStatus.ACTIVE.getCode());
+            account.setReviewedTime(LocalDateTime.now());
+            judgeAccountMapper.updateById(account);
+            return buildJudgeLoginResponse(account);
+        }
         if (status == JudgeAccountStatus.PROFILE_INCOMPLETE) {
             return buildJudgeLoginResponse(account);
         }
@@ -517,8 +524,14 @@ public class AuthServiceImpl implements AuthService {
                 jwtProperties.getJudgeTtl(), jwtProperties.getJudgeRefreshTtl());
         response.setUserId(null);
         response.setStatus(status.getCode());
-        response.setProfileRequired(status == JudgeAccountStatus.PROFILE_INCOMPLETE);
+        response.setProfileRequired(!isJudgeProfileComplete(account));
         return response;
+    }
+
+    private boolean isJudgeProfileComplete(JudgeAccount account) {
+        return account != null
+                && StringUtils.hasText(account.getName())
+                && StringUtils.hasText(account.getQualification());
     }
 
     private String createRefreshSession(Long userId,

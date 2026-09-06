@@ -64,7 +64,6 @@
       >
         <span class="event-cell">
           <strong>{{ competition.name }}</strong>
-          <small>{{ competition.code }}</small>
         </span>
         <span :class="['state-badge', statusMeta[competition.status].tone]">
           {{ statusMeta[competition.status].label }}
@@ -633,7 +632,7 @@ svg {
 .event-cell {
   align-items: flex-start;
   flex-direction: column;
-  gap: 6px;
+  gap: 0;
   min-width: 0;
 }
 

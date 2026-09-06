@@ -10,14 +10,6 @@
     </div>
 
     <template v-else>
-      <header class="analytics-hero">
-        <div class="hero-meta">
-          <span>生成于 {{ formatDateTime(analytics.generatedAt) }}</span>
-          <span>评分记录 {{ summary.scoreRecords || 0 }} 条</span>
-          <span v-if="summary.testRecordCount">测试记录 {{ summary.testRecordCount }} 条</span>
-        </div>
-      </header>
-
       <section class="metric-grid">
         <article v-for="item in summaryCards" :key="item.key" class="metric-card">
           <small>{{ item.label }}</small>
@@ -37,78 +29,52 @@
           <div class="bucket-columns">
             <section class="bucket-panel">
               <h4>投递组别</h4>
-              <div class="bucket-list">
-                <div v-for="bucket in topBuckets(registration.categories, 8)" :key="bucket.key" class="bucket-row">
-                  <div class="bucket-top">
-                    <strong>{{ bucket.label }}</strong>
-                    <span>{{ bucket.count }} 款</span>
-                  </div>
-                  <div class="bucket-track">
-                    <span :style="bucketBarStyle(bucket)"></span>
-                  </div>
-                  <div class="bucket-foot">
-                    <small v-if="bucket.detail">{{ bucket.detail }}</small>
-                    <small>{{ bucketShare(bucket) }}</small>
-                  </div>
+              <div class="pie-layout">
+                <div class="pie-visual" @mouseleave="clearPieHover">
+                  <svg class="pie-chart" viewBox="0 0 200 200" role="img" aria-label="投递组别占比">
+                    <path v-for="(bucket, index) in categoryPieBuckets" :key="bucket.key" class="pie-slice" :style="pieFillStyle(index)" :d="piePath(categoryPieBuckets, index)" @mouseenter="setPieHover('category', bucket)" />
+                  </svg>
+                  <div v-if="hoveredPie?.type === 'category'" class="pie-tooltip"><span>{{ hoveredPie.bucket.label }}</span><strong>{{ hoveredPie.bucket.count }} 款</strong><small>{{ bucketShare(hoveredPie.bucket) }}</small></div>
+                </div>
+                <div class="pie-legend">
+                  <div v-for="(bucket, index) in categoryPieBuckets" :key="bucket.key" class="pie-legend-row"><i :style="pieColorStyle(index)"></i><span>{{ bucket.label }}</span><strong>{{ bucket.count }} 款</strong><small>{{ bucketShare(bucket) }}</small></div>
                 </div>
               </div>
             </section>
 
             <section class="bucket-panel">
               <h4>报名风格</h4>
-              <div class="bucket-list">
-                <div v-for="bucket in topBuckets(registration.styles, 8)" :key="bucket.key" class="bucket-row">
-                  <div class="bucket-top">
-                    <strong>{{ bucket.label }}</strong>
-                    <span>{{ bucket.count }} 款</span>
-                  </div>
-                  <div class="bucket-track">
-                    <span :style="bucketBarStyle(bucket)"></span>
-                  </div>
-                  <div class="bucket-foot">
-                    <small v-if="bucket.detail">{{ bucket.detail }}</small>
-                    <small>{{ bucketShare(bucket) }}</small>
-                  </div>
+              <div class="pie-layout">
+                <div class="pie-visual" @mouseleave="clearPieHover">
+                  <svg class="pie-chart" viewBox="0 0 200 200" role="img" aria-label="报名风格占比">
+                    <path v-for="(bucket, index) in stylePieBuckets" :key="bucket.key" class="pie-slice" :style="pieFillStyle(index)" :d="piePath(stylePieBuckets, index)" @mouseenter="setPieHover('style', bucket)" />
+                  </svg>
+                  <div v-if="hoveredPie?.type === 'style'" class="pie-tooltip"><span>{{ hoveredPie.bucket.label }}</span><strong>{{ hoveredPie.bucket.count }} 款</strong><small>{{ bucketShare(hoveredPie.bucket) }}</small></div>
+                </div>
+                <div class="pie-legend">
+                  <div v-for="(bucket, index) in stylePieBuckets" :key="bucket.key" class="pie-legend-row"><i :style="pieColorStyle(index)"></i><span>{{ bucket.label }}</span><strong>{{ bucket.count }} 款</strong><small>{{ bucketShare(bucket) }}</small></div>
                 </div>
               </div>
             </section>
           </div>
 
           <div class="bucket-columns">
-            <section class="bucket-panel">
+            <section class="bucket-panel abv-panel">
               <h4>酒精度分布</h4>
-              <div class="bucket-list compact">
-                <div v-for="bucket in registration.abvBuckets || []" :key="bucket.key" class="bucket-row">
-                  <div class="bucket-top">
-                    <strong>{{ bucket.label }}</strong>
-                    <span>{{ bucket.count }} 款</span>
-                  </div>
-                  <div class="bucket-track">
-                    <span :style="bucketBarStyle(bucket)"></span>
-                  </div>
-                  <div class="bucket-foot">
-                    <small v-if="bucket.detail">{{ bucket.detail }}</small>
-                    <small>{{ bucketShare(bucket) }}</small>
-                  </div>
-                </div>
-              </div>
+              <div class="abv-chart"><div v-for="bucket in registration.abvBuckets || []" :key="bucket.key" class="abv-column"><span>{{ bucket.count }}</span><i :style="{ height: `${Math.max(5, Number(bucket.share || 0))}%` }"></i><small>{{ bucket.label }}</small></div></div>
             </section>
 
-            <section class="bucket-panel">
-              <h4>厂牌集中度</h4>
-              <div class="bucket-list compact">
-                <div v-for="bucket in topBuckets(registration.breweries, 6)" :key="bucket.key" class="bucket-row">
-                  <div class="bucket-top">
-                    <strong>{{ bucket.label }}</strong>
-                    <span>{{ bucket.count }} 款</span>
-                  </div>
-                  <div class="bucket-track">
-                    <span :style="bucketBarStyle(bucket)"></span>
-                  </div>
-                  <div class="bucket-foot">
-                    <small v-if="bucket.detail">{{ bucket.detail }}</small>
-                    <small>{{ bucketShare(bucket) }}</small>
-                  </div>
+            <section class="bucket-panel brewery-panel">
+              <h4>参赛厂家</h4>
+              <div class="pie-layout">
+                <div class="pie-visual" @mouseleave="clearPieHover">
+                  <svg class="pie-chart" viewBox="0 0 200 200" role="img" aria-label="参赛厂家占比">
+                    <path v-for="(bucket, index) in breweryPieBuckets" :key="bucket.key" class="pie-slice" :style="pieFillStyle(index)" :d="piePath(breweryPieBuckets, index)" @mouseenter="setPieHover('brewery', bucket)" />
+                  </svg>
+                  <div v-if="hoveredPie?.type === 'brewery'" class="pie-tooltip"><span>{{ hoveredPie.bucket.label }}</span><strong>{{ hoveredPie.bucket.count }} 款</strong><small>{{ bucketShare(hoveredPie.bucket) }}</small></div>
+                </div>
+                <div class="pie-legend">
+                  <div v-for="(bucket, index) in breweryPieBuckets" :key="bucket.key" class="pie-legend-row"><i :style="pieColorStyle(index)"></i><span>{{ bucket.label }}</span><strong>{{ bucket.count }} 款</strong><small>{{ bucketShare(bucket) }}</small></div>
                 </div>
               </div>
             </section>
@@ -131,7 +97,9 @@
             </article>
           </div>
 
-          <div class="bucket-list compact">
+          <div v-if="paymentStatuses.length" class="payment-status-layout">
+            <div class="donut" :style="donutStyle(paymentStatuses)"><div><strong>{{ paymentCompletion }}%</strong><small>支付完成率</small></div></div>
+            <div class="bucket-list compact">
             <div v-for="bucket in paymentStatuses" :key="bucket.key" class="bucket-row">
               <div class="bucket-top">
                 <strong>{{ bucket.label }}</strong>
@@ -145,7 +113,10 @@
                 <small>{{ formatMoney(bucket.amount) }}</small>
               </div>
             </div>
+            </div>
           </div>
+
+          <div v-else class="empty-payment"><strong>暂无付款记录</strong><small>报名尚未产生付款数据</small></div>
 
           <div v-if="paymentNotes.length" class="note-list">
             <p v-for="note in paymentNotes" :key="note">{{ note }}</p>
@@ -161,7 +132,9 @@
             </div>
           </div>
 
-          <div class="bucket-list compact">
+          <div v-if="deliveryStatuses.length" class="delivery-status-layout">
+            <div class="donut" :style="donutStyle(deliveryStatuses)"><div><strong>{{ deliveryCompletion }}%</strong><small>入库完成率</small></div></div>
+            <div class="bucket-list compact">
             <div v-for="bucket in deliveryStatuses" :key="bucket.key" class="bucket-row">
               <div class="bucket-top">
                 <strong>{{ bucket.label }}</strong>
@@ -175,7 +148,10 @@
                 <small>{{ bucketShare(bucket) }}</small>
               </div>
             </div>
+            </div>
           </div>
+
+          <div v-else class="empty-payment"><strong>暂无送样记录</strong><small>报名酒款提交送样信息后显示</small></div>
 
           <div class="channel-grid delivery-grid">
             <article v-for="bucket in deliveryMethods" :key="bucket.key" class="channel-card">
@@ -259,8 +235,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
-import { formatDateTime } from '../../competitionStore'
+import { computed, ref } from 'vue'
 
 const props = defineProps({
   analytics: {
@@ -273,6 +248,8 @@ const props = defineProps({
   },
 })
 
+const hoveredPie = ref(null)
+
 const summary = computed(() => props.analytics?.summary || {})
 const registration = computed(() => props.analytics?.registration || {})
 const payment = computed(() => props.analytics?.payment || {})
@@ -280,19 +257,21 @@ const delivery = computed(() => props.analytics?.delivery || {})
 const feedback = computed(() => props.analytics?.feedback || {})
 const warnings = computed(() => props.analytics?.warnings || [])
 
+const paymentCompletion = computed(() => ratio(summary.value.paidEntries, summary.value.totalEntries))
+const deliveryCompletion = computed(() => ratio(summary.value.receivedEntries, summary.value.totalEntries))
+
 const summaryCards = computed(() => ([
   { key: 'total', label: '参赛酒款', value: formatCount(summary.value.totalEntries) },
-  { key: 'stored', label: '已入库', value: formatCount(summary.value.storedEntries) },
-  { key: 'paid', label: '已支付', value: formatCount(summary.value.paidEntries) },
-  { key: 'pending', label: '待支付', value: formatCount(summary.value.pendingPaymentEntries) },
   { key: 'reviewed', label: '已评审酒款', value: formatCount(summary.value.reviewedEntries) },
   { key: 'records', label: '评分记录', value: formatCount(summary.value.scoreRecords) },
-  { key: 'awards', label: '奖项数量', value: formatCount(summary.value.awardCount) },
-  { key: 'comment', label: '平均评语字数', value: formatCount(summary.value.averageCommentChars) },
-  { key: 'duration', label: '平均用时', value: formatDuration(summary.value.averageReviewSeconds) },
+  { key: 'commentChars', label: '平均评语字数', value: summary.value.averageCommentChars ? `${formatCount(summary.value.averageCommentChars)} 字` : '0 字' },
+  { key: 'reviewDuration', label: '平均评语耗时', value: formatDuration(summary.value.averageReviewSeconds) },
 ]))
 
 const paymentChannels = computed(() => payment.value.channels || [])
+const categoryPieBuckets = computed(() => buildPieBuckets(registration.value.categories, 8))
+const stylePieBuckets = computed(() => buildPieBuckets(registration.value.styles, 8))
+const breweryPieBuckets = computed(() => buildPieBuckets(registration.value.breweries, 8))
 const paymentStatuses = computed(() => payment.value.statuses || [])
 const paymentNotes = computed(() => payment.value.notes || [])
 const deliveryStatuses = computed(() => delivery.value.statuses || [])
@@ -317,6 +296,49 @@ function bucketShare(bucket) {
 function bucketBarStyle(bucket) {
   const share = Math.max(0, Number(bucket?.share || 0))
   return { width: `${Math.min(100, share || 4)}%` }
+}
+
+function buildPieBuckets(list, limit) {
+  const source = (list || []).filter((item) => Number(item?.count || 0) > 0)
+  if (source.length <= limit) return source
+  const visible = source.slice(0, limit - 1)
+  const remainder = source.slice(limit - 1).reduce((sum, item) => sum + Number(item.count || 0), 0)
+  const total = source.reduce((sum, item) => sum + Number(item.count || 0), 0)
+  return [...visible, { key: '__other__', label: '其他', count: remainder, share: total ? Number((remainder * 100 / total).toFixed(1)) : 0, tone: 'neutral' }]
+}
+
+function pieFillStyle(index) {
+  const colors = ['#d8a935', '#6fcf7a', '#f2994a', '#5b9bd5', '#c76a9c', '#7f8c8d', '#b87935', '#56b4a9']
+  return { fill: colors[index % colors.length] }
+}
+
+function piePath(list, index) {
+  const items = list || []
+  const total = items.reduce((sum, item) => sum + Number(item?.count || 0), 0)
+  if (!total || !items[index]) return ''
+  const start = items.slice(0, index).reduce((sum, item) => sum + Number(item?.count || 0), 0) / total * Math.PI * 2 - Math.PI / 2
+  const end = start + Number(items[index].count || 0) / total * Math.PI * 2
+  const radius = 92
+  const x1 = 100 + radius * Math.cos(start)
+  const y1 = 100 + radius * Math.sin(start)
+  const x2 = 100 + radius * Math.cos(end)
+  const y2 = 100 + radius * Math.sin(end)
+  const largeArc = end - start > Math.PI ? 1 : 0
+  if (items.length === 1) return `M 100 8 A 92 92 0 1 1 100 192 A 92 92 0 1 1 100 8 Z`
+  return `M 100 100 L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2} Z`
+}
+
+function setPieHover(type, bucket) {
+  hoveredPie.value = { type, bucket }
+}
+
+function clearPieHover() {
+  hoveredPie.value = null
+}
+
+function pieColorStyle(index) {
+  const colors = ['#d8a935', '#6fcf7a', '#f2994a', '#5b9bd5', '#c76a9c', '#7f8c8d', '#b87935', '#56b4a9']
+  return { background: colors[index % colors.length] }
 }
 
 function cloudItemStyle(item) {
@@ -359,6 +381,18 @@ function formatMoney(value) {
   }
   return `¥${amount.toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
 }
+function ratio(a, b) {
+  const x = Number(a || 0); const y = Number(b || 0)
+  return y ? Math.round(x / y * 100) : 0
+}
+
+function donutStyle(list) {
+  const colors = ['#d8a935', '#6fcf7a', '#f2994a', '#8899a6', '#d85b5b']
+  const total = list.reduce((sum, item) => sum + Number(item.count || 0), 0) || 1
+  let start = 0
+  const stops = list.map((item, index) => { const end = start + Number(item.count || 0) / total * 360; const stop = `${colors[index % colors.length]} ${start}deg ${end}deg`; start = end; return stop })
+  return { background: `conic-gradient(${stops.join(',')})` }
+}
 </script>
 
 <style scoped>
@@ -391,37 +425,6 @@ function formatMoney(value) {
 .sample-card small,
 .phrase-card small {
   color: var(--muted);
-}
-
-.analytics-hero {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 18px;
-  padding: 10px 12px;
-  border: 1px solid rgba(216, 169, 53, 0.2);
-  border-radius: 8px;
-  background:
-    linear-gradient(135deg, rgba(216, 169, 53, 0.12), rgba(255, 255, 255, 0.025)),
-    rgba(8, 14, 16, 0.94);
-}
-
-.hero-meta {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.hero-meta span {
-  padding: 7px 10px;
-  color: var(--gold-soft);
-  border: 1px solid rgba(216, 169, 53, 0.18);
-  border-radius: 999px;
-  background: rgba(216, 169, 53, 0.06);
-  font-size: 12px;
-  font-weight: 800;
-  white-space: nowrap;
 }
 
 .metric-grid {
@@ -510,6 +513,116 @@ function formatMoney(value) {
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.018);
 }
+
+.pie-layout {
+  display: grid;
+  grid-template-columns: minmax(132px, 160px) 1fr;
+  align-items: center;
+  gap: 14px;
+  min-height: 190px;
+}
+
+.pie-visual {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 152px;
+  height: 176px;
+}
+
+.pie-chart {
+  display: grid;
+  place-items: center;
+  width: 152px;
+  height: 152px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.08), 0 10px 24px rgba(0,0,0,.18);
+}
+
+.pie-slice {
+  cursor: pointer;
+  stroke: rgba(13, 22, 25, .9);
+  stroke-width: 1.5;
+  transition: filter .16s ease, opacity .16s ease;
+}
+
+.pie-slice:hover {
+  filter: brightness(1.14) saturate(1.08);
+  stroke: #fff0c0;
+  stroke-width: 2.5;
+}
+
+.pie-tooltip {
+  position: absolute;
+  z-index: 2;
+  bottom: -2px;
+  left: 50%;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  max-width: 240px;
+  padding: 6px 9px;
+  border: 1px solid rgba(216, 169, 53, .35);
+  border-radius: 6px;
+  color: var(--text);
+  background: rgba(8, 14, 16, .96);
+  box-shadow: 0 8px 18px rgba(0,0,0,.28);
+  font-size: 11px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.pie-tooltip span { overflow: hidden; text-overflow: ellipsis; }
+.pie-tooltip strong { color: #fff0c0; font-size: 12px; }
+.pie-tooltip small { color: var(--muted); }
+
+.pie-chart span {
+  color: #fff8df;
+  font-size: 21px;
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: 0 1px 3px rgba(0,0,0,.65);
+}
+
+.pie-chart span small {
+  margin-left: 3px;
+  color: rgba(255,248,223,.9);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.pie-legend {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pie-legend-row {
+  display: grid;
+  grid-template-columns: 9px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.pie-legend-row i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.pie-legend-row span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pie-legend-row strong { color: #fff0c0; font-size: 12px; white-space: nowrap; }
+.pie-legend-row small { color: var(--muted); font-size: 11px; white-space: nowrap; }
 
 .bucket-list {
   display: grid;
@@ -744,6 +857,21 @@ function formatMoney(value) {
   background: rgba(242, 153, 74, 0.05);
 }
 
+.payment-status-layout,.delivery-status-layout { display:grid; grid-template-columns:145px 1fr; align-items:center; gap:14px; }
+.donut { display:grid; place-items:center; width:138px; height:138px; border-radius:50%; }
+.donut > div { display:grid; place-items:center; width:92px; height:92px; border-radius:50%; background:#131c20; }
+.donut strong { color:#fff0c0; font-size:23px; }
+.donut small { color:var(--muted); font-size:11px; }
+.empty-payment { display:grid; place-items:center; align-content:center; min-height:150px; border:1px dashed rgba(219,232,237,.13); border-radius:8px; color:var(--muted); }
+.empty-payment strong { color:var(--text); font-size:14px; }
+.empty-payment small { margin-top:5px; font-size:12px; }
+.abv-panel .bucket-list,.brewery-panel .bucket-list { min-height:150px; }
+.abv-chart { display:flex; align-items:end; height:155px; padding:10px 6px 0; border-bottom:1px solid rgba(219,232,237,.09); }
+.abv-column { display:flex; flex:1; flex-direction:column; align-items:center; justify-content:end; gap:5px; min-width:0; height:100%; color:var(--muted); font-size:11px; }
+.abv-column i { width:24px; min-height:5px; border-radius:5px 5px 0 0; background:linear-gradient(180deg,#f0c85f,#b37930); }
+.abv-column small { max-width:70px; overflow:hidden; color:var(--muted); font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
+@media (max-width:900px) { .payment-status-layout,.delivery-status-layout { grid-template-columns:1fr; justify-items:center; } }
+
 @media (max-width: 1280px) {
   .metric-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -765,6 +893,15 @@ function formatMoney(value) {
   .bucket-columns,
   .phrase-grid {
     grid-template-columns: 1fr;
+  }
+
+  .pie-layout {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+
+  .pie-legend {
+    width: 100%;
   }
 }
 </style>

@@ -194,6 +194,7 @@ public class CompetitionAnalyticsService {
                 .filter(Objects::nonNull)
                 .toList());
         int averageReviewSeconds = averageInt(scoreRecords.stream()
+                .filter(record -> Objects.equals(record.getFinalFlag(), 0))
                 .map(ScoreRecord::getDurationSeconds)
                 .filter(Objects::nonNull)
                 .toList());

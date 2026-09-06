@@ -158,12 +158,13 @@ public class JudgeServiceImpl implements JudgeService {
         // 1) 查询当前评审账号
         JudgeAccount account = requireJudge(BaseContext.getCurrentId());
 
-        // 2) 更新可自主管理资料，首次完善后进入待审核
+        // 2) 更新可自主管理资料；账号注册即激活，资料完整性在报名时校验
         applyProfile(account, request.getWechat(), request.getName(), request.getQualification(),
                 request.getBreweryConflictFlag(), request.getBreweryConflictText(), account.getReviewRemark());
-        if (JudgeAccountStatus.of(account.getStatus()) == JudgeAccountStatus.PROFILE_INCOMPLETE) {
-            account.setStatus(JudgeAccountStatus.PENDING_REVIEW.getCode());
+        if (JudgeAccountStatus.of(account.getStatus()) == JudgeAccountStatus.PENDING_REVIEW) {
+            account.setStatus(JudgeAccountStatus.ACTIVE.getCode());
             account.setSubmittedTime(LocalDateTime.now());
+            account.setReviewedTime(LocalDateTime.now());
         }
         judgeAccountMapper.updateById(account);
 

@@ -1259,6 +1259,21 @@ svg {
   padding-bottom: 28px;
 }
 
+.judges-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+.judges-panel > .allocation-workbench {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+  max-height: none;
+}
+
 .entry-config-panel,
 .score-config-panel {
   width: min(100%, 1280px);
