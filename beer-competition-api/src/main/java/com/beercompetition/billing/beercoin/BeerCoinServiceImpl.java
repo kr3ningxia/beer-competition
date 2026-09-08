@@ -441,7 +441,7 @@ public class BeerCoinServiceImpl implements BeerCoinService, BeerCoinSettlementS
         if (identity.adminType() == AdminType.PLATFORM_EVENT_ADMIN) {
             return BeerCoinSettlementVO.builder().applicable(false).completed(true).build();
         }
-        if (identity.adminType() == AdminType.ORGANIZER_ADMIN
+        if (identity.adminType().isOrganizerAdmin()
                 && !Objects.equals(identity.organizerId(), competition.getOrganizerId())) {
             throw new ForbiddenException("无权查看其他组织的赛事结算");
         }
@@ -743,7 +743,7 @@ public class BeerCoinServiceImpl implements BeerCoinService, BeerCoinSettlementS
 
     private AdminSessionIdentity requireOrganizerIdentity() {
         AdminSessionIdentity identity = requireSupportedIdentity();
-        if (identity.adminType() != AdminType.ORGANIZER_ADMIN) {
+        if (!identity.adminType().isOrganizerAdmin()) {
             throw new ForbiddenException("只有主办方管理员可以购买啤酒币");
         }
         return identity;

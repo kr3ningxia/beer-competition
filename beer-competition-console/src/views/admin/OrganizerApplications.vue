@@ -387,25 +387,49 @@ async function submitReviewAction(explicitStatus) {
 }
 
 async function approveApplication() {
-  const confirmed = await confirmDanger('审核通过后将进入账号发放阶段。', '确认审核通过')
+  const confirmed = await confirmDanger('审核通过后将立即创建主办方后台账号，并显示一次性初始密码。', '确认审核通过并发放账号')
   if (!confirmed) return
-  await submitReviewAction('APPROVED')
+  if (!selectedApplication.value) return
+  actionLoading.value = true
+  try {
+    const updated = await reviewOrganizerApplication(selectedApplication.value.id, {
+      status: 'APPROVED',
+    })
+    replaceApplication(updated)
+    await issueApplication(updated)
+    cancelReview()
+    ElMessage.success('审核通过，账号已发放')
+  } finally {
+    actionLoading.value = false
+  }
 }
 
 async function provisionApplication() {
   if (!selectedApplication.value) return
   actionLoading.value = true
   try {
-    const result = await provisionOrganizerApplication(selectedApplication.value.id)
-    replaceApplication({ ...selectedApplication.value, status: 'ACCOUNT_ISSUED', statusLabel: '账号已发放', accountIssuedTime: new Date().toISOString() })
-    credentialData.value = {
-      ...result,
-      organizationName: selectedApplication.value.organizationName,
-    }
-    credentialVisible.value = true
+    await issueApplication(selectedApplication.value)
   } finally {
     actionLoading.value = false
   }
+}
+
+async function issueApplication(application) {
+  const result = await provisionOrganizerApplication(application.id)
+  const issuedApplication = {
+    ...application,
+    status: 'ACCOUNT_ISSUED',
+    statusLabel: '账号已发放',
+    organizerId: result.organizerId || application.organizerId,
+    initialAdminUserId: result.adminUserId || application.initialAdminUserId,
+    accountIssuedTime: application.accountIssuedTime || new Date().toISOString(),
+  }
+  replaceApplication(issuedApplication)
+  credentialData.value = {
+    ...result,
+    organizationName: application.organizationName,
+  }
+  credentialVisible.value = true
 }
 
 function replaceApplication(updated) {

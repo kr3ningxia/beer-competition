@@ -8,4 +8,7 @@ public class AdminEntryStatusRequest {
 
     @Size(max = 300, message = "处理原因不能超过300个字符")
     private String reason;
+
+    @Size(max = 20, message = "箱号不能超过20个字符")
+    private String boxNumber;
 }

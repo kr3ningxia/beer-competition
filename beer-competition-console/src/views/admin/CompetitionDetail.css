@@ -422,7 +422,7 @@ svg {
 
 .entry-assign-mode-switch {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
   padding: 5px;
   border: 1px solid rgba(219, 232, 237, 0.12);
@@ -2029,6 +2029,10 @@ input[type="checkbox"] {
   color: var(--muted);
   font-size: 12px;
   overflow-wrap: anywhere;
+}
+
+.entry-code-cell .entry-box-number {
+  color: var(--gold-soft);
 }
 
 .entry-followup {
@@ -4189,6 +4193,18 @@ button.pyramid-placeholder-mark {
   color: var(--text);
   font-size: 13px;
   line-height: 1.5;
+}
+
+.confirm-reason input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  color: var(--confirm-text);
+  border: 1px solid var(--confirm-line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  font: inherit;
 }
 
 .feedback-entry-detail-note {

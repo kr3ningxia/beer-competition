@@ -17,6 +17,8 @@ import com.beercompetition.pojo.po.Organizer;
 import com.beercompetition.pojo.po.OrganizerMember;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -39,10 +41,11 @@ class CompetitionAccessServiceTest {
         BaseContext.clear();
     }
 
-    @Test
-    void organizerAdminCannotAccessAnotherOrganizerCompetition() {
-        asAdmin(10L, AdminType.ORGANIZER_ADMIN);
-        when(adminUserMapper.selectById(10L)).thenReturn(activeAdmin(10L, AdminType.ORGANIZER_ADMIN));
+    @ParameterizedTest
+    @EnumSource(value = AdminType.class, names = {"ORGANIZER_ADMIN", "ORGANIZER_SUB_ADMIN"})
+    void organizerAdminCannotAccessAnotherOrganizerCompetition(AdminType type) {
+        asAdmin(10L, type);
+        when(adminUserMapper.selectById(10L)).thenReturn(activeAdmin(10L, type));
         when(competitionMapper.selectById(99L)).thenReturn(Competition.builder().id(99L).organizerId(2L).build());
         when(organizerMapper.selectById(2L)).thenReturn(activeOrganizer(2L));
         when(organizerMemberMapper.selectOne(any())).thenReturn(null);
@@ -61,10 +64,11 @@ class CompetitionAccessServiceTest {
                 .isInstanceOf(ForbiddenException.class);
     }
 
-    @Test
-    void organizerAdminUsesMembershipAsCreationScope() {
-        asAdmin(12L, AdminType.ORGANIZER_ADMIN);
-        when(adminUserMapper.selectById(12L)).thenReturn(activeAdmin(12L, AdminType.ORGANIZER_ADMIN));
+    @ParameterizedTest
+    @EnumSource(value = AdminType.class, names = {"ORGANIZER_ADMIN", "ORGANIZER_SUB_ADMIN"})
+    void organizerAdminUsesMembershipAsCreationScope(AdminType type) {
+        asAdmin(12L, type);
+        when(adminUserMapper.selectById(12L)).thenReturn(activeAdmin(12L, type));
         when(organizerMemberMapper.selectOne(any())).thenReturn(
                 OrganizerMember.builder().organizerId(3L).adminUserId(12L).status(1).build());
         when(organizerMapper.selectById(3L)).thenReturn(activeOrganizer(3L));

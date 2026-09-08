@@ -2,6 +2,7 @@ export const ADMIN_TYPES = Object.freeze({
   PLATFORM_SUPER_ADMIN: 'PLATFORM_SUPER_ADMIN',
   PLATFORM_EVENT_ADMIN: 'PLATFORM_EVENT_ADMIN',
   ORGANIZER_ADMIN: 'ORGANIZER_ADMIN',
+  ORGANIZER_SUB_ADMIN: 'ORGANIZER_SUB_ADMIN',
 })
 
 export const ALL_ADMIN_TYPES = Object.freeze(Object.values(ADMIN_TYPES))
@@ -40,7 +41,7 @@ export const ADMIN_NAV_GROUPS = Object.freeze([
         path: '/admin/beer-coins',
         label: '啤酒币',
         icon: 'beerCoins',
-        adminTypes: [ADMIN_TYPES.PLATFORM_SUPER_ADMIN, ADMIN_TYPES.ORGANIZER_ADMIN],
+        adminTypes: [ADMIN_TYPES.PLATFORM_SUPER_ADMIN, ADMIN_TYPES.ORGANIZER_ADMIN, ADMIN_TYPES.ORGANIZER_SUB_ADMIN],
       },
       { path: '/admin/operation-logs', label: '操作日志', icon: 'logs', adminTypes: ALL_ADMIN_TYPES },
     ],
@@ -77,7 +78,8 @@ export function getAdminTypeLabel(adminType) {
   const labels = {
     [ADMIN_TYPES.PLATFORM_SUPER_ADMIN]: '平台超级管理员',
     [ADMIN_TYPES.PLATFORM_EVENT_ADMIN]: '平台赛事管理员',
-    [ADMIN_TYPES.ORGANIZER_ADMIN]: '主办方管理员',
+    [ADMIN_TYPES.ORGANIZER_ADMIN]: '主办方主管理员',
+    [ADMIN_TYPES.ORGANIZER_SUB_ADMIN]: '主办方子管理员',
   }
   return labels[adminType] || '后台管理员'
 }

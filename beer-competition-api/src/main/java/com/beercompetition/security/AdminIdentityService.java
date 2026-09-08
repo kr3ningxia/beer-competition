@@ -36,7 +36,7 @@ public class AdminIdentityService {
         }
         AdminType adminType = parseAdminType(adminUser.getAdminType());
         Long organizerId = null;
-        if (adminType == AdminType.ORGANIZER_ADMIN) {
+        if (adminType.isOrganizerAdmin()) {
             List<OrganizerMember> members = organizerMemberMapper.selectList(new LambdaQueryWrapper<OrganizerMember>()
                     .eq(OrganizerMember::getAdminUserId, adminUser.getId())
                     .eq(OrganizerMember::getStatus, ACTIVE_STATUS)
@@ -80,7 +80,8 @@ public class AdminIdentityService {
      */
     public Long findOrganizerIdForDisplay(AdminUser adminUser) {
         if (adminUser == null || adminUser.getId() == null
-                || !AdminType.ORGANIZER_ADMIN.name().equals(adminUser.getAdminType())) {
+                || !(AdminType.ORGANIZER_ADMIN.name().equals(adminUser.getAdminType())
+                || AdminType.ORGANIZER_SUB_ADMIN.name().equals(adminUser.getAdminType()))) {
             return null;
         }
         OrganizerMember member = organizerMemberMapper.selectOne(new LambdaQueryWrapper<OrganizerMember>()
@@ -98,7 +99,7 @@ public class AdminIdentityService {
 
     public Long requireCurrentOrganizerId() {
         AdminSessionIdentity identity = requireCurrentIdentity();
-        if (identity.adminType() != AdminType.ORGANIZER_ADMIN || identity.organizerId() == null) {
+        if (!identity.adminType().isOrganizerAdmin() || identity.organizerId() == null) {
             throw new ForbiddenException("当前账号未关联主办方组织");
         }
         return identity.organizerId();

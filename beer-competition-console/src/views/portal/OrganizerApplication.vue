@@ -190,13 +190,28 @@
                </div>
 
                <div v-if="statusResult.status === 'ACCOUNT_ISSUED' && statusResult.adminUsername" class="issued-account-panel">
-                 <div>
-                   <span>主办方后台账号</span>
-                   <strong>{{ statusResult.adminUsername }}</strong>
+                 <div class="issued-account-heading">
+                   <div>
+                     <span>主办方后台账号</span>
+                     <strong>{{ statusResult.adminUsername }}</strong>
+                   </div>
+                   <span class="issued-account-state">已开通</span>
                  </div>
+                 <div v-if="statusResult.initialPassword" class="issued-credentials">
+                   <div class="issued-credential-row">
+                     <span>初始密码</span>
+                     <code>{{ statusResult.initialPassword }}</code>
+                     <button type="button" :aria-label="credentialCopied === 'password' ? '初始密码已复制' : '复制初始密码'" @click="copyCredential(statusResult.initialPassword, 'password')">
+                       <Check v-if="credentialCopied === 'password'" />
+                       <CopyDocument v-else />
+                     </button>
+                   </div>
+                   <p>请使用这组凭据登录后台，并在首次登录时完成账号设置。</p>
+                 </div>
+                 <p v-else class="issued-credential-note">初始密码已交付或已完成首次设置，如需重新进入后台，请联系平台管理员。</p>
                  <RouterLink class="primary-action" :to="{ path: '/admin/login', query: { username: statusResult.adminUsername } }">
                    <Right />
-                   进入主办方后台
+                   使用账号登录
                  </RouterLink>
                </div>
 
@@ -548,6 +563,7 @@ const material = ref(null)
 const isDragging = ref(false)
 const isSubmitting = ref(false)
 const isCopied = ref(false)
+const credentialCopied = ref('')
 const submittedApplication = ref(null)
 const statusResult = ref(null)
 const statusLoading = ref(false)
@@ -912,6 +928,29 @@ function copyApplicationNo() {
     input.remove()
   }
   isCopied.value = true
+}
+
+function copyCredential(value, field) {
+  if (!value) return
+  const markCopied = () => {
+    credentialCopied.value = field
+    window.setTimeout(() => {
+      if (credentialCopied.value === field) credentialCopied.value = ''
+    }, 1800)
+  }
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(value).then(markCopied).catch(() => {})
+    return
+  }
+  const input = document.createElement('textarea')
+  input.value = value
+  input.style.position = 'fixed'
+  input.style.opacity = '0'
+  document.body.appendChild(input)
+  input.select()
+  document.execCommand('copy')
+  input.remove()
+  markCopied()
 }
 
 function statusTone(status) {
@@ -2004,9 +2043,7 @@ fieldset.field {
 }
 
 .issued-account-panel {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
   gap: 16px;
   margin-top: 18px;
   padding: 15px 16px;
@@ -2015,7 +2052,14 @@ fieldset.field {
   border-radius: 7px;
 }
 
-.issued-account-panel > div {
+.issued-account-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.issued-account-heading > div {
   display: grid;
   gap: 5px;
   min-width: 0;
@@ -2027,6 +2071,16 @@ fieldset.field {
   font-weight: 800;
 }
 
+.issued-account-state {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  color: #2f6b3f !important;
+  background: rgba(61, 125, 80, 0.1);
+  border-radius: 999px;
+  font-size: 10px !important;
+  letter-spacing: 0.08em;
+}
+
 .issued-account-panel strong {
   overflow: hidden;
   color: #245635;
@@ -2036,8 +2090,71 @@ fieldset.field {
   white-space: nowrap;
 }
 
-.issued-account-panel .primary-action {
+.issued-credentials {
+  display: grid;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px dashed rgba(61, 125, 80, 0.24);
+}
+
+.issued-credential-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.issued-credential-row > span {
+  flex: 0 0 58px;
+}
+
+.issued-credential-row code {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: #245635;
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 14px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.issued-credential-row button {
+  display: grid;
   flex: 0 0 auto;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  color: #58725a;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.issued-credential-row button:hover,
+.issued-credential-row button:focus-visible {
+  color: #245635;
+  background: rgba(61, 125, 80, 0.1);
+  outline: 0;
+}
+
+.issued-credential-row button svg {
+  width: 15px;
+  height: 15px;
+}
+
+.issued-credentials p,
+.issued-credential-note {
+  margin: 0;
+  color: #58725a;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.issued-account-panel .primary-action {
+  justify-self: start;
   color: #fff8e8;
   background: var(--green);
   border-color: var(--green);
@@ -2046,6 +2163,16 @@ fieldset.field {
 .issued-account-panel .primary-action:hover,
 .issued-account-panel .primary-action:focus-visible {
   background: #306740;
+}
+
+@media (max-width: 620px) {
+  .issued-account-heading {
+    align-items: flex-start;
+  }
+
+  .issued-account-panel .primary-action {
+    width: 100%;
+  }
 }
 
 .status-result-topline {

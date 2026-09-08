@@ -35,3 +35,11 @@ test('only platform super admin receives platform maintenance menu', () => {
   assert.ok(paths.includes('/admin/style-libraries'))
   assert.ok(paths.includes('/admin/organizer-applications'))
 })
+
+test('sub admin has its own identity without account management', () => {
+  const paths = visiblePaths(ADMIN_TYPES.ORGANIZER_SUB_ADMIN)
+  assert.ok(paths.includes('/admin/dashboard'))
+  assert.ok(paths.includes('/admin/competitions'))
+  assert.ok(!paths.includes('/admin/admin-users'))
+  assert.ok(!paths.includes('/admin/organizer-applications'))
+})

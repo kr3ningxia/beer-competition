@@ -25,6 +25,7 @@ public class AdminEntryDetailVO {
     private Long categoryId;
     private String categoryName;
     private String style;
+    private String boxNumber;
     private BigDecimal abv;
     private String status;
     private String paymentStatus;

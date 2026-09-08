@@ -53,6 +53,8 @@ public class OrganizerApplicationServiceImpl implements OrganizerApplicationServ
     private static final int STATUS_QUERY_LIMIT = 10;
     private static final String TARGET_APPLICATION = "ORGANIZER_APPLICATION";
     private static final String RATE_LIMIT_PREFIX = "beer-competition:organizer-application:query:";
+    private static final String INITIAL_CREDENTIAL_DELIVERY_PREFIX =
+            "beer-competition:organizer-application:credential:";
     private static final String BUSINESS_TYPE_MATERIAL = "ORGANIZER_APPLICATION_MATERIAL";
     private static final String OWNER_TYPE_APPLICATION = "ORGANIZER_APPLICATION";
     private static final long MAX_MATERIAL_SIZE = 10L * 1024L * 1024L;
@@ -142,7 +144,7 @@ public class OrganizerApplicationServiceImpl implements OrganizerApplicationServ
         String phone = normalizePhone(contactPhone);
         checkQueryRateLimit(applicationNo, phone);
         OrganizerApplication application = findByVerification(applicationNo, phone);
-        return toStatusVO(application, true, false);
+        return toStatusVO(application, true, true);
     }
 
     @Override
@@ -406,6 +408,8 @@ public class OrganizerApplicationServiceImpl implements OrganizerApplicationServ
                 .statusLabel(statusLabel(status.name()))
                 .adminUsername(includeAccount && status == OrganizerApplicationStatus.ACCOUNT_ISSUED
                         ? findAdminUsername(application.getInitialAdminUserId()) : null)
+                .initialPassword(includeAccount && status == OrganizerApplicationStatus.ACCOUNT_ISSUED
+                        ? findInitialPassword(application.getId()) : null)
                 .reviewRemark(external && status != OrganizerApplicationStatus.NEED_MORE_INFO
                         && status != OrganizerApplicationStatus.REJECTED ? null : application.getReviewRemark())
                 .submittedTime(application.getSubmittedTime())
@@ -419,6 +423,15 @@ public class OrganizerApplicationServiceImpl implements OrganizerApplicationServ
         }
         AdminUser adminUser = adminUserMapper.selectById(adminUserId);
         return adminUser == null ? null : adminUser.getUsername();
+    }
+
+    private String findInitialPassword(Long applicationId) {
+        if (applicationId == null) {
+            return null;
+        }
+        Object encrypted = redisTemplate.opsForValue().get(INITIAL_CREDENTIAL_DELIVERY_PREFIX + applicationId);
+        return encrypted instanceof String value && StringUtils.hasText(value)
+                ? piiService.decrypt(value) : null;
     }
 
     private PortalAccount requireCurrentPortalAccount() {

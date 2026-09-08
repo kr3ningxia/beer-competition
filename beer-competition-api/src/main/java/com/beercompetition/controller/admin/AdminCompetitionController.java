@@ -66,8 +66,9 @@ public class AdminCompetitionController {
      * 查询后台比赛列表。
      */
     @GetMapping
-    public Result<List<CompetitionVO>> competitions(@RequestParam(defaultValue = "false") boolean includeArchived) {
-        return Result.success(competitionQueryService.listCompetitions(includeArchived));
+    public Result<List<CompetitionVO>> competitions(@RequestParam(defaultValue = "false") boolean includeArchived,
+                                                    @RequestParam(required = false) String organizerType) {
+        return Result.success(competitionQueryService.listCompetitions(includeArchived, organizerType));
     }
 
     /**
@@ -107,6 +108,11 @@ public class AdminCompetitionController {
                                                                                 @RequestParam(defaultValue = "1") Integer page,
                                                                                 @RequestParam(defaultValue = "20") Integer pageSize) {
         return Result.success(competitionQueryService.getCompetitionEntryPoolPage(id, page, pageSize));
+    }
+
+    @GetMapping("/{id}/box-numbers")
+    public Result<List<String>> getCompetitionBoxNumbers(@PathVariable Long id) {
+        return Result.success(competitionQueryService.getCompetitionBoxNumbers(id));
     }
 
     /**

@@ -16,6 +16,7 @@ public class OrganizerApplicationStatusVO {
     private String status;
     private String statusLabel;
     private String adminUsername;
+    private String initialPassword;
     private String reviewRemark;
     private LocalDateTime submittedTime;
     private LocalDateTime accountIssuedTime;

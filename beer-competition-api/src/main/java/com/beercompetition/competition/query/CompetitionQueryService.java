@@ -21,6 +21,8 @@ public interface CompetitionQueryService {
 
     List<CompetitionVO> listCompetitions(boolean includeArchived);
 
+    List<CompetitionVO> listCompetitions(boolean includeArchived, String organizerType);
+
     PortalHomeVO getPortalHome();
 
     List<PortalCompetitionVO> listPortalCompetitions();
@@ -36,6 +38,8 @@ public interface CompetitionQueryService {
     List<CompetitionEntryVO> getCompetitionEntryPool(Long id);
 
     PageResult<CompetitionEntryVO> getCompetitionEntryPoolPage(Long id, Integer page, Integer pageSize);
+
+    List<String> getCompetitionBoxNumbers(Long id);
 
     CompetitionQuickSummaryVO getCompetitionQuickSummary(Long id);
 

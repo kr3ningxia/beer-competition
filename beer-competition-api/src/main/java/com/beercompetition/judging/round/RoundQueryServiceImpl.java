@@ -189,6 +189,7 @@ public class RoundQueryServiceImpl implements RoundQueryService {
                 .categoryId(entry.getCategoryId())
                 .categoryName(categoryNameById.getOrDefault(entry.getCategoryId(), "-"))
                 .style(entry.getStyle())
+                .boxNumber(entry.getBoxNumber())
                 .styleCategoryName(style == null ? null : style.getCategoryName())
                 .styleCode(style == null ? null : style.getStyleCode())
                 .styleDescription(style == null ? null : style.getDescription())

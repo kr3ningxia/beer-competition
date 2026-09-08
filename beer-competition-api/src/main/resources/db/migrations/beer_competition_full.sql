@@ -1548,6 +1548,10 @@ CREATE TABLE `competition_coin_settlement_entry` (
 -- Dumping events for database 'beer_competition'
 --
 
+ALTER TABLE `beer_entry`
+  ADD COLUMN `box_number` varchar(20) DEFAULT NULL COMMENT '比赛内样品箱号' AFTER `stored_flag`,
+  ADD KEY `idx_beer_entry_competition_box` (`competition_id`, `box_number`);
+
 --
 -- Dumping routines for database 'beer_competition'
 --

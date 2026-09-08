@@ -59,6 +59,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
@@ -122,6 +123,11 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
 
     @Override
     public List<CompetitionVO> listCompetitions(boolean includeArchived) {
+        return listCompetitions(includeArchived, null);
+    }
+
+    @Override
+    public List<CompetitionVO> listCompetitions(boolean includeArchived, String organizerType) {
         // 1) 查询比赛主数据，常用列表默认排除归档赛事
         LambdaQueryWrapper<Competition> wrapper = new LambdaQueryWrapper<Competition>()
                 .orderByDesc(Competition::getCompetitionDate)
@@ -129,13 +135,37 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
         if (!includeArchived) {
             wrapper.ne(Competition::getStatus, CompetitionStatus.ARCHIVED.name());
         }
-        if (!competitionAccessService.canAccessAllOrganizers()) {
+        boolean canAccessAllOrganizers = competitionAccessService.canAccessAllOrganizers();
+        if (!canAccessAllOrganizers) {
             wrapper.eq(Competition::getOrganizerId, competitionAccessService.requireCurrentOrganizerId());
+        } else {
+            OrganizerType requestedOrganizerType = parseOrganizerTypeFilter(organizerType);
+            if (requestedOrganizerType != null) {
+                List<Long> organizerIds = organizerMapper.selectList(new LambdaQueryWrapper<Organizer>()
+                                .eq(Organizer::getOrganizerType, requestedOrganizerType.name()))
+                        .stream()
+                        .map(Organizer::getId)
+                        .filter(Objects::nonNull)
+                        .toList();
+                if (organizerIds.isEmpty()) {
+                    return List.of();
+                }
+                wrapper.in(Competition::getOrganizerId, organizerIds);
+            }
         }
         List<Competition> competitions = competitionMapper.selectList(wrapper);
         if (competitions.isEmpty()) {
             return List.of();
         }
+
+        List<Long> organizerIds = competitions.stream()
+                .map(Competition::getOrganizerId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, Organizer> organizerById = (organizerIds.isEmpty() ? List.<Organizer>of() : organizerMapper.selectBatchIds(organizerIds))
+                .stream()
+                .collect(Collectors.toMap(Organizer::getId, Function.identity()));
 
         // 2) 批量查询列表所需统计，避免逐场构建完整比赛详情
         List<Long> competitionIds = competitions.stream().map(Competition::getId).toList();
@@ -174,7 +204,8 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
                         categoryCountByCompetition.getOrDefault(competition.getId(), 0L) > 0,
                         judgeTablesByCompetition.getOrDefault(competition.getId(), List.of()).size(),
                         Math.toIntExact(judgeCountByCompetition.getOrDefault(competition.getId(), 0L)),
-                        scoreConfigsByCompetition.getOrDefault(competition.getId(), List.of())))
+                        scoreConfigsByCompetition.getOrDefault(competition.getId(), List.of()),
+                        organizerById.get(competition.getOrganizerId())))
                 .toList();
     }
 
@@ -267,6 +298,12 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
     }
 
     @Override
+    public List<String> getCompetitionBoxNumbers(Long id) {
+        Competition competition = getAdminCompetitionOrThrow(id);
+        return beerEntryMapper.selectBoxNumbers(competition.getId());
+    }
+
+    @Override
     public CompetitionQuickSummaryVO getCompetitionQuickSummary(Long id) {
         // 1) 复用轻量概览计算，避免列表抽屉加载酒款、轮次和结果工作区
         CompetitionDetailVO detail = getCompetitionOverview(id);
@@ -299,7 +336,8 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
                                                    boolean hasCategories,
                                                    int judgeTableCount,
                                                    int judgeCount,
-                                                   List<ScoreConfigVO> scoreConfigs) {
+                                                   List<ScoreConfigVO> scoreConfigs,
+                                                   Organizer organizer) {
         EntrySummaryVO entriesSummary = buildListEntriesSummary(entryStats);
         List<CompetitionCheckVO> checks = competitionReadinessEvaluator.buildListChecks(
                 competition, hasCategories, judgeTableCount > 0, scoreConfigs, entriesSummary);
@@ -313,6 +351,8 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
                 .code(competition.getCode())
                 .name(competition.getName())
                 .competitionType(competitionReadinessEvaluator.resolveCompetitionType(competition).name())
+                .organizerType(organizer == null ? null : organizer.getOrganizerType())
+                .organizerName(organizer == null ? null : organizer.getName())
                 .competitionDate(competition.getCompetitionDate())
                 .registrationStart(competition.getRegistrationStart())
                 .registrationDeadline(competition.getRegistrationDeadline())
@@ -339,6 +379,17 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
                 .judgeTableCount(judgeTableCount)
                 .judgeCount(judgeCount)
                 .build();
+    }
+
+    private OrganizerType parseOrganizerTypeFilter(String organizerType) {
+        if (!StringUtils.hasText(organizerType) || "ALL".equalsIgnoreCase(organizerType.trim())) {
+            return null;
+        }
+        try {
+            return OrganizerType.valueOf(organizerType.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            throw new BaseException("主办方筛选项不正确");
+        }
     }
 
     private String resolveOrganizerType(Long organizerId) {

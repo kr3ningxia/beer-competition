@@ -40,6 +40,7 @@ public interface BeerEntryMapper extends BaseMapper<BeerEntry> {
                    e.category_id,
                    cc.name AS category_name,
                    e.style,
+                   e.box_number,
                    e.abv,
                    e.status,
                    CASE
@@ -123,7 +124,8 @@ public interface BeerEntryMapper extends BaseMapper<BeerEntry> {
                   OR l.label_code LIKE CONCAT('%', #{keyword}, '%')
                   OR l.short_code LIKE CONCAT('%', #{keyword}, '%')
                   OR cc.name LIKE CONCAT('%', #{keyword}, '%')
-                  OR e.style LIKE CONCAT('%', #{keyword}, '%')
+                   OR e.style LIKE CONCAT('%', #{keyword}, '%')
+                  OR e.box_number LIKE CONCAT('%', #{keyword}, '%')
                   OR ed.carrier LIKE CONCAT('%', #{keyword}, '%')
                   OR ed.tracking_no LIKE CONCAT('%', #{keyword}, '%')
                 )
@@ -157,6 +159,17 @@ public interface BeerEntryMapper extends BaseMapper<BeerEntry> {
             @Param("keyword") String keyword,
             @Param("offset") int offset,
             @Param("limit") int limit);
+
+    @Select("""
+            SELECT DISTINCT box_number
+            FROM beer_entry
+            WHERE competition_id = #{competitionId}
+              AND deleted_flag = 0
+              AND box_number IS NOT NULL
+              AND box_number != ''
+            ORDER BY box_number
+            """)
+    List<String> selectBoxNumbers(@Param("competitionId") Long competitionId);
 
     @Select("""
             <script>
@@ -210,6 +223,7 @@ public interface BeerEntryMapper extends BaseMapper<BeerEntry> {
                   OR l.short_code LIKE CONCAT('%', #{keyword}, '%')
                   OR cc.name LIKE CONCAT('%', #{keyword}, '%')
                   OR e.style LIKE CONCAT('%', #{keyword}, '%')
+                  OR e.box_number LIKE CONCAT('%', #{keyword}, '%')
                   OR ed.carrier LIKE CONCAT('%', #{keyword}, '%')
                   OR ed.tracking_no LIKE CONCAT('%', #{keyword}, '%')
                 )

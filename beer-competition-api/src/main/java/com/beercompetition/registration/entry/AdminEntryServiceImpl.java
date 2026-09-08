@@ -145,6 +145,11 @@ public class AdminEntryServiceImpl implements AdminEntryService {
         addChange(changes, "酒名", entry.getName(), normalizeRequired(request.getName(), "酒款名称不能为空"));
         addChange(changes, "投递组别", resolveCategoryName(entry.getCategoryId()), category.getName());
         addChange(changes, "基础风格", entry.getStyle(), normalizeRequired(request.getStyle(), "基础风格不能为空"));
+        String boxNumber = normalizeNullable(request.getBoxNumber());
+        if (boxNumber != null && boxNumber.length() > 20) {
+            throw new BaseException("箱号不能超过20个字符");
+        }
+        addChange(changes, "箱号", entry.getBoxNumber(), boxNumber);
         addChange(changes, "ABV", entry.getAbv() == null ? null : entry.getAbv().stripTrailingZeros().toPlainString(),
                 request.getAbv() == null ? null : request.getAbv().stripTrailingZeros().toPlainString());
         addExtraFieldChanges(changes, entry.getId(), fieldConfigs, normalizedExtraFields);
@@ -152,6 +157,7 @@ public class AdminEntryServiceImpl implements AdminEntryService {
         entry.setName(normalizeRequired(request.getName(), "酒款名称不能为空"));
         entry.setCategoryId(category.getId());
         entry.setStyle(normalizeRequired(request.getStyle(), "基础风格不能为空"));
+        entry.setBoxNumber(boxNumber);
         entry.setStyleConfigId(selectedStyle == null ? entry.getStyleConfigId() : selectedStyle.getId());
         entry.setAbv(request.getAbv());
         entry.setExtraFieldsJson(writeJson(normalizedExtraFields));

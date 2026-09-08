@@ -33,6 +33,7 @@ public class BeerEntry {
     private String extraFieldsJson;
     private String status;
     private Integer storedFlag;
+    private String boxNumber;
     @TableLogic(value = "0", delval = "1")
     private Integer deletedFlag;
     private LocalDateTime deletedTime;

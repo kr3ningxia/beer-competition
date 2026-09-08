@@ -103,6 +103,7 @@
             <div class="entry-cell">
               <strong :data-tooltip="entry.name || '未命名酒款'" :title="entry.name || '未命名酒款'">{{ entry.name || '未命名酒款' }}</strong>
               <small :data-tooltip="entry.breweryCompanyName || '未关联厂牌'" :title="entry.breweryCompanyName || '未关联厂牌'">{{ entry.breweryCompanyName || '未关联厂牌' }}</small>
+              <small v-if="entry.boxNumber" class="box-number-meta">箱号 {{ entry.boxNumber }}</small>
             </div>
             <div class="soft-cell">
               <strong :data-tooltip="entry.competitionName || '-'" :title="entry.competitionName || '-'">{{ entry.competitionName || '-' }}</strong>
@@ -213,6 +214,16 @@
                 <select v-model="editForm.categoryId" :disabled="!detail.canEdit">
                   <option v-for="item in detailCategoryOptions" :key="item.id" :value="String(item.id)">{{ item.name }}</option>
                 </select>
+              </label>
+              <label>
+                <span>箱号（选填）</span>
+                <input
+                  v-model.trim="editForm.boxNumber"
+                  maxlength="20"
+                  list="admin-entry-box-numbers"
+                  :disabled="!detail.canEdit"
+                  placeholder="输入或选择箱号"
+                />
               </label>
               <label>
                 <span>基础风格</span>
@@ -400,6 +411,15 @@
             <strong>{{ item.value }}</strong>
           </span>
         </div>
+        <label v-if="entryConfirm.payload?.type === 'stored'" class="confirm-reason">
+          <span>箱号（选填）</span>
+          <input
+            v-model.trim="entryConfirm.boxNumber"
+            maxlength="20"
+            list="admin-entry-box-numbers"
+            placeholder="输入或选择箱号"
+          />
+        </label>
         <label v-if="entryConfirm.reasonLabel" class="confirm-reason">
           <span>{{ entryConfirm.reasonLabel }}</span>
           <textarea v-model.trim="entryConfirm.reason" :placeholder="entryConfirm.reasonPlaceholder" maxlength="255"></textarea>
@@ -412,6 +432,10 @@
         </footer>
       </section>
     </div>
+
+    <datalist id="admin-entry-box-numbers">
+      <option v-for="boxNumber in boxNumberOptions" :key="boxNumber" :value="boxNumber" />
+    </datalist>
 
     <div v-if="deleteDialog.open" class="stage-confirm-backdrop" @click.self="closeDeleteDialog">
       <section class="stage-confirm-dialog danger-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-entry-title">
@@ -449,6 +473,7 @@ import {
   fetchAdminEntries,
   fetchAdminEntryDetail,
   fetchAdminEntryDeleteImpact,
+  fetchCompetitionBoxNumbers,
   fetchCompetitionDetail,
   fetchCompetitions,
   markEntryStored,
@@ -468,6 +493,7 @@ const total = ref(0)
 const competitions = ref([])
 const categoryOptions = ref([])
 const detailCategoryOptions = ref([])
+const boxNumberOptions = ref([])
 const loading = ref(false)
 const detailLoading = ref(false)
 const detailOpen = ref(false)
@@ -491,6 +517,7 @@ const entryConfirm = reactive({
   reasonPlaceholder: '',
   reasonRequired: false,
   reason: '',
+  boxNumber: '',
   payload: null,
 })
 const deleteDialog = reactive({ open: false, loading: false, impact: null, entryId: null, reason: '', confirmationCode: '', manualRefunded: false, highRiskConfirmed: false })
@@ -606,7 +633,10 @@ watch(() => route.query.entryId, (entryId) => {
 onMounted(async () => {
   await loadCompetitions()
   applyQuery()
-  if (filters.competitionId) await loadCategoryOptions(filters.competitionId)
+  if (filters.competitionId) {
+    await loadCategoryOptions(filters.competitionId)
+    await loadBoxNumberOptions(filters.competitionId)
+  }
   await loadEntries()
   if (route.query.entryId) await openDetail(Number(route.query.entryId), normalizeDetailTab(route.query.entryTab))
 })
@@ -628,6 +658,7 @@ function applyQuery() {
 async function onCompetitionChange() {
   filters.categoryId = ''
   await loadCategoryOptions(filters.competitionId)
+  await loadBoxNumberOptions(filters.competitionId)
   applyFilters()
 }
 
@@ -638,6 +669,14 @@ async function loadCategoryOptions(competitionId) {
   }
   const data = await fetchCompetitionDetail(competitionId)
   categoryOptions.value = data.categories || []
+}
+
+async function loadBoxNumberOptions(competitionId) {
+  if (!competitionId) {
+    boxNumberOptions.value = []
+    return
+  }
+  boxNumberOptions.value = await fetchCompetitionBoxNumbers(competitionId)
 }
 
 function applyFilters() {
@@ -660,6 +699,7 @@ function changePageSize() {
 function resetFilters() {
   Object.assign(filters, { competitionId: '', status: '', paymentStatus: '', deliveryStatus: '', refundStatus: '', categoryId: '', assigned: '', keyword: '', page: 1, pageSize: 20 })
   categoryOptions.value = []
+  boxNumberOptions.value = []
   router.replace('/admin/entries')
   loadEntries()
 }
@@ -694,6 +734,7 @@ async function openDetail(entryId, tab = 'profile', edit = false) {
   try {
     detail.value = await fetchAdminEntryDetail(entryId)
     await loadDetailCategories(detail.value.competitionId)
+    await loadBoxNumberOptions(detail.value.competitionId)
     syncEditForm()
     statusReason.value = ''
     if (edit) activeTab.value = 'profile'
@@ -776,6 +817,7 @@ function syncEditForm() {
     categoryId: detail.value?.categoryId ? String(detail.value.categoryId) : '',
     style: detail.value?.style || '',
     abv: detail.value?.abv == null ? '' : String(detail.value.abv),
+    boxNumber: detail.value?.boxNumber || '',
     reason: '',
     extraFields: (detail.value?.extraFields || []).map((item) => ({ ...item })),
   })
@@ -811,6 +853,7 @@ async function saveProfile() {
       name: editForm.name,
       categoryId: Number(editForm.categoryId),
       style: editForm.style,
+      boxNumber: editForm.boxNumber.trim() || null,
       abv: Number(normalizeAbvInput(editForm.abv)),
       extraFields,
       reason: editForm.reason,
@@ -894,6 +937,7 @@ function openEntryConfirm(config) {
     reasonPlaceholder: '',
     reasonRequired: false,
     reason: statusReason.value || '',
+    boxNumber: detail.value?.boxNumber || '',
     payload: null,
     ...config,
   })
@@ -908,7 +952,9 @@ async function confirmEntryAction() {
   if (!entryConfirm.action || entryConfirmReasonInvalid.value) return
   entryConfirm.loading = true
   try {
-    if (entryConfirm.action === 'status') await executeDetailStatusAction(entryConfirm.payload?.type, entryConfirm.reason)
+    if (entryConfirm.action === 'status') {
+      await executeDetailStatusAction(entryConfirm.payload?.type, entryConfirm.reason, entryConfirm.boxNumber)
+    }
     if (entryConfirm.action === 'refund') await executeRefundAction(entryConfirm.payload?.type, entryConfirm.reason)
     entryConfirm.open = false
   } finally {
@@ -941,6 +987,22 @@ async function runDetailStatusAction(type) {
     })
     return
   }
+  if (type === 'stored') {
+    openEntryConfirm({
+      action: 'status',
+      kicker: '样品入库',
+      title: '确认样品入库？',
+      copy: '确认后，该酒款会进入后续分桌和评审准备流程。入库时可以顺手登记箱号，后续也能在酒款详情中调整',
+      summary: entrySummaryItems(current, [
+        { label: '当前状态', value: deliveryLabel(current.deliveryStatus) },
+        { label: '短编号', value: current.shortCode || '-' },
+      ]),
+      confirmText: '确认入库',
+      loadingText: '入库中',
+      payload: { type },
+    })
+    return
+  }
   if (type === 'unmarkStored') {
     openEntryConfirm({
       action: 'status',
@@ -963,15 +1025,17 @@ async function runDetailStatusAction(type) {
   await executeDetailStatusAction(type, statusReason.value)
 }
 
-async function executeDetailStatusAction(type, reason = statusReason.value) {
+async function executeDetailStatusAction(type, reason = statusReason.value, boxNumber = '') {
   const current = detail.value
   if (!current) return
   const payload = { reason }
+  if (type === 'stored') payload.boxNumber = boxNumber.trim() || null
   if (type === 'payment') await confirmEntryPayment(current.id, payload)
   if (type === 'stored') await markEntryStored(current.id, payload)
   if (type === 'unmarkStored') await unmarkEntryStored(current.id, payload)
   if (type === 'cancel') await cancelEntry(current.id, payload)
   detail.value = await fetchAdminEntryDetail(current.id)
+  await loadBoxNumberOptions(detail.value.competitionId)
   syncEditForm()
   await loadEntries()
   ElMessage.success(statusActionLabel(type))
@@ -1798,6 +1862,10 @@ button:disabled {
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.entry-cell .box-number-meta {
+  color: #e0b84a;
 }
 
 .state-pill {

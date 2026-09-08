@@ -659,6 +659,7 @@
                 </div>
                 <div class="entry-code-cell">
                   <strong>{{ entry.shortCode }}</strong>
+                  <small v-if="entry.boxNumber" class="entry-box-number">箱 {{ entry.boxNumber }}</small>
                 </div>
                 <div class="entry-style-cell">
                   <strong>{{ entry.categoryName }}</strong>
@@ -1625,6 +1626,15 @@
               <strong>{{ item.value }}</strong>
             </span>
           </div>
+          <label v-if="businessConfirm.boxNumberLabel" class="confirm-reason">
+            <span>{{ businessConfirm.boxNumberLabel }}</span>
+            <input
+              v-model.trim="businessConfirm.boxNumber"
+              maxlength="20"
+              list="competition-box-number-options"
+              :placeholder="businessConfirm.boxNumberPlaceholder"
+            />
+          </label>
           <label v-if="businessConfirm.reasonLabel" class="confirm-reason">
             <span>{{ businessConfirm.reasonLabel }}</span>
             <textarea v-model.trim="businessConfirm.reason" :placeholder="businessConfirm.reasonPlaceholder" :maxlength="businessConfirm.reasonMaxLength"></textarea>
@@ -1687,6 +1697,13 @@
           >
             编号分配
           </button>
+          <button
+            :class="{ active: entryAutoAssignForm.mode === 'box' }"
+            type="button"
+            @click="entryAutoAssignForm.mode = 'box'"
+          >
+            箱号分配
+          </button>
         </div>
 
         <template v-if="entryAutoAssignForm.mode === 'quick'">
@@ -1729,7 +1746,7 @@
           </div>
         </template>
 
-        <template v-else>
+        <template v-else-if="entryAutoAssignForm.mode === 'codes'">
           <label class="entry-code-assign-field">
             <span>参赛编号</span>
             <textarea
@@ -1745,6 +1762,29 @@
           </div>
           <div v-if="entryCodeAssignPreview.issues.length" class="entry-code-assign-issues">
             <p v-for="issue in entryCodeAssignPreview.issues" :key="issue">{{ issue }}</p>
+          </div>
+        </template>
+
+        <template v-else>
+          <label class="entry-code-assign-field">
+            <span>箱号</span>
+            <el-select
+              v-model="entryAutoAssignForm.boxNumber"
+              filterable
+              allow-create
+              default-first-option
+              clearable
+              placeholder="输入或选择箱号"
+              popper-class="entry-auto-assign-popper"
+              style="width: 100%"
+            >
+              <el-option v-for="boxNumber in entryBoxNumberOptions" :key="boxNumber" :label="boxNumber" :value="boxNumber" />
+            </el-select>
+          </label>
+          <div class="entry-code-assign-summary">
+            <span><strong>{{ entryBoxAssignPreview.total }}</strong>箱内酒款</span>
+            <span><strong>{{ entryBoxAssignPreview.assigned }}</strong>已分配</span>
+            <span class="highlight"><strong>{{ entryBoxAssignPreview.entries.length }}</strong>本次加入</span>
           </div>
         </template>
       </div>
@@ -1957,6 +1997,10 @@
         </div>
       </div>
     </el-dialog>
+
+    <datalist id="competition-box-number-options">
+      <option v-for="boxNumber in entryBoxNumberOptions" :key="boxNumber" :value="boxNumber" />
+    </datalist>
 
     <div v-if="feedbackEntryDetailOpen" class="feedback-entry-detail-mask" @click.self="closeFeedbackEntryDetail">
       <aside class="feedback-entry-detail-drawer" role="dialog" aria-modal="true" aria-labelledby="feedback-entry-detail-title">
@@ -2242,6 +2286,9 @@ const businessConfirm = reactive({
   reasonPlaceholder: '',
   reason: '',
   reasonMaxLength: 255,
+  boxNumberLabel: '',
+  boxNumberPlaceholder: '输入或选择箱号',
+  boxNumber: '',
   deadlineLabel: '',
   deadlineValue: '',
   deadlineRequired: false,
@@ -2284,6 +2331,7 @@ const entryAutoAssignForm = reactive({
   categoryId: null,
   quantity: 1,
   codes: '',
+  boxNumber: '',
 })
 const selectedStyleLibraryVersion = ref('')
 const styleLibraryOptions = ref(normalizeStyleLibraries(fallbackStyleLibraries))
@@ -2344,7 +2392,7 @@ const roundStatusLabels = {
 
 const statusInfo = computed(() => statusMeta[competition.value?.status] || statusMeta.DRAFT)
 const adminType = computed(() => getAdminType())
-const isOrganizerAdmin = computed(() => adminType.value === ADMIN_TYPES.ORGANIZER_ADMIN)
+const isOrganizerAdmin = computed(() => adminType.value === ADMIN_TYPES.ORGANIZER_ADMIN || adminType.value === ADMIN_TYPES.ORGANIZER_SUB_ADMIN)
 const beerCoinSettlement = computed(() => competition.value?.beerCoinSettlement || {})
 const beerCoinApplicable = computed(() => (
   isOrganizerAdmin.value && beerCoinSettlement.value.applicable === true
@@ -2773,6 +2821,11 @@ const entryAutoAssignCategoryOptions = computed(() => {
   })
   return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
 })
+const entryBoxNumberOptions = computed(() => [...new Set(
+  [...roundEntryPool.value, ...(competition.value?.entryPool || [])]
+    .map((entry) => String(entry.boxNumber || '').trim())
+    .filter(Boolean),
+)].sort((left, right) => left.localeCompare(right, 'zh-CN')))
 const entryAutoAssignSelectedCategory = computed(() => entryAutoAssignCategoryOptions.value
   .find((option) => option.id === entryAutoAssignForm.categoryId) || null)
 const entryAutoAssignStats = computed(() => {
@@ -3107,10 +3160,24 @@ watch(feedbackFilteredEntries, (entries) => {
     selectedFeedbackEntryKey.value = feedbackEntryKey(feedbackPageEntries.value[0] || entries[0])
   }
 })
+const entryBoxAssignPreview = computed(() => {
+  const boxNumber = String(entryAutoAssignForm.boxNumber || '').trim()
+  if (!boxNumber) return { total: 0, assigned: 0, entries: [] }
+  const matchingEntries = currentPoolEntries.value.filter((entry) => String(entry.boxNumber || '').trim() === boxNumber)
+  const entries = matchingEntries.filter((entry) => !getRoundEntryAssignment(entry.uuid))
+  return {
+    total: matchingEntries.length,
+    assigned: matchingEntries.length - entries.length,
+    entries,
+  }
+})
 const entryCodeAssignPreview = computed(() => buildEntryCodeAssignPreview(entryAutoAssignForm.codes))
 const entryAutoAssignSubmitDisabled = computed(() => {
   if (entryAutoAssignForm.mode === 'codes') {
     return entryCodeAssignPreview.value.entries.length === 0 || entryCodeAssignPreview.value.issues.length > 0
+  }
+  if (entryAutoAssignForm.mode === 'box') {
+    return !String(entryAutoAssignForm.boxNumber || '').trim() || entryBoxAssignPreview.value.entries.length === 0
   }
   return !entryAutoAssignForm.categoryId || entryAutoAssignStats.value.unassigned === 0
 })
@@ -3124,6 +3191,14 @@ watch(feedbackFilters, () => {
   if (activeTab.value === 'feedback') loadFeedbackReview(true)
 }, { deep: true })
 watch(() => sponsorLogoCrop.scale, clampSponsorLogoCropOffset)
+watch(() => entryAutoAssignForm.boxNumber, (value) => {
+  const normalized = String(value || '').slice(0, 20)
+  if (normalized !== value) entryAutoAssignForm.boxNumber = normalized
+})
+watch(() => businessConfirm.boxNumber, (value) => {
+  const normalized = String(value || '').slice(0, 20)
+  if (normalized !== value) businessConfirm.boxNumber = normalized
+})
 
 function buildPaginationPages(page, totalPages) {
   const currentPage = Math.min(Math.max(Number(page) || 1, 1), totalPages)
@@ -5303,6 +5378,7 @@ function resetEntryAutoAssignForm(table = null) {
   entryAutoAssignForm.categoryId = table?.categoryId ?? null
   entryAutoAssignForm.quantity = 1
   entryAutoAssignForm.codes = ''
+  entryAutoAssignForm.boxNumber = ''
 }
 
 function normalizeEntryCode(value) {
@@ -5364,6 +5440,19 @@ function closeEntryAutoAssignDialog() {
 function confirmEntryAutoAssign() {
   const table = entryAutoAssignTable.value
   if (!table) return
+  if (entryAutoAssignForm.mode === 'box') {
+    const preview = entryBoxAssignPreview.value
+    if (!preview.entries.length) {
+      ElMessage.warning('当前箱号没有可加入的酒款')
+      return
+    }
+    table.entryUuids.push(...preview.entries.map((entry) => entry.uuid))
+    syncRoundTableScope(table)
+    clearEntrySelection()
+    closeEntryAutoAssignDialog()
+    ElMessage.success(`${table.name} 已按箱号加入 ${preview.entries.length} 款酒`)
+    return
+  }
   if (entryAutoAssignForm.mode === 'codes') {
     const preview = entryCodeAssignPreview.value
     if (!preview.entries.length) {
@@ -6150,6 +6239,9 @@ function openBusinessConfirm(config) {
     reasonPlaceholder: '',
     reason: '',
     reasonMaxLength: 255,
+    boxNumberLabel: '',
+    boxNumberPlaceholder: '输入或选择箱号',
+    boxNumber: '',
     deadlineLabel: '',
     deadlineValue: '',
     deadlineRequired: false,
@@ -6193,6 +6285,7 @@ async function confirmBusinessAction() {
     if (businessConfirm.action === 'prepareJudging') await runPrepareJudging()
     if (businessConfirm.action === 'reopenRegistration') await runReopenRegistration()
     if (businessConfirm.action === 'returnToSampleCheck') await runReturnToSampleCheck()
+    if (businessConfirm.action === 'markStored') await runMarkEntryStored()
     if (businessConfirm.action === 'replaceCertificate') runChooseAwardCertificate(businessConfirm.payload?.award)
     if (businessConfirm.action === 'deleteCertificate') await runDeleteAwardCertificate(businessConfirm.payload?.award)
     businessConfirm.open = false
@@ -6540,24 +6633,35 @@ function openAdminEntry(entry) {
   router.push({ path: '/admin/entries', query: { competitionId: competition.value.id, entryId: entry.id } })
 }
 
+async function runMarkEntryStored() {
+  const entryId = businessConfirm.payload?.entryId
+  if (!entryId) return
+  await markEntryStored(entryId, {
+    boxNumber: String(businessConfirm.boxNumber || '').trim() || null,
+  })
+  await loadDetail()
+  ElMessage.success('样品已确认入库')
+}
+
 async function markEntryStoredAction(entry) {
   if (isRefundedEntry(entry)) return
-  try {
-    await ElMessageBox.confirm(
-      `确认「${entry.name || entry.shortCode || entry.uuid}」样品已经到场并完成入库吗？确认后该酒款将进入后续分桌和评审准备流程`,
-      '确认样品入库？',
-      {
-        confirmButtonText: '确认入库',
-        cancelButtonText: '再核对',
-        type: 'warning',
-      },
-    )
-  } catch {
-    return
-  }
-  await markEntryStored(entry.id)
-  await loadDetail()
-  ElMessage.success(`${entry.name || entry.uuid} 已确认入库`)
+  await loadEntryPool()
+  openBusinessConfirm({
+    action: 'markStored',
+    kicker: '样品入库',
+    title: '确认样品入库？',
+    copy: `确认「${entry.name || entry.shortCode || entry.uuid}」已经到场并完成入库后，该酒款会进入后续分桌和评审准备流程`,
+    summary: [
+      { label: '酒款', value: entry.name || entry.shortCode || entry.uuid || '-' },
+      { label: '短编号', value: entry.shortCode || '-' },
+      { label: '当前状态', value: entryLatestProgress(entry).label },
+    ],
+    boxNumberLabel: '箱号（选填）',
+    boxNumber: entry.boxNumber || '',
+    confirmText: '确认入库',
+    loadingText: '入库中',
+    payload: { entryId: entry.id },
+  })
 }
 
 function addEntryField() {

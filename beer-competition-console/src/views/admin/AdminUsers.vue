@@ -91,7 +91,7 @@
             <div class="admin-cell">
               <div>
                 <strong>{{ item.name || '未命名管理员' }}</strong>
-                <small>{{ item.currentUser ? '当前登录账号' : '组委会后台账号' }}</small>
+                <small>{{ item.currentUser ? '当前登录账号' : getAdminTypeLabel(item.adminType) }}</small>
               </div>
             </div>
             <span class="code-cell">{{ item.username }}</span>
@@ -150,6 +150,13 @@
           <span>初始密码</span>
           <input v-model.trim="form.password" type="password" autocomplete="new-password" placeholder="至少 6 位" />
         </label>
+        <label v-if="editorMode === 'create' && isOrganizerAdmin">
+          <span>管理员类型</span>
+          <select v-model="form.adminType">
+            <option value="ORGANIZER_ADMIN">主办方主管理员</option>
+            <option value="ORGANIZER_SUB_ADMIN">主办方子管理员</option>
+          </select>
+        </label>
         <footer>
           <button class="tool-button" type="button" @click="closeEditor">取消</button>
           <button class="tool-button primary" type="button" :disabled="saving" @click="saveEditor">保存</button>
@@ -203,7 +210,8 @@ import {
   updateMyAdminCredentials,
 } from '@/api/admin'
 import { getAdminMe } from '@/api/auth'
-import { getAdminUsername, getDisplayName, isAdminCredentialSetupRequired, setSession } from '@/utils/auth'
+import { getAdminType, getAdminUsername, getDisplayName, isAdminCredentialSetupRequired, setSession } from '@/utils/auth'
+import { ADMIN_TYPES, getAdminTypeLabel } from '@/config/adminAccess'
 
 const route = useRoute()
 const router = useRouter()
@@ -224,6 +232,7 @@ const credentialSaving = ref(false)
 const setupMode = computed(() => route.path === '/admin/account-setup' && isAdminCredentialSetupRequired())
 const accountOnly = computed(() => route.path === '/admin/account')
 const currentUser = reactive({ username: getAdminUsername(), displayName: getDisplayName('admin') })
+const isOrganizerAdmin = computed(() => getAdminType() === ADMIN_TYPES.ORGANIZER_ADMIN)
 
 const credentialForm = reactive({
   username: currentUser.username,
@@ -236,6 +245,7 @@ const form = reactive({
   username: '',
   name: '',
   password: '',
+  adminType: 'ORGANIZER_ADMIN',
 })
 
 const passwordForm = reactive({
@@ -330,6 +340,7 @@ function openCreateEditor() {
   form.username = ''
   form.name = ''
   form.password = ''
+  form.adminType = isOrganizerAdmin.value ? 'ORGANIZER_ADMIN' : ''
   editorOpen.value = true
 }
 
@@ -363,6 +374,7 @@ async function saveEditor() {
         username: form.username,
         name: form.name,
         password: form.password,
+        ...(isOrganizerAdmin.value ? { adminType: form.adminType } : {}),
       })
       ElMessage.success('管理员账号已新增')
     } else {
@@ -1053,7 +1065,8 @@ svg {
   font-weight: 850;
 }
 
-.modal-card input {
+.modal-card input,
+.modal-card select {
   width: 100%;
   border: 1px solid rgba(219, 232, 237, 0.16);
   border-radius: 8px;

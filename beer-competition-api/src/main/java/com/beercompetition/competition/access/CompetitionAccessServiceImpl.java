@@ -47,7 +47,7 @@ public class CompetitionAccessServiceImpl implements CompetitionAccessService {
     @Override
     public void requireStyleLibraryWriteAccess() {
         AdminType type = resolveAdminType(requireCurrentAdmin());
-        if (type != AdminType.PLATFORM_SUPER_ADMIN && type != AdminType.ORGANIZER_ADMIN) {
+        if (type != AdminType.PLATFORM_SUPER_ADMIN && !type.isOrganizerAdmin()) {
             throw new ForbiddenException("当前账号无风格库维护权限");
         }
     }
@@ -59,7 +59,7 @@ public class CompetitionAccessServiceImpl implements CompetitionAccessService {
 
     @Override
     public boolean isOrganizerAdmin() {
-        return resolveAdminType(requireCurrentAdmin()) == AdminType.ORGANIZER_ADMIN;
+        return resolveAdminType(requireCurrentAdmin()).isOrganizerAdmin();
     }
 
     @Override
@@ -110,7 +110,7 @@ public class CompetitionAccessServiceImpl implements CompetitionAccessService {
     public Long requireCurrentOrganizerId() {
         AdminUser adminUser = requireCurrentAdmin();
         AdminType adminType = resolveAdminType(adminUser);
-        if (adminType == AdminType.ORGANIZER_ADMIN) {
+        if (adminType.isOrganizerAdmin()) {
             OrganizerMember member = organizerMemberMapper.selectOne(new LambdaQueryWrapper<OrganizerMember>()
                     .eq(OrganizerMember::getAdminUserId, adminUser.getId())
                     .eq(OrganizerMember::getStatus, ACTIVE_STATUS)

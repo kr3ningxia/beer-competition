@@ -6,5 +6,10 @@ package com.beercompetition.pojo.enums;
 public enum AdminType {
     PLATFORM_SUPER_ADMIN,
     PLATFORM_EVENT_ADMIN,
-    ORGANIZER_ADMIN
+    ORGANIZER_ADMIN,
+    ORGANIZER_SUB_ADMIN;
+
+    public boolean isOrganizerAdmin() {
+        return this == ORGANIZER_ADMIN || this == ORGANIZER_SUB_ADMIN;
+    }
 }

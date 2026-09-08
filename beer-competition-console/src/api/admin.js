@@ -34,6 +34,10 @@ export function fetchCompetitionEntryPoolPage(id, params = {}) {
   return request.get(`/api/admin/competitions/${id}/entry-pool/page`, { params, authScope: 'admin' })
 }
 
+export function fetchCompetitionBoxNumbers(id) {
+  return request.get(`/api/admin/competitions/${id}/box-numbers`, { authScope: 'admin' })
+}
+
 export function fetchCompetitionQuickSummary(id) {
   return request.get(`/api/admin/competitions/${id}/quick-summary`, { authScope: 'admin' })
 }

@@ -5,6 +5,7 @@ import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.common.util.Md5Util;
+import com.beercompetition.common.util.PiiService;
 import com.beercompetition.mapper.AdminOperationLogMapper;
 import com.beercompetition.mapper.AdminUserMapper;
 import com.beercompetition.mapper.EnterpriseAccountMapper;
@@ -23,11 +24,13 @@ import com.beercompetition.pojo.po.OrganizerMember;
 import com.beercompetition.security.AdminIdentityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.LocalDateTime;
 
 /**
@@ -41,6 +44,9 @@ public class OrganizerProvisioningServiceImpl implements OrganizerProvisioningSe
     private static final String ENTERPRISE_STATUS_ACTIVE = "ACTIVE";
     private static final String ORGANIZER_STATUS_ACTIVE = "ACTIVE";
     private static final String TARGET_APPLICATION = "ORGANIZER_APPLICATION";
+    private static final String INITIAL_CREDENTIAL_DELIVERY_PREFIX =
+            "beer-competition:organizer-application:credential:";
+    private static final Duration INITIAL_CREDENTIAL_DELIVERY_TTL = Duration.ofDays(7);
     private static final String PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
     private static final SecureRandom RANDOM = new SecureRandom();
 
@@ -51,6 +57,8 @@ public class OrganizerProvisioningServiceImpl implements OrganizerProvisioningSe
     private final OrganizerMemberMapper organizerMemberMapper;
     private final AdminOperationLogMapper adminOperationLogMapper;
     private final AdminIdentityService adminIdentityService;
+    private final PiiService piiService;
+    private final RedisTemplate<String, Object> redisTemplate;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -124,8 +132,24 @@ public class OrganizerProvisioningServiceImpl implements OrganizerProvisioningSe
         application.setStatus(OrganizerApplicationStatus.ACCOUNT_ISSUED.name());
         organizerApplicationMapper.updateById(application);
         writeProvisioningLog(application, organizer.getId(), adminUser.getId());
+        storeInitialCredential(application.getId(), initialPassword);
 
         return new ProvisioningResult(organizer.getId(), adminUser.getId(), username, initialPassword);
+    }
+
+    private void storeInitialCredential(Long applicationId, String initialPassword) {
+        if (applicationId == null || !org.springframework.util.StringUtils.hasText(initialPassword)) {
+            return;
+        }
+        // Redis 中只保留短期加密交付凭据；管理员账号表仍只保存密码哈希。
+        redisTemplate.opsForValue().set(
+                credentialDeliveryKey(applicationId),
+                piiService.encrypt(initialPassword),
+                INITIAL_CREDENTIAL_DELIVERY_TTL);
+    }
+
+    private String credentialDeliveryKey(Long applicationId) {
+        return INITIAL_CREDENTIAL_DELIVERY_PREFIX + applicationId;
     }
 
     private String encryptContactPhone(OrganizerApplication application) {

@@ -8,6 +8,7 @@ import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.common.util.Md5Util;
 import com.beercompetition.mapper.AdminOperationLogMapper;
 import com.beercompetition.mapper.AdminUserMapper;
+import com.beercompetition.mapper.OrganizerApplicationMapper;
 import com.beercompetition.mapper.OrganizerMemberMapper;
 import com.beercompetition.pojo.dto.AdminPasswordUpdateRequest;
 import com.beercompetition.pojo.dto.AdminCredentialsUpdateRequest;
@@ -17,6 +18,7 @@ import com.beercompetition.pojo.dto.AdminUserStatusUpdateRequest;
 import com.beercompetition.pojo.dto.AdminUserUpdateRequest;
 import com.beercompetition.pojo.po.AdminOperationLog;
 import com.beercompetition.pojo.po.AdminUser;
+import com.beercompetition.pojo.po.OrganizerApplication;
 import com.beercompetition.pojo.po.OrganizerMember;
 import com.beercompetition.pojo.enums.AdminType;
 import com.beercompetition.pojo.vo.AdminUserVO;
@@ -25,6 +27,7 @@ import com.beercompetition.security.AdminSessionIdentity;
 import com.beercompetition.service.AdminUserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -38,11 +41,15 @@ public class AdminUserServiceImpl implements AdminUserService {
     private static final int STATUS_DISABLED = 0;
     private static final int STATUS_ACTIVE = 1;
     private static final String TARGET_ADMIN_USER = "ADMIN_USER";
+    private static final String INITIAL_CREDENTIAL_DELIVERY_PREFIX =
+            "beer-competition:organizer-application:credential:";
 
     private final AdminUserMapper adminUserMapper;
     private final AdminOperationLogMapper adminOperationLogMapper;
     private final OrganizerMemberMapper organizerMemberMapper;
+    private final OrganizerApplicationMapper organizerApplicationMapper;
     private final AdminIdentityService adminIdentityService;
+    private final RedisTemplate<String, Object> redisTemplate;
 
     @Override
     public List<AdminUserVO> listAdminUsers(Integer status, String keyword) {
@@ -77,7 +84,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     @Transactional(rollbackFor = Exception.class)
     public AdminUserVO createAdminUser(AdminUserCreateRequest request) {
         AdminSessionIdentity currentIdentity = adminIdentityService.requireCurrentIdentity();
-        AdminType newAdminType = resolveCreatedAdminType(currentIdentity);
+        AdminType newAdminType = resolveCreatedAdminType(currentIdentity, request.getAdminType());
         // 1) 参数规范化与账号唯一性前置校验
         String username = request.getUsername().trim();
         ensureUsernameAvailable(username);
@@ -97,7 +104,7 @@ public class AdminUserServiceImpl implements AdminUserService {
         } catch (DuplicateKeyException ex) {
             throw new BaseException("登录账号已存在");
         }
-        if (newAdminType == AdminType.ORGANIZER_ADMIN) {
+        if (newAdminType.isOrganizerAdmin()) {
             organizerMemberMapper.insert(OrganizerMember.builder()
                     .organizerId(currentIdentity.organizerId())
                     .adminUserId(adminUser.getId())
@@ -162,6 +169,7 @@ public class AdminUserServiceImpl implements AdminUserService {
             adminUser.setMustChangeUsername(0);
         }
         adminUserMapper.updateById(adminUser);
+        clearInitialCredentialDelivery(adminUser.getId());
         writeAdminLog("ADMIN_USER_PASSWORD_RESET", adminUser.getId(), "重置管理员密码：" + adminUser.getUsername());
     }
 
@@ -206,6 +214,9 @@ public class AdminUserServiceImpl implements AdminUserService {
             adminUserMapper.updateById(adminUser);
         } catch (DuplicateKeyException ex) {
             throw new BaseException("该登录账号已被使用");
+        }
+        if (firstSetup) {
+            clearInitialCredentialDelivery(adminUser.getId());
         }
 
         String summary = usernameChanged ? "修改管理员登录账号" : "修改当前管理员密码";
@@ -288,7 +299,8 @@ public class AdminUserServiceImpl implements AdminUserService {
             return adminUser;
         }
         if (currentIdentity.adminType() != AdminType.ORGANIZER_ADMIN
-                || !AdminType.ORGANIZER_ADMIN.name().equals(adminUser.getAdminType())
+                || !(AdminType.ORGANIZER_ADMIN.name().equals(adminUser.getAdminType())
+                || AdminType.ORGANIZER_SUB_ADMIN.name().equals(adminUser.getAdminType()))
                 || !hasActiveMembership(currentIdentity.organizerId(), adminUser.getId())) {
             throw new ForbiddenException("当前账号无权管理该管理员");
         }
@@ -321,11 +333,21 @@ public class AdminUserServiceImpl implements AdminUserService {
                 .toList();
     }
 
-    private AdminType resolveCreatedAdminType(AdminSessionIdentity identity) {
+    private AdminType resolveCreatedAdminType(AdminSessionIdentity identity, String requestedType) {
         if (identity.adminType() == AdminType.PLATFORM_SUPER_ADMIN) {
+            if (requestedType != null && !requestedType.isEmpty()) {
+                throw new BaseException("平台账号创建不支持指定主办方管理员类型");
+            }
             return AdminType.PLATFORM_EVENT_ADMIN;
         }
         if (identity.adminType() == AdminType.ORGANIZER_ADMIN && identity.organizerId() != null) {
+            if (AdminType.ORGANIZER_SUB_ADMIN.name().equals(requestedType)) {
+                return AdminType.ORGANIZER_SUB_ADMIN;
+            }
+            if (requestedType != null && !requestedType.isEmpty()
+                    && !AdminType.ORGANIZER_ADMIN.name().equals(requestedType)) {
+                throw new BaseException("管理员类型不正确");
+            }
             return AdminType.ORGANIZER_ADMIN;
         }
         throw new ForbiddenException("当前账号无权新增管理员账号");
@@ -404,5 +426,17 @@ public class AdminUserServiceImpl implements AdminUserService {
                 .targetPublicId(String.valueOf(targetId))
                 .summary(summary)
                 .build());
+    }
+
+    private void clearInitialCredentialDelivery(Long adminUserId) {
+        if (adminUserId == null) {
+            return;
+        }
+        OrganizerApplication application = organizerApplicationMapper.selectOne(new LambdaQueryWrapper<OrganizerApplication>()
+                .eq(OrganizerApplication::getInitialAdminUserId, adminUserId)
+                .last("LIMIT 1"));
+        if (application != null && application.getId() != null) {
+            redisTemplate.delete(INITIAL_CREDENTIAL_DELIVERY_PREFIX + application.getId());
+        }
     }
 }

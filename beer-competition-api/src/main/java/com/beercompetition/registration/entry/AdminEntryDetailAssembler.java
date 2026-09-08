@@ -117,6 +117,7 @@ public class AdminEntryDetailAssembler {
                 .categoryId(entry.getCategoryId())
                 .categoryName(category == null ? null : category.getName())
                 .style(entry.getStyle())
+                .boxNumber(entry.getBoxNumber())
                 .abv(entry.getAbv())
                 .status(entry.getStatus())
                 .paymentStatus(resolvePaymentStatus(entry, payment))

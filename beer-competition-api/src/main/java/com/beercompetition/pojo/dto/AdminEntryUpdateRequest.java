@@ -25,6 +25,9 @@ public class AdminEntryUpdateRequest {
     @Size(max = 128, message = "基础风格不能超过128个字符")
     private String style;
 
+    @Size(max = 20, message = "箱号不能超过20个字符")
+    private String boxNumber;
+
     @NotNull(message = "ABV不能为空")
     @DecimalMin(value = "0.0", message = "ABV不能小于0")
     @DecimalMax(value = "99.99", message = "ABV不能大于99.99")

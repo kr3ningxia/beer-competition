@@ -1,5 +1,5 @@
 <template>
-  <div class="competition-ledger">
+  <div :class="['competition-ledger', { 'third-party-view': isThirdPartyView }]">
     <AdminPageHeader title="比赛管理">
       <template #actions>
         <button v-if="focusCompetition" class="focus-brief" type="button" @click="openQuickView(focusCompetition)">
@@ -22,6 +22,18 @@
       <label class="search-field">
         <Search />
         <input v-model.trim="keyword" type="search" placeholder="搜索比赛名称、编号" />
+      </label>
+
+      <label v-if="canFilterOrganizers" class="organizer-filter">
+        <span class="filter-label">
+          <OfficeBuilding />
+          主办方
+        </span>
+        <select v-model="selectedOrganizerType" aria-label="主办方筛选" @change="selectOrganizer">
+          <option v-for="option in organizerOptions" :key="option.value" :value="option.value">
+            {{ option.label }}
+          </option>
+        </select>
       </label>
 
       <div class="status-tabs" aria-label="比赛状态筛选">
@@ -52,7 +64,7 @@
         <span>入库</span>
         <span>评审配置</span>
         <span>配置</span>
-        <span>下一步</span>
+        <span>{{ organizerColumnLabel }}</span>
       </div>
 
       <button
@@ -76,7 +88,11 @@
           <b>{{ getReadyCount(competition) }} / {{ checkItems.length }}</b>
           <small>{{ getConfigHint(competition) }}</small>
         </span>
-        <span class="row-action">
+        <span v-if="isThirdPartyView" class="row-action organizer-cell" :title="competition.organizerName || '未标注主办方'">
+          <span class="organizer-dot" aria-hidden="true"></span>
+          <strong>{{ competition.organizerName || '未标注主办方' }}</strong>
+        </span>
+        <span v-else class="row-action">
           {{ getNextAction(competition) }}
           <Right />
         </span>
@@ -194,6 +210,7 @@ import {
   CircleCheck,
   Clock,
   Close,
+  OfficeBuilding,
   Plus,
   Right,
   Search,
@@ -207,17 +224,30 @@ import {
   statusMeta,
 } from './competitionStore'
 import { fetchCompetitionQuickSummary, fetchCompetitions } from '@/api/admin'
+import { ADMIN_TYPES } from '@/config/adminAccess'
+import { getAdminType } from '@/utils/auth'
 
 const router = useRouter()
 const competitions = ref([])
 const loading = ref(false)
 const keyword = ref('')
 const selectedStatus = ref('ALL')
+const selectedOrganizerType = ref('PLATFORM')
 const selectedYear = ref('ALL')
 const quickVisible = ref(false)
 const quickLoading = ref(false)
 const selectedCompetition = ref(null)
 const archivesLoaded = ref(false)
+
+const canFilterOrganizers = computed(() => getAdminType() === ADMIN_TYPES.PLATFORM_SUPER_ADMIN)
+const isThirdPartyView = computed(() => canFilterOrganizers.value && selectedOrganizerType.value === 'TENANT')
+const organizerColumnLabel = computed(() => isThirdPartyView.value ? '比赛举办的主办方' : '下一步')
+
+const organizerOptions = [
+  { label: '啤酒事务局', value: 'PLATFORM' },
+  { label: '第三方平台', value: 'TENANT' },
+  { label: '所有主办方', value: 'ALL' },
+]
 
 const statusOptions = [
   { label: '全部', value: 'ALL' },
@@ -231,7 +261,7 @@ const statusOptions = [
 ]
 
 const focusCompetition = computed(() => {
-  const activeCompetitions = competitions.value.filter((item) => item.status !== 'ARCHIVED')
+  const activeCompetitions = filteredCompetitions.value.filter((item) => item.status !== 'ARCHIVED')
   return activeCompetitions.find((item) => item.status === 'JUDGING_PREP')
     || activeCompetitions.find((item) => item.status === 'REGISTRATION_OPEN')
     || activeCompetitions[0]
@@ -251,12 +281,16 @@ const filteredCompetitions = computed(() => {
   })
 })
 
-onMounted(loadCompetitions)
+onMounted(() => loadCompetitions(false))
 
-async function loadCompetitions() {
+async function loadCompetitions(includeArchived = false) {
   loading.value = true
   try {
-    const data = await fetchCompetitions({ includeArchived: false })
+    const params = { includeArchived }
+    if (canFilterOrganizers.value) {
+      params.organizerType = selectedOrganizerType.value
+    }
+    const data = await fetchCompetitions(params)
     competitions.value = data.map(normalizeCompetition)
   } finally {
     loading.value = false
@@ -313,15 +347,17 @@ async function openQuickView(competition) {
 async function selectStatus(status) {
   selectedStatus.value = status
   if (status !== 'ARCHIVED' || archivesLoaded.value || loading.value) return
-  loading.value = true
-  try {
-    const data = await fetchCompetitions({ includeArchived: true })
-    const merged = new Map(competitions.value.map((item) => [item.id, item]))
-    data.map(normalizeCompetition).forEach((item) => merged.set(item.id, item))
-    competitions.value = [...merged.values()]
+  await loadCompetitions(true)
+  if (selectedStatus.value === 'ARCHIVED') {
     archivesLoaded.value = true
-  } finally {
-    loading.value = false
+  }
+}
+
+async function selectOrganizer() {
+  archivesLoaded.value = false
+  await loadCompetitions(selectedStatus.value === 'ARCHIVED')
+  if (selectedStatus.value === 'ARCHIVED') {
+    archivesLoaded.value = true
   }
 }
 
@@ -521,6 +557,7 @@ svg {
 .filter-bar {
   flex: 0 0 auto;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 14px;
   margin-top: 22px;
   padding: 14px;
@@ -554,7 +591,55 @@ svg {
   color: var(--faint);
 }
 
+.organizer-filter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  min-height: 42px;
+  padding: 0 10px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.filter-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.filter-label svg {
+  width: 15px;
+  color: var(--gold-soft);
+}
+
+.organizer-filter select {
+  min-height: 34px;
+  padding: 0 26px 0 8px;
+  color: var(--text);
+  border: 1px solid rgba(216, 169, 53, 0.2);
+  border-radius: 6px;
+  outline: 0;
+  background: rgba(216, 169, 53, 0.07);
+}
+
+.organizer-filter select:focus-visible {
+  border-color: rgba(224, 184, 74, 0.6);
+  box-shadow: 0 0 0 3px rgba(216, 169, 53, 0.1);
+}
+
+.organizer-filter option {
+  color: #dce9ed;
+  background: #172227;
+}
+
 .status-tabs {
+  flex: 1 1 auto;
   gap: 6px;
   flex-wrap: wrap;
 }
@@ -684,6 +769,27 @@ svg {
   gap: 8px;
   color: var(--gold-soft);
   font-weight: 800;
+}
+
+.organizer-cell {
+  min-width: 0;
+  color: var(--text);
+}
+
+.organizer-cell strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.organizer-dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--blue);
+  box-shadow: 0 0 0 4px rgba(111, 180, 207, 0.1);
 }
 
 .quick-button {
@@ -864,6 +970,16 @@ svg {
   .ledger-row > .row-action {
     display: none;
   }
+
+  .third-party-view .ledger-header,
+  .third-party-view .ledger-row {
+    grid-template-columns: minmax(220px, 1fr) 90px 90px 100px 125px 104px minmax(135px, 0.8fr) 44px;
+  }
+
+  .third-party-view .ledger-header span:nth-child(8),
+  .third-party-view .ledger-row > .organizer-cell {
+    display: flex;
+  }
 }
 
 @media (max-width: 980px) {
@@ -878,6 +994,10 @@ svg {
     display: flex;
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .organizer-filter {
+    justify-content: space-between;
   }
 
   .focus-brief {

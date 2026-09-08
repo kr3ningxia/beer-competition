@@ -97,10 +97,13 @@ public class AdminEntryStatusService {
             delivery.setSubmittedTime(LocalDateTime.now());
         }
         entryDeliveryMapper.updateById(delivery);
+        String boxNumber = normalizeBoxNumber(request == null ? null : request.getBoxNumber());
+        entry.setBoxNumber(boxNumber);
         entry.setStoredFlag(1);
         entry.setStatus(EntryStatus.STORED.name());
         beerEntryMapper.updateById(entry);
-        writeEntryLog("ENTRY_MARK_STORED", entry.getUuid(), buildStatusLogSummary("确认入库", normalizeStatusReason(request)));
+        writeEntryLog("ENTRY_MARK_STORED", entry.getUuid(), buildStatusLogSummary("确认入库",
+                normalizeStatusReason(request), boxNumber));
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -160,14 +163,29 @@ public class AdminEntryStatusService {
     }
 
     private String buildStatusLogSummary(String action, String reason) {
+        return buildStatusLogSummary(action, reason, null);
+    }
+
+    private String buildStatusLogSummary(String action, String reason, String boxNumber) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("action", action);
         payload.put("reason", StringUtils.hasText(reason) ? reason : "");
+        if (boxNumber != null) {
+            payload.put("boxNumber", boxNumber);
+        }
         return writeObjectJson(payload, "保存状态记录失败");
     }
 
     private String normalizeStatusReason(AdminEntryStatusRequest request) {
         return request == null ? null : normalizeNullable(request.getReason());
+    }
+
+    private String normalizeBoxNumber(String value) {
+        String normalized = normalizeNullable(value);
+        if (normalized != null && normalized.length() > 20) {
+            throw new BaseException("箱号不能超过20个字符");
+        }
+        return normalized;
     }
 
     private void writeEntryLog(String action, String targetPublicId, String summary) {

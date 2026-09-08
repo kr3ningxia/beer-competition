@@ -159,7 +159,9 @@ class OrganizerApplicationIntegrationTest {
 
     @Test
     void reviewAndProvisionAreIdempotentAndInitialPasswordIsOneTimeOnly() {
-        applicationId = findApplicationId(applicationService.submit(request("账号发放测试")).getApplicationNo());
+        OrganizerApplicationSubmitRequest applicationRequest = request("账号发放测试");
+        OrganizerApplicationSubmitVO submitted = applicationService.submit(applicationRequest);
+        applicationId = findApplicationId(submitted.getApplicationNo());
         platformAdminId = insertPlatformAdmin();
         asPlatformAdmin();
 
@@ -178,6 +180,10 @@ class OrganizerApplicationIntegrationTest {
         assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM admin_operation_log WHERE target_type = 'ORGANIZER_APPLICATION' AND target_public_id = ? AND summary LIKE ?",
                 Integer.class, String.valueOf(applicationId), "%" + first.initialPassword() + "%"))
                 .isZero();
+
+        var delivered = applicationService.queryStatus(submitted.getApplicationNo(), applicationRequest.getContactPhone());
+        assertThat(delivered.getAdminUsername()).isEqualTo(first.username());
+        assertThat(delivered.getInitialPassword()).isEqualTo(first.initialPassword());
 
         OrganizerProvisioningService.ProvisioningResult second = provisioningService.provisionApprovedApplication(applicationId);
         assertThat(second.organizerId()).isEqualTo(first.organizerId());

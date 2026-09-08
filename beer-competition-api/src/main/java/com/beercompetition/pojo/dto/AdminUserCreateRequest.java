@@ -20,4 +20,8 @@ public class AdminUserCreateRequest {
     @NotBlank(message = "请输入初始密码")
     @Size(min = 6, max = 32, message = "密码长度需为6到32位")
     private String password;
+
+    /** 主办方创建时可选主管理员或子管理员；平台账号创建时由服务端决定。 */
+    @Pattern(regexp = "^(ORGANIZER_ADMIN|ORGANIZER_SUB_ADMIN)?$", message = "管理员类型不正确")
+    private String adminType;
 }
