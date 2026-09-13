@@ -26,6 +26,7 @@ public class CompetitionRound {
     private Long sourceRoundId;
     private String status;
     private Integer sortOrder;
+    private Long allocationRevision;
     private LocalDateTime publishedTime;
     private LocalDateTime submittedTime;
     private LocalDateTime lockedTime;

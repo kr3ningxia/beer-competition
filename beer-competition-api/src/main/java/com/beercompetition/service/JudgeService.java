@@ -7,6 +7,7 @@ import com.beercompetition.pojo.dto.AdminJudgeStatusUpdateRequest;
 import com.beercompetition.pojo.dto.AdminJudgeUpdateRequest;
 import com.beercompetition.pojo.dto.AdminJudgePhoneUpdateRequest;
 import com.beercompetition.pojo.dto.JudgeProfileUpdateRequest;
+import com.beercompetition.pojo.dto.JudgeRoundMemberChangeRequest;
 import com.beercompetition.pojo.vo.CompetitionVO;
 import com.beercompetition.pojo.vo.JudgeAccountVO;
 
@@ -37,6 +38,9 @@ public interface JudgeService {
     void createAssignment(JudgeAssignmentCreateRequest request);
 
     void updateCompetitionAssignments(Long competitionId, JudgeAssignmentBatchUpdateRequest request);
+
+    void changeRoundTableMembers(Long competitionId, Long roundId, Long roundTableId,
+                                 JudgeRoundMemberChangeRequest request);
 
     List<CompetitionVO> listMyCompetitions();
 }

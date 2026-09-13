@@ -361,10 +361,15 @@
             </div>
             <p v-if="!detail.logs?.length" class="empty-line">暂无修改记录</p>
           </section>
-          <details class="danger-zone">
-            <summary>危险操作</summary>
-            <p>仅在确需移除酒款时使用，操作需要短编号确认并记录原因。</p>
-            <button class="danger" type="button" @click="openDeleteDialog(detail)">删除酒款</button>
+          <details class="more-zone">
+            <summary>
+              <span>更多</span>
+              <svg class="more-zone-caret" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6.2 8 10.2 12 6.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
+            </summary>
+            <div class="more-zone-body">
+              <p>仅在确需移除酒款时使用，操作需要短编号确认并记录原因。</p>
+              <button type="button" @click="openDeleteDialog(detail)">删除酒款</button>
+            </div>
           </details>
         </template>
       </aside>
@@ -1903,16 +1908,69 @@ button:disabled {
   justify-content: flex-start;
 }
 
-.danger-zone {
-  margin-top: 22px;
-  padding: 12px;
-  border: 1px solid rgba(239, 139, 126, .3);
-  border-radius: 8px;
-  color: var(--muted);
+.more-zone {
+  margin-top: 18px;
+  border: 1px solid rgba(218, 232, 237, 0.12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  overflow: hidden;
 }
 
-.danger-zone summary { cursor: pointer; color: #ef8b7e; font-weight: 700; }
-.danger-zone button { margin-top: 8px; }
+.more-zone summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 11px 14px;
+  cursor: pointer;
+  color: #c3d2d7;
+  font-size: 13px;
+  font-weight: 600;
+  list-style: none;
+  user-select: none;
+}
+
+.more-zone summary::-webkit-details-marker { display: none; }
+
+.more-zone-caret {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  color: #8ea4ad;
+  transition: transform 0.18s ease;
+}
+
+.more-zone[open] .more-zone-caret { transform: rotate(180deg); }
+
+.more-zone-body {
+  padding: 0 14px 14px;
+  border-top: 1px solid rgba(218, 232, 237, 0.08);
+}
+
+.more-zone-body p {
+  margin: 12px 0 10px;
+  color: #8ea4ad;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.more-zone-body button {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid rgba(218, 232, 237, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #d7e3e7;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.more-zone-body button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(218, 232, 237, 0.3);
+}
 .confirm-reason input { width: 100%; min-height: 38px; }
 .confirm-check { display: flex; gap: 8px; align-items: flex-start; margin-top: 10px; color: #f1d6d0; font-size: 13px; }
 .danger-dialog .confirm-button.primary { background: #b94b40; }

@@ -24,35 +24,33 @@
         <input v-model.trim="keyword" type="search" placeholder="搜索比赛名称、编号" />
       </label>
 
-      <label v-if="canFilterOrganizers" class="organizer-filter">
-        <span class="filter-label">
-          <OfficeBuilding />
-          主办方
-        </span>
-        <select v-model="selectedOrganizerType" aria-label="主办方筛选" @change="selectOrganizer">
-          <option v-for="option in organizerOptions" :key="option.value" :value="option.value">
-            {{ option.label }}
-          </option>
+      <div class="filter-controls">
+        <label v-if="canFilterOrganizers" class="organizer-filter">
+          <span class="filter-label">
+            <OfficeBuilding />
+            主办方
+          </span>
+          <select v-model="selectedOrganizerType" aria-label="主办方筛选" @change="selectOrganizer">
+            <option v-for="option in organizerOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </label>
+
+        <label class="status-filter">
+          <select v-model="selectedStatus" aria-label="比赛状态筛选" @change="selectStatus(selectedStatus)">
+            <option v-for="option in statusOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </label>
+
+        <select v-model="selectedYear" aria-label="年份筛选">
+          <option value="ALL">全部年份</option>
+          <option value="2026">2026</option>
+          <option value="2025">2025</option>
         </select>
-      </label>
-
-      <div class="status-tabs" aria-label="比赛状态筛选">
-        <button
-          v-for="option in statusOptions"
-          :key="option.value"
-          :class="{ active: selectedStatus === option.value }"
-          type="button"
-          @click="selectStatus(option.value)"
-        >
-          {{ option.label }}
-        </button>
       </div>
-
-      <select v-model="selectedYear" aria-label="年份筛选">
-        <option value="ALL">全部年份</option>
-        <option value="2026">2026</option>
-        <option value="2025">2025</option>
-      </select>
     </section>
 
     <section class="ledger-panel">
@@ -63,7 +61,6 @@
         <span>报名</span>
         <span>入库</span>
         <span>评审配置</span>
-        <span>配置</span>
         <span>{{ organizerColumnLabel }}</span>
       </div>
 
@@ -84,10 +81,6 @@
         <span>{{ competition.entriesSummary.registered }} / {{ competition.entriesSummary.total }}</span>
         <span>{{ competition.entriesSummary.stored }} / {{ competition.entriesSummary.registered }}</span>
         <span>{{ competition.judgeTableCount }} 桌 · {{ getJudgeCount(competition) }} 人</span>
-        <span>
-          <b>{{ getReadyCount(competition) }} / {{ checkItems.length }}</b>
-          <small>{{ getConfigHint(competition) }}</small>
-        </span>
         <span v-if="isThirdPartyView" class="row-action organizer-cell" :title="competition.organizerName || '未标注主办方'">
           <span class="organizer-dot" aria-hidden="true"></span>
           <strong>{{ competition.organizerName || '未标注主办方' }}</strong>
@@ -370,19 +363,6 @@ function getJudgeCount(competition) {
   return competition.judgeCount
 }
 
-function getConfigHint(competition) {
-  if (competition.dataIntegrityIssues.length) {
-    return '需修正'
-  }
-  if (getReadyCount(competition) === checkItems.length) {
-    return '完整'
-  }
-  if (competition.alerts.some((alert) => alert.level === 'danger')) {
-    return '阻塞'
-  }
-  return '待确认'
-}
-
 function getReadyCount(competition) {
   return Number(competition.readyCount || 0)
 }
@@ -482,7 +462,7 @@ svg {
 .tool-button,
 .filter-bar,
 .search-field,
-.status-tabs,
+.status-filter,
 .ledger-row,
 .event-cell,
 .row-action,
@@ -558,13 +538,20 @@ svg {
   flex: 0 0 auto;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 14px;
+  gap: 12px 16px;
   margin-top: 22px;
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
   backdrop-filter: blur(14px);
+}
+
+.filter-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .search-field {
@@ -591,16 +578,13 @@ svg {
   color: var(--faint);
 }
 
-.organizer-filter {
+.organizer-filter,
+.status-filter {
   display: flex;
   align-items: center;
   gap: 10px;
   flex: 0 0 auto;
   min-height: 42px;
-  padding: 0 10px 0 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.025);
 }
 
 .filter-label {
@@ -618,46 +602,24 @@ svg {
   color: var(--gold-soft);
 }
 
-.organizer-filter select {
-  min-height: 34px;
-  padding: 0 26px 0 8px;
-  color: var(--text);
-  border: 1px solid rgba(216, 169, 53, 0.2);
-  border-radius: 6px;
+.filter-bar select {
+  min-height: 42px;
+  padding: 0 30px 0 12px;
+  color: #a9bbc2;
+  border: 1px solid var(--line);
+  border-radius: 8px;
   outline: 0;
-  background: rgba(216, 169, 53, 0.07);
+  background: rgba(255, 255, 255, 0.025);
 }
 
-.organizer-filter select:focus-visible {
+.filter-bar select:focus-visible {
   border-color: rgba(224, 184, 74, 0.6);
   box-shadow: 0 0 0 3px rgba(216, 169, 53, 0.1);
 }
 
-.organizer-filter option {
+.filter-bar option {
   color: #dce9ed;
   background: #172227;
-}
-
-.status-tabs {
-  flex: 1 1 auto;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.status-tabs button,
-.filter-bar select {
-  min-height: 38px;
-  padding: 0 12px;
-  color: #a9bbc2;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.025);
-}
-
-.status-tabs button.active {
-  color: var(--gold-soft);
-  border-color: rgba(216, 169, 53, 0.32);
-  background: rgba(216, 169, 53, 0.08);
 }
 
 .ledger-panel {
@@ -681,7 +643,7 @@ svg {
 .ledger-header,
 .ledger-row {
   display: grid;
-  grid-template-columns: minmax(250px, 1.5fr) 104px 112px 112px 112px 142px 112px minmax(150px, 0.9fr) 44px;
+  grid-template-columns: minmax(250px, 1.5fr) 104px 112px 112px 112px 142px minmax(170px, 1fr) 44px;
   gap: 14px;
   align-items: center;
 }
@@ -758,11 +720,6 @@ svg {
   color: #a9bbc2;
   border-color: var(--line);
   background: rgba(255, 255, 255, 0.03);
-}
-
-.ledger-row b {
-  display: block;
-  color: var(--text);
 }
 
 .row-action {
@@ -961,11 +918,11 @@ svg {
 @media (max-width: 1320px) {
   .ledger-header,
   .ledger-row {
-    grid-template-columns: minmax(260px, 1fr) 104px 100px 100px 126px 104px 44px;
+    grid-template-columns: minmax(260px, 1fr) 104px 100px 100px 126px 44px;
   }
 
   .ledger-header span:nth-child(5),
-  .ledger-header span:nth-child(8),
+  .ledger-header span:nth-child(7),
   .ledger-row > span:nth-child(5),
   .ledger-row > .row-action {
     display: none;
@@ -973,10 +930,10 @@ svg {
 
   .third-party-view .ledger-header,
   .third-party-view .ledger-row {
-    grid-template-columns: minmax(220px, 1fr) 90px 90px 100px 125px 104px minmax(135px, 0.8fr) 44px;
+    grid-template-columns: minmax(220px, 1fr) 90px 90px 100px 125px minmax(135px, 0.8fr) 44px;
   }
 
-  .third-party-view .ledger-header span:nth-child(8),
+  .third-party-view .ledger-header span:nth-child(7),
   .third-party-view .ledger-row > .organizer-cell {
     display: flex;
   }
@@ -990,7 +947,8 @@ svg {
     overflow: visible;
   }
 
-  .filter-bar {
+  .filter-bar,
+  .filter-controls {
     display: flex;
     flex-direction: column;
     align-items: stretch;
@@ -998,6 +956,10 @@ svg {
 
   .organizer-filter {
     justify-content: space-between;
+  }
+
+  .filter-controls select {
+    width: 100%;
   }
 
   .focus-brief {

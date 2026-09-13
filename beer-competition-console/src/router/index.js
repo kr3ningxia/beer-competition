@@ -49,8 +49,8 @@ const routes = [
     meta: { requiresAuth: true, scope: 'admin' },
     children: [
       { path: 'dashboard', component: () => import('@/views/admin/Dashboard.vue'), meta: { adminTypes: ALL_ADMIN_TYPES } },
-      { path: 'account-setup', component: () => import('@/views/admin/AdminUsers.vue'), meta: { adminTypes: ALL_ADMIN_TYPES, credentialSetup: true } },
-      { path: 'account', component: () => import('@/views/admin/AdminUsers.vue'), meta: { adminTypes: ALL_ADMIN_TYPES } },
+      { path: 'account-setup', component: () => import('@/views/admin/AccountSettings.vue'), meta: { adminTypes: ALL_ADMIN_TYPES, credentialSetup: true } },
+      { path: 'account', component: () => import('@/views/admin/AccountSettings.vue'), meta: { adminTypes: ALL_ADMIN_TYPES } },
       { path: 'competitions', component: () => import('@/views/admin/Competitions.vue'), meta: { adminTypes: ALL_ADMIN_TYPES } },
       { path: 'competitions/new', component: () => import('@/views/admin/CompetitionCreate.vue'), meta: { adminTypes: ALL_ADMIN_TYPES } },
       { path: 'competitions/:id', component: () => import('@/views/admin/CompetitionDetail.vue'), meta: { adminTypes: ALL_ADMIN_TYPES } },

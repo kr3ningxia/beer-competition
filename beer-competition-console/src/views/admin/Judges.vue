@@ -12,7 +12,7 @@
     <section class="toolbar">
       <label class="search-box">
         <Search />
-        <input v-model.trim="keyword" placeholder="搜索姓名、手机号后四位、资质、回避酒厂" @input="scheduleLoadJudges" @keyup.enter="loadFirstPage" />
+        <input v-model.trim="keyword" placeholder="搜索姓名、手机号后四位、资质、BJCP 编号、回避酒厂" @input="scheduleLoadJudges" @keyup.enter="loadFirstPage" />
       </label>
       <div class="filter-tabs" aria-label="评审状态筛选">
         <button
@@ -44,6 +44,7 @@
           <span>资质</span>
           <span>利益关系</span>
           <span>备注</span>
+          <span>赛事表现</span>
           <span>状态</span>
           <span>操作</span>
         </div>
@@ -70,6 +71,13 @@
               </small>
             </div>
             <span class="review-remark" :title="judge.reviewRemark || ''">{{ judge.reviewRemark || '-' }}</span>
+            <div class="performance-cell">
+              <template v-if="performanceById[judge.publicId]?.evaluatedCompetitionCount">
+                <strong>{{ formatPerformanceScore(performanceById[judge.publicId].averageScore) }}</strong>
+                <small>{{ performanceById[judge.publicId].evaluatedCompetitionCount }} 场已评</small>
+              </template>
+              <span v-else class="performance-empty">暂无赛事评价</span>
+            </div>
             <span :class="['status-badge', statusTone(judge)]">
               {{ judge.statusLabel || statusLabel(judge.status) }}
             </span>
@@ -160,6 +168,10 @@
           <textarea v-model.trim="editForm.qualification"></textarea>
         </label>
         <label>
+          <span>BJCP 编号</span>
+          <input v-model.trim="editForm.bjcpNumber" maxlength="64" />
+        </label>
+        <label>
           <span>备注</span>
           <textarea v-model.trim="editForm.reviewRemark" maxlength="200" placeholder="可填写评审审核备注"></textarea>
           <small class="field-counter">{{ editForm.reviewRemark.length }} / 200</small>
@@ -221,8 +233,23 @@
           <div><span>手机号</span><strong>{{ viewingJudge?.phone || viewingJudge?.maskedPhone || '-' }}</strong></div>
           <div><span>微信号</span><strong>{{ viewingJudge?.wechat || viewingJudge?.maskedWechat || '-' }}</strong></div>
           <div class="wide"><span>资质信息</span><strong>{{ viewingJudge?.qualification || '-' }}</strong></div>
+          <div class="wide"><span>BJCP 编号</span><strong>{{ viewingJudge?.bjcpNumber || '-' }}</strong></div>
           <div class="wide"><span>利益关系</span><strong>{{ hasBreweryConflict(viewingJudge) ? formatBreweryConflict(viewingJudge) : '无' }}</strong></div>
           <div class="wide"><span>备注</span><strong>{{ viewingJudge?.reviewRemark || '-' }}</strong></div>
+          <div class="wide performance-detail">
+            <span>赛事表现</span>
+            <template v-if="viewingPerformance?.evaluatedCompetitionCount">
+              <strong>{{ formatPerformanceScore(viewingPerformance.averageScore) }} 平均分 · {{ viewingPerformance.evaluatedCompetitionCount }} 场已评</strong>
+              <small v-if="viewingPerformance.latestCompetitionName">最近：{{ viewingPerformance.latestCompetitionName }} {{ formatPerformanceScore(viewingPerformance.latestScore) }}</small>
+              <ul>
+                <li v-for="item in viewingPerformance.history" :key="`${item.competitionId}-${item.confirmedTime}`">
+                  <span>{{ item.competitionName }}</span>
+                  <strong>{{ formatPerformanceScore(item.totalScore) }}</strong>
+                </li>
+              </ul>
+            </template>
+            <strong v-else>暂无已确认的赛事评价</strong>
+          </div>
         </div>
         <footer class="drawer-actions">
           <button class="tool-button primary" type="button" @click="editFromViewer">编辑资料</button>
@@ -238,10 +265,11 @@ import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import { Refresh, Search } from '@element-plus/icons-vue'
-import { deleteJudge, fetchJudgeDetail, fetchJudgesPage, updateJudge, updateJudgePhone, updateJudgeStatus } from '@/api/admin'
+import { deleteJudge, fetchJudgeDetail, fetchJudgePerformanceHistory, fetchJudgePerformanceOverview, fetchJudgesPage, updateJudge, updateJudgePhone, updateJudgeStatus } from '@/api/admin'
 
 const route = useRoute()
 const judges = ref([])
+const performanceById = ref({})
 const keyword = ref('')
 const statusFilter = ref('ALL')
 const loading = ref(false)
@@ -251,12 +279,14 @@ const editorOpen = ref(false)
 const phoneEditorOpen = ref(false)
 const viewerOpen = ref(false)
 const viewingJudge = ref(null)
+const viewingPerformance = ref(null)
 const editingJudgePublicId = ref(null)
 const editForm = reactive({
   phone: '',
   name: '',
   wechat: '',
   qualification: '',
+  bjcpNumber: '',
   breweryConflictFlag: false,
   breweryConflictText: '',
   reviewRemark: '',
@@ -312,6 +342,15 @@ async function loadJudges() {
     })
     judges.value = data.records || []
     totalCount.value = data.total || 0
+    performanceById.value = {}
+    if (judges.value.length) {
+      try {
+        const performance = await fetchJudgePerformanceOverview(judges.value.map((judge) => judge.publicId))
+        performanceById.value = Object.fromEntries((performance || []).map((item) => [item.judgePublicId, item]))
+      } catch {
+        performanceById.value = {}
+      }
+    }
   } finally {
     loading.value = false
   }
@@ -378,6 +417,7 @@ async function openEditor(judge) {
   editForm.name = detail.name || ''
   editForm.wechat = detail.wechat || ''
   editForm.qualification = detail.qualification || ''
+  editForm.bjcpNumber = detail.bjcpNumber || ''
   editForm.breweryConflictFlag = Boolean(detail.breweryConflictFlag)
   editForm.breweryConflictText = detail.breweryConflictText || ''
   editForm.reviewRemark = detail.reviewRemark || ''
@@ -386,12 +426,19 @@ async function openEditor(judge) {
 
 async function openViewer(judge) {
   viewingJudge.value = await fetchJudgeDetail(judge.publicId)
+  viewingPerformance.value = null
+  try {
+    viewingPerformance.value = await fetchJudgePerformanceHistory(judge.publicId)
+  } catch {
+    viewingPerformance.value = null
+  }
   viewerOpen.value = true
 }
 
 function closeViewer() {
   viewerOpen.value = false
   viewingJudge.value = null
+  viewingPerformance.value = null
 }
 
 function editFromViewer() {
@@ -418,6 +465,7 @@ async function saveEditor() {
     name: editForm.name,
     wechat: editForm.wechat,
     qualification: editForm.qualification,
+    bjcpNumber: editForm.bjcpNumber,
     breweryConflictFlag: editForm.breweryConflictFlag,
     breweryConflictText: editForm.breweryConflictFlag ? editForm.breweryConflictText : '',
     reviewRemark: editForm.reviewRemark,
@@ -453,6 +501,10 @@ async function changeStatus(judge, status) {
 
 function getInitial(name) {
   return name?.trim()?.slice(0, 1) || '评'
+}
+
+function formatPerformanceScore(value) {
+  return value == null ? '-' : Number(value).toFixed(1)
 }
 
 function hasBreweryConflict(judge) {
@@ -766,7 +818,7 @@ svg {
 .table-head,
 .table-row {
   display: grid;
-  grid-template-columns: minmax(200px, 1.1fr) minmax(180px, 0.9fr) minmax(220px, 1.1fr) minmax(150px, 0.8fr) minmax(150px, 0.8fr) 86px minmax(250px, auto);
+  grid-template-columns: minmax(200px, 1.1fr) minmax(180px, 0.9fr) minmax(220px, 1.1fr) minmax(150px, 0.8fr) minmax(150px, 0.8fr) minmax(140px, 0.8fr) 86px minmax(250px, auto);
   gap: 12px;
   align-items: center;
 }
@@ -800,6 +852,7 @@ svg {
 .contact-cell span,
 .qualification,
 .conflict-cell small,
+.performance-cell strong,
 .review-remark {
   display: block;
   min-width: 0;
@@ -809,9 +862,49 @@ svg {
   white-space: nowrap;
 }
 
+.performance-cell {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.performance-cell strong {
+  color: var(--gold-soft);
+  font-size: 16px;
+}
+
+.performance-empty,
+.performance-detail > strong {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.performance-detail ul {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.performance-detail li {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.performance-detail li strong {
+  color: var(--gold-soft);
+  font-size: 13px;
+}
+
 .judge-cell small,
 .contact-cell small,
-.conflict-cell small {
+.conflict-cell small,
+.performance-cell small {
   display: block;
   margin-top: 4px;
   overflow: hidden;
@@ -1122,7 +1215,7 @@ svg {
 @media (max-width: 1260px) {
   .table-head,
   .table-row {
-    grid-template-columns: minmax(190px, 1fr) minmax(170px, 0.9fr) minmax(180px, 1fr) minmax(130px, 0.8fr) minmax(130px, 0.8fr) 80px minmax(220px, auto);
+    grid-template-columns: minmax(190px, 1fr) minmax(170px, 0.9fr) minmax(180px, 1fr) minmax(130px, 0.8fr) minmax(130px, 0.8fr) minmax(120px, 0.8fr) 80px minmax(220px, auto);
   }
 }
 

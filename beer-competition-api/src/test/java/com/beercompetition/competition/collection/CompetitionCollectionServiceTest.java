@@ -7,6 +7,7 @@ import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.FileAssetMapper;
 import com.beercompetition.mapper.OrganizerMapper;
 import com.beercompetition.pojo.dto.CompetitionCollectionConfigUpdateRequest;
+import com.beercompetition.pojo.enums.EntryPayMethod;
 import com.beercompetition.pojo.po.Competition;
 import com.beercompetition.pojo.po.CompetitionCollectionConfig;
 import com.beercompetition.pojo.po.FileAsset;
@@ -81,6 +82,21 @@ class CompetitionCollectionServiceTest {
         assertThatThrownBy(() -> service.updateAdminConfig(1L, request))
                 .isInstanceOf(BaseException.class)
                 .hasMessage("微信收款码文件无效");
+    }
+
+    @Test
+    void tenantCompetitionRejectsDisabledPaymentMethod() {
+        givenTenantCompetition();
+        when(competitionMapper.selectById(1L)).thenReturn(Competition.builder()
+                .id(1L).organizerId(2L).status("REGISTRATION_OPEN").build());
+        when(configMapper.selectOne(any())).thenReturn(CompetitionCollectionConfig.builder()
+                .competitionId(1L)
+                .enabledMethodsJson("[\"WECHAT_QR\"]")
+                .build());
+
+        assertThatThrownBy(() -> service.requirePortalPaymentMethodEnabled(1L, EntryPayMethod.BANK_TRANSFER))
+                .isInstanceOf(BaseException.class)
+                .hasMessage("该赛事未开放银行转账");
     }
 
     private void givenTenantCompetition() {

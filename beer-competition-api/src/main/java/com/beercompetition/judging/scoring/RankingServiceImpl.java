@@ -189,7 +189,8 @@ public class RankingServiceImpl implements RankingService {
         }
         assertCompetitionNotArchived(table.getCompetitionId());
         RoundTableMember member = requireRoundTableMember(roundTableId, judgeId);
-        if (JudgeRoleType.CAPTAIN.name().equals(member.getRole())) {
+        if ("REMOVED".equalsIgnoreCase(member.getStatus())
+                || JudgeRoleType.CAPTAIN.name().equals(member.getRole())) {
             throw new ForbiddenException("当前账号不需要确认本桌排序");
         }
         roundValidationPolicy.validateRankingRoundTableReady(table);
@@ -261,7 +262,10 @@ public class RankingServiceImpl implements RankingService {
             throw new BaseException("本桌排序已锁定，不能调整参考排序");
         }
         assertCompetitionNotArchived(table.getCompetitionId());
-        requireRoundTableMember(roundTableId, judgeId);
+        RoundTableMember member = requireRoundTableMember(roundTableId, judgeId);
+        if ("REMOVED".equalsIgnoreCase(member.getStatus())) {
+            throw new ForbiddenException("当前账号已离场，不能继续调整参考排序");
+        }
         roundValidationPolicy.validateRankingDraft(table, request.getResults());
 
         // 2) 用覆盖写方式保存草稿，保证同一评审同一桌只有一份参考排序
@@ -424,12 +428,14 @@ public class RankingServiceImpl implements RankingService {
     private int resolveRankingConfirmationRequiredCount(RoundTable table) {
         return Math.toIntExact(roundTableMemberMapper.selectCount(new LambdaQueryWrapper<RoundTableMember>()
                 .eq(RoundTableMember::getRoundTableId, table.getId())
+                .ne(RoundTableMember::getStatus, "REMOVED")
                 .ne(RoundTableMember::getRole, JudgeRoleType.CAPTAIN.name())));
     }
 
     private int resolveRankingConfirmationConfirmedCount(RoundTable table) {
         Set<Long> requiredJudgeIds = roundTableMemberMapper.selectList(new LambdaQueryWrapper<RoundTableMember>()
                         .eq(RoundTableMember::getRoundTableId, table.getId())
+                        .ne(RoundTableMember::getStatus, "REMOVED")
                         .ne(RoundTableMember::getRole, JudgeRoleType.CAPTAIN.name()))
                 .stream()
                 .map(RoundTableMember::getJudgeAccountId)

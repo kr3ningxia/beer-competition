@@ -169,16 +169,18 @@ public class RoundAllocationServiceImpl implements RoundAllocationService {
     public void saveRoundAllocation(Long competitionId, Long roundId, RoundAllocationRequest request) {
         // 1) 查询轮次并校验编辑状态
         Competition competition = roundQuerySupport.requireCompetition(competitionId);
-        CompetitionRound round = roundQuerySupport.requireRound(competitionId, roundId);
+        CompetitionRound round = roundQuerySupport.requireRoundForUpdate(competitionId, roundId);
         beerCoinSettlementService.requireJudgingSettlementCompleted(competitionId);
         roundValidationPolicy.validateCompetitionStageForRoundAllocation(competition, round);
         if (!RoundStatus.DRAFT.name().equals(round.getStatus())) {
             throw new BaseException("只有草稿轮次可以保存编排");
         }
+        validateAllocationRevision(round, request);
         roundValidationPolicy.validateAllocationRequest(round, request, false);
 
         // 2) 清理旧编排数据
         List<RoundTable> oldTables = roundQuerySupport.listRoundTables(roundId);
+        validateCandidateCoverage(round, request);
         List<Long> oldTableIds = oldTables.stream().map(RoundTable::getId).toList();
         if (!oldTableIds.isEmpty()) {
             roundResultMapper.delete(new LambdaQueryWrapper<RoundResult>().in(RoundResult::getRoundTableId, oldTableIds));
@@ -189,6 +191,46 @@ public class RoundAllocationServiceImpl implements RoundAllocationService {
 
         // 3) 全量写入新的轮次桌、桌长和酒款
         saveAllocationTables(competitionId, round, request);
+        round.setAllocationRevision(normalizeAllocationRevision(round) + 1);
+        competitionRoundMapper.updateById(round);
+    }
+
+    private void validateAllocationRevision(CompetitionRound round, RoundAllocationRequest request) {
+        long currentRevision = normalizeAllocationRevision(round);
+        if (request.getAllocationRevision() == null || request.getAllocationRevision() != currentRevision) {
+            throw new BaseException("轮次草稿已被更新，请重新加载后继续编辑");
+        }
+    }
+
+    private void validateCandidateCoverage(CompetitionRound round, RoundAllocationRequest request) {
+        if (!RoundType.RANKING.name().equals(round.getRoundType())) {
+            return;
+        }
+        String targetMode = request.getTables().stream()
+                .map(RoundTableAllocationRequest::getTargetMode)
+                .filter(StringUtils::hasText)
+                .findFirst()
+                .orElse(RoundTargetMode.TOP_N.name());
+        Set<Long> expectedEntryIds = roundQuerySupport.filterCandidatesForTargetMode(
+                        roundQuerySupport.listSubmittedCandidateResults(round.getSourceRoundId()), targetMode)
+                .stream()
+                .map(RoundResult::getBeerEntryId)
+                .collect(Collectors.toSet());
+        Set<Long> submittedEntryIds = roundQuerySupport.loadEntryByUuids(round.getCompetitionId(), request.getTables().stream()
+                        .flatMap(table -> safeList(table.getEntryUuids()).stream())
+                        .filter(StringUtils::hasText)
+                        .collect(Collectors.toSet()))
+                .values()
+                .stream()
+                .map(BeerEntry::getId)
+                .collect(Collectors.toSet());
+        if (!submittedEntryIds.equals(expectedEntryIds)) {
+            throw new BaseException("晋级候选已更新，请重新加载后继续编辑");
+        }
+    }
+
+    private long normalizeAllocationRevision(CompetitionRound round) {
+        return round.getAllocationRevision() == null ? 0L : round.getAllocationRevision();
     }
 
     private void saveAllocationTables(Long competitionId, CompetitionRound round, RoundAllocationRequest request) {
@@ -408,12 +450,16 @@ public class RoundAllocationServiceImpl implements RoundAllocationService {
 
     private void insertMembers(RoundTable table, List<JudgeAssignment> assignments, boolean requireTasks) {
         for (JudgeAssignment assignment : assignments) {
+            if ("WITHDRAWN".equalsIgnoreCase(assignment.getStatus())) {
+                continue;
+            }
             boolean taskRequired = requireTasks || JudgeRoleType.CAPTAIN.name().equals(assignment.getRole());
             roundTableMemberMapper.insert(RoundTableMember.builder()
                     .roundTableId(table.getId())
                     .judgeAccountId(assignment.getJudgeAccountId())
                     .role(assignment.getRole())
                     .systemTaskRequired(taskRequired ? FLAG_TRUE : FLAG_FALSE)
+                    .status("ACTIVE")
                     .build());
         }
     }
@@ -428,6 +474,7 @@ public class RoundAllocationServiceImpl implements RoundAllocationService {
                 .judgeAccountId(captainJudgeId)
                 .role(JudgeRoleType.CAPTAIN.name())
                 .systemTaskRequired(FLAG_TRUE)
+                .status("ACTIVE")
                 .build());
     }
 
@@ -447,6 +494,7 @@ public class RoundAllocationServiceImpl implements RoundAllocationService {
                             .judgeAccountId(judge.getId())
                             .role(JudgeRoleType.PROFESSIONAL.name())
                             .systemTaskRequired(FLAG_FALSE)
+                            .status("ACTIVE")
                             .build());
                 });
     }
@@ -482,6 +530,7 @@ public class RoundAllocationServiceImpl implements RoundAllocationService {
                     .judgeAccountId(judge.getId())
                     .role(memberRole)
                     .systemTaskRequired(FLAG_TRUE)
+                    .status("ACTIVE")
                     .build());
         }
     }
@@ -512,6 +561,7 @@ public class RoundAllocationServiceImpl implements RoundAllocationService {
                 .recruitmentApplicationId(judgeRecruitmentApplicationMapper
                         .selectAcceptedApplicationId(table.getCompetitionId(), judgeId))
                 .role(role)
+                .status("ACTIVE")
                 .build());
     }
 
@@ -549,6 +599,7 @@ public class RoundAllocationServiceImpl implements RoundAllocationService {
                 .map(RoundTableMember::getJudgeAccountId)
                 .collect(Collectors.toSet());
         assignments.stream()
+                .filter(assignment -> !"WITHDRAWN".equalsIgnoreCase(assignment.getStatus()))
                 .filter(assignment -> !JudgeRoleType.CAPTAIN.name().equals(assignment.getRole()))
                 .filter(assignment -> !existingIds.contains(assignment.getJudgeAccountId()))
                 .forEach(assignment -> roundTableMemberMapper.insert(RoundTableMember.builder()
@@ -556,6 +607,7 @@ public class RoundAllocationServiceImpl implements RoundAllocationService {
                         .judgeAccountId(assignment.getJudgeAccountId())
                         .role(assignment.getRole())
                         .systemTaskRequired(FLAG_TRUE)
+                        .status("ACTIVE")
                         .build()));
     }
 

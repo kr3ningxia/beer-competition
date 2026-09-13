@@ -50,8 +50,9 @@ public class AdminAccountController {
      */
     @GetMapping("/accounts")
     public Result<List<AdminUserVO>> list(@RequestParam(required = false) Integer status,
+                                          @RequestParam(required = false) String adminType,
                                           @RequestParam(required = false) String keyword) {
-        return Result.success(adminUserService.listAdminUsers(status, keyword));
+        return Result.success(adminUserService.listAdminUsers(status, adminType, keyword));
     }
 
     /**

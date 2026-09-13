@@ -1,0 +1,33 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e9]:
+      - paragraph [ref=e10]: 啤酒事务局
+      - heading "赛事后台" [level=1] [ref=e11]
+    - generic [ref=e40]:
+      - heading "赛事后台登录" [level=2] [ref=e42]
+      - generic [ref=e43]:
+        - generic [ref=e44]:
+          - generic [ref=e45]: "*账号"
+          - textbox "*账号" [ref=e51]:
+            - /placeholder: 请输入账号
+            - text: codex_perf_qa_0913
+        - generic [ref=e52]:
+          - generic [ref=e53]: "*密码"
+          - generic [ref=e56]:
+            - textbox "*密码" [ref=e60]:
+              - /placeholder: 请输入密码
+              - text: CodexQa0913!
+            - generic [ref=e81] [cursor=pointer]
+        - generic [ref=e62] [cursor=pointer]:
+          - generic [ref=e63]:
+            - checkbox "记住账号"
+          - generic [ref=e65]: 记住账号
+        - button "登录" [disabled]
+  - contentinfo "网站备案信息" [ref=e71]:
+    - generic [ref=e72]:
+      - generic [ref=e73]: © 上海啤事文化传播有限公司
+      - navigation "备案查询" [ref=e75]:
+        - link "沪ICP备2024061956号-3" [ref=e76] [cursor=pointer]:
+          - /url: https://beian.miit.gov.cn/
+        - link "沪公网安备31011702892028号" [ref=e78] [cursor=pointer]:
+          - /url: https://beian.mps.gov.cn/#/query/webSearch?code=31011702892028

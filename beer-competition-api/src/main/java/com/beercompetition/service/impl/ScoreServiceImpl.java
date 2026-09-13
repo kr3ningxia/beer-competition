@@ -256,14 +256,6 @@ public class ScoreServiceImpl implements ScoreService {
         // 1) 校验桌长权限并查询同桌原始评分
         BeerEntry entry = requireEntry(uuid);
         RoundTableEntry roundEntry = requireScoreRoundTask(entry.getId(), JudgeRoleType.CAPTAIN.name(), true);
-        Set<Long> peerJudgeIds = roundTableMemberMapper.selectList(new LambdaQueryWrapper<RoundTableMember>()
-                        .eq(RoundTableMember::getRoundTableId, roundEntry.getRoundTableId())
-                        .eq(RoundTableMember::getSystemTaskRequired, FLAG_TRUE)
-                        .ne(RoundTableMember::getRole, JudgeRoleType.CAPTAIN.name()))
-                .stream()
-                .map(RoundTableMember::getJudgeAccountId)
-                .collect(Collectors.toSet());
-        Long captainId = BaseContext.getCurrentId();
         return scoreRecordMapper.selectList(new LambdaQueryWrapper<ScoreRecord>()
                         .eq(ScoreRecord::getBeerEntryId, entry.getId())
                         .eq(ScoreRecord::getCompetitionId, entry.getCompetitionId())
@@ -272,7 +264,6 @@ public class ScoreServiceImpl implements ScoreService {
                         .orderByAsc(ScoreRecord::getFinalFlag)
                         .orderByAsc(ScoreRecord::getId))
                 .stream()
-                .filter(score -> isCurrentTableScore(score, peerJudgeIds, captainId))
                 .map(this::toScoreRecordVO)
                 .toList();
     }
@@ -292,15 +283,18 @@ public class ScoreServiceImpl implements ScoreService {
         JudgeAssignment captainAssignment = requireCaptainAssignment(entry.getCompetitionId());
         RoundTableEntry roundEntry = requireScoreRoundTask(entry.getId(), JudgeRoleType.CAPTAIN.name(), true);
         rejectCaptainFinalAfterSubmitted(roundEntry);
+        ScoreRecord finalRecord = scoreRecordMapper.selectOne(new LambdaQueryWrapper<ScoreRecord>()
+                .eq(ScoreRecord::getBeerEntryId, entry.getId())
+                .eq(ScoreRecord::getFinalFlag, 1)
+                .last("LIMIT 1"));
+        if (finalRecord != null && !Objects.equals(finalRecord.getJudgeAccountId(), BaseContext.getCurrentId())) {
+            throw new BaseException("该酒款已由原桌长完成汇总");
+        }
         requireCaptainPersonalScoreSubmitted(roundEntry, BaseContext.getCurrentId());
         requireAllTableScoresSubmitted(roundEntry);
         int commentCharCount = countDimensionNotes(request.getDimensions());
 
         // 2) 新增或更新桌长共识结果
-        ScoreRecord finalRecord = scoreRecordMapper.selectOne(new LambdaQueryWrapper<ScoreRecord>()
-                .eq(ScoreRecord::getBeerEntryId, entry.getId())
-                .eq(ScoreRecord::getJudgeAccountId, BaseContext.getCurrentId())
-                .eq(ScoreRecord::getFinalFlag, 1));
         String nextDimensionsJson = writeDimensions(request.getDimensions());
         boolean changed = finalRecord == null || finalScoreChanged(finalRecord, nextDimensionsJson, request);
         if (finalRecord == null) {
@@ -704,6 +698,7 @@ public class ScoreServiceImpl implements ScoreService {
                     .recruitmentApplicationId(judgeRecruitmentApplicationMapper
                             .selectAcceptedApplicationId(competitionId, judgeId))
                     .role(member.getRole())
+                    .status("ACTIVE")
                     .build();
             judgeAssignmentMapper.insert(created);
             return created;

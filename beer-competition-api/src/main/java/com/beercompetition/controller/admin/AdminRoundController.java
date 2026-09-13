@@ -5,6 +5,7 @@ import com.beercompetition.pojo.dto.AdminConfirmationOverrideRequest;
 import com.beercompetition.pojo.dto.FirstRoundCreateRequest;
 import com.beercompetition.pojo.dto.NextRoundCreateRequest;
 import com.beercompetition.pojo.dto.RoundAllocationRequest;
+import com.beercompetition.pojo.dto.JudgeRoundMemberChangeRequest;
 import com.beercompetition.pojo.vo.CompetitionDetailVO;
 import com.beercompetition.pojo.vo.ResultDraftVO;
 import com.beercompetition.competition.query.CompetitionQueryService;
@@ -16,6 +17,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -38,6 +40,7 @@ public class AdminRoundController {
     private final RoundLifecycleService roundLifecycleService;
     private final RoundQueryService roundQueryService;
     private final ScoreConfirmationService scoreConfirmationService;
+    private final com.beercompetition.service.JudgeService judgeService;
 
     /**
      * 创建指定比赛的第一轮评审。
@@ -57,6 +60,18 @@ public class AdminRoundController {
                                                            @PathVariable Long roundId,
                                                            @RequestBody @Valid RoundAllocationRequest request) {
         roundAllocationService.saveRoundAllocation(id, roundId, request);
+        return Result.success(competitionQueryService.getCompetitionDetail(id));
+    }
+
+    /**
+     * 调整进行中评审桌的评委成员。历史评分与确认记录不删除。
+     */
+    @PatchMapping("/rounds/{roundId}/tables/{roundTableId}/judge-members")
+    public Result<CompetitionDetailVO> changeRoundTableMembers(@PathVariable Long id,
+                                                               @PathVariable Long roundId,
+                                                               @PathVariable Long roundTableId,
+                                                               @RequestBody @Valid JudgeRoundMemberChangeRequest request) {
+        judgeService.changeRoundTableMembers(id, roundId, roundTableId, request);
         return Result.success(competitionQueryService.getCompetitionDetail(id));
     }
 

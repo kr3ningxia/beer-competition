@@ -9,7 +9,7 @@
       </template>
     </AdminPageHeader>
 
-    <section class="filter-panel" aria-label="操作日志筛选">
+    <section :class="['filter-panel', { 'is-actor-hidden': !canFilterByAdmin }]" aria-label="操作日志筛选">
       <label class="field time-field">
         <span>时间范围</span>
         <el-date-picker
@@ -27,7 +27,7 @@
         />
       </label>
 
-      <label class="field">
+      <label v-if="canFilterByAdmin" class="field">
         <span>操作者</span>
         <el-select
           v-model="filters.adminUserId"
@@ -206,6 +206,10 @@ import { useRouter } from 'vue-router'
 import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import { Refresh, Search } from '@element-plus/icons-vue'
 import { fetchAdminOperationLogs, fetchAdminUsers } from '@/api/admin'
+import { getAdminType } from '@/utils/auth'
+import { ADMIN_TYPES, canAccessAdminTypes } from '@/config/adminAccess'
+
+const ADMIN_ACCOUNT_MANAGER_TYPES = [ADMIN_TYPES.PLATFORM_SUPER_ADMIN, ADMIN_TYPES.ORGANIZER_ADMIN]
 
 const router = useRouter()
 const logs = ref([])
@@ -227,6 +231,8 @@ const pagination = reactive({
   page: 1,
   pageSize: 30,
 })
+
+const canFilterByAdmin = computed(() => canAccessAdminTypes(getAdminType(), ADMIN_ACCOUNT_MANAGER_TYPES))
 
 const adminOptions = computed(() => adminUsers.value.map((item) => ({
   value: String(item.id),
@@ -283,7 +289,8 @@ const emptyTitle = computed(() => (hasActiveFilters.value ? '没有符合条件�
 const emptyDescription = computed(() => (hasActiveFilters.value ? '调整时间、对象或关键词后再查询' : '关键业务操作发生后会显示在这里'))
 
 onMounted(async () => {
-  await Promise.all([loadAdminUsers(), loadLogs()])
+  // 操作者下拉依赖管理员账号列表接口，仅平台超级管理员与主办方主管理员有权访问。
+  await Promise.all([canFilterByAdmin.value ? loadAdminUsers() : Promise.resolve(), loadLogs()])
 })
 
 async function loadAdminUsers() {
@@ -515,6 +522,10 @@ button:disabled {
   border-radius: 8px;
   background: var(--panel);
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.18);
+}
+
+.filter-panel.is-actor-hidden {
+  grid-template-columns: minmax(360px, 1.45fr) minmax(150px, 0.65fr) minmax(150px, 0.65fr) minmax(260px, 1fr) auto;
 }
 
 .field {

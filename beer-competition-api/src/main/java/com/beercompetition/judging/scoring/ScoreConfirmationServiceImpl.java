@@ -167,6 +167,22 @@ public class ScoreConfirmationServiceImpl implements ScoreConfirmationService {
         autoSubmitRoundTableIfReady(roundTableMapper.selectById(roundTableId), round);
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void refreshAfterMemberChange(Long roundTableId) {
+        RoundTable table = roundQuerySupport.requireRoundTable(roundTableId);
+        CompetitionRound round = competitionRoundMapper.selectById(table.getRoundId());
+        if (round == null || table.getCaptainJudgeId() == null) {
+            return;
+        }
+        boolean ready = RoundType.SCORE.name().equals(round.getRoundType())
+                ? isScoreRoundTableReady(table)
+                : roundValidationPolicy.isRankingRoundTableReady(table);
+        if (ready) {
+            autoSubmitRoundTableIfReady(table, round);
+        }
+    }
+
     private RoundTableMember requireRoundTableMember(Long roundTableId, Long judgeId) {
         RoundTableMember member = roundTableMemberMapper.selectOne(new LambdaQueryWrapper<RoundTableMember>()
                 .eq(RoundTableMember::getRoundTableId, roundTableId)
@@ -323,12 +339,14 @@ public class ScoreConfirmationServiceImpl implements ScoreConfirmationService {
     private int resolveRankingConfirmationRequiredCount(RoundTable table) {
         return Math.toIntExact(roundTableMemberMapper.selectCount(new LambdaQueryWrapper<RoundTableMember>()
                 .eq(RoundTableMember::getRoundTableId, table.getId())
+                .ne(RoundTableMember::getStatus, "REMOVED")
                 .ne(RoundTableMember::getRole, JudgeRoleType.CAPTAIN.name())));
     }
 
     private int resolveRankingConfirmationConfirmedCount(RoundTable table) {
         Set<Long> requiredJudgeIds = roundTableMemberMapper.selectList(new LambdaQueryWrapper<RoundTableMember>()
                         .eq(RoundTableMember::getRoundTableId, table.getId())
+                        .ne(RoundTableMember::getStatus, "REMOVED")
                         .ne(RoundTableMember::getRole, JudgeRoleType.CAPTAIN.name()))
                 .stream()
                 .map(RoundTableMember::getJudgeAccountId)

@@ -12,7 +12,7 @@ import java.util.List;
 
 public interface AdminUserService {
 
-    List<AdminUserVO> listAdminUsers(Integer status, String keyword);
+    List<AdminUserVO> listAdminUsers(Integer status, String adminType, String keyword);
 
     AdminUserVO createAdminUser(AdminUserCreateRequest request);
 

@@ -1,6 +1,7 @@
 package com.beercompetition.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.exception.BaseException;
@@ -10,6 +11,7 @@ import com.beercompetition.common.util.PiiService;
 import com.beercompetition.mapper.AdminOperationLogMapper;
 import com.beercompetition.mapper.BreweryMapper;
 import com.beercompetition.mapper.CompetitionMapper;
+import com.beercompetition.mapper.CompetitionRoundMapper;
 import com.beercompetition.mapper.JudgeAccountMapper;
 import com.beercompetition.mapper.JudgeAssignmentMapper;
 import com.beercompetition.mapper.JudgeTableMapper;
@@ -18,6 +20,7 @@ import com.beercompetition.mapper.JudgeScoreSessionMapper;
 import com.beercompetition.mapper.RoundJudgeRankingDraftMapper;
 import com.beercompetition.mapper.RoundTableConfirmationMapper;
 import com.beercompetition.mapper.RoundTableMemberMapper;
+import com.beercompetition.mapper.RoundTableMapper;
 import com.beercompetition.mapper.ScoreRecordMapper;
 import com.beercompetition.mapper.PortalAccountMapper;
 import com.beercompetition.pojo.dto.AdminJudgePhoneUpdateRequest;
@@ -27,11 +30,15 @@ import com.beercompetition.pojo.dto.JudgeAssignmentBatchUpdateRequest;
 import com.beercompetition.pojo.dto.JudgeAssignmentCreateRequest;
 import com.beercompetition.pojo.dto.JudgeAssignmentItemRequest;
 import com.beercompetition.pojo.dto.JudgeProfileUpdateRequest;
+import com.beercompetition.pojo.dto.JudgeRoundMemberChangeRequest;
 import com.beercompetition.pojo.enums.JudgeAccountStatus;
 import com.beercompetition.pojo.enums.JudgeRoleType;
+import com.beercompetition.pojo.enums.RoundStatus;
+import com.beercompetition.pojo.enums.RoundType;
 import com.beercompetition.pojo.po.AdminOperationLog;
 import com.beercompetition.pojo.po.Brewery;
 import com.beercompetition.pojo.po.Competition;
+import com.beercompetition.pojo.po.CompetitionRound;
 import com.beercompetition.pojo.po.JudgeAccount;
 import com.beercompetition.pojo.po.JudgeAssignment;
 import com.beercompetition.pojo.po.JudgeTable;
@@ -39,6 +46,7 @@ import com.beercompetition.pojo.po.JudgeScoreSession;
 import com.beercompetition.pojo.po.RoundJudgeRankingDraft;
 import com.beercompetition.pojo.po.RoundTableConfirmation;
 import com.beercompetition.pojo.po.RoundTableMember;
+import com.beercompetition.pojo.po.RoundTable;
 import com.beercompetition.pojo.po.ScoreRecord;
 import com.beercompetition.pojo.po.PortalAccount;
 import com.beercompetition.pojo.vo.CompetitionVO;
@@ -47,6 +55,7 @@ import com.beercompetition.pojo.vo.JudgeTaskVO;
 import com.beercompetition.judging.access.JudgeAccessService;
 import com.beercompetition.service.JudgeService;
 import com.beercompetition.judging.round.JudgeRoundTaskService;
+import com.beercompetition.judging.scoring.ScoreConfirmationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -76,12 +85,15 @@ public class JudgeServiceImpl implements JudgeService {
     private final RoundTableMemberMapper roundTableMemberMapper;
     private final ScoreRecordMapper scoreRecordMapper;
     private final CompetitionMapper competitionMapper;
+    private final CompetitionRoundMapper competitionRoundMapper;
+    private final RoundTableMapper roundTableMapper;
     private final PortalAccountMapper portalAccountMapper;
     private final BreweryMapper breweryMapper;
     private final AdminOperationLogMapper adminOperationLogMapper;
     private final PiiService piiService;
     private final JudgeAccessService judgeAccessService;
     private final JudgeRoundTaskService judgeRoundTaskService;
+    private final ScoreConfirmationService scoreConfirmationService;
 
     @Override
     public List<JudgeAccountVO> listJudges(Integer status, String keyword) {
@@ -160,7 +172,8 @@ public class JudgeServiceImpl implements JudgeService {
 
         // 2) 更新可自主管理资料；账号注册即激活，资料完整性在报名时校验
         applyProfile(account, request.getWechat(), request.getName(), request.getQualification(),
-                request.getBreweryConflictFlag(), request.getBreweryConflictText(), account.getReviewRemark());
+                request.getBjcpNumber(), request.getBreweryConflictFlag(), request.getBreweryConflictText(),
+                account.getReviewRemark());
         if (JudgeAccountStatus.of(account.getStatus()) == JudgeAccountStatus.PENDING_REVIEW) {
             account.setStatus(JudgeAccountStatus.ACTIVE.getCode());
             account.setSubmittedTime(LocalDateTime.now());
@@ -181,7 +194,8 @@ public class JudgeServiceImpl implements JudgeService {
 
         // 2) 后台更新非手机号资料
         applyProfile(account, request.getWechat(), request.getName(), request.getQualification(),
-                request.getBreweryConflictFlag(), request.getBreweryConflictText(), request.getReviewRemark());
+                request.getBjcpNumber(), request.getBreweryConflictFlag(), request.getBreweryConflictText(),
+                request.getReviewRemark());
         judgeAccountMapper.updateById(account);
         writeAdminLog("JUDGE_PROFILE_UPDATE", account.getPublicId(), "更新评审资料");
 
@@ -280,6 +294,7 @@ public class JudgeServiceImpl implements JudgeService {
         if (existing != null) {
             existing.setTableId(request.getTableId());
             existing.setRole(request.getRole().name());
+            existing.setStatus("ACTIVE");
             existing.setRecruitmentApplicationId(judgeRecruitmentApplicationMapper
                     .selectAcceptedApplicationId(request.getCompetitionId(), judge.getId()));
             judgeAssignmentMapper.updateById(existing);
@@ -293,6 +308,7 @@ public class JudgeServiceImpl implements JudgeService {
                         .selectAcceptedApplicationId(request.getCompetitionId(), judge.getId()))
                 .tableId(request.getTableId())
                 .role(request.getRole().name())
+                .status("ACTIVE")
                 .build());
         writeAdminLog("JUDGE_ASSIGNMENT_UPDATE", judge.getPublicId(), "新增单个评审编排");
     }
@@ -351,9 +367,251 @@ public class JudgeServiceImpl implements JudgeService {
                     .recruitmentApplicationId(judgeRecruitmentApplicationMapper
                             .selectAcceptedApplicationId(competitionId, judge.getId()))
                     .role(item.getRole().name())
+                    .status("ACTIVE")
                     .build());
         }
         writeAdminLog("JUDGE_ASSIGNMENT_UPDATE", "COMP-" + competitionId, "整体保存评审编排，人数 " + items.size());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void changeRoundTableMembers(Long competitionId, Long roundId, Long roundTableId,
+                                        JudgeRoundMemberChangeRequest request) {
+        judgeAccessService.requireCompetitionAccess(competitionId);
+        CompetitionRound round = competitionRoundMapper.selectById(roundId);
+        RoundTable table = roundTableMapper.selectById(roundTableId);
+        if (round == null || !Objects.equals(round.getCompetitionId(), competitionId)
+                || table == null || !Objects.equals(table.getCompetitionId(), competitionId)
+                || !Objects.equals(table.getRoundId(), roundId)) {
+            throw new ResourceNotFoundException("评审桌不存在");
+        }
+        if (!isRoundMemberChangeAllowed(round, table)) {
+            throw new BaseException("当前轮次状态不允许调整评委");
+        }
+        List<String> removeIds = request.getRemoveJudgePublicIds() == null
+                ? List.of()
+                : request.getRemoveJudgePublicIds().stream().filter(StringUtils::hasText).distinct().toList();
+        List<JudgeRoundMemberChangeRequest.JudgeRoundMemberItemRequest> additions =
+                request.getAdd() == null ? List.of() : request.getAdd();
+        if (removeIds.isEmpty() && additions.isEmpty()) {
+            throw new BaseException("请至少选择一位需要调整的评委");
+        }
+        Set<String> additionPublicIds = additions.stream()
+                .map(JudgeRoundMemberChangeRequest.JudgeRoundMemberItemRequest::getJudgePublicId)
+                .filter(StringUtils::hasText)
+                .collect(Collectors.toSet());
+        if (additionPublicIds.size() != additions.size()) {
+            throw new BaseException("新增评委不能重复");
+        }
+        if (removeIds.stream().anyMatch(additionPublicIds::contains)) {
+            throw new BaseException("同一评委不能同时加入和离场");
+        }
+        String reason = StringUtils.hasText(request.getReason()) ? request.getReason().trim() : "比赛现场评委调整";
+        List<RoundTableMember> members = roundTableMemberMapper.selectList(new LambdaQueryWrapper<RoundTableMember>()
+                .eq(RoundTableMember::getRoundTableId, roundTableId));
+        Map<Long, RoundTableMember> memberByJudge = members.stream()
+                .collect(Collectors.toMap(RoundTableMember::getJudgeAccountId, item -> item, (left, right) -> left));
+
+        Set<Long> removedJudgeIds = new HashSet<>();
+        for (String publicId : removeIds) {
+            JudgeAccount judge = requireAdminJudgeByPublicId(publicId);
+            RoundTableMember member = memberByJudge.get(judge.getId());
+            if (member == null || !isActiveMember(member)) {
+                throw new BaseException("评委不在当前桌：" + publicId);
+            }
+            member.setStatus("REMOVED");
+            member.setSystemTaskRequired(0);
+            member.setRemovedTime(LocalDateTime.now());
+            member.setRemovedBy(BaseContext.getCurrentId());
+            member.setRemoveReason(reason);
+            roundTableMemberMapper.updateById(member);
+            removedJudgeIds.add(judge.getId());
+            markAssignmentWithdrawn(competitionId, judge.getId(), reason);
+        }
+
+        for (JudgeRoundMemberChangeRequest.JudgeRoundMemberItemRequest item : additions) {
+            JudgeAccount judge = requireAdminJudgeByPublicId(item.getJudgePublicId());
+            if (!isActiveJudge(judge)) {
+                throw new BaseException("只有启用评委可以加入当前轮次");
+            }
+            if (hasActiveMemberInOtherTable(competitionId, roundId, roundTableId, judge.getId())) {
+                throw new BaseException("同一轮同一评委只能分配到一张桌");
+            }
+            String role = resolveLiveMemberRole(round, item, request.getCaptainJudgePublicId());
+            RoundTableMember existing = memberByJudge.get(judge.getId());
+            if (existing != null) {
+                if (isActiveMember(existing)
+                        && !JudgeRoleType.CAPTAIN.name().equals(role)) {
+                    throw new BaseException("评委已在当前桌");
+                }
+                existing.setStatus("ACTIVE");
+                existing.setRole(role);
+                existing.setSystemTaskRequired(requiresSystemTask(round, role) ? 1 : 0);
+                existing.setRemovedTime(null);
+                existing.setRemovedBy(null);
+                existing.setRemoveReason(null);
+                roundTableMemberMapper.updateById(existing);
+                roundTableMemberMapper.update(null, new LambdaUpdateWrapper<RoundTableMember>()
+                        .eq(RoundTableMember::getId, existing.getId())
+                        .set(RoundTableMember::getRemovedTime, null)
+                        .set(RoundTableMember::getRemovedBy, null)
+                        .set(RoundTableMember::getRemoveReason, null));
+            } else {
+                roundTableMemberMapper.insert(RoundTableMember.builder()
+                        .roundTableId(roundTableId)
+                        .judgeAccountId(judge.getId())
+                        .role(role)
+                        .systemTaskRequired(requiresSystemTask(round, role) ? 1 : 0)
+                        .status("ACTIVE")
+                        .build());
+            }
+            reactivateAssignment(competitionId, judge.getId(), table, role);
+        }
+
+        if (request.getCaptainJudgePublicId() != null) {
+            JudgeAccount captain = requireAdminJudgeByPublicId(request.getCaptainJudgePublicId());
+            if (!isActiveJudge(captain)) {
+                throw new BaseException("桌长必须是启用评委");
+            }
+            RoundTableMember captainMember = roundTableMemberMapper.selectOne(new LambdaQueryWrapper<RoundTableMember>()
+                    .eq(RoundTableMember::getRoundTableId, roundTableId)
+                    .eq(RoundTableMember::getJudgeAccountId, captain.getId())
+                    .last("LIMIT 1"));
+            if (!isActiveMember(captainMember)) {
+                throw new BaseException("新桌长必须先加入当前桌");
+            }
+            boolean hasOtherCaptain = roundTableMemberMapper.selectList(new LambdaQueryWrapper<RoundTableMember>()
+                            .eq(RoundTableMember::getRoundTableId, roundTableId)
+                            .eq(RoundTableMember::getRole, JudgeRoleType.CAPTAIN.name()))
+                    .stream()
+                    .anyMatch(member -> !Objects.equals(member.getJudgeAccountId(), captain.getId())
+                            && isActiveMember(member));
+            if (hasOtherCaptain) {
+                throw new BaseException("更换桌长时需同时将原桌长标记离场");
+            }
+            captainMember.setRole(JudgeRoleType.CAPTAIN.name());
+            captainMember.setSystemTaskRequired(1);
+            roundTableMemberMapper.updateById(captainMember);
+            table.setCaptainJudgeId(captain.getId());
+            roundTableMapper.updateById(table);
+        } else if (removedJudgeIds.contains(table.getCaptainJudgeId())) {
+            table.setCaptainJudgeId(null);
+            roundTableMapper.updateById(table);
+        }
+        writeAdminLog("JUDGE_ROUND_MEMBER_CHANGE", "COMP-" + competitionId,
+                "调整轮次评委，round=" + roundId + ", table=" + roundTableId);
+        scoreConfirmationService.refreshAfterMemberChange(roundTableId);
+    }
+
+    private boolean isRoundMemberChangeAllowed(CompetitionRound round, RoundTable table) {
+        if (RoundType.SCORE.name().equals(round.getRoundType())) {
+            return RoundStatus.PUBLISHED.name().equals(round.getStatus())
+                    && RoundStatus.PUBLISHED.name().equals(table.getStatus());
+        }
+        return RoundType.RANKING.name().equals(round.getRoundType())
+                && RoundStatus.IN_PROGRESS.name().equals(round.getStatus())
+                && RoundStatus.IN_PROGRESS.name().equals(table.getStatus());
+    }
+
+    private boolean isActiveMember(RoundTableMember member) {
+        return member != null && !"REMOVED".equalsIgnoreCase(member.getStatus());
+    }
+
+    private String resolveLiveMemberRole(CompetitionRound round,
+                                         JudgeRoundMemberChangeRequest.JudgeRoundMemberItemRequest item,
+                                         String captainPublicId) {
+        boolean captain = Objects.equals(item.getJudgePublicId(), captainPublicId);
+        if (item.getRole() == JudgeRoleType.CAPTAIN && !captain) {
+            throw new BaseException("设置桌长时必须明确指定新桌长");
+        }
+        if (captain) {
+            return JudgeRoleType.CAPTAIN.name();
+        }
+        if (RoundType.SCORE.name().equals(round.getRoundType()) && item.getRole() == JudgeRoleType.CROSS) {
+            return JudgeRoleType.CROSS.name();
+        }
+        return JudgeRoleType.PROFESSIONAL.name();
+    }
+
+    private boolean requiresSystemTask(CompetitionRound round, String role) {
+        return RoundType.SCORE.name().equals(round.getRoundType())
+                || JudgeRoleType.CAPTAIN.name().equals(role);
+    }
+
+    private boolean isActiveJudge(JudgeAccount judge) {
+        return judge != null && JudgeAccountStatus.of(judge.getStatus()) == JudgeAccountStatus.ACTIVE;
+    }
+
+    private boolean hasActiveMemberInOtherTable(Long competitionId, Long roundId, Long roundTableId, Long judgeId) {
+        List<RoundTable> tables = roundTableMapper.selectList(new LambdaQueryWrapper<RoundTable>()
+                .eq(RoundTable::getCompetitionId, competitionId)
+                .eq(RoundTable::getRoundId, roundId)
+                .ne(RoundTable::getId, roundTableId));
+        if (tables.isEmpty()) return false;
+        return roundTableMemberMapper.selectCount(new LambdaQueryWrapper<RoundTableMember>()
+                .in(RoundTableMember::getRoundTableId, tables.stream().map(RoundTable::getId).toList())
+                .eq(RoundTableMember::getJudgeAccountId, judgeId)
+                .ne(RoundTableMember::getStatus, "REMOVED")) > 0;
+    }
+
+    private void markAssignmentWithdrawn(Long competitionId, Long judgeId, String reason) {
+        JudgeAssignment assignment = judgeAssignmentMapper.selectOne(new LambdaQueryWrapper<JudgeAssignment>()
+                .eq(JudgeAssignment::getCompetitionId, competitionId)
+                .eq(JudgeAssignment::getJudgeAccountId, judgeId)
+                .last("LIMIT 1"));
+        if (assignment != null) {
+            assignment.setStatus("WITHDRAWN");
+            assignment.setWithdrawnTime(LocalDateTime.now());
+            assignment.setWithdrawnBy(BaseContext.getCurrentId());
+            assignment.setWithdrawReason(reason);
+            judgeAssignmentMapper.updateById(assignment);
+        }
+    }
+
+    private void reactivateAssignment(Long competitionId, Long judgeId, RoundTable table, String role) {
+        JudgeAssignment assignment = judgeAssignmentMapper.selectOne(new LambdaQueryWrapper<JudgeAssignment>()
+                .eq(JudgeAssignment::getCompetitionId, competitionId)
+                .eq(JudgeAssignment::getJudgeAccountId, judgeId)
+                .last("LIMIT 1"));
+        if (assignment == null) {
+            JudgeTable base = judgeTableMapper.selectOne(new LambdaQueryWrapper<JudgeTable>()
+                    .eq(JudgeTable::getCompetitionId, competitionId)
+                    .eq(JudgeTable::getTableName, table.getTableName())
+                    .last("LIMIT 1"));
+            if (base == null) {
+                base = JudgeTable.builder().competitionId(competitionId).tableName(table.getTableName()).sortOrder(table.getSortOrder()).build();
+                judgeTableMapper.insert(base);
+            }
+            assignment = JudgeAssignment.builder().competitionId(competitionId).judgeAccountId(judgeId)
+                    .recruitmentApplicationId(judgeRecruitmentApplicationMapper
+                            .selectAcceptedApplicationId(competitionId, judgeId))
+                    .tableId(base.getId()).role(role).status("ACTIVE").build();
+            judgeAssignmentMapper.insert(assignment);
+            return;
+        }
+        assignment.setStatus("ACTIVE");
+        assignment.setTableId(resolveBaseTableId(competitionId, table));
+        assignment.setRole(role);
+        assignment.setWithdrawnTime(null);
+        assignment.setWithdrawnBy(null);
+        assignment.setWithdrawReason(null);
+        judgeAssignmentMapper.updateById(assignment);
+        judgeAssignmentMapper.update(null, new LambdaUpdateWrapper<JudgeAssignment>()
+                .eq(JudgeAssignment::getId, assignment.getId())
+                .set(JudgeAssignment::getWithdrawnTime, null)
+                .set(JudgeAssignment::getWithdrawnBy, null)
+                .set(JudgeAssignment::getWithdrawReason, null));
+    }
+
+    private Long resolveBaseTableId(Long competitionId, RoundTable table) {
+        JudgeTable base = judgeTableMapper.selectOne(new LambdaQueryWrapper<JudgeTable>()
+                .eq(JudgeTable::getCompetitionId, competitionId)
+                .eq(JudgeTable::getTableName, table.getTableName())
+                .last("LIMIT 1"));
+        if (base != null) return base.getId();
+        base = JudgeTable.builder().competitionId(competitionId).tableName(table.getTableName()).sortOrder(table.getSortOrder()).build();
+        judgeTableMapper.insert(base);
+        return base.getId();
     }
 
     @Override
@@ -438,11 +696,13 @@ public class JudgeServiceImpl implements JudgeService {
     }
 
     private void applyProfile(JudgeAccount account, String wechat, String name, String qualification,
-                              Boolean breweryConflictFlag, String breweryConflictText, String reviewRemark) {
+                              String bjcpNumber, Boolean breweryConflictFlag, String breweryConflictText,
+                              String reviewRemark) {
         boolean hasBreweryConflict = Boolean.TRUE.equals(breweryConflictFlag);
         account.setWechatEnc(StringUtils.hasText(wechat) ? piiService.encrypt(wechat.trim()) : null);
         account.setName(name.trim());
         account.setQualification(qualification.trim());
+        account.setBjcpNumber(StringUtils.hasText(bjcpNumber) ? bjcpNumber.trim() : null);
         account.setBreweryConflictFlag(hasBreweryConflict);
         account.setBreweryConflictText(hasBreweryConflict && StringUtils.hasText(breweryConflictText)
                 ? breweryConflictText.trim()
@@ -481,6 +741,7 @@ public class JudgeServiceImpl implements JudgeService {
             wrapper.and(item -> {
                 item.like(JudgeAccount::getName, query)
                         .or().like(JudgeAccount::getQualification, query)
+                        .or().like(JudgeAccount::getBjcpNumber, query)
                         .or().like(JudgeAccount::getBreweryConflictText, query);
                 if (digits.length() == 11) {
                     item.or().eq(JudgeAccount::getPhoneHash, piiService.hashPhone(digits));
@@ -540,6 +801,7 @@ public class JudgeServiceImpl implements JudgeService {
                 .maskedPhone(piiService.maskPhone(phone))
                 .maskedWechat(piiService.maskWechat(wechat))
                 .qualification(judge.getQualification())
+                .bjcpNumber(judge.getBjcpNumber())
                 .breweryConflictFlag(Boolean.TRUE.equals(judge.getBreweryConflictFlag()))
                 .breweryConflictText(judge.getBreweryConflictText())
                 .phoneBreweryConflictFlag(phoneConflict.flag())
@@ -566,6 +828,7 @@ public class JudgeServiceImpl implements JudgeService {
                 .maskedPhone(piiService.maskPhone(phone))
                 .maskedWechat(piiService.maskWechat(wechat))
                 .qualification(judge.getQualification())
+                .bjcpNumber(judge.getBjcpNumber())
                 .breweryConflictFlag(Boolean.TRUE.equals(judge.getBreweryConflictFlag()))
                 .breweryConflictText(judge.getBreweryConflictText())
                 .phoneBreweryConflictFlag(phoneConflict.flag())

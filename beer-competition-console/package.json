@@ -11,7 +11,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test:live-board": "node --test src/views/admin/liveBoardSelection.test.js",
-    "test:admin-access": "node --test src/config/adminAccess.test.js"
+    "test:admin-access": "node --test src/config/adminAccess.test.js",
+    "test:competition-draft": "node --test src/views/admin/competitionDraftCoordinator.test.js"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.1",

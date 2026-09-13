@@ -1,0 +1,87 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e80]:
+    - complementary [ref=e81]:
+      - generic [ref=e85]:
+        - strong [ref=e86]: 赛事运营后台
+        - generic [ref=e87]: 超级核爆
+      - navigation "后台导航" [ref=e88]:
+        - generic [ref=e89]:
+          - paragraph [ref=e90]: 概览
+          - link "工作台" [ref=e91] [cursor=pointer]:
+            - /url: /admin/dashboard
+        - generic [ref=e97]:
+          - paragraph [ref=e98]: 赛事运营
+          - link "比赛管理" [ref=e99] [cursor=pointer]:
+            - /url: /admin/competitions
+          - link "酒款管理" [ref=e104] [cursor=pointer]:
+            - /url: /admin/entries
+          - link "收款确认" [ref=e108] [cursor=pointer]:
+            - /url: /admin/bank-transfers
+          - link "裁判招募" [ref=e114] [cursor=pointer]:
+            - /url: /admin/judge-recruitments
+          - link "评审人员" [ref=e118] [cursor=pointer]:
+            - /url: /admin/judges
+          - link "数据导出" [ref=e122] [cursor=pointer]:
+            - /url: /admin/exports
+        - generic [ref=e126]:
+          - paragraph [ref=e127]: 组织管理
+          - link "管理员账号" [ref=e128] [cursor=pointer]:
+            - /url: /admin/admin-users
+          - link "啤酒币" [ref=e132] [cursor=pointer]:
+            - /url: /admin/beer-coins
+          - link "操作日志" [ref=e138] [cursor=pointer]:
+            - /url: /admin/operation-logs
+        - generic [ref=e142]:
+          - paragraph [ref=e143]: 平台管理
+          - link "风格库" [ref=e144] [cursor=pointer]:
+            - /url: /admin/style-libraries
+      - generic [ref=e148]:
+        - button "夏凛 主办方主管理员" [ref=e149]:
+          - generic [ref=e150]:
+            - strong [ref=e151]: 夏凛
+            - generic [ref=e152]: 主办方主管理员
+        - button "退出登录" [ref=e155]
+    - main [ref=e160]:
+      - main [ref=e161]:
+        - generic [ref=e162]:
+          - heading "工作台" [level=1] [ref=e165]
+          - button "刷新工作台" [ref=e167]
+        - region "待办总览" [ref=e170]:
+          - button "评委报名待审核 0" [ref=e171] [cursor=pointer]:
+            - generic [ref=e175]:
+              - generic [ref=e176]: 评委报名待审核
+              - strong [ref=e177]: "0"
+          - button "转账待确认 0" [ref=e180] [cursor=pointer]:
+            - generic [ref=e186]:
+              - generic [ref=e187]: 转账待确认
+              - strong [ref=e188]: "0"
+          - button "酒款待处理 0" [ref=e191] [cursor=pointer]:
+            - generic [ref=e195]:
+              - generic [ref=e196]: 酒款待处理
+              - strong [ref=e197]: "0"
+        - generic [ref=e200]:
+          - article [ref=e201]:
+            - generic [ref=e203]:
+              - heading "待处理" [level=2] [ref=e204]
+              - generic [ref=e205]: 0 项
+            - navigation "待办类型筛选" [ref=e206]:
+              - button "全部" [ref=e207] [cursor=pointer]
+              - button "评委报名" [ref=e208] [cursor=pointer]
+              - button "转账" [ref=e209] [cursor=pointer]
+              - button "酒款" [ref=e210] [cursor=pointer]
+            - paragraph [ref=e212]: 当前没有待处理事项
+          - article [ref=e213]:
+            - generic [ref=e214]:
+              - generic [ref=e215]:
+                - heading "赛事" [level=2] [ref=e216]
+                - generic [ref=e217]: 1 场
+              - button "全部比赛" [ref=e218]
+            - button "租户发起的比赛测试 报名已截止 · 2026-09-01 2 报名" [ref=e222] [cursor=pointer]:
+              - generic [ref=e223]:
+                - strong [ref=e224]: 租户发起的比赛测试
+                - generic [ref=e225]: 报名已截止 · 2026-09-01
+              - generic [ref=e226]:
+                - generic [ref=e227]: "2"
+                - generic [ref=e228]: 报名
+  - alert [ref=e231]:
+    - paragraph [ref=e235]: 登录成功

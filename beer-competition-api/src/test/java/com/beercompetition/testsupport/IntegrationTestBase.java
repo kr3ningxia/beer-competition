@@ -11,7 +11,13 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.util.UUID;
 
-@SpringBootTest
+@SpringBootTest(properties = {
+        "app.storage.provider=local",
+        "app.storage.local-base-dir=target/test-uploads",
+        "app.wechat-pay.mode=MOCK",
+        "app.beer-coin.payment-mode=MOCK",
+        "app.sms.mock-enabled=true"
+})
 @ActiveProfiles("local")
 public abstract class IntegrationTestBase {
 
@@ -94,7 +100,8 @@ public abstract class IntegrationTestBase {
                 DELETE wpn FROM wechat_pay_notify wpn
                 JOIN entry_payment ep ON ep.out_trade_no = wpn.out_trade_no
                 JOIN beer_entry be ON be.id = ep.beer_entry_id
-                WHERE be.uuid LIKE ?
+                JOIN competition c ON c.id = be.competition_id
+                WHERE c.code LIKE ?
                 """, prefix + "%");
         jdbcTemplate.update("""
                 DELETE rtc FROM round_table_confirmation rtc
@@ -116,6 +123,11 @@ public abstract class IntegrationTestBase {
         jdbcTemplate.update("""
                 DELETE jss FROM judge_score_session jss
                 JOIN competition c ON c.id = jss.competition_id
+                WHERE c.code LIKE ?
+                """, prefix + "%");
+        jdbcTemplate.update("""
+                DELETE cje FROM competition_judge_evaluation cje
+                JOIN competition c ON c.id = cje.competition_id
                 WHERE c.code LIKE ?
                 """, prefix + "%");
         jdbcTemplate.update("""
@@ -157,29 +169,38 @@ public abstract class IntegrationTestBase {
         jdbcTemplate.update("""
                 DELETE esl FROM entry_scan_label esl
                 JOIN beer_entry be ON be.id = esl.beer_entry_id
-                WHERE be.uuid LIKE ?
+                JOIN competition c ON c.id = be.competition_id
+                WHERE c.code LIKE ?
                 """, prefix + "%");
         jdbcTemplate.update("""
                 DELETE er FROM entry_refund er
                 JOIN beer_entry be ON be.id = er.beer_entry_id
-                WHERE be.uuid LIKE ?
+                JOIN competition c ON c.id = be.competition_id
+                WHERE c.code LIKE ?
                 """, prefix + "%");
         jdbcTemplate.update("""
                 DELETE ep FROM entry_payment ep
                 JOIN beer_entry be ON be.id = ep.beer_entry_id
-                WHERE be.uuid LIKE ?
+                JOIN competition c ON c.id = be.competition_id
+                WHERE c.code LIKE ?
                 """, prefix + "%");
         jdbcTemplate.update("""
                 DELETE ed FROM entry_delivery ed
                 JOIN beer_entry be ON be.id = ed.beer_entry_id
-                WHERE be.uuid LIKE ?
+                JOIN competition c ON c.id = be.competition_id
+                WHERE c.code LIKE ?
                 """, prefix + "%");
         jdbcTemplate.update("""
                 DELETE beef FROM beer_entry_extra_field beef
                 JOIN beer_entry be ON be.id = beef.beer_entry_id
-                WHERE be.uuid LIKE ?
+                JOIN competition c ON c.id = be.competition_id
+                WHERE c.code LIKE ?
                 """, prefix + "%");
-        jdbcTemplate.update("DELETE FROM beer_entry WHERE uuid LIKE ?", prefix + "%");
+        jdbcTemplate.update("""
+                DELETE be FROM beer_entry be
+                JOIN competition c ON c.id = be.competition_id
+                WHERE c.code LIKE ?
+                """, prefix + "%");
         jdbcTemplate.update("""
                 DELETE rb FROM registration_batch rb
                 JOIN competition c ON c.id = rb.competition_id
@@ -210,6 +231,11 @@ public abstract class IntegrationTestBase {
                 JOIN competition c ON aol.target_public_id = CAST(c.id AS CHAR)
                 WHERE aol.target_type = 'COMPETITION'
                   AND c.code LIKE ?
+                """, prefix + "%");
+        jdbcTemplate.update("""
+                DELETE aol FROM admin_operation_log aol
+                JOIN competition c ON c.id = aol.competition_id
+                WHERE c.code LIKE ?
                 """, prefix + "%");
         jdbcTemplate.update("""
                 DELETE cs FROM competition_style_config cs

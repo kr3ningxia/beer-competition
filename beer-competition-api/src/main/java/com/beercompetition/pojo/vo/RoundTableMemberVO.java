@@ -12,4 +12,7 @@ public class RoundTableMemberVO {
     private String role;
     private String roleLabel;
     private Boolean systemTaskRequired;
+    private String status;
+    private String statusLabel;
+    private String removedTime;
 }

@@ -1,0 +1,238 @@
+- generic [ref=f2e3]:
+  - complementary [ref=f2e4]:
+    - generic [ref=f2e8]:
+      - strong [ref=f2e9]: 赛事运营后台
+      - generic [ref=f2e10]: 啤酒事务局
+    - navigation "后台导航" [ref=f2e11]:
+      - generic [ref=f2e12]:
+        - paragraph [ref=f2e13]: 概览
+        - link "工作台" [ref=f2e14] [cursor=pointer]:
+          - /url: /admin/dashboard
+      - generic [ref=f2e20]:
+        - paragraph [ref=f2e21]: 赛事运营
+        - link "比赛管理" [ref=f2e22] [cursor=pointer]:
+          - /url: /admin/competitions
+        - link "酒款管理" [ref=f2e27] [cursor=pointer]:
+          - /url: /admin/entries
+        - link "收款确认" [ref=f2e31] [cursor=pointer]:
+          - /url: /admin/bank-transfers
+        - link "裁判招募" [ref=f2e37] [cursor=pointer]:
+          - /url: /admin/judge-recruitments
+        - link "评审人员" [ref=f2e41] [cursor=pointer]:
+          - /url: /admin/judges
+        - link "数据导出" [ref=f2e45] [cursor=pointer]:
+          - /url: /admin/exports
+      - generic [ref=f2e49]:
+        - paragraph [ref=f2e50]: 组织管理
+        - link "管理员账号" [ref=f2e51] [cursor=pointer]:
+          - /url: /admin/admin-users
+        - link "啤酒币" [ref=f2e55] [cursor=pointer]:
+          - /url: /admin/beer-coins
+        - link "操作日志" [ref=f2e61] [cursor=pointer]:
+          - /url: /admin/operation-logs
+      - generic [ref=f2e65]:
+        - paragraph [ref=f2e66]: 平台管理
+        - link "主办方入驻" [ref=f2e67] [cursor=pointer]:
+          - /url: /admin/organizer-applications
+        - link "风格库" [ref=f2e73] [cursor=pointer]:
+          - /url: /admin/style-libraries
+    - generic [ref=f2e77]:
+      - button "superadmin 平台超级管理员" [ref=f2e78]:
+        - generic [ref=f2e79]:
+          - strong [ref=f2e80]: superadmin
+          - generic [ref=f2e81]: 平台超级管理员
+      - button "退出登录" [ref=f2e84]
+  - main [ref=f2e89]:
+    - generic [ref=f2e90]:
+      - generic [ref=f2e91]:
+        - generic [ref=f2e92]:
+          - button "比赛管理" [ref=f2e93] [cursor=pointer]
+          - generic [ref=f2e97]:
+            - heading "首届中国拉格大赛" [level=1] [ref=f2e98]
+            - generic [ref=f2e99]:
+              - generic [ref=f2e100]: 评审中
+              - generic [ref=f2e101]: 比赛日 2026.08.15
+        - generic [ref=f2e103]:
+          - generic "发布报名并进入评审准备中后才能发布首轮" [ref=f2e104]:
+            - button "发布当前轮次" [disabled] [ref=f2e105]
+          - group [ref=f2e108]:
+            - generic "更多" [ref=f2e109] [cursor=pointer]
+      - generic [ref=f2e110]:
+        - navigation "比赛详情导航" [ref=f2e112]:
+          - button "概览" [ref=f2e113] [cursor=pointer]
+          - button "数据分析" [ref=f2e116] [cursor=pointer]
+          - button "基础信息" [ref=f2e119] [cursor=pointer]
+          - button "赞助商" [ref=f2e122] [cursor=pointer]
+          - button "报名配置" [ref=f2e126] [cursor=pointer]
+          - button "评分表" [ref=f2e129] [cursor=pointer]
+          - button "参赛酒款" [ref=f2e132] [cursor=pointer]
+          - button "分桌分配" [ref=f2e135] [cursor=pointer]
+          - button "轮次编排" [ref=f2e138] [cursor=pointer]
+          - button "评价查看" [ref=f2e141] [cursor=pointer]
+          - button "结果发布" [disabled] [ref=f2e145]
+        - main [ref=f2e149]:
+          - generic [ref=f2e440]:
+            - complementary [ref=f2e441]:
+              - generic [ref=f2e442]:
+                - textbox [ref=f2e446]:
+                  - /placeholder: 搜索酒名、编号、短编号、风格
+                - button "加入" [disabled] [ref=f2e447]
+              - button "全部" [ref=f2e449] [cursor=pointer]
+              - paragraph [ref=f2e451]: 暂无可分配酒款
+            - main [ref=f2e452]:
+              - article [ref=f2e453]:
+                - generic [ref=f2e454]:
+                  - generic [ref=f2e455]:
+                    - textbox "评审桌名称" [ref=f2e456]: 1桌
+                    - generic [ref=f2e457]: 0 款
+                    - generic [ref=f2e458]: 桌长 林林
+                  - generic [ref=f2e459]:
+                    - button "删除桌" [ref=f2e460] [cursor=pointer]
+                    - button "快速分配" [ref=f2e463] [cursor=pointer]
+                - generic [ref=f2e464]:
+                  - generic [ref=f2e465]:
+                    - generic [ref=f2e466]: 范围
+                    - combobox "范围" [ref=f2e467]:
+                      - option "未指定" [selected]
+                      - option "混合"
+                  - generic [ref=f2e468]:
+                    - generic [ref=f2e469]: 晋级数量
+                    - spinbutton "晋级数量" [ref=f2e471]: "3"
+                - paragraph [ref=f2e473]: 从左侧加入酒款
+              - article [ref=f2e474]:
+                - generic [ref=f2e475]:
+                  - generic [ref=f2e476]:
+                    - textbox "评审桌名称" [ref=f2e477]: 2桌
+                    - generic [ref=f2e478]: 0 款
+                    - generic [ref=f2e479]: 桌长 商立明
+                  - generic [ref=f2e480]:
+                    - button "删除桌" [ref=f2e481] [cursor=pointer]
+                    - button "快速分配" [ref=f2e484] [cursor=pointer]
+                - generic [ref=f2e485]:
+                  - generic [ref=f2e486]:
+                    - generic [ref=f2e487]: 范围
+                    - combobox "范围" [ref=f2e488]:
+                      - option "未指定" [selected]
+                      - option "混合"
+                  - generic [ref=f2e489]:
+                    - generic [ref=f2e490]: 晋级数量
+                    - spinbutton "晋级数量" [ref=f2e492]: "3"
+                - paragraph [ref=f2e494]: 从左侧加入酒款
+              - article [ref=f2e495]:
+                - generic [ref=f2e496]:
+                  - generic [ref=f2e497]:
+                    - textbox "评审桌名称" [ref=f2e498]: 3桌
+                    - generic [ref=f2e499]: 0 款
+                    - generic [ref=f2e500]: 桌长 王延斌
+                  - generic [ref=f2e501]:
+                    - button "删除桌" [ref=f2e502] [cursor=pointer]
+                    - button "快速分配" [ref=f2e505] [cursor=pointer]
+                - generic [ref=f2e506]:
+                  - generic [ref=f2e507]:
+                    - generic [ref=f2e508]: 范围
+                    - combobox "范围" [ref=f2e509]:
+                      - option "未指定" [selected]
+                      - option "混合"
+                  - generic [ref=f2e510]:
+                    - generic [ref=f2e511]: 晋级数量
+                    - spinbutton "晋级数量" [ref=f2e513]: "3"
+                - paragraph [ref=f2e515]: 从左侧加入酒款
+              - article [ref=f2e516]:
+                - generic [ref=f2e517]:
+                  - generic [ref=f2e518]:
+                    - textbox "评审桌名称" [ref=f2e519]: 4桌
+                    - generic [ref=f2e520]: 0 款
+                    - generic [ref=f2e521]: 桌长 王飞飞
+                  - generic [ref=f2e522]:
+                    - button "删除桌" [ref=f2e523] [cursor=pointer]
+                    - button "快速分配" [ref=f2e526] [cursor=pointer]
+                - generic [ref=f2e527]:
+                  - generic [ref=f2e528]:
+                    - generic [ref=f2e529]: 范围
+                    - combobox "范围" [ref=f2e530]:
+                      - option "未指定" [selected]
+                      - option "混合"
+                  - generic [ref=f2e531]:
+                    - generic [ref=f2e532]: 晋级数量
+                    - spinbutton "晋级数量" [ref=f2e534]: "3"
+                - paragraph [ref=f2e536]: 从左侧加入酒款
+              - article [ref=f2e537]:
+                - generic [ref=f2e538]:
+                  - generic [ref=f2e539]:
+                    - textbox "评审桌名称" [ref=f2e540]: 5桌
+                    - generic [ref=f2e541]: 0 款
+                    - generic [ref=f2e542]: 桌长 曹志雄
+                  - generic [ref=f2e543]:
+                    - button "删除桌" [ref=f2e544] [cursor=pointer]
+                    - button "快速分配" [ref=f2e547] [cursor=pointer]
+                - generic [ref=f2e548]:
+                  - generic [ref=f2e549]:
+                    - generic [ref=f2e550]: 范围
+                    - combobox "范围" [ref=f2e551]:
+                      - option "未指定" [selected]
+                      - option "混合"
+                  - generic [ref=f2e552]:
+                    - generic [ref=f2e553]: 晋级数量
+                    - spinbutton "晋级数量" [ref=f2e555]: "3"
+                - paragraph [ref=f2e557]: 从左侧加入酒款
+              - article [ref=f2e558]:
+                - generic [ref=f2e559]:
+                  - generic [ref=f2e560]:
+                    - textbox "评审桌名称" [ref=f2e561]: 6桌
+                    - generic [ref=f2e562]: 0 款
+                    - generic [ref=f2e563]: 桌长 刘天成
+                  - generic [ref=f2e564]:
+                    - button "删除桌" [ref=f2e565] [cursor=pointer]
+                    - button "快速分配" [ref=f2e568] [cursor=pointer]
+                - generic [ref=f2e569]:
+                  - generic [ref=f2e570]:
+                    - generic [ref=f2e571]: 范围
+                    - combobox "范围" [ref=f2e572]:
+                      - option "未指定" [selected]
+                      - option "混合"
+                  - generic [ref=f2e573]:
+                    - generic [ref=f2e574]: 晋级数量
+                    - spinbutton "晋级数量" [ref=f2e576]: "3"
+                - paragraph [ref=f2e578]: 从左侧加入酒款
+            - complementary [ref=f2e579]:
+              - generic [ref=f2e580]:
+                - strong [ref=f2e581]: 当前轮次
+                - generic "当前轮次" [ref=f2e582]:
+                  - button "首轮草稿" [ref=f2e583] [cursor=pointer]
+              - generic [ref=f2e584]:
+                - strong [ref=f2e585]: 分配对象
+                - generic "编辑对象" [ref=f2e586]:
+                  - button "评审" [ref=f2e587] [cursor=pointer]
+                  - button "酒款" [ref=f2e588] [cursor=pointer]
+                  - button "总览" [ref=f2e589] [cursor=pointer]
+              - generic [ref=f2e590]:
+                - strong [ref=f2e591]: 操作
+                - button "发布给评审" [disabled] [ref=f2e592] [cursor=pointer]
+              - generic [ref=f2e593]:
+                - strong [ref=f2e594]: 首轮草稿检查
+                - paragraph [ref=f2e595]:
+                  - generic [ref=f2e598]: 首轮草稿尚未分配酒款
+                - paragraph [ref=f2e599]:
+                  - generic [ref=f2e602]: 1桌尚未分配酒款
+                - paragraph [ref=f2e603]:
+                  - generic [ref=f2e606]: 1桌晋级数量超过候选酒款数
+                - paragraph [ref=f2e607]:
+                  - generic [ref=f2e610]: 2桌尚未分配酒款
+                - paragraph [ref=f2e611]:
+                  - generic [ref=f2e614]: 2桌晋级数量超过候选酒款数
+                - paragraph [ref=f2e615]:
+                  - generic [ref=f2e618]: 3桌尚未分配酒款
+                - paragraph [ref=f2e619]:
+                  - generic [ref=f2e622]: 3桌晋级数量超过候选酒款数
+                - paragraph [ref=f2e623]:
+                  - generic [ref=f2e626]: 4桌尚未分配酒款
+                - paragraph [ref=f2e627]:
+                  - generic [ref=f2e630]: 4桌晋级数量超过候选酒款数
+                - paragraph [ref=f2e631]:
+                  - generic [ref=f2e634]: 5桌尚未分配酒款
+                - paragraph [ref=f2e635]:
+                  - generic [ref=f2e638]: 5桌晋级数量超过候选酒款数
+                - paragraph [ref=f2e639]:
+                  - generic [ref=f2e642]: 6桌尚未分配酒款
+                - paragraph [ref=f2e643]:
+                  - generic [ref=f2e646]: 6桌晋级数量超过候选酒款数

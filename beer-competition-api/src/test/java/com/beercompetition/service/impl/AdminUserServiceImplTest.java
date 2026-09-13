@@ -63,7 +63,7 @@ class AdminUserServiceImplTest {
         when(adminUserMapper.selectList(any())).thenReturn(List.of(user));
         when(adminIdentityService.findOrganizerIdForDisplay(user)).thenReturn(18L);
 
-        var result = adminUserService.listAdminUsers(null, null);
+        var result = adminUserService.listAdminUsers(null, null, null);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getOrganizerId()).isEqualTo(18L);

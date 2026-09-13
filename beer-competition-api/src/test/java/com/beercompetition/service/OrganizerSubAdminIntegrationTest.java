@@ -127,7 +127,7 @@ class OrganizerSubAdminIntegrationTest {
 
     private long createAccount(String type) throws Exception {
         String result = mvc.perform(post("/api/admin/accounts").header(jwt.getHeaderName(), token(mainId)).contentType("application/json").content(payload(type)))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.mustChangeUsername").value(true))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.mustChangeUsername").value(false))
                 .andExpect(jsonPath("$.data.mustChangePassword").value(true))
                 .andReturn().getResponse().getContentAsString();
         return json.readTree(result).path("data").path("id").asLong();

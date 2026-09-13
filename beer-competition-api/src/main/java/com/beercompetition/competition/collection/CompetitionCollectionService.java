@@ -1,6 +1,7 @@
 package com.beercompetition.competition.collection;
 
 import com.beercompetition.pojo.dto.CompetitionCollectionConfigUpdateRequest;
+import com.beercompetition.pojo.enums.EntryPayMethod;
 import com.beercompetition.pojo.vo.CompetitionCollectionConfigVO;
 import com.beercompetition.pojo.vo.CompetitionCollectionQrVO;
 import org.springframework.web.multipart.MultipartFile;
@@ -15,4 +16,6 @@ public interface CompetitionCollectionService {
     CompetitionCollectionQrVO uploadWechatQr(Long competitionId, MultipartFile file);
 
     CompetitionCollectionConfigVO getPortalConfig(Long competitionId);
+
+    void requirePortalPaymentMethodEnabled(Long competitionId, EntryPayMethod payMethod);
 }

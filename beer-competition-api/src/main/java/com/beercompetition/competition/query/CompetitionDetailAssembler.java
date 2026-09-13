@@ -296,9 +296,12 @@ public class CompetitionDetailAssembler {
         return tables.stream()
                 .map(table -> {
                     List<JudgeAssignment> tableAssignments = assignmentsByTable.getOrDefault(table.getId(), List.of());
-                    int captain = countRole(tableAssignments, JudgeRoleType.CAPTAIN.name());
-                    int professional = countRole(tableAssignments, JudgeRoleType.PROFESSIONAL.name());
-                    int cross = countRole(tableAssignments, JudgeRoleType.CROSS.name());
+                    List<JudgeAssignment> activeAssignments = tableAssignments.stream()
+                            .filter(this::isActiveAssignment)
+                            .toList();
+                    int captain = countRole(activeAssignments, JudgeRoleType.CAPTAIN.name());
+                    int professional = countRole(activeAssignments, JudgeRoleType.PROFESSIONAL.name());
+                    int cross = countRole(activeAssignments, JudgeRoleType.CROSS.name());
                     int finalized = finalizedByTable.entrySet().stream()
                             .filter(entry -> {
                                 JudgeAssignment assignment = assignmentById.get(entry.getKey());
@@ -328,6 +331,9 @@ public class CompetitionDetailAssembler {
                                                     ? null
                                                     : judgeById.get(assignment.getJudgeAccountId()).getQualification())
                                             .role(assignment.getRole())
+                                            .status(isActiveAssignment(assignment) ? "ACTIVE" : "WITHDRAWN")
+                                            .statusLabel(isActiveAssignment(assignment) ? "在场" : "已离场")
+                                            .withdrawnTime(assignment.getWithdrawnTime() == null ? null : assignment.getWithdrawnTime().toString())
                                             .build())
                                     .toList())
                             .build();
@@ -348,6 +354,10 @@ public class CompetitionDetailAssembler {
         return (int) assignments.stream()
                 .filter(assignment -> role.equals(assignment.getRole()))
                 .count();
+    }
+
+    private boolean isActiveAssignment(JudgeAssignment assignment) {
+        return assignment != null && !"WITHDRAWN".equalsIgnoreCase(assignment.getStatus());
     }
 
     private Integer resolveMinCommentLength(Integer minCommentLength) {

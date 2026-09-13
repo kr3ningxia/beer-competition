@@ -20,6 +20,10 @@ export function fetchCompetitionEntryPool(id) {
   return request.get(`/api/admin/competitions/${id}/entry-pool`, { authScope: 'admin' })
 }
 
+export function fetchCompetitionCollection(id) {
+  return request.get(`/api/admin/competitions/${id}/collection`, { authScope: 'admin' })
+}
+
 export function uploadCompetitionCollectionQr(id, file) {
   const formData = new FormData()
   formData.append('file', file)
@@ -227,6 +231,25 @@ export function fetchJudgeDetail(publicId) {
   return request.get(`/api/admin/judges/${publicId}`, { authScope: 'admin' })
 }
 
+export function fetchCompetitionJudgePerformances(competitionId) {
+  return request.get(`/api/admin/competitions/${competitionId}/judge-performances`, { authScope: 'admin' })
+}
+
+export function saveJudgePerformance(competitionId, judgePublicId, payload) {
+  return request.put(`/api/admin/competitions/${competitionId}/judge-performances/${judgePublicId}`, payload, { authScope: 'admin' })
+}
+
+export function fetchJudgePerformanceOverview(publicIds = []) {
+  return request.get('/api/admin/judge-performances/accounts', {
+    params: { publicIds: publicIds.join(',') },
+    authScope: 'admin',
+  })
+}
+
+export function fetchJudgePerformanceHistory(publicId) {
+  return request.get(`/api/admin/judges/${publicId}/performances`, { authScope: 'admin' })
+}
+
 export function updateJudge(publicId, payload) {
   return request.put(`/api/admin/judges/${publicId}`, payload, { authScope: 'admin' })
 }
@@ -271,6 +294,10 @@ export function createFirstRound(competitionId, payload) {
 
 export function saveRoundAllocation(competitionId, roundId, payload) {
   return request.put(`/api/admin/competitions/${competitionId}/rounds/${roundId}/allocation`, payload, { authScope: 'admin' })
+}
+
+export function changeRoundTableJudgeMembers(competitionId, roundId, roundTableId, payload) {
+  return request.patch(`/api/admin/competitions/${competitionId}/rounds/${roundId}/tables/${roundTableId}/judge-members`, payload, { authScope: 'admin' })
 }
 
 export function publishRound(competitionId, roundId) {

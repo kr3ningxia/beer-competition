@@ -1,5 +1,10 @@
 ﻿<template>
-  <section :class="['allocation-workbench', { 'overview-workbench': allocationMode === 'overview' }]">
+  <section
+    :class="['allocation-workbench', { 'overview-workbench': allocationMode === 'overview', saving }]"
+    :aria-busy="saving"
+    :inert="saving"
+  >
+    <span v-if="saving" class="allocation-save-state">保存中</span>
     <section v-if="allocationMode === 'judges'" class="allocation-grid">
       <template v-if="usesRoundJudgeEditor">
       <aside class="resource-panel judge-resource-panel">
@@ -12,7 +17,7 @@
             v-for="judge in filteredJudgePool"
             :key="judge.publicId"
             :class="['resource-card', { assigned: isRoundJudgeAssigned(judge.publicId), disabled: !isJudgeActive(judge) }]"
-            :draggable="currentRound?.status === 'DRAFT' && isJudgeActive(judge) && !isRoundJudgeAssigned(judge.publicId)"
+            :draggable="canEditRoundJudges && isJudgeActive(judge) && !isRoundJudgeAssigned(judge.publicId)"
             @dragstart="$emit('startJudgeDrag', judge)"
             @dragend="$emit('clearDrag')"
           >
@@ -95,7 +100,7 @@
                     {{ getJudgeBreweryConflict(table.captainPublicId) }}
                   </small>
                 </div>
-                <button class="icon-action" type="button" @click.stop="$emit('updateTableCaptain', table.id, '')">
+                <button v-if="canEditRoundJudges" class="icon-action" type="button" :title="isLiveRoundJudgeChange ? '标记离场' : '移除桌长'" @click.stop="$emit('updateTableCaptain', table.id, '')">
                   <Delete />
                 </button>
               </article>
@@ -129,7 +134,7 @@
                     {{ getJudgeBreweryConflict(member.judgePublicId) }}
                   </small>
                 </div>
-                <button class="icon-action" type="button" @click.stop="$emit('removeRoundParticipant', table.id, member.judgePublicId)">
+                <button v-if="canEditRoundJudges" class="icon-action" type="button" :title="isLiveRoundJudgeChange ? '标记离场' : '移除评审'" @click.stop="$emit('removeRoundParticipant', table.id, member.judgePublicId)">
                   <Delete />
                 </button>
               </article>
@@ -161,7 +166,7 @@
                     {{ getJudgeBreweryConflict(member.judgePublicId) }}
                   </small>
                 </div>
-                <button class="icon-action" type="button" @click.stop="$emit('removeRoundParticipant', table.id, member.judgePublicId)">
+                <button v-if="canEditRoundJudges" class="icon-action" type="button" :title="isLiveRoundJudgeChange ? '标记离场' : '移除评审'" @click.stop="$emit('removeRoundParticipant', table.id, member.judgePublicId)">
                   <Delete />
                 </button>
               </article>
@@ -169,6 +174,12 @@
                 默认加入到这里，也可以拖入
               </p>
             </div>
+          </section>
+          <section v-if="getRemovedRoundMembers(table).length" class="removed-member-strip">
+            <strong>离场记录</strong>
+            <span v-for="member in getRemovedRoundMembers(table)" :key="`removed-${member.judgePublicId}`">
+              {{ member.name || getJudge(member.judgePublicId)?.name || '未知评审' }} · {{ member.removedTime ? formatPresenceTime(member.removedTime) : '已离场' }}
+            </span>
           </section>
         </article>
       </main>
@@ -298,7 +309,12 @@
             <div class="desk-summary-main">
               <label v-if="editableJudges" class="desk-name-field">
                 <span>桌号：</span>
-                <input :value="table.tableName" placeholder="例如 A桌" @input="table.tableName = $event.target.value" />
+                <input
+                  :value="table.tableName"
+                  placeholder="例如 A桌"
+                  @input="$emit('updateJudgeTableName', table.localId, $event.target.value)"
+                  @blur="$emit('updateJudgeTableName', table.localId, $event.target.value, { commit: true })"
+                />
               </label>
               <h3 v-else>{{ table.tableName }}</h3>
             </div>
@@ -788,6 +804,7 @@ import { computed, ref } from 'vue'
 import { CircleCheck, Delete, Search, Warning } from '@element-plus/icons-vue'
 
 const props = defineProps({
+  saving: { type: Boolean, default: false },
   allocationMode: { type: String, default: 'judges' },
   rounds: { type: Array, required: true },
   activeRoundId: { type: String, default: '' },
@@ -839,6 +856,7 @@ const emit = defineEmits([
   'addJudgeToTarget',
   'addJudgeTable',
   'removeJudgeTable',
+  'updateJudgeTableName',
   'removeAssignment',
   'saveJudgeDraft',
   'startJudgeDrag',
@@ -901,6 +919,10 @@ const firstRoundExists = computed(() => props.rounds.some((round) => round.round
 const isFeedbackOnlyScoreRound = computed(() => props.competitionType === 'FEEDBACK_ONLY' && props.currentRound?.type === 'SCORE')
 const usesRoundJudgeEditor = computed(() => props.currentRound?.type === 'RANKING'
   || (props.currentRound?.type === 'SCORE' && !props.currentRound?.isPreparationDraft))
+const isLiveRoundJudgeChange = computed(() => props.currentRound?.type === 'SCORE'
+  ? props.currentRound?.status === 'PUBLISHED'
+  : props.currentRound?.status === 'IN_PROGRESS')
+const canEditRoundJudges = computed(() => props.currentRound?.status === 'DRAFT' || isLiveRoundJudgeChange.value)
 const displayRounds = computed(() => {
   if (props.currentRound?.isPreparationDraft && !firstRoundExists.value) return [props.currentRound]
   return props.rounds
@@ -1007,6 +1029,14 @@ function getRoundMembers(roundTable) {
   return roundTable?.members || []
 }
 
+function isActiveRoundMember(member) {
+  return member?.status !== 'REMOVED'
+}
+
+function getRemovedRoundMembers(roundTable) {
+  return getRoundMembers(roundTable).filter((member) => !isActiveRoundMember(member))
+}
+
 function selectRankingTable(tableId) {
   selectedRankingRole.value = null
   emit('selectRoundTable', tableId)
@@ -1040,34 +1070,34 @@ function dropRankingJudge(tableId, role) {
 }
 
 function getRankingParticipants(roundTable) {
-  return getRoundMembers(roundTable).filter((member) => member.role !== 'CAPTAIN')
+  return getRoundMembers(roundTable).filter((member) => isActiveRoundMember(member) && member.role !== 'CAPTAIN')
 }
 
 function getScoreRoleMembers(roundTable, role) {
   return getRoundMembers(roundTable)
-    .filter((member) => member.role !== 'CAPTAIN' && normalizeRoundScoreMemberRole(member.role) === role)
+    .filter((member) => isActiveRoundMember(member) && member.role !== 'CAPTAIN' && normalizeRoundScoreMemberRole(member.role) === role)
 }
 
 function isRoundJudgeAssigned(judgePublicId) {
   return props.currentRoundTables.some((table) => (
     table.captainPublicId === judgePublicId
-      || getRoundMembers(table).some((member) => member.judgePublicId === judgePublicId)
+      || getRoundMembers(table).some((member) => isActiveRoundMember(member) && member.judgePublicId === judgePublicId)
   ))
 }
 
 function getRoundJudgeAssignmentSummary(judgePublicId) {
   const table = props.currentRoundTables.find((item) => (
     item.captainPublicId === judgePublicId
-      || getRoundMembers(item).some((member) => member.judgePublicId === judgePublicId)
+      || getRoundMembers(item).some((member) => isActiveRoundMember(member) && member.judgePublicId === judgePublicId)
   ))
   if (!table) return ''
   if (table.captainPublicId === judgePublicId) return `已在 ${table.name} · 桌长`
-  const member = getRoundMembers(table).find((item) => item.judgePublicId === judgePublicId)
+  const member = getRoundMembers(table).find((item) => isActiveRoundMember(item) && item.judgePublicId === judgePublicId)
   return `已在 ${table.name} · ${props.currentRound?.type === 'SCORE' ? formatRoundMemberRole(member?.role) : '参与评审'}`
 }
 
 function canAddRoundJudge(judge) {
-  return props.currentRound?.status === 'DRAFT'
+  return canEditRoundJudges.value
     && props.selectedRoundTableId
     && props.isJudgeActive(judge)
     && !isRoundJudgeAssigned(judge.publicId)
@@ -1076,7 +1106,14 @@ function canAddRoundJudge(judge) {
 function getRoundJudgeActionLabel(judge) {
   if (!props.isJudgeActive(judge)) return '已停用'
   if (isRoundJudgeAssigned(judge.publicId)) return '已分配'
+  if (props.currentRoundTables.some((table) => getRemovedRoundMembers(table).some((member) => member.judgePublicId === judge.publicId))) return '重新加入'
   return '加入'
+}
+
+function formatPresenceTime(value) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '已离场'
+  return date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
 function getRoundEntryStatusLabel(uuid) {
@@ -1186,7 +1223,7 @@ function getRoundJudgeAssignments(roundTable) {
     seen.add(roundTable.captainPublicId)
   }
   getRoundMembers(roundTable).forEach((member) => {
-    if (!member?.judgePublicId || seen.has(member.judgePublicId)) return
+    if (!isActiveRoundMember(member) || !member?.judgePublicId || seen.has(member.judgePublicId)) return
     assignments.push({
       judgePublicId: member.judgePublicId,
       role: member.role || 'PROFESSIONAL',
@@ -1323,10 +1360,29 @@ function getOverviewTableIssues(roundTable) {
 }
 
 .allocation-workbench {
+  position: relative;
   min-height: 0;
   height: 100%;
   max-height: none;
   overflow: hidden;
+}
+
+.allocation-workbench.saving {
+  cursor: wait;
+}
+
+.allocation-save-state {
+  position: absolute;
+  z-index: 5;
+  top: 8px;
+  right: 8px;
+  padding: 5px 9px;
+  border: 1px solid rgba(216, 169, 53, 0.42);
+  border-radius: 4px;
+  background: #162228;
+  color: #f1d58c;
+  font-size: 12px;
+  line-height: 1;
 }
 
 .allocation-workbench.overview-workbench {
@@ -1983,6 +2039,28 @@ p {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
   align-items: start;
+}
+
+.removed-member-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 8px 10px;
+  border-top: 1px solid rgba(219, 232, 237, 0.1);
+  color: #82959d;
+  font-size: 12px;
+}
+
+.removed-member-strip strong {
+  flex: 0 0 auto;
+  color: #b8c6cb;
+}
+
+.removed-member-strip span {
+  padding-left: 8px;
+  border-left: 1px solid rgba(219, 232, 237, 0.12);
 }
 
 .role-lane {

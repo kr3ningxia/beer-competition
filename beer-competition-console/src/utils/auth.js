@@ -140,6 +140,11 @@ export function isAdminCredentialSetupRequired() {
     || localStorage.getItem(ADMIN_MUST_CHANGE_USERNAME_KEY) === '1'
 }
 
+export function isAdminUsernameSetupRequired() {
+  sessionRevision.value
+  return localStorage.getItem(ADMIN_MUST_CHANGE_USERNAME_KEY) === '1'
+}
+
 function setOptionalValue(key, value) {
   if (value === undefined || value === null || value === '') {
     localStorage.removeItem(key)

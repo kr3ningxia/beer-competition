@@ -6,6 +6,7 @@ import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ForbiddenException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
+import com.beercompetition.competition.collection.CompetitionCollectionService;
 import com.beercompetition.common.result.PageResult;
 import com.beercompetition.competition.access.CompetitionAccessService;
 import com.beercompetition.file.FileAccessService;
@@ -102,6 +103,7 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
     private final FileAccessService fileAccessService;
     private final StorageProperties storageProperties;
     private final CompetitionAccessService competitionAccessService;
+    private final CompetitionCollectionService competitionCollectionService;
 
     @Override
     public BankTransferAccountVO getAccount() {
@@ -155,12 +157,14 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
         Long entryId = request.getEntryId();
         String payerName = defaultString(normalizeNullable(request.getPayerName()));
         String remark = defaultString(normalizeNullable(request.getRemark()));
-        FileAsset voucher = requireVoucherAsset(request.getVoucherAssetId(), account.getId());
         LocalDateTime submittedTime = LocalDateTime.now();
         LocalDateTime transferTime = request.getTransferTime() == null ? submittedTime : request.getTransferTime();
 
         // 2) 读取并校验当前酒款与支付记录
         BeerEntry entry = requireOwnedPayableEntry(entryId, brewery.getId());
+        competitionCollectionService.requirePortalPaymentMethodEnabled(
+                entry.getCompetitionId(), EntryPayMethod.BANK_TRANSFER);
+        FileAsset voucher = requireVoucherAsset(request.getVoucherAssetId(), account.getId());
         EntryPayment payment = ensurePayment(entry);
         if (payment.getPaymentOrderId() != null) {
             throw new BaseException("该酒款已加入统一付款订单，请按整批提交银行转账");
@@ -207,6 +211,8 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
         if (batch == null || !Objects.equals(batch.getBreweryId(), brewery.getId())) {
             throw new ForbiddenException("无权操作该支付订单");
         }
+        competitionCollectionService.requirePortalPaymentMethodEnabled(
+                batch.getCompetitionId(), EntryPayMethod.BANK_TRANSFER);
         FileAsset voucher = requireVoucherAsset(request.getVoucherAssetId(), account.getId());
         LocalDateTime submittedTime = LocalDateTime.now();
         LocalDateTime transferTime = request.getTransferTime() == null ? submittedTime : request.getTransferTime();
@@ -246,6 +252,8 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
         if (batch == null || !Objects.equals(batch.getBreweryId(), account.getBreweryId())) {
             throw new ForbiddenException("无权操作该支付订单");
         }
+        competitionCollectionService.requirePortalPaymentMethodEnabled(
+                batch.getCompetitionId(), EntryPayMethod.WECHAT_QR);
         if (!PaymentOrderStatus.UNPAID.name().equals(order.getStatus())) {
             throw new BaseException("当前订单不能提交付款确认");
         }

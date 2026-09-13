@@ -20,6 +20,9 @@ public class JudgeProfileUpdateRequest {
     @Size(max = 255, message = "资质信息最多 255 个字符")
     private String qualification;
 
+    @Size(max = 64, message = "BJCP 编号最多 64 个字符")
+    private String bjcpNumber;
+
     private Boolean breweryConflictFlag = false;
 
     @Size(max = 500, message = "酒厂利益关系说明最多 500 个字符")

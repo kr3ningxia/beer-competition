@@ -20,6 +20,9 @@ public class AdminJudgeUpdateRequest {
     @Size(max = 255, message = "资质信息最多 255 个字符")
     private String qualification;
 
+    @Size(max = 64, message = "BJCP 编号最多 64 个字符")
+    private String bjcpNumber;
+
     @Size(max = 200, message = "备注最多 200 个字符")
     private String reviewRemark;
 

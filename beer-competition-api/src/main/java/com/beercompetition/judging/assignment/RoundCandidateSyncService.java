@@ -14,6 +14,7 @@ import com.beercompetition.pojo.po.RoundTableEntry;
 import com.beercompetition.service.impl.round.RoundQuerySupport;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -36,6 +37,7 @@ public class RoundCandidateSyncService {
                 || RoundStatus.LOCKED.name().equals(sourceRound.getStatus()));
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void syncDependentDrafts(CompetitionRound sourceRound) {
         if (sourceRound == null) {
             return;
@@ -46,11 +48,12 @@ public class RoundCandidateSyncService {
                         .eq(CompetitionRound::getStatus, RoundStatus.DRAFT.name())
                         .orderByAsc(CompetitionRound::getId)
                         .last("FOR UPDATE"))
-                .forEach(this::syncDraftCandidates);
+                .forEach(this::syncDraftCandidatesAndRevision);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void syncDraftRound(Long competitionId, Long roundId) {
-        CompetitionRound round = roundQuerySupport.requireRound(competitionId, roundId);
+        CompetitionRound round = roundQuerySupport.requireRoundForUpdate(competitionId, roundId);
         if (!RoundType.RANKING.name().equals(round.getRoundType())) {
             throw new BaseException("只有后续排序轮需要更新候选酒款");
         }
@@ -58,10 +61,18 @@ public class RoundCandidateSyncService {
             throw new BaseException("只有草稿轮次可以更新候选酒款");
         }
         roundQuerySupport.requireRound(competitionId, round.getSourceRoundId());
-        syncDraftCandidates(round);
+        syncDraftCandidatesAndRevision(round);
     }
 
-    private void syncDraftCandidates(CompetitionRound round) {
+    private void syncDraftCandidatesAndRevision(CompetitionRound round) {
+        if (!syncDraftCandidates(round)) {
+            return;
+        }
+        round.setAllocationRevision((round.getAllocationRevision() == null ? 0L : round.getAllocationRevision()) + 1);
+        competitionRoundMapper.updateById(round);
+    }
+
+    private boolean syncDraftCandidates(CompetitionRound round) {
         List<RoundTable> tables = roundQuerySupport.listRoundTables(round.getId()).stream()
                 .sorted(Comparator.comparing(RoundTable::getSortOrder, Comparator.nullsLast(Integer::compareTo))
                         .thenComparing(RoundTable::getId))
@@ -82,6 +93,7 @@ public class RoundCandidateSyncService {
         if (!staleIds.isEmpty()) {
             roundTableEntryMapper.deleteBatchIds(staleIds);
         }
+        boolean changed = !staleIds.isEmpty();
 
         List<RoundTableEntry> retainedEntries = existingEntries.stream()
                 .filter(entry -> candidateEntryIds.contains(entry.getBeerEntryId()))
@@ -118,6 +130,8 @@ public class RoundCandidateSyncService {
                     .sortOrder(nextSortOrderByTable.compute(targetTable.getId(), (key, value) -> value + 1) - 1)
                     .build());
             entryCountByTable.compute(targetTable.getId(), (key, value) -> value + 1);
+            changed = true;
         }
+        return changed;
     }
 }

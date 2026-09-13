@@ -150,6 +150,7 @@ public class RoundOverviewQueryService {
                 .name(round.getRoundName())
                 .type(round.getRoundType())
                 .status(round.getStatus())
+                .allocationRevision(round.getAllocationRevision() == null ? 0L : round.getAllocationRevision())
                 .sourceRoundId(round.getSourceRoundId())
                 .sourceEntryUuids(new ArrayList<>(sourceEntryUuids))
                 .sourceLocked(sourceRound == null ? null : sourceLocked)
@@ -280,6 +281,9 @@ public class RoundOverviewQueryService {
                             .role(member.getRole())
                             .roleLabel(roleLabel(member))
                             .systemTaskRequired(Objects.equals(member.getSystemTaskRequired(), FLAG_TRUE))
+                            .status("REMOVED".equalsIgnoreCase(member.getStatus()) ? "REMOVED" : "ACTIVE")
+                            .statusLabel("REMOVED".equalsIgnoreCase(member.getStatus()) ? "已离场" : "在场")
+                            .removedTime(member.getRemovedTime() == null ? null : member.getRemovedTime().toString())
                             .build();
                 })
                 .toList();
@@ -426,12 +430,14 @@ public class RoundOverviewQueryService {
     private int resolveRankingConfirmationRequiredCount(RoundTable table) {
         return Math.toIntExact(roundTableMemberMapper.selectCount(new LambdaQueryWrapper<RoundTableMember>()
                 .eq(RoundTableMember::getRoundTableId, table.getId())
+                .ne(RoundTableMember::getStatus, "REMOVED")
                 .ne(RoundTableMember::getRole, JudgeRoleType.CAPTAIN.name())));
     }
 
     private int resolveRankingConfirmationConfirmedCount(RoundTable table) {
         Set<Long> requiredJudgeIds = roundTableMemberMapper.selectList(new LambdaQueryWrapper<RoundTableMember>()
                         .eq(RoundTableMember::getRoundTableId, table.getId())
+                        .ne(RoundTableMember::getStatus, "REMOVED")
                         .ne(RoundTableMember::getRole, JudgeRoleType.CAPTAIN.name()))
                 .stream()
                 .map(RoundTableMember::getJudgeAccountId)
@@ -531,7 +537,10 @@ public class RoundOverviewQueryService {
     }
 
     private int countMembers(List<RoundTableMember> members, String role) {
-        return (int) members.stream().filter(member -> role.equals(member.getRole())).count();
+        return (int) members.stream()
+                .filter(member -> !"REMOVED".equalsIgnoreCase(member.getStatus()))
+                .filter(member -> role.equals(member.getRole()))
+                .count();
     }
 
     private int averageInt(List<Integer> values) {

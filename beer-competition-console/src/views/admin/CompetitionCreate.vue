@@ -106,8 +106,8 @@
                 </label>
               </div>
               <label class="tier-toggle" :class="{ enabled: draft.tierPricingEnabled }">
-                <span>启用阶梯报价</span>
-                <el-switch v-model="draft.tierPricingEnabled" aria-label="启用阶梯报价" />
+                <span>启用阶梯报名费</span>
+                <el-switch v-model="draft.tierPricingEnabled" aria-label="启用阶梯报名费" />
               </label>
               <div v-if="draft.tierPricingEnabled" class="tier-editor">
                 <div class="tier-editor-head">
@@ -210,7 +210,7 @@
                 </label>
                 <label class="wide-field">
                   <span>粘贴标签说明</span>
-                  <textarea v-model.trim="draft.deliveryNote" rows="3" placeholder="说明标签打印、裁剪、粘贴和防水等要求" />
+                  <textarea v-model.trim="draft.deliveryNote" rows="3" placeholder="例如：用 A4 纸打印标签并裁剪，贴在每瓶酒款上，建议覆膜防水" />
                 </label>
               </div>
             </section>
@@ -351,21 +351,41 @@
         <section v-if="isTenantOrganizer" id="collection-config" class="form-section">
           <header class="section-head"><h2>报名收款</h2></header>
           <div class="collection-config-grid">
-            <div class="collection-upload wide-field">
+            <div class="collection-method-field wide-field">
+              <span class="field-label">支持的收款方式</span>
+              <div class="collection-method-segmented" role="radiogroup" aria-label="支持的收款方式">
+                <button
+                  v-for="option in collectionMethodOptions"
+                  :key="option.value"
+                  class="collection-method-option"
+                  :class="{ active: collectionDraft.methodMode === option.value }"
+                  type="button"
+                  role="radio"
+                  :aria-checked="collectionDraft.methodMode === option.value"
+                  @click="collectionDraft.methodMode = option.value"
+                >
+                  {{ option.label }}
+                </button>
+              </div>
+            </div>
+            <div v-if="wechatCollectionEnabled" class="collection-upload wide-field">
               <span class="field-label">微信收款码 <b>*</b></span>
               <input ref="collectionQrInput" class="collection-file-input" type="file" accept="image/jpeg,image/png,image/webp" @change="selectCollectionQr" />
-              <button v-if="!collectionDraft.qrFile" class="upload-dropzone" type="button" @click="collectionQrInput?.click()"><span class="upload-icon">↑</span><strong>上传收款码</strong><small>支持 JPG、PNG、WEBP，建议使用清晰的个人或企业收款码</small></button>
-              <div v-else class="qr-preview-card"><img :src="collectionDraft.qrPreviewUrl" alt="微信收款码预览" /><div><strong>{{ collectionDraft.qrFile.name }}</strong><small>已选择，可直接保存草稿</small><button type="button" @click="collectionQrInput?.click()">更换图片</button></div></div>
+              <button v-if="!collectionDraft.qrFile" class="upload-dropzone" type="button" @click="collectionQrInput?.click()"><span class="upload-icon">↑</span><strong>上传微信收款码</strong><small>支持 JPG、PNG、WEBP，请上传清晰完整的收款码</small></button>
+              <div v-else class="qr-preview-card"><img :src="collectionDraft.qrPreviewUrl" alt="微信收款码预览" /><div><strong>{{ collectionDraft.qrFile.name }}</strong><small>厂商付款时将看到此收款码</small><button type="button" @click="collectionQrInput?.click()">更换图片</button></div></div>
             </div>
-            <label><span>账户名 <b>*</b></span><input v-model.trim="collectionDraft.bankAccountName" placeholder="请输入收款账户名称" /></label>
-            <label><span>账号 <b>*</b></span><input v-model.trim="collectionDraft.bankAccountNo" placeholder="请输入银行卡号" /></label>
-            <label class="wide-field"><span>开户行 <b>*</b></span><input v-model.trim="collectionDraft.bankName" placeholder="请输入开户银行及支行" /></label>
-            <label class="wide-field"><span>收款备注</span><input v-model.trim="collectionDraft.collectionNote" maxlength="255" placeholder="展示给报名厂商的转账备注要求" /></label>
+            <template v-if="bankCollectionEnabled">
+              <label><span>收款户名 <b>*</b></span><input v-model.trim="collectionDraft.bankAccountName" placeholder="请输入银行卡开户名称" /></label>
+              <label><span>银行账号 <b>*</b></span><input v-model.trim="collectionDraft.bankAccountNo" placeholder="请输入收款银行账号" /></label>
+              <label class="wide-field"><span>开户银行 <b>*</b></span><input v-model.trim="collectionDraft.bankName" placeholder="请输入开户银行及支行" /></label>
+            </template>
+            <label class="wide-field"><span>付款备注要求</span><input v-model.trim="collectionDraft.collectionNote" maxlength="255" placeholder="例如：付款时请备注厂牌名称" /></label>
+            <label class="wide-field"><span>付款咨询联系</span><input v-model.trim="collectionDraft.paymentContact" maxlength="128" placeholder="微信号或手机号，付款的厂商遇到问题时联系" /></label>
           </div>
           <div v-if="beerCoinOverview" class="beer-coin-create-hint" :class="{ insufficient: beerCoinInsufficient }">
             <div>
               <span>啤酒币</span>
-              <strong>开放报名时扣除 1 枚，当前余额 {{ formatInteger(beerCoinWallet?.availableQuantity) }} 枚</strong>
+              <strong>开放报名最低扣除 1 枚，每款有效酒款 1 枚，当前余额 {{ formatInteger(beerCoinWallet?.availableQuantity) }} 枚</strong>
             </div>
             <button v-if="beerCoinInsufficient" class="text-button" type="button" @click="router.push('/admin/beer-coins')">购买啤酒币</button>
           </div>
@@ -488,7 +508,7 @@
                 </div>
                 <div>
                   <dt>报名费</dt>
-                  <dd>{{ draft.entryFee }} 元 / 款</dd>
+                  <dd>{{ draft.entryFee === '' || draft.entryFee === null ? '-' : `${draft.entryFee} 元 / 款` }}</dd>
                 </div>
                 <div>
                   <dt>早鸟价</dt>
@@ -585,48 +605,79 @@ const fieldTypeOptions = [
   { label: '多选', value: 'multi_select' },
 ]
 
+const collectionMethodOptions = [
+  { label: '微信收款', value: 'WECHAT' },
+  { label: '银行转账', value: 'BANK' },
+  { label: '微信支付+银行转账', value: 'BOTH' },
+]
+
+function pad2(value) {
+  return String(value).padStart(2, '0')
+}
+
+function formatDateOnly(date) {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
+}
+
+function formatDateTimeLocal(date) {
+  return `${formatDateOnly(date)}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`
+}
+
+function createDefaultSchedule() {
+  const now = new Date()
+  const registrationStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 0)
+  const registrationDeadline = new Date(registrationStart)
+  registrationDeadline.setDate(registrationDeadline.getDate() + 30)
+  registrationDeadline.setHours(18, 0, 0, 0)
+  const competitionDate = new Date(registrationDeadline)
+  competitionDate.setDate(competitionDate.getDate() + 30)
+  const sampleArrivalStart = new Date(registrationDeadline)
+  sampleArrivalStart.setDate(sampleArrivalStart.getDate() + 5)
+  sampleArrivalStart.setHours(9, 0, 0, 0)
+  const sampleArrivalDeadline = new Date(competitionDate)
+  sampleArrivalDeadline.setDate(sampleArrivalDeadline.getDate() - 5)
+  sampleArrivalDeadline.setHours(18, 0, 0, 0)
+  return {
+    competitionDate: formatDateOnly(competitionDate),
+    registrationStart: formatDateTimeLocal(registrationStart),
+    registrationDeadline: formatDateTimeLocal(registrationDeadline),
+    sampleArrivalStart: formatDateTimeLocal(sampleArrivalStart),
+    sampleArrivalDeadline: formatDateTimeLocal(sampleArrivalDeadline),
+  }
+}
+
+const defaultSchedule = createDefaultSchedule()
+
 const draft = reactive({
   name: '',
   competitionType: 'AWARD',
-  date: '2026-08-20',
-  registrationStart: '2026-06-10T10:00',
-  registrationDeadline: '2026-07-30T18:00',
-  entryFee: 199,
-  earlyBirdFee: 159,
-  earlyBirdDeadline: '2026-06-30T18:00',
+  date: defaultSchedule.competitionDate,
+  registrationStart: defaultSchedule.registrationStart,
+  registrationDeadline: defaultSchedule.registrationDeadline,
+  entryFee: '',
+  earlyBirdFee: '',
+  earlyBirdDeadline: '',
   tierPricingEnabled: false,
   feeTiers: [{ id: 'tier-initial', startQuantity: 3, discountRatePercent: 80 }],
   description: '',
-  rulesUrl: 'https://mp.weixin.qq.com/s/iGxSnomHIXvdOyMO9xgd2Q',
-  deliveryMethod: 'BOTH',
-  sampleArrivalStart: '2026-08-10T10:00',
-  sampleArrivalDeadline: '2026-08-15T18:00',
-  sampleQuantityNote: '每款 6 瓶，单瓶容量不低于 330ml',
-  deliveryRecipient: '赛事收样组',
+  rulesUrl: '',
+  deliveryMethod: 'EXPRESS',
+  sampleArrivalStart: defaultSchedule.sampleArrivalStart,
+  sampleArrivalDeadline: defaultSchedule.sampleArrivalDeadline,
+  sampleQuantityNote: '',
+  deliveryRecipient: '',
   deliveryPhone: '',
   deliveryAddress: '',
-  deliveryNote: '支付成功后，您将看到自动生成的作品标签。请用 A4 纸打印，裁剪后分别贴在每瓶／罐参赛酒款上。张贴之前，请移除参赛酒款原本的酒标。建议采用激光打印，并在贴后使用透明塑料胶带覆盖，以增加防水性。',
+  deliveryNote: '',
   logisticsVisibility: 'PAYMENT_CONFIRMED',
-  categories: [
-    { id: 'cat-1', name: '组别1' },
-    { id: 'cat-2', name: '组别2' },
-  ],
+  categories: [{ id: 'cat-1', name: '' }],
   styleLibraryVersion: defaultStyleLibraryValue,
-  entryFields: [
-    {
-      key: 'specialIngredients',
-      label: '增味原料或特殊工艺',
-      type: 'textarea',
-      helpText: '如使用茶、咖啡、水果、桶陈等，请描述原料和工艺',
-      required: false,
-      visibleToJudges: true,
-      options: [],
-    },
-  ],
+  entryFields: [],
   scoreConfigs: createScoreConfigs(),
 })
-const collectionDraft = reactive({ enabledMethods: ['WECHAT_QR', 'BANK_TRANSFER'], qrFile: null, qrPreviewUrl: '', qrAssetId: null, bankAccountName: '', bankAccountNo: '', bankName: '', collectionNote: '' })
+const collectionDraft = reactive({ methodMode: 'BOTH', qrFile: null, qrPreviewUrl: '', qrAssetId: null, bankAccountName: '', bankAccountNo: '', bankName: '', collectionNote: '', paymentContact: '' })
 const initialDraftSnapshot = JSON.stringify(toDraftSnapshot(draft))
+const initialCollectionSnapshot = JSON.stringify(toCollectionSnapshot(collectionDraft))
 
 const scoreDescriptions = {
   CROSS: '每场比赛可配置 2-3 个维度，总分 50',
@@ -653,7 +704,27 @@ const categorySummary = computed(() => summarizeList(getCategoryNames(draft), '�
 const judgeVisibleFieldSummary = computed(() => summarizeList(getJudgeVisibleFields(draft), '无'))
 const beerCoinWallet = computed(() => beerCoinOverview.value?.wallet || null)
 const beerCoinInsufficient = computed(() => Number(beerCoinWallet.value?.availableQuantity || 0) < 1)
-const isDraftDirty = computed(() => JSON.stringify(toDraftSnapshot(draft)) !== initialDraftSnapshot || (isTenantOrganizer.value && (collectionDraft.qrFile !== null || collectionDraft.bankAccountName || collectionDraft.bankAccountNo || collectionDraft.bankName || collectionDraft.collectionNote)))
+const wechatCollectionEnabled = computed(() => ['WECHAT', 'BOTH'].includes(collectionDraft.methodMode))
+const bankCollectionEnabled = computed(() => ['BANK', 'BOTH'].includes(collectionDraft.methodMode))
+const collectionEnabledMethods = computed(() => [
+  ...(wechatCollectionEnabled.value ? ['WECHAT_QR'] : []),
+  ...(bankCollectionEnabled.value ? ['BANK_TRANSFER'] : []),
+])
+const isDraftDirty = computed(() => JSON.stringify(toDraftSnapshot(draft)) !== initialDraftSnapshot
+  || (isTenantOrganizer.value && JSON.stringify(toCollectionSnapshot(collectionDraft)) !== initialCollectionSnapshot))
+
+function toCollectionSnapshot(collection) {
+  return {
+    methodMode: collection.methodMode,
+    qrFileName: collection.qrFile?.name || '',
+    qrAssetId: collection.qrAssetId,
+    bankAccountName: collection.bankAccountName,
+    bankAccountNo: collection.bankAccountNo,
+    bankName: collection.bankName,
+    collectionNote: collection.collectionNote,
+    paymentContact: collection.paymentContact,
+  }
+}
 
 function removeItem(list, index) {
   list.splice(index, 1)
@@ -746,13 +817,13 @@ async function submitDraft() {
     ElMessage.warning(`“${invalidOptionField.label || '未命名字段'}”至少需要 2 个不重复候选项`)
     return
   }
-  if (isTenantOrganizer.value && !collectionDraft.qrFile && !collectionDraft.qrAssetId) {
+  if (isTenantOrganizer.value && wechatCollectionEnabled.value && !collectionDraft.qrFile && !collectionDraft.qrAssetId) {
     ElMessage.warning('请上传微信收款码')
     scrollToSection('collection-config')
     return
   }
-  if (isTenantOrganizer.value && (!collectionDraft.bankAccountName || !collectionDraft.bankAccountNo || !collectionDraft.bankName)) {
-    ElMessage.warning('请完整填写银行账户名、账号和开户行')
+  if (isTenantOrganizer.value && bankCollectionEnabled.value && (!collectionDraft.bankAccountName || !collectionDraft.bankAccountNo || !collectionDraft.bankName)) {
+    ElMessage.warning('请完整填写收款户名、银行账号和开户银行')
     scrollToSection('collection-config')
     return
   }
@@ -808,9 +879,17 @@ async function submitDraft() {
     })
     const competitionId = created.id
     let qrAssetId = collectionDraft.qrAssetId
-    if (isTenantOrganizer.value && collectionDraft.qrFile) qrAssetId = (await uploadCompetitionCollectionQr(competitionId, collectionDraft.qrFile)).fileAssetId
+    if (isTenantOrganizer.value && wechatCollectionEnabled.value && collectionDraft.qrFile) qrAssetId = (await uploadCompetitionCollectionQr(competitionId, collectionDraft.qrFile)).fileAssetId
     if (isTenantOrganizer.value) {
-      await updateCompetitionCollection(competitionId, { enabledMethods: collectionDraft.enabledMethods, wechatQrAssetId: qrAssetId, bankAccountName: collectionDraft.bankAccountName, bankAccountNo: collectionDraft.bankAccountNo, bankName: collectionDraft.bankName, collectionNote: collectionDraft.collectionNote })
+      await updateCompetitionCollection(competitionId, {
+        enabledMethods: collectionEnabledMethods.value,
+        wechatQrAssetId: wechatCollectionEnabled.value ? qrAssetId : null,
+        bankAccountName: bankCollectionEnabled.value ? collectionDraft.bankAccountName : null,
+        bankAccountNo: bankCollectionEnabled.value ? collectionDraft.bankAccountNo : null,
+        bankName: bankCollectionEnabled.value ? collectionDraft.bankName : null,
+        collectionNote: collectionDraft.collectionNote,
+        paymentContact: collectionDraft.paymentContact,
+      })
     }
     ElMessage.success('比赛草稿已创建，下一步进入工作台完成评审编排')
     router.push(`/admin/competitions/${competitionId}`)
@@ -1066,6 +1145,29 @@ function isOptionalDeadlineAfterStart(start, deadline) {
   return new Date(deadline).getTime() > new Date(start).getTime()
 }
 
+function isFutureDateTime(value) {
+  if (!value) {
+    return false
+  }
+  const time = new Date(value).getTime()
+  return Number.isFinite(time) && time > Date.now()
+}
+
+function isTodayOrLater(dateValue) {
+  if (!dateValue) {
+    return false
+  }
+  const time = new Date(`${dateValue}T23:59:59`).getTime()
+  return Number.isFinite(time) && time >= Date.now()
+}
+
+function isDateOnOrAfter(dateValue, dateTimeValue) {
+  if (!dateValue || !dateTimeValue) {
+    return true
+  }
+  return new Date(`${dateValue}T00:00:00`).getTime() >= new Date(dateTimeValue).getTime()
+}
+
 function isValidHttpUrl(value) {
   return /^https?:\/\//i.test(String(value || '').trim())
 }
@@ -1118,6 +1220,7 @@ function buildReviewItems(source) {
   const earlyBirdInvalid = !earlyBirdIncomplete && source.earlyBirdDeadline
     && (!isDeadlineAfterStart(source.registrationStart, source.earlyBirdDeadline)
       || !isOptionalDeadlineAfterStart(source.earlyBirdDeadline, source.registrationDeadline)
+      || !isFutureDateTime(source.earlyBirdDeadline)
       || Number(source.earlyBirdFee) > Number(source.entryFee)
       || Number(source.earlyBirdFee) < 0)
   const tierInvalid = source.tierPricingEnabled && (!source.feeTiers?.length
@@ -1148,13 +1251,28 @@ function buildReviewItems(source) {
       detail: missingBaseFields.length ? `缺少${missingBaseFields.join('、')}` : `${source.name}，${source.date}`,
     },
     {
+      key: 'competitionDate',
+      label: '比赛日期',
+      target: 'base-info',
+      status: isTodayOrLater(source.date) && isDateOnOrAfter(source.date, source.registrationDeadline) ? 'done' : 'pending',
+      detail: !source.date
+        ? '请填写比赛日期'
+        : !isTodayOrLater(source.date)
+          ? '比赛日期不能早于今天'
+          : !isDateOnOrAfter(source.date, source.registrationDeadline)
+            ? '比赛日期需晚于报名截止时间'
+            : source.date,
+    },
+    {
       key: 'time',
       label: '报名时间',
       target: 'base-info',
-      status: isDeadlineAfterStart(source.registrationStart, source.registrationDeadline) ? 'done' : 'pending',
-      detail: isDeadlineAfterStart(source.registrationStart, source.registrationDeadline)
-        ? `截止 ${formatDateTime(source.registrationDeadline)}`
-        : '报名截止需晚于报名开始',
+      status: isDeadlineAfterStart(source.registrationStart, source.registrationDeadline) && isFutureDateTime(source.registrationDeadline) ? 'done' : 'pending',
+      detail: !isDeadlineAfterStart(source.registrationStart, source.registrationDeadline)
+        ? '报名截止需晚于报名开始'
+        : !isFutureDateTime(source.registrationDeadline)
+          ? '报名截止时间已过期，请改为未来时间'
+          : `截止 ${formatDateTime(source.registrationDeadline)}`,
     },
     {
       key: 'earlyBird',
@@ -1164,7 +1282,7 @@ function buildReviewItems(source) {
       detail: earlyBirdIncomplete
         ? '早鸟价和截止时间需要同时填写'
         : earlyBirdInvalid
-          ? '早鸟价需不高于报名费，截止时间需在报名窗口内'
+          ? '早鸟价需不高于报名费，截止时间需晚于当前时间且在报名窗口内'
           : source.earlyBirdFee ? `早鸟 ${source.earlyBirdFee} 元 / 款，截止 ${formatDateTime(source.earlyBirdDeadline)}` : '未设置早鸟价',
     },
     {
@@ -1180,10 +1298,10 @@ function buildReviewItems(source) {
     },
     {
       key: 'tierPricing',
-      label: '阶梯报价',
+      label: '阶梯报名费',
       target: 'base-info',
       status: !tierInvalid ? 'done' : 'pending',
-      detail: !source.tierPricingEnabled ? '未启用阶梯报价' : (tierInvalid ? '请按起始款数升序配置折扣率' : `已配置 ${source.feeTiers.length} 档`),
+      detail: !source.tierPricingEnabled ? '未启用阶梯报名费' : (tierInvalid ? '请按起始款数升序配置折扣率' : `已配置 ${source.feeTiers.length} 档`),
     },
     {
       key: 'logistics',
@@ -1830,6 +1948,47 @@ textarea::placeholder {
   grid-column: 1 / -1;
 }
 
+.collection-method-field {
+  display: grid;
+  gap: 9px;
+}
+
+.collection-method-segmented {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  max-width: 620px;
+  padding: 4px;
+  border: 1px solid rgba(219, 232, 237, 0.16);
+  border-radius: 8px;
+  background: rgba(7, 14, 17, 0.68);
+}
+
+.collection-method-option {
+  min-height: 42px;
+  padding: 0 14px;
+  color: #a9bbc2;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  transition: color 0.16s ease, background 0.16s ease, border-color 0.16s ease;
+}
+
+.collection-method-option:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.collection-method-option.active {
+  color: var(--gold-soft);
+  border-color: rgba(216, 169, 53, 0.32);
+  background: rgba(216, 169, 53, 0.08);
+}
+
 .collection-upload {
   display: grid;
   gap: 9px;
@@ -1970,6 +2129,10 @@ textarea::placeholder {
 
 @media (max-width: 720px) {
   .collection-config-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .collection-method-segmented {
     grid-template-columns: 1fr;
   }
 

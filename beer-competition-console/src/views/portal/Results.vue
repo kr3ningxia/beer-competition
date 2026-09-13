@@ -2,7 +2,6 @@
   <div class="results-page">
     <section class="result-hero">
       <div>
-        <span class="label-chip tone-gold">结果中心</span>
         <h1>我的结果</h1>
         <p>{{ resultHeroText }}</p>
       </div>
@@ -180,11 +179,21 @@
               <dd>{{ selectedEntry.style || '风格待确认' }}</dd>
             </div>
           </dl>
-          <div class="locked-progress">
-            <span class="done">提交资料</span>
-            <span :class="{ done: selectedEntry.status !== 'PENDING_PAYMENT' }">支付报名费</span>
-            <span :class="{ done: selectedEntry.status === 'STORED' || selectedEntry.status === 'RESULT_PUBLISHED' }">样品入库</span>
-            <span :class="{ done: selectedEntry.status === 'RESULT_PUBLISHED' }">结果发布</span>
+          <div class="locked-timeline">
+            <h3>参赛进度</h3>
+            <ol class="timeline-list">
+              <li
+                v-for="step in lockedSteps"
+                :key="step.label"
+                :class="['timeline-step', step.state]"
+              >
+                <span class="step-mark" aria-hidden="true" />
+                <div class="step-body">
+                  <strong>{{ step.label }}</strong>
+                  <small>{{ step.hint }}</small>
+                </div>
+              </li>
+            </ol>
           </div>
           <div class="empty-actions">
             <RouterLink to="/portal/my">返回我的参赛</RouterLink>
@@ -219,7 +228,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { downloadPortalResultCertificate, fetchPortalResultDetail, fetchPortalResults } from '@/api/portal'
-import { entryStatusMeta, isEntryAwarded, isEntryResultPublished } from './portalViewModels'
+import { entryStatusMeta, isEntryAwarded, isEntryResultPublished, isEntryStored } from './portalViewModels'
 
 const route = useRoute()
 const router = useRouter()
@@ -264,6 +273,24 @@ const lockedResultHint = computed(() => (
     ? '组委会发布诊断结果后，这里会显示评分、评语和桌长综合意见'
     : '组委会确认并发布结果后，这里会显示评分、评语和奖项信息'
 ))
+const lockedSteps = computed(() => {
+  const entry = selectedEntry.value
+  const paid = Boolean(entry) && entry.status !== 'PENDING_PAYMENT'
+  const stored = isEntryStored(entry)
+  const resultPublished = isEntryResultPublished(entry)
+  const steps = [
+    { label: '提交资料', done: true, hint: '酒款资料已提交' },
+    { label: '支付报名费', done: paid, hint: paid ? '报名费已支付' : '等待支付报名费' },
+    { label: '样品入库', done: stored, hint: stored ? '样品已完成入库' : '等待组委会确认入库' },
+    { label: '结果发布', done: resultPublished, hint: resultPublished ? '结果已发布' : '等待组委会发布结果' },
+  ]
+  const canceled = entry?.status === 'CANCELED'
+  const currentIndex = canceled ? -1 : steps.findIndex((step) => !step.done)
+  return steps.map((step, index) => ({
+    ...step,
+    state: step.done ? 'done' : index === currentIndex ? 'current' : 'pending',
+  }))
+})
 const categoryEntryCountText = computed(() => {
   const count = Number(selectedEntry.value?.categoryEntryCount || 0)
   return count ? `${count} 款参赛酒` : '待确认'
@@ -498,7 +525,7 @@ function buildCertificateFilename(blob) {
 }
 
 .result-hero h1 {
-  margin: 12px 0 6px;
+  margin: 0 0 6px;
   font-size: 34px;
   line-height: 1.1;
 }
@@ -998,25 +1025,121 @@ function buildCertificateFilename(blob) {
   margin-top: 20px;
 }
 
-.locked-progress {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+.locked-timeline {
   margin-top: 24px;
-}
-
-.locked-progress span {
-  min-height: 46px;
-  padding: 12px;
-  color: #7d705f;
-  text-align: center;
-  background: #f0e2c8;
+  padding: 18px 20px;
+  background: #fffdf7;
+  border: 1px solid rgba(87, 58, 26, 0.1);
   border-radius: 8px;
 }
 
-.locked-progress span.done {
-  color: #fff6df;
+.locked-timeline h3 {
+  margin: 0 0 16px;
+  color: #6b4710;
+  font-size: 15px;
+}
+
+.timeline-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.timeline-step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  padding-bottom: 18px;
+}
+
+.timeline-step:last-child {
+  padding-bottom: 0;
+}
+
+.timeline-step:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 22px;
+  bottom: 2px;
+  width: 2px;
+  background: rgba(87, 58, 26, 0.14);
+}
+
+.timeline-step.done:not(:last-child)::before {
+  background: rgba(61, 125, 80, 0.4);
+}
+
+.step-mark {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  background: #fffdf7;
+  border: 2px solid #d5c6ad;
+  border-radius: 50%;
+}
+
+.timeline-step.done .step-mark {
   background: #3d7d50;
+  border-color: #3d7d50;
+}
+
+.timeline-step.done .step-mark::after {
+  content: '';
+  width: 4px;
+  height: 8px;
+  margin-top: -3px;
+  border: solid #fff6df;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.timeline-step.current .step-mark {
+  border-color: #c98a1f;
+  box-shadow: 0 0 0 4px rgba(201, 138, 31, 0.16);
+}
+
+.timeline-step.current .step-mark::after {
+  content: '';
+  width: 7px;
+  height: 7px;
+  background: #c98a1f;
+  border-radius: 50%;
+}
+
+.step-body {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.step-body strong {
+  color: #2b1d10;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.step-body small {
+  color: #746a5f;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.timeline-step.pending .step-body strong {
+  color: #9b917f;
+}
+
+.timeline-step.current .step-body strong {
+  color: #a35f10;
 }
 
 .empty-actions {
@@ -1054,8 +1177,7 @@ function buildCertificateFilename(blob) {
   .result-hero,
   .result-stats,
   .entry-meta,
-  .filter-tabs,
-  .locked-progress {
+  .filter-tabs {
     grid-template-columns: 1fr;
   }
 

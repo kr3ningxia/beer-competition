@@ -9,6 +9,7 @@ import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.FileAssetMapper;
 import com.beercompetition.mapper.OrganizerMapper;
 import com.beercompetition.pojo.dto.CompetitionCollectionConfigUpdateRequest;
+import com.beercompetition.pojo.enums.EntryPayMethod;
 import com.beercompetition.pojo.enums.OrganizerType;
 import com.beercompetition.pojo.po.Competition;
 import com.beercompetition.pojo.po.CompetitionCollectionConfig;
@@ -83,6 +84,7 @@ public class CompetitionCollectionServiceImpl implements CompetitionCollectionSe
         config.setBankAccountNo(normalizeNullable(request.getBankAccountNo()));
         config.setBankName(normalizeNullable(request.getBankName()));
         config.setCollectionNote(normalizeNullable(request.getCollectionNote()));
+        config.setPaymentContact(normalizeNullable(request.getPaymentContact()));
         if (config.getId() == null) {
             configMapper.insert(config);
         } else {
@@ -129,6 +131,23 @@ public class CompetitionCollectionServiceImpl implements CompetitionCollectionSe
                     .build();
         }
         return toVO(competition, findConfig(competitionId), true);
+    }
+
+    @Override
+    public void requirePortalPaymentMethodEnabled(Long competitionId, EntryPayMethod payMethod) {
+        CompetitionCollectionConfigVO config = getPortalConfig(competitionId);
+        if (!Boolean.TRUE.equals(config.getTenantCompetition())) {
+            return;
+        }
+        String configuredMethod = switch (payMethod) {
+            case WECHAT_QR -> METHOD_WECHAT_QR;
+            case BANK_TRANSFER -> METHOD_BANK_TRANSFER;
+            default -> throw new BaseException("该赛事不支持当前付款方式");
+        };
+        if (config.getEnabledMethods() == null || !config.getEnabledMethods().contains(configuredMethod)) {
+            String methodName = payMethod == EntryPayMethod.WECHAT_QR ? "微信收款" : "银行转账";
+            throw new BaseException("该赛事未开放" + methodName);
+        }
     }
 
     private Competition requireTenantCompetition(Long competitionId) {
@@ -182,6 +201,7 @@ public class CompetitionCollectionServiceImpl implements CompetitionCollectionSe
                 .bankAccountNo(config == null ? null : config.getBankAccountNo())
                 .bankName(config == null ? null : config.getBankName())
                 .collectionNote(config == null ? null : config.getCollectionNote())
+                .paymentContact(config == null ? null : config.getPaymentContact())
                 .build();
     }
 

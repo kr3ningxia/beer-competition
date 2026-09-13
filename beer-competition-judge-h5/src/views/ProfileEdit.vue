@@ -22,6 +22,10 @@
         资质信息
         <textarea v-model.trim="form.qualification" class="textarea" placeholder="例如 BJCP 等级、评审经验、从业背景"></textarea>
       </label>
+      <label class="field">
+        BJCP 编号（选填）
+        <input v-model.trim="form.bjcpNumber" class="input" maxlength="64" />
+      </label>
       <section class="field conflict-field">
         <span>是否与酒厂有利益关联</span>
         <div class="choice-row" role="radiogroup" aria-label="是否与酒厂有利益关联">
@@ -75,6 +79,7 @@ const form = reactive({
   name: '',
   wechat: '',
   qualification: '',
+  bjcpNumber: '',
   breweryConflictFlag: false,
   breweryConflictText: '',
 })
@@ -85,6 +90,7 @@ onMounted(async () => {
   form.name = profile.value.name || ''
   form.wechat = profile.value.wechat || ''
   form.qualification = profile.value.qualification || ''
+  form.bjcpNumber = profile.value.bjcpNumber || ''
   form.breweryConflictFlag = Boolean(profile.value.breweryConflictFlag)
   form.breweryConflictText = profile.value.breweryConflictText || ''
 })
@@ -105,6 +111,7 @@ async function save() {
       name: form.name,
       wechat: form.wechat,
       qualification: form.qualification,
+      bjcpNumber: form.bjcpNumber,
       breweryConflictFlag: form.breweryConflictFlag,
       breweryConflictText: form.breweryConflictFlag ? form.breweryConflictText : '',
     })

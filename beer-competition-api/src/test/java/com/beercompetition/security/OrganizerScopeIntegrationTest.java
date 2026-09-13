@@ -13,6 +13,7 @@ import com.beercompetition.pojo.enums.UserRole;
 import com.beercompetition.pojo.po.Competition;
 import com.beercompetition.pojo.vo.JudgeAccountVO;
 import com.beercompetition.service.JudgeService;
+import com.beercompetition.service.JudgePerformanceService;
 import com.beercompetition.service.AdminExportService;
 import com.beercompetition.service.AdminUserService;
 import com.beercompetition.registration.entry.AdminEntryService;
@@ -43,6 +44,9 @@ class OrganizerScopeIntegrationTest extends IntegrationTestBase {
 
     @Autowired
     private JudgeService judgeService;
+
+    @Autowired
+    private JudgePerformanceService judgePerformanceService;
 
     @Autowired
     private CompetitionFeedbackQueryService feedbackQueryService;
@@ -117,6 +121,36 @@ class OrganizerScopeIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    void organizerJudgePerformanceOnlyIncludesItsOwnCompetitions() {
+        createTenantIdentity();
+        Competition tenantCompetition = tenantCompetition();
+        Competition platformCompetition = testData.createCompetition(testRun + "-PERF-PLATFORM", CompetitionStatus.ARCHIVED);
+        String phone = "138" + String.format("%08d", Math.floorMod(testRun.hashCode(), 100_000_000));
+        var sharedJudge = testData.createJudge(testRun, "PERF-SHARED", phone, JudgeAccountStatus.ACTIVE);
+        var tenantTable = testData.createBaseJudgeTable(tenantCompetition.getId(), testRun + "-performance-tenant-table");
+        var platformTable = testData.createBaseJudgeTable(platformCompetition.getId(), testRun + "-performance-platform-table");
+        testData.createAssignment(tenantCompetition.getId(), tenantTable.getId(), sharedJudge.getId(), JudgeRoleType.PROFESSIONAL);
+        testData.createAssignment(platformCompetition.getId(), platformTable.getId(), sharedJudge.getId(), JudgeRoleType.PROFESSIONAL);
+        insertConfirmedPerformance(tenantCompetition.getId(), sharedJudge.getId(), "88.0");
+        insertConfirmedPerformance(platformCompetition.getId(), sharedJudge.getId(), "96.0");
+
+        asTenantAdmin();
+
+        var history = judgePerformanceService.getAccountHistory(sharedJudge.getPublicId());
+        assertThat(history.getEvaluatedCompetitionCount()).isEqualTo(1);
+        assertThat(history.getAverageScore()).isEqualByComparingTo("88.0");
+        assertThat(history.getHistory()).extracting(item -> item.getCompetitionId())
+                .containsExactly(tenantCompetition.getId());
+        var overview = judgePerformanceService.listAccountOverviews(List.of(sharedJudge.getPublicId()));
+        assertThat(overview).singleElement().satisfies(item -> {
+            assertThat(item.getEvaluatedCompetitionCount()).isEqualTo(1);
+            assertThat(item.getAverageScore()).isEqualByComparingTo("88.0");
+        });
+        assertThatThrownBy(() -> judgePerformanceService.listCompetitionPerformances(platformCompetition.getId()))
+                .isInstanceOf(ForbiddenException.class);
+    }
+
+    @Test
     void organizerOperationLogsResolveScopeFromCompetitionTarget() {
         createTenantIdentity();
         Competition tenantCompetition = tenantCompetition();
@@ -165,7 +199,7 @@ class OrganizerScopeIntegrationTest extends IntegrationTestBase {
 
         asAdmin(1L);
 
-        var users = adminUserService.listAdminUsers(null, tenantAdminUsername);
+        var users = adminUserService.listAdminUsers(null, null, tenantAdminUsername);
 
         assertThat(users).anySatisfy(user -> {
             assertThat(user.getUsername()).isEqualTo(tenantAdminUsername);
@@ -208,6 +242,15 @@ class OrganizerScopeIntegrationTest extends IntegrationTestBase {
                 .adminType(AdminType.ORGANIZER_ADMIN.name())
                 .organizerId(tenantOrganizerId)
                 .build());
+    }
+
+    private void insertConfirmedPerformance(Long competitionId, Long judgeId, String totalScore) {
+        localJdbcTemplate.update("""
+                INSERT INTO competition_judge_evaluation
+                    (competition_id, judge_account_id, manual_score, comment_score, total_score,
+                     status, excellent_candidate, task_completed_count, task_total_count, completion_rate)
+                VALUES (?, ?, 60.0, 28.0, ?, 'CONFIRMED', 1, 1, 1, 100.00)
+                """, competitionId, judgeId, totalScore);
     }
 
     private String incrementPhone(String phone) {

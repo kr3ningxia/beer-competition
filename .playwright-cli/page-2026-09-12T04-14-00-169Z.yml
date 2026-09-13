@@ -1,0 +1,90 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e38]:
+    - banner [ref=e39]:
+      - generic [ref=e40]:
+        - link "赛事首页" [ref=e41] [cursor=pointer]:
+          - /url: /portal/home
+          - generic [ref=e44]:
+            - strong [ref=e45]: 啤酒事务局
+            - generic [ref=e46]: 赛事平台
+        - navigation "赛事平台导航" [ref=e47]:
+          - link "赛事首页" [ref=e48] [cursor=pointer]:
+            - /url: /portal/home
+          - link "全部赛事" [ref=e52] [cursor=pointer]:
+            - /url: /portal/events
+          - link "赛事结果" [ref=e56] [cursor=pointer]:
+            - /url: /portal/competition-results
+          - link "我的参赛" [ref=e60] [cursor=pointer]:
+            - /url: /portal/my
+          - link "我的结果" [ref=e65] [cursor=pointer]:
+            - /url: /portal/results
+          - link "主办方入驻" [ref=e70] [cursor=pointer]:
+            - /url: /portal/organizer-application
+        - generic [ref=e76]:
+          - link "进入厂牌资料" [ref=e77] [cursor=pointer]:
+            - /url: /portal/profile
+            - img "厂牌头像" [ref=e79]
+            - generic [ref=e80]: 八千代麦芽工坊
+          - button "退出" [ref=e81] [cursor=pointer]
+    - main [ref=e83]:
+      - generic [ref=e84]:
+        - generic [ref=e85]:
+          - generic [ref=e86]:
+            - generic [ref=e87]: 我的参赛
+            - heading "八千代麦芽工坊" [level=1] [ref=e88]
+          - link "11 款结果可看" [ref=e89] [cursor=pointer]:
+            - /url: /portal/results
+          - link "查看结果" [ref=e90] [cursor=pointer]:
+            - /url: /portal/results?entryId=44011
+        - generic [ref=e92]:
+          - heading "我的赛事进度" [level=2] [ref=e94]
+          - link "浏览开放赛事" [ref=e95] [cursor=pointer]:
+            - /url: /portal/events
+        - generic [ref=e96]:
+          - generic [ref=e97]:
+            - heading "最近酒款" [level=2] [ref=e99]
+            - link "全部酒款" [ref=e100] [cursor=pointer]:
+              - /url: /portal/entries
+          - generic [ref=e101]:
+            - article [ref=e102]:
+              - generic [ref=e103]:
+                - generic [ref=e104]: 已确认入库
+                - heading "12" [level=3] [ref=e105]
+                - paragraph [ref=e106]: 未关联赛事
+              - paragraph [ref=e108]: 样品已入库，等待组委会发布评审结果
+              - link "查看参赛进度" [ref=e109] [cursor=pointer]:
+                - /url: /portal/entries?competitionId=1010&entryId=44456
+            - article [ref=e110]:
+              - generic [ref=e111]:
+                - generic [ref=e112]: 已确认入库
+                - heading "凸豪金皮尔森" [level=3] [ref=e113]
+                - paragraph [ref=e114]: 未关联赛事
+              - paragraph [ref=e116]: 样品已入库，等待组委会发布评审结果
+              - link "查看参赛进度" [ref=e117] [cursor=pointer]:
+                - /url: /portal/entries?competitionId=1010&entryId=44455
+            - article [ref=e118]:
+              - generic [ref=e119]:
+                - generic [ref=e120]: 结果已发布
+                - heading "宇宙之石烟熏拉格" [level=3] [ref=e121]
+                - paragraph [ref=e122]: 未关联赛事
+              - paragraph [ref=e124]: 结果已发布，结果页展示评分、评语和奖项
+              - link "查看结果" [ref=e125] [cursor=pointer]:
+                - /url: /portal/results?entryId=44011
+            - article [ref=e126]:
+              - generic [ref=e127]:
+                - generic [ref=e128]: 结果已发布
+                - heading "本格捷克皮尔森" [level=3] [ref=e129]
+                - paragraph [ref=e130]: 未关联赛事
+              - paragraph [ref=e132]: 结果已发布，结果页展示评分、评语和奖项
+              - link "查看结果" [ref=e133] [cursor=pointer]:
+                - /url: /portal/results?entryId=44010
+    - contentinfo "网站备案信息" [ref=e134]:
+      - generic [ref=e135]:
+        - generic [ref=e136]: © 上海啤事文化传播有限公司
+        - navigation "备案查询" [ref=e138]:
+          - link "沪ICP备2024061956号-3" [ref=e139] [cursor=pointer]:
+            - /url: https://beian.miit.gov.cn/
+          - link "沪公网安备31011702892028号" [ref=e141] [cursor=pointer]:
+            - /url: https://beian.mps.gov.cn/#/query/webSearch?code=31011702892028
+  - alert [ref=e143]:
+    - paragraph [ref=e147]: 已登录

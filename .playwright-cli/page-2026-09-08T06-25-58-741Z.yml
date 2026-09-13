@@ -1,0 +1,25 @@
+- generic [ref=e172]:
+  - main [ref=e173]:
+    - generic [ref=e174]:
+      - heading "参赛入口" [level=1] [ref=e175]
+      - paragraph [ref=e176]: 手机号验证后即可进入赛事平台
+      - generic [ref=e177]:
+        - generic [ref=e178]:
+          - generic [ref=e179]: 手机号
+          - textbox "手机号" [ref=e183]:
+            - /placeholder: 请输入联系人手机号
+        - generic [ref=e185]:
+          - generic [ref=e186]: 验证码
+          - generic [ref=e188]:
+            - textbox "验证码" [ref=e191]:
+              - /placeholder: 请输入验证码
+            - button "发送验证码" [disabled] [ref=e192]
+        - button "验证手机号，进入报名" [ref=e194] [cursor=pointer]
+  - contentinfo "网站备案信息" [ref=e196]:
+    - generic [ref=e197]:
+      - generic [ref=e198]: © 上海啤事文化传播有限公司
+      - navigation "备案查询" [ref=e200]:
+        - link "沪ICP备2024061956号-3" [ref=e201] [cursor=pointer]:
+          - /url: https://beian.miit.gov.cn/
+        - link "沪公网安备31011702892028号" [ref=e203] [cursor=pointer]:
+          - /url: https://beian.mps.gov.cn/#/query/webSearch?code=31011702892028

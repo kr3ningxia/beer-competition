@@ -1,0 +1,551 @@
+- generic [active] [ref=f1e1]:
+  - generic [ref=f1e93]:
+    - complementary [ref=f1e94]:
+      - generic [ref=f1e98]:
+        - strong [ref=f1e99]: 赛事运营后台
+        - generic [ref=f1e100]: 啤酒事务局
+      - navigation "后台导航" [ref=f1e101]:
+        - generic [ref=f1e102]:
+          - paragraph [ref=f1e103]: 概览
+          - link "工作台" [ref=f1e104] [cursor=pointer]:
+            - /url: /admin/dashboard
+        - generic [ref=f1e110]:
+          - paragraph [ref=f1e111]: 赛事运营
+          - link "比赛管理" [ref=f1e112] [cursor=pointer]:
+            - /url: /admin/competitions
+          - link "酒款管理" [ref=f1e117] [cursor=pointer]:
+            - /url: /admin/entries
+          - link "收款确认" [ref=f1e121] [cursor=pointer]:
+            - /url: /admin/bank-transfers
+          - link "裁判招募" [ref=f1e127] [cursor=pointer]:
+            - /url: /admin/judge-recruitments
+          - link "评审人员" [ref=f1e131] [cursor=pointer]:
+            - /url: /admin/judges
+          - link "数据导出" [ref=f1e135] [cursor=pointer]:
+            - /url: /admin/exports
+        - generic [ref=f1e139]:
+          - paragraph [ref=f1e140]: 组织管理
+          - link "管理员账号" [ref=f1e141] [cursor=pointer]:
+            - /url: /admin/admin-users
+          - link "啤酒币" [ref=f1e145] [cursor=pointer]:
+            - /url: /admin/beer-coins
+          - link "操作日志" [ref=f1e151] [cursor=pointer]:
+            - /url: /admin/operation-logs
+        - generic [ref=f1e155]:
+          - paragraph [ref=f1e156]: 平台管理
+          - link "主办方入驻" [ref=f1e157] [cursor=pointer]:
+            - /url: /admin/organizer-applications
+          - link "风格库" [ref=f1e163] [cursor=pointer]:
+            - /url: /admin/style-libraries
+      - generic [ref=f1e167]:
+        - button "superadmin 平台超级管理员" [ref=f1e168]:
+          - generic [ref=f1e169]:
+            - strong [ref=f1e170]: superadmin
+            - generic [ref=f1e171]: 平台超级管理员
+        - button "退出登录" [ref=f1e174]
+    - main [ref=f1e179]:
+      - generic [ref=f1e954]:
+        - generic [ref=f1e955]:
+          - heading "酒款管理" [level=1] [ref=f1e958]
+          - generic [ref=f1e959]:
+            - button "重置筛选" [ref=f1e960] [cursor=pointer]
+            - button "刷新" [ref=f1e963] [cursor=pointer]
+        - generic [ref=f1e966]:
+          - generic [ref=f1e967]:
+            - generic [ref=f1e968]: 关键词
+            - textbox "关键词" [ref=f1e972]:
+              - /placeholder: 搜索酒款、厂牌、短编号、运单号
+          - generic [ref=f1e973]:
+            - generic [ref=f1e974]: 比赛
+            - combobox "比赛" [ref=f1e975]:
+              - option "全部比赛"
+              - option "首届国产酒花啤酒大赛"
+              - option "租户发起的比赛测试"
+              - option "风格对齐会：布鲁塞尔啤酒挑战赛"
+              - option "阶梯报名比赛"
+              - option "222"
+              - option "测试比赛1"
+              - option "测试比赛"
+              - option "首届中国拉格大赛" [selected]
+          - generic [ref=f1e976]:
+            - generic [ref=f1e977]: 投递组别
+            - combobox "投递组别" [ref=f1e978]:
+              - option "全部组别" [selected]
+              - option "Fermentis · 浅色拉格组"
+              - option "迈拓 · 深色拉格组"
+              - option "Kegland · 创意拉格组"
+          - generic [ref=f1e979]:
+            - generic [ref=f1e980]: 报名状态
+            - combobox "报名状态" [ref=f1e981]:
+              - option "全部状态" [selected]
+              - option "待支付"
+              - option "报名成功"
+              - option "已入库"
+              - option "结果已出"
+              - option "已取消"
+          - generic [ref=f1e982]:
+            - generic [ref=f1e983]: 支付
+            - combobox "支付" [ref=f1e984]:
+              - option "全部支付状态" [selected]
+              - option "待支付"
+              - option "等待转账确认"
+              - option "已支付"
+              - option "已退款"
+          - generic [ref=f1e985]:
+            - generic [ref=f1e986]: 入库
+            - combobox "入库" [ref=f1e987]:
+              - option "全部入库" [selected]
+              - option "未提交"
+              - option "已寄出"
+              - option "已入库"
+          - generic [ref=f1e988]:
+            - generic [ref=f1e989]: 退款
+            - combobox "退款" [ref=f1e990]:
+              - option "全部退款" [selected]
+              - option "待处理"
+              - option "待执行退款"
+              - option "退款处理中"
+              - option "已退款"
+              - option "已驳回"
+              - option "退款失败"
+          - generic [ref=f1e991]:
+            - generic [ref=f1e992]: 分桌
+            - combobox "分桌" [ref=f1e993]:
+              - option "全部" [selected]
+              - option "已分桌"
+              - option "未分桌"
+        - generic [ref=f1e994]:
+          - generic [ref=f1e995]:
+            - heading "酒款明细" [level=2] [ref=f1e996]
+            - generic [ref=f1e997]: 20 / 226 款
+          - generic [ref=f1e998]:
+            - generic [ref=f1e999]:
+              - generic [ref=f1e1000]: 酒款
+              - generic [ref=f1e1001]: 比赛
+              - generic [ref=f1e1002]: 组别 / 风格
+              - generic [ref=f1e1003]: 支付/退款
+              - generic [ref=f1e1004]: 入库
+              - generic [ref=f1e1005]: 最近修改
+              - generic [ref=f1e1006]: 操作
+            - generic [ref=f1e1007]:
+              - generic [ref=f1e1008]:
+                - generic [ref=f1e1009]:
+                  - strong [ref=f1e1010]: 四百只兔子墨西哥拉格
+                  - generic "悠航鲜啤" [ref=f1e1011]
+                - generic [ref=f1e1012]:
+                  - strong [ref=f1e1013]: 首届中国拉格大赛
+                  - generic "2026CLA" [ref=f1e1014]
+                - generic [ref=f1e1015]:
+                  - strong [ref=f1e1016]: Fermentis · 浅色拉格组
+                  - generic "Mexican-Style Pale Lager（BA）" [ref=f1e1017]
+                - generic [ref=f1e1018]: 已支付
+                - generic [ref=f1e1020]: 已入库
+                - generic [ref=f1e1021]: 2026-08-14 11:28
+                - generic [ref=f1e1022]:
+                  - button "查看" [ref=f1e1023] [cursor=pointer]
+                  - button "编辑资料" [ref=f1e1024] [cursor=pointer]
+                  - button "状态处理" [ref=f1e1025] [cursor=pointer]
+              - generic [ref=f1e1026]:
+                - generic [ref=f1e1027]:
+                  - strong [ref=f1e1028]: 浮光
+                  - generic "薛定谔的酒" [ref=f1e1029]
+                - generic [ref=f1e1030]:
+                  - strong [ref=f1e1031]: 首届中国拉格大赛
+                  - generic "2026CLA" [ref=f1e1032]
+                - generic [ref=f1e1033]:
+                  - strong [ref=f1e1034]: Fermentis · 浅色拉格组
+                  - generic "Helles" [ref=f1e1035]
+                - generic [ref=f1e1036]: 已支付
+                - generic [ref=f1e1038]: 已入库
+                - generic [ref=f1e1039]: 2026-08-13 21:12
+                - generic [ref=f1e1040]:
+                  - button "查看" [ref=f1e1041] [cursor=pointer]
+                  - button "编辑资料" [ref=f1e1042] [cursor=pointer]
+                  - button "状态处理" [ref=f1e1043] [cursor=pointer]
+              - generic [ref=f1e1044]:
+                - generic [ref=f1e1045]:
+                  - strong [ref=f1e1046]: 绿野狂想
+                  - generic "JJJ" [ref=f1e1047]
+                - generic [ref=f1e1048]:
+                  - strong [ref=f1e1049]: 首届中国拉格大赛
+                  - generic "2026CLA" [ref=f1e1050]
+                - generic [ref=f1e1051]:
+                  - strong [ref=f1e1052]: Fermentis · 浅色拉格组
+                  - generic "酒花皮尔森" [ref=f1e1053]
+                - generic [ref=f1e1054]: 已支付
+                - generic [ref=f1e1056]: 已入库
+                - generic [ref=f1e1057]: 2026-08-13 21:00
+                - generic [ref=f1e1058]:
+                  - button "查看" [ref=f1e1059] [cursor=pointer]
+                  - button "编辑资料" [ref=f1e1060] [cursor=pointer]
+                  - button "状态处理" [ref=f1e1061] [cursor=pointer]
+              - generic [ref=f1e1062]:
+                - generic [ref=f1e1063]:
+                  - strong [ref=f1e1064]: 西西里微风
+                  - generic "JJJ" [ref=f1e1065]
+                - generic [ref=f1e1066]:
+                  - strong [ref=f1e1067]: 首届中国拉格大赛
+                  - generic "2026CLA" [ref=f1e1068]
+                - generic [ref=f1e1069]:
+                  - strong [ref=f1e1070]: Fermentis · 浅色拉格组
+                  - generic "意大利皮尔森" [ref=f1e1071]
+                - generic [ref=f1e1072]: 已支付
+                - generic [ref=f1e1074]: 已入库
+                - generic [ref=f1e1075]: 2026-08-13 20:57
+                - generic [ref=f1e1076]:
+                  - button "查看" [ref=f1e1077] [cursor=pointer]
+                  - button "编辑资料" [ref=f1e1078] [cursor=pointer]
+                  - button "状态处理" [ref=f1e1079] [cursor=pointer]
+              - generic [ref=f1e1080]:
+                - generic [ref=f1e1081]:
+                  - strong [ref=f1e1082]: 午夜篝火
+                  - generic "JJJ" [ref=f1e1083]
+                - generic [ref=f1e1084]:
+                  - strong [ref=f1e1085]: 首届中国拉格大赛
+                  - generic "2026CLA" [ref=f1e1086]
+                - generic [ref=f1e1087]:
+                  - strong [ref=f1e1088]: 迈拓 · 深色拉格组
+                  - generic "德式烟熏拉格" [ref=f1e1089]
+                - generic [ref=f1e1090]: 已支付
+                - generic [ref=f1e1092]: 已入库
+                - generic [ref=f1e1093]: 2026-08-13 20:56
+                - generic [ref=f1e1094]:
+                  - button "查看" [ref=f1e1095] [cursor=pointer]
+                  - button "编辑资料" [ref=f1e1096] [cursor=pointer]
+                  - button "状态处理" [ref=f1e1097] [cursor=pointer]
+              - generic [ref=f1e1098]:
+                - generic [ref=f1e1099]:
+                  - strong [ref=f1e1100]: 琥珀余晖
+                  - generic "JJJ" [ref=f1e1101]
+                - generic [ref=f1e1102]:
+                  - strong [ref=f1e1103]: 首届中国拉格大赛
+                  - generic "2026CLA" [ref=f1e1104]
+                - generic [ref=f1e1105]:
+                  - strong [ref=f1e1106]: 迈拓 · 深色拉格组
+                  - generic "国际琥珀拉格" [ref=f1e1107]
+                - generic [ref=f1e1108]: 已支付
+                - generic [ref=f1e1110]: 已入库
+                - generic [ref=f1e1111]: 2026-08-13 20:54
+                - generic [ref=f1e1112]:
+                  - button "查看" [ref=f1e1113] [cursor=pointer]
+                  - button "编辑资料" [ref=f1e1114] [cursor=pointer]
+                  - button "状态处理" [ref=f1e1115] [cursor=pointer]
+              - generic [ref=f1e1116]:
+                - generic [ref=f1e1117]:
+                  - strong [ref=f1e1118]: 先天一炁
+                  - generic "浮沫精酿" [ref=f1e1119]
+                - generic [ref=f1e1120]:
+                  - strong [ref=f1e1121]: 首届中国拉格大赛
+                  - generic "2026CLA" [ref=f1e1122]
+                - generic [ref=f1e1123]:
+                  - strong [ref=f1e1124]: Kegland · 创意拉格组
+                  - generic "滇红茶拉格" [ref=f1e1125]
+                - generic [ref=f1e1126]: 已支付
+                - generic [ref=f1e1128]: 已入库
+                - generic [ref=f1e1129]: 2026-08-13 15:18
+                - generic [ref=f1e1130]:
+                  - button "查看" [ref=f1e1131] [cursor=pointer]
+                  - button "编辑资料" [ref=f1e1132] [cursor=pointer]
+                  - button "状态处理" [ref=f1e1133] [cursor=pointer]
+              - generic [ref=f1e1134]:
+                - generic [ref=f1e1135]:
+                  - strong [ref=f1e1136]: 楚地枭雄
+                  - generic "汉森布鲁" [ref=f1e1137]
+                - generic [ref=f1e1138]:
+                  - strong [ref=f1e1139]: 首届中国拉格大赛
+                  - generic "2026CLA" [ref=f1e1140]
+                - generic [ref=f1e1141]:
+                  - strong [ref=f1e1142]: Fermentis · 浅色拉格组
+                  - generic "酒花皮尔森" [ref=f1e1143]
+                - generic [ref=f1e1144]: 已支付
+                - generic [ref=f1e1146]: 已入库
+                - generic [ref=f1e1147]: 2026-08-12 19:32
+                - generic [ref=f1e1148]:
+                  - button "查看" [ref=f1e1149] [cursor=pointer]
+                  - button "编辑资料" [ref=f1e1150] [cursor=pointer]
+                  - button "状态处理" [ref=f1e1151] [cursor=pointer]
+              - generic [ref=f1e1152]:
+                - generic [ref=f1e1153]:
+                  - strong [ref=f1e1154]: 艾拉
+                  - generic "汉森布鲁" [ref=f1e1155]
+                - generic [ref=f1e1156]:
+                  - strong [ref=f1e1157]: 首届中国拉格大赛
+                  - generic "2026CLA" [ref=f1e1158]
+                - generic [ref=f1e1159]:
+                  - strong [ref=f1e1160]: Fermentis · 浅色拉格组
+                  - generic "酒花皮尔森" [ref=f1e1161]
+                - generic [ref=f1e1162]: 已支付
+                - generic [ref=f1e1164]: 已入库
+                - generic [ref=f1e1165]: 2026-08-12 19:30
+                - generic [ref=f1e1166]:
+                  - button "查看" [ref=f1e1167] [cursor=pointer]
+                  - button "编辑资料" [ref=f1e1168] [cursor=pointer]
+                  - button "状态处理" [ref=f1e1169] [cursor=pointer]
+              - generic [ref=f1e1170]:
+                - generic [ref=f1e1171]:
+                  - strong [ref=f1e1172]: 御道
+                  - generic "库姆巴特" [ref=f1e1173]
+                - generic [ref=f1e1174]:
+                  - strong [ref=f1e1175]: 首届中国拉格大赛
+                  - generic "2026CLA" [ref=f1e1176]
+                - generic [ref=f1e1177]:
+                  - strong [ref=f1e1178]: 迈拓 · 深色拉格组
+                  - generic "琥珀拉格啤酒" [ref=f1e1179]
+                - generic [ref=f1e1180]: 已支付
+                - generic [ref=f1e1182]: 已入库
+                - generic [ref=f1e1183]: 2026-08-12 19:25
+                - generic [ref=f1e1184]:
+                  - button "查看" [ref=f1e1185] [cursor=pointer]
+                  - button "编辑资料" [ref=f1e1186] [cursor=pointer]
+                  - button "状态处理" [ref=f1e1187] [cursor=pointer]
+              - generic [ref=f1e1188]:
+                - generic [ref=f1e1189]:
+                  - strong [ref=f1e1190]: 德式黑啤
+                  - generic "四月小妖" [ref=f1e1191]
+                - generic [ref=f1e1192]:
+                  - strong [ref=f1e1193]: 首届中国拉格大赛
+                  - generic "2026CLA" [ref=f1e1194]
+                - generic [ref=f1e1195]:
+                  - strong [ref=f1e1196]: 迈拓 · 深色拉格组
+                  - generic "德式黑啤" [ref=f1e1197]
+                - generic [ref=f1e1198]: 已支付
+                - generic [ref=f1e1200]: 已入库
+                - generic [ref=f1e1201]: 2026-08-12 19:23
+                - generic [ref=f1e1202]:
+                  - button "查看" [ref=f1e1203] [cursor=pointer]
+                  - button "编辑资料" [ref=f1e1204] [cursor=pointer]
+                  - button "状态处理" [ref=f1e1205] [cursor=pointer]
+              - generic [ref=f1e1206]:
+                - generic [ref=f1e1207]:
+                  - strong [ref=f1e1208]: 青稞皮尔森
+                  - generic "四月小妖" [ref=f1e1209]
+                - generic [ref=f1e1210]:
+                  - strong [ref=f1e1211]: 首届中国拉格大赛
+                  - generic "2026CLA" [ref=f1e1212]
+                - generic [ref=f1e1213]:
+                  - strong [ref=f1e1214]: Fermentis · 浅色拉格组
+                  - generic "捷克皮尔森" [ref=f1e1215]
+                - generic [ref=f1e1216]: 已支付
+                - generic [ref=f1e1218]: 已入库
+                - generic [ref=f1e1219]: 2026-08-12 19:21
+                - generic [ref=f1e1220]:
+                  - button "查看" [ref=f1e1221] [cursor=pointer]
+                  - button "编辑资料" [ref=f1e1222] [cursor=pointer]
+                  - button "状态处理" [ref=f1e1223] [cursor=pointer]
+              - generic [ref=f1e1224]:
+                - generic [ref=f1e1225]:
+                  - strong [ref=f1e1226]: 深色酸拉格
+                  - generic "四月小妖" [ref=f1e1227]
+                - generic [ref=f1e1228]:
+                  - strong [ref=f1e1229]: 首届中国拉格大赛
+                  - generic "2026CLA" [ref=f1e1230]
+                - generic [ref=f1e1231]:
+                  - strong [ref=f1e1232]: 迈拓 · 深色拉格组
+                  - generic "拉格" [ref=f1e1233]
+                - generic [ref=f1e1234]: 已支付
+                - generic [ref=f1e1236]: 已入库
+                - generic [ref=f1e1237]: 2026-08-12 19:19
+                - generic [ref=f1e1238]:
+                  - button "查看" [ref=f1e1239] [cursor=pointer]
+                  - button "编辑资料" [ref=f1e1240] [cursor=pointer]
+                  - button "状态处理" [ref=f1e1241] [cursor=pointer]
+              - generic [ref=f1e1242]:
+                - generic [ref=f1e1243]:
+                  - strong [ref=f1e1244]: 济水之南
+                  - generic "迪鲁精酿" [ref=f1e1245]
+                - generic [ref=f1e1246]:
+                  - strong [ref=f1e1247]: 首届中国拉格大赛
+                  - generic "2026CLA" [ref=f1e1248]
+                - generic [ref=f1e1249]:
+                  - strong [ref=f1e1250]: Fermentis · 浅色拉格组
+                  - generic "慕尼黑清亮拉格" [ref=f1e1251]
+                - generic [ref=f1e1252]: 已支付
+                - generic [ref=f1e1254]: 已入库
+                - generic [ref=f1e1255]: 2026-08-12 19:09
+                - generic [ref=f1e1256]:
+                  - button "查看" [ref=f1e1257] [cursor=pointer]
+                  - button "编辑资料" [ref=f1e1258] [cursor=pointer]
+                  - button "状态处理" [ref=f1e1259] [cursor=pointer]
+              - generic [ref=f1e1260]:
+                - generic [ref=f1e1261]:
+                  - strong [ref=f1e1262]: 新法棍
+                  - generic "花雅酿造" [ref=f1e1263]
+                - generic [ref=f1e1264]:
+                  - strong [ref=f1e1265]: 首届中国拉格大赛
+                  - generic "2026CLA" [ref=f1e1266]
+                - generic [ref=f1e1267]:
+                  - strong [ref=f1e1268]: Fermentis · 浅色拉格组
+                  - generic "新西兰皮尔森" [ref=f1e1269]
+                - generic [ref=f1e1270]: 已支付
+                - generic [ref=f1e1272]: 已入库
+                - generic [ref=f1e1273]: 2026-08-12 19:06
+                - generic [ref=f1e1274]:
+                  - button "查看" [ref=f1e1275] [cursor=pointer]
+                  - button "编辑资料" [ref=f1e1276] [cursor=pointer]
+                  - button "状态处理" [ref=f1e1277] [cursor=pointer]
+              - generic [ref=f1e1278]:
+                - generic [ref=f1e1279]:
+                  - strong [ref=f1e1280]: 黑法棍
+                  - generic "花雅酿造" [ref=f1e1281]
+                - generic [ref=f1e1282]:
+                  - strong [ref=f1e1283]: 首届中国拉格大赛
+                  - generic "2026CLA" [ref=f1e1284]
+                - generic [ref=f1e1285]:
+                  - strong [ref=f1e1286]: 迈拓 · 深色拉格组
+                  - generic "慕尼黑深色啤酒" [ref=f1e1287]
+                - generic [ref=f1e1288]: 已支付
+                - generic [ref=f1e1290]: 已入库
+                - generic [ref=f1e1291]: 2026-08-12 19:04
+                - generic [ref=f1e1292]:
+                  - button "查看" [ref=f1e1293] [cursor=pointer]
+                  - button "编辑资料" [ref=f1e1294] [cursor=pointer]
+                  - button "状态处理" [ref=f1e1295] [cursor=pointer]
+              - generic [ref=f1e1296]:
+                - generic [ref=f1e1297]:
+                  - strong [ref=f1e1298]: 金布拉格
+                  - generic "幸会酿造啤酒厂" [ref=f1e1299]
+                - generic [ref=f1e1300]:
+                  - strong [ref=f1e1301]: 首届中国拉格大赛
+                  - generic "2026CLA" [ref=f1e1302]
+                - generic [ref=f1e1303]:
+                  - strong [ref=f1e1304]: Fermentis · 浅色拉格组
+                  - generic "捷克淡色拉格" [ref=f1e1305]
+                - generic [ref=f1e1306]: 已支付
+                - generic [ref=f1e1308]: 已入库
+                - generic [ref=f1e1309]: 2026-08-12 18:59
+                - generic [ref=f1e1310]:
+                  - button "查看" [ref=f1e1311] [cursor=pointer]
+                  - button "编辑资料" [ref=f1e1312] [cursor=pointer]
+                  - button "状态处理" [ref=f1e1313] [cursor=pointer]
+              - generic [ref=f1e1314]:
+                - generic [ref=f1e1315]:
+                  - strong [ref=f1e1316]: 自由之路
+                  - generic "幸会酿造啤酒厂" [ref=f1e1317]
+                - generic [ref=f1e1318]:
+                  - strong [ref=f1e1319]: 首届中国拉格大赛
+                  - generic "2026CLA" [ref=f1e1320]
+                - generic [ref=f1e1321]:
+                  - strong [ref=f1e1322]: Fermentis · 浅色拉格组
+                  - generic "酒花拉格" [ref=f1e1323]
+                - generic [ref=f1e1324]: 已支付
+                - generic [ref=f1e1326]: 已入库
+                - generic [ref=f1e1327]: 2026-08-12 18:51
+                - generic [ref=f1e1328]:
+                  - button "查看" [ref=f1e1329] [cursor=pointer]
+                  - button "编辑资料" [ref=f1e1330] [cursor=pointer]
+                  - button "状态处理" [ref=f1e1331] [cursor=pointer]
+              - generic [ref=f1e1332]:
+                - generic [ref=f1e1333]:
+                  - strong [ref=f1e1334]: 婆婆丁
+                  - generic "幸会酿造啤酒厂" [ref=f1e1335]
+                - generic [ref=f1e1336]:
+                  - strong [ref=f1e1337]: 首届中国拉格大赛
+                  - generic "2026CLA" [ref=f1e1338]
+                - generic [ref=f1e1339]:
+                  - strong [ref=f1e1340]: Kegland · 创意拉格组
+                  - generic "植物增味创意拉格" [ref=f1e1341]
+                - generic [ref=f1e1342]: 已支付
+                - generic [ref=f1e1344]: 已入库
+                - generic [ref=f1e1345]: 2026-08-12 18:46
+                - generic [ref=f1e1346]:
+                  - button "查看" [ref=f1e1347] [cursor=pointer]
+                  - button "编辑资料" [ref=f1e1348] [cursor=pointer]
+                  - button "状态处理" [ref=f1e1349] [cursor=pointer]
+              - generic [ref=f1e1350]:
+                - generic [ref=f1e1351]:
+                  - strong [ref=f1e1352]: 南纬41度
+                  - generic "幸会酿造啤酒厂" [ref=f1e1353]
+                - generic [ref=f1e1354]:
+                  - strong [ref=f1e1355]: 首届中国拉格大赛
+                  - generic "2026CLA" [ref=f1e1356]
+                - generic [ref=f1e1357]:
+                  - strong [ref=f1e1358]: Fermentis · 浅色拉格组
+                  - generic "酒花拉格" [ref=f1e1359]
+                - generic [ref=f1e1360]: 已支付
+                - generic [ref=f1e1362]: 已入库
+                - generic [ref=f1e1363]: 2026-08-12 18:44
+                - generic [ref=f1e1364]:
+                  - button "查看" [ref=f1e1365] [cursor=pointer]
+                  - button "编辑资料" [ref=f1e1366] [cursor=pointer]
+                  - button "状态处理" [ref=f1e1367] [cursor=pointer]
+          - generic [ref=f1e1368]:
+            - generic [ref=f1e1369]: 共 226 条
+            - generic [ref=f1e1370]:
+              - button "上一页" [disabled] [ref=f1e1371]
+              - button "1" [ref=f1e1372]
+              - button "2" [ref=f1e1373]
+              - button "3" [ref=f1e1374]
+              - button "4" [ref=f1e1375]
+              - button "5" [ref=f1e1376]
+              - button "下一页" [ref=f1e1377]
+            - generic [ref=f1e1378]:
+              - generic [ref=f1e1379]: 每页
+              - combobox "每页" [ref=f1e1380]:
+                - option "20" [selected]
+                - option "50"
+                - option "100"
+        - complementary [ref=f1e1382]:
+          - generic [ref=f1e1383]:
+            - generic [ref=f1e1384]:
+              - text: 首届中国拉格大赛
+              - heading "棒法棍" [level=2] [ref=f1e1385]
+              - text: 花雅酿造 · 54532
+            - button "关闭" [ref=f1e1386] [cursor=pointer]
+          - navigation [ref=f1e1387]:
+            - button "报名信息" [ref=f1e1388] [cursor=pointer]
+            - button "状态处理" [ref=f1e1389] [cursor=pointer]
+            - button "二维码" [ref=f1e1390] [cursor=pointer]
+            - button "分桌轨迹" [ref=f1e1391] [cursor=pointer]
+            - button "修改记录" [ref=f1e1392] [cursor=pointer]
+          - generic [ref=f1e1393]:
+            - generic [ref=f1e1394]:
+              - strong [ref=f1e1395]: 酒款已分桌
+              - generic [ref=f1e1396]: 修改组别或评审可见信息后，需要核对分桌和现场展示
+            - generic [ref=f1e1397]:
+              - generic [ref=f1e1398]:
+                - strong [ref=f1e1399]: 送样信息
+                - generic [ref=f1e1400]: 已入库
+              - generic [ref=f1e1401]:
+                - generic [ref=f1e1402]:
+                  - term [ref=f1e1403]: 提交时间
+                  - definition [ref=f1e1404]: 2026-08-12 10:31
+                - generic [ref=f1e1405]:
+                  - term [ref=f1e1406]: 签收时间
+                  - definition [ref=f1e1407]: 2026-08-12 10:31
+            - generic [ref=f1e1408]:
+              - generic [ref=f1e1409]:
+                - generic [ref=f1e1410]: 酒名
+                - textbox "酒名" [ref=f1e1411]: 棒法棍
+              - generic [ref=f1e1412]:
+                - generic [ref=f1e1413]: 投递组别
+                - combobox "投递组别" [ref=f1e1414]:
+                  - option "Fermentis · 浅色拉格组" [selected]
+                  - option "迈拓 · 深色拉格组"
+                  - option "Kegland · 创意拉格组"
+              - generic [ref=f1e1415]:
+                - generic [ref=f1e1416]: 箱号（选填）
+                - combobox "箱号（选填）" [ref=f1e1417]: ABCDEFGHIJKLMNOPQRST
+              - generic [ref=f1e1418]:
+                - generic [ref=f1e1419]: 基础风格
+                - textbox "基础风格" [ref=f1e1420]: 国际淡色拉格
+              - generic [ref=f1e1421]:
+                - generic [ref=f1e1422]: ABV
+                - textbox "ABV" [ref=f1e1423]:
+                  - /placeholder: 例如：5.35
+                  - text: "5.59"
+            - generic [ref=f1e1424]:
+              - generic [ref=f1e1425]:
+                - generic [ref=f1e1426]: 酵母类型（可选）、增味原料及特殊工艺（必填）
+                - textbox "酵母类型（可选）、增味原料及特殊工艺（必填）" [ref=f1e1427]: 无
+              - generic [ref=f1e1428]:
+                - generic [ref=f1e1429]: 如万一未获奖，是否允许宣传推广
+                - textbox "如万一未获奖，是否允许宣传推广" [ref=f1e1430]: 是
+            - generic [ref=f1e1431]:
+              - generic [ref=f1e1432]: 修改原因
+              - textbox "修改原因" [ref=f1e1433]:
+                - /placeholder: 填写后才能保存资料修改
+            - button "保存报名信息" [ref=f1e1435] [cursor=pointer]
+          - group [ref=f1e1436]:
+            - generic "危险操作" [ref=f1e1437] [cursor=pointer]
+  - alert [ref=f1e1485]:
+    - paragraph [ref=f1e1489]: 报名信息已保存

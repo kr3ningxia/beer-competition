@@ -29,7 +29,13 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-@SpringBootTest
+@SpringBootTest(properties = {
+        "app.storage.provider=local",
+        "app.storage.local-base-dir=target/test-uploads",
+        "app.wechat-pay.mode=MOCK",
+        "app.beer-coin.payment-mode=MOCK",
+        "app.sms.mock-enabled=true"
+})
 @ActiveProfiles("local")
 class OrganizerApplicationIntegrationTest {
 

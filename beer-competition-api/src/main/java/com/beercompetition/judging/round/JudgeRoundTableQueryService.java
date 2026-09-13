@@ -501,12 +501,14 @@ public class JudgeRoundTableQueryService {
     private int resolveRankingConfirmationRequiredCount(RoundTable table) {
         return Math.toIntExact(roundTableMemberMapper.selectCount(new LambdaQueryWrapper<RoundTableMember>()
                 .eq(RoundTableMember::getRoundTableId, table.getId())
+                .ne(RoundTableMember::getStatus, "REMOVED")
                 .ne(RoundTableMember::getRole, JudgeRoleType.CAPTAIN.name())));
     }
 
     private int resolveRankingConfirmationConfirmedCount(RoundTable table) {
         Set<Long> requiredJudgeIds = roundTableMemberMapper.selectList(new LambdaQueryWrapper<RoundTableMember>()
                         .eq(RoundTableMember::getRoundTableId, table.getId())
+                        .ne(RoundTableMember::getStatus, "REMOVED")
                         .ne(RoundTableMember::getRole, JudgeRoleType.CAPTAIN.name()))
                 .stream()
                 .map(RoundTableMember::getJudgeAccountId)

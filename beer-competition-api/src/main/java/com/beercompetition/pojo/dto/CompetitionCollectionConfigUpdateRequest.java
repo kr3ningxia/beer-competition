@@ -1,6 +1,7 @@
 package com.beercompetition.pojo.dto;
 
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.util.List;
@@ -16,4 +17,7 @@ public class CompetitionCollectionConfigUpdateRequest {
     private String bankAccountNo;
     private String bankName;
     private String collectionNote;
+
+    @Size(max = 128, message = "付款咨询联系最多128个字")
+    private String paymentContact;
 }

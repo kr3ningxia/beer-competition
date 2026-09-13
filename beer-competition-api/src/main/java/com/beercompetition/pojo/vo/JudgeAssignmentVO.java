@@ -13,4 +13,7 @@ public class JudgeAssignmentVO {
     private String qualification;
     private Long tableId;
     private String role;
+    private String status;
+    private String statusLabel;
+    private String withdrawnTime;
 }

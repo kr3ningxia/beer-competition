@@ -89,8 +89,8 @@ service.interceptors.response.use(
     }
     const message = error.response?.data?.msg || '请求失败，请稍后重试'
     if (status === 403 && scope === 'admin' && message.includes('首次登录请先修改密码')) {
-      if (router.currentRoute.value.path !== '/admin/admin-users') {
-        router.replace({ path: '/admin/admin-users', query: { setup: '1' } })
+      if (router.currentRoute.value.path !== '/admin/account-setup') {
+        router.replace('/admin/account-setup')
       }
       error.userNotified = true
       error.userMessage = message

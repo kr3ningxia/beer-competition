@@ -52,7 +52,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     private final RedisTemplate<String, Object> redisTemplate;
 
     @Override
-    public List<AdminUserVO> listAdminUsers(Integer status, String keyword) {
+    public List<AdminUserVO> listAdminUsers(Integer status, String adminType, String keyword) {
         AdminSessionIdentity currentIdentity = adminIdentityService.requireCurrentIdentity();
         List<Long> manageableIds = manageableAdminIds(currentIdentity);
         // 1) 构造查询条件
@@ -64,6 +64,9 @@ public class AdminUserServiceImpl implements AdminUserService {
         if (status != null) {
             validateStatus(status);
             wrapper.eq(AdminUser::getStatus, status);
+        }
+        if (StringUtils.hasText(adminType)) {
+            wrapper.eq(AdminUser::getAdminType, parseRequestedAdminType(adminType).name());
         }
         if (StringUtils.hasText(keyword)) {
             String normalizedKeyword = keyword.trim();
@@ -90,6 +93,7 @@ public class AdminUserServiceImpl implements AdminUserService {
         ensureUsernameAvailable(username);
 
         // 2) 创建启用管理员账号
+        // 内部新建账号由创建者设定登录名，只强制首次改密；改登录名的要求仅适用于平台发放的初始账号。
         AdminUser adminUser = AdminUser.builder()
                 .username(username)
                 .name(request.getName().trim())
@@ -97,7 +101,7 @@ public class AdminUserServiceImpl implements AdminUserService {
                 .status(STATUS_ACTIVE)
                 .adminType(newAdminType.name())
                 .mustChangePassword(1)
-                .mustChangeUsername(1)
+                .mustChangeUsername(0)
                 .build();
         try {
             adminUserMapper.insert(adminUser);
@@ -120,16 +124,70 @@ public class AdminUserServiceImpl implements AdminUserService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public AdminUserVO updateAdminUser(Long id, AdminUserUpdateRequest request) {
-        // 1) 查询目标账号
+        // 1) 查询目标账号并解析类型变更
         AdminUser adminUser = requireManageableAdmin(id);
+        AdminType nextType = resolveUpdatedAdminType(adminUser, request.getAdminType());
 
-        // 2) 更新显示姓名
+        // 2) 更新显示姓名与管理员类型
         adminUser.setName(request.getName().trim());
+        if (nextType != null) {
+            adminUser.setAdminType(nextType.name());
+        }
         adminUserMapper.updateById(adminUser);
-        writeAdminLog("ADMIN_USER_UPDATE", adminUser.getId(), "更新管理员姓名：" + adminUser.getUsername());
+        writeAdminLog("ADMIN_USER_UPDATE", adminUser.getId(), "更新管理员资料：" + adminUser.getUsername());
 
         // 3) 组装并返回结果
         return toVO(adminUserMapper.selectById(adminUser.getId()));
+    }
+
+    /**
+     * 解析编辑时的类型变更。返回 null 表示不修改类型。
+     * 只允许在同一侧内调整，且不允许修改自己的类型，避免把自己锁出后台。
+     */
+    private AdminType resolveUpdatedAdminType(AdminUser adminUser, String requestedType) {
+        AdminType requested = parseRequestedAdminType(requestedType);
+        if (requested == null || requested.name().equals(adminUser.getAdminType())) {
+            return null;
+        }
+        if (adminUser.getId().equals(BaseContext.getCurrentId())) {
+            throw new BaseException("不能修改自己的管理员类型");
+        }
+        AdminType current = parseRequestedAdminType(adminUser.getAdminType());
+        if (isPlatformType(current) != isPlatformType(requested)) {
+            throw new BaseException("只能在同一侧内调整管理员类型");
+        }
+        if (current == AdminType.ORGANIZER_ADMIN && requested == AdminType.ORGANIZER_SUB_ADMIN) {
+            ensureOrganizerKeepsMainAdmin(adminUser);
+        }
+        return requested;
+    }
+
+    private void ensureOrganizerKeepsMainAdmin(AdminUser adminUser) {
+        OrganizerMember member = organizerMemberMapper.selectOne(new LambdaQueryWrapper<OrganizerMember>()
+                .eq(OrganizerMember::getAdminUserId, adminUser.getId())
+                .eq(OrganizerMember::getStatus, STATUS_ACTIVE)
+                .orderByAsc(OrganizerMember::getId)
+                .last("LIMIT 1"));
+        if (member == null || member.getOrganizerId() == null) {
+            return;
+        }
+        List<Long> memberIds = organizerMemberMapper.selectList(new LambdaQueryWrapper<OrganizerMember>()
+                        .eq(OrganizerMember::getOrganizerId, member.getOrganizerId())
+                        .eq(OrganizerMember::getStatus, STATUS_ACTIVE))
+                .stream()
+                .map(OrganizerMember::getAdminUserId)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        if (memberIds.isEmpty()) {
+            return;
+        }
+        Long mainAdminCount = adminUserMapper.selectCount(new LambdaQueryWrapper<AdminUser>()
+                .in(AdminUser::getId, memberIds)
+                .eq(AdminUser::getStatus, STATUS_ACTIVE)
+                .eq(AdminUser::getAdminType, AdminType.ORGANIZER_ADMIN.name()));
+        if (mainAdminCount <= 1) {
+            throw new BaseException("至少保留一个主办方主管理员");
+        }
     }
 
     @Override
@@ -158,16 +216,16 @@ public class AdminUserServiceImpl implements AdminUserService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void resetAdminUserPassword(Long id, AdminUserPasswordResetRequest request) {
-        // 1) 查询目标账号
+        // 1) 查询目标账号并拒绝重置本人密码，避免把自己变成待首次设置状态
         AdminUser adminUser = requireManageableAdmin(id);
-
-        // 2) 重置登录密码
-        adminUser.setPassword(Md5Util.encode(request.getPassword()));
-        adminUser.setMustChangePassword(1);
-        // 已完成首次设置的账号重置密码后只需要再次改密；尚未完成初始化的账号保留用户名设置要求。
-        if (!Integer.valueOf(STATUS_ACTIVE).equals(adminUser.getMustChangeUsername())) {
-            adminUser.setMustChangeUsername(0);
+        if (adminUser.getId().equals(BaseContext.getCurrentId())) {
+            throw new BaseException("请到账号设置修改自己的密码");
         }
+
+        // 2) 重置登录密码；管理员直接下发可用密码，目标账号不再被强制改密或改登录名。
+        adminUser.setPassword(Md5Util.encode(request.getPassword()));
+        adminUser.setMustChangePassword(0);
+        adminUser.setMustChangeUsername(0);
         adminUserMapper.updateById(adminUser);
         clearInitialCredentialDelivery(adminUser.getId());
         writeAdminLog("ADMIN_USER_PASSWORD_RESET", adminUser.getId(), "重置管理员密码：" + adminUser.getUsername());
@@ -334,23 +392,35 @@ public class AdminUserServiceImpl implements AdminUserService {
     }
 
     private AdminType resolveCreatedAdminType(AdminSessionIdentity identity, String requestedType) {
+        AdminType requested = parseRequestedAdminType(requestedType);
         if (identity.adminType() == AdminType.PLATFORM_SUPER_ADMIN) {
-            if (requestedType != null && !requestedType.isEmpty()) {
-                throw new BaseException("平台账号创建不支持指定主办方管理员类型");
+            if (requested != null && !isPlatformType(requested)) {
+                throw new BaseException("平台账号只能创建平台赛事管理员或平台超级管理员");
             }
-            return AdminType.PLATFORM_EVENT_ADMIN;
+            return requested == null ? AdminType.PLATFORM_EVENT_ADMIN : requested;
         }
         if (identity.adminType() == AdminType.ORGANIZER_ADMIN && identity.organizerId() != null) {
-            if (AdminType.ORGANIZER_SUB_ADMIN.name().equals(requestedType)) {
-                return AdminType.ORGANIZER_SUB_ADMIN;
+            if (requested != null && isPlatformType(requested)) {
+                throw new BaseException("主办方账号不能创建平台管理员");
             }
-            if (requestedType != null && !requestedType.isEmpty()
-                    && !AdminType.ORGANIZER_ADMIN.name().equals(requestedType)) {
-                throw new BaseException("管理员类型不正确");
-            }
-            return AdminType.ORGANIZER_ADMIN;
+            return requested == null ? AdminType.ORGANIZER_ADMIN : requested;
         }
         throw new ForbiddenException("当前账号无权新增管理员账号");
+    }
+
+    private AdminType parseRequestedAdminType(String requestedType) {
+        if (!StringUtils.hasText(requestedType)) {
+            return null;
+        }
+        try {
+            return AdminType.valueOf(requestedType);
+        } catch (IllegalArgumentException ex) {
+            throw new BaseException("管理员类型不正确");
+        }
+    }
+
+    private boolean isPlatformType(AdminType adminType) {
+        return adminType == AdminType.PLATFORM_SUPER_ADMIN || adminType == AdminType.PLATFORM_EVENT_ADMIN;
     }
 
     private void ensureUsernameAvailable(String username) {

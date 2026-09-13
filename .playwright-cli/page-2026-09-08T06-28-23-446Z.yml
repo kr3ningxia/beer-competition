@@ -1,0 +1,154 @@
+- generic [ref=f1e93]:
+  - complementary [ref=f1e94]:
+    - generic [ref=f1e98]:
+      - strong [ref=f1e99]: 赛事运营后台
+      - generic [ref=f1e100]: 啤酒事务局
+    - navigation "后台导航" [ref=f1e101]:
+      - generic [ref=f1e102]:
+        - paragraph [ref=f1e103]: 概览
+        - link "工作台" [ref=f1e104] [cursor=pointer]:
+          - /url: /admin/dashboard
+      - generic [ref=f1e110]:
+        - paragraph [ref=f1e111]: 赛事运营
+        - link "比赛管理" [active] [ref=f1e112] [cursor=pointer]:
+          - /url: /admin/competitions
+        - link "酒款管理" [ref=f1e117] [cursor=pointer]:
+          - /url: /admin/entries
+        - link "收款确认" [ref=f1e121] [cursor=pointer]:
+          - /url: /admin/bank-transfers
+        - link "裁判招募" [ref=f1e127] [cursor=pointer]:
+          - /url: /admin/judge-recruitments
+        - link "评审人员" [ref=f1e131] [cursor=pointer]:
+          - /url: /admin/judges
+        - link "数据导出" [ref=f1e135] [cursor=pointer]:
+          - /url: /admin/exports
+      - generic [ref=f1e139]:
+        - paragraph [ref=f1e140]: 组织管理
+        - link "管理员账号" [ref=f1e141] [cursor=pointer]:
+          - /url: /admin/admin-users
+        - link "啤酒币" [ref=f1e145] [cursor=pointer]:
+          - /url: /admin/beer-coins
+        - link "操作日志" [ref=f1e151] [cursor=pointer]:
+          - /url: /admin/operation-logs
+      - generic [ref=f1e155]:
+        - paragraph [ref=f1e156]: 平台管理
+        - link "主办方入驻" [ref=f1e157] [cursor=pointer]:
+          - /url: /admin/organizer-applications
+        - link "风格库" [ref=f1e163] [cursor=pointer]:
+          - /url: /admin/style-libraries
+    - generic [ref=f1e167]:
+      - button "superadmin 平台超级管理员" [ref=f1e168]:
+        - generic [ref=f1e169]:
+          - strong [ref=f1e170]: superadmin
+          - generic [ref=f1e171]: 平台超级管理员
+      - button "退出登录" [ref=f1e174]
+  - main [ref=f1e179]:
+    - generic [ref=f1e331]:
+      - generic [ref=f1e332]:
+        - heading "比赛管理" [level=1] [ref=f1e335]
+        - generic [ref=f1e336]:
+          - button "当前重点 首届国产酒花啤酒大赛 报名中 1 项待处理 · 截止报名" [ref=f1e337] [cursor=pointer]:
+            - generic [ref=f1e338]: 当前重点
+            - strong [ref=f1e339]: 首届国产酒花啤酒大赛
+            - emphasis [ref=f1e340]: 报名中
+            - generic [ref=f1e341]: 1 项待处理 · 截止报名
+          - button "新建比赛" [ref=f1e343] [cursor=pointer]
+      - generic [ref=f1e346]:
+        - searchbox [ref=f1e350]
+        - generic [ref=f1e351]:
+          - generic [ref=f1e352]: 主办方
+          - combobox "主办方筛选" [ref=f1e357]:
+            - option "啤酒事务局" [selected]
+            - option "第三方平台"
+            - option "所有主办方"
+        - generic "比赛状态筛选" [ref=f1e358]:
+          - button "全部" [ref=f1e359] [cursor=pointer]
+          - button "草稿" [ref=f1e360] [cursor=pointer]
+          - button "报名中" [ref=f1e361] [cursor=pointer]
+          - button "评审准备" [ref=f1e362] [cursor=pointer]
+          - button "评审中" [ref=f1e363] [cursor=pointer]
+          - button "结果确认" [ref=f1e364] [cursor=pointer]
+          - button "已发布" [ref=f1e365] [cursor=pointer]
+          - button "已归档" [ref=f1e366] [cursor=pointer]
+        - combobox "年份筛选" [ref=f1e367]:
+          - option "全部年份" [selected]
+          - option "2026"
+          - option "2025"
+      - generic [ref=f1e368]:
+        - generic [ref=f1e369]:
+          - generic [ref=f1e370]: 赛事
+          - generic [ref=f1e371]: 状态
+          - generic [ref=f1e372]: 比赛日
+          - generic [ref=f1e373]: 报名
+          - generic [ref=f1e374]: 评审配置
+          - generic [ref=f1e375]: 配置
+        - button "首届国产酒花啤酒大赛 报名中 2026.10.11 20 / 20 1 桌 · 0 人 6 / 8 待确认" [ref=f1e376] [cursor=pointer]:
+          - strong [ref=f1e378]: 首届国产酒花啤酒大赛
+          - generic [ref=f1e379]: 报名中
+          - generic [ref=f1e380]: 2026.10.11
+          - generic [ref=f1e381]: 20 / 20
+          - generic [ref=f1e382]: 1 桌 · 0 人
+          - generic [ref=f1e383]:
+            - generic [ref=f1e384]: 6 / 8
+            - text: 待确认
+          - button "快速概览" [ref=f1e385]
+        - button "风格对齐会：布鲁塞尔啤酒挑战赛 收样中 2026.08.29 1 / 1 1 桌 · 0 人 6 / 8 待确认" [ref=f1e388] [cursor=pointer]:
+          - strong [ref=f1e390]: 风格对齐会：布鲁塞尔啤酒挑战赛
+          - generic [ref=f1e391]: 收样中
+          - generic [ref=f1e392]: 2026.08.29
+          - generic [ref=f1e393]: 1 / 1
+          - generic [ref=f1e394]: 1 桌 · 0 人
+          - generic [ref=f1e395]:
+            - generic [ref=f1e396]: 6 / 8
+            - text: 待确认
+          - button "快速概览" [ref=f1e397]
+        - button "阶梯报名比赛 报名中 2026.08.20 0 / 0 0 桌 · 0 人 5 / 8 待确认" [ref=f1e400] [cursor=pointer]:
+          - strong [ref=f1e402]: 阶梯报名比赛
+          - generic [ref=f1e403]: 报名中
+          - generic [ref=f1e404]: 2026.08.20
+          - generic [ref=f1e405]: 0 / 0
+          - generic [ref=f1e406]: 0 桌 · 0 人
+          - generic [ref=f1e407]:
+            - generic [ref=f1e408]: 5 / 8
+            - text: 待确认
+          - button "快速概览" [ref=f1e409]
+        - button "222 评审中 2026.08.20 4 / 4 2 桌 · 2 人 7 / 8 待确认" [ref=f1e412] [cursor=pointer]:
+          - strong [ref=f1e414]: "222"
+          - generic [ref=f1e415]: 评审中
+          - generic [ref=f1e416]: 2026.08.20
+          - generic [ref=f1e417]: 4 / 4
+          - generic [ref=f1e418]: 2 桌 · 2 人
+          - generic [ref=f1e419]:
+            - generic [ref=f1e420]: 7 / 8
+            - text: 待确认
+          - button "快速概览" [ref=f1e421]
+        - button "测试比赛1 收样中 2026.08.20 0 / 0 0 桌 · 0 人 5 / 8 待确认" [ref=f1e424] [cursor=pointer]:
+          - strong [ref=f1e426]: 测试比赛1
+          - generic [ref=f1e427]: 收样中
+          - generic [ref=f1e428]: 2026.08.20
+          - generic [ref=f1e429]: 0 / 0
+          - generic [ref=f1e430]: 0 桌 · 0 人
+          - generic [ref=f1e431]:
+            - generic [ref=f1e432]: 5 / 8
+            - text: 待确认
+          - button "快速概览" [ref=f1e433]
+        - button "测试比赛 收样中 2026.08.20 0 / 0 0 桌 · 0 人 5 / 8 待确认" [ref=f1e436] [cursor=pointer]:
+          - strong [ref=f1e438]: 测试比赛
+          - generic [ref=f1e439]: 收样中
+          - generic [ref=f1e440]: 2026.08.20
+          - generic [ref=f1e441]: 0 / 0
+          - generic [ref=f1e442]: 0 桌 · 0 人
+          - generic [ref=f1e443]:
+            - generic [ref=f1e444]: 5 / 8
+            - text: 待确认
+          - button "快速概览" [ref=f1e445]
+        - button "首届中国拉格大赛 评审中 2026.08.15 226 / 226 6 桌 · 20 人 7 / 8 待确认" [ref=f1e448] [cursor=pointer]:
+          - strong [ref=f1e450]: 首届中国拉格大赛
+          - generic [ref=f1e451]: 评审中
+          - generic [ref=f1e452]: 2026.08.15
+          - generic [ref=f1e453]: 226 / 226
+          - generic [ref=f1e454]: 6 桌 · 20 人
+          - generic [ref=f1e455]:
+            - generic [ref=f1e456]: 7 / 8
+            - text: 待确认
+          - button "快速概览" [ref=f1e457]

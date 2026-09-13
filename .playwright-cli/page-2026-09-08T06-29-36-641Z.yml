@@ -1,0 +1,119 @@
+- generic [ref=f1e93]:
+  - complementary [ref=f1e94]:
+    - generic [ref=f1e98]:
+      - strong [ref=f1e99]: 赛事运营后台
+      - generic [ref=f1e100]: 啤酒事务局
+    - navigation "后台导航" [ref=f1e101]:
+      - generic [ref=f1e102]:
+        - paragraph [ref=f1e103]: 概览
+        - link "工作台" [ref=f1e104] [cursor=pointer]:
+          - /url: /admin/dashboard
+      - generic [ref=f1e110]:
+        - paragraph [ref=f1e111]: 赛事运营
+        - link "比赛管理" [ref=f1e112] [cursor=pointer]:
+          - /url: /admin/competitions
+        - link "酒款管理" [ref=f1e117] [cursor=pointer]:
+          - /url: /admin/entries
+        - link "收款确认" [ref=f1e121] [cursor=pointer]:
+          - /url: /admin/bank-transfers
+        - link "裁判招募" [ref=f1e127] [cursor=pointer]:
+          - /url: /admin/judge-recruitments
+        - link "评审人员" [ref=f1e131] [cursor=pointer]:
+          - /url: /admin/judges
+        - link "数据导出" [ref=f1e135] [cursor=pointer]:
+          - /url: /admin/exports
+      - generic [ref=f1e139]:
+        - paragraph [ref=f1e140]: 组织管理
+        - link "管理员账号" [ref=f1e141] [cursor=pointer]:
+          - /url: /admin/admin-users
+        - link "啤酒币" [ref=f1e145] [cursor=pointer]:
+          - /url: /admin/beer-coins
+        - link "操作日志" [ref=f1e151] [cursor=pointer]:
+          - /url: /admin/operation-logs
+      - generic [ref=f1e155]:
+        - paragraph [ref=f1e156]: 平台管理
+        - link "主办方入驻" [ref=f1e157] [cursor=pointer]:
+          - /url: /admin/organizer-applications
+        - link "风格库" [ref=f1e163] [cursor=pointer]:
+          - /url: /admin/style-libraries
+    - generic [ref=f1e167]:
+      - button "superadmin 平台超级管理员" [ref=f1e168]:
+        - generic [ref=f1e169]:
+          - strong [ref=f1e170]: superadmin
+          - generic [ref=f1e171]: 平台超级管理员
+      - button "退出登录" [ref=f1e174]
+  - main [ref=f1e179]:
+    - generic [ref=f1e460]:
+      - generic [ref=f1e461]:
+        - generic [ref=f1e462]:
+          - button "比赛管理" [ref=f1e463] [cursor=pointer]
+          - generic [ref=f1e467]:
+            - heading "首届中国拉格大赛" [level=1] [ref=f1e468]
+            - generic [ref=f1e469]:
+              - generic [ref=f1e470]: 评审中
+              - generic [ref=f1e471]: 比赛日 2026.08.15
+        - generic [ref=f1e473]:
+          - generic "发布报名并进入评审准备中后才能发布首轮" [ref=f1e474]:
+            - button "发布当前轮次" [disabled] [ref=f1e475]
+          - group [ref=f1e478]:
+            - generic "更多" [ref=f1e479] [cursor=pointer]
+      - generic [ref=f1e480]:
+        - navigation "比赛详情导航" [ref=f1e482]:
+          - button "概览" [ref=f1e483] [cursor=pointer]
+          - button "数据分析" [ref=f1e486] [cursor=pointer]
+          - button "基础信息" [ref=f1e489] [cursor=pointer]
+          - button "赞助商" [ref=f1e492] [cursor=pointer]
+          - button "报名配置" [ref=f1e496] [cursor=pointer]
+          - button "评分表" [ref=f1e499] [cursor=pointer]
+          - button "参赛酒款" [ref=f1e502] [cursor=pointer]
+          - button "分桌分配" [ref=f1e505] [cursor=pointer]
+          - button "轮次编排" [ref=f1e508] [cursor=pointer]
+          - button "评价查看" [ref=f1e511] [cursor=pointer]
+          - button "结果发布" [disabled] [ref=f1e515]
+        - main [ref=f1e519]:
+          - generic [ref=f1e520]:
+            - generic [ref=f1e521]:
+              - article [ref=f1e522]:
+                - generic [ref=f1e523]: 开放报名准备
+                - strong [ref=f1e524]: 3 / 3
+              - article [ref=f1e525]:
+                - generic [ref=f1e526]: 当前轮次
+                - strong [ref=f1e527]: 首轮草稿
+              - article [ref=f1e528]:
+                - generic [ref=f1e529]: 当前轮次桌数
+                - strong [ref=f1e530]: 6 桌
+              - article [ref=f1e531]:
+                - generic [ref=f1e532]: 晋级名单
+                - strong [ref=f1e533]: "0"
+            - generic [ref=f1e534]:
+              - article [ref=f1e535]:
+                - generic [ref=f1e536]:
+                  - heading "当前需要处理" [level=2] [ref=f1e537]
+                  - generic [ref=f1e538]: 3 项
+                - generic [ref=f1e539]:
+                  - paragraph [ref=f1e540]:
+                    - generic [ref=f1e545]: 首轮草稿尚未分配酒款
+                    - button "去处理" [ref=f1e546] [cursor=pointer]
+                  - paragraph [ref=f1e547]:
+                    - generic [ref=f1e552]: 1桌尚未分配酒款
+                    - button "去处理" [ref=f1e553] [cursor=pointer]
+                  - paragraph [ref=f1e554]:
+                    - generic [ref=f1e559]: 1桌晋级数量超过候选酒款数
+                    - button "去处理" [ref=f1e560] [cursor=pointer]
+              - article [ref=f1e561]:
+                - generic [ref=f1e562]:
+                  - heading "轮次重组摘要" [level=2] [ref=f1e563]
+                  - generic [ref=f1e564]: 0 个节点
+            - article [ref=f1e565]:
+              - heading "阶段任务" [level=2] [ref=f1e567]
+              - generic [ref=f1e568]:
+                - button "样品入库 已入库酒款将进入评审编排 已核对 202 款" [ref=f1e569] [cursor=pointer]:
+                  - generic [ref=f1e570]:
+                    - strong [ref=f1e571]: 样品入库
+                    - generic [ref=f1e572]: 已入库酒款将进入评审编排
+                  - emphasis [ref=f1e573]: 已核对 202 款
+                - button "奖项确认 确认组别奖项和发布反馈 待确认" [ref=f1e574] [cursor=pointer]:
+                  - generic [ref=f1e575]:
+                    - strong [ref=f1e576]: 奖项确认
+                    - generic [ref=f1e577]: 确认组别奖项和发布反馈
+                  - emphasis [ref=f1e578]: 待确认

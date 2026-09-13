@@ -491,6 +491,9 @@ INSERT INTO `competition_round` VALUES (1,2,1,'第一轮','SCORE',NULL,'PUBLISHE
 /*!40000 ALTER TABLE `competition_round` ENABLE KEYS */;
 UNLOCK TABLES;
 
+ALTER TABLE `competition_round`
+  ADD COLUMN `allocation_revision` bigint NOT NULL DEFAULT '0' COMMENT '轮次编排修订号' AFTER `update_time`;
+
 --
 -- Table structure for table `competition_score_config`
 --
@@ -853,6 +856,7 @@ CREATE TABLE `judge_account` (
   `wechat_enc` text COMMENT '微信号密文',
   `name` varchar(64) NOT NULL COMMENT '评委姓名',
   `qualification` varchar(255) NOT NULL COMMENT '评委资质说明',
+  `bjcp_number` varchar(64) DEFAULT NULL COMMENT 'BJCP编号',
   `brewery_conflict_flag` tinyint NOT NULL DEFAULT '0' COMMENT '是否存在厂牌利益关系',
   `brewery_conflict_text` varchar(500) DEFAULT NULL COMMENT '利益关系说明',
   `status` tinyint NOT NULL DEFAULT '1' COMMENT '评委账号状态',
@@ -1567,3 +1571,42 @@ ALTER TABLE `beer_entry`
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
 -- Dump completed on 2026-07-05  0:24:51
+
+--
+-- Table structure for table `competition_judge_evaluation`
+--
+
+CREATE TABLE IF NOT EXISTS `competition_judge_evaluation` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `competition_id` bigint NOT NULL,
+  `judge_account_id` bigint NOT NULL,
+  `judgment_level` tinyint DEFAULT NULL,
+  `feedback_quality_level` tinyint DEFAULT NULL,
+  `rule_execution_level` tinyint DEFAULT NULL,
+  `professionalism_level` tinyint DEFAULT NULL,
+  `manual_score` decimal(5,1) DEFAULT NULL,
+  `comment_total_chars` int NOT NULL DEFAULT 0,
+  `comment_average_chars` int NOT NULL DEFAULT 0,
+  `comment_record_count` int NOT NULL DEFAULT 0,
+  `comment_requirement_ratio` decimal(8,3) NOT NULL DEFAULT 0,
+  `comment_percentile` decimal(6,2) DEFAULT NULL,
+  `comment_score` decimal(5,1) DEFAULT NULL,
+  `task_completed_count` int NOT NULL DEFAULT 0,
+  `task_total_count` int NOT NULL DEFAULT 0,
+  `completion_rate` decimal(6,2) NOT NULL DEFAULT 0,
+  `total_score` decimal(5,1) DEFAULT NULL,
+  `excellent_candidate` tinyint NOT NULL DEFAULT 0,
+  `evidence` varchar(1000) DEFAULT NULL,
+  `status` varchar(16) NOT NULL DEFAULT 'DRAFT',
+  `evaluated_by` bigint DEFAULT NULL,
+  `evaluated_time` datetime DEFAULT NULL,
+  `confirmed_by` bigint DEFAULT NULL,
+  `confirmed_time` datetime DEFAULT NULL,
+  `version` int NOT NULL DEFAULT 0,
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_competition_judge_evaluation` (`competition_id`,`judge_account_id`),
+  KEY `idx_judge_evaluation_judge` (`judge_account_id`,`status`),
+  KEY `idx_judge_evaluation_competition_score` (`competition_id`,`status`,`total_score`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='比赛级评审表现评价';

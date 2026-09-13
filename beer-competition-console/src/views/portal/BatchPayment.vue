@@ -66,24 +66,34 @@
             <div class="method-head">
               <div>
                 <span class="section-kicker">当前付款方式</span>
-                <h2>{{ payMode === 'BANK_TRANSFER' ? '银行转账' : payMode === 'WECHAT_QR' ? '赛事收款码' : isWechatPayEnv ? '微信支付' : '微信扫码支付' }}</h2>
+                <h2>{{ currentPayModeLabel }}</h2>
               </div>
-              <el-dropdown v-if="!editingBankTransfer" placement="bottom-end" trigger="click" @command="switchPayMode">
+              <el-dropdown v-if="!editingBankTransfer && availablePaymentMethods.length > 1" placement="bottom-end" trigger="click" @command="switchPayMode">
                 <button class="change-method-button" type="button">
                   <span>更换付款方式</span>
                   <el-icon><ArrowDown /></el-icon>
                 </button>
                 <template #dropdown>
                   <el-dropdown-menu>
-                    <el-dropdown-item :command="payMode === 'BANK_TRANSFER' ? 'WECHAT' : 'BANK_TRANSFER'">
-                      {{ payMode === 'BANK_TRANSFER' ? '改用微信支付' : '改用银行转账' }}
+                    <el-dropdown-item
+                      v-for="method in alternativePaymentMethods"
+                      :key="method.value"
+                      :command="method.value"
+                    >
+                      改用{{ method.label }}
                     </el-dropdown-item>
                   </el-dropdown-menu>
                 </template>
               </el-dropdown>
             </div>
 
-            <section v-if="payMode === 'WECHAT_QR'" class="wechat-panel">
+            <section v-if="!availablePaymentMethods.length" class="pending-panel unavailable-payment">
+              <div>
+                <h2>暂未开放付款</h2>
+                <p>请联系赛事主办方确认收款方式</p>
+              </div>
+            </section>
+            <section v-else-if="payMode === 'WECHAT_QR'" class="wechat-panel">
               <div class="qr-side">
                 <div class="qr-frame">
                   <img v-if="organizerQrUrl" :src="organizerQrUrl" width="220" height="220" alt="赛事收款码" />
@@ -135,7 +145,12 @@
                 <div><dt>开户银行</dt><dd>{{ bankAccount?.bankName || '-' }}</dd></div>
                 <div><dt>银行账号</dt><dd>{{ bankAccount?.accountNo || '-' }}</dd></div>
                 <div><dt>转账金额</dt><dd>{{ formatCurrency(batch.totalAmount) }}</dd></div>
+                <div v-if="bankAccount?.remarkTip"><dt>收款提示</dt><dd>{{ bankAccount.remarkTip }}</dd></div>
+                <div v-if="paymentContactText"><dt>付款咨询</dt><dd>{{ paymentContactText }}</dd></div>
               </dl>
+              <div class="bank-account-actions">
+                <el-button @click="copyBankAccount">复制账户信息</el-button>
+              </div>
               <el-form label-position="top" class="bank-form">
                 <el-form-item label="转账备注（选填）">
                   <el-input v-model.trim="bankForm.remark" maxlength="255" placeholder="如需补充核对信息，可填写转账备注" />
@@ -243,12 +258,31 @@ const bankPending = computed(() => orderStatus.value === 'PENDING_CONFIRM')
 const organizerQrPending = computed(() => bankPending.value && paymentStatus.value?.payMethod === 'WECHAT_QR')
 const organizerPaymentRemark = ref('')
 const organizerManaged = computed(() => collectionConfig.value?.tenantCompetition === true)
+const availablePaymentMethods = computed(() => {
+  if (!organizerManaged.value) {
+    return [
+      { value: 'WECHAT', label: '微信支付' },
+      { value: 'BANK_TRANSFER', label: '银行转账' },
+    ]
+  }
+  const enabledMethods = collectionConfig.value?.enabledMethods || []
+  return [
+    ...(enabledMethods.includes('WECHAT_QR') ? [{ value: 'WECHAT_QR', label: '微信收款' }] : []),
+    ...(enabledMethods.includes('BANK_TRANSFER') ? [{ value: 'BANK_TRANSFER', label: '银行转账' }] : []),
+  ]
+})
+const alternativePaymentMethods = computed(() => availablePaymentMethods.value.filter((method) => method.value !== payMode.value))
+const currentPayModeLabel = computed(() => availablePaymentMethods.value.find((method) => method.value === payMode.value)?.label || '付款方式')
 const organizerQrUrl = computed(() => {
   const value = collectionConfig.value?.wechatQrUrl || ''
   if (!value || /^https?:\/\//i.test(value) || value.startsWith('data:')) return value
   return `${BASE_URL}${value.startsWith('/') ? value : `/${value}`}`
 })
 const isWechatPayEnv = computed(() => isWechatBrowser())
+const paymentContactText = computed(() => {
+  if (organizerManaged.value) return collectionConfig.value?.paymentContact || ''
+  return bankAccount.value?.serviceWechat ? `小秘书微信 ${bankAccount.value.serviceWechat}` : ''
+})
 const wechatPayAppId = computed(() => wechatPayConfig.value?.appId || '')
 const fulfillmentEntry = computed(() => batch.value?.entries?.find((entry) => !hasDeliveryProgress(entry)) || batch.value?.entries?.[0] || null)
 const fulfillmentLocation = computed(() => ({
@@ -267,7 +301,6 @@ const expireText = computed(() => {
 onMounted(async () => {
   try {
     if (!orderId) return
-    if (isWechatPayEnv.value) await loadWechatPayConfig()
     const statusData = await fetchPortalBatchPaymentStatus(orderId)
     if (requestedBatchId && Number(statusData.batchId) !== requestedBatchId) {
       throw new Error('付款订单与报名批次不一致')
@@ -275,8 +308,10 @@ onMounted(async () => {
     batchId.value = Number(statusData.batchId || requestedBatchId)
     if (!batchId.value) throw new Error('付款订单缺少报名批次')
     paymentStatus.value = statusData
-    batch.value = await fetchPortalEntryBatch(batchId.value)
-    collectionConfig.value = await fetchPortalCompetitionCollection(batch.value.competitionId)
+    const loadedBatch = await fetchPortalEntryBatch(batchId.value)
+    const loadedCollectionConfig = await fetchPortalCompetitionCollection(loadedBatch.competitionId)
+    batch.value = loadedBatch
+    collectionConfig.value = loadedCollectionConfig
     if (paymentStatus.value?.payMethod === 'WECHAT_QR' && paymentStatus.value?.bankTransferId) {
       try {
         const transfer = await fetchPortalBankTransfer(paymentStatus.value.bankTransferId)
@@ -288,13 +323,17 @@ onMounted(async () => {
     if (bankPending.value) {
       startPolling()
     } else if (!paid.value && !refunded.value) {
-      if (organizerManaged.value && collectionConfig.value?.enabledMethods?.includes('WECHAT_QR')) {
-        payMode.value = 'WECHAT_QR'
-      } else if (organizerManaged.value) {
-        payMode.value = 'BANK_TRANSFER'
+      const requestedMode = payMode.value === 'BANK_TRANSFER'
+        ? 'BANK_TRANSFER'
+        : (organizerManaged.value ? 'WECHAT_QR' : 'WECHAT')
+      payMode.value = availablePaymentMethods.value.some((method) => method.value === requestedMode)
+        ? requestedMode
+        : (availablePaymentMethods.value[0]?.value || '')
+      if (payMode.value === 'BANK_TRANSFER') {
         await loadBankAccount()
-      } else if (payMode.value === 'BANK_TRANSFER') await loadBankAccount()
-      else await startWechatPayment({ silent: true })
+      } else if (payMode.value === 'WECHAT') {
+        await startWechatPayment({ silent: true })
+      }
     }
   } catch (error) {
     ElMessage.warning(error?.message || '付款信息读取失败')
@@ -313,13 +352,14 @@ watch([paid, batch], ([paymentPaid, currentBatch]) => {
 })
 
 async function switchPayMode(mode) {
+  if (!availablePaymentMethods.value.some((method) => method.value === mode)) return
   payMode.value = mode
   if (mode === 'BANK_TRANSFER') {
     stopPolling()
     await loadBankAccount()
     return
   }
-  await startWechatPayment({ silent: true })
+  if (mode === 'WECHAT') await startWechatPayment({ silent: true })
 }
 
 async function submitOrganizerPayment() {
@@ -461,6 +501,20 @@ function selectVoucher(event) {
   voucherFile.value = event.target.files?.[0] || null
 }
 
+async function copyBankAccount() {
+  const account = bankAccount.value
+  if (!account) return
+  const text = [
+    `收款户名：${account.accountName || ''}`,
+    `开户银行：${account.bankName || ''}`,
+    `银行账号：${account.accountNo || ''}`,
+    account.remarkTip ? `收款提示：${account.remarkTip}` : '',
+    paymentContactText.value ? `付款咨询：${paymentContactText.value}` : '',
+  ].filter(Boolean).join('\n')
+  await navigator.clipboard.writeText(text)
+  ElMessage.success('收款账户信息已复制')
+}
+
 async function submitBankTransfer() {
   if (submittingBank.value) return
   if (!voucherFile.value && !bankVoucherAssetId.value) {
@@ -597,11 +651,13 @@ function formatCurrency(value) {
 .bank-account div { padding: 13px 15px; background: #fff8e8; }
 .bank-account dt { color: #8a7761; font-size: 12px; }
 .bank-account dd { margin: 5px 0 0; color: #342518; font-weight: 800; }
+.bank-account-actions { margin-top: 12px; }
 .bank-form { margin-top: 20px; }
 .voucher-picker { display: flex; align-items: center; gap: 9px; width: 100%; padding: 12px 14px; color: #6f573e; background: #fffdf8; border: 1px dashed rgba(87,58,26,.25); border-radius: 7px; cursor: pointer; }
 .voucher-picker input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .bank-submit { width: 100%; min-height: 46px; background: #875515; border: 0; font-weight: 900; }
 .success-panel, .pending-panel { display: flex; gap: 22px; align-items: center; min-height: 330px; justify-content: center; }
+.unavailable-payment { text-align: center; }
 .success-panel > .el-icon, .pending-panel > .el-icon { width: 68px; height: 68px; font-size: 68px; }
 .success-panel > .el-icon { color: #3b7a4f; }
 .pending-panel > .el-icon { color: #ad721e; }

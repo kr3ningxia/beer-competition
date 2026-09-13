@@ -194,26 +194,19 @@
 
         <section class="payment-panel">
           <div>
-            <h3>选择付款方式</h3>
+            <h3>{{ availablePaymentMethods.length > 1 ? '选择付款方式' : '付款方式' }}</h3>
           </div>
-          <div class="payment-options" role="radiogroup" aria-label="选择付款方式">
+          <div :class="['payment-options', { single: availablePaymentMethods.length === 1 }]" role="radiogroup" aria-label="选择付款方式">
             <button
-              :class="['payment-option', { active: payMode === 'WECHAT' }]"
+              v-for="method in availablePaymentMethods"
+              :key="method.value"
+              :class="['payment-option', { active: payMode === method.value }]"
               type="button"
               role="radio"
-              :aria-checked="payMode === 'WECHAT'"
-              @click="payMode = 'WECHAT'"
+              :aria-checked="payMode === method.value"
+              @click="payMode = method.value"
             >
-              <span>微信支付</span>
-            </button>
-            <button
-              :class="['payment-option', { active: payMode === 'BANK_TRANSFER' }]"
-              type="button"
-              role="radio"
-              :aria-checked="payMode === 'BANK_TRANSFER'"
-              @click="payMode = 'BANK_TRANSFER'"
-            >
-              <span>银行转账</span>
+              <span>{{ method.label }}</span>
             </button>
           </div>
         </section>
@@ -258,7 +251,7 @@
           <div v-if="earlyBirdSaving > 0"><span>早鸟优惠</span><b>-{{ formatCurrency(earlyBirdSaving) }}</b></div>
           <div v-if="tierSaving > 0"><span>批量优惠</span><b>-{{ formatCurrency(tierSaving) }}</b></div>
           <div class="receipt-total"><span>应付总额</span><strong>{{ formatCurrency(totalAmount) }}</strong></div>
-          <div><span>付款方式</span><b>{{ payMode === 'WECHAT' ? '微信支付' : '银行转账' }}</b></div>
+          <div><span>付款方式</span><b>{{ selectedPaymentMethodLabel }}</b></div>
         </div>
         <div v-if="tierNudge" class="tier-nudge">{{ tierNudge }}</div>
         <div v-if="batchSpansTierRates" class="tier-meter">本批按累计序号分档计价，请以逐款明细为准</div>
@@ -280,7 +273,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, RouterLink, useRoute, useRouter } from 'vue-router'
 import { ArrowRight, CircleCheck, Delete, Plus, WarningFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { fetchPortalCompetitionDetail, quotePortalEntryBatch, submitPortalEntryBatch } from '@/api/portal'
+import { fetchPortalCompetitionCollection, fetchPortalCompetitionDetail, quotePortalEntryBatch, submitPortalEntryBatch } from '@/api/portal'
 import { isValidAbvInput, normalizeAbvInput } from '@/utils/formatters'
 import { nextTierHint, tierRateAt } from './portalViewModels'
 
@@ -290,6 +283,7 @@ const router = useRouter()
 const activeFormRef = ref(null)
 const entryTabsRef = ref(null)
 const competition = ref(null)
+const collectionConfig = ref(null)
 const entries = ref([])
 const activeIndex = ref(0)
 const rulesAccepted = ref(false)
@@ -313,6 +307,20 @@ const currencyFormatter = new Intl.NumberFormat('zh-CN', {
 const configuredFields = computed(() => normalizeEntryFields(competition.value?.entryFields || []))
 const activeEntry = computed(() => entries.value[activeIndex.value] || entries.value[0])
 const hasRulesUrl = computed(() => Boolean(competition.value?.rulesUrl))
+const availablePaymentMethods = computed(() => {
+  if (!collectionConfig.value?.tenantCompetition) {
+    return [
+      { value: 'WECHAT', label: '微信支付' },
+      { value: 'BANK_TRANSFER', label: '银行转账' },
+    ]
+  }
+  const enabledMethods = collectionConfig.value.enabledMethods || []
+  return [
+    ...(enabledMethods.includes('WECHAT_QR') ? [{ value: 'WECHAT', label: '微信收款' }] : []),
+    ...(enabledMethods.includes('BANK_TRANSFER') ? [{ value: 'BANK_TRANSFER', label: '银行转账' }] : []),
+  ]
+})
+const selectedPaymentMethodLabel = computed(() => availablePaymentMethods.value.find((method) => method.value === payMode.value)?.label || '待选择')
 const unitAmount = computed(() => Number(quote.value?.unitAmount ?? competition.value?.entryFee ?? 0))
 const totalAmount = computed(() => Number(quote.value?.totalAmount ?? unitAmount.value * entries.value.length))
 const baseUnitAmount = computed(() => Number(quote.value?.earlyBirdUnitAmount ?? competition.value?.entryFee ?? 0))
@@ -367,8 +375,14 @@ const formRules = computed(() => {
 onMounted(async () => {
   try {
     if (!competitionId) return
-    competition.value = await fetchPortalCompetitionDetail(competitionId)
+    const [competitionDetail, competitionCollection] = await Promise.all([
+      fetchPortalCompetitionDetail(competitionId),
+      fetchPortalCompetitionCollection(competitionId),
+    ])
+    competition.value = competitionDetail
+    collectionConfig.value = competitionCollection
     restoreDraft()
+    ensureAvailablePayMode()
     if (!entries.value.length) entries.value = [createEmptyEntry()]
     await refreshQuote()
   } catch (error) {
@@ -460,6 +474,10 @@ async function refreshQuote() {
 
 async function submitBatch() {
   if (submitting.value) return
+  if (totalAmount.value > 0 && !availablePaymentMethods.value.length) {
+    ElMessage.warning('该赛事暂未开放付款，请联系主办方')
+    return
+  }
   const invalidIndex = entries.value.findIndex((entry) => entryErrorCount(entry) > 0)
   if (invalidIndex >= 0) {
     activeIndex.value = invalidIndex
@@ -558,6 +576,11 @@ function restoreDraft() {
   } catch {
     localStorage.removeItem(draftKey)
   }
+}
+
+function ensureAvailablePayMode() {
+  if (availablePaymentMethods.value.some((method) => method.value === payMode.value)) return
+  payMode.value = availablePaymentMethods.value[0]?.value || ''
 }
 
 function handleBeforeUnload(event) {
@@ -748,6 +771,7 @@ function round2(value) {
 .payment-panel { margin-top: 16px; padding-top: 18px; border-top: 1px solid rgba(87, 58, 26, .1); align-items: center; }
 .payment-panel h3 { font-size: 17px; }
 .payment-options { display: grid; grid-template-columns: repeat(2, minmax(170px, 1fr)); gap: 10px; }
+.payment-options.single { grid-template-columns: minmax(170px, 1fr); }
 .payment-option { display: grid; min-height: 48px; place-items: center; padding: 10px 16px; text-align: center; color: #493a2d; background: #fffdf8; border: 1px solid rgba(87, 58, 26, .16); border-radius: 7px; cursor: pointer; }
 .payment-option:hover { border-color: rgba(166, 101, 20, .48); }
 .payment-option.active { background: #fff1c7; border-color: #ae6f19; box-shadow: 0 0 0 2px rgba(174, 111, 25, .09); }

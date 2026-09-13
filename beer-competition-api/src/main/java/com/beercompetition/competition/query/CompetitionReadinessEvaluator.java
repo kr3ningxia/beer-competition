@@ -510,6 +510,7 @@ public class CompetitionReadinessEvaluator {
         scopes.put("styleLibrary", draft || status == CompetitionStatus.REGISTRATION_OPEN);
         scopes.put("styles", draft || status == CompetitionStatus.REGISTRATION_OPEN);
         scopes.put("entryFields", draft || status == CompetitionStatus.REGISTRATION_OPEN);
+        scopes.put("collection", draft || registrationStage);
         scopes.put("refundPolicy", isRefundPolicyEditable(competition, LocalDateTime.now()));
         scopes.put("judgeConfig", judgeConfig);
         scopes.put("judgeTables", judgeConfig);

@@ -26,5 +26,9 @@ public class JudgeAssignment {
     @TableField("base_table_id")
     private Long tableId;
     private String role;
+    private String status;
+    private LocalDateTime withdrawnTime;
+    private Long withdrawnBy;
+    private String withdrawReason;
     private LocalDateTime createTime;
 }

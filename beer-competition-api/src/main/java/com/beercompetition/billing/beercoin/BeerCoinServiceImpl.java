@@ -464,7 +464,7 @@ public class BeerCoinServiceImpl implements BeerCoinService, BeerCoinSettlementS
         long required = closing == null ? (opening == null ? 1 : nullToZero(opening.getRequiredQuantity()))
                 : nullToZero(closing.getRequiredQuantity());
         if (isSettlementCalculationStage(competition.getStatus())) {
-            // 评审准备后仍可能补录有效酒款，详情页必须展示当前口径而非旧快照。
+            // 报名中用于展示预计用量，评审准备后用于覆盖补录酒款，均需读取当前口径。
             effectiveEntryCount = Math.toIntExact(beerEntryMapper.countEffectiveEntries(competitionId));
             required = requiredQuantityForEntryCount(effectiveEntryCount);
         }
@@ -653,7 +653,7 @@ public class BeerCoinServiceImpl implements BeerCoinService, BeerCoinSettlementS
                     .enterpriseAccountId(context.enterpriseAccountId())
                     .settlementType(BeerCoinSettlementType.REGISTRATION_CLOSE.name())
                     .effectiveEntryCount(effectiveCount)
-                    .billingTier("每 10 款有效酒款计 1 枚")
+                    .billingTier("每款有效酒款计 1 枚")
                     .requiredQuantity(required)
                     .chargedQuantity(delta)
                     .status(SETTLEMENT_COMPLETED)
@@ -1362,12 +1362,14 @@ public class BeerCoinServiceImpl implements BeerCoinService, BeerCoinSettlementS
         return new CompetitionContext(competition, organizer.getEnterpriseAccountId());
     }
 
-    private long requiredQuantityForEntryCount(int effectiveCount) {
-        return Math.max(1L, (effectiveCount + 9L) / 10L);
+    static long requiredQuantityForEntryCount(int effectiveCount) {
+        // 每款有效酒款对应 1 枚啤酒币，同时保留每场赛事最低 1 枚的发布费用。
+        return Math.max(1L, effectiveCount);
     }
 
     private boolean isSettlementCalculationStage(String status) {
         return Set.of(
+                CompetitionStatus.REGISTRATION_OPEN.name(),
                 CompetitionStatus.REGISTRATION_CLOSED.name(),
                 CompetitionStatus.JUDGING_PREP.name(),
                 CompetitionStatus.JUDGING.name(),

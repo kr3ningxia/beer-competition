@@ -30,41 +30,10 @@
 
             <div class="editor-tier-title">
               <span>阶梯价格</span>
-              <div class="tier-add-control">
-                <button class="text-action" type="button" :aria-expanded="tierCreatorOpen" aria-controls="tier-creator" @click="openTierCreator">
-                  <Plus />
-                  添加阶梯
-                </button>
-                <form v-if="tierCreatorOpen" id="tier-creator" class="tier-creator" @submit.prevent="confirmAddTier" @keydown.esc="closeTierCreator">
-                  <label class="tier-creator-field">
-                    <span>新阶梯从第</span>
-                    <input
-                      ref="tierStartInput"
-                      v-model.number="tierCreator.startQuantity"
-                      name="newTierStart"
-                      autocomplete="off"
-                      type="number"
-                      :min="minimumNewTierStart"
-                      step="1"
-                      :placeholder="`至少 ${formatInteger(minimumNewTierStart)}`"
-                    />
-                    <span>枚开始</span>
-                  </label>
-                  <label class="tier-creator-field">
-                    <span>单枚价格</span>
-                    <span class="tier-price-input compact-price-input">
-                      <em>¥</em>
-                      <input v-model="tierCreator.unitPrice" name="newTierPrice" autocomplete="off" inputmode="decimal" placeholder="0.00" />
-                      <em>/枚</em>
-                    </span>
-                  </label>
-                  <span v-if="tierCreatorError" class="tier-creator-error" aria-live="polite">{{ tierCreatorError }}</span>
-                  <div class="tier-creator-actions">
-                    <button class="secondary-button" type="button" @click="closeTierCreator">取消</button>
-                    <button class="primary-button" type="submit">添加</button>
-                  </div>
-                </form>
-              </div>
+              <button class="text-action" type="button" @click="addTier">
+                <Plus />
+                添加阶梯
+              </button>
             </div>
             <div class="editor-tier-list">
               <div class="editor-tier-head" aria-hidden="true">
@@ -96,7 +65,7 @@
                 <label class="tier-price-input">
                   <span class="sr-only">第 {{ index + 1 }} 档单枚价格</span>
                   <em>¥</em>
-                  <input v-model="tier.unitPrice" :name="`tierPrice${index}`" autocomplete="off" inputmode="decimal" placeholder="0.00" @blur="normalizeTierPrice(tier)" />
+                  <input ref="tierPriceInputs" v-model="tier.unitPrice" :name="`tierPrice${index}`" autocomplete="off" inputmode="decimal" placeholder="0.00" @blur="normalizeTierPrice(tier)" />
                   <em>/枚</em>
                 </label>
                 <button class="icon-button danger-icon" type="button" title="删除这一档" :aria-label="`删除第 ${index + 1} 档`" :disabled="pricingEditor.tiers.length <= 1" @click="removeTier(index)">
@@ -545,14 +514,11 @@ const pricingEditorError = ref('')
 const pricingValidationAttempted = ref(false)
 const savedPricingSignature = ref('')
 const editorKey = ref(0)
-const tierCreatorOpen = ref(false)
-const tierCreatorError = ref('')
-const tierStartInput = ref(null)
+const tierPriceInputs = ref([])
 const paymentTimer = ref(null)
 const adjustmentDialogOpen = ref(false)
 const wechatCode = ref(String(route.query.code || ''))
 const pricingEditor = reactive({ tiers: [] })
-const tierCreator = reactive({ startQuantity: null, unitPrice: '' })
 const adjustmentDirections = [
   { value: 'CREDIT', label: '补发' },
   { value: 'DEBIT', label: '扣减' },
@@ -584,11 +550,6 @@ const lots = computed(() => overview.value?.lots || [])
 const ledger = computed(() => overview.value?.ledger || [])
 const accountOptions = computed(() => overview.value?.accountOptions || [])
 const pricingDirty = computed(() => pricingEditorSignature() !== savedPricingSignature.value)
-const minimumNewTierStart = computed(() => {
-  const lastTier = pricingEditor.tiers[pricingEditor.tiers.length - 1]
-  const start = Number(lastTier?.startQuantity)
-  return Number.isSafeInteger(start) && start > 0 ? start + 1 : 2
-})
 const adminView = computed(() => route.query.view === 'accounts' ? 'accounts' : 'pricing')
 const organizerSection = computed(() => ['purchase', 'orders', 'lots', 'ledger'].includes(String(route.query.section || ''))
   ? String(route.query.section)
@@ -767,7 +728,6 @@ function resetPricingEditor() {
     : [{ key: `${editorKey.value}-1`, startQuantity: 1, endQuantity: null, unitPrice: '' }]
   pricingValidationAttempted.value = false
   pricingEditorError.value = ''
-  closeTierCreator()
   resequenceEditorTiers()
   savedPricingSignature.value = pricingEditorSignature()
 }
@@ -782,51 +742,32 @@ function pricingEditorSignature() {
   })))
 }
 
-async function openTierCreator() {
-  if (tierCreatorOpen.value) {
-    closeTierCreator()
-    return
-  }
+async function addTier() {
   const last = pricingEditor.tiers[pricingEditor.tiers.length - 1]
-  if (!last || !Number.isSafeInteger(Number(last.startQuantity))) {
+  const lastStart = Number(last?.startQuantity)
+  if (!last || !Number.isSafeInteger(lastStart) || lastStart <= 0) {
     pricingEditorError.value = '请先修正当前数量区间。'
     return
   }
-  tierCreator.startQuantity = null
-  tierCreator.unitPrice = ''
-  tierCreatorError.value = ''
-  tierCreatorOpen.value = true
-  await nextTick()
-  tierStartInput.value?.focus()
-}
-
-function closeTierCreator() {
-  tierCreatorOpen.value = false
-  tierCreatorError.value = ''
-}
-
-function confirmAddTier() {
-  const last = pricingEditor.tiers[pricingEditor.tiers.length - 1]
-  const newStart = Number(tierCreator.startQuantity)
-  if (!last || !Number.isSafeInteger(newStart) || newStart < minimumNewTierStart.value || newStart > 1000000000) {
-    tierCreatorError.value = `起始数量需要是 ${formatInteger(minimumNewTierStart.value)} 至 1,000,000,000 之间的整数。`
+  const newStart = lastStart + 1
+  if (newStart > 1000000000) {
+    pricingEditorError.value = '数量区间已达上限。'
     return
   }
-  if (!isValidUnitPrice(tierCreator.unitPrice)) {
-    tierCreatorError.value = '单枚价格必须大于 0，最多保留两位小数。'
-    return
-  }
-  last.endQuantity = newStart - 1
+  // 新档从上一档的下一个数量开始，上一档同步收口，区间保持连续。
+  last.endQuantity = lastStart
   editorKey.value += 1
   pricingEditor.tiers.push({
     key: `${editorKey.value}-${pricingEditor.tiers.length + 1}`,
     startQuantity: newStart,
     endQuantity: null,
-    unitPrice: Number(tierCreator.unitPrice).toFixed(2),
+    unitPrice: '',
   })
   resequenceEditorTiers()
-  closeTierCreator()
   pricingEditorError.value = ''
+  await nextTick()
+  const inputs = tierPriceInputs.value
+  inputs[inputs.length - 1]?.focus()
 }
 
 async function removeTier(index) {
@@ -843,7 +784,6 @@ async function removeTier(index) {
   }
   pricingEditor.tiers.splice(index, 1)
   resequenceEditorTiers()
-  closeTierCreator()
   pricingEditorError.value = ''
 }
 
@@ -1381,7 +1321,7 @@ function businessLabel(type) {
   margin-top: 18px;
 }
 
-.pricing-workspace { width: min(1040px, 100%); }
+.pricing-workspace { width: min(960px, 100%); }
 .pricing-settings-panel { padding-bottom: 18px; }
 .pricing-save-state { color: #82969e; font-size: 11px; font-variant-numeric: tabular-nums; }
 
@@ -1497,24 +1437,6 @@ function businessLabel(type) {
 .editor-tier-title { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 0 20px 9px; color: #dbe7ea; font-size: 13px; font-weight: 800; }
 .text-action, .row-action { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 0 8px; color: #ffdc73; border: 1px solid rgba(216, 169, 53, 0.22); border-radius: 6px; background: rgba(216, 169, 53, 0.07); font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; }
 .text-action svg { width: 14px; height: 14px; }
-.tier-add-control { position: relative; }
-.tier-creator {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 10;
-  display: grid;
-  gap: 12px;
-  width: 380px;
-  padding: 14px;
-  color: #dce7e9;
-  border: 1px solid rgba(218, 231, 236, 0.16);
-  border-radius: 8px;
-  background: #111c20;
-  box-shadow: 0 20px 54px rgba(0, 0, 0, 0.42);
-}
-.tier-creator-field { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; color: #9bb0b8; font-size: 11px; white-space: nowrap; }
-.tier-creator-field > input,
 .tier-range-editor input {
   box-sizing: border-box;
   width: 100%;
@@ -1529,20 +1451,16 @@ function businessLabel(type) {
   font-size: 12px;
   font-weight: 700;
 }
-.tier-creator-field > input:focus-visible,
 .tier-range-editor input:focus-visible,
 .tier-price-input:focus-within { border-color: rgba(216, 169, 53, 0.55); box-shadow: 0 0 0 3px rgba(216, 169, 53, 0.08); }
-.tier-creator-error, .tier-row-error { color: #ffaaa0; font-size: 11px; font-weight: 600; line-height: 1.4; }
-.tier-creator-actions { display: flex; justify-content: flex-end; gap: 8px; }
-.tier-creator-actions .primary-button, .tier-creator-actions .secondary-button { min-height: 34px; }
+.tier-row-error { color: #ffaaa0; font-size: 11px; font-weight: 600; line-height: 1.4; }
 .editor-tier-list { display: grid; margin: 0 20px; overflow: hidden; border: 1px solid rgba(218, 231, 236, 0.09); border-radius: 7px; }
 .editor-tier-head,
 .editor-tier-row {
   display: grid;
-  grid-template-columns: minmax(320px, 420px) minmax(220px, 280px) 40px;
+  grid-template-columns: minmax(280px, 1fr) minmax(200px, 260px) 44px;
   gap: 12px;
   align-items: center;
-  justify-content: start;
 }
 .editor-tier-head {
   min-height: 34px;
@@ -1560,7 +1478,7 @@ function businessLabel(type) {
 }
 .tier-range-editor {
   display: grid;
-  grid-template-columns: minmax(78px, auto) auto minmax(120px, 180px) auto;
+  grid-template-columns: minmax(88px, auto) auto minmax(120px, 180px) auto;
   align-items: center;
   gap: 8px;
   min-width: 0;
@@ -1596,12 +1514,8 @@ function businessLabel(type) {
   font: inherit;
   font-size: 12px;
 }
-.compact-price-input { width: 100%; }
 .tier-row-error { grid-column: 1 / -1; margin-top: -3px; }
-.tier-creator input[type='number'],
 .tier-range-editor input[type='number'] { appearance: textfield; }
-.tier-creator input[type='number']::-webkit-inner-spin-button,
-.tier-creator input[type='number']::-webkit-outer-spin-button,
 .tier-range-editor input[type='number']::-webkit-inner-spin-button,
 .tier-range-editor input[type='number']::-webkit-outer-spin-button { margin: 0; appearance: none; }
 .compact-field input { min-height: 34px; padding: 0 8px; font-size: 12px; }
@@ -1610,12 +1524,13 @@ function businessLabel(type) {
 .icon-button:disabled { opacity: 0.45; cursor: not-allowed; }
 .icon-button svg { width: 17px; height: 17px; }
 .danger-icon { color: #ff9b92; }
-.editor-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; max-width: 764px; margin: 16px 20px 0; }
+.editor-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 16px 20px 0; }
 .pricing-actions { display: flex; justify-content: flex-end; gap: 8px; margin-left: auto; }
-.pricing-trial { display: grid; grid-template-columns: 280px 220px; gap: 12px; align-items: center; justify-content: start; max-width: 740px; margin: 16px 20px 0; padding: 12px; border: 1px solid rgba(218, 231, 236, 0.08); border-radius: 7px; background: rgba(255, 255, 255, 0.025); }
-.pricing-trial > .compact-field { grid-template-columns: 68px minmax(0, 1fr); align-items: center; gap: 10px; }
+.pricing-trial { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 16px 20px 0; padding: 12px; border: 1px solid rgba(218, 231, 236, 0.08); border-radius: 7px; background: rgba(255, 255, 255, 0.025); }
+.pricing-trial > .compact-field { display: flex; align-items: center; gap: 10px; }
 .pricing-trial > .compact-field > span { white-space: nowrap; }
-.pricing-trial > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 34px; }
+.pricing-trial > .compact-field > input { width: 160px; }
+.pricing-trial > div { display: flex; align-items: center; justify-content: flex-end; gap: 12px; min-height: 34px; }
 .pricing-trial > div span { color: #81969e; font-size: 10px; font-weight: 700; }
 .pricing-trial > div strong { color: #ffdc73; font-size: 16px; font-variant-numeric: tabular-nums; }
 .form-error { color: #ffaaa0; font-size: 12px; line-height: 1.45; }
@@ -1726,8 +1641,8 @@ td small { margin-top: 3px; color: #7f959d; font-size: 10px; }
   .purchase-button { width: 100%; }
   .editor-tier-head { display: none; }
   .editor-tier-row { grid-template-columns: 1fr 1fr 38px; }
-  .pricing-trial { grid-template-columns: 1fr 1fr; }
-  .pricing-trial > .form-field { grid-column: 1 / -1; }
+  .pricing-trial { flex-wrap: wrap; }
+  .pricing-trial > .compact-field { flex: 1 1 240px; }
   .accounts-toolbar { align-items: stretch; flex-direction: column; }
   .account-filter { width: 100%; }
   .account-facts { grid-template-columns: 1fr; }
@@ -1744,12 +1659,12 @@ td small { margin-top: 3px; color: #7f959d; font-size: 10px; }
   .wallet-main { grid-column: auto; }
   .segment-row { grid-template-columns: 1fr auto; }
   .segment-row span:nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
-  .tier-creator { width: min(380px, calc(100vw - 48px)); }
   .editor-tier-row { grid-template-columns: minmax(0, 1fr) 38px; }
   .tier-range-editor { grid-column: 1 / -1; }
   .editor-tier-row > .tier-price-input { grid-column: 1; }
-  .pricing-trial { grid-template-columns: 1fr; }
-  .pricing-trial > .form-field { grid-column: auto; }
+  .pricing-trial { flex-direction: column; align-items: stretch; }
+  .pricing-trial > .compact-field { flex: 0 0 auto; }
+  .pricing-trial > div { justify-content: space-between; }
   .danger-icon { grid-column: 2; justify-self: end; }
 }
 

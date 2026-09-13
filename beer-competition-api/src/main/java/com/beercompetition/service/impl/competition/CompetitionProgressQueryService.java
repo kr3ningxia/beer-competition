@@ -101,6 +101,7 @@ public class CompetitionProgressQueryService {
                 .name(currentRound.getRoundName())
                 .type(currentRound.getRoundType())
                 .status(currentRound.getStatus())
+                .allocationRevision(currentRound.getAllocationRevision() == null ? 0L : currentRound.getAllocationRevision())
                 .sourceRoundId(currentRound.getSourceRoundId())
                 .sourceEntryUuids(List.of())
                 .sourceLocked(false)

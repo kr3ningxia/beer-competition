@@ -1,5 +1,7 @@
 package com.beercompetition.pojo.po;
 
+import java.time.LocalDateTime;
+
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -21,4 +23,8 @@ public class RoundTableMember {
     private Long judgeAccountId;
     private String role;
     private Integer systemTaskRequired;
+    private String status;
+    private LocalDateTime removedTime;
+    private Long removedBy;
+    private String removeReason;
 }

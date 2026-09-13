@@ -167,7 +167,7 @@ public class JudgeRoundTaskServiceImpl implements JudgeRoundTaskService {
                                        RoundTable table,
                                        Map<Long, CompetitionRound> roundById,
                                        Map<Long, Competition> competitionById) {
-        if (table == null) {
+        if (table == null || "REMOVED".equalsIgnoreCase(member.getStatus())) {
             return null;
         }
         CompetitionRound round = roundById.get(table.getRoundId());

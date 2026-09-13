@@ -18,4 +18,5 @@ public class CompetitionCollectionConfigVO {
     private String bankAccountNo;
     private String bankName;
     private String collectionNote;
+    private String paymentContact;
 }

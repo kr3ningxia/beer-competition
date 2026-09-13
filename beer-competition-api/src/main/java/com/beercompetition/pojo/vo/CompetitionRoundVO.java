@@ -14,6 +14,7 @@ public class CompetitionRoundVO {
     private String name;
     private String type;
     private String status;
+    private Long allocationRevision;
     private Long sourceRoundId;
     private List<String> sourceEntryUuids;
     private Boolean sourceLocked;

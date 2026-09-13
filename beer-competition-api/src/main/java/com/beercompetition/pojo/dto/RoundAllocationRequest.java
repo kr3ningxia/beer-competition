@@ -9,6 +9,8 @@ import java.util.List;
 @Data
 public class RoundAllocationRequest {
 
+    private Long allocationRevision;
+
     @Valid
     @NotEmpty(message = "轮次桌不能为空")
     private List<RoundTableAllocationRequest> tables;

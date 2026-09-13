@@ -1,0 +1,121 @@
+- generic [ref=f1e3]:
+  - complementary [ref=f1e4]:
+    - generic [ref=f1e8]:
+      - strong [ref=f1e9]: 赛事运营后台
+      - generic [ref=f1e10]: 啤酒事务局
+    - navigation "后台导航" [ref=f1e11]:
+      - generic [ref=f1e12]:
+        - paragraph [ref=f1e13]: 概览
+        - link "工作台" [ref=f1e14] [cursor=pointer]:
+          - /url: /admin/dashboard
+      - generic [ref=f1e20]:
+        - paragraph [ref=f1e21]: 赛事运营
+        - link "比赛管理" [ref=f1e22] [cursor=pointer]:
+          - /url: /admin/competitions
+        - link "酒款管理" [ref=f1e27] [cursor=pointer]:
+          - /url: /admin/entries
+        - link "收款确认" [ref=f1e31] [cursor=pointer]:
+          - /url: /admin/bank-transfers
+        - link "裁判招募" [ref=f1e37] [cursor=pointer]:
+          - /url: /admin/judge-recruitments
+        - link "评审人员" [ref=f1e41] [cursor=pointer]:
+          - /url: /admin/judges
+        - link "数据导出" [ref=f1e45] [cursor=pointer]:
+          - /url: /admin/exports
+      - generic [ref=f1e49]:
+        - paragraph [ref=f1e50]: 组织管理
+        - link "管理员账号" [ref=f1e51] [cursor=pointer]:
+          - /url: /admin/admin-users
+        - link "啤酒币" [ref=f1e55] [cursor=pointer]:
+          - /url: /admin/beer-coins
+        - link "操作日志" [ref=f1e61] [cursor=pointer]:
+          - /url: /admin/operation-logs
+      - generic [ref=f1e65]:
+        - paragraph [ref=f1e66]: 平台管理
+        - link "风格库" [ref=f1e67] [cursor=pointer]:
+          - /url: /admin/style-libraries
+    - generic [ref=f1e71]:
+      - button "QA 主办方主管理员" [ref=f1e72]:
+        - generic [ref=f1e73]:
+          - strong [ref=f1e74]: QA
+          - generic [ref=f1e75]: 主办方主管理员
+      - button "退出登录" [ref=f1e78]
+  - main [ref=f1e83]:
+    - generic [ref=f1e84]:
+      - generic [ref=f1e85]:
+        - heading "管理员账号" [level=1] [ref=f1e88]
+        - generic [ref=f1e89]:
+          - button "我的账号" [ref=f1e90] [cursor=pointer]
+          - button "新增管理员" [active] [ref=f1e93] [cursor=pointer]
+      - button "登录账号与密码 qa_main · QA" [ref=f1e97] [cursor=pointer]:
+        - generic [ref=f1e101]:
+          - strong [ref=f1e102]: 登录账号与密码
+          - generic [ref=f1e103]: qa_main · QA
+      - generic [ref=f1e106]:
+        - textbox [ref=f1e110]:
+          - /placeholder: 搜索登录账号、管理员姓名
+        - generic "管理员状态筛选" [ref=f1e111]:
+          - button "全部" [ref=f1e112] [cursor=pointer]
+          - button "启用" [ref=f1e113] [cursor=pointer]
+          - button "停用" [ref=f1e114] [cursor=pointer]
+      - generic [ref=f1e115]:
+        - generic [ref=f1e117]:
+          - heading "账号明细" [level=2] [ref=f1e118]
+          - generic [ref=f1e119]: 2 个账号
+        - generic [ref=f1e120]:
+          - generic [ref=f1e121]:
+            - generic [ref=f1e122]: 管理员
+            - generic [ref=f1e123]: 登录账号
+            - generic [ref=f1e124]: 状态
+            - generic [ref=f1e125]: 创建时间
+            - generic [ref=f1e126]: 更新时间
+            - generic [ref=f1e127]: 操作
+          - generic [ref=f1e128]:
+            - generic [ref=f1e129]:
+              - generic [ref=f1e131]:
+                - strong [ref=f1e132]: QA Main
+                - generic [ref=f1e133]: 当前登录账号
+              - generic [ref=f1e134]: qa_main
+              - generic [ref=f1e135]: 启用
+              - generic [ref=f1e136]: "-"
+              - generic [ref=f1e137]: "-"
+              - generic [ref=f1e138]:
+                - button "编辑" [ref=f1e139] [cursor=pointer]
+                - button "重置密码" [ref=f1e140] [cursor=pointer]
+                - button "停用" [disabled] [ref=f1e141]
+            - generic [ref=f1e142]:
+              - generic [ref=f1e144]:
+                - strong [ref=f1e145]: QA Sub
+                - generic [ref=f1e146]: 主办方子管理员
+              - generic [ref=f1e147]: qa_sub
+              - generic [ref=f1e148]: 待首次设置
+              - generic [ref=f1e149]: "-"
+              - generic [ref=f1e150]: "-"
+              - generic [ref=f1e151]:
+                - button "编辑" [ref=f1e152] [cursor=pointer]
+                - button "重置密码" [ref=f1e153] [cursor=pointer]
+                - button "停用" [ref=f1e154] [cursor=pointer]
+      - generic [ref=f1e156]:
+        - generic [ref=f1e157]:
+          - heading "新增管理员" [level=2] [ref=f1e158]
+          - button "×" [ref=f1e159] [cursor=pointer]
+        - generic [ref=f1e160]:
+          - generic [ref=f1e161]: 登录账号
+          - textbox "登录账号" [ref=f1e162]:
+            - /placeholder: 例如 event_admin
+        - generic [ref=f1e163]:
+          - generic [ref=f1e164]: 管理员姓名
+          - textbox "管理员姓名" [ref=f1e165]:
+            - /placeholder: 用于操作记录和后台显示
+        - generic [ref=f1e166]:
+          - generic [ref=f1e167]: 初始密码
+          - textbox "初始密码" [ref=f1e168]:
+            - /placeholder: 至少 6 位
+        - generic [ref=f1e169]:
+          - generic [ref=f1e170]: 管理员类型
+          - combobox "管理员类型" [ref=f1e171]:
+            - option "主办方主管理员" [selected]
+            - option "主办方子管理员"
+        - generic [ref=f1e172]:
+          - button "取消" [ref=f1e173] [cursor=pointer]
+          - button "保存" [ref=f1e174] [cursor=pointer]

@@ -1,0 +1,439 @@
+- generic [ref=f2e3]:
+  - complementary [ref=f2e4]:
+    - generic [ref=f2e8]:
+      - strong [ref=f2e9]: 赛事运营后台
+      - generic [ref=f2e10]: 超级核爆
+    - navigation "后台导航" [ref=f2e11]:
+      - generic [ref=f2e12]:
+        - paragraph [ref=f2e13]: 概览
+        - link "工作台" [ref=f2e14] [cursor=pointer]:
+          - /url: /admin/dashboard
+      - generic [ref=f2e20]:
+        - paragraph [ref=f2e21]: 赛事运营
+        - link "比赛管理" [ref=f2e22] [cursor=pointer]:
+          - /url: /admin/competitions
+        - link "酒款管理" [ref=f2e27] [cursor=pointer]:
+          - /url: /admin/entries
+        - link "收款确认" [ref=f2e31] [cursor=pointer]:
+          - /url: /admin/bank-transfers
+        - link "裁判招募" [ref=f2e37] [cursor=pointer]:
+          - /url: /admin/judge-recruitments
+        - link "评审人员" [ref=f2e41] [cursor=pointer]:
+          - /url: /admin/judges
+        - link "数据导出" [ref=f2e45] [cursor=pointer]:
+          - /url: /admin/exports
+      - generic [ref=f2e49]:
+        - paragraph [ref=f2e50]: 组织管理
+        - link "管理员账号" [ref=f2e51] [cursor=pointer]:
+          - /url: /admin/admin-users
+        - link "啤酒币" [ref=f2e55] [cursor=pointer]:
+          - /url: /admin/beer-coins
+        - link "操作日志" [ref=f2e61] [cursor=pointer]:
+          - /url: /admin/operation-logs
+      - generic [ref=f2e65]:
+        - paragraph [ref=f2e66]: 平台管理
+        - link "风格库" [ref=f2e67] [cursor=pointer]:
+          - /url: /admin/style-libraries
+    - generic [ref=f2e71]:
+      - button "夏凛 主办方主管理员" [ref=f2e72]:
+        - generic [ref=f2e73]:
+          - strong [ref=f2e74]: 夏凛
+          - generic [ref=f2e75]: 主办方主管理员
+      - button "退出登录" [ref=f2e78]
+  - main [ref=f2e83]:
+    - generic [ref=f2e84]:
+      - generic [ref=f2e85]:
+        - generic [ref=f2e86]:
+          - button "比赛管理" [ref=f2e87] [cursor=pointer]
+          - heading "新建比赛" [level=1] [ref=f2e92]
+        - generic [ref=f2e94]:
+          - button "取消" [ref=f2e95] [cursor=pointer]
+          - button "保存草稿" [ref=f2e96] [cursor=pointer]
+      - navigation "新建比赛分区导航" [ref=f2e100]:
+        - button "基础信息" [ref=f2e101] [cursor=pointer]
+        - button "送样信息" [ref=f2e102] [cursor=pointer]
+        - button "报名表" [ref=f2e103] [cursor=pointer]
+        - button "报名收款" [ref=f2e104] [cursor=pointer]
+        - button "评分表" [ref=f2e105] [cursor=pointer]
+        - button "确认" [ref=f2e106] [cursor=pointer]
+      - main [ref=f2e107]:
+        - generic [ref=f2e108]:
+          - heading "基础信息" [level=2] [ref=f2e110]
+          - generic [ref=f2e111]:
+            - generic [ref=f2e112]:
+              - generic [ref=f2e113]: 比赛名称
+              - textbox "比赛名称" [ref=f2e114]:
+                - /placeholder: 请输入赛事名称
+            - generic [ref=f2e115]:
+              - generic [ref=f2e116]:
+                - heading "赛制选择" [level=3] [ref=f2e117]
+                - button "赛制选择说明：风格对齐会在第一轮评选后发布结果，不产生奖项" [ref=f2e118]: 风格对齐会在第一轮评选后发布结果，不产生奖项
+              - generic [ref=f2e121]:
+                - button [ref=f2e122] [cursor=pointer]:
+                  - strong [ref=f2e123]: 正式评奖比赛
+                - button [ref=f2e124] [cursor=pointer]:
+                  - strong [ref=f2e125]: 风格对齐会
+              - generic [ref=f2e127]:
+                - generic [ref=f2e128]: 比赛日期
+                - textbox "比赛日期" [ref=f2e129]: 2026-08-20
+            - generic [ref=f2e130]:
+              - heading "报名时间" [level=3] [ref=f2e131]
+              - generic [ref=f2e132]:
+                - generic [ref=f2e133]:
+                  - generic [ref=f2e134]: 报名开始时间
+                  - textbox "报名开始时间" [ref=f2e135]: 2026-06-10T10:00
+                - generic [ref=f2e136]:
+                  - generic [ref=f2e137]: 报名截止时间
+                  - textbox "报名截止时间" [ref=f2e138]: 2026-07-30T18:00
+            - generic [ref=f2e139]:
+              - heading "费用规则" [level=3] [ref=f2e140]
+              - generic [ref=f2e141]:
+                - generic [ref=f2e142]:
+                  - generic [ref=f2e143]: 普通报名费
+                  - generic [ref=f2e144]:
+                    - spinbutton "普通报名费 元 / 款" [ref=f2e145]: "199"
+                    - generic [ref=f2e146]: 元 / 款
+                - generic [ref=f2e147]:
+                  - generic [ref=f2e148]: 早鸟价
+                  - generic [ref=f2e149]:
+                    - spinbutton "早鸟价 元 / 款" [ref=f2e150]: "159"
+                    - generic [ref=f2e151]: 元 / 款
+                - generic [ref=f2e152]:
+                  - generic [ref=f2e153]: 早鸟截止时间
+                  - textbox "早鸟截止时间" [ref=f2e154]: 2026-06-30T18:00
+              - generic [ref=f2e155] [cursor=pointer]:
+                - generic [ref=f2e156]: 启用阶梯报价
+                - generic [ref=f2e157]:
+                  - switch "启用阶梯报价"
+            - generic [ref=f2e160]:
+              - heading "赛事展示" [level=3] [ref=f2e161]
+              - generic [ref=f2e162]:
+                - generic [ref=f2e163]: 赛事简介
+                - textbox "赛事简介" [ref=f2e164]:
+                  - /placeholder: 面向厂牌说明本场赛事定位、适合提交的酒款或报名重点
+              - generic [ref=f2e165]:
+                - generic [ref=f2e166]: 参赛细则链接
+                - textbox "参赛细则链接" [ref=f2e167]:
+                  - /placeholder: 例如 https://mp.weixin.qq.com/s/...
+                  - text: https://mp.weixin.qq.com/s/iGxSnomHIXvdOyMO9xgd2Q
+        - generic [ref=f2e168]:
+          - heading "送样信息" [level=2] [ref=f2e170]
+          - generic [ref=f2e173]:
+            - generic [ref=f2e174]:
+              - generic [ref=f2e175]: 送样方式
+              - generic [ref=f2e177] [cursor=pointer]:
+                - generic:
+                  - combobox "送样方式" [ref=f2e179]
+                  - generic [ref=f2e180]: 快递寄送 / 现场送样
+            - generic [ref=f2e185]:
+              - generic [ref=f2e186]: 地址展示
+              - generic [ref=f2e188] [cursor=pointer]:
+                - generic:
+                  - combobox "地址展示" [ref=f2e190]
+                  - generic [ref=f2e191]: 支付成功后显示完整地址
+            - generic [ref=f2e196]:
+              - generic [ref=f2e197]: 送达开始
+              - textbox "送达开始" [ref=f2e198]: 2026-08-10T10:00
+            - generic [ref=f2e199]:
+              - generic [ref=f2e200]: 送达截止
+              - textbox "送达截止" [ref=f2e201]: 2026-08-15T18:00
+            - generic [ref=f2e202]:
+              - generic [ref=f2e203]: 收件人
+              - textbox "收件人" [ref=f2e204]:
+                - /placeholder: 例如 赛事收样组
+                - text: 赛事收样组
+            - generic [ref=f2e205]:
+              - generic [ref=f2e206]: 收件联系电话
+              - textbox "收件联系电话" [ref=f2e207]:
+                - /placeholder: 用于快递面单和异常联系
+            - generic [ref=f2e208]:
+              - generic [ref=f2e209]: 收件地址
+              - textbox "收件地址" [ref=f2e210]:
+                - /placeholder: 省市区、详细地址、收样点名称
+            - generic [ref=f2e211]:
+              - generic [ref=f2e212]: 样品数量要求
+              - textbox "样品数量要求" [ref=f2e213]:
+                - /placeholder: 例如 每款 6 瓶，单瓶不低于 330ml
+                - text: 每款 6 瓶，单瓶容量不低于 330ml
+            - generic [ref=f2e214]:
+              - generic [ref=f2e215]: 粘贴标签说明
+              - textbox "粘贴标签说明" [ref=f2e216]:
+                - /placeholder: 说明标签打印、裁剪、粘贴和防水等要求
+                - text: 支付成功后，您将看到自动生成的作品标签。请用 A4 纸打印，裁剪后分别贴在每瓶／罐参赛酒款上。张贴之前，请移除参赛酒款原本的酒标。建议采用激光打印，并在贴后使用透明塑料胶带覆盖，以增加防水性。
+        - generic [ref=f2e217]:
+          - heading "报名表配置" [level=2] [ref=f2e219]
+          - generic [ref=f2e220]:
+            - heading "内置报名信息" [level=3] [ref=f2e221]
+            - generic [ref=f2e222]:
+              - generic [ref=f2e223]: 酒名
+              - generic [ref=f2e224]: 投递组别
+              - generic [ref=f2e225]: 基础风格
+              - generic [ref=f2e226]: ABV
+          - generic [ref=f2e228]:
+            - heading "基础风格库" [level=3] [ref=f2e229]
+            - generic [ref=f2e231] [cursor=pointer]:
+              - generic:
+                - combobox "风格库版本" [ref=f2e233]
+                - generic [ref=f2e234]: BJCP 2021 中文标准库
+            - generic [ref=f2e239]: 标准风格库
+          - generic [ref=f2e241]:
+            - generic [ref=f2e242]:
+              - generic [ref=f2e243]:
+                - heading "投递组别" [level=3] [ref=f2e244]
+                - generic [ref=f2e245]: 2 个
+              - generic [ref=f2e246]:
+                - generic [ref=f2e247] [cursor=pointer]:
+                  - generic [ref=f2e248]: 同步风格库
+                  - generic [ref=f2e249]:
+                    - switch "同步风格库投递组别"
+                - button "添加组别" [ref=f2e252] [cursor=pointer]
+            - generic [ref=f2e255]:
+              - generic [ref=f2e256]:
+                - textbox "投递组别 1" [ref=f2e257]:
+                  - /placeholder: 例如 浅色拉格
+                  - text: 组别1
+                - button "删除投递组别" [ref=f2e258] [cursor=pointer]
+              - generic [ref=f2e261]:
+                - textbox "投递组别 2" [ref=f2e262]:
+                  - /placeholder: 例如 浅色拉格
+                  - text: 组别2
+                - button "删除投递组别" [ref=f2e263] [cursor=pointer]
+          - generic [ref=f2e266]:
+            - generic [ref=f2e267]:
+              - heading "补充字段" [level=3] [ref=f2e269]
+              - button "添加字段" [ref=f2e270] [cursor=pointer]
+            - generic [ref=f2e274]:
+              - generic [ref=f2e275]:
+                - generic [ref=f2e276]:
+                  - generic [ref=f2e277]: 字段名称
+                  - textbox "字段名称" [ref=f2e278]:
+                    - /placeholder: 例如 增味原料或特殊工艺
+                    - text: 增味原料或特殊工艺
+                - generic [ref=f2e279]:
+                  - generic [ref=f2e280]: 类型
+                  - generic [ref=f2e282] [cursor=pointer]:
+                    - generic:
+                      - combobox "补充字段 1 类型" [ref=f2e284]
+                      - generic [ref=f2e285]: 长文本
+                - button "删除补充字段" [ref=f2e290] [cursor=pointer]
+              - generic [ref=f2e293]:
+                - generic [ref=f2e294]:
+                  - generic [ref=f2e295]: 提示文案
+                  - textbox "提示文案" [ref=f2e296]:
+                    - /placeholder: 给厂牌看的填写说明
+                    - text: 如使用茶、咖啡、水果、桶陈等，请描述原料和工艺
+                - generic [ref=f2e297] [cursor=pointer]:
+                  - checkbox "必填" [ref=f2e298]
+                  - text: 必填
+                - generic [ref=f2e299]:
+                  - checkbox "评审可见 评审可见字段会进入匿名扫码页，只勾选评酒时需要判断的信息" [checked] [ref=f2e300]
+                  - text: 评审可见 评审可见字段会进入匿名扫码页，只勾选评酒时需要判断的信息
+        - generic [ref=f2e301]:
+          - heading "报名收款" [level=2] [ref=f2e303]
+          - generic [ref=f2e304]:
+            - generic [ref=f2e305]:
+              - generic [ref=f2e306]: 支持的收款方式
+              - radiogroup "支持的收款方式" [ref=f2e307]:
+                - radio "微信收款" [ref=f2e308] [cursor=pointer]
+                - radio "银行转账" [checked] [active] [ref=f2e309] [cursor=pointer]
+                - radio "两种方式" [ref=f2e310] [cursor=pointer]
+            - generic [ref=f2e588]:
+              - generic [ref=f2e589]: 收款户名 *
+              - textbox "收款户名 *" [ref=f2e590]:
+                - /placeholder: 请输入银行卡开户名称
+            - generic [ref=f2e591]:
+              - generic [ref=f2e592]: 银行卡号 *
+              - textbox "银行卡号 *" [ref=f2e593]:
+                - /placeholder: 请输入收款银行卡号
+            - generic [ref=f2e594]:
+              - generic [ref=f2e595]: 开户银行 *
+              - textbox "开户银行 *" [ref=f2e596]:
+                - /placeholder: 请输入开户银行及支行
+            - generic [ref=f2e326]:
+              - generic [ref=f2e327]: 付款备注要求
+              - textbox "付款备注要求" [ref=f2e328]:
+                - /placeholder: 例如：付款时请备注厂牌名称
+          - generic [ref=f2e330]:
+            - generic [ref=f2e331]: 啤酒币
+            - strong [ref=f2e332]: 开放报名时扣除 1 枚，当前余额 1 枚
+        - generic [ref=f2e333]:
+          - heading "评分表配置" [level=2] [ref=f2e335]
+          - generic [ref=f2e336]:
+            - article [ref=f2e337]:
+              - generic [ref=f2e338]:
+                - generic [ref=f2e339]:
+                  - heading "跨界评审" [level=3] [ref=f2e340]
+                  - button "跨界评审说明：每场比赛可配置 2-3 个维度，总分 50" [ref=f2e341]: 每场比赛可配置 2-3 个维度，总分 50
+                - generic [ref=f2e344]: 50 / 50
+              - generic [ref=f2e345]:
+                - generic [ref=f2e346]:
+                  - generic [ref=f2e347]: 维度
+                  - generic [ref=f2e348]: 满分
+                  - generic [ref=f2e349]: 备注提示
+                - generic [ref=f2e350]:
+                  - textbox "维度名称" [ref=f2e351]: 整体感受
+                  - spinbutton [ref=f2e352]: "20"
+                  - textbox "例如 描述香气表现" [ref=f2e353]: 描述第一印象、愉悦度和整体完成度
+                  - button [ref=f2e354] [cursor=pointer]
+                - generic [ref=f2e357]:
+                  - textbox "维度名称" [ref=f2e358]: 适饮性
+                  - spinbutton [ref=f2e359]: "20"
+                  - textbox "例如 描述香气表现" [ref=f2e360]: 描述是否易饮、是否愿意继续饮用
+                  - button [ref=f2e361] [cursor=pointer]
+                - generic [ref=f2e364]:
+                  - textbox "维度名称" [ref=f2e365]: 记忆点
+                  - spinbutton [ref=f2e366]: "10"
+                  - textbox "例如 描述香气表现" [ref=f2e367]: 描述最容易被记住的风味或体验
+                  - button [ref=f2e368] [cursor=pointer]
+                - generic [ref=f2e371]:
+                  - generic [ref=f2e372]:
+                    - generic [ref=f2e373]: 备注合计字数下限
+                    - spinbutton "备注合计字数下限" [ref=f2e374]: "50"
+                  - button "添加维度" [disabled] [ref=f2e375]
+            - article [ref=f2e378]:
+              - generic [ref=f2e379]:
+                - generic [ref=f2e380]:
+                  - heading "专业评审" [level=3] [ref=f2e381]
+                  - button "专业评审说明：固定 BJCP 口径，允许调整备注提示" [ref=f2e382]: 固定 BJCP 口径，允许调整备注提示
+                - generic [ref=f2e385]: 50 / 50
+              - generic [ref=f2e386]:
+                - generic [ref=f2e387]:
+                  - generic [ref=f2e388]: 维度
+                  - generic [ref=f2e389]: 满分
+                  - generic [ref=f2e390]: 备注提示
+                - generic [ref=f2e391]:
+                  - textbox "维度名称" [disabled] [ref=f2e392]: 香气
+                  - spinbutton [disabled] [ref=f2e393]: "12"
+                  - textbox "例如 描述香气表现" [ref=f2e394]: 描述香气强度、干净度和主要香气来源
+                  - button [disabled] [ref=f2e395]
+                - generic [ref=f2e398]:
+                  - textbox "维度名称" [disabled] [ref=f2e399]: 外观
+                  - spinbutton [disabled] [ref=f2e400]: "3"
+                  - textbox "例如 描述香气表现" [ref=f2e401]: 描述颜色、清澈度、泡沫和持久性
+                  - button [disabled] [ref=f2e402]
+                - generic [ref=f2e405]:
+                  - textbox "维度名称" [disabled] [ref=f2e406]: 味道
+                  - spinbutton [disabled] [ref=f2e407]: "20"
+                  - textbox "例如 描述香气表现" [ref=f2e408]: 描述甜苦酸平衡、风味层次和缺陷
+                  - button [disabled] [ref=f2e409]
+                - generic [ref=f2e412]:
+                  - textbox "维度名称" [disabled] [ref=f2e413]: 口感
+                  - spinbutton [disabled] [ref=f2e414]: "5"
+                  - textbox "例如 描述香气表现" [ref=f2e415]: 描述酒体、杀口感、顺滑度和余味
+                  - button [disabled] [ref=f2e416]
+                - generic [ref=f2e419]:
+                  - textbox "维度名称" [disabled] [ref=f2e420]: 整体印象
+                  - spinbutton [disabled] [ref=f2e421]: "10"
+                  - textbox "例如 描述香气表现" [ref=f2e422]: 汇总整体表现、完成度和改进方向
+                  - button [disabled] [ref=f2e423]
+                - generic [ref=f2e426]:
+                  - generic [ref=f2e427]:
+                    - generic [ref=f2e428]: 备注合计字数下限
+                    - spinbutton "备注合计字数下限" [ref=f2e429]: "30"
+                  - generic [ref=f2e430]: 维度固定
+            - article [ref=f2e431]:
+              - generic [ref=f2e432]:
+                - generic [ref=f2e433]:
+                  - heading "桌长" [level=3] [ref=f2e434]
+                  - button "桌长说明：桌长填写独立共识分和综合评语" [ref=f2e435]: 桌长填写独立共识分和综合评语
+                - generic [ref=f2e438]: 50 / 50
+              - generic [ref=f2e439]:
+                - generic [ref=f2e440]:
+                  - generic [ref=f2e441]: 维度
+                  - generic [ref=f2e442]: 满分
+                  - generic [ref=f2e443]: 备注提示
+                - generic [ref=f2e444]:
+                  - textbox "维度名称" [ref=f2e445]: 共识分
+                  - spinbutton [ref=f2e446]: "50"
+                  - textbox "例如 描述香气表现" [ref=f2e447]: 桌长讨论后填写独立共识分
+                  - button [disabled] [ref=f2e448]
+                - generic [ref=f2e451]:
+                  - generic [ref=f2e452]:
+                    - generic [ref=f2e453]: 备注合计字数下限
+                    - spinbutton "备注合计字数下限" [ref=f2e454]: "30"
+                  - generic [ref=f2e455]: 共识分
+        - generic [ref=f2e456]:
+          - heading "确认草稿" [level=2] [ref=f2e458]
+          - generic [ref=f2e459]:
+            - generic [ref=f2e464]:
+              - heading "还有 1 项需要处理" [level=3] [ref=f2e465]
+              - paragraph [ref=f2e466]: 请先处理：基础信息
+            - button "保存草稿，进入工作台" [ref=f2e468] [cursor=pointer]
+          - generic [ref=f2e472]:
+            - generic [ref=f2e473]:
+              - heading "保存前检查" [level=3] [ref=f2e474]
+              - generic [ref=f2e475]:
+                - generic [ref=f2e476]:
+                  - generic [ref=f2e479]:
+                    - strong [ref=f2e480]: 基础信息
+                    - generic [ref=f2e481]: 缺少比赛名称、赛事简介
+                  - button "去修改" [ref=f2e482] [cursor=pointer]
+                - generic [ref=f2e487]:
+                  - strong [ref=f2e488]: 报名时间
+                  - generic [ref=f2e489]: 截止 2026.07.30 18:00
+                - generic [ref=f2e494]:
+                  - strong [ref=f2e495]: 早鸟价
+                  - generic [ref=f2e496]: 早鸟 159 元 / 款，截止 2026.06.30 18:00
+                - generic [ref=f2e501]:
+                  - strong [ref=f2e502]: 参赛细则
+                  - generic [ref=f2e503]: 已设置参赛细则链接
+                - generic [ref=f2e508]:
+                  - strong [ref=f2e509]: 阶梯报价
+                  - generic [ref=f2e510]: 未启用阶梯报价
+                - generic [ref=f2e515]:
+                  - strong [ref=f2e516]: 送样信息
+                  - generic [ref=f2e517]: 送达截止 2026.08.15 18:00
+                - generic [ref=f2e522]:
+                  - strong [ref=f2e523]: 投递组别
+                  - generic [ref=f2e524]: 组别1、组别2
+                - generic [ref=f2e529]:
+                  - strong [ref=f2e530]: 补充字段
+                  - generic [ref=f2e531]: 增味原料或特殊工艺 对评审可见
+                - generic [ref=f2e536]:
+                  - strong [ref=f2e537]: 评分表
+                  - generic [ref=f2e538]: 三类评分表均为 50 分
+                - generic [ref=f2e543]:
+                  - strong [ref=f2e544]: 跨界评审
+                  - generic [ref=f2e545]: 3 个评分维度
+            - generic [ref=f2e546]:
+              - heading "关键摘要" [level=3] [ref=f2e547]
+              - generic [ref=f2e548]:
+                - generic [ref=f2e549]:
+                  - term [ref=f2e550]: 比赛名称
+                  - definition [ref=f2e551]: "-"
+                - generic [ref=f2e552]:
+                  - term [ref=f2e553]: 比赛类型
+                  - definition [ref=f2e554]: 正式评奖比赛
+                - generic [ref=f2e555]:
+                  - term [ref=f2e556]: 比赛日期
+                  - definition [ref=f2e557]: 2026-08-20
+                - generic [ref=f2e558]:
+                  - term [ref=f2e559]: 报名截止
+                  - definition [ref=f2e560]: 2026.07.30 18:00
+                - generic [ref=f2e561]:
+                  - term [ref=f2e562]: 报名费
+                  - definition [ref=f2e563]: 199 元 / 款
+                - generic [ref=f2e564]:
+                  - term [ref=f2e565]: 早鸟价
+                  - definition [ref=f2e566]: 159 元 / 款
+                - generic [ref=f2e567]:
+                  - term [ref=f2e568]: 早鸟截止
+                  - definition [ref=f2e569]: 2026.06.30 18:00
+                - generic [ref=f2e570]:
+                  - term [ref=f2e571]: 赛事简介
+                  - definition [ref=f2e572]: "-"
+                - generic [ref=f2e573]:
+                  - term [ref=f2e574]: 参赛细则
+                  - definition [ref=f2e575]: https://mp.weixin.qq.com/s/iGxSnomHIXvdOyMO9xgd2Q
+                - generic [ref=f2e576]:
+                  - term [ref=f2e577]: 送样方式
+                  - definition [ref=f2e578]: 快递寄送 / 现场送样
+                - generic [ref=f2e579]:
+                  - term [ref=f2e580]: 送样截止
+                  - definition [ref=f2e581]: 2026.08.15 18:00
+                - generic [ref=f2e582]:
+                  - term [ref=f2e583]: 投递组别
+                  - definition [ref=f2e584]: 组别1、组别2
+                - generic [ref=f2e585]:
+                  - term [ref=f2e586]: 评审可见字段
+                  - definition [ref=f2e587]: 增味原料或特殊工艺

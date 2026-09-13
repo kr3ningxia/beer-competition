@@ -103,7 +103,7 @@
                 <strong>{{ beerCoinWalletLoading ? '读取中' : `${formatInteger(beerCoinWallet?.availableQuantity)} 枚` }}</strong>
               </div>
               <div>
-                <small>{{ competition.status === 'DRAFT' ? '发布最低消耗' : '预计总消耗' }}</small>
+                <small>{{ competition.status === 'DRAFT' ? '发布最低消耗' : '预计总消耗（每款 1 枚）' }}</small>
                 <strong>{{ formatInteger(beerCoinSettlement.requiredQuantity) }} 枚</strong>
               </div>
               <div>
@@ -217,8 +217,8 @@
                   </label>
                 </div>
                 <label class="tier-toggle" :class="{ enabled: baseForm.tierPricingEnabled }">
-                  <span>启用阶梯报价</span>
-                  <el-switch v-model="baseForm.tierPricingEnabled" aria-label="启用阶梯报价" :disabled="!editable.basePrice" />
+                  <span>启用阶梯报名费</span>
+                  <el-switch v-model="baseForm.tierPricingEnabled" aria-label="启用阶梯报名费" :disabled="!editable.basePrice" />
                 </label>
                 <div v-if="baseForm.tierPricingEnabled" class="tier-editor">
                   <div class="tier-editor-head">
@@ -711,6 +711,7 @@
           </div>
           <TableAllocationWorkbench
             :allocation-mode="allocationMode"
+            :saving="allocationDraftSaving"
             :rounds="rounds"
             :active-round-id="activeRoundId"
             :current-round="currentRound"
@@ -759,8 +760,9 @@
             @add-judge-to-target="addJudgeToTarget"
             @add-judge-table="addJudgeTable"
             @remove-judge-table="removeJudgeTable"
+            @update-judge-table-name="updateBaseJudgeTableName"
             @remove-assignment="removeAssignment"
-            @save-judge-draft="saveJudgeDraft"
+            @save-judge-draft="saveCurrentJudgeDraft"
             @start-judge-drag="startJudgeDrag"
             @start-assignment-drag="startAssignmentDrag"
             @drop-on-role="dropOnRole"
@@ -953,6 +955,104 @@
 
             </section>
           </section>
+        </section>
+
+        <section v-if="activeTab === 'collection' && isTenantOrganizer" class="tab-panel collection-config-panel">
+          <div v-if="!collectionEditable" class="edit-banner locked">
+            <Lock />
+            报名截止后收款配置已锁定，厂商付款页仍按既有配置展示
+          </div>
+
+          <article class="panel-card">
+            <div class="panel-heading">
+              <div>
+                <h2>支持的收款方式</h2>
+              </div>
+            </div>
+            <div class="collection-method-switch" role="radiogroup" aria-label="支持的收款方式">
+              <button
+                v-for="option in collectionMethodOptions"
+                :key="option.value"
+                type="button"
+                role="radio"
+                :aria-checked="collectionForm.methodMode === option.value"
+                :class="{ active: collectionForm.methodMode === option.value }"
+                :disabled="!collectionEditable"
+                @click="collectionForm.methodMode = option.value"
+              >
+                {{ option.label }}
+              </button>
+            </div>
+          </article>
+
+          <article v-if="collectionWechatEnabled" class="panel-card">
+            <div class="panel-heading">
+              <div>
+                <h2>微信收款码</h2>
+              </div>
+              <div v-if="collectionEditable" class="panel-actions">
+                <button class="tool-button" type="button" @click="collectionQrInput?.click()">
+                  <Plus />
+                  {{ collectionQrAssetId ? '更换收款码' : '上传收款码' }}
+                </button>
+              </div>
+            </div>
+            <input
+              ref="collectionQrInput"
+              class="hidden-file-input"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              @change="selectCollectionQr"
+            />
+            <div class="collection-qr-row">
+              <img v-if="collectionQrPreviewUrl" :src="collectionQrPreviewUrl" alt="微信收款码" />
+              <div>
+                <strong>{{ collectionQrStatusText }}</strong>
+                <small v-if="collectionForm.qrFile">已选择新收款码，保存后生效</small>
+                <small v-else>厂商付款时将看到此收款码</small>
+              </div>
+            </div>
+          </article>
+
+          <article v-if="collectionBankEnabled" class="panel-card">
+            <div class="panel-heading">
+              <div>
+                <h2>银行转账账户</h2>
+              </div>
+            </div>
+            <div class="base-form-grid">
+              <label>
+                <span>收款户名</span>
+                <input v-model.trim="collectionForm.bankAccountName" :disabled="!collectionEditable" placeholder="请输入银行开户名称" />
+              </label>
+              <label>
+                <span>银行账号</span>
+                <input v-model.trim="collectionForm.bankAccountNo" :disabled="!collectionEditable" placeholder="请输入收款银行账号" />
+              </label>
+              <label class="wide-field">
+                <span>开户银行</span>
+                <input v-model.trim="collectionForm.bankName" :disabled="!collectionEditable" placeholder="请输入开户银行及支行" />
+              </label>
+            </div>
+          </article>
+
+          <article class="panel-card">
+            <div class="panel-heading">
+              <div>
+                <h2>付款说明</h2>
+              </div>
+            </div>
+            <div class="base-form-grid">
+              <label class="wide-field">
+                <span>付款备注要求</span>
+                <input v-model.trim="collectionForm.collectionNote" :disabled="!collectionEditable" maxlength="255" placeholder="例如：付款时请备注厂牌名称" />
+              </label>
+              <label class="wide-field">
+                <span>付款咨询联系</span>
+                <input v-model.trim="collectionForm.paymentContact" :disabled="!collectionEditable" maxlength="128" placeholder="微信号或手机号，付款的厂商遇到问题时联系" />
+              </label>
+            </div>
+          </article>
         </section>
 
         <section v-if="activeTab === 'score'" class="tab-panel score-config-panel">
@@ -1217,6 +1317,10 @@
           </div>
         </section>
 
+        <section v-if="activeTab === 'performance'" class="tab-panel performance-review-panel">
+          <JudgePerformancePanel :competition="competition" />
+        </section>
+
         <section v-if="activeTab === 'results'" class="tab-panel">
           <div class="results-workbench">
             <article v-if="!isFeedbackOnlyCompetition" class="panel-card award-table-card">
@@ -1439,7 +1543,7 @@
             </span>
             <span v-if="beerCoinApplicable">
               <small>啤酒币</small>
-              <strong>{{ beerCoinWalletLoading ? '读取中' : `${formatInteger(beerCoinWallet?.availableQuantity)} / 扣 1 枚` }}</strong>
+              <strong>{{ beerCoinWalletLoading ? '读取中' : `${formatInteger(beerCoinWallet?.availableQuantity)} / 发布扣 1 枚` }}</strong>
             </span>
           </div>
           <footer>
@@ -2046,7 +2150,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import {
@@ -2056,6 +2160,7 @@ import {
   CircleCheck,
   Clock,
   Close,
+  Coin,
   DataAnalysis,
   Delete,
   EditPen,
@@ -2088,6 +2193,7 @@ import {
   createNextRound,
   deleteAwardCertificate,
   deleteDraftRound,
+  changeRoundTableJudgeMembers,
   deleteCompetition,
   downloadAwardCertificate,
   exportCompetitionScoringData,
@@ -2099,6 +2205,7 @@ import {
   fetchCompetitionFeedbackReview,
   fetchCompetitionFeedbackReviewPage,
   fetchAdminEntryDetail,
+  fetchCompetitionCollection,
   fetchCompetitionDetail,
   fetchCompetitionOverview,
   fetchCompetitionProgress,
@@ -2121,6 +2228,7 @@ import {
   updateCompetitionBaseInfo,
   updateCompetitionRefundPolicy,
   updateCompetitionCategories,
+  updateCompetitionCollection,
   updateCompetitionEntryFields,
   updateCompetitionJudgeAssignments,
   updateCompetitionJudgeTables,
@@ -2128,19 +2236,24 @@ import {
   updateCompetitionStyles,
   updateScoreConfigs,
   uploadAwardCertificate,
+  uploadCompetitionCollectionQr,
   uploadCompetitionSponsorLogo,
 } from '@/api/admin'
+import { getAdminMe } from '@/api/auth'
+import { BASE_URL } from '@/config'
 import { fetchBeerCoinOverview } from '@/api/beerCoin'
 import { ADMIN_TYPES } from '@/config/adminAccess'
 import { getAdminType } from '@/utils/auth'
 import { fallbackStyleLibraries, formatStyleItemName, getStyleLibrary, normalizeStyleLibraries } from './styleLibraries'
 import CreateRoundWizard from './components/competition-detail/CreateRoundWizard.vue'
 import CompetitionAnalyticsPanel from './components/competition-detail/CompetitionAnalyticsPanel.vue'
+import JudgePerformancePanel from './components/competition-detail/JudgePerformancePanel.vue'
 import TableAllocationWorkbench from './components/competition-detail/TableAllocationWorkbench.vue'
+import { createSerialTaskQueue, drainDirtyTask, matchesCompetitionRequest } from './competitionDraftCoordinator'
 
 const route = useRoute()
 const router = useRouter()
-const detailTabKeys = new Set(['overview', 'analysis', 'baseInfo', 'sponsors', 'entryConfig', 'entries', 'judges', 'rounds', 'score', 'feedback', 'results'])
+const detailTabKeys = new Set(['overview', 'analysis', 'baseInfo', 'sponsors', 'entryConfig', 'collection', 'entries', 'judges', 'rounds', 'score', 'feedback', 'performance', 'results'])
 const roundProgressPollIntervalMs = 8000
 const activeTab = ref(normalizeDetailTab(route.query.tab))
 const loading = ref(false)
@@ -2159,8 +2272,15 @@ const competitionAnalytics = ref(null)
 const competitionAnalyticsLoading = ref(false)
 const competitionAnalyticsCompetitionId = ref(null)
 let roundProgressPollTimer = null
-let roundProgressRefreshing = false
+let detailRequestGeneration = 0
+let roundProgressRequestGeneration = 0
 let roundTableNameAutoSaveTimer = null
+let allocationSavePendingCount = 0
+const allocationSaveCoordinator = createSerialTaskQueue((pendingCount) => {
+  allocationSavePendingCount = pendingCount
+  allocationDraftSaving.value = pendingCount > 0
+})
+const allocationDraftDirtyVersions = new Map()
 const categoryForm = reactive([])
 const baseForm = reactive({
   name: '',
@@ -2345,23 +2465,27 @@ const tabs = [
   { key: 'baseInfo', label: '基础信息', icon: Setting },
   { key: 'sponsors', label: '赞助商', icon: Medal },
   { key: 'entryConfig', label: '报名配置', icon: Setting },
+  { key: 'collection', label: '报名收款', icon: Coin },
   { key: 'score', label: '评分表', icon: Finished },
   { key: 'entries', label: '参赛酒款', icon: Tickets },
   { key: 'judges', label: '分桌分配', icon: Files },
   { key: 'rounds', label: '轮次编排', icon: Calendar },
   { key: 'feedback', label: '评价查看', icon: CircleCheck },
+  { key: 'performance', label: '评审表现', icon: Medal },
   { key: 'results', label: '结果发布', icon: Medal },
 ]
 
-const detailTabs = computed(() => tabs.map((tab) => {
-  const disabledReason = resolveDetailTabDisabledReason(tab.key)
-  return {
-    ...tab,
-    label: tab.key === 'results' && isFeedbackOnlyCompetition.value ? '诊断发布' : tab.label,
-    enabled: !disabledReason,
-    disabledReason,
-  }
-}))
+const detailTabs = computed(() => tabs
+  .filter((tab) => tab.key !== 'collection' || isTenantOrganizer.value)
+  .map((tab) => {
+    const disabledReason = resolveDetailTabDisabledReason(tab.key)
+    return {
+      ...tab,
+      label: tab.key === 'results' && isFeedbackOnlyCompetition.value ? '诊断发布' : tab.label,
+      enabled: !disabledReason,
+      disabledReason,
+    }
+  }))
 
 const entryStatusLabels = {
   PENDING_PAYMENT: '待支付',
@@ -2408,6 +2532,38 @@ const beerCoinWalletInsufficient = computed(() => (
   )
 ))
 const editable = computed(() => competition.value?.editableScopes || {})
+const isTenantOrganizer = ref(false)
+const collectionConfig = ref(null)
+const collectionQrInput = ref(null)
+const collectionQrLocalUrl = ref('')
+const collectionForm = reactive({
+  methodMode: 'BOTH',
+  qrFile: null,
+  bankAccountName: '',
+  bankAccountNo: '',
+  bankName: '',
+  collectionNote: '',
+  paymentContact: '',
+})
+const collectionMethodOptions = [
+  { label: '微信收款', value: 'WECHAT' },
+  { label: '银行转账', value: 'BANK' },
+  { label: '微信支付+银行转账', value: 'BOTH' },
+]
+const collectionEditable = computed(() => Boolean(editable.value.collection))
+const collectionWechatEnabled = computed(() => ['WECHAT', 'BOTH'].includes(collectionForm.methodMode))
+const collectionBankEnabled = computed(() => ['BANK', 'BOTH'].includes(collectionForm.methodMode))
+const collectionEnabledMethods = computed(() => [
+  ...(collectionWechatEnabled.value ? ['WECHAT_QR'] : []),
+  ...(collectionBankEnabled.value ? ['BANK_TRANSFER'] : []),
+])
+const collectionQrAssetId = computed(() => collectionConfig.value?.wechatQrAssetId || null)
+const collectionQrPreviewUrl = computed(() => {
+  if (collectionQrLocalUrl.value) return collectionQrLocalUrl.value
+  const assetId = collectionQrAssetId.value
+  return assetId ? `${BASE_URL}/api/portal/public/files/${assetId}` : ''
+})
+const collectionQrStatusText = computed(() => (collectionQrAssetId.value ? '已上传收款码' : '尚未上传收款码'))
 const refundPolicyDirty = computed(() => (
   baseForm.refundApprovalMode !== (competition.value?.refundApprovalMode || 'AUTO_APPROVE')
 ))
@@ -2444,12 +2600,99 @@ const stagePrimaryActionDisabledReason = computed(() => (
   stagePrimaryAction.value.enabled ? '' : stagePrimaryAction.value.disabledReason || '当前阶段不能执行该操作'
 ))
 const stageSecondaryActions = computed(() => resolveStageSecondaryActions())
+
+function resolveCollectionMethodMode(enabledMethods = []) {
+  const wechat = enabledMethods.includes('WECHAT_QR')
+  const bank = enabledMethods.includes('BANK_TRANSFER')
+  if (wechat && bank) return 'BOTH'
+  if (bank) return 'BANK'
+  return 'WECHAT'
+}
+
+function clearCollectionQrLocalUrl() {
+  if (collectionQrLocalUrl.value) URL.revokeObjectURL(collectionQrLocalUrl.value)
+  collectionQrLocalUrl.value = ''
+}
+
+async function loadCollectionConfig() {
+  const competitionId = competition.value?.id || route.params.id
+  if (!competitionId) return
+  try {
+    const data = await fetchCompetitionCollection(competitionId)
+    collectionConfig.value = data || null
+    collectionForm.methodMode = resolveCollectionMethodMode(data?.enabledMethods || [])
+    collectionForm.bankAccountName = data?.bankAccountName || ''
+    collectionForm.bankAccountNo = data?.bankAccountNo || ''
+    collectionForm.bankName = data?.bankName || ''
+    collectionForm.collectionNote = data?.collectionNote || ''
+    collectionForm.paymentContact = data?.paymentContact || ''
+    collectionForm.qrFile = null
+    clearCollectionQrLocalUrl()
+  } catch {
+    collectionConfig.value = null
+  }
+}
+
+function selectCollectionQr(event) {
+  const file = event.target.files?.[0] || null
+  if (!file) return
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    ElMessage.warning('收款码仅支持 JPG、PNG 或 WEBP 图片')
+    event.target.value = ''
+    return
+  }
+  clearCollectionQrLocalUrl()
+  collectionForm.qrFile = file
+  collectionQrLocalUrl.value = URL.createObjectURL(file)
+}
+
+async function saveCollectionConfig() {
+  const competitionId = competition.value?.id || route.params.id
+  if (!competitionId) return
+  if (collectionWechatEnabled.value && !collectionForm.qrFile && !collectionQrAssetId.value) {
+    ElMessage.warning('请上传微信收款码')
+    return
+  }
+  if (collectionBankEnabled.value && (!collectionForm.bankAccountName || !collectionForm.bankAccountNo || !collectionForm.bankName)) {
+    ElMessage.warning('请完整填写收款户名、银行账号和开户银行')
+    return
+  }
+  try {
+    let qrAssetId = collectionQrAssetId.value
+    if (collectionWechatEnabled.value && collectionForm.qrFile) {
+      qrAssetId = (await uploadCompetitionCollectionQr(competitionId, collectionForm.qrFile)).fileAssetId
+    }
+    const saved = await updateCompetitionCollection(competitionId, {
+      enabledMethods: collectionEnabledMethods.value,
+      wechatQrAssetId: qrAssetId,
+      bankAccountName: collectionBankEnabled.value ? collectionForm.bankAccountName : null,
+      bankAccountNo: collectionBankEnabled.value ? collectionForm.bankAccountNo : null,
+      bankName: collectionBankEnabled.value ? collectionForm.bankName : null,
+      collectionNote: collectionForm.collectionNote,
+      paymentContact: collectionForm.paymentContact,
+    })
+    if (saved) collectionConfig.value = saved
+    collectionForm.qrFile = null
+    clearCollectionQrLocalUrl()
+    ElMessage.success('收款配置已保存')
+  } catch (error) {
+    ElMessage.warning(error?.message || '收款配置保存失败，请稍后重试')
+  }
+}
+
+watch(activeTab, (tab) => {
+  if (tab === 'collection' && isTenantOrganizer.value && !collectionConfig.value) loadCollectionConfig()
+})
+
 const tabSaveAction = computed(() => {
   if (activeTab.value === 'baseInfo' && (editable.value.baseInfo || editable.value.description)) {
     return { label: '保存基础信息', handler: saveBaseInfo }
   }
   if (activeTab.value === 'entryConfig' && editable.value.entryStructure) {
     return { label: '保存报名配置', handler: saveEntryConfig }
+  }
+  if (activeTab.value === 'collection' && collectionEditable.value) {
+    return { label: '保存收款配置', handler: saveCollectionConfig }
   }
   if (activeTab.value === 'score' && editable.value.scoreConfigs) {
     return { label: '保存评分表', handler: saveScoreConfigs }
@@ -2460,7 +2703,11 @@ const tabSaveAction = computed(() => {
   return null
 })
 const futureStageTasks = computed(() => buildFutureStageTasks())
-const currentRound = computed(() => rounds.value.find((round) => round.id === activeRoundId.value) || rounds.value[0] || firstRoundDraft)
+const currentRound = computed(() => rounds.value.find((round) => round.id === activeRoundId.value)
+  || (String(competition.value?.currentRound?.id || '') === String(activeRoundId.value || '') ? competition.value.currentRound : null)
+  || rounds.value[0]
+  || competition.value?.currentRound
+  || firstRoundDraft)
 const currentRoundTables = computed(() => currentRound.value?.tables || [])
 const currentRoundIsTerminal = computed(() => isTerminalRound(currentRound.value))
 const currentDraftSourceRound = computed(() => {
@@ -3094,12 +3341,36 @@ onMounted(() => {
   loadDetail()
   nextTick(setupStyleDistributionObserver)
   roundProgressPollTimer = window.setInterval(refreshRoundProgress, roundProgressPollIntervalMs)
+  window.addEventListener('beforeunload', handleAllocationBeforeUnload)
+  getAdminMe()
+    .then((user) => {
+      isTenantOrganizer.value = user?.organizerType === 'TENANT'
+      if (isTenantOrganizer.value) {
+        loadCollectionConfig()
+      } else if (activeTab.value === 'collection') {
+        activeTab.value = 'overview'
+      }
+    })
+    .catch(() => {})
 })
 onUnmounted(() => {
+  clearCollectionQrLocalUrl()
   if (roundProgressPollTimer) window.clearInterval(roundProgressPollTimer)
   clearRoundTableNameAutoSave()
   if (styleDistributionResizeObserver) styleDistributionResizeObserver.disconnect()
   closeSponsorLogoCrop()
+  window.removeEventListener('beforeunload', handleAllocationBeforeUnload)
+})
+onBeforeRouteLeave(async () => flushAllocationDraftBeforeNavigation())
+onBeforeRouteUpdate(async (to, from) => {
+  if (String(to.params.id || '') === String(from.params.id || '')) {
+    if (normalizeDetailTab(to.query.tab) !== normalizeDetailTab(from.query.tab)
+      && (activeTab.value === 'judges' || isCurrentRoundAllocationDirty())) {
+      return flushAllocationDraftBeforeNavigation()
+    }
+    return true
+  }
+  return flushAllocationDraftBeforeNavigation()
 })
 watch(() => route.params.id, loadDetail)
 watch(() => route.query.tab, (tab) => {
@@ -3237,12 +3508,17 @@ function hasFeedbackFilters() {
 }
 
 async function loadDetail() {
+  const competitionKey = String(route.params.id || '')
+  const requestGeneration = ++detailRequestGeneration
+  roundProgressRequestGeneration++
   loading.value = true
   competition.value = null
   beerCoinOverview.value = null
   resetLoadedSections()
   try {
-    const data = await fetchCompetitionOverview(route.params.id)
+    const data = await fetchCompetitionOverview(competitionKey)
+    if (!isCurrentCompetitionRequest(competitionKey, requestGeneration)) return
+    allocationDraftDirtyVersions.clear()
     competition.value = normalizeDetail(data)
     competitionAnalytics.value = null
     competitionAnalyticsCompetitionId.value = null
@@ -3254,18 +3530,21 @@ async function loadDetail() {
     }
     await loadActiveTabData(activeTab.value)
   } finally {
-    loading.value = false
+    if (isCurrentCompetitionRequest(competitionKey, requestGeneration)) loading.value = false
   }
 }
 
 async function refreshRoundProgress(force = false) {
   if (!force && !shouldRefreshRoundProgress()) return
-  if (roundProgressRefreshing) return
-  roundProgressRefreshing = true
+  const competitionKey = currentCompetitionKey()
+  const detailGeneration = detailRequestGeneration
+  const requestGeneration = ++roundProgressRequestGeneration
   const preferredRoundId = activeRoundId.value
   const preferredTableId = selectedRoundTableId.value
   try {
-    const data = await fetchCompetitionProgress(route.params.id)
+    const data = await fetchCompetitionProgress(competitionKey)
+    if (!isCurrentCompetitionRequest(competitionKey, detailGeneration)
+      || requestGeneration !== roundProgressRequestGeneration) return
     competition.value = normalizeDetail({
       ...competition.value,
       progressSummary: data.progressSummary,
@@ -3277,8 +3556,6 @@ async function refreshRoundProgress(force = false) {
     ensureActiveTabAvailable()
   } catch {
     // 现场进度静默刷新失败时保留当前页面状态
-  } finally {
-    roundProgressRefreshing = false
   }
 }
 
@@ -3297,7 +3574,7 @@ async function loadActiveTabData(tab) {
     return
   }
   if (tab === 'judges') {
-    await loadJudgePool()
+    await Promise.all([loadEntryPool(), loadJudgePool(), refreshRoundProgress(true)])
     return
   }
   if (tab === 'rounds') {
@@ -3327,10 +3604,19 @@ function currentCompetitionKey() {
   return String(competition.value?.id || route.params.id || '')
 }
 
+function isCurrentCompetitionRequest(competitionKey, requestGeneration = detailRequestGeneration) {
+  return matchesCompetitionRequest(
+    { competitionId: competitionKey, generation: requestGeneration },
+    { competitionId: route.params.id, generation: detailRequestGeneration },
+  )
+}
+
 async function loadSponsors() {
   const competitionKey = currentCompetitionKey()
+  const requestGeneration = detailRequestGeneration
   if (!competitionKey || loadedSectionCompetitionIds.sponsors === competitionKey) return
   const sponsors = await fetchCompetitionSponsors(competitionKey)
+  if (!isCurrentCompetitionRequest(competitionKey, requestGeneration)) return
   competition.value = normalizeDetail({ ...competition.value, sponsors: sponsors || [] })
   loadedSectionCompetitionIds.sponsors = competitionKey
   resetSponsorForm()
@@ -3338,8 +3624,10 @@ async function loadSponsors() {
 
 async function loadEntryPool() {
   const competitionKey = currentCompetitionKey()
+  const requestGeneration = detailRequestGeneration
   if (!competitionKey || loadedSectionCompetitionIds.entryPool === competitionKey) return
   const entryPool = await fetchCompetitionEntryPool(competitionKey)
+  if (!isCurrentCompetitionRequest(competitionKey, requestGeneration)) return
   competition.value = normalizeDetail({
     ...competition.value,
     entries: entryPool || [],
@@ -3352,12 +3640,14 @@ async function loadEntryPool() {
 
 async function loadEntryPage() {
   const competitionKey = currentCompetitionKey()
+  const requestGeneration = detailRequestGeneration
   if (!competitionKey) return
   try {
     const data = await fetchCompetitionEntryPoolPage(competitionKey, {
       page: entryPagination.page,
       pageSize: entryPagination.pageSize,
     })
+    if (!isCurrentCompetitionRequest(competitionKey, requestGeneration)) return
     entryPageRecords.value = data?.records || []
     entryPageTotal.value = Number(data?.total || 0)
     if (entryPagination.page > entryTotalPages.value) {
@@ -3398,12 +3688,14 @@ function formatInteger(value) {
 
 async function loadResultsWorkspace() {
   const competitionKey = currentCompetitionKey()
+  const requestGeneration = detailRequestGeneration
   if (!competitionKey || loadedSectionCompetitionIds.results === competitionKey) return
   const [resultDrafts, awardRules, awardResults] = await Promise.all([
     fetchCompetitionResultDrafts(competitionKey),
     fetchCompetitionAwardRules(competitionKey),
     fetchCompetitionAwards(competitionKey),
   ])
+  if (!isCurrentCompetitionRequest(competitionKey, requestGeneration)) return
   competition.value = normalizeDetail({
     ...competition.value,
     resultDrafts: resultDrafts || [],
@@ -3438,9 +3730,11 @@ function syncActiveTabQuery(tab) {
 
 async function loadJudgePool() {
   const competitionKey = currentCompetitionKey()
+  const requestGeneration = detailRequestGeneration
   if (!competitionKey || loadedSectionCompetitionIds.judges === competitionKey) return
   try {
     const data = await fetchJudges({ competitionId: competitionKey })
+    if (!isCurrentCompetitionRequest(competitionKey, requestGeneration)) return
     judgePool.value = data || []
     loadedSectionCompetitionIds.judges = competitionKey
   } catch {
@@ -3863,7 +4157,7 @@ function applyRoundState(preferredRoundId = activeRoundId.value, options = {}) {
       advancedEntryUuids: table.advancedEntryUuids || [],
       members: table.members || [],
       participantPublicIds: (table.members || [])
-        .filter((member) => member.role !== 'CAPTAIN')
+        .filter((member) => member.role !== 'CAPTAIN' && member.status !== 'REMOVED')
         .map((member) => member.judgePublicId)
         .filter(Boolean),
       rankings: table.rankings || buildEmptyRankings(Number(table.targetCount || 3), table.targetMode),
@@ -4055,6 +4349,7 @@ async function ensureFirstRoundDraft(options = {}) {
     tables: payload.tables,
   })
   const preferredMode = options.preferredMode || allocationMode.value
+  clearRoundAllocationDirty(competition.value.id, firstRoundDraft.id)
   competition.value = normalizeDetail(detail)
   resetForms()
   const createdRound = competition.value.rounds?.find((round) => Number(round.roundNo) === 1)
@@ -4066,7 +4361,8 @@ async function ensureFirstRoundDraft(options = {}) {
 }
 
 async function generateFirstRoundFromJudges() {
-  await ensureFirstRoundDraft({ preferredMode: 'entries' })
+  clearRoundTableNameAutoSave()
+  await enqueueAllocationSave(() => ensureFirstRoundDraft({ preferredMode: 'entries' }))
 }
 
 function resolveRegistrationWindowInfo() {
@@ -4311,21 +4607,27 @@ function buildFutureStageTasks() {
   return tasks
 }
 
-function handleFutureTask(task) {
+async function handleFutureTask(task) {
   if (task.action === 'createNextRound') {
     openCreateRoundDialog()
     return
   }
-  if (task.roundId) selectRound(task.roundId)
+  if (task.roundId && !(await selectRound(task.roundId))) return
   handleDetailTabChange(task.targetTab)
 }
 
-function selectRound(roundId) {
+async function selectRound(roundId) {
+  if (roundId === activeRoundId.value) return true
+  if (activeTab.value === 'judges' || isCurrentRoundAllocationDirty()) {
+    const saved = await autoSaveAllocationDraft(allocationMode.value)
+    if (!saved) return false
+  }
   activeRoundId.value = roundId
   const round = rounds.value.find((item) => item.id === roundId) || (roundId === firstRoundDraft.id ? firstRoundDraft : null)
   selectedRoundTableId.value = round?.tables[0]?.id || ''
   selectedEntryUuids.value = []
   closeEntryAutoAssignDialog()
+  return true
 }
 
 function ensureActiveTabAvailable() {
@@ -4342,7 +4644,7 @@ function resolveDetailTabDisabledReason(tabKey) {
   const hasFeedback = feedbackReviewEntries.value.length > 0
   const hasAwards = awardDrafts.value.length > 0
 
-  if (tabKey === 'overview' || tabKey === 'baseInfo' || tabKey === 'entryConfig' || tabKey === 'score') {
+  if (tabKey === 'overview' || tabKey === 'baseInfo' || tabKey === 'entryConfig' || tabKey === 'collection' || tabKey === 'score') {
     return ''
   }
   if (tabKey === 'entries') {
@@ -4360,6 +4662,12 @@ function resolveDetailTabDisabledReason(tabKey) {
   if (tabKey === 'feedback') {
     if (!['JUDGING', 'RESULT_CONFIRMING', 'PUBLISHED', 'ARCHIVED'].includes(status) && !hasFeedback) {
       return '评审开始并产生评分反馈后才能查看评价'
+    }
+    return ''
+  }
+  if (tabKey === 'performance') {
+    if (!['JUDGING', 'RESULT_CONFIRMING', 'PUBLISHED', 'ARCHIVED'].includes(status)) {
+      return '评审开始后才能查看评审表现'
     }
     return ''
   }
@@ -4383,7 +4691,7 @@ async function handleDetailTabChange(nextTab) {
     ElMessage.info(disabledReason)
     return
   }
-  if (activeTab.value === 'judges') {
+  if (activeTab.value === 'judges' || isCurrentRoundAllocationDirty()) {
     const saved = await autoSaveAllocationDraft(allocationMode.value)
     if (!saved) return
   }
@@ -4398,40 +4706,109 @@ async function handleAllocationModeChange(nextMode) {
 }
 
 async function autoSaveAllocationDraft(mode = allocationMode.value) {
-  if (allocationDraftSaving.value || activeTab.value !== 'judges' || !competition.value || !currentRound.value) return true
-  if (mode !== 'judges' && mode !== 'entries') return true
-  allocationDraftSaving.value = true
+  if (!competition.value || !currentRound.value) return waitForAllocationSaveQueue()
+  const formalRoundDirty = !currentRound.value.isPreparationDraft
+    && isRoundAllocationDirty(competition.value.id, currentRound.value.id)
+  if (mode !== 'judges' && mode !== 'entries' && !formalRoundDirty) return waitForAllocationSaveQueue()
+  clearRoundTableNameAutoSave()
+  const context = {
+    competitionId: competition.value.id,
+    roundId: currentRound.value.id,
+    mode: mode === 'judges' ? 'judges' : 'entries',
+  }
+  if (!currentRound.value.isPreparationDraft && !isRoundAllocationDirty(context.competitionId, context.roundId)) {
+    return waitForAllocationSaveQueue()
+  }
   try {
-    if (mode === 'judges') {
-      if (currentRound.value.type === 'RANKING' && currentRound.value.status === 'DRAFT') {
-        await persistCurrentRoundAllocation()
-      } else if (currentRound.value.type === 'SCORE' && !currentRound.value.isPreparationDraft && currentRound.value.status === 'DRAFT') {
-        await persistCurrentRoundAllocation()
-      } else if (canEditBaseJudgeTables.value) {
-        if (currentRound.value.isPreparationDraft) syncFirstRoundDraftTables()
-        await saveJudgeDraft({ silent: true, allowIncomplete: true })
-      }
-    } else if (mode === 'entries') {
-      if (currentRound.value.isPreparationDraft) {
-        syncFirstRoundDraftTables()
-        if (firstRoundDraft.tables.length) {
-          await ensureFirstRoundDraft({ silent: true, allowIncomplete: true, preferredMode: allocationMode.value })
-        }
-      } else {
-        await persistCurrentRoundAllocation()
-      }
-    }
-    return true
+    return await enqueueAllocationSave(() => drainDirtyTask(
+      () => isRoundAllocationDirty(context.competitionId, context.roundId),
+      () => saveAllocationDraftNow(context),
+    ))
   } catch (error) {
-    ElMessage.error('草稿自动保存失败，请稍后重试')
+    if (!error?.userNotified) ElMessage.error(error?.message || '草稿自动保存失败，请稍后重试')
     return false
-  } finally {
-    allocationDraftSaving.value = false
   }
 }
 
-function publishRoundById(roundId) {
-  selectRound(roundId)
+async function saveAllocationDraftNow(context) {
+  if (String(competition.value?.id || '') !== String(context.competitionId || '')) return false
+  const round = findAllocationRound(context.roundId)
+  if (!round || round.status !== 'DRAFT') return true
+  if (context.mode === 'judges') {
+    if (!round.isPreparationDraft) return persistCurrentRoundAllocation({ competitionId: context.competitionId, roundId: context.roundId })
+    if (canEditBaseJudgeTables.value) {
+      syncFirstRoundDraftTables()
+      await saveJudgeDraft({ silent: true, allowIncomplete: true })
+      clearRoundAllocationDirty(context.competitionId, context.roundId)
+    }
+    return true
+  }
+  if (round.isPreparationDraft) {
+    syncFirstRoundDraftTables()
+    if (firstRoundDraft.tables.length) {
+      await ensureFirstRoundDraft({ silent: true, allowIncomplete: true, preferredMode: allocationMode.value })
+      clearRoundAllocationDirty(context.competitionId, context.roundId)
+    }
+    return true
+  }
+  return persistCurrentRoundAllocation({ competitionId: context.competitionId, roundId: context.roundId })
+}
+
+function enqueueAllocationSave(task) {
+  return allocationSaveCoordinator.enqueue(task)
+}
+
+async function waitForAllocationSaveQueue() {
+  return allocationSaveCoordinator.wait()
+}
+
+async function flushAllocationDraftBeforeNavigation() {
+  if (activeTab.value !== 'judges' && !isCurrentRoundAllocationDirty()) return waitForAllocationSaveQueue()
+  return autoSaveAllocationDraft(allocationMode.value)
+}
+
+function handleAllocationBeforeUnload(event) {
+  if (!allocationDraftDirtyVersions.size && !allocationSavePendingCount) return
+  event.preventDefault()
+  event.returnValue = ''
+}
+
+function allocationRoundKey(competitionId, roundId) {
+  return `${competitionId}:${roundId}`
+}
+
+function findAllocationRound(roundId) {
+  return rounds.value.find((round) => String(round.id) === String(roundId))
+    || (String(roundId) === String(firstRoundDraft.id) ? firstRoundDraft : null)
+}
+
+function isRoundAllocationDirty(competitionId, roundId) {
+  return allocationDraftDirtyVersions.has(allocationRoundKey(competitionId, roundId))
+}
+
+function isCurrentRoundAllocationDirty() {
+  return Boolean(competition.value?.id && currentRound.value?.id
+    && isRoundAllocationDirty(competition.value.id, currentRound.value.id))
+}
+
+function markRoundAllocationDirty(options = {}) {
+  const round = options.round || currentRound.value
+  const competitionId = options.competitionId || competition.value?.id
+  if (!competitionId || !round || round.status !== 'DRAFT') return
+  const key = allocationRoundKey(competitionId, round.id)
+  allocationDraftDirtyVersions.set(key, (allocationDraftDirtyVersions.get(key) || 0) + 1)
+  if (options.schedule !== false) scheduleRoundTableNameAutoSave()
+}
+
+function clearRoundAllocationDirty(competitionId, roundId, version) {
+  const key = allocationRoundKey(competitionId, roundId)
+  if (version != null && allocationDraftDirtyVersions.get(key) !== version) return false
+  allocationDraftDirtyVersions.delete(key)
+  return true
+}
+
+async function publishRoundById(roundId) {
+  if (!(await selectRound(roundId))) return
   publishCurrentRound()
 }
 
@@ -5109,9 +5486,9 @@ function buildRoundTodoHint() {
   }
 }
 
-function handleRoundPyramidNode(node) {
+async function handleRoundPyramidNode(node) {
   if (node.kind === 'round' && node.roundId) {
-    selectRound(node.roundId)
+    await selectRound(node.roundId)
     return
   }
   if (node.kind === 'placeholder' && node.actionable) {
@@ -5119,18 +5496,18 @@ function handleRoundPyramidNode(node) {
     return
   }
   if (node.kind === 'result' && node.actionable) {
-    activeTab.value = 'results'
+    await handleDetailTabChange('results')
   }
 }
 
-function selectPyramidTable(node, table) {
+async function selectPyramidTable(node, table) {
   if (node.kind !== 'round' || !node.roundId) return
-  selectRound(node.roundId)
+  if (!(await selectRound(node.roundId))) return
   selectedRoundTableId.value = table.id
 }
 
-function submitRankingRoundById(roundId) {
-  selectRound(roundId)
+async function submitRankingRoundById(roundId) {
+  if (!(await selectRound(roundId))) return
   submitRankingRound()
 }
 
@@ -5448,6 +5825,7 @@ function confirmEntryAutoAssign() {
     }
     table.entryUuids.push(...preview.entries.map((entry) => entry.uuid))
     syncRoundTableScope(table)
+    markRoundAllocationDirty()
     clearEntrySelection()
     closeEntryAutoAssignDialog()
     ElMessage.success(`${table.name} 已按箱号加入 ${preview.entries.length} 款酒`)
@@ -5465,6 +5843,7 @@ function confirmEntryAutoAssign() {
     }
     table.entryUuids.push(...preview.entries.map((entry) => entry.uuid))
     syncRoundTableScope(table)
+    markRoundAllocationDirty()
     clearEntrySelection()
     closeEntryAutoAssignDialog()
     ElMessage.success(`${table.name} 已按编号分配 ${preview.entries.length} 款酒`)
@@ -5487,6 +5866,7 @@ function confirmEntryAutoAssign() {
     table.entryUuids.push(entry.uuid)
   })
   syncRoundTableScope(table)
+  markRoundAllocationDirty()
   clearEntrySelection()
   closeEntryAutoAssignDialog()
   ElMessage.success(`${table.name} 已加入 ${candidates.length} 款酒`)
@@ -5518,13 +5898,46 @@ function addEntryToSelectedRoundTable(uuid, notify = true) {
   })
   table.entryUuids.push(uuid)
   syncRoundTableScope(table)
+  markRoundAllocationDirty()
   if (notify) ElMessage.success(`${uuid} 已加入 ${table.name}`)
 }
 
 function updateRoundTableCaptain(tableId, judgePublicId) {
-  if (currentRound.value?.status !== 'DRAFT') return
   const table = currentRoundTables.value.find((item) => item.id === tableId)
   if (!table) return
+  if (isLiveRoundMemberChange()) {
+    const previousCaptain = table.captainPublicId
+    if (!judgePublicId && previousCaptain) {
+      openLiveJudgeLeave(table, previousCaptain, 'CAPTAIN')
+      return
+    }
+    if (judgePublicId && judgePublicId !== previousCaptain) {
+      const judge = getJudge(judgePublicId)
+      openBusinessConfirm({
+        action: 'changeRoundJudgeMembers',
+        kicker: '更换桌长',
+        title: `确认由${judge?.name || '该评委'}接任桌长？`,
+        copy: '已完成的评分和汇总会保留，新桌长接手当前桌后续任务。',
+        summary: [
+          { label: '评审桌', value: table.name || '-' },
+          { label: '原桌长', value: getJudge(previousCaptain)?.name || '未指定' },
+          { label: '新桌长', value: judge?.name || judgePublicId },
+        ],
+        reasonLabel: '调整原因',
+        reasonPlaceholder: '例如：原桌长临时离场',
+        confirmText: '确认更换',
+        loadingText: '调整中',
+        payload: {
+          tableId,
+          add: [{ judgePublicId, role: 'CAPTAIN' }],
+          removeJudgePublicIds: previousCaptain ? [previousCaptain] : [],
+          captainJudgePublicId: judgePublicId,
+        },
+      })
+    }
+    return
+  }
+  if (currentRound.value?.status !== 'DRAFT') return
   if (judgePublicId) {
     const alreadyAssigned = currentRoundTables.value.some((item) => (
       item.id !== table.id
@@ -5547,6 +5960,7 @@ function updateRoundTableCaptain(tableId, judgePublicId) {
     ...(table.members || []).filter((member) => member.role !== 'CAPTAIN' && member.judgePublicId !== judgePublicId),
   ]
   table.participantPublicIds = getTableParticipantPublicIds(table)
+  markRoundAllocationDirty()
 }
 
 function updateRoundTableName(tableId, value, options = {}) {
@@ -5561,8 +5975,10 @@ function updateRoundTableName(tableId, value, options = {}) {
     if (baseTable) baseTable.tableName = table.name
   }
   if (options.commit) {
+    markRoundAllocationDirty()
     scheduleRoundTableNameAutoSave()
   } else {
+    markRoundAllocationDirty({ schedule: false })
     clearRoundTableNameAutoSave()
   }
 }
@@ -5586,16 +6002,7 @@ function scheduleRoundTableNameAutoSave() {
     roundTableNameAutoSaveTimer = null
     if (!currentRound.value || currentRound.value.status !== 'DRAFT') return
     if (hasRoundTableNameIssues(currentRound.value)) return
-    try {
-      if (currentRound.value.isPreparationDraft) {
-        syncFirstRoundDraftTables()
-        if (canEditBaseJudgeTables.value) await saveJudgeDraft({ silent: true, allowIncomplete: true })
-      } else {
-        await persistCurrentRoundAllocation()
-      }
-    } catch {
-      ElMessage.error('桌名自动保存失败，请稍后重试')
-    }
+    await autoSaveAllocationDraft(allocationMode.value)
   }, 900)
 }
 
@@ -5606,20 +6013,46 @@ function hasRoundTableNameIssues(round) {
 
 function setRoundCaptainForSelectedTable(judgePublicId) {
   const table = selectedRoundTable.value
-  if (!table || currentRound.value?.status !== 'DRAFT') return
+  if (!table || (!isLiveRoundMemberChange() && currentRound.value?.status !== 'DRAFT')) return
   updateRoundTableCaptain(table.id, judgePublicId)
 }
 
 function getTableParticipantPublicIds(table) {
   return (table?.members || [])
-    .filter((member) => member.role !== 'CAPTAIN')
+    .filter((member) => member.role !== 'CAPTAIN' && member.status !== 'REMOVED')
     .map((member) => member.judgePublicId)
     .filter((publicId) => publicId && publicId !== table?.captainPublicId)
 }
 
 function addRoundParticipantToSelectedTable(judgePublicId, role = 'PROFESSIONAL') {
   const table = selectedRoundTable.value
-  if (!table || currentRound.value?.status !== 'DRAFT') return
+  if (!table) return
+  if (isLiveRoundMemberChange()) {
+    const judge = getJudge(judgePublicId)
+    const memberRole = currentRound.value?.type === 'SCORE' ? normalizeScoreJudgeRole(role) : 'PROFESSIONAL'
+    const memberRoleLabel = currentRound.value?.type === 'SCORE' ? roleLabels[memberRole] : '参与评审'
+    const removedBefore = currentRoundTables.value.some((item) => (item.members || [])
+      .some((member) => member.judgePublicId === judgePublicId && member.status === 'REMOVED'))
+    openBusinessConfirm({
+      action: 'changeRoundJudgeMembers',
+      kicker: removedBefore ? '评委回场' : '现场加人',
+      title: `确认${removedBefore ? '重新加入' : '加入'}${judge?.name || '该评委'}？`,
+      copy: '加入后将承担当前桌尚未完成的评分和后续确认任务。',
+      summary: [
+        { label: '评审桌', value: table.name || '-' },
+        { label: '角色', value: memberRoleLabel },
+      ],
+      confirmText: removedBefore ? '确认回场' : '确认加入',
+      loadingText: '加入中',
+      payload: {
+        tableId: table.id,
+        add: [{ judgePublicId, role: memberRole }],
+        removeJudgePublicIds: [],
+      },
+    })
+    return
+  }
+  if (currentRound.value?.status !== 'DRAFT') return
   if (!judgePublicId || judgePublicId === table.captainPublicId) {
     ElMessage.warning('桌长不需要重复加入参与评审')
     return
@@ -5645,11 +6078,12 @@ function addRoundParticipantToSelectedTable(judgePublicId, role = 'PROFESSIONAL'
     },
   ]
   table.participantPublicIds = getTableParticipantPublicIds(table)
+  markRoundAllocationDirty()
 }
 
 function dropRoundJudge(tableId, role) {
   if (!draggingItem.value || draggingItem.value.type !== 'judge') return
-  if (currentRound.value?.status !== 'DRAFT') return
+  if (!isLiveRoundMemberChange() && currentRound.value?.status !== 'DRAFT') return
   selectedRoundTableId.value = tableId
   if (role === 'CAPTAIN') {
     updateRoundTableCaptain(tableId, draggingItem.value.judgePublicId)
@@ -5661,9 +6095,62 @@ function dropRoundJudge(tableId, role) {
 
 function removeRoundParticipant(tableId, judgePublicId) {
   const table = currentRoundTables.value.find((item) => item.id === tableId)
-  if (!table || currentRound.value?.status !== 'DRAFT') return
+  if (!table) return
+  if (isLiveRoundMemberChange()) {
+    const member = (table.members || []).find((item) => item.judgePublicId === judgePublicId && item.status !== 'REMOVED')
+    openLiveJudgeLeave(table, judgePublicId, member?.role || 'PROFESSIONAL')
+    return
+  }
+  if (currentRound.value?.status !== 'DRAFT') return
   table.members = (table.members || []).filter((member) => member.role === 'CAPTAIN' || member.judgePublicId !== judgePublicId)
   table.participantPublicIds = getTableParticipantPublicIds(table)
+  markRoundAllocationDirty()
+}
+
+function isLiveRoundMemberChange() {
+  if (currentRound.value?.type === 'SCORE') return currentRound.value?.status === 'PUBLISHED'
+  return currentRound.value?.type === 'RANKING' && currentRound.value?.status === 'IN_PROGRESS'
+}
+
+function openLiveJudgeLeave(table, judgePublicId, role) {
+  const judge = getJudge(judgePublicId)
+  const progress = (table.judgeDetails || []).find((item) => item.judgePublicId === judgePublicId)
+  openBusinessConfirm({
+    action: 'changeRoundJudgeMembers',
+    kicker: '评委离场',
+    title: `确认${judge?.name || '该评委'}离场？`,
+    copy: '已有评分和确认记录会保留，未完成任务及后续确认义务会解除，之后仍可重新加入。',
+    summary: [
+      { label: '评审桌', value: table.name || '-' },
+      { label: '角色', value: roleLabels[role] || (role === 'CAPTAIN' ? '桌长' : '参与评审') },
+      { label: '已评分', value: progress ? `${progress.submittedCount || 0} / ${progress.totalCount || 0}` : '0' },
+    ],
+    reasonLabel: '离场原因',
+    reasonPlaceholder: '例如：评委临时有事离场',
+    confirmText: '确认离场',
+    loadingText: '处理中',
+    payload: {
+      tableId: table.id,
+      add: [],
+      removeJudgePublicIds: [judgePublicId],
+    },
+  })
+}
+
+async function runChangeRoundJudgeMembers() {
+  const payload = businessConfirm.payload || {}
+  const targetRoundId = currentRound.value?.id
+  const targetTableId = payload.tableId
+  const detail = await changeRoundTableJudgeMembers(competition.value.id, targetRoundId, targetTableId, {
+    add: payload.add || [],
+    removeJudgePublicIds: payload.removeJudgePublicIds || [],
+    captainJudgePublicId: payload.captainJudgePublicId,
+    reason: businessConfirm.reason.trim() || '比赛现场评委调整',
+  })
+  competition.value = normalizeDetail(detail)
+  resetForms()
+  applyRoundState(targetRoundId, { preferredTableId: targetTableId })
+  ElMessage.success(payload.removeJudgePublicIds?.length ? '评委状态已更新，历史评分已保留' : '评委已加入当前桌')
 }
 
 function normalizeScoreJudgeRole(role) {
@@ -5678,6 +6165,7 @@ function updateRoundTableScope(tableId, scopeValue) {
     table.categoryId = null
     table.categoryMode = 'MIXED'
     table.categoryName = '混合'
+    markRoundAllocationDirty()
     return
   }
   if (scopeValue?.startsWith('CATEGORY:')) {
@@ -5686,11 +6174,13 @@ function updateRoundTableScope(tableId, scopeValue) {
     table.categoryId = categoryId
     table.categoryMode = 'CATEGORY'
     table.categoryName = getCategoryNameById(categoryId)
+    markRoundAllocationDirty()
     return
   }
   table.categoryId = null
   table.categoryMode = 'EMPTY'
   table.categoryName = ''
+  markRoundAllocationDirty()
 }
 
 function updateRoundTableTarget(tableId, targetCount) {
@@ -5699,6 +6189,7 @@ function updateRoundTableTarget(tableId, targetCount) {
   if (!table) return
   table.targetCount = Math.max(1, Number(targetCount || 1))
   table.rankings = buildEmptyRankings(table.targetCount, table.targetMode)
+  markRoundAllocationDirty()
 }
 
 function updateRoundTargetMode(mode) {
@@ -5711,6 +6202,7 @@ function updateRoundTargetMode(mode) {
     table.targetCount = nextTargetCount
     table.rankings = buildEmptyRankings(nextTargetCount, normalizedMode)
   })
+  markRoundAllocationDirty()
   ElMessage.success(`已切换为${formatTargetModeName(normalizedMode)}`)
 }
 
@@ -5737,6 +6229,7 @@ function addRoundTable() {
   }
   tables.push(table)
   selectedRoundTableId.value = table.id
+  markRoundAllocationDirty()
 }
 
 function removeEntryFromRoundTable(tableId, uuid) {
@@ -5750,6 +6243,7 @@ function removeEntryFromRoundTable(tableId, uuid) {
       if (slot.uuid === uuid) slot.uuid = ''
     })
   }
+  markRoundAllocationDirty()
 }
 
 function startEntryDrag(uuid) {
@@ -5768,6 +6262,7 @@ function removeRoundTable(tableId) {
   if (!currentRound.value || currentRound.value.status !== 'DRAFT') return
   currentRound.value.tables = currentRound.value.tables.filter((table) => table.id !== tableId)
   selectedRoundTableId.value = currentRound.value.tables[0]?.id || ''
+  markRoundAllocationDirty()
 }
 
 function resolveDraftRoundTableName(roundNo, index, tableCount) {
@@ -5775,22 +6270,50 @@ function resolveDraftRoundTableName(roundNo, index, tableCount) {
   return `${roundNo}${String.fromCharCode(65 + index)}桌`
 }
 
-async function persistCurrentRoundAllocation() {
-  if (!currentRound.value || currentRound.value.isPreparationDraft || currentRound.value.status !== 'DRAFT') return true
-  const targetRoundId = currentRound.value.id
+async function persistCurrentRoundAllocation(options = {}) {
+  const competitionId = options.competitionId || competition.value?.id
+  const targetRoundId = options.roundId || currentRound.value?.id
+  const targetRound = findAllocationRound(targetRoundId)
+  if (!competitionId || !targetRound || targetRound.isPreparationDraft || targetRound.status !== 'DRAFT') return true
   const preferredTableId = selectedRoundTableId.value
-  const payload = buildRoundAllocationPayload(currentRound.value)
-  const detail = await saveRoundAllocation(competition.value.id, targetRoundId, payload)
-  competition.value = normalizeDetail(detail)
-  resetForms()
-  applyRoundState(targetRoundId, { preferredTableId })
-  return true
+  const preferredTableIndex = targetRound.tables.findIndex((table) => String(table.id) === String(preferredTableId))
+  const preferredTableName = preferredTableIndex >= 0 ? targetRound.tables[preferredTableIndex]?.name : ''
+  const dirtyKey = allocationRoundKey(competitionId, targetRoundId)
+  const dirtyVersion = allocationDraftDirtyVersions.get(dirtyKey)
+  const payload = buildRoundAllocationPayload(targetRound)
+  try {
+    const detail = await saveRoundAllocation(competitionId, targetRoundId, payload)
+    if (String(competition.value?.id || '') !== String(competitionId)) return true
+    const savedRound = (detail.rounds || []).find((round) => String(round.id) === String(targetRoundId))
+    if (!clearRoundAllocationDirty(competitionId, targetRoundId, dirtyVersion)) {
+      if (savedRound) targetRound.allocationRevision = savedRound.allocationRevision
+      scheduleRoundTableNameAutoSave()
+      return true
+    }
+    competition.value = normalizeDetail(detail)
+    resetForms()
+    const restoredRound = (competition.value.rounds || []).find((round) => String(round.id) === String(targetRoundId))
+    const restoredTable = (restoredRound?.tables || []).find((table) => table.name === preferredTableName)
+      || (preferredTableIndex >= 0 ? restoredRound?.tables?.[preferredTableIndex] : null)
+    applyRoundState(targetRoundId, { preferredTableId: restoredTable?.id || preferredTableId })
+    return true
+  } catch (error) {
+    const message = String(error?.userMessage || error?.message || '')
+    if (message.includes('轮次草稿已被更新') || message.includes('晋级候选已更新')) {
+      clearRoundAllocationDirty(competitionId, targetRoundId)
+      await refreshRoundProgress(true)
+      if (!error?.userNotified) ElMessage.warning(message)
+      error.userNotified = true
+    }
+    throw error
+  }
 }
 
 function buildRoundAllocationPayload(round) {
   const pool = getPoolEntriesForRound(round)
   round.tables.forEach((table) => syncRoundTableScope(table, pool))
   return {
+    allocationRevision: Number(round.allocationRevision || 0),
     tables: round.tables.map((table, index) => ({
       id: Number.isFinite(Number(table.id)) ? Number(table.id) : undefined,
       name: table.name?.trim() || '',
@@ -5802,7 +6325,7 @@ function buildRoundAllocationPayload(round) {
       sortOrder: index,
       participantPublicIds: getTableParticipantPublicIds(table),
       members: round.type === 'SCORE' ? getTableRoundMemberPayload(table) : [],
-      entryUuids: table.entryUuids || [],
+      entryUuids: [...(table.entryUuids || [])],
     })),
   }
 }
@@ -5844,12 +6367,16 @@ async function confirmPublishCurrentRound() {
   if (!currentRound.value || roundPublishLoading.value) return
   roundPublishLoading.value = true
   try {
+    clearRoundTableNameAutoSave()
     if (currentRound.value.isPreparationDraft) {
-      const createdRound = await ensureFirstRoundDraft({ silent: true, preferredMode: allocationMode.value })
+      const createdRound = await enqueueAllocationSave(() => ensureFirstRoundDraft({ silent: true, preferredMode: allocationMode.value }))
       if (!createdRound) return
     }
     const targetRoundId = currentRound.value.id
-    if (currentRound.value.status === 'DRAFT') await persistCurrentRoundAllocation()
+    if (currentRound.value.status === 'DRAFT') {
+      const saved = await autoSaveAllocationDraft(allocationMode.value)
+      if (!saved) return
+    }
     const detail = await publishRound(competition.value.id, targetRoundId)
     competition.value = normalizeDetail(detail)
     resetForms()
@@ -6288,6 +6815,7 @@ async function confirmBusinessAction() {
     if (businessConfirm.action === 'markStored') await runMarkEntryStored()
     if (businessConfirm.action === 'replaceCertificate') runChooseAwardCertificate(businessConfirm.payload?.award)
     if (businessConfirm.action === 'deleteCertificate') await runDeleteAwardCertificate(businessConfirm.payload?.award)
+    if (businessConfirm.action === 'changeRoundJudgeMembers') await runChangeRoundJudgeMembers()
     businessConfirm.open = false
   } finally {
     businessConfirm.loading = false
@@ -6699,6 +7227,7 @@ function addJudgeTable() {
   const table = { localId: `new-table-${Date.now()}`, tableName: `${code}桌`, captainCount: 0, professionalCount: 0, crossCount: 0 }
   judgeTableForm.push(table)
   selectedTableLocalId.value = table.localId
+  markRoundAllocationDirty()
 }
 
 function removeItem(list, index) {
@@ -6723,6 +7252,18 @@ function removeJudgeTable(index) {
     }
   }
   selectedTableLocalId.value = judgeTableForm[0]?.localId || null
+  markRoundAllocationDirty()
+}
+
+function updateBaseJudgeTableName(tableLocalId, value, options = {}) {
+  if (!canEditBaseJudgeTables.value) return
+  const table = judgeTableForm.find((item) => item.localId === tableLocalId)
+  if (!table) return
+  const nextName = options.commit ? String(value || '').trim() : String(value || '')
+  if (table.tableName === nextName && !options.commit) return
+  table.tableName = nextName
+  markRoundAllocationDirty({ schedule: Boolean(options.commit) })
+  if (!options.commit) clearRoundTableNameAutoSave()
 }
 
 function assignmentsForTable(table, role) {
@@ -6748,6 +7289,7 @@ function addJudgeToTarget(judge) {
   if (existing) {
     existing.tableLocalId = selectedTable.value.localId
     existing.role = selectedRole.value
+    markRoundAllocationDirty()
     ElMessage.success(`${judge.name}已移动到${selectedTargetLabel.value}`)
     return
   }
@@ -6757,12 +7299,16 @@ function addJudgeToTarget(judge) {
     judgePublicId: judge.publicId,
     role: selectedRole.value,
   })
+  markRoundAllocationDirty()
 }
 
 function removeAssignment(assignment) {
   if (!canEditBaseJudgeTables.value) return
   const index = judgeAssignmentForm.findIndex((item) => item.localId === assignment.localId)
-  if (index >= 0) judgeAssignmentForm.splice(index, 1)
+  if (index >= 0) {
+    judgeAssignmentForm.splice(index, 1)
+    markRoundAllocationDirty()
+  }
 }
 
 function countAssignedRole(role) {
@@ -6770,8 +7316,8 @@ function countAssignedRole(role) {
 }
 
 function startJudgeDrag(judge) {
-  const canDragRoundJudge = currentRound.value?.status === 'DRAFT'
-    && (currentRound.value?.type === 'RANKING' || (currentRound.value?.type === 'SCORE' && !currentRound.value?.isPreparationDraft))
+  const canDragRoundJudge = (currentRound.value?.status === 'DRAFT' || isLiveRoundMemberChange())
+    && usesRoundJudgePoolForCurrentRound()
   if (!canDragRoundJudge && !canEditBaseJudgeTables.value) return
   if (!isJudgeActive(judge)) return
   draggingItem.value = { type: 'judge', judgePublicId: judge.publicId }
@@ -6795,6 +7341,7 @@ function dropOnRole(table, role) {
     if (assignment) {
       assignment.tableLocalId = table.localId
       assignment.role = role
+      markRoundAllocationDirty()
     }
     clearDrag()
     return
@@ -6892,6 +7439,12 @@ async function saveJudgeDraft(options = {}) {
   applyRoundState()
   if (!options.silent) ElMessage.success('评审人员已保存')
   return true
+}
+
+async function saveCurrentJudgeDraft() {
+  markRoundAllocationDirty({ schedule: false })
+  const saved = await autoSaveAllocationDraft('judges')
+  if (saved) ElMessage.success('评审人员已保存')
 }
 
 async function saveBaseInfo() {

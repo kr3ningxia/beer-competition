@@ -14,4 +14,6 @@ public interface ScoreConfirmationService {
     ScoreConfirmationVO confirmScoreRoundTable(Long roundTableId, RoundTableConfirmationRequest request);
 
     void overrideScoreConfirmation(Long competitionId, Long roundTableId, AdminConfirmationOverrideRequest request);
+
+    void refreshAfterMemberChange(Long roundTableId);
 }
