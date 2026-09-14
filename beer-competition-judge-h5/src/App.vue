@@ -1,8 +1,13 @@
 <template>
   <div class="judge-app">
     <router-view />
+    <WechatBrowserNotice />
   </div>
 </template>
+
+<script setup>
+import WechatBrowserNotice from './components/WechatBrowserNotice.vue'
+</script>
 
 <style>
 :root {

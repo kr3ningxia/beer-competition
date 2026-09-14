@@ -522,6 +522,19 @@ function entryDescription(entry) {
   align-items: center;
 }
 
+.row-actions {
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+.row-actions button {
+  min-width: 56px;
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
 .tool-button,
 .row-actions button,
 .status-actions button,
@@ -669,10 +682,10 @@ button:disabled {
 .table-head,
 .table-row {
   display: grid;
-  grid-template-columns: minmax(190px, 1.05fr) minmax(220px, 1.2fr) 130px minmax(240px, 1.35fr) 86px 130px 110px;
+  grid-template-columns: minmax(190px, 1.05fr) minmax(220px, 1.2fr) 130px minmax(240px, 1.35fr) 86px 130px 140px;
   gap: 12px;
   align-items: center;
-  min-width: 1120px;
+  min-width: 1160px;
 }
 
 .table-head {
@@ -688,7 +701,7 @@ button:disabled {
   flex: 1 1 auto;
   align-content: start;
   gap: 8px;
-  min-width: 1120px;
+  min-width: 1160px;
   min-height: 0;
   overflow-y: auto;
   padding-right: 4px;

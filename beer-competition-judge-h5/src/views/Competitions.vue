@@ -12,19 +12,22 @@
             class="refresh-status-button"
             type="button"
             :disabled="refreshingTasks"
+            :aria-label="refreshingTasks ? '同步中' : '刷新状态'"
             @click="refreshTaskStatus"
           >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
+            <svg :class="{ spinning: refreshingTasks }" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M20 11a8 8 0 0 0-14.2-5" />
               <path d="M5 4v5h5" />
               <path d="M4 13a8 8 0 0 0 14.2 5" />
               <path d="M19 20v-5h-5" />
             </svg>
-            {{ refreshingTasks ? '同步中' : '刷新状态' }}
           </button>
         </div>
       </div>
-      <div :class="['progress-strip', { 'captain-progress': isScoreRoundCaptain }]">
+      <div
+        v-if="isScoreRoundCaptain || isRankingRound || scoreConfirmationVisible"
+        :class="['progress-strip', { 'captain-progress': isScoreRoundCaptain }]"
+      >
         <template v-if="isScoreRoundCaptain">
         <span>我的评分 <strong>{{ myScoredCount }}/{{ entries.length }}</strong></span>
         <span>本桌汇总 <strong>{{ finalizedCount }}/{{ entries.length }}</strong></span>
@@ -34,25 +37,18 @@
         <span>候选 <strong>{{ entries.length }}款</strong></span>
         <span v-if="showRankingFilledProgress">已排序 <strong>{{ rankingFilledCount }}/{{ rankingSlots.length }}</strong></span>
         </template>
-        <span v-else>{{ progressLabel }} <strong>{{ progressCount }}</strong></span>
         <span v-if="scoreConfirmationVisible"><strong>{{ scoreConfirmationProgressLabel }}</strong></span>
       </div>
-      <div v-if="showReviewStats" :class="['review-stats-strip', { empty: !showDetailedReviewStats }]">
-        <template v-if="showDetailedReviewStats">
-          <article class="review-stat-card">
-            <span>我的平均用时</span>
-            <strong>{{ myReviewStatsText.duration }}</strong>
-            <small>{{ myReviewStatsText.siteDuration }}</small>
-          </article>
-          <article class="review-stat-card">
-            <span>我的平均评语字数</span>
-            <strong>{{ myReviewStatsText.comment }}</strong>
-            <small>{{ myReviewStatsText.siteComment }}</small>
-          </article>
-        </template>
-        <article v-else class="review-stat-empty">
-          <strong>首款提交后显示评分统计</strong>
-          <small>包含平均用时、评语字数和现场参考。</small>
+      <div v-if="showDetailedReviewStats" class="review-stats-strip">
+        <article class="review-stat-card">
+          <span>我的平均用时</span>
+          <strong>{{ myReviewStatsText.duration }}</strong>
+          <small>{{ myReviewStatsText.siteDuration }}</small>
+        </article>
+        <article class="review-stat-card">
+          <span>我的平均评语字数</span>
+          <strong>{{ myReviewStatsText.comment }}</strong>
+          <small>{{ myReviewStatsText.siteComment }}</small>
         </article>
       </div>
     </section>
@@ -158,9 +154,10 @@
     <section class="card table-task-card">
       <div class="split">
         <h2 class="section-title compact">{{ taskSectionTitle }}</h2>
-        <span class="pill">{{ entries.length }} 款</span>
+        <span v-if="!isScoreRoundCaptain" class="task-progress">
+          {{ progressLabel }} <strong>{{ progressCount }}</strong>
+        </span>
       </div>
-      <p v-if="!isScoreRoundCaptain" class="task-hint">{{ taskSectionHint }}</p>
       <div v-if="entries.length" class="entry-tools" aria-label="酒款筛选和排序">
         <div class="entry-filter" role="group" aria-label="评分状态">
           <button
@@ -344,7 +341,6 @@ const scoreConfirmationProgressLabel = computed(() => (
   scoreConfirmation.value?.mineConfirmed ? '已确认结果' : '待确认结果'
 ))
 const myReviewStats = computed(() => currentRoundTable.value?.myReviewStats || null)
-const showReviewStats = computed(() => Boolean(myReviewStats.value) && !isRankingRound.value)
 const hasSubmittedReviewStats = computed(() => Number(myReviewStats.value?.submittedCount || 0) > 0)
 const hasSiteReviewStats = computed(() => (
   Number(myReviewStats.value?.siteAverageDurationSeconds || 0) > 0
@@ -386,11 +382,6 @@ const progressCount = computed(() => (
     : `${current.value?.myScoredCount || 0} / ${current.value?.totalEntries || 0}`
 ))
 const taskSectionTitle = computed(() => (isCaptain.value ? '本桌酒款' : '我的本轮酒款'))
-const taskSectionHint = computed(() => (
-  isScoreRoundCaptain.value
-    ? `扫码完成自己的专业评分；同桌评分齐全后，从下方进入本桌汇总。`
-    : '扫码或点酒款进入评分，已评分酒款在确认前开放查看和调整。'
-))
 const tableReadyForReview = computed(() => {
   if (!entries.value.length) return false
   if (isFeedbackOnlyCompetition.value) return finalizedCount.value === entries.value.length
@@ -801,9 +792,8 @@ onBeforeUnmount(() => {
 .review-actions {
   display: flex;
   flex: 0 0 auto;
-  flex-direction: column;
-  gap: 7px;
-  align-items: flex-end;
+  gap: 8px;
+  align-items: center;
 }
 
 .compact-title {
@@ -823,9 +813,12 @@ onBeforeUnmount(() => {
 }
 
 .role-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
   border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: 999px;
-  padding: 5px 9px;
+  padding: 0 10px;
   color: #fff7ed;
   background: rgba(255, 255, 255, 0.1);
   font-size: 12px;
@@ -835,28 +828,36 @@ onBeforeUnmount(() => {
 
 .refresh-status-button {
   display: inline-flex;
-  gap: 5px;
+  flex: 0 0 auto;
   align-items: center;
-  min-height: 28px;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 999px;
-  padding: 4px 9px;
+  padding: 0;
   color: rgba(255, 255, 255, 0.86);
   background: rgba(255, 255, 255, 0.075);
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1;
-  white-space: nowrap;
 }
 
 .refresh-status-button svg {
-  width: 13px;
-  height: 13px;
+  width: 14px;
+  height: 14px;
   stroke: currentColor;
   stroke-width: 2.2;
   fill: none;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.refresh-status-button svg.spinning {
+  animation: refresh-spin 0.9s linear infinite;
+}
+
+@keyframes refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .progress-strip {
@@ -892,10 +893,6 @@ onBeforeUnmount(() => {
   margin-top: 10px;
 }
 
-.review-stats-strip.empty {
-  grid-template-columns: minmax(0, 1fr);
-}
-
 .review-stat-card {
   display: grid;
   gap: 4px;
@@ -915,37 +912,6 @@ onBeforeUnmount(() => {
   line-height: 1.25;
   white-space: nowrap;
   text-overflow: ellipsis;
-}
-
-.review-stat-empty {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-  border: 1px dashed rgba(255, 255, 255, 0.18);
-  border-radius: 8px;
-  padding: 8px 10px;
-  background: rgba(255, 255, 255, 0.055);
-}
-
-.review-stat-empty strong,
-.review-stat-empty small {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.review-stat-empty strong {
-  color: #fff;
-  font-size: 13px;
-  line-height: 1.3;
-  font-weight: 850;
-}
-
-.review-stat-empty small {
-  color: rgba(248, 250, 252, 0.66);
-  font-size: 11px;
-  line-height: 1.25;
-  font-weight: 750;
 }
 
 .review-stat-card strong {
@@ -1063,6 +1029,23 @@ onBeforeUnmount(() => {
 
 .table-task-card {
   margin-bottom: 92px;
+}
+
+.task-progress {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 5px;
+  align-items: baseline;
+  color: #667085;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.task-progress strong {
+  color: #26313d;
+  font-size: 16px;
+  font-weight: 850;
+  font-variant-numeric: tabular-nums;
 }
 
 .round-checkout {

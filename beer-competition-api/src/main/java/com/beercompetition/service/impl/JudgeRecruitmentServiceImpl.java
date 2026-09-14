@@ -32,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Service @RequiredArgsConstructor
@@ -45,7 +46,7 @@ public class JudgeRecruitmentServiceImpl implements JudgeRecruitmentService {
  private JudgeRecruitment req(Long id){JudgeRecruitment r=recruitmentMapper.selectById(id);if(r==null)throw new ResourceNotFoundException("招募不存在");return r;}
  private Competition comp(Long id){Competition c=competitionMapper.selectById(id);if(c==null)throw new ResourceNotFoundException("比赛不存在");return c;}
  private void validate(JudgeRecruitmentRequest q){if(q.getRecruitmentDeadline().isBefore(q.getRecruitmentStart()))throw new BaseException("截止时间不能早于开始时间");}
- @Override public List<JudgeRecruitmentVO> adminList(String status,String keyword){return recruitmentMapper.selectList(new LambdaQueryWrapper<JudgeRecruitment>().eq(StringUtils.hasText(status),JudgeRecruitment::getStatus,status).orderByDesc(JudgeRecruitment::getCreateTime)).stream().filter(r->accessible(r.getCompetitionId())).filter(r->!StringUtils.hasText(keyword)||match(comp(r.getCompetitionId()),keyword)).map(this::toVO).toList();}
+ @Override public List<JudgeRecruitmentVO> adminList(String status,String keyword,String organizerType){Set<Long> organizerScope=judgeAccessService.competitionIdsByOrganizerType(organizerType);return recruitmentMapper.selectList(new LambdaQueryWrapper<JudgeRecruitment>().eq(StringUtils.hasText(status),JudgeRecruitment::getStatus,status).orderByDesc(JudgeRecruitment::getCreateTime)).stream().filter(r->organizerScope==null||organizerScope.contains(r.getCompetitionId())).filter(r->accessible(r.getCompetitionId())).filter(r->!StringUtils.hasText(keyword)||match(comp(r.getCompetitionId()),keyword)).map(this::toVO).toList();}
  private boolean accessible(Long competitionId){try{judgeAccessService.requireCompetitionAccess(competitionId);return true;}catch(RuntimeException e){return false;}}
  private boolean match(Competition c,String k){String x=k.toLowerCase();return String.valueOf(c.getName()).toLowerCase().contains(x)||String.valueOf(c.getCode()).toLowerCase().contains(x);}
  @Override public JudgeRecruitmentVO adminGet(Long id){JudgeRecruitment r=req(id);judgeAccessService.requireCompetitionAccess(r.getCompetitionId());return toVO(r);}

@@ -274,6 +274,37 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public BankTransferVO updatePortalOrganizerPayment(Long orderId, PortalOrganizerPaymentRequest request) {
+        // 1) 校验当前厂牌、待确认收款订单与转账记录
+        PortalAccount account = requirePortalAccount();
+        PaymentOrder order = paymentOrderMapper.selectById(orderId);
+        if (order == null || order.getBankTransferId() == null) {
+            throw new ResourceNotFoundException("待确认的付款信息不存在");
+        }
+        if (!PaymentOrderStatus.PENDING_CONFIRM.name().equals(order.getStatus())
+                || !EntryPayMethod.WECHAT_QR.name().equals(order.getPayMethod())) {
+            throw new BaseException("当前付款备注不能修改");
+        }
+        RegistrationBatch batch = registrationBatchMapper.selectById(order.getRegistrationBatchId());
+        if (batch == null || !Objects.equals(batch.getBreweryId(), account.getBreweryId())) {
+            throw new ForbiddenException("无权修改该支付订单");
+        }
+        BankTransferPayment transfer = requireTransfer(order.getBankTransferId());
+        if (!BankTransferPaymentStatus.SUBMITTED.name().equals(transfer.getStatus())
+                || !Objects.equals(transfer.getPaymentOrderId(), orderId)) {
+            throw new BaseException("当前付款备注不能修改");
+        }
+
+        // 2) 仅更新付款备注
+        transfer.setRemark(defaultString(normalizeNullable(request == null ? null : request.getRemark())));
+        bankTransferPaymentMapper.updateById(transfer);
+
+        // 3) 返回最新转账详情
+        return toBankTransferVO(bankTransferPaymentMapper.selectById(transfer.getId()), true);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public BankTransferVO updatePortalOrderTransfer(Long orderId, PortalPaymentOrderBankTransferRequest request) {
         // 1) 校验当前厂商、聚合订单和待确认转账记录
         PortalAccount account = requirePortalAccount();

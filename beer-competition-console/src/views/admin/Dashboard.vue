@@ -8,7 +8,7 @@
       </template>
     </AdminPageHeader>
 
-    <section v-if="!loading && !competitions.length" class="empty-workspace">
+    <section v-if="!loading && !competitions.length && !pendingApplications.length" class="empty-workspace">
       <span class="empty-icon"><Medal /></span>
       <strong>暂无比赛</strong>
       <button class="primary-button" type="button" @click="router.push('/admin/competitions/new')">
@@ -17,12 +17,17 @@
       </button>
     </section>
 
-    <template v-else-if="competitions.length">
+    <template v-else-if="competitions.length || pendingApplications.length">
       <section class="todo-summary" aria-label="待办总览">
-        <button v-for="card in summaryCards" :key="card.key" :class="['todo-card', card.tone]" type="button" @click="selectTodoType(card.key)">
+        <button v-for="card in summaryCards" :key="card.key" :class="['todo-card', card.tone]" type="button" @click="openSummaryCard(card)">
           <span class="todo-card-icon"><component :is="card.icon" /></span>
-          <span class="todo-card-copy"><small>{{ card.label }}</small><strong>{{ card.count }}</strong></span>
-          <Right />
+          <span class="todo-card-copy">
+            <small>{{ card.label }}</small>
+            <strong>{{ card.count }}</strong>
+            <em v-if="card.unit">{{ card.unit }}</em>
+          </span>
+          <span v-if="card.hint" class="todo-card-hint"><ShoppingCart />{{ card.hint }}</span>
+          <Right v-else />
         </button>
       </section>
 
@@ -63,11 +68,15 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Document, Medal, Money, Plus, Refresh, Right, User } from '@element-plus/icons-vue'
+import { Coin, Document, Medal, Money, OfficeBuilding, Plus, Refresh, Right, ShoppingCart, User } from '@element-plus/icons-vue'
 import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import { fetchAdminBankTransfers, fetchAdminEntries, fetchCompetitions, fetchJudgeRecruitments } from '@/api/admin'
+import { fetchBeerCoinWallet } from '@/api/beerCoin'
+import { fetchOrganizerApplications } from '@/api/organizerApplicationAdmin'
+import { ADMIN_TYPES, canAccessAdminTypes } from '@/config/adminAccess'
+import { getAdminOrganizerType, getAdminType } from '@/utils/auth'
 
 const router = useRouter()
 const competitions = ref([])
@@ -75,48 +84,118 @@ const recruitments = ref([])
 const transfers = ref([])
 const transferTotal = ref(0)
 const entryQueues = ref({ payment: null, storage: null, refund: null })
+const applications = ref([])
+const beerCoinBalance = ref(null)
 const loading = ref(false)
 const todoFilter = ref('ALL')
+const canViewApplications = computed(() => canAccessAdminTypes(getAdminType(), [ADMIN_TYPES.PLATFORM_SUPER_ADMIN]))
+const isThirdPartyOrganizer = computed(() => getAdminOrganizerType() === 'TENANT')
+const pendingApplications = computed(() => applications.value.filter((item) => ['SUBMITTED', 'UNDER_REVIEW', 'APPROVED'].includes(item.status)))
+const applicationTodos = computed(() => pendingApplications.value.slice(0, 5).map(toApplicationTodo))
 const entryQueueCount = computed(() => Object.values(entryQueues.value)
   .filter((queue) => queue && queue !== entryQueues.value.payment)
   .reduce((sum, item) => sum + Number(item?.total || 0), 0))
 const judgePendingTotal = computed(() => recruitments.value.reduce((sum, item) => sum + Number(item.pendingCount || 0), 0))
 const summaryCards = computed(() => [
+  ...(canViewApplications.value ? [{ key: 'APPLICATION', label: '入驻申请待处理', count: pendingApplications.value.length, tone: 'green', icon: OfficeBuilding }] : []),
   { key: 'JUDGE', label: '评委报名待审核', count: judgePendingTotal.value, tone: 'gold', icon: User },
   { key: 'TRANSFER', label: '转账待确认', count: transferTotal.value, tone: 'orange', icon: Money },
   { key: 'ENTRY', label: '酒款待处理', count: entryQueueCount.value, tone: 'blue', icon: Document },
+  ...(beerCoinBalance.value === null ? [] : [{
+    key: 'BEER_COIN',
+    label: '啤酒币余额',
+    count: formatQuantity(beerCoinBalance.value),
+    unit: '枚',
+    tone: 'gold',
+    icon: Coin,
+    path: '/admin/beer-coins',
+    hint: '去购买',
+  }]),
 ])
 const todos = computed(() => [
-  ...recruitments.value.filter((item) => item.pendingCount).map((item) => ({ id: `judge-${item.id}`, type: '评委报名', tone: 'gold', title: `${item.competitionName}待审核 ${item.pendingCount} 人`, detail: `招募${item.status === 'OPEN' ? '进行中' : '已截止'}`, time: formatTime(item.recruitmentDeadline), path: `/admin/judge-recruitments/${item.id}` })),
-  ...transfers.value.slice(0, 6).map((item) => ({ id: `transfer-${item.id}`, type: '转账', tone: 'orange', title: `${item.breweryName || '厂牌'} · ${item.competitionName || '赛事'}`, detail: `${formatMoney(item.amount)} · ${item.voucherFileName ? '凭证已上传' : '缺少付款凭证'}`, time: formatTime(item.submittedTime), path: '/admin/bank-transfers' })),
-  ...(entryQueues.value.storage?.records || []).slice(0, 4).map((item) => ({ id: `storage-${item.id}`, type: '酒款', tone: 'blue', title: `${item.name || '未命名酒款'}待入库`, detail: `${item.breweryCompanyName || '未关联厂牌'} · ${item.competitionName || '赛事'}`, time: formatTime(item.submittedAt), path: '/admin/entries?deliveryStatus=SUBMITTED' })),
-  ...(entryQueues.value.refund?.records || []).slice(0, 4).map((item) => ({ id: `refund-${item.id}`, type: '酒款', tone: 'red', title: `${item.name || '未命名酒款'}退款待处理`, detail: `${item.breweryCompanyName || '未关联厂牌'} · ${item.competitionName || '赛事'}`, time: formatTime(item.refundRequestedAt), path: '/admin/entries?refundStatus=REQUESTED' })),
+  ...applicationTodos.value,
+  ...recruitments.value.filter((item) => item.pendingCount).map((item) => ({ id: `judge-${item.id}`, type: '评委报名', tone: 'gold', todoKey: 'JUDGE', title: `${item.competitionName}待审核 ${item.pendingCount} 人`, detail: `招募${item.status === 'OPEN' ? '进行中' : '已截止'}`, time: formatTime(item.recruitmentDeadline), path: `/admin/judge-recruitments/${item.id}` })),
+  ...transfers.value.slice(0, 6).map((item) => ({ id: `transfer-${item.id}`, type: '转账', tone: 'orange', todoKey: 'TRANSFER', title: `${item.breweryName || '厂牌'} · ${item.competitionName || '赛事'}`, detail: `${formatMoney(item.amount)} · ${item.voucherFileName ? '凭证已上传' : '缺少付款凭证'}`, time: formatTime(item.submittedTime), path: '/admin/bank-transfers' })),
+  ...(entryQueues.value.storage?.records || []).slice(0, 4).map((item) => ({ id: `storage-${item.id}`, type: '酒款', tone: 'blue', todoKey: 'ENTRY', title: `${item.name || '未命名酒款'}待入库`, detail: `${item.breweryCompanyName || '未关联厂牌'} · ${item.competitionName || '赛事'}`, time: formatTime(item.submittedAt), path: '/admin/entries?deliveryStatus=SUBMITTED' })),
+  ...(entryQueues.value.refund?.records || []).slice(0, 4).map((item) => ({ id: `refund-${item.id}`, type: '酒款', tone: 'red', todoKey: 'ENTRY', title: `${item.name || '未命名酒款'}退款待处理`, detail: `${item.breweryCompanyName || '未关联厂牌'} · ${item.competitionName || '赛事'}`, time: formatTime(item.refundRequestedAt), path: '/admin/entries?refundStatus=REQUESTED' })),
 ])
-const todoTabs = computed(() => [{ key: 'ALL', label: '全部', count: judgePendingTotal.value + transferTotal.value + entryQueueCount.value }, { key: 'JUDGE', label: '评委报名', count: judgePendingTotal.value }, { key: 'TRANSFER', label: '转账', count: transferTotal.value }, { key: 'ENTRY', label: '酒款', count: entryQueueCount.value }])
+const todoTabs = computed(() => [
+  { key: 'ALL', label: '全部', count: judgePendingTotal.value + transferTotal.value + entryQueueCount.value + pendingApplications.value.length },
+  ...(canViewApplications.value ? [{ key: 'APPLICATION', label: '入驻申请', count: pendingApplications.value.length }] : []),
+  { key: 'JUDGE', label: '评委报名', count: judgePendingTotal.value },
+  { key: 'TRANSFER', label: '转账', count: transferTotal.value },
+  { key: 'ENTRY', label: '酒款', count: entryQueueCount.value },
+])
 const todoCountByFilter = computed(() => todoTabs.value.find((tab) => tab.key === todoFilter.value)?.count || 0)
-const filteredTodos = computed(() => todos.value.filter((item) => todoFilter.value === 'ALL' || (todoFilter.value === 'JUDGE' && item.type === '评委报名') || (todoFilter.value === 'TRANSFER' && item.type === '转账') || (todoFilter.value === 'ENTRY' && item.type === '酒款')).slice(0, 8))
+const filteredTodos = computed(() => todos.value.filter((item) => todoFilter.value === 'ALL' || item.todoKey === todoFilter.value).slice(0, 8))
 const activeCompetitions = computed(() => competitions.value.filter((item) => !['PUBLISHED', 'ARCHIVED'].includes(item.status)))
 
+function toApplicationTodo(item) {
+  const name = item.organizationName || '未填写主体名称'
+  const contact = [item.contactName, item.maskedContactPhone].filter(Boolean).join(' · ')
+  const base = { id: `application-${item.id}`, type: '入驻申请', tone: 'green', todoKey: 'APPLICATION' }
+  if (item.status === 'APPROVED') {
+    return { ...base, title: `${name} · 待发放账号`, detail: `审核通过，等待开通后台${contact ? ` · ${contact}` : ''}`, time: formatTime(item.reviewedTime || item.submittedTime), path: '/admin/organizer-applications?status=APPROVED' }
+  }
+  if (item.status === 'UNDER_REVIEW') {
+    return { ...base, title: `${name} · 审核中`, detail: contact || '等待审核结论', time: formatTime(item.submittedTime), path: '/admin/organizer-applications' }
+  }
+  return {
+    ...base,
+    title: `${name} · ${item.supplementalNote ? '补充资料后重新提交' : '提交入驻申请'}`,
+    detail: `${contact ? `${contact} · ` : ''}等待审核`,
+    time: formatTime(item.submittedTime),
+    path: '/admin/organizer-applications?status=SUBMITTED',
+  }
+}
+
 onMounted(loadDashboard)
+
+// 主办方类型来自 /api/admin/me，进入工作台时可能尚未写入，登录态更新后需要补拉余额。
+watch(isThirdPartyOrganizer, loadBeerCoinWallet)
+
+async function loadBeerCoinWallet() {
+  if (!isThirdPartyOrganizer.value) {
+    beerCoinBalance.value = null
+    return
+  }
+  try {
+    beerCoinBalance.value = (await fetchBeerCoinWallet())?.availableQuantity ?? null
+  } catch {
+    // 账户不可用或组织不支持啤酒币时隐藏余额卡，不影响工作台其他数据。
+    beerCoinBalance.value = null
+  }
+}
 
 async function loadDashboard() {
   loading.value = true
   try {
-    const [competitionData, recruitmentData, transferData, storageData, refundData] = await Promise.all([
+    const [competitionData, recruitmentData, transferData, storageData, refundData, applicationData] = await Promise.all([
       fetchCompetitions({ includeArchived: false }),
       fetchJudgeRecruitments(),
       fetchAdminBankTransfers({ status: 'SUBMITTED', page: 1, pageSize: 20 }),
       fetchAdminEntries({ deliveryStatus: 'SUBMITTED', page: 1, pageSize: 8 }),
       fetchAdminEntries({ refundStatus: 'REQUESTED', page: 1, pageSize: 8 }),
+      canViewApplications.value ? fetchOrganizerApplications('ALL') : Promise.resolve([]),
     ])
     competitions.value = competitionData || []
     recruitments.value = recruitmentData || []
     transfers.value = transferData?.records || []
     transferTotal.value = transferData?.total || 0
     entryQueues.value = { payment: null, storage: storageData, refund: refundData }
+    applications.value = applicationData || []
+    await loadBeerCoinWallet()
   } finally {
     loading.value = false
   }
+}
+
+function openSummaryCard(card) {
+  if (card.path) {
+    router.push(card.path)
+    return
+  }
+  selectTodoType(card.key)
 }
 
 function selectTodoType(type) { todoFilter.value = type === 'ENTRY' ? 'ENTRY' : type }
@@ -146,6 +225,11 @@ function formatTime(value) {
 
 function formatMoney(value) {
   return value === undefined || value === null ? '-' : `¥${Number(value).toFixed(2)}`
+}
+
+function formatQuantity(value) {
+  const amount = Number(value)
+  return Number.isFinite(amount) ? amount.toLocaleString('zh-CN', { maximumFractionDigits: 0 }) : '0'
 }
 </script>
 
@@ -182,7 +266,7 @@ h2 { font-size: 18px; }
 .icon-button:disabled { opacity: 0.55; }
 .spinning { animation: spin 0.8s linear infinite; }
 
-.todo-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
+.todo-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-top: 18px; }
 .todo-card { display: flex; align-items: center; gap: 12px; min-height: 94px; padding: 15px; color: var(--text); text-align: left; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); cursor: pointer; }
 .todo-card:hover { border-color: rgba(216, 169, 53, 0.35); background: rgba(28, 40, 44, 0.96); }
 .todo-card-icon { display: grid; flex: 0 0 auto; place-items: center; width: 36px; height: 36px; border-radius: 7px; background: rgba(216, 169, 53, 0.1); }
@@ -190,10 +274,15 @@ h2 { font-size: 18px; }
 .todo-card-copy { display: flex; flex: 1; min-width: 0; align-items: baseline; gap: 10px; }
 .todo-card-copy small { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .todo-card-copy strong { flex: 0 0 auto; font-size: 27px; line-height: 1; }
+.todo-card-copy em { flex: 0 0 auto; color: var(--muted); font-size: 12px; font-style: normal; }
+.todo-card-hint { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 4px; padding: 4px 8px; color: #e0b84a; border: 1px solid rgba(216, 169, 53, 0.28); border-radius: 6px; background: rgba(216, 169, 53, 0.08); font-size: 11px; font-weight: 800; white-space: nowrap; }
+.todo-card-hint svg { width: 13px; height: 13px; }
 .todo-card.orange .todo-card-icon { color: #f2a65a; background: rgba(242, 166, 90, 0.1); }
 .todo-card.blue .todo-card-icon { color: #76b9d2; background: rgba(118, 185, 210, 0.1); }
+.todo-card.green .todo-card-icon { color: #70cf7c; background: rgba(112, 207, 124, 0.1); }
 .todo-card.orange strong { color: #f2a65a; }
 .todo-card.blue strong { color: #76b9d2; }
+.todo-card.green strong { color: #70cf7c; }
 .todo-card > svg { flex: 0 0 auto; width: 15px; height: 15px; color: #71858d; }
 .dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(330px, 0.65fr); gap: 14px; margin-top: 14px; }
 .todo-panel, .active-panel { min-width: 0; padding: 18px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); }
@@ -213,6 +302,7 @@ h2 { font-size: 18px; }
 .todo-type.orange { color: #f2a65a; background: rgba(242, 166, 90, 0.1); }
 .todo-type.blue { color: #76b9d2; background: rgba(118, 185, 210, 0.1); }
 .todo-type.red { color: #ffaaa0; background: rgba(255, 122, 107, 0.1); }
+.todo-type.green { color: #70cf7c; background: rgba(112, 207, 124, 0.1); }
 .todo-main, .active-main { display: grid; gap: 3px; min-width: 0; }
 .todo-main strong, .todo-main small, .active-main strong, .active-main small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .todo-main strong, .active-main strong { font-size: 13px; }

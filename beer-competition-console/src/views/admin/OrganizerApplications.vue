@@ -165,6 +165,11 @@
               <span>主体证明材料</span>
               <div v-if="selectedApplication.materialAssetId" class="material-actions">
                 <span class="material-name">{{ selectedApplication.materialFileName || '已上传材料' }}</span>
+                <button class="material-link" type="button" :disabled="materialViewing" @click="viewMaterial">
+                  <Loading v-if="materialViewing" class="spinning" />
+                  <View v-else />
+                  {{ materialViewing ? '读取中' : '查看材料' }}
+                </button>
                 <button class="material-link" type="button" :disabled="materialLoading" @click="downloadMaterial">
                   <Loading v-if="materialLoading" class="spinning" />
                   <Download v-else />
@@ -251,6 +256,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import {
@@ -265,6 +271,7 @@ import {
   Lock,
   Refresh,
   Search,
+  View,
   Warning,
 } from '@element-plus/icons-vue'
 import {
@@ -274,6 +281,7 @@ import {
   reviewOrganizerApplication,
 } from '@/api/organizerApplicationAdmin'
 
+const route = useRoute()
 const applications = ref([])
 const loading = ref(false)
 const loadError = ref(false)
@@ -284,6 +292,7 @@ const drawerOpen = ref(false)
 const selectedApplication = ref(null)
 const actionLoading = ref(false)
 const materialLoading = ref(false)
+const materialViewing = ref(false)
 const reviewLoading = ref(false)
 const reviewAction = ref('')
 const reviewRemark = ref('')
@@ -298,6 +307,11 @@ const statusFilters = [
   { label: '已开通', value: 'ACCOUNT_ISSUED' },
   { label: '已拒绝', value: 'REJECTED' },
 ]
+
+const requestedStatus = String(route.query.status || '')
+if (statusFilters.some((item) => item.value === requestedStatus)) {
+  statusFilter.value = requestedStatus
+}
 
 const filteredApplications = computed(() => {
   const search = keyword.value.toLowerCase()
@@ -457,6 +471,40 @@ async function downloadMaterial() {
   } finally {
     materialLoading.value = false
   }
+}
+
+async function viewMaterial() {
+  const assetId = selectedApplication.value?.materialAssetId
+  if (!assetId || materialViewing.value) return
+  const previewWindow = window.open('about:blank', '_blank')
+  if (previewWindow) previewWindow.opener = null
+  materialViewing.value = true
+  try {
+    const blob = await downloadOrganizerApplicationMaterial(assetId)
+    if (!isPreviewableMaterial(blob, selectedApplication.value.materialFileName)) {
+      previewWindow?.close()
+      ElMessage.warning('当前材料格式不支持在线预览，请下载后查看')
+      return
+    }
+    const url = URL.createObjectURL(blob)
+    if (previewWindow && !previewWindow.closed) {
+      previewWindow.location.href = url
+    } else {
+      window.open(url, '_blank')
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 60000)
+  } catch (error) {
+    previewWindow?.close()
+    ElMessage.warning(error?.message || '材料预览失败')
+  } finally {
+    materialViewing.value = false
+  }
+}
+
+function isPreviewableMaterial(blob, fileName) {
+  const type = blob?.type || ''
+  if (type === 'application/pdf' || type.startsWith('image/') || type.startsWith('text/')) return true
+  return /\.(pdf|jpe?g|png|webp|gif|bmp|txt)$/i.test(fileName || '')
 }
 
 async function confirmDanger(message, title) {

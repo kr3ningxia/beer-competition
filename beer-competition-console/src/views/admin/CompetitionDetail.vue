@@ -18,7 +18,6 @@
           <span
             class="disabled-action-tip"
             :data-disabled-reason="stagePrimaryActionDisabledReason || null"
-            :title="stagePrimaryActionDisabledReason"
           >
             <button
               class="tool-button primary"
@@ -100,7 +99,7 @@
             <div class="beer-coin-settlement-grid">
               <div>
                 <small>当前可用余额</small>
-                <strong>{{ beerCoinWalletLoading ? '读取中' : `${formatInteger(beerCoinWallet?.availableQuantity)} 枚` }}</strong>
+                <strong>{{ beerCoinWalletBalanceText }}</strong>
               </div>
               <div>
                 <small>{{ competition.status === 'DRAFT' ? '发布最低消耗' : '预计总消耗（每款 1 枚）' }}</small>
@@ -115,7 +114,14 @@
                 <strong>{{ formatInteger(beerCoinSettlement.effectiveEntryCount) }} 款</strong>
               </div>
             </div>
-            <div v-if="beerCoinWalletInsufficient" class="beer-coin-settlement-footer">
+            <div v-if="beerCoinBalanceUnknown" class="beer-coin-settlement-footer">
+              <span>啤酒币余额读取失败，暂时无法确认能否继续</span>
+              <button class="link-action" type="button" :disabled="beerCoinWalletLoading" @click="loadBeerCoinOverview">
+                {{ beerCoinWalletLoading ? '重新读取中' : '重新读取' }}
+                <Refresh />
+              </button>
+            </div>
+            <div v-else-if="beerCoinWalletInsufficient" class="beer-coin-settlement-footer">
               <span>{{ competition.status === 'DRAFT' ? '当前余额不足，无法发布报名' : '当前余额不足，无法进入评审准备' }}</span>
               <button class="link-action" type="button" @click="goToBeerCoins">
                 购买啤酒币
@@ -127,7 +133,7 @@
           <div class="two-column">
             <article class="panel-card">
               <div class="panel-heading">
-                <h2>当前需要处理</h2>
+                <h2>当前待办</h2>
                 <span>{{ overviewActionItems.length }} 项</span>
               </div>
               <div class="alert-list">
@@ -145,7 +151,7 @@
 
             <article class="panel-card">
               <div class="panel-heading">
-                <h2>轮次重组摘要</h2>
+                <h2>轮次信息</h2>
                 <span>{{ rounds.length }} 个节点</span>
               </div>
               <div class="round-path">
@@ -749,7 +755,9 @@
             :is-judge-active="isJudgeActive"
             :get-round-entry-assignment="getRoundEntryAssignment"
             :get-round-table-issues="getRoundTableIssues"
-            :get-round-table-conflict-warnings="getRoundTableConflictWarnings"
+            :get-round-table-advisories="getRoundTableAdvisories"
+            :get-base-table-advisories="getBaseTableAdvisories"
+            :disabled-judge-pool="disabledJudgePool"
             @update:allocation-mode="handleAllocationModeChange"
             @select-round="selectRound"
             @update:judge-keyword="judgeKeyword = $event"
@@ -1543,7 +1551,7 @@
             </span>
             <span v-if="beerCoinApplicable">
               <small>啤酒币</small>
-              <strong>{{ beerCoinWalletLoading ? '读取中' : `${formatInteger(beerCoinWallet?.availableQuantity)} / 发布扣 1 枚` }}</strong>
+              <strong>{{ beerCoinWalletBalanceText }} / 发布扣 1 枚</strong>
             </span>
           </div>
           <footer>
@@ -1833,7 +1841,7 @@
             </el-select>
           </label>
 
-          <label class="entry-auto-assign-field">
+          <label class="entry-auto-assign-field compact">
             <span>数量</span>
             <el-input-number
               v-model="entryAutoAssignForm.quantity"
@@ -2169,6 +2177,7 @@ import {
   Lock,
   Medal,
   Plus,
+  Refresh,
   Right,
   Search,
   Setting,
@@ -2206,6 +2215,7 @@ import {
   fetchCompetitionFeedbackReviewPage,
   fetchAdminEntryDetail,
   fetchCompetitionCollection,
+  fetchCompetitionCollectionQr,
   fetchCompetitionDetail,
   fetchCompetitionOverview,
   fetchCompetitionProgress,
@@ -2240,7 +2250,6 @@ import {
   uploadCompetitionSponsorLogo,
 } from '@/api/admin'
 import { getAdminMe } from '@/api/auth'
-import { BASE_URL } from '@/config'
 import { fetchBeerCoinOverview } from '@/api/beerCoin'
 import { ADMIN_TYPES } from '@/config/adminAccess'
 import { getAdminType } from '@/utils/auth'
@@ -2260,6 +2269,7 @@ const loading = ref(false)
 const competition = ref(null)
 const beerCoinOverview = ref(null)
 const beerCoinWalletLoading = ref(false)
+const beerCoinWalletFailed = ref(false)
 const loadedSectionCompetitionIds = reactive({
   sponsors: '',
   styleLibraries: '',
@@ -2333,6 +2343,8 @@ const judgeTableForm = reactive([])
 const judgeAssignmentForm = reactive([])
 const scoreConfigForm = reactive([])
 const judgePool = ref([])
+let judgePoolSearchToken = 0
+let judgePoolSearchTimer = null
 const feedbackReviewEntries = ref([])
 const feedbackReviewLoading = ref(false)
 const feedbackReviewCompetitionId = ref(null)
@@ -2522,20 +2534,39 @@ const beerCoinApplicable = computed(() => (
   isOrganizerAdmin.value && beerCoinSettlement.value.applicable === true
 ))
 const beerCoinWallet = computed(() => beerCoinOverview.value?.wallet || null)
+const beerCoinRequiredQuantity = computed(() => (
+  competition.value?.status === 'DRAFT'
+    ? Math.max(Number(beerCoinSettlement.value.requiredQuantity || 1), 1)
+    : Math.max(Number(beerCoinSettlement.value.pendingQuantity || 0), 0)
+))
 const beerCoinWalletInsufficient = computed(() => (
   beerCoinApplicable.value
   && beerCoinWallet.value
-  && Number(beerCoinWallet.value.availableQuantity || 0) < (
-    competition.value?.status === 'DRAFT'
-      ? Math.max(Number(beerCoinSettlement.value.requiredQuantity || 1), 1)
-      : Math.max(Number(beerCoinSettlement.value.pendingQuantity || 0), 0)
-  )
+  && Number(beerCoinWallet.value.availableQuantity || 0) < beerCoinRequiredQuantity.value
 ))
+const beerCoinBalanceUnknown = computed(() => (
+  beerCoinApplicable.value && beerCoinWalletFailed.value && !beerCoinWallet.value
+))
+const beerCoinWalletBalanceText = computed(() => {
+  if (beerCoinWalletLoading.value) return '读取中'
+  if (beerCoinWallet.value) return `${formatInteger(beerCoinWallet.value.availableQuantity)} 枚`
+  return '读取失败'
+})
+const beerCoinBlockReason = computed(() => {
+  if (!beerCoinApplicable.value) return ''
+  if (beerCoinBalanceUnknown.value) return '啤酒币余额读取失败，请刷新页面后重试'
+  if (beerCoinWalletInsufficient.value) {
+    const available = Number(beerCoinWallet.value?.availableQuantity || 0)
+    return `啤酒币不足：还需 ${formatInteger(Math.max(beerCoinRequiredQuantity.value - available, 0))} 枚，当前 ${formatInteger(available)} 枚，请在「啤酒币」页面购买后继续`
+  }
+  return ''
+})
 const editable = computed(() => competition.value?.editableScopes || {})
 const isTenantOrganizer = ref(false)
 const collectionConfig = ref(null)
 const collectionQrInput = ref(null)
 const collectionQrLocalUrl = ref('')
+const collectionQrRemoteUrl = ref('')
 const collectionForm = reactive({
   methodMode: 'BOTH',
   qrFile: null,
@@ -2558,11 +2589,7 @@ const collectionEnabledMethods = computed(() => [
   ...(collectionBankEnabled.value ? ['BANK_TRANSFER'] : []),
 ])
 const collectionQrAssetId = computed(() => collectionConfig.value?.wechatQrAssetId || null)
-const collectionQrPreviewUrl = computed(() => {
-  if (collectionQrLocalUrl.value) return collectionQrLocalUrl.value
-  const assetId = collectionQrAssetId.value
-  return assetId ? `${BASE_URL}/api/portal/public/files/${assetId}` : ''
-})
+const collectionQrPreviewUrl = computed(() => collectionQrLocalUrl.value || collectionQrRemoteUrl.value)
 const collectionQrStatusText = computed(() => (collectionQrAssetId.value ? '已上传收款码' : '尚未上传收款码'))
 const refundPolicyDirty = computed(() => (
   baseForm.refundApprovalMode !== (competition.value?.refundApprovalMode || 'AUTO_APPROVE')
@@ -2614,6 +2641,25 @@ function clearCollectionQrLocalUrl() {
   collectionQrLocalUrl.value = ''
 }
 
+function releaseCollectionQrUrls() {
+  clearCollectionQrLocalUrl()
+  if (collectionQrRemoteUrl.value) URL.revokeObjectURL(collectionQrRemoteUrl.value)
+  collectionQrRemoteUrl.value = ''
+}
+
+// 草稿/归档赛事的收款码不在公开接口暴露，预览要走带鉴权的后台文件接口取 blob。
+async function loadCollectionQrPreview(assetId) {
+  if (collectionQrRemoteUrl.value) URL.revokeObjectURL(collectionQrRemoteUrl.value)
+  collectionQrRemoteUrl.value = ''
+  if (!assetId) return
+  try {
+    const blob = await fetchCompetitionCollectionQr(assetId)
+    collectionQrRemoteUrl.value = URL.createObjectURL(blob)
+  } catch {
+    collectionQrRemoteUrl.value = ''
+  }
+}
+
 async function loadCollectionConfig() {
   const competitionId = competition.value?.id || route.params.id
   if (!competitionId) return
@@ -2627,7 +2673,8 @@ async function loadCollectionConfig() {
     collectionForm.collectionNote = data?.collectionNote || ''
     collectionForm.paymentContact = data?.paymentContact || ''
     collectionForm.qrFile = null
-    clearCollectionQrLocalUrl()
+    releaseCollectionQrUrls()
+    await loadCollectionQrPreview(data?.wechatQrAssetId)
   } catch {
     collectionConfig.value = null
   }
@@ -2672,8 +2719,7 @@ async function saveCollectionConfig() {
       paymentContact: collectionForm.paymentContact,
     })
     if (saved) collectionConfig.value = saved
-    collectionForm.qrFile = null
-    clearCollectionQrLocalUrl()
+    await loadCollectionConfig()
     ElMessage.success('收款配置已保存')
   } catch (error) {
     ElMessage.warning(error?.message || '收款配置保存失败，请稍后重试')
@@ -2704,7 +2750,7 @@ const tabSaveAction = computed(() => {
 })
 const futureStageTasks = computed(() => buildFutureStageTasks())
 const currentRound = computed(() => rounds.value.find((round) => round.id === activeRoundId.value)
-  || (String(competition.value?.currentRound?.id || '') === String(activeRoundId.value || '') ? competition.value.currentRound : null)
+  || (String(competition.value?.currentRound?.id || '') === String(activeRoundId.value || '') ? competition.value?.currentRound : null)
   || rounds.value[0]
   || competition.value?.currentRound
   || firstRoundDraft)
@@ -3199,8 +3245,6 @@ const resultChecks = computed(() => {
 })
 
 const selectedTable = computed(() => judgeTableForm.find((table) => table.localId === selectedTableLocalId.value))
-const selectedRoleLabel = computed(() => roleOptions.find((role) => role.value === selectedRole.value)?.label || '角色')
-const selectedTargetLabel = computed(() => selectedTable.value ? `${selectedTable.value.tableName || '未命名评审桌'} · ${selectedRoleLabel.value}` : '请先选择评审桌')
 const judgeMetrics = computed(() => ({
   assigned: judgeAssignmentForm.length,
   captain: countAssignedRole('CAPTAIN'),
@@ -3214,6 +3258,9 @@ const judgeFilterCounts = computed(() => ({
 const validationIssues = computed(() => {
   const issues = []
   if (!judgeTableForm.length) issues.push('至少需要创建 1 张基础桌')
+  const tableNames = judgeTableForm.map((table) => table.tableName?.trim() || '')
+  const duplicateTableNames = tableNames.filter((name, index, list) => name && list.indexOf(name) !== index)
+  if (duplicateTableNames.length) issues.push(`基础桌名称不能重复：${duplicateTableNames[0]}`)
   judgeTableForm.forEach((table) => issues.push(...tableValidationIssues(table)))
   const duplicateJudgeIds = judgeAssignmentForm
     .map((assignment) => assignment.judgePublicId)
@@ -3224,21 +3271,8 @@ const validationIssues = computed(() => {
   return issues
 })
 const filteredJudgePool = computed(() => {
-  const query = judgeKeyword.value.toLowerCase()
   const pool = judgePool.value.filter((judge) => {
     if (!isJudgeActive(judge)) return false
-    const matchesKeyword = !query || [
-      judge.name,
-      judge.maskedPhone,
-      judge.qualification,
-      judge.breweryConflictText,
-      judge.phoneConflictText,
-      judge.phoneConflictBreweryName,
-    ]
-      .filter(Boolean)
-      .some((value) => String(value).toLowerCase().includes(query))
-    if (!matchesKeyword) return false
-
     if (usesRoundJudgePool.value) return true
     return judgeRoleFilter.value === 'ALL'
       || (judgeRoleFilter.value === 'UNASSIGNED' && !isAssigned(judge.publicId))
@@ -3246,6 +3280,9 @@ const filteredJudgePool = computed(() => {
   if (!usesRoundJudgePool.value) return pool
   return [...pool].sort(compareRoundJudgePoolOrder)
 })
+const disabledJudgePool = computed(() => judgePool.value
+  .filter((judge) => !isJudgeActive(judge))
+  .sort(compareRoundJudgePoolOrder))
 const feedbackStatusOptions = [
   { value: 'all', label: '全部' },
   { value: 'comment_missing', label: '待评价' },
@@ -3354,8 +3391,9 @@ onMounted(() => {
     .catch(() => {})
 })
 onUnmounted(() => {
-  clearCollectionQrLocalUrl()
+  releaseCollectionQrUrls()
   if (roundProgressPollTimer) window.clearInterval(roundProgressPollTimer)
+  if (judgePoolSearchTimer) clearTimeout(judgePoolSearchTimer)
   clearRoundTableNameAutoSave()
   if (styleDistributionResizeObserver) styleDistributionResizeObserver.disconnect()
   closeSponsorLogoCrop()
@@ -3405,6 +3443,13 @@ watch([
   () => judgeAssignmentForm.map((assignment) => `${assignment.localId}:${assignment.tableLocalId}:${assignment.judgePublicId}:${assignment.role}`).join('|'),
 ], () => {
   if (!rounds.value.some((round) => round.roundNo === 1)) syncFirstRoundDraftTables()
+})
+watch(judgeKeyword, () => {
+  if (judgePoolSearchTimer) clearTimeout(judgePoolSearchTimer)
+  judgePoolSearchTimer = setTimeout(() => {
+    judgePoolSearchTimer = null
+    loadJudgePool({ force: true })
+  }, 300)
 })
 watch(entryAutoAssignStats, (stats) => {
   const maxQuantity = Math.max(stats.unassigned, 1)
@@ -3663,6 +3708,7 @@ async function loadEntryPage() {
 
 async function loadBeerCoinOverview() {
   beerCoinOverview.value = null
+  beerCoinWalletFailed.value = false
   if (!isOrganizerAdmin.value || competition.value?.beerCoinSettlement?.applicable !== true) {
     beerCoinWalletLoading.value = false
     return
@@ -3671,7 +3717,8 @@ async function loadBeerCoinOverview() {
   try {
     beerCoinOverview.value = await fetchBeerCoinOverview()
   } catch {
-    // 余额读取失败时保留赛事详情，发布动作仍由后端结算门槛校验
+    // 余额读取失败必须显式告知，不能当成 0 枚余额放行发布动作。
+    beerCoinWalletFailed.value = true
   } finally {
     beerCoinWalletLoading.value = false
   }
@@ -3728,12 +3775,19 @@ function syncActiveTabQuery(tab) {
   }).catch(() => {})
 }
 
-async function loadJudgePool() {
+async function loadJudgePool(options = {}) {
   const competitionKey = currentCompetitionKey()
   const requestGeneration = detailRequestGeneration
-  if (!competitionKey || loadedSectionCompetitionIds.judges === competitionKey) return
+  if (!competitionKey) return
+  if (!options.force && loadedSectionCompetitionIds.judges === competitionKey) return
+  const searchToken = judgePoolSearchToken + 1
+  judgePoolSearchToken = searchToken
   try {
-    const data = await fetchJudges({ competitionId: competitionKey })
+    const data = await fetchJudges({
+      competitionId: competitionKey,
+      keyword: judgeKeyword.value.trim() || undefined,
+    })
+    if (searchToken !== judgePoolSearchToken) return
     if (!isCurrentCompetitionRequest(competitionKey, requestGeneration)) return
     judgePool.value = data || []
     loadedSectionCompetitionIds.judges = competitionKey
@@ -4444,8 +4498,8 @@ function resolveStagePrimaryAction() {
   if (competition.value.status === 'DRAFT') {
     return {
       text: '发布报名',
-      enabled: !beerCoinWalletInsufficient.value,
-      disabledReason: beerCoinWalletInsufficient.value ? '余额不足，请先购买啤酒币' : '',
+      enabled: !beerCoinBlockReason.value,
+      disabledReason: beerCoinBlockReason.value,
       action: 'publishRegistration',
     }
   }
@@ -4455,16 +4509,16 @@ function resolveStagePrimaryAction() {
   if (competition.value.status === 'REGISTRATION_CLOSED') {
     return {
       text: '完成样品入库核对，进入评审准备中',
-      enabled: !beerCoinWalletInsufficient.value,
-      disabledReason: beerCoinWalletInsufficient.value ? '余额不足，请先购买啤酒币' : '',
+      enabled: !beerCoinBlockReason.value,
+      disabledReason: beerCoinBlockReason.value,
       action: 'prepareJudging',
     }
   }
   if (competition.value.status === 'JUDGING_PREP' && !rounds.value.length) {
     return {
       text: '安排首轮',
-      enabled: !beerCoinWalletInsufficient.value,
-      disabledReason: beerCoinWalletInsufficient.value ? '余额不足，请先购买啤酒币' : '',
+      enabled: !beerCoinBlockReason.value,
+      disabledReason: beerCoinBlockReason.value,
       action: 'goToRoundAllocation',
     }
   }
@@ -5619,6 +5673,10 @@ function getRoundTableIssues(table) {
   if (!table.name?.trim()) issues.push('评审桌名称不能为空')
   if (!table.captainPublicId) issues.push(`${tableName}缺少桌长`)
   if (!table.entryUuids.length) issues.push(`${tableName}尚未分配酒款`)
+  const disabledJudgeCount = countDisabledJudges(getRoundTableJudgeRefs(table)
+    .filter((ref) => ref.active)
+    .map((ref) => ref.judgePublicId))
+  if (disabledJudgeCount) issues.push(`${tableName}有 ${disabledJudgeCount} 位评审已停用，请替换或移除`)
   if (isFeedbackOnlyCompetition.value && currentRound.value?.type === 'SCORE') return issues
   if (!Number(table.targetCount || 0)) issues.push(`${tableName}${targetLabel}不能为空`)
   if (table.targetMode !== 'MEDALS' && Number(table.targetCount || 0) > table.entryUuids.length) issues.push(`${tableName}${targetLabel}超过候选酒款数`)
@@ -5628,40 +5686,69 @@ function getRoundTableIssues(table) {
   return issues
 }
 
-function getRoundTableConflictWarnings(table) {
-  const judges = getRoundTableConflictJudges(table)
-  const entries = (table?.entryUuids || [])
+function getRoundTableAdvisories(table) {
+  return buildJudgeAdvisories({
+    label: table?.name?.trim() || '未命名评审桌',
+    captainPublicId: table?.captainPublicId,
+    judgeRefs: getRoundTableJudgeRefs(table),
+    entries: resolveAdvisoryEntries(table?.entryUuids),
+  })
+}
+
+function getBaseTableAdvisories(judgeTable) {
+  const assignments = assignmentsForTable(judgeTable)
+  const roundTable = currentRoundTables.value.find((item) => item.tableName === judgeTable.tableName)
+  return buildJudgeAdvisories({
+    label: judgeTable?.tableName?.trim() || '未命名评审桌',
+    captainPublicId: assignments.find((assignment) => assignment.role === 'CAPTAIN')?.judgePublicId,
+    judgeRefs: assignments.map((assignment) => ({ judgePublicId: assignment.judgePublicId, active: true })),
+    entries: resolveAdvisoryEntries(roundTable?.entryUuids),
+  })
+}
+
+function getRoundTableJudgeRefs(table) {
+  const refs = []
+  if (table?.captainPublicId) refs.push({ judgePublicId: table.captainPublicId, active: true })
+  ;(table?.members || []).forEach((member) => {
+    if (member?.judgePublicId) refs.push({ judgePublicId: member.judgePublicId, active: member.status !== 'REMOVED' })
+  })
+  if (refs.length) return refs
+  // 首轮预排草稿的成员可能尚未同步，退回基础桌配置读取
+  const baseTable = judgeTableForm.find((item) => item.tableName === table?.name)
+  if (baseTable) {
+    assignmentsForTable(baseTable).forEach((assignment) => refs.push({ judgePublicId: assignment.judgePublicId, active: true }))
+  }
+  return refs
+}
+
+function resolveAdvisoryEntries(entryUuids) {
+  return (entryUuids || [])
     .map((uuid) => roundEntryPool.value.find((entry) => entry.uuid === uuid))
     .filter((entry) => entry?.breweryCompanyName || entry?.breweryId)
-  const warnings = []
-  judges.forEach((judge) => {
+}
+
+function buildJudgeAdvisories({ label, captainPublicId, judgeRefs, entries }) {
+  const advisories = []
+  const activeIds = [...new Set(judgeRefs.filter((ref) => ref.active).map((ref) => ref.judgePublicId).filter(Boolean))]
+  if (activeIds.length && activeIds.every((publicId) => publicId === captainPublicId)) {
+    advisories.push(`${label}只有桌长，没有普通评审`)
+  }
+  const conflictJudges = [...new Set(judgeRefs.map((ref) => ref.judgePublicId).filter(Boolean))]
+    .map((publicId) => getJudge(publicId))
+    .filter((judge) => (judge?.breweryConflictFlag && judge?.breweryConflictText) || judge?.phoneBreweryConflictFlag)
+  conflictJudges.forEach((judge) => {
     const keywords = splitBreweryConflictKeywords(judge.breweryConflictText)
     entries.forEach((entry) => {
       if (isPhoneBreweryConflictMatch(judge, entry)) {
-        warnings.push(`本桌存在手机号匹配回避：${judge.name || '未知评审'} / ${entry.breweryCompanyName || judge.phoneConflictBreweryName || '关联厂牌'}`)
+        advisories.push(`本桌存在手机号匹配回避：${judge.name || '未知评审'} / ${entry.breweryCompanyName || judge.phoneConflictBreweryName || '关联厂牌'}`)
+        return
       }
       if (isBreweryConflictMatch(keywords, entry.breweryCompanyName)) {
-        warnings.push(`本桌可能存在回避风险：${judge.name || '未知评审'} / ${entry.breweryCompanyName}`)
+        advisories.push(`本桌可能存在回避风险：${judge.name || '未知评审'} / ${entry.breweryCompanyName}`)
       }
     })
   })
-  return [...new Set(warnings)]
-}
-
-function getRoundTableConflictJudges(table) {
-  const publicIds = new Set()
-  if (table?.captainPublicId) publicIds.add(table.captainPublicId)
-  const members = table?.members || []
-  members.forEach((member) => {
-    if (member?.judgePublicId) publicIds.add(member.judgePublicId)
-  })
-  const baseTable = judgeTableForm.find((item) => item.tableName === table?.name)
-  if (baseTable) {
-    assignmentsForTable(baseTable).forEach((assignment) => publicIds.add(assignment.judgePublicId))
-  }
-  return [...publicIds]
-    .map((publicId) => getJudge(publicId))
-    .filter((judge) => (judge?.breweryConflictFlag && judge?.breweryConflictText) || judge?.phoneBreweryConflictFlag)
+  return [...new Set(advisories)]
 }
 
 function splitBreweryConflictKeywords(text) {
@@ -5902,7 +5989,7 @@ function addEntryToSelectedRoundTable(uuid, notify = true) {
   if (notify) ElMessage.success(`${uuid} 已加入 ${table.name}`)
 }
 
-function updateRoundTableCaptain(tableId, judgePublicId) {
+async function updateRoundTableCaptain(tableId, judgePublicId) {
   const table = currentRoundTables.value.find((item) => item.id === tableId)
   if (!table) return
   if (isLiveRoundMemberChange()) {
@@ -5938,14 +6025,15 @@ function updateRoundTableCaptain(tableId, judgePublicId) {
     return
   }
   if (currentRound.value?.status !== 'DRAFT') return
+  if (judgePublicId && table.captainPublicId && table.captainPublicId !== judgePublicId) {
+    ElMessage.warning('该桌已有桌长，请先移除当前桌长再加入')
+    return
+  }
   if (judgePublicId) {
-    const alreadyAssigned = currentRoundTables.value.some((item) => (
-      item.id !== table.id
-        && (item.captainPublicId === judgePublicId || getTableParticipantPublicIds(item).includes(judgePublicId))
-    ))
-    if (alreadyAssigned) {
-      ElMessage.warning('这位评审已安排到其他桌')
-      return
+    const busyTable = findRoundTableHoldingJudge(judgePublicId, table.id)
+    if (busyTable) {
+      if (!(await confirmJudgeMove(judgePublicId, busyTable, table))) return
+      detachRoundJudgeFromOtherTables(judgePublicId, table.id)
     }
   }
   table.captainPublicId = judgePublicId
@@ -6024,7 +6112,46 @@ function getTableParticipantPublicIds(table) {
     .filter((publicId) => publicId && publicId !== table?.captainPublicId)
 }
 
-function addRoundParticipantToSelectedTable(judgePublicId, role = 'PROFESSIONAL') {
+function findRoundTableHoldingJudge(judgePublicId, excludeTableId) {
+  return currentRoundTables.value.find((item) => item.id !== excludeTableId
+    && (item.captainPublicId === judgePublicId || getTableParticipantPublicIds(item).includes(judgePublicId)))
+}
+
+function detachRoundJudgeFromOtherTables(judgePublicId, keepTableId) {
+  currentRoundTables.value.forEach((table) => {
+    if (table.id === keepTableId) return
+    let changed = false
+    if (table.captainPublicId === judgePublicId) {
+      table.captainPublicId = ''
+      changed = true
+    }
+    const members = table.members || []
+    const nextMembers = members.filter((member) => (
+      member.status === 'REMOVED' || member.judgePublicId !== judgePublicId
+    ))
+    if (nextMembers.length !== members.length) {
+      table.members = nextMembers
+      changed = true
+    }
+    if (changed) table.participantPublicIds = getTableParticipantPublicIds(table)
+  })
+}
+
+async function confirmJudgeMove(judgePublicId, fromTable, toTable) {
+  const judge = getJudge(judgePublicId)
+  try {
+    await ElMessageBox.confirm(
+      `${judge?.name || '该评审'}目前在${fromTable.name || '其他桌'}，移动到${toTable.name || '当前桌'}后原桌会空出该位置。`,
+      '调整评审位置',
+      { confirmButtonText: '确认移动', cancelButtonText: '取消', type: 'warning' },
+    )
+  } catch {
+    return false
+  }
+  return true
+}
+
+async function addRoundParticipantToSelectedTable(judgePublicId, role = 'PROFESSIONAL') {
   const table = selectedRoundTable.value
   if (!table) return
   if (isLiveRoundMemberChange()) {
@@ -6057,13 +6184,10 @@ function addRoundParticipantToSelectedTable(judgePublicId, role = 'PROFESSIONAL'
     ElMessage.warning('桌长不需要重复加入参与评审')
     return
   }
-  const alreadyAssigned = currentRoundTables.value.some((item) => (
-    item.id !== table.id
-      && (item.captainPublicId === judgePublicId || getTableParticipantPublicIds(item).includes(judgePublicId))
-  ))
-  if (alreadyAssigned) {
-    ElMessage.warning('这位评审已安排到其他桌')
-    return
+  const busyTable = findRoundTableHoldingJudge(judgePublicId, table.id)
+  if (busyTable) {
+    if (!(await confirmJudgeMove(judgePublicId, busyTable, table))) return
+    detachRoundJudgeFromOtherTables(judgePublicId, table.id)
   }
   if (getTableParticipantPublicIds(table).includes(judgePublicId)) return
   const judge = getJudge(judgePublicId)
@@ -6258,9 +6382,28 @@ function dropEntryOnRoundTable(tableId) {
   clearDrag()
 }
 
-function removeRoundTable(tableId) {
+async function removeRoundTable(tableId) {
   if (!currentRound.value || currentRound.value.status !== 'DRAFT') return
-  currentRound.value.tables = currentRound.value.tables.filter((table) => table.id !== tableId)
+  const table = currentRoundTables.value.find((item) => item.id === tableId)
+  if (!table) return
+  const members = [
+    ...(table.captainPublicId ? [{ judgePublicId: table.captainPublicId }] : []),
+    ...(table.members || []).filter((member) => member.role !== 'CAPTAIN' && member.status !== 'REMOVED'),
+  ]
+  const tableLabel = table.name || '未命名评审桌'
+  const names = members.map((member) => getJudge(member.judgePublicId)?.name || '未知评审')
+  try {
+    await ElMessageBox.confirm(
+      members.length
+        ? `「${tableLabel}」上有 ${names.length} 位评审：${names.join('、')}，删除后回到未分配。`
+        : `确认删除「${tableLabel}」？`,
+      '删除评审桌',
+      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' },
+    )
+  } catch {
+    return
+  }
+  currentRound.value.tables = currentRound.value.tables.filter((item) => item.id !== tableId)
   selectedRoundTableId.value = currentRound.value.tables[0]?.id || ''
   markRoundAllocationDirty()
 }
@@ -7243,13 +7386,57 @@ function formatBaseTierAmount(ratePercent) {
   return (Number(baseForm.entryFee || 0) * Number(ratePercent ?? 100) / 100).toFixed(2)
 }
 
-function removeJudgeTable(index) {
+async function removeJudgeTable(index) {
   if (!canEditBaseJudgeTables.value) return
-  const [table] = judgeTableForm.splice(index, 1)
-  if (table) {
-    for (let i = judgeAssignmentForm.length - 1; i >= 0; i -= 1) {
-      if (judgeAssignmentForm[i].tableLocalId === table.localId) judgeAssignmentForm.splice(i, 1)
+  const table = judgeTableForm[index]
+  if (!table) return
+  const affected = assignmentsForTable(table)
+  const tableLabel = table.tableName || '未命名评审桌'
+  if (!affected.length) {
+    try {
+      await ElMessageBox.confirm(`确认删除「${tableLabel}」？`, '删除评审桌', {
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+      })
+    } catch {
+      return
     }
+    removeBaseJudgeTable(table)
+    return
+  }
+  const names = affected.map((assignment) => getJudge(assignment.judgePublicId)?.name || '未知评审')
+  const otherTables = judgeTableForm.filter((item) => item.localId !== table.localId)
+  let moveToOther = false
+  try {
+    await ElMessageBox.confirm(
+      `「${tableLabel}」上有 ${names.length} 位评审：${names.join('、')}。`,
+      '删除评审桌',
+      otherTables.length
+        ? { confirmButtonText: '回到未分配并删除', cancelButtonText: '移到其他桌', distinguishCancelAndClose: true, type: 'warning' }
+        : { confirmButtonText: '回到未分配并删除', cancelButtonText: '取消', type: 'warning' },
+    )
+  } catch (action) {
+    if (!otherTables.length || action !== 'cancel') return
+    moveToOther = true
+  }
+  if (!moveToOther) {
+    removeBaseJudgeTable(table)
+    return
+  }
+  const target = otherTables[0]
+  affected.forEach((assignment) => {
+    assignment.tableLocalId = target.localId
+  })
+  removeBaseJudgeTable(table)
+  ElMessage.success(`${names.length} 位评审已移到${target.tableName || '其他桌'}，请核对桌长设置`)
+}
+
+function removeBaseJudgeTable(table) {
+  const index = judgeTableForm.findIndex((item) => item.localId === table.localId)
+  if (index >= 0) judgeTableForm.splice(index, 1)
+  for (let i = judgeAssignmentForm.length - 1; i >= 0; i -= 1) {
+    if (judgeAssignmentForm[i].tableLocalId === table.localId) judgeAssignmentForm.splice(i, 1)
   }
   selectedTableLocalId.value = judgeTableForm[0]?.localId || null
   markRoundAllocationDirty()
@@ -7275,9 +7462,23 @@ function selectAssignmentTarget(table, role) {
   selectedRole.value = role
 }
 
-function addJudgeToTarget(judge) {
+function pushBaseAssignment(judge, table, role) {
+  const assignment = {
+    localId: `assignment-${Date.now()}-${judge.publicId}`,
+    tableLocalId: table.localId,
+    judgePublicId: judge.publicId,
+    role,
+  }
+  judgeAssignmentForm.push(assignment)
+  markRoundAllocationDirty()
+  return assignment
+}
+
+async function addJudgeToTarget(judge) {
   if (!canEditBaseJudgeTables.value) return
-  if (!selectedTable.value) {
+  const targetTable = selectedTable.value
+  const targetRole = selectedRole.value
+  if (!targetTable) {
     ElMessage.warning('请先选择要加入的基础桌')
     return
   }
@@ -7285,21 +7486,36 @@ function addJudgeToTarget(judge) {
     ElMessage.warning('停用评审不能加入本场比赛')
     return
   }
+  if (targetRole === 'CAPTAIN') {
+    const currentCaptain = assignmentsForTable(targetTable, 'CAPTAIN')[0]
+    if (currentCaptain && currentCaptain.judgePublicId !== judge.publicId) {
+      ElMessage.warning('该桌已有桌长，请先移除当前桌长再加入')
+      return
+    }
+  }
+  const targetLabel = `${targetTable.tableName || '未命名评审桌'} · ${roleLabels[targetRole] || targetRole}`
   const existing = judgeAssignmentForm.find((assignment) => assignment.judgePublicId === judge.publicId)
   if (existing) {
-    existing.tableLocalId = selectedTable.value.localId
-    existing.role = selectedRole.value
+    if (existing.tableLocalId === targetTable.localId && existing.role === targetRole) {
+      ElMessage.info(`${judge.name}已在${targetLabel}`)
+      return
+    }
+    try {
+      await ElMessageBox.confirm(
+        `${judge.name}将从${getJudgeAssignmentSummary(judge.publicId) || '未分配'}移到${targetLabel}，原位置会空出。`,
+        '调整评审位置',
+        { confirmButtonText: '确认移动', cancelButtonText: '取消', type: 'warning' },
+      )
+    } catch {
+      return
+    }
+    existing.tableLocalId = targetTable.localId
+    existing.role = targetRole
     markRoundAllocationDirty()
-    ElMessage.success(`${judge.name}已移动到${selectedTargetLabel.value}`)
+    ElMessage.success(`${judge.name}已移动到${targetLabel}`)
     return
   }
-  judgeAssignmentForm.push({
-    localId: `assignment-${Date.now()}-${judge.publicId}`,
-    tableLocalId: selectedTable.value.localId,
-    judgePublicId: judge.publicId,
-    role: selectedRole.value,
-  })
-  markRoundAllocationDirty()
+  pushBaseAssignment(judge, targetTable, targetRole)
 }
 
 function removeAssignment(assignment) {
@@ -7353,13 +7569,23 @@ function dropOnRole(table, role) {
 
 function tableValidationIssues(table) {
   const issues = []
+  const tableLabel = table.tableName || '未命名基础桌'
   const captainCount = assignmentsForTable(table, 'CAPTAIN').length
   const totalCount = assignmentsForTable(table).length
   if (!table.tableName?.trim()) issues.push('基础桌名称不能为空')
-  if (captainCount === 0) issues.push(`${table.tableName || '未命名基础桌'}缺少桌长`)
-  if (captainCount > 1) issues.push(`${table.tableName || '未命名基础桌'}有 ${captainCount} 名桌长`)
-  if (totalCount === 0) issues.push(`${table.tableName || '未命名基础桌'}尚未分配评审`)
+  if (captainCount === 0) issues.push(`${tableLabel}缺少桌长`)
+  if (captainCount > 1) issues.push(`${tableLabel}有 ${captainCount} 名桌长`)
+  if (totalCount === 0) issues.push(`${tableLabel}尚未分配评审`)
+  const disabledCount = countDisabledJudges(assignmentsForTable(table).map((assignment) => assignment.judgePublicId))
+  if (disabledCount) issues.push(`${tableLabel}有 ${disabledCount} 位评审已停用，请替换或移除`)
   return issues
+}
+
+function countDisabledJudges(judgePublicIds) {
+  return [...new Set(judgePublicIds.filter(Boolean))]
+    .map((publicId) => getJudge(publicId))
+    .filter((judge) => judge && !isJudgeActive(judge))
+    .length
 }
 
 function getJudgeAssignmentSummary(judgePublicId) {

@@ -24,6 +24,10 @@ export function fetchCompetitionCollection(id) {
   return request.get(`/api/admin/competitions/${id}/collection`, { authScope: 'admin' })
 }
 
+export function fetchCompetitionCollectionQr(assetId) {
+  return request.get(`/api/admin/files/${assetId}`, { authScope: 'admin', responseType: 'blob' })
+}
+
 export function uploadCompetitionCollectionQr(id, file) {
   const formData = new FormData()
   formData.append('file', file)

@@ -51,6 +51,7 @@ import com.beercompetition.security.JwtUtil;
 import com.beercompetition.security.AdminIdentityService;
 import com.beercompetition.security.AdminSessionIdentity;
 import com.beercompetition.service.AuthService;
+import com.beercompetition.service.LoginCaptchaService;
 import com.beercompetition.service.SmsAuthProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -104,6 +105,7 @@ public class AuthServiceImpl implements AuthService {
     private final SmsAuthProvider smsAuthProvider;
     private final PiiService piiService;
     private final AdminIdentityService adminIdentityService;
+    private final LoginCaptchaService loginCaptchaService;
 
     @Override
     public LoginResponse adminLogin(AdminLoginRequest request) {
@@ -160,9 +162,21 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public LoginResponse portalLogin(SmsLoginRequest request) {
-        // 1) 验证短信验证码
-        validateSmsCode(SmsBizType.PORTAL_LOGIN, request.getPhone(), request.getCode());
         String phone = piiService.normalizePhone(request.getPhone());
+        String phoneHash = piiService.hashPhone(phone);
+        String captchaSubject = SmsBizType.PORTAL_LOGIN.name() + ":" + phoneHash;
+
+        // 1) 首次短信验证码失败后，后续尝试必须先通过图形验证码。
+        loginCaptchaService.validateIfRequired(captchaSubject,
+                request.getCaptchaId(), request.getCaptchaCode());
+        try {
+            validateSmsCode(SmsBizType.PORTAL_LOGIN, phone, request.getCode());
+        } catch (BaseException exception) {
+            if ("验证码错误或已过期".equals(exception.getMessage())) {
+                loginCaptchaService.recordFailure(captchaSubject);
+            }
+            throw exception;
+        }
 
         // 2) 查询或自动创建厂牌账号
         boolean newAccount = false;
@@ -183,6 +197,7 @@ public class AuthServiceImpl implements AuthService {
         response.setNewAccount(newAccount);
         response.setProfileComplete(profileComplete);
         response.setProfileRequired(!profileComplete);
+        loginCaptchaService.clearFailure(captchaSubject);
         return response;
     }
 

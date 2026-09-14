@@ -2,7 +2,7 @@ package com.beercompetition.controller.admin;
 import com.beercompetition.common.result.Result; import com.beercompetition.pojo.dto.*; import com.beercompetition.pojo.vo.*; import com.beercompetition.service.JudgeRecruitmentService; import jakarta.validation.Valid; import lombok.RequiredArgsConstructor; import org.springframework.web.bind.annotation.*; import java.util.List;
 @RestController @RequiredArgsConstructor @RequestMapping("/api/admin/judge-recruitments")
 public class AdminJudgeRecruitmentController { private final JudgeRecruitmentService service;
- @GetMapping public Result<List<JudgeRecruitmentVO>> list(@RequestParam(required=false) String status,@RequestParam(required=false) String keyword){return Result.success(service.adminList(status,keyword));}
+ @GetMapping public Result<List<JudgeRecruitmentVO>> list(@RequestParam(required=false) String status,@RequestParam(required=false) String keyword,@RequestParam(required=false) String organizerType){return Result.success(service.adminList(status,keyword,organizerType));}
  @GetMapping("/{id}") public Result<JudgeRecruitmentVO> get(@PathVariable Long id){return Result.success(service.adminGet(id));}
  @PostMapping public Result<JudgeRecruitmentVO> create(@RequestBody @Valid JudgeRecruitmentRequest q){return Result.success(service.save(q,null));}
  @PutMapping("/{id}") public Result<JudgeRecruitmentVO> update(@PathVariable Long id,@RequestBody @Valid JudgeRecruitmentRequest q){return Result.success(service.save(q,id));}

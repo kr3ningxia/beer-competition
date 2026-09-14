@@ -12,6 +12,7 @@ import com.beercompetition.pojo.vo.BeerCoinPricingVO;
 import com.beercompetition.pojo.vo.BeerCoinPurchaseOrderVO;
 import com.beercompetition.pojo.vo.BeerCoinPurchasePaymentVO;
 import com.beercompetition.pojo.vo.BeerCoinSettlementVO;
+import com.beercompetition.pojo.vo.BeerCoinWalletVO;
 import com.beercompetition.pojo.vo.WechatPayClientConfigVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +39,11 @@ public class AdminBeerCoinController {
     @GetMapping
     public Result<BeerCoinOverviewVO> overview() {
         return Result.success(beerCoinService.getOverview());
+    }
+
+    @GetMapping("/wallet")
+    public Result<BeerCoinWalletVO> wallet() {
+        return Result.success(beerCoinService.getWallet());
     }
 
     @GetMapping("/pricing")

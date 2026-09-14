@@ -2,7 +2,9 @@ package com.beercompetition.judging.access;
 
 import com.beercompetition.competition.access.CompetitionAccessService;
 import com.beercompetition.common.exception.ForbiddenException;
+import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.JudgeAssignmentMapper;
+import com.beercompetition.mapper.OrganizerMapper;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -18,7 +20,8 @@ class JudgeAccessServiceTest {
     private final CompetitionAccessService competitionAccessService = mock(CompetitionAccessService.class);
     private final JudgeAssignmentMapper judgeAssignmentMapper = mock(JudgeAssignmentMapper.class);
     private final JudgeAccessService judgeAccessService = new JudgeAccessService(
-            competitionAccessService, judgeAssignmentMapper);
+            competitionAccessService, judgeAssignmentMapper,
+            mock(CompetitionMapper.class), mock(OrganizerMapper.class));
 
     @Test
     void superAdminUsesUnrestrictedScope() {

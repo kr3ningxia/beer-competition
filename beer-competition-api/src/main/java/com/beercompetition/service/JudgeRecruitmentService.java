@@ -8,7 +8,7 @@ import com.beercompetition.pojo.vo.JudgeRecruitmentVO;
 import java.util.List;
 
 public interface JudgeRecruitmentService {
-    List<JudgeRecruitmentVO> adminList(String status, String keyword);
+    List<JudgeRecruitmentVO> adminList(String status, String keyword, String organizerType);
     JudgeRecruitmentVO adminGet(Long id);
     JudgeRecruitmentVO save(JudgeRecruitmentRequest request, Long id);
     JudgeRecruitmentVO publish(Long id);

@@ -305,7 +305,7 @@
 
     <el-dialog
       v-model="refundDialogVisible"
-      title="退赛退款"
+      title="申请退款"
       width="520px"
       class="refund-confirm-dialog"
       align-center
@@ -315,22 +315,35 @@
         <div v-if="refundPreview" class="refund-preview-summary">
           <p>退款前累计 {{ refundPreview.activeEntryCountBefore }} 款，退款后剩余 {{ refundPreview.activeEntryCountAfter }} 款</p>
           <p>本次退款金额：<strong>{{ formatCurrency(refundPreview.refundAmount) }}</strong></p>
-          <p>{{ refundPreview.pricingNote }}</p>
+          <p v-if="refundTierActive" class="refund-pricing-note">计价说明：按当前累计档位的单价退还</p>
+          <el-popover placement="bottom-end" :width="360" trigger="click" popper-class="refund-rules-popper">
+            <template #reference>
+              <button class="refund-hint-marker" type="button" aria-label="查看退款说明">?</button>
+            </template>
+            <div class="refund-rules">
+              <h4>退款说明</h4>
+              <ul>
+                <li v-if="refundTierRuleText">{{ refundTierRuleText }}</li>
+                <li>报名截止前可提交退款申请，截止后不再受理。</li>
+                <li v-if="isManualReviewRefund">需主办方审核通过后处理，审核期间报名与酒标仍然有效。</li>
+                <li v-if="pendingRefundEntry && isWechatQrRefund(pendingRefundEntry)">微信支付原路退回，一般 1–3 个工作日到账。</li>
+                <li v-else>银行转账报名由主办方确认后退款，以实际到账为准。</li>
+                <li>退款完成后该酒款报名取消、酒标同时作废，不可撤回。</li>
+              </ul>
+            </div>
+          </el-popover>
         </div>
-        <el-tooltip :content="refundConfirmTip" placement="top">
-          <button class="refund-hint-marker" type="button" aria-label="查看退款说明">?</button>
-        </el-tooltip>
         <el-input
           v-model.trim="refundForm.reason"
           class="refund-reason-input"
-          placeholder="退款原因（选填）"
+          placeholder="退款原因（选填，将同步给主办方）"
           maxlength="200"
           clearable
         />
       </div>
       <template #footer>
         <div class="refund-dialog-actions">
-          <el-button class="refund-cancel-button" :disabled="refunding" @click="refundDialogVisible = false">取消退款</el-button>
+          <el-button class="refund-cancel-button" :disabled="refunding" @click="refundDialogVisible = false">暂不退款</el-button>
           <el-button
             class="refund-edit-button"
             :disabled="refunding || !pendingRefundEntry?.canUpdateInfo"
@@ -338,7 +351,7 @@
           >
             修改酒款信息
           </el-button>
-          <el-button class="refund-confirm-button" :loading="refunding" @click="confirmRefundRequest">确定退款</el-button>
+          <el-button class="refund-confirm-button" :loading="refunding" @click="confirmRefundRequest">{{ refundSubmitLabel }}</el-button>
         </div>
       </template>
     </el-dialog>
@@ -376,7 +389,7 @@ const savingEdit = ref(false)
 const refundDialogVisible = ref(false)
 const refunding = ref(false)
 const pendingRefundEntry = ref(null)
-const DEFAULT_REFUND_REASON = '退赛退款'
+const DEFAULT_REFUND_REASON = '主动退赛'
 const refundForm = reactive({
   reason: '',
 })
@@ -395,11 +408,17 @@ const currencyFormatter = new Intl.NumberFormat('zh-CN', {
 })
 
 const statusOptions = Object.entries(entryStatusMeta).map(([value, meta]) => ({ value, label: meta.label }))
-const refundConfirmTip = computed(() => (
-  pendingRefundEntry.value?.refundApprovalMode === 'MANUAL_REVIEW'
-    ? '提交后等待组委会审核；退款完成后报名取消，酒标同时作废。'
-    : '提交后系统自动受理；退款完成后报名取消，酒标同时作废。'
-))
+const isManualReviewRefund = computed(() => pendingRefundEntry.value?.refundApprovalMode === 'MANUAL_REVIEW')
+const refundTierActive = computed(() => Boolean(refundPreview.value?.tierPricingActive))
+const refundSubmitLabel = computed(() => (isManualReviewRefund.value ? '提交退款申请' : '确认退款'))
+const refundTierRuleText = computed(() => {
+  const preview = refundPreview.value
+  if (!preview?.tierPricingActive) return ''
+  return `阶梯价按累计款数计价，退款金额取退 1 款前后的合计差额：`
+    + `${preview.activeEntryCountBefore} 款 ${formatCurrency(preview.totalAmountBeforeRefund)} → `
+    + `${preview.activeEntryCountAfter} 款 ${formatCurrency(preview.totalAmountAfterRefund)}，`
+    + `差额 ${formatCurrency(preview.refundAmount)}。退款金额与所退酒款无关，剩余酒款价格不变。`
+})
 const competitionMap = computed(() => new Map(competitions.value.map((competition) => [competition.id, competition])))
 const editConfiguredFields = computed(() => normalizeEntryFields(editCompetition.value?.entryFields || []))
 const judgeVisibleExtraFields = computed(() => {
@@ -759,7 +778,7 @@ async function confirmRefundRequest() {
     const reason = refundForm.reason.trim() || DEFAULT_REFUND_REASON
     const detail = await requestPortalEntryRefund(entry.id, { reason })
     refundDialogVisible.value = false
-    ElMessage.success(entry.refundApprovalMode === 'MANUAL_REVIEW' ? '退款申请已提交' : '退款申请已受理')
+    ElMessage.success(refundSuccessText(entry))
     entries.value = await fetchPortalEntries()
     if (selectedEntry.value?.id === entry.id) selectedEntry.value = detail
   } catch (error) {
@@ -767,6 +786,12 @@ async function confirmRefundRequest() {
   } finally {
     refunding.value = false
   }
+}
+
+function refundSuccessText(entry) {
+  if (entry?.refundApprovalMode === 'MANUAL_REVIEW') return '退款申请已提交，等待主办方审核'
+  if (isManualRefundPayment(entry)) return '退款已受理，主办方确认后安排退款'
+  return '退款已受理，将原路退回，一般 1–3 个工作日到账'
 }
 
 function refundUnavailableText(entry) {
@@ -1340,18 +1365,40 @@ dd {
 }
 
 .refund-confirm-body {
-  position: relative;
   display: grid;
   gap: 14px;
 }
 
+.refund-preview-summary {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  padding-right: 30px;
+  font-size: 14px;
+}
+
+.refund-preview-summary p {
+  margin: 0;
+}
+
+.refund-preview-summary strong {
+  color: #8f5100;
+  font-size: 18px;
+}
+
+.refund-pricing-note {
+  margin-top: 6px;
+  color: #8b7b67;
+  font-size: 13px;
+}
+
 .refund-hint-marker {
   position: absolute;
-  top: -42px;
-  right: 34px;
+  top: 0;
+  right: 0;
   display: inline-grid;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   padding: 0;
   place-items: center;
   color: #80694d;
@@ -1368,6 +1415,38 @@ dd {
   color: #4a321b;
   border-color: rgba(87, 58, 26, 0.5);
   outline: none;
+}
+
+:global(.refund-rules-popper.el-popper) {
+  background: #fffaf0;
+  border: 1px solid rgba(87, 58, 26, 0.16);
+  box-shadow: 0 12px 32px rgba(43, 29, 16, 0.18);
+}
+
+:global(.refund-rules-popper .el-popper__arrow::before) {
+  background: #fffaf0;
+  border-color: rgba(87, 58, 26, 0.16);
+}
+
+:global(.refund-rules h4) {
+  margin: 0 0 8px;
+  color: #2b1d10;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+:global(.refund-rules ul) {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 16px;
+  color: #6f6252;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+:global(.refund-rules li) {
+  list-style: disc;
 }
 
 .refund-reason-input :deep(.el-input__wrapper) {

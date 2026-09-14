@@ -24,12 +24,13 @@
             <span class="avatar">{{ getJudgeInitial(judge.name) }}</span>
             <div class="resource-body">
               <strong>{{ judge.name || '未填写姓名' }}</strong>
-              <small v-if="hasJudgeBreweryConflict(judge)" class="judge-conflict-line" :data-full="formatJudgeBreweryConflict(judge)">
-                {{ formatJudgeBreweryConflict(judge) }}
-              </small>
-              <small class="judge-qualification" :data-full="formatJudgeQualification(judge.qualification)">
-                {{ formatJudgeQualification(judge.qualification) }}
-              </small>
+              <p class="judge-meta" :title="judgeMetaFull(judge, formatJudgeQualification(judge.qualification))">
+                <span class="judge-meta-main">{{ formatJudgeQualification(judge.qualification) }}</span>
+                <span v-if="hasJudgeBreweryConflict(judge)" class="judge-meta-conflict">
+                  <span v-if="judgeConflictBrewery(judge, formatJudgeQualification(judge.qualification))" class="judge-meta-brewery">{{ judgeConflictBrewery(judge, formatJudgeQualification(judge.qualification)) }}</span>
+                  <span class="judge-meta-flag">需回避</span>
+                </span>
+              </p>
               <em v-if="getRoundJudgeAssignmentSummary(judge.publicId)" class="assignment-status">{{ getRoundJudgeAssignmentSummary(judge.publicId) }}</em>
             </div>
             <div class="resource-card-actions">
@@ -42,6 +43,31 @@
               </button>
             </div>
           </article>
+          <template v-if="disabledJudgePool.length">
+            <button class="pool-group-toggle" type="button" @click="disabledPoolExpanded = !disabledPoolExpanded">
+              <span>已停用评审</span>
+              <b>{{ disabledJudgePool.length }}</b>
+              <em>{{ disabledPoolExpanded ? '收起' : '展开' }}</em>
+            </button>
+            <article
+              v-for="judge in disabledPoolExpanded ? disabledJudgePool : []"
+              :key="`disabled-round-${judge.publicId}`"
+              class="resource-card disabled"
+            >
+              <span class="avatar">{{ getJudgeInitial(judge.name) }}</span>
+              <div class="resource-body">
+                <strong>{{ judge.name || '未填写姓名' }}</strong>
+                <p class="judge-meta" :title="judgeMetaFull(judge, formatJudgeQualification(judge.qualification))">
+                  <span class="judge-meta-main">{{ formatJudgeQualification(judge.qualification) }}</span>
+                  <span v-if="hasJudgeBreweryConflict(judge)" class="judge-meta-conflict">
+                    <span v-if="judgeConflictBrewery(judge, formatJudgeQualification(judge.qualification))" class="judge-meta-brewery">{{ judgeConflictBrewery(judge, formatJudgeQualification(judge.qualification)) }}</span>
+                    <span class="judge-meta-flag">需回避</span>
+                  </span>
+                </p>
+                <em class="assignment-status">已停用，不能加入</em>
+              </div>
+            </article>
+          </template>
         </div>
       </aside>
 
@@ -49,7 +75,7 @@
         <article
           v-for="table in currentRoundTables"
           :key="table.id"
-          :class="['desk-card', { active: selectedRoundTableId === table.id, danger: getRoundTableIssues(table).length }]"
+          :class="['desk-card', { active: selectedRoundTableId === table.id, danger: getRoundTableIssues(table).length || getRoundTableAdvisories(table).length }]"
           @click="selectRankingTable(table.id)"
         >
           <header class="desk-summary">
@@ -80,6 +106,10 @@
               </button>
             </div>
           </header>
+          <p v-for="warning in getRoundTableAdvisories(table)" :key="warning" class="desk-warning-line">
+            <Warning />
+            <span>{{ warning }}</span>
+          </p>
           <section :class="['role-grid', 'ranking-role-grid', { 'score-role-grid': currentRound?.type === 'SCORE' }]">
             <div
               :class="['role-lane', { active: isSelectedRankingRole(table.id, 'CAPTAIN') }]"
@@ -91,14 +121,20 @@
                 <strong>桌长</strong>
                 <span>{{ table.captainPublicId ? 1 : 0 }} 人</span>
               </header>
-              <article v-if="table.captainPublicId" class="mini-card">
+              <article
+                v-if="table.captainPublicId"
+                class="mini-card"
+              >
                 <span class="avatar small">{{ getJudgeInitial(getJudge(table.captainPublicId)?.name) }}</span>
                 <div>
                   <strong>{{ getJudge(table.captainPublicId)?.name || '未知评审' }}</strong>
-                  <small>桌长</small>
-                  <small v-if="getJudgeBreweryConflict(table.captainPublicId)" class="judge-conflict-line" :data-full="getJudgeBreweryConflict(table.captainPublicId)">
-                    {{ getJudgeBreweryConflict(table.captainPublicId) }}
-                  </small>
+                  <p class="judge-meta" :title="getJudgeMetaFull(table.captainPublicId, '桌长')">
+                    <span class="judge-meta-main">桌长</span>
+                    <span v-if="hasJudgeConflict(table.captainPublicId)" class="judge-meta-conflict">
+                      <span v-if="getJudgeConflictBrewery(table.captainPublicId, '桌长')" class="judge-meta-brewery">{{ getJudgeConflictBrewery(table.captainPublicId, '桌长') }}</span>
+                      <span class="judge-meta-flag">需回避</span>
+                    </span>
+                  </p>
                 </div>
                 <button v-if="canEditRoundJudges" class="icon-action" type="button" :title="isLiveRoundJudgeChange ? '标记离场' : '移除桌长'" @click.stop="$emit('updateTableCaptain', table.id, '')">
                   <Delete />
@@ -129,10 +165,13 @@
                 <span class="avatar small">{{ getJudgeInitial(member.name) }}</span>
                 <div>
                   <strong>{{ member.name || getJudge(member.judgePublicId)?.name || '未知评审' }}</strong>
-                  <small>{{ member.roleLabel || formatRoundMemberRole(member.role) }}</small>
-                  <small v-if="getJudgeBreweryConflict(member.judgePublicId)" class="judge-conflict-line" :data-full="getJudgeBreweryConflict(member.judgePublicId)">
-                    {{ getJudgeBreweryConflict(member.judgePublicId) }}
-                  </small>
+                  <p class="judge-meta" :title="getJudgeMetaFull(member.judgePublicId, member.roleLabel || formatRoundMemberRole(member.role))">
+                    <span class="judge-meta-main">{{ member.roleLabel || formatRoundMemberRole(member.role) }}</span>
+                    <span v-if="hasJudgeConflict(member.judgePublicId)" class="judge-meta-conflict">
+                      <span v-if="getJudgeConflictBrewery(member.judgePublicId, member.roleLabel || formatRoundMemberRole(member.role))" class="judge-meta-brewery">{{ getJudgeConflictBrewery(member.judgePublicId, member.roleLabel || formatRoundMemberRole(member.role)) }}</span>
+                      <span class="judge-meta-flag">需回避</span>
+                    </span>
+                  </p>
                 </div>
                 <button v-if="canEditRoundJudges" class="icon-action" type="button" :title="isLiveRoundJudgeChange ? '标记离场' : '移除评审'" @click.stop="$emit('removeRoundParticipant', table.id, member.judgePublicId)">
                   <Delete />
@@ -161,10 +200,13 @@
                 <span class="avatar small">{{ getJudgeInitial(member.name) }}</span>
                 <div>
                   <strong>{{ member.name || getJudge(member.judgePublicId)?.name || '未知评审' }}</strong>
-                  <small>参与评审</small>
-                  <small v-if="getJudgeBreweryConflict(member.judgePublicId)" class="judge-conflict-line" :data-full="getJudgeBreweryConflict(member.judgePublicId)">
-                    {{ getJudgeBreweryConflict(member.judgePublicId) }}
-                  </small>
+                  <p class="judge-meta" :title="getJudgeMetaFull(member.judgePublicId, '参与评审')">
+                    <span class="judge-meta-main">参与评审</span>
+                    <span v-if="hasJudgeConflict(member.judgePublicId)" class="judge-meta-conflict">
+                      <span v-if="getJudgeConflictBrewery(member.judgePublicId, member.roleLabel || formatRoundMemberRole(member.role))" class="judge-meta-brewery">{{ getJudgeConflictBrewery(member.judgePublicId, member.roleLabel || formatRoundMemberRole(member.role)) }}</span>
+                      <span class="judge-meta-flag">需回避</span>
+                    </span>
+                  </p>
                 </div>
                 <button v-if="canEditRoundJudges" class="icon-action" type="button" :title="isLiveRoundJudgeChange ? '标记离场' : '移除评审'" @click.stop="$emit('removeRoundParticipant', table.id, member.judgePublicId)">
                   <Delete />
@@ -242,6 +284,11 @@
             <Warning />
             <span>{{ issue }}</span>
           </p>
+          <p v-if="currentRoundAdvisories.length" class="advisory-label">风险提示（不影响发布）</p>
+          <p v-for="warning in currentRoundAdvisories" :key="warning" class="advisory">
+            <Warning />
+            <span>{{ warning }}</span>
+          </p>
           <p v-if="roundValidationIssues.length === 0 && publishDisabledReason" class="warning">
             <Warning />
             <span>{{ publishDisabledReason }}</span>
@@ -284,18 +331,44 @@
             <span class="avatar">{{ getJudgeInitial(judge.name) }}</span>
             <div class="resource-body">
               <strong>{{ judge.name || '未填写姓名' }}</strong>
-              <small v-if="hasJudgeBreweryConflict(judge)" class="judge-conflict-line" :data-full="formatJudgeBreweryConflict(judge)">
-                {{ formatJudgeBreweryConflict(judge) }}
-              </small>
-              <small class="judge-qualification" :data-full="formatJudgeQualification(judge.qualification)">
-                {{ formatJudgeQualification(judge.qualification) }}
-              </small>
+              <p class="judge-meta" :title="judgeMetaFull(judge, formatJudgeQualification(judge.qualification))">
+                <span class="judge-meta-main">{{ formatJudgeQualification(judge.qualification) }}</span>
+                <span v-if="hasJudgeBreweryConflict(judge)" class="judge-meta-conflict">
+                  <span v-if="judgeConflictBrewery(judge, formatJudgeQualification(judge.qualification))" class="judge-meta-brewery">{{ judgeConflictBrewery(judge, formatJudgeQualification(judge.qualification)) }}</span>
+                  <span class="judge-meta-flag">需回避</span>
+                </span>
+              </p>
               <em v-if="getJudgeAssignmentSummary(judge.publicId)" class="assignment-status">{{ getJudgeAssignmentSummary(judge.publicId) }}</em>
             </div>
             <button type="button" :disabled="!editableJudges || !isJudgeActive(judge)" @click="$emit('addJudgeToTarget', judge)">
               {{ isAssigned(judge.publicId) ? '调整到当前' : '加入' }}
             </button>
           </article>
+          <template v-if="disabledJudgePool.length">
+            <button class="pool-group-toggle" type="button" @click="disabledPoolExpanded = !disabledPoolExpanded">
+              <span>已停用评审</span>
+              <b>{{ disabledJudgePool.length }}</b>
+              <em>{{ disabledPoolExpanded ? '收起' : '展开' }}</em>
+            </button>
+            <article
+              v-for="judge in disabledPoolExpanded ? disabledJudgePool : []"
+              :key="`disabled-base-${judge.publicId}`"
+              class="resource-card disabled"
+            >
+              <span class="avatar">{{ getJudgeInitial(judge.name) }}</span>
+              <div class="resource-body">
+                <strong>{{ judge.name || '未填写姓名' }}</strong>
+                <p class="judge-meta" :title="judgeMetaFull(judge, formatJudgeQualification(judge.qualification))">
+                  <span class="judge-meta-main">{{ formatJudgeQualification(judge.qualification) }}</span>
+                  <span v-if="hasJudgeBreweryConflict(judge)" class="judge-meta-conflict">
+                    <span v-if="judgeConflictBrewery(judge, formatJudgeQualification(judge.qualification))" class="judge-meta-brewery">{{ judgeConflictBrewery(judge, formatJudgeQualification(judge.qualification)) }}</span>
+                    <span class="judge-meta-flag">需回避</span>
+                  </span>
+                </p>
+                <em class="assignment-status">已停用，不能加入</em>
+              </div>
+            </article>
+          </template>
         </div>
       </aside>
 
@@ -303,7 +376,7 @@
         <article
           v-for="(table, index) in judgeTableForm"
           :key="table.localId"
-          :class="['desk-card', { active: selectedTableLocalId === table.localId, danger: tableValidationIssues(table).length }]"
+          :class="['desk-card', { active: selectedTableLocalId === table.localId, danger: tableValidationIssues(table).length || getBaseTableAdvisories(table).length }]"
         >
           <header class="desk-summary">
             <div class="desk-summary-main">
@@ -322,11 +395,15 @@
               <em :class="['desk-status', tableValidationIssues(table).length ? 'warning' : 'ok']">
                 {{ tableValidationIssues(table)[0] || '人员完整' }}
               </em>
-              <button v-if="editableJudges" class="icon-action" type="button" @click="$emit('removeJudgeTable', index)">
+              <button v-if="editableJudges" class="icon-action desk-delete-action" type="button" @click="$emit('removeJudgeTable', index)">
                 <Delete />
               </button>
             </div>
           </header>
+          <p v-for="warning in getBaseTableAdvisories(table)" :key="warning" class="desk-warning-line">
+            <Warning />
+            <span>{{ warning }}</span>
+          </p>
           <section class="role-grid">
             <div
               v-for="role in roleOptions"
@@ -351,9 +428,12 @@
                 <span class="avatar small">{{ getJudgeInitial(getJudge(assignment.judgePublicId)?.name) }}</span>
                 <div>
                   <strong>{{ getJudge(assignment.judgePublicId)?.name || '未知评审' }}</strong>
-                  <small v-if="getJudgeBreweryConflict(assignment.judgePublicId)" class="judge-conflict-line" :data-full="getJudgeBreweryConflict(assignment.judgePublicId)">
-                    {{ getJudgeBreweryConflict(assignment.judgePublicId) }}
-                  </small>
+                  <p v-if="hasJudgeConflict(assignment.judgePublicId)" class="judge-meta" :title="getJudgeMetaFull(assignment.judgePublicId, '')">
+                    <span v-if="hasJudgeConflict(assignment.judgePublicId)" class="judge-meta-conflict">
+                      <span v-if="getJudgeConflictBrewery(assignment.judgePublicId, '')" class="judge-meta-brewery">{{ getJudgeConflictBrewery(assignment.judgePublicId, '') }}</span>
+                      <span class="judge-meta-flag">需回避</span>
+                    </span>
+                  </p>
                 </div>
                 <button v-if="editableJudges" class="icon-action" type="button" @click.stop="$emit('removeAssignment', assignment)">
                   <Delete />
@@ -400,6 +480,11 @@
         <p v-for="issue in validationIssues" :key="issue" class="warning">
           <Warning />
           <span>{{ issue }}</span>
+        </p>
+        <p v-if="baseTableAdvisories.length" class="advisory-label">风险提示（不影响保存）</p>
+        <p v-for="warning in baseTableAdvisories" :key="warning" class="advisory">
+          <Warning />
+          <span>{{ warning }}</span>
         </p>
         <p v-if="validationIssues.length === 0 && !firstRoundExists" class="ok">
           <CircleCheck />
@@ -480,7 +565,7 @@
         <article
           v-for="table in currentRoundTables"
           :key="table.id"
-          :class="['desk-card', { active: selectedRoundTableId === table.id, danger: getRoundTableIssues(table).length || getRoundTableConflictWarnings(table).length }]"
+          :class="['desk-card', { active: selectedRoundTableId === table.id, danger: getRoundTableIssues(table).length || getRoundTableAdvisories(table).length }]"
           @click="$emit('selectRoundTable', table.id)"
           @dragover.prevent
           @drop.prevent="$emit('dropEntryOnRoundTable', table.id)"
@@ -521,7 +606,7 @@
             </div>
           </header>
           <p
-            v-for="warning in getRoundTableConflictWarnings(table)"
+            v-for="warning in getRoundTableAdvisories(table)"
             :key="warning"
             class="desk-warning-line"
           >
@@ -655,7 +740,7 @@
             <Warning />
             <span>{{ issue }}</span>
           </p>
-          <p v-for="warning in currentRoundConflictWarnings" :key="warning" class="warning">
+          <p v-for="warning in currentRoundAdvisories" :key="warning" class="warning">
             <Warning />
             <span>{{ warning }}</span>
           </p>
@@ -760,7 +845,12 @@
                     <em :class="`role-${judge.role}`">{{ judge.roleLabel }}</em>
                     <div>
                       <strong>{{ judge.name }}</strong>
-                      <small v-if="judge.breweryConflict" class="judge-conflict-line" :data-full="judge.breweryConflict">{{ judge.breweryConflict }}</small>
+                      <p v-if="judge.hasConflict" class="judge-meta" :title="judge.conflictDetail">
+                        <span class="judge-meta-conflict">
+                          <span v-if="judge.conflictBrewery" class="judge-meta-brewery">{{ judge.conflictBrewery }}</span>
+                          <span class="judge-meta-flag">需回避</span>
+                        </span>
+                      </p>
                     </div>
                   </li>
                 </ul>
@@ -842,7 +932,9 @@ const props = defineProps({
   isJudgeActive: { type: Function, required: true },
   getRoundEntryAssignment: { type: Function, required: true },
   getRoundTableIssues: { type: Function, required: true },
-  getRoundTableConflictWarnings: { type: Function, default: () => [] },
+  getRoundTableAdvisories: { type: Function, default: () => [] },
+  getBaseTableAdvisories: { type: Function, default: () => [] },
+  disabledJudgePool: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits([
@@ -911,6 +1003,8 @@ function commitRoundTableName(table, value) {
 }
 
 const selectedRankingRole = ref(null)
+const disabledPoolExpanded = ref(false)
+
 const scoreRoundMemberRoles = [
   { value: 'PROFESSIONAL', label: '专业评审' },
   { value: 'CROSS', label: '跨界评审' },
@@ -1012,7 +1106,7 @@ const overviewMetrics = computed(() => {
     : props.currentRound?.type === 'SCORE'
       ? props.judgeTableForm.reduce((sum, table) => sum + props.assignmentsForTable(table).length, 0)
       : props.currentRoundTables.reduce((sum, table) => sum + getRoundMembers(table).length, 0)
-  const issueCount = props.roundValidationIssues.length + overviewBaseValidationIssues.value.length + currentRoundConflictWarnings.value.length
+  const issueCount = props.roundValidationIssues.length + overviewBaseValidationIssues.value.length + currentRoundAdvisories.value.length
   return {
     assignedEntries,
     assignedJudges,
@@ -1020,8 +1114,12 @@ const overviewMetrics = computed(() => {
     issueCount,
   }
 })
-const currentRoundConflictWarnings = computed(() => {
-  const warnings = props.currentRoundTables.flatMap((table) => props.getRoundTableConflictWarnings(table))
+const currentRoundAdvisories = computed(() => {
+  const warnings = props.currentRoundTables.flatMap((table) => props.getRoundTableAdvisories(table))
+  return [...new Set(warnings)]
+})
+const baseTableAdvisories = computed(() => {
+  const warnings = props.judgeTableForm.flatMap((table) => props.getBaseTableAdvisories(table))
   return [...new Set(warnings)]
 })
 
@@ -1085,15 +1183,35 @@ function isRoundJudgeAssigned(judgePublicId) {
   ))
 }
 
+function findRoundMembership(judgePublicId) {
+  const memberships = []
+  props.rounds.forEach((round) => {
+    ;(round.tables || []).forEach((table) => {
+      if (table.captainPublicId === judgePublicId) {
+        memberships.push({ round, table, role: 'CAPTAIN' })
+        return
+      }
+      const member = getRoundMembers(table).find((item) => isActiveRoundMember(item) && item.judgePublicId === judgePublicId)
+      if (member) memberships.push({ round, table, role: member.role })
+    })
+  })
+  return memberships
+}
+
+function formatRoundMembership(membership) {
+  const label = membership.role === 'CAPTAIN'
+    ? '桌长'
+    : (membership.round.type === 'SCORE' ? formatRoundMemberRole(membership.role) : '参与评审')
+  const roundPrefix = membership.round.id === props.activeRoundId ? '' : `${membership.round.name} `
+  return `已在 ${roundPrefix}${membership.table.name} · ${label}`
+}
+
 function getRoundJudgeAssignmentSummary(judgePublicId) {
-  const table = props.currentRoundTables.find((item) => (
-    item.captainPublicId === judgePublicId
-      || getRoundMembers(item).some((member) => isActiveRoundMember(member) && member.judgePublicId === judgePublicId)
-  ))
-  if (!table) return ''
-  if (table.captainPublicId === judgePublicId) return `已在 ${table.name} · 桌长`
-  const member = getRoundMembers(table).find((item) => isActiveRoundMember(item) && item.judgePublicId === judgePublicId)
-  return `已在 ${table.name} · ${props.currentRound?.type === 'SCORE' ? formatRoundMemberRole(member?.role) : '参与评审'}`
+  const memberships = findRoundMembership(judgePublicId)
+  if (!memberships.length) return ''
+  const current = memberships.find((item) => item.round.id === props.activeRoundId) || memberships[0]
+  const roundCount = memberships.length
+  return `${formatRoundMembership(current)}${roundCount > 1 ? ` 等 ${roundCount} 轮` : ''}`
 }
 
 function canAddRoundJudge(judge) {
@@ -1255,17 +1373,39 @@ function hasJudgeBreweryConflict(judge) {
   return Boolean((judge?.breweryConflictFlag && String(judge?.breweryConflictText || '').trim()) || judge?.phoneBreweryConflictFlag)
 }
 
+function hasJudgeConflict(judgePublicId) {
+  return hasJudgeBreweryConflict(props.getJudge(judgePublicId))
+}
+
+function judgeConflictBrewery(judge, mainText) {
+  if (!hasJudgeBreweryConflict(judge)) return ''
+  const brewery = String(judge?.phoneConflictBreweryName || '').trim()
+    || String(judge?.breweryConflictText || '').trim()
+  if (!brewery) return ''
+  return String(mainText || '').trim().includes(brewery) ? '' : brewery
+}
+
+function getJudgeConflictBrewery(judgePublicId, mainText) {
+  return judgeConflictBrewery(props.getJudge(judgePublicId), mainText)
+}
+
 function formatJudgeBreweryConflict(judge) {
+  if (!hasJudgeBreweryConflict(judge)) return ''
   const items = []
   const manualText = String(judge?.breweryConflictText || '').trim()
-  const phoneText = String(judge?.phoneConflictText || '').trim()
   if (manualText) items.push(`需回避：${manualText}`)
-  if (judge?.phoneBreweryConflictFlag) items.push(phoneText || '手机号匹配厂商账号')
+  if (judge?.phoneBreweryConflictFlag) {
+    items.push(String(judge?.phoneConflictText || '').trim() || '手机号匹配厂商账号')
+  }
   return items.join('；')
 }
 
-function getJudgeBreweryConflict(judgePublicId) {
-  return formatJudgeBreweryConflict(props.getJudge(judgePublicId))
+function judgeMetaFull(judge, mainText) {
+  return [mainText, formatJudgeBreweryConflict(judge)].filter(Boolean).join(' · ')
+}
+
+function getJudgeMetaFull(judgePublicId, mainText) {
+  return judgeMetaFull(props.getJudge(judgePublicId), mainText)
 }
 
 function getOverviewJudgeItems(roundTable) {
@@ -1275,7 +1415,9 @@ function getOverviewJudgeItems(roundTable) {
     return {
       key: assignment.localId || `${assignment.judgePublicId || 'judge'}-${role}-${index}`,
       name: judge?.name || '未知评审',
-      breweryConflict: formatJudgeBreweryConflict(judge),
+      hasConflict: hasJudgeBreweryConflict(judge),
+      conflictBrewery: judgeConflictBrewery(judge, ''),
+      conflictDetail: formatJudgeBreweryConflict(judge),
       initial: props.getJudgeInitial(judge?.name),
       role,
       roleLabel: getRoleLabel(role),
@@ -1334,7 +1476,7 @@ function formatCategorySummary(roundTable) {
 
 function getOverviewTableIssues(roundTable) {
   const issues = [...props.getRoundTableIssues(roundTable)]
-  issues.push(...props.getRoundTableConflictWarnings(roundTable))
+  issues.push(...props.getRoundTableAdvisories(roundTable))
   if (props.currentRound?.type === 'SCORE' && props.currentRound?.isPreparationDraft) {
     const judgeTable = getJudgeTable(roundTable)
     if (judgeTable) issues.push(...props.tableValidationIssues(judgeTable))
@@ -1595,6 +1737,11 @@ button:disabled {
   grid-template-rows: auto auto minmax(0, 1fr);
 }
 
+.judge-resource-panel .resource-list {
+  align-content: start;
+  grid-auto-rows: max-content;
+}
+
 .panel-head,
 .desk-card header,
 .role-lane header,
@@ -1796,15 +1943,56 @@ dt,
   color: #6fcf7a;
 }
 
-.judge-conflict-line {
-  position: relative;
-  display: block;
-  max-width: 100%;
+.judge-meta {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  margin: 0;
+  min-width: 0;
+  color: #8da1aa;
+  font-size: 12px;
+}
+
+.judge-meta-main,
+.judge-meta-conflict,
+.judge-meta-brewery {
   min-width: 0;
   overflow: hidden;
-  color: #f1bd79;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.judge-meta-main {
+  flex: 1 1 auto;
+}
+
+/* 评审池：资质和「酒厂名 · 需回避」各占一半，酒厂名先截断 */
+.resource-card .judge-meta-main {
+  max-width: 50%;
+}
+
+.judge-meta-conflict {
+  display: inline-flex;
+  flex: 0 1 auto;
+  font-weight: 700;
+  color: #f1bd79;
+}
+
+.judge-meta-brewery::after {
+  content: ' ·';
+}
+
+.judge-meta-flag {
+  flex: 0 0 auto;
+}
+
+/* 桌位卡里的角色名优先完整显示，酒厂名先截断 */
+.mini-card .judge-meta-main {
+  flex: 0 0 auto;
+}
+
+.mini-card .judge-meta-conflict {
+  flex: 0 1 auto;
 }
 
 .desk-warning-line {
@@ -1832,6 +2020,32 @@ dt,
 
 .resource-card.disabled {
   opacity: 0.52;
+}
+
+.pool-group-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  color: rgba(219, 232, 237, 0.66);
+  border: 1px dashed rgba(219, 232, 237, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: left;
+}
+
+.pool-group-toggle b {
+  color: #f1bd79;
+}
+
+.pool-group-toggle em {
+  margin-left: auto;
+  font-style: normal;
+  font-weight: 700;
+  opacity: 0.72;
 }
 
 .avatar {
@@ -1901,61 +2115,6 @@ dt,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.judge-qualification,
-.judge-conflict-line {
-  position: relative;
-  display: block;
-  max-width: 100%;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.judge-qualification:hover,
-.judge-conflict-line:hover {
-  overflow: visible;
-}
-
-.judge-qualification:hover::after,
-.judge-conflict-line:hover::after {
-  content: attr(data-full);
-  position: absolute;
-  z-index: 20;
-  left: 0;
-  bottom: calc(100% + 7px);
-  width: max-content;
-  max-width: min(360px, 72vw);
-  padding: 7px 9px;
-  color: #e6edf0;
-  border: 1px solid rgba(216, 169, 53, 0.3);
-  border-radius: 8px;
-  background: rgba(7, 14, 17, 0.98);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.5;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  pointer-events: none;
-}
-
-.judge-qualification:hover::before,
-.judge-conflict-line:hover::before {
-  content: '';
-  position: absolute;
-  z-index: 21;
-  left: 14px;
-  bottom: calc(100% + 2px);
-  width: 8px;
-  height: 8px;
-  border-right: 1px solid rgba(216, 169, 53, 0.3);
-  border-bottom: 1px solid rgba(216, 169, 53, 0.3);
-  background: rgba(7, 14, 17, 0.98);
-  transform: rotate(45deg);
-  pointer-events: none;
 }
 
 .table-board {
@@ -2171,10 +2330,14 @@ p {
 
 .desk-delete-action {
   flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
   color: #f1bd79;
   border-color: rgba(242, 153, 74, 0.22);
   background: rgba(242, 153, 74, 0.06);
 }
+
 
 .desk-delete-action:hover {
   color: #ffd3a6;
@@ -2187,6 +2350,11 @@ p {
   width: 16px;
   height: 16px;
   flex: 0 0 auto;
+}
+
+.desk-delete-action :deep(svg) {
+  width: 14px;
+  height: 14px;
 }
 
 .add-desk {
@@ -2650,6 +2818,28 @@ p {
 
 .ok {
   color: #6fcf7a;
+}
+
+.check-panel p.advisory-label {
+  padding: 0;
+  color: rgba(219, 232, 237, 0.5);
+  border: 0;
+  background: none;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+
+.check-panel p.advisory {
+  color: rgba(241, 189, 121, 0.84);
+  border-style: dashed;
+  background: rgba(242, 153, 74, 0.04);
+}
+
+.check-panel p.advisory :deep(svg) {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
 }
 
 .overview-card {

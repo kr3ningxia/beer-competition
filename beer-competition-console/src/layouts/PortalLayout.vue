@@ -102,15 +102,15 @@
       </div>
     </Transition>
 
-    <main :class="['page-frame', { 'page-frame-immersive': organizerExperience }]">
+    <main :class="['page-frame', { 'page-frame-immersive': organizerRoute }]">
       <router-view />
     </main>
-    <SiteFilingFooter />
+    <SiteFilingFooter :tone="organizerExperience ? 'dark' : 'warm'" />
   </div>
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, provide, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
   CircleCheck,
@@ -137,7 +137,10 @@ const mobileMenuTriggerRef = ref(null)
 const mobileMenuPanelRef = ref(null)
 let bodyOverflowBeforeMenu = ''
 const loggedIn = computed(() => isLoggedIn('portal'))
-const organizerExperience = computed(() => route.path.includes('/organizer-application'))
+const organizerRoute = computed(() => route.path.includes('/organizer-application'))
+const organizerImmersive = ref(false)
+provide('organizerImmersive', organizerImmersive)
+const organizerExperience = computed(() => organizerRoute.value && organizerImmersive.value)
 const accountName = computed(() => isQuestionPlaceholder(displayName.value) ? '完善厂牌资料' : displayName.value || '完善厂牌资料')
 const accountInitial = computed(() => getAccountInitial(accountName.value))
 const accountAvatarPreviewUrl = computed(() => resolveAvatarUrl(accountAvatarUrl.value))

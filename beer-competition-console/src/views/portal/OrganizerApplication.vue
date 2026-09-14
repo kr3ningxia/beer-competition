@@ -5,16 +5,14 @@
     <template v-else>
     <section class="application-intro" aria-labelledby="application-section-title">
       <div>
-        <span class="section-eyebrow">主办方入驻</span>
         <h2 id="application-section-title">
-          {{ pageMode === 'status' ? '找到您的申请记录' : resubmitContext ? '补充资料，继续审核' : '申请成为平台赛事主办方' }}
+          {{ pageMode === 'status'
+            ? portalLoggedIn ? '我的入驻申请' : '找到您的申请记录'
+            : resubmitContext ? '补充资料，继续审核' : '申请成为平台赛事主办方' }}
         </h2>
       </div>
-      <p>
-        {{ pageMode === 'status'
-          ? portalLoggedIn ? '已登录的账号，会自动带出您的申请。' : '用申请编号和联系人手机号，找回您的申请。'
-          : '用几分钟时间留下基本资料，后续由平台团队与您联系。' }}
-      </p>
+      <p v-if="pageMode === 'apply'">用几分钟时间留下基本资料，后续由平台团队与您联系。</p>
+      <p v-else-if="!portalLoggedIn">用申请编号和联系人手机号，找回您的申请。</p>
       <button
         v-if="pageMode === 'apply' && !submittedApplication && !resubmitContext"
         class="experience-back"
@@ -24,40 +22,28 @@
         <ArrowLeft />
         返回了解平台
       </button>
+      <RouterLink v-else-if="pageMode === 'status'" class="experience-back" to="/portal/organizer-application">
+        <ArrowLeft />
+        返回入驻申请
+      </RouterLink>
     </section>
 
     <Transition name="stage" mode="out-in">
-      <section v-if="pageMode === 'status'" key="status" class="status-layout" aria-labelledby="status-title">
-        <aside class="status-side">
-          <span class="side-number">01</span>
-          <h3 id="status-title">申请进度</h3>
-          <p>{{ portalLoggedIn ? '已登录的账号，会自动带出您的申请。' : '申请提交后，请用相同手机号进行查询。' }}</p>
-          <RouterLink class="side-link" to="/portal/organizer-application">
-            <ArrowLeft />
-            返回入驻申请
-          </RouterLink>
-        </aside>
-
+      <section v-if="pageMode === 'status'" key="status" class="status-layout">
         <div class="status-main">
-          <div v-if="portalLoggedIn" class="mine-status-toolbar">
-            <div class="mine-status-heading">
-              <span class="result-eyebrow">SIGNED-IN VIEW</span>
-              <strong>我的入驻申请</strong>
-            </div>
-            <div v-if="myApplications.length > 1" class="application-switcher" role="tablist" aria-label="选择申请记录">
-              <button
-                v-for="application in myApplications"
-                :key="application.applicationNo"
-                type="button"
-                :class="{ active: application.applicationNo === selectedApplicationNo }"
-                role="tab"
-                :aria-selected="application.applicationNo === selectedApplicationNo"
-                @click="selectMyApplication(application.applicationNo)"
-              >
-                <span>{{ application.organizationName || '未命名机构' }}</span>
-                <small>{{ application.statusLabel || application.status }}</small>
-              </button>
-            </div>
+          <div v-if="portalLoggedIn && myApplications.length > 1" class="application-switcher" role="tablist" aria-label="选择申请记录">
+            <button
+              v-for="application in myApplications"
+              :key="application.applicationNo"
+              type="button"
+              :class="{ active: application.applicationNo === selectedApplicationNo }"
+              role="tab"
+              :aria-selected="application.applicationNo === selectedApplicationNo"
+              @click="selectMyApplication(application.applicationNo)"
+            >
+              <span>{{ application.organizationName || '未命名机构' }}</span>
+              <small>{{ application.statusLabel || application.status }}</small>
+            </button>
           </div>
 
           <div v-if="portalLoggedIn && myApplicationsLoading" class="status-loading" aria-live="polite">
@@ -77,6 +63,94 @@
           <div v-if="portalLoggedIn && myApplicationsError" class="submit-error" role="alert">
             {{ myApplicationsError }}
           </div>
+
+          <Transition name="result-reveal">
+            <section v-if="statusResult" class="status-result" aria-live="polite">
+              <div class="status-result-topline">
+                <div>
+                  <h3>{{ statusResult.organizationName }}</h3>
+                  <p>申请编号 {{ statusResult.applicationNo }}</p>
+                </div>
+                <span :class="['status-badge', statusTone(statusResult.status)]">
+                  <CircleCheck v-if="statusResult.status === 'ACCOUNT_ISSUED' || statusResult.status === 'APPROVED'" />
+                  <Warning v-else-if="statusResult.status === 'REJECTED'" />
+                  <Clock v-else />
+                  {{ statusResult.statusLabel || statusResult.status }}
+                </span>
+              </div>
+
+              <ol class="status-timeline">
+                <li
+                  v-for="(item, index) in visibleTimeline"
+                  :key="item.key"
+                  :class="{ complete: statusProgress > index, current: statusProgress === index && statusResult.status !== 'REJECTED' }"
+                >
+                  <span class="timeline-marker">
+                    <Check v-if="statusProgress > index" />
+                    <span v-else>{{ String(index + 1).padStart(2, '0') }}</span>
+                  </span>
+                  <span class="timeline-copy">
+                    <strong>{{ item.label }}</strong>
+                    <small>{{ item.description }}</small>
+                  </span>
+                </li>
+              </ol>
+
+              <div v-if="statusResult.reviewRemark" class="review-note">
+                <span>平台备注</span>
+                <p>{{ statusResult.reviewRemark }}</p>
+              </div>
+
+              <div v-if="statusResult.status === 'ACCOUNT_ISSUED' && statusResult.adminUsername" class="issued-account-panel">
+                <div class="issued-account-heading">
+                  <span class="issued-account-title">主办方后台账号</span>
+                  <span class="issued-account-state">
+                    <Check />
+                    已开通
+                  </span>
+                </div>
+
+                <div class="issued-credentials">
+                  <div class="issued-credential-row">
+                    <span class="issued-credential-label">登录账号</span>
+                    <code>{{ statusResult.adminUsername }}</code>
+                    <button type="button" :aria-label="credentialCopied === 'username' ? '登录账号已复制' : '复制登录账号'" @click="copyCredential(statusResult.adminUsername, 'username')">
+                      <Check v-if="credentialCopied === 'username'" />
+                      <CopyDocument v-else />
+                      <span>{{ credentialCopied === 'username' ? '已复制' : '复制' }}</span>
+                    </button>
+                  </div>
+                  <div v-if="statusResult.initialPassword" class="issued-credential-row">
+                    <span class="issued-credential-label">初始密码</span>
+                    <code>{{ statusResult.initialPassword }}</code>
+                    <button type="button" :aria-label="credentialCopied === 'password' ? '初始密码已复制' : '复制初始密码'" @click="copyCredential(statusResult.initialPassword, 'password')">
+                      <Check v-if="credentialCopied === 'password'" />
+                      <CopyDocument v-else />
+                      <span>{{ credentialCopied === 'password' ? '已复制' : '复制' }}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="issued-account-footer">
+                  <p v-if="statusResult.initialPassword" class="issued-credential-note">请使用这组凭据登录后台，并在首次登录时完成账号设置。</p>
+                  <p v-else class="issued-credential-note">初始密码已交付或已完成首次设置，如需重新进入后台，请联系平台管理员。</p>
+                  <RouterLink class="primary-action" :to="{ path: '/admin/login', query: { username: statusResult.adminUsername } }">
+                    <Right />
+                    使用账号登录
+                  </RouterLink>
+                </div>
+              </div>
+
+              <div class="status-result-footer">
+                <span v-if="statusResult.maskedContactPhone">联系人 {{ statusResult.maskedContactPhone }}</span>
+                <span v-if="statusResult.submittedTime">提交于 {{ formatDateTime(statusResult.submittedTime) }}</span>
+                <button v-if="statusResult.status === 'NEED_MORE_INFO'" class="primary-action" type="button" @click="startResubmit">
+                  <DocumentAdd />
+                  补充资料
+                </button>
+              </div>
+            </section>
+          </Transition>
 
           <button
             v-if="portalLoggedIn && !showFallbackLookup"
@@ -151,80 +225,6 @@
             </div>
           </form>
 
-          <Transition name="result-reveal">
-             <section v-if="statusResult" class="status-result" aria-live="polite">
-              <div class="status-result-topline">
-                <div>
-                  <span class="result-eyebrow">APPLICATION STATUS</span>
-                  <h3>{{ statusResult.organizationName }}</h3>
-                  <p>申请编号 {{ statusResult.applicationNo }}</p>
-                </div>
-                <span :class="['status-badge', statusTone(statusResult.status)]">
-                  <CircleCheck v-if="statusResult.status === 'ACCOUNT_ISSUED' || statusResult.status === 'APPROVED'" />
-                  <Warning v-else-if="statusResult.status === 'REJECTED'" />
-                  <Clock v-else />
-                  {{ statusResult.statusLabel || statusResult.status }}
-                </span>
-              </div>
-
-              <ol class="status-timeline">
-                <li
-                  v-for="(item, index) in statusTimeline"
-                  :key="item.key"
-                  :class="{ complete: statusProgress > index, current: statusProgress === index && statusResult.status !== 'REJECTED' }"
-                >
-                  <span class="timeline-marker">
-                    <Check v-if="statusProgress > index" />
-                    <span v-else>{{ String(index + 1).padStart(2, '0') }}</span>
-                  </span>
-                  <span class="timeline-copy">
-                    <strong>{{ item.label }}</strong>
-                    <small>{{ item.description }}</small>
-                  </span>
-                </li>
-              </ol>
-
-               <div v-if="statusResult.reviewRemark" class="review-note">
-                <span>平台备注</span>
-                <p>{{ statusResult.reviewRemark }}</p>
-               </div>
-
-               <div v-if="statusResult.status === 'ACCOUNT_ISSUED' && statusResult.adminUsername" class="issued-account-panel">
-                 <div class="issued-account-heading">
-                   <div>
-                     <span>主办方后台账号</span>
-                     <strong>{{ statusResult.adminUsername }}</strong>
-                   </div>
-                   <span class="issued-account-state">已开通</span>
-                 </div>
-                 <div v-if="statusResult.initialPassword" class="issued-credentials">
-                   <div class="issued-credential-row">
-                     <span>初始密码</span>
-                     <code>{{ statusResult.initialPassword }}</code>
-                     <button type="button" :aria-label="credentialCopied === 'password' ? '初始密码已复制' : '复制初始密码'" @click="copyCredential(statusResult.initialPassword, 'password')">
-                       <Check v-if="credentialCopied === 'password'" />
-                       <CopyDocument v-else />
-                     </button>
-                   </div>
-                   <p>请使用这组凭据登录后台，并在首次登录时完成账号设置。</p>
-                 </div>
-                 <p v-else class="issued-credential-note">初始密码已交付或已完成首次设置，如需重新进入后台，请联系平台管理员。</p>
-                 <RouterLink class="primary-action" :to="{ path: '/admin/login', query: { username: statusResult.adminUsername } }">
-                   <Right />
-                   使用账号登录
-                 </RouterLink>
-               </div>
-
-               <div class="status-result-footer">
-                <span v-if="statusResult.maskedContactPhone">联系人 {{ statusResult.maskedContactPhone }}</span>
-                <span v-if="statusResult.submittedTime">提交于 {{ formatDateTime(statusResult.submittedTime) }}</span>
-                <button v-if="statusResult.status === 'NEED_MORE_INFO'" class="primary-action" type="button" @click="startResubmit">
-                  <DocumentAdd />
-                  补充资料
-                </button>
-              </div>
-            </section>
-          </Transition>
         </div>
       </section>
 
@@ -261,9 +261,7 @@
       <section v-else key="form" id="application-form" class="application-layout" aria-labelledby="form-title">
         <aside class="steps-side">
           <div class="steps-intro">
-            <span class="side-number">03</span>
             <h3>资料采集</h3>
-            <p>三步完成基础申请，填写内容越完整，平台越容易了解您的办赛计划。</p>
           </div>
           <ol class="step-list" aria-label="申请步骤">
             <li v-for="step in steps" :key="step.number" :class="{ active: currentStep === step.number, reached: currentStep >= step.number }">
@@ -274,20 +272,14 @@
                 </span>
                 <span class="step-copy">
                   <strong>{{ step.title }}</strong>
-                  <small>{{ step.description }}</small>
                 </span>
               </button>
             </li>
           </ol>
-          <div class="privacy-note">
-            <Lock />
-            <span>资料仅用于入驻审核，敏感联系方式会按规则保护。</span>
-          </div>
         </aside>
 
         <form class="form-panel" novalidate @submit.prevent="submitApplication">
           <div class="form-panel-topline">
-            <span>STEP {{ String(currentStep).padStart(2, '0') }} / 03</span>
             <span>{{ resubmitContext ? '补充申请资料' : '公开入驻申请' }}</span>
           </div>
 
@@ -296,8 +288,7 @@
               <div class="form-section-heading">
                 <span class="form-section-index">01</span>
                 <div>
-                  <h3 id="step-one-title">先说说，这场赛由谁来办</h3>
-                  <p>填办赛挂靠的公司或机构名称。</p>
+                  <h3 id="step-one-title">先说说是谁来办这场赛事</h3>
                 </div>
               </div>
               <div class="field-grid">
@@ -356,7 +347,6 @@
                     <span class="upload-icon"><UploadFilled /></span>
                     <span class="upload-copy">
                       <strong>拖入文件，或点击选择</strong>
-                      <small>一份材料即可，审核时会由平台团队查看</small>
                     </span>
                     <ArrowRight class="upload-arrow" />
                   </template>
@@ -442,7 +432,6 @@
                 <span class="form-section-index">03</span>
                 <div>
                   <h3 id="step-three-title">说说您想办一场怎样的赛事</h3>
-                  <p>不需要写得很正式，真实的想法足够让我们开始了解。</p>
                 </div>
               </div>
               <div class="field-grid single-column">
@@ -494,7 +483,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, inject, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import OrganizerApplicationLanding from './components/OrganizerApplicationLanding.vue'
 import {
@@ -509,7 +498,6 @@ import {
   Document,
   DocumentAdd,
   Loading,
-  Lock,
   Message,
   OfficeBuilding,
   Phone,
@@ -535,9 +523,9 @@ const route = useRoute()
 const router = useRouter()
 
 const steps = [
-  { number: 1, title: '机构资料', description: '先认识您的机构' },
-  { number: 2, title: '联系方式', description: '保持顺畅沟通' },
-  { number: 3, title: '办赛计划', description: '分享您的想法' },
+  { number: 1, title: '机构资料' },
+  { number: 2, title: '联系方式' },
+  { number: 3, title: '办赛计划' },
 ]
 
 const scaleOptions = [
@@ -587,15 +575,24 @@ const showLanding = computed(() => (
   && !resubmitContext.value
 ))
 
+const organizerImmersive = inject('organizerImmersive', null)
+watch(showLanding, (visible) => {
+  if (organizerImmersive) organizerImmersive.value = visible
+}, { immediate: true })
+
 const form = reactive(createEmptyForm())
 const errors = reactive({})
 const touched = reactive({})
 const statusForm = reactive({ applicationNo: '', contactPhone: '' })
 const statusErrors = reactive({})
 
+const visibleTimeline = computed(() => (
+  statusTimeline.filter((item) => item.key !== 'NEED_MORE_INFO' || statusResult.value?.status === 'NEED_MORE_INFO')
+))
+
 const statusProgress = computed(() => {
   if (!statusResult.value) return -1
-  const index = statusTimeline.findIndex((item) => item.key === statusResult.value.status)
+  const index = visibleTimeline.value.findIndex((item) => item.key === statusResult.value.status)
   return index >= 0 ? index : 0
 })
 
@@ -1056,6 +1053,7 @@ function selectMyApplication(applicationNo) {
 
 .experience-back {
   order: -1;
+  justify-self: start;
   display: inline-flex;
   align-items: center;
   gap: 9px;
@@ -1068,6 +1066,7 @@ function selectMyApplication(applicationNo) {
   font: inherit;
   font-size: 13px;
   font-weight: 800;
+  text-decoration: none;
   cursor: pointer;
 }
 
@@ -1171,8 +1170,7 @@ function selectMyApplication(applicationNo) {
 .hero-primary-action,
 .hero-status-link,
 .primary-action,
-.secondary-action,
-.side-link {
+.secondary-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1218,8 +1216,7 @@ function selectMyApplication(applicationNo) {
 .hero-primary-action svg,
 .hero-status-link svg,
 .primary-action svg,
-.secondary-action svg,
-.side-link svg {
+.secondary-action svg {
   width: 18px;
   height: 18px;
 }
@@ -1231,18 +1228,11 @@ function selectMyApplication(applicationNo) {
   animation: rise-in 680ms 160ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.hero-aside-label,
-.result-eyebrow,
 .section-eyebrow {
   color: var(--amber-deep);
   font-size: 11px;
   font-weight: 900;
   letter-spacing: 0.14em;
-}
-
-.hero-aside-label,
-.result-eyebrow {
-  color: #efca7a;
 }
 
 .hero-aside strong {
@@ -1278,12 +1268,12 @@ function selectMyApplication(applicationNo) {
 
 .workspace-open .application-intro {
   display: grid;
-  grid-template-columns: minmax(300px, 1fr) minmax(300px, auto) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: end;
 }
 
 .application-intro h2 {
-  margin: 9px 0 0;
+  margin: 0;
   font-family: 'Noto Serif SC', 'Songti SC', Georgia, serif;
   font-size: 30px;
   line-height: 1.25;
@@ -1298,47 +1288,27 @@ function selectMyApplication(applicationNo) {
   text-align: right;
 }
 
-.application-layout,
-.status-layout {
+.application-layout {
   display: grid;
   grid-template-columns: 224px minmax(0, 1fr);
   gap: 38px;
   align-items: start;
 }
 
-.steps-side,
-.status-side {
+.steps-side {
   position: sticky;
   top: 98px;
 }
 
-.steps-intro,
-.status-side {
+.steps-intro {
   padding: 4px 0 24px;
 }
 
-.side-number {
-  display: block;
-  color: var(--amber-deep);
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: 0.12em;
-}
-
-.steps-intro h3,
-.status-side h3 {
-  margin: 10px 0 10px;
+.steps-intro h3 {
+  margin: 0 0 10px;
   font-family: 'Noto Serif SC', 'Songti SC', Georgia, serif;
   font-size: 24px;
   line-height: 1.25;
-}
-
-.steps-intro p,
-.status-side p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.75;
 }
 
 .step-list {
@@ -1423,31 +1393,6 @@ function selectMyApplication(applicationNo) {
   color: #4f4335;
   font-size: 14px;
   line-height: 1.3;
-}
-
-.step-copy small {
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.privacy-note {
-  display: flex;
-  gap: 8px;
-  margin-top: 27px;
-  padding-top: 16px;
-  color: #8c7d6c;
-  border-top: 1px dashed rgba(87, 58, 26, 0.18);
-  font-size: 11px;
-  line-height: 1.6;
-}
-
-.privacy-note svg {
-  flex: 0 0 auto;
-  width: 15px;
-  height: 15px;
-  margin-top: 1px;
-  color: var(--green);
 }
 
 .form-panel,
@@ -1907,29 +1852,12 @@ fieldset.field {
   gap: 20px;
 }
 
-.mine-status-toolbar {
-  display: grid;
-  gap: 14px;
-  padding-bottom: 17px;
-  border-bottom: 1px solid var(--line);
-}
-
-.mine-status-heading {
-  display: grid;
-  gap: 6px;
-}
-
-.mine-status-heading strong {
-  color: #493522;
-  font-family: 'Noto Serif SC', 'Songti SC', Georgia, serif;
-  font-size: 20px;
-}
-
 .application-switcher {
   display: flex;
   gap: 8px;
   overflow-x: auto;
-  padding-bottom: 2px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
 }
 
 .application-switcher button {
@@ -2044,9 +1972,9 @@ fieldset.field {
 
 .issued-account-panel {
   display: grid;
-  gap: 16px;
+  gap: 15px;
   margin-top: 18px;
-  padding: 15px 16px;
+  padding: 16px 18px 18px;
   background: #edf5e6;
   border: 1px solid rgba(61, 125, 80, 0.2);
   border-radius: 7px;
@@ -2057,104 +1985,111 @@ fieldset.field {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(61, 125, 80, 0.18);
 }
 
-.issued-account-heading > div {
-  display: grid;
-  gap: 5px;
-  min-width: 0;
-}
-
-.issued-account-panel span {
-  color: #58725a;
-  font-size: 11px;
-  font-weight: 800;
+.issued-account-title {
+  color: #3f6b4a;
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .issued-account-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   flex: 0 0 auto;
-  padding: 5px 8px;
-  color: #2f6b3f !important;
-  background: rgba(61, 125, 80, 0.1);
+  padding: 4px 9px;
+  color: #2f6b3f;
+  background: rgba(61, 125, 80, 0.12);
   border-radius: 999px;
-  font-size: 10px !important;
+  font-size: 10px;
+  font-weight: 900;
   letter-spacing: 0.08em;
 }
 
-.issued-account-panel strong {
-  overflow: hidden;
-  color: #245635;
-  font-family: 'SFMono-Regular', Consolas, monospace;
-  font-size: 15px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.issued-account-state svg {
+  width: 13px;
+  height: 13px;
 }
 
 .issued-credentials {
   display: grid;
-  gap: 8px;
-  padding-top: 14px;
-  border-top: 1px dashed rgba(61, 125, 80, 0.24);
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 14px;
+  row-gap: 12px;
 }
 
 .issued-credential-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
+  display: contents;
 }
 
-.issued-credential-row > span {
-  flex: 0 0 58px;
+.issued-credential-label {
+  color: #58725a;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .issued-credential-row code {
-  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   color: #245635;
   font-family: 'SFMono-Regular', Consolas, monospace;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .issued-credential-row button {
-  display: grid;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   flex: 0 0 auto;
-  place-items: center;
-  width: 30px;
   height: 30px;
-  color: #58725a;
-  background: transparent;
+  padding: 0 10px;
+  color: #2f6b3f;
+  background: rgba(61, 125, 80, 0.1);
   border: 0;
-  border-radius: 5px;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
   cursor: pointer;
 }
 
 .issued-credential-row button:hover,
 .issued-credential-row button:focus-visible {
-  color: #245635;
-  background: rgba(61, 125, 80, 0.1);
+  color: #1f5a34;
+  background: rgba(61, 125, 80, 0.2);
   outline: 0;
 }
 
 .issued-credential-row button svg {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
 }
 
-.issued-credentials p,
+.issued-account-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed rgba(61, 125, 80, 0.24);
+}
+
 .issued-credential-note {
   margin: 0;
   color: #58725a;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.6;
 }
 
 .issued-account-panel .primary-action {
-  justify-self: start;
+  flex: 0 0 auto;
   color: #fff8e8;
   background: var(--green);
   border-color: var(--green);
@@ -2170,7 +2105,27 @@ fieldset.field {
     align-items: flex-start;
   }
 
-  .issued-account-panel .primary-action {
+  .issued-credentials {
+    grid-template-columns: 56px minmax(0, 1fr) auto;
+    column-gap: 10px;
+    row-gap: 10px;
+  }
+
+  .issued-credential-label {
+    font-size: 11px;
+  }
+
+  .issued-credential-row code {
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .issued-account-footer {
+    display: grid;
+    gap: 12px;
+  }
+
+  .issued-account-footer .primary-action {
     width: 100%;
   }
 }
@@ -2185,7 +2140,7 @@ fieldset.field {
 }
 
 .status-result-topline h3 {
-  margin: 8px 0 5px;
+  margin: 0 0 5px;
   font-family: 'Noto Serif SC', 'Songti SC', Georgia, serif;
   font-size: 23px;
   line-height: 1.3;
@@ -2343,24 +2298,6 @@ fieldset.field {
 
 .status-result-footer .primary-action {
   margin-left: auto;
-}
-
-.side-link {
-  justify-content: flex-start;
-  margin-top: 22px;
-  padding: 0;
-  color: #8b5c19;
-  border: 0;
-  border-bottom: 1px solid transparent;
-  border-radius: 0;
-}
-
-.side-link:hover,
-.side-link:focus-visible {
-  color: #5c3c14;
-  border-bottom-color: #8b5c19;
-  transform: none;
-  outline: 0;
 }
 
 .success-layout {
@@ -2539,8 +2476,7 @@ fieldset.field {
     padding-left: 22px;
   }
 
-  .application-layout,
-  .status-layout {
+  .application-layout {
     gap: 28px;
   }
 }
@@ -2551,7 +2487,7 @@ fieldset.field {
   }
 
   .workspace-open .application-intro {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: auto minmax(0, 1fr);
   }
 
   .workspace-open .application-intro > p {
@@ -2574,31 +2510,22 @@ fieldset.field {
     margin-top: 44px;
   }
 
-  .application-layout,
-  .status-layout {
+  .application-layout {
     grid-template-columns: 1fr;
   }
 
-  .steps-side,
-  .status-side {
+  .steps-side {
     position: static;
   }
 
-  .steps-intro,
-  .status-side {
+  .steps-intro {
     display: flex;
     align-items: baseline;
     gap: 14px;
     padding-bottom: 15px;
   }
 
-  .steps-intro p,
-  .status-side p {
-    max-width: 540px;
-  }
-
-  .steps-intro h3,
-  .status-side h3 {
+  .steps-intro h3 {
     margin: 0;
   }
 
@@ -2629,17 +2556,6 @@ fieldset.field {
     padding: 4px;
   }
 
-  .step-copy small {
-    display: none;
-  }
-
-  .privacy-note {
-    display: none;
-  }
-
-  .side-link {
-    margin: 0 0 0 auto;
-  }
 }
 
 @media (max-width: 620px) {

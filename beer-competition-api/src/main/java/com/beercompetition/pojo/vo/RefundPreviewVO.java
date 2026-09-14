@@ -15,5 +15,7 @@ public class RefundPreviewVO {
     private BigDecimal currentPaidAmount;
     private BigDecimal refundAmount;
     private BigDecimal remainingAmountAfterRefund;
-    private String pricingNote;
+    private Boolean tierPricingActive;
+    private BigDecimal totalAmountBeforeRefund;
+    private BigDecimal totalAmountAfterRefund;
 }

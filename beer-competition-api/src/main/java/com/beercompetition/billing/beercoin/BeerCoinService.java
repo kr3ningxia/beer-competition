@@ -10,6 +10,7 @@ import com.beercompetition.pojo.vo.BeerCoinPricingVO;
 import com.beercompetition.pojo.vo.BeerCoinPurchaseOrderVO;
 import com.beercompetition.pojo.vo.BeerCoinPurchasePaymentVO;
 import com.beercompetition.pojo.vo.BeerCoinSettlementVO;
+import com.beercompetition.pojo.vo.BeerCoinWalletVO;
 import com.beercompetition.pojo.vo.WechatPayClientConfigVO;
 import com.beercompetition.pay.WechatPayClient;
 
@@ -18,6 +19,8 @@ import java.util.List;
 public interface BeerCoinService {
 
     BeerCoinOverviewVO getOverview();
+
+    BeerCoinWalletVO getWallet();
 
     BeerCoinPricingVO getActivePricing();
 

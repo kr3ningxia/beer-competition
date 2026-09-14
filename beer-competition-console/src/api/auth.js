@@ -12,6 +12,10 @@ export function portalLogin(payload) {
   return request.post('/api/public/portal/login', payload)
 }
 
+export function getLoginCaptcha() {
+  return request.get('/api/public/login/captcha')
+}
+
 export function getAdminMe() {
   return request.get('/api/admin/me', { authScope: 'admin' })
 }

@@ -38,4 +38,7 @@ Thumbs.db
 # Local runtime artifacts
 tmp/
 .playwright-mcp/
+.playwright-cli/
+.codex-tmp/
+output/
 uploads/

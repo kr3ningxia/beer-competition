@@ -168,7 +168,7 @@ svg {
   position: absolute;
   z-index: 80;
   right: 0;
-  bottom: calc(100% + 9px);
+  top: calc(100% + 9px);
   width: max-content;
   max-width: min(340px, 72vw);
   padding: 8px 10px;
@@ -190,13 +190,13 @@ svg {
   position: absolute;
   z-index: 81;
   right: 18px;
-  bottom: calc(100% + 4px);
+  top: calc(100% + 4px);
   width: 8px;
   height: 8px;
   border-right: 1px solid rgba(216, 169, 53, 0.32);
   border-bottom: 1px solid rgba(216, 169, 53, 0.32);
   background: rgba(7, 14, 17, 0.98);
-  transform: rotate(45deg);
+  transform: rotate(225deg);
   pointer-events: none;
 }
 
@@ -415,36 +415,44 @@ svg {
   border-top: 1px solid rgba(219, 232, 237, 0.08);
 }
 
+
 .entry-auto-assign-dialog {
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 .entry-assign-mode-switch {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-  padding: 5px;
+  gap: 4px;
+  padding: 4px;
   border: 1px solid rgba(219, 232, 237, 0.12);
   border-radius: 8px;
   background: rgba(7, 14, 17, 0.72);
 }
 
 .entry-assign-mode-switch button {
-  min-height: 46px;
-  color: #8da1aa;
+  min-height: 42px;
+  padding: 0 14px;
+  color: #a9bbc2;
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
   font: inherit;
-  font-weight: 850;
+  font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
 }
 
+.entry-assign-mode-switch button:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+}
+
 .entry-assign-mode-switch button.active {
-  color: #e0b84a;
+  color: var(--gold-soft);
   border-color: rgba(216, 169, 53, 0.32);
-  background: rgba(216, 169, 53, 0.1);
+  background: rgba(216, 169, 53, 0.08);
 }
 
 :global(.round-score-detail-dialog-shell.el-dialog) {
@@ -792,27 +800,30 @@ svg {
   align-items: center;
 }
 
+.entry-auto-assign-field.compact {
+  grid-template-columns: 52px 140px;
+}
+
 .entry-auto-assign-field > span {
   color: #8da1aa;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .entry-auto-assign-stats {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-left: 62px;
 }
 
 .entry-auto-assign-stats span {
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: 4px;
-  min-width: 0;
-  min-height: 30px;
-  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 0 10px;
   color: #8da1aa;
   font-size: 12px;
   font-weight: 800;
@@ -824,7 +835,7 @@ svg {
 
 .entry-auto-assign-stats strong {
   color: #e6edf0;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1;
 }
 
@@ -840,13 +851,17 @@ svg {
 
 .entry-code-assign-field {
   display: grid;
-  gap: 7px;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
 }
 
 .entry-code-assign-field > span {
+  padding-top: 12px;
   color: #8da1aa;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .entry-code-assign-field textarea {
@@ -875,28 +890,35 @@ svg {
 }
 
 .entry-code-assign-summary {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+  margin-left: 62px;
 }
 
 .entry-code-assign-summary span {
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
+  display: inline-flex;
+  align-items: center;
   gap: 5px;
-  min-height: 34px;
+  min-height: 28px;
+  padding: 0 10px;
   color: #8da1aa;
   border: 1px solid rgba(219, 232, 237, 0.1);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.026);
   font-size: 12px;
   font-weight: 800;
-  line-height: 34px;
+  white-space: nowrap;
 }
 
-.entry-code-assign-summary strong,
-.entry-code-assign-summary .highlight {
+.entry-code-assign-summary strong {
+  color: #e6edf0;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.entry-code-assign-summary .highlight,
+.entry-code-assign-summary .highlight strong {
   color: #e0b84a;
 }
 
@@ -956,8 +978,13 @@ svg {
   box-shadow: 0 0 0 2px rgba(216, 169, 53, 0.08);
 }
 
+:global(.entry-auto-assign-dialog-shell .el-input__wrapper),
+:global(.entry-auto-assign-dialog-shell .el-select__wrapper),
+:global(.entry-auto-assign-dialog-shell .el-input-number) {
+  min-height: 40px;
+}
+
 :global(.entry-auto-assign-dialog-shell .el-select__wrapper) {
-  min-height: 42px;
   background: var(--entry-dialog-panel);
   border: 1px solid rgba(219, 232, 237, 0.14);
   border-radius: 8px;
@@ -996,6 +1023,14 @@ svg {
   color: var(--entry-dialog-muted);
   border-color: rgba(219, 232, 237, 0.1);
   background: rgba(255, 255, 255, 0.035);
+}
+
+/* Element Plus 的 controls-right 分隔线用的是默认浅色，需要更高优先级覆盖 */
+:global(.entry-auto-assign-dialog-shell .el-input-number.is-controls-right .el-input-number__decrease),
+:global(.entry-auto-assign-dialog-shell .el-input-number.is-controls-right .el-input-number__increase) {
+  border-color: rgba(219, 232, 237, 0.1);
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--entry-dialog-muted);
 }
 
 :global(.entry-auto-assign-popper.el-popper) {

@@ -23,6 +23,8 @@ public interface BankTransferPaymentService {
 
     BankTransferVO submitPortalOrganizerPayment(Long orderId, PortalOrganizerPaymentRequest request);
 
+    BankTransferVO updatePortalOrganizerPayment(Long orderId, PortalOrganizerPaymentRequest request);
+
     BankTransferVO updatePortalOrderTransfer(Long orderId, PortalPaymentOrderBankTransferRequest request);
 
     BankTransferVO getPortalTransfer(Long id);

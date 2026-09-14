@@ -154,14 +154,26 @@ public class EntryRefundServiceImpl implements EntryRefundService {
         EntryPayment payment = ensureEntryPayment(entry.getId(), entry.getCompetitionId());
         assertCanRequestRefund(entry, competition, payment);
         int before = countActiveEntries(entry.getCompetitionId(), entry.getBreweryId());
+        int after = Math.max(0, before - 1);
         BigDecimal amount = calculateRefundAmount(competition, payment, before);
+        BigDecimal base = resolvePricingBase(payment);
         return RefundPreviewVO.builder()
                 .beerEntryId(entry.getId()).competitionId(entry.getCompetitionId())
-                .activeEntryCountBefore(before).activeEntryCountAfter(Math.max(0, before - 1))
+                .activeEntryCountBefore(before).activeEntryCountAfter(after)
                 .currentPaidAmount(payment.getAmount()).refundAmount(amount)
                 .remainingAmountAfterRefund(payment.getAmount().subtract(amount).max(BigDecimal.ZERO))
-                .pricingNote("退款按退款前累计数量的最后一档边际价格计算，不按被退酒款原价计算")
+                .tierPricingActive(Integer.valueOf(1).equals(competition.getTierPricingEnabled()))
+                .totalAmountBeforeRefund(totalAmountForCount(competition, base, before))
+                .totalAmountAfterRefund(totalAmountForCount(competition, base, after))
                 .build();
+    }
+
+    private BigDecimal totalAmountForCount(Competition competition, BigDecimal base, int count) {
+        BigDecimal total = BigDecimal.ZERO;
+        for (int sequence = 1; sequence <= count; sequence++) {
+            total = total.add(competitionPricingService.priceForSequence(competition, base, sequence));
+        }
+        return total.setScale(2, java.math.RoundingMode.HALF_UP);
     }
 
     private int countActiveEntries(Long competitionId, Long breweryId) {
@@ -175,12 +187,13 @@ public class EntryRefundServiceImpl implements EntryRefundService {
         if (activeCount <= 0) {
             return BigDecimal.ZERO;
         }
-        BigDecimal base = payment.getPricingBaseAmount();
-        if (base == null) {
-            base = payment.getAmount();
-        }
+        BigDecimal base = resolvePricingBase(payment);
         BigDecimal amount = competitionPricingService.priceForSequence(competition, base, activeCount);
         return amount.min(payment.getAmount()).setScale(2, java.math.RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal resolvePricingBase(EntryPayment payment) {
+        return payment.getPricingBaseAmount() == null ? payment.getAmount() : payment.getPricingBaseAmount();
     }
 
     private Long findPaymentOrderItemId(EntryPayment payment) {

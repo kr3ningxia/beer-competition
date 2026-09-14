@@ -173,7 +173,7 @@
           <article>
             <span>03</span>
             <div>
-              <strong>各管各的</strong>
+              <strong>数据隔离</strong>
               <p>只看得到自己的赛事和资料</p>
             </div>
           </article>

@@ -164,6 +164,16 @@ public class PortalPaymentController {
     }
 
     /**
+     * 修改等待主办方确认时的付款备注。
+     */
+    @PutMapping("/payment-orders/{id}/organizer-payment")
+    public Result<BankTransferVO> updateOrganizerPayment(
+            @PathVariable Long id,
+            @RequestBody @Valid PortalOrganizerPaymentRequest request) {
+        return Result.success(bankTransferPaymentService.updatePortalOrganizerPayment(id, request));
+    }
+
+    /**
      * 修改多酒款聚合订单待确认的银行转账信息。
      */
     @PutMapping("/payment-orders/{id}/bank-transfer")

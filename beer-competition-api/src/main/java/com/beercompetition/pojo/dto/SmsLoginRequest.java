@@ -13,4 +13,8 @@ public class SmsLoginRequest {
 
     @NotBlank(message = "验证码不能为空")
     private String code;
+
+    private String captchaId;
+
+    private String captchaCode;
 }

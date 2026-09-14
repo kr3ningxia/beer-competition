@@ -41,9 +41,23 @@
               <div>
                 <span>付款信息已提交</span>
                 <h2>等待主办方确认</h2>
-                <p>主办方确认收款后，这批酒款会一起完成报名</p>
-                <p v-if="organizerPaymentRemark" class="submitted-remark">付款备注：{{ organizerPaymentRemark }}</p>
-                <p v-else class="submitted-remark">未填写付款备注</p>
+                <div v-if="editingOrganizerRemark" class="organizer-remark-editor">
+                  <el-input
+                    v-model.trim="organizerRemarkDraft"
+                    maxlength="255"
+                    placeholder="付款备注（选填）"
+                  />
+                  <div class="organizer-remark-actions">
+                    <el-button type="primary" :loading="savingOrganizerRemark" @click="saveOrganizerRemark">保存备注</el-button>
+                    <el-button text @click="cancelOrganizerRemarkEdit">取消</el-button>
+                  </div>
+                </div>
+                <div v-else class="organizer-remark-row">
+                  <p v-if="organizerPaymentRemark" class="submitted-remark">付款备注：{{ organizerPaymentRemark }}</p>
+                  <button type="button" class="organizer-remark-action" @click="startOrganizerRemarkEdit">
+                    {{ organizerPaymentRemark ? '修改备注' : '填写付款备注' }}
+                  </button>
+                </div>
                 <p v-if="collectionConfig?.collectionNote" class="collection-note">
                   收款备注：{{ collectionConfig.collectionNote }}
                 </p>
@@ -110,8 +124,7 @@
                   maxlength="255"
                   placeholder="付款备注（选填）"
                 />
-                <el-button type="primary" :loading="paying" @click="submitOrganizerPayment">我已完成付款</el-button>
-                <el-button text :loading="checking" @click="checkPayment">查看确认结果</el-button>
+                <el-button class="organizer-payment-submit" type="primary" :loading="paying" @click="submitOrganizerPayment">我已完成付款</el-button>
               </div>
             </section>
             <section v-else-if="payMode === 'WECHAT'" class="wechat-panel">
@@ -186,6 +199,7 @@
           <div class="order-total"><span>合计</span><strong>{{ formatCurrency(batch.totalAmount) }}</strong></div>
           <div class="summary-actions">
             <RouterLink v-if="paid" :to="fulfillmentLocation">下载标签并填写送样信息</RouterLink>
+            <RouterLink v-else-if="bankPending || refunded" to="/portal/my">返回我的参赛</RouterLink>
             <RouterLink v-else to="/portal/my">稍后处理</RouterLink>
           </div>
         </aside>
@@ -215,6 +229,7 @@ import {
   submitPortalOrganizerPayment,
   fetchPortalCompetitionCollection,
   updatePortalBatchBankTransfer,
+  updatePortalOrganizerPayment,
   uploadPortalBankTransferVoucher,
 } from '@/api/portal'
 import { buildWechatOauthUrl, currentUrlWithoutWechatCode, invokeWechatPay, isWechatBrowser } from '@/utils/wechatPay'
@@ -257,6 +272,9 @@ const refunded = computed(() => ['PARTIALLY_REFUNDED', 'REFUNDED'].includes(orde
 const bankPending = computed(() => orderStatus.value === 'PENDING_CONFIRM')
 const organizerQrPending = computed(() => bankPending.value && paymentStatus.value?.payMethod === 'WECHAT_QR')
 const organizerPaymentRemark = ref('')
+const organizerRemarkDraft = ref('')
+const editingOrganizerRemark = ref(false)
+const savingOrganizerRemark = ref(false)
 const organizerManaged = computed(() => collectionConfig.value?.tenantCompetition === true)
 const availablePaymentMethods = computed(() => {
   if (!organizerManaged.value) {
@@ -366,7 +384,8 @@ async function submitOrganizerPayment() {
   if (paying.value || paid.value) return
   paying.value = true
   try {
-    await submitPortalOrganizerPayment(orderId, { remark: bankForm.remark || '' })
+    const transfer = await submitPortalOrganizerPayment(orderId, { remark: bankForm.remark || '' })
+    organizerPaymentRemark.value = transfer?.remark || ''
     paymentStatus.value = await fetchPortalBatchPaymentStatus(orderId)
     batch.value = await fetchPortalEntryBatch(batchId.value)
     startPolling()
@@ -573,6 +592,32 @@ function cancelBankTransferEdit() {
   bankVoucherName.value = ''
 }
 
+function startOrganizerRemarkEdit() {
+  organizerRemarkDraft.value = organizerPaymentRemark.value
+  editingOrganizerRemark.value = true
+}
+
+function cancelOrganizerRemarkEdit() {
+  editingOrganizerRemark.value = false
+  organizerRemarkDraft.value = ''
+}
+
+async function saveOrganizerRemark() {
+  if (savingOrganizerRemark.value) return
+  savingOrganizerRemark.value = true
+  try {
+    const transfer = await updatePortalOrganizerPayment(orderId, { remark: organizerRemarkDraft.value || '' })
+    organizerPaymentRemark.value = transfer?.remark || organizerRemarkDraft.value || ''
+    editingOrganizerRemark.value = false
+    organizerRemarkDraft.value = ''
+    ElMessage.success('付款备注已更新')
+  } catch (error) {
+    ElMessage.warning(error?.message || '付款备注更新失败')
+  } finally {
+    savingOrganizerRemark.value = false
+  }
+}
+
 function startPolling() {
   stopPolling()
   pollingTimer = window.setInterval(() => checkPayment({ silent: true }), 3000)
@@ -646,6 +691,7 @@ function formatCurrency(value) {
 .wechat-copy > strong { color: #744709; font-size: 34px; font-variant-numeric: tabular-nums; }
 .wechat-copy p { margin: 0 0 8px; color: #74624d; }
 .organizer-payment-remark { max-width: 420px; }
+.organizer-payment-submit { width: 100%; max-width: 420px; min-height: 46px; margin-top: 4px; background: #875515; border: 0; font-weight: 900; }
 .bank-panel { margin-top: 20px; }
 .bank-account { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 1px; overflow: hidden; background: rgba(87,58,26,.12); border: 1px solid rgba(87,58,26,.12); border-radius: 8px; }
 .bank-account div { padding: 13px 15px; background: #fff8e8; }
@@ -665,8 +711,15 @@ function formatCurrency(value) {
 .success-panel p, .pending-panel p { margin: 0; color: #76644f; }
 .success-actions { display: flex; gap: 8px; margin-top: 16px; }
 .pending-edit-button { margin-top: 16px; }
-.organizer-qr-pending .submitted-remark { margin-top: 12px; color: #80500f; font-weight: 800; }
+.organizer-qr-pending .submitted-remark { color: #80500f; font-weight: 800; }
 .organizer-qr-pending .collection-note { margin-top: 8px; font-size: 13px; }
+.organizer-remark-row { display: flex; align-items: baseline; gap: 12px; margin-top: 12px; }
+.organizer-remark-row .submitted-remark { min-width: 0; }
+.organizer-remark-action { flex: none; padding: 0; color: #96611b; background: transparent; border: 0; cursor: pointer; font-size: 13px; font-weight: 800; white-space: nowrap; }
+.organizer-remark-action:hover { color: #80500f; text-decoration: underline; text-underline-offset: 3px; }
+.organizer-remark-action:focus-visible { color: #80500f; outline: 2px solid rgba(174, 111, 25, .35); outline-offset: 3px; border-radius: 3px; }
+.organizer-remark-editor { display: grid; gap: 10px; max-width: 420px; margin-top: 14px; }
+.organizer-remark-actions { display: flex; gap: 8px; }
 .bank-cancel-edit { width: 100%; margin-top: 10px; }
 .order-summary { position: sticky; top: 116px; }
 .order-summary > header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 14px; border-bottom: 1px solid rgba(87,58,26,.12); }

@@ -36,6 +36,33 @@
               </el-button>
             </div>
           </el-form-item>
+          <transition name="captcha-reveal">
+            <el-form-item v-if="showCaptcha" label="图形验证码" class="captcha-form-item">
+              <div class="captcha-row">
+                <el-input
+                  v-model="form.captchaCode"
+                  name="captchaCode"
+                  autocomplete="off"
+                  spellcheck="false"
+                  maxlength="4"
+                  placeholder="请输入图形验证码"
+                  @input="normalizeCaptchaCode"
+                />
+                <button
+                  type="button"
+                  class="captcha-image-button"
+                  :disabled="captchaLoading"
+                  aria-label="刷新图形验证码"
+                  title="换一张"
+                  @click="refreshCaptcha"
+                >
+                  <img v-if="captchaImage" :src="captchaImage" alt="图形验证码，点击刷新" />
+                  <span v-else class="captcha-loading">加载中</span>
+                  <el-icon class="captcha-refresh-icon" aria-hidden="true"><Refresh /></el-icon>
+                </button>
+              </div>
+            </el-form-item>
+          </transition>
           <div v-if="message" class="form-note">{{ message }}</div>
           <el-button type="primary" native-type="submit" class="full" :loading="submitting">
             验证手机号，进入报名
@@ -50,22 +77,27 @@
 <script setup>
 import { computed, onBeforeUnmount, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Refresh } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
-import { portalLogin, sendSmsCode } from '@/api/auth'
+import { getLoginCaptcha, portalLogin, sendSmsCode } from '@/api/auth'
 import SiteFilingFooter from '@/components/SiteFilingFooter.vue'
 import { setSession } from '@/utils/auth'
 
 const router = useRouter()
 const route = useRoute()
-const form = reactive({ phone: '', code: '' })
+const form = reactive({ phone: '', code: '', captchaId: '', captchaCode: '' })
 const sending = ref(false)
 const submitting = ref(false)
+const captchaLoading = ref(false)
+const showCaptcha = ref(false)
+const captchaImage = ref('')
 const countdown = ref(0)
 const message = ref('')
 let timer = null
 
 const phoneValid = computed(() => /^1\d{10}$/.test(form.phone))
 const codeValid = computed(() => /^\d{4,6}$/.test(form.code))
+const captchaValid = computed(() => !showCaptcha.value || /^[A-Z0-9]{4}$/.test(form.captchaCode))
 const sendDisabled = computed(() => sending.value || countdown.value > 0 || !phoneValid.value)
 const sendButtonText = computed(() => (countdown.value > 0 ? `${countdown.value}s` : '发送验证码'))
 const postLoginPath = computed(() => normalizePortalPath(route.query.redirect || route.query.next, '/portal/my'))
@@ -97,10 +129,19 @@ async function submit() {
     ElMessage.warning('请输入验证码')
     return
   }
+  if (!captchaValid.value) {
+    ElMessage.warning('请输入图形验证码')
+    return
+  }
 
   submitting.value = true
   try {
-    const data = await portalLogin({ phone: form.phone, code: form.code })
+    const data = await portalLogin({
+      phone: form.phone,
+      code: form.code,
+      captchaId: form.captchaId,
+      captchaCode: form.captchaCode,
+    })
     setSession('portal', data)
     ElMessage.success(data.newAccount ? '账号已创建' : '已登录')
     if (data.newAccount || data.profileRequired || data.profileComplete === false) {
@@ -108,17 +149,56 @@ async function submit() {
       return
     }
     router.push(postLoginPath.value)
+  } catch (error) {
+    const errorMessage = error?.userMessage || error?.message || ''
+    if (errorMessage === '验证码错误或已过期' || errorMessage.includes('图形验证码')) {
+      showCaptcha.value = true
+      message.value = '请完成图形验证码'
+      await loadCaptcha()
+    }
   } finally {
     submitting.value = false
   }
 }
 
 function normalizePhone(value) {
-  form.phone = String(value || '').replace(/\D/g, '').slice(0, 11)
+  const normalized = String(value || '').replace(/\D/g, '').slice(0, 11)
+  if (normalized !== form.phone && showCaptcha.value) {
+    resetCaptcha()
+  }
+  form.phone = normalized
 }
 
 function normalizeCode(value) {
   form.code = String(value || '').replace(/\D/g, '').slice(0, 6)
+}
+
+function normalizeCaptchaCode(value) {
+  form.captchaCode = String(value || '').replace(/[^a-z\d]/gi, '').toUpperCase().slice(0, 4)
+}
+
+async function loadCaptcha() {
+  captchaLoading.value = true
+  try {
+    const data = await getLoginCaptcha()
+    captchaImage.value = data.image
+    form.captchaId = data.captchaId
+    form.captchaCode = ''
+  } finally {
+    captchaLoading.value = false
+  }
+}
+
+async function refreshCaptcha() {
+  if (captchaLoading.value) return
+  await loadCaptcha()
+}
+
+function resetCaptcha() {
+  showCaptcha.value = false
+  captchaImage.value = ''
+  form.captchaId = ''
+  form.captchaCode = ''
 }
 
 function normalizePortalPath(value, fallback) {
@@ -247,6 +327,77 @@ onBeforeUnmount(() => window.clearInterval(timer))
   white-space: nowrap;
 }
 
+.captcha-reveal-enter-active,
+.captcha-reveal-leave-active {
+  overflow: hidden;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.captcha-reveal-enter-from,
+.captcha-reveal-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.captcha-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 132px;
+  gap: 12px;
+  width: 100%;
+}
+
+.captcha-image-button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 132px;
+  min-height: 42px;
+  padding: 0;
+  overflow: hidden;
+  color: #7a6448;
+  border: 1px solid rgba(87, 58, 26, 0.14);
+  border-radius: 8px;
+  background: #fffdf7;
+  cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.captcha-image-button:hover,
+.captcha-image-button:focus-visible {
+  border-color: #b87517;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(184, 117, 23, 0.12);
+}
+
+.captcha-image-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.captcha-image-button img {
+  display: block;
+  width: 100%;
+  height: 42px;
+  object-fit: cover;
+}
+
+.captcha-loading {
+  font-size: 13px;
+}
+
+.captcha-refresh-icon {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  color: #fff;
+  border-radius: 50%;
+  background: rgba(43, 29, 16, 0.52);
+}
+
 .form-note {
   margin: 8px 0 18px;
   padding: 12px;
@@ -284,6 +435,15 @@ onBeforeUnmount(() => window.clearInterval(timer))
   .sms-row {
     grid-template-columns: minmax(0, 2fr) minmax(108px, 1fr);
     gap: 10px;
+  }
+
+  .captcha-row {
+    grid-template-columns: minmax(0, 1fr) 124px;
+    gap: 10px;
+  }
+
+  .captcha-image-button {
+    width: 124px;
   }
 }
 

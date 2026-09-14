@@ -23,6 +23,7 @@ import com.beercompetition.pojo.po.AdminUser;
 import com.beercompetition.pojo.vo.LoginResponse;
 import com.beercompetition.properties.JwtProperties;
 import com.beercompetition.properties.SmsProperties;
+import com.beercompetition.service.LoginCaptchaService;
 import com.beercompetition.service.SmsAuthProvider;
 import com.beercompetition.service.impl.AuthServiceImpl;
 import com.beercompetition.common.util.PiiService;
@@ -88,6 +89,8 @@ class AuthServiceRefreshTokenTest {
     private PiiService piiService;
     @Mock
     private AdminIdentityService adminIdentityService;
+    @Mock
+    private LoginCaptchaService loginCaptchaService;
 
     private final Map<String, Object> redisStore = new ConcurrentHashMap<>();
     private AuthServiceImpl authService;
@@ -139,7 +142,8 @@ class AuthServiceRefreshTokenTest {
                 smsProperties,
                 smsAuthProvider,
                 piiService,
-                adminIdentityService
+                adminIdentityService,
+                loginCaptchaService
         );
     }
 

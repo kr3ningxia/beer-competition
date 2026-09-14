@@ -4,6 +4,10 @@ export function fetchBeerCoinOverview() {
   return request.get('/api/admin/beer-coins', { authScope: 'admin' })
 }
 
+export function fetchBeerCoinWallet() {
+  return request.get('/api/admin/beer-coins/wallet', { authScope: 'admin' })
+}
+
 export function fetchActiveBeerCoinPricing() {
   return request.get('/api/admin/beer-coins/pricing', { authScope: 'admin' })
 }

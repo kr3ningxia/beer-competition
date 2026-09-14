@@ -155,6 +155,15 @@ public class BeerCoinServiceImpl implements BeerCoinService, BeerCoinSettlementS
     }
 
     @Override
+    public BeerCoinWalletVO getWallet() {
+        AdminSessionIdentity identity = requireSupportedIdentity();
+        if (!identity.adminType().isOrganizerAdmin()) {
+            throw new ForbiddenException("只有第三方主办方可以查看啤酒币余额");
+        }
+        return toWallet(requireCurrentEnterpriseAccount(identity));
+    }
+
+    @Override
     public BeerCoinPricingVO getActivePricing() {
         requireSupportedIdentity();
         return toPricingVO(productMapper.selectActive());
@@ -536,10 +545,10 @@ public class BeerCoinServiceImpl implements BeerCoinService, BeerCoinSettlementS
         if (result.paidAmount() == null) {
             throw new BaseException("微信支付金额缺失");
         }
-        if (BeerCoinPurchaseOrderStatus.EXPIRED.name().equals(order.getStatus())
-                || BeerCoinPurchaseOrderStatus.CLOSED.name().equals(order.getStatus())) {
-            throw new BaseException("啤酒币订单已关闭");
-        }
+        // 本地过期只代表我们不再对外提供支付入口，微信侧仍可能已经扣款成功，
+        // 此时必须照常入账，否则会变成钱收了、币没给。
+        boolean latePayment = BeerCoinPurchaseOrderStatus.EXPIRED.name().equals(order.getStatus())
+                || BeerCoinPurchaseOrderStatus.CLOSED.name().equals(order.getStatus());
         BeerCoinPurchaseOrder duplicateTransaction = purchaseOrderMapper.selectOne(new LambdaQueryWrapper<BeerCoinPurchaseOrder>()
                 .eq(BeerCoinPurchaseOrder::getWechatTransactionId, result.transactionId())
                 .ne(BeerCoinPurchaseOrder::getId, order.getId())
@@ -577,7 +586,8 @@ public class BeerCoinServiceImpl implements BeerCoinService, BeerCoinSettlementS
                 lotMapper.insert(lot);
             }
             insertLedger(order.getEnterpriseAccountId(), BeerCoinLedgerDirection.CREDIT.name(), order.getQuantity(),
-                    BUSINESS_PURCHASE, order.getId().toString(), key, null, "微信支付到账");
+                    BUSINESS_PURCHASE, order.getId().toString(), key, null,
+                    latePayment ? "微信支付到账（订单过期后补入账）" : "微信支付到账");
         }
         return true;
     }
@@ -874,10 +884,25 @@ public class BeerCoinServiceImpl implements BeerCoinService, BeerCoinSettlementS
     private void expireOrder(BeerCoinPurchaseOrder order) {
         if (order != null && !PAID.equals(order.getStatus())
                 && !BeerCoinPurchaseOrderStatus.EXPIRED.name().equals(order.getStatus())) {
+            closeWechatOrderOnExpire(order);
             order.setStatus(BeerCoinPurchaseOrderStatus.EXPIRED.name());
             order.setWechatTradeState("CLOSED");
             order.setWechatTradeStateDesc("支付已过期");
             purchaseOrderMapper.updateById(order);
+        }
+    }
+
+    /**
+     * 本地过期时关闭微信单，避免用户在我们判定过期后仍能完成支付。
+     * 关闭失败（已支付、已关闭、网络异常）不阻断状态流转，真正的兜底是回调按已支付入账。
+     */
+    private void closeWechatOrderOnExpire(BeerCoinPurchaseOrder order) {
+        if (!isWechatPaymentMode() || !StringUtils.hasText(order.getOutTradeNo())) {
+            return;
+        }
+        try {
+            wechatPayClient.closePayment(order.getOutTradeNo());
+        } catch (Exception ignored) {
         }
     }
 

@@ -5,10 +5,13 @@ import com.beercompetition.pojo.dto.AdminLoginRequest;
 import com.beercompetition.pojo.dto.RefreshTokenRequest;
 import com.beercompetition.pojo.dto.SmsLoginRequest;
 import com.beercompetition.pojo.dto.SmsSendRequest;
+import com.beercompetition.pojo.vo.LoginCaptchaResponse;
 import com.beercompetition.pojo.vo.LoginResponse;
 import com.beercompetition.service.AuthService;
+import com.beercompetition.service.LoginCaptchaService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,6 +26,15 @@ import org.springframework.web.bind.annotation.RestController;
 public class PublicAuthController {
 
     private final AuthService authService;
+    private final LoginCaptchaService loginCaptchaService;
+
+    /**
+     * 创建登录图形验证码。挑战本身不绑定账号，提交时由登录接口校验。
+     */
+    @GetMapping("/login/captcha")
+    public Result<LoginCaptchaResponse> loginCaptcha() {
+        return Result.success(loginCaptchaService.createChallenge());
+    }
 
     /**
      * 后台管理员账号密码登录。
