@@ -7,6 +7,8 @@ import com.beercompetition.judging.round.RoundQueryService;
 import com.beercompetition.pojo.dto.NextRoundCreateRequest;
 import com.beercompetition.pojo.dto.RoundAllocationRequest;
 import com.beercompetition.pojo.dto.RoundTableAllocationRequest;
+import com.beercompetition.pojo.enums.RoundStatus;
+import com.beercompetition.pojo.enums.RoundTargetMode;
 import com.beercompetition.pojo.po.CompetitionRound;
 import com.beercompetition.pojo.vo.CompetitionRoundVO;
 import com.beercompetition.testsupport.BeerCompetitionTestData;
@@ -100,6 +102,24 @@ class RoundAllocationRevisionIntegrationTest extends IntegrationTestBase {
         roundAllocationService.saveRoundAllocation(draft.competitionId(), draft.roundId(),
                 allocationRequest(draft, 1L, List.of(draft.candidateEntryUuid())));
         assertThat(allocationRevision(draft.roundId())).isEqualTo(2L);
+    }
+
+    @Test
+    void medalRoundCanOnlyCreateChampionRound() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        BeerCompetitionTestData.RankingRound medalRound = testData.createRankingRound(
+                fixture, List.of(fixture.entryA1(), fixture.entryA2(), fixture.entryB1()),
+                RoundTargetMode.MEDALS, 3, RoundStatus.LOCKED, 1);
+        jdbcTemplate.update("UPDATE competition SET status = 'JUDGING' WHERE id = ?", fixture.competition().getId());
+        NextRoundCreateRequest request = nextRoundRequest(medalRound.round().getId());
+        request.setRoundName("决赛轮");
+        request.setTargetMode(RoundTargetMode.MEDALS.name());
+        request.setTargetCount(3);
+
+        asAdmin(1L);
+        assertThatThrownBy(() -> roundAllocationService.createNextRound(fixture.competition().getId(), request))
+                .isInstanceOf(BaseException.class)
+                .hasMessageContaining("只能创建决赛轮");
     }
 
     private DraftFixture createDraftRound() {

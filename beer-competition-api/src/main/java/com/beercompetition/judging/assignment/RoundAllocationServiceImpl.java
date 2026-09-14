@@ -337,6 +337,7 @@ public class RoundAllocationServiceImpl implements RoundAllocationService {
         }
         roundValidationPolicy.validateTargetCountForMode(request.getRoundName(), targetMode.name(), request.getTargetCount());
         CompetitionRound sourceRound = roundQuerySupport.requireRound(competitionId, request.getSourceRoundId());
+        roundValidationPolicy.validateNextRoundTargetMode(sourceRound, targetMode.name());
         if (isTerminalRound(sourceRound)) {
             throw new BaseException("决赛轮已是最后一轮，不能继续创建轮次");
         }

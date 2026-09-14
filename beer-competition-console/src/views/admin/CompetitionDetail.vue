@@ -2946,11 +2946,7 @@ const currentRoundTargetMode = computed(() => {
 })
 const currentRoundTargetModeOptions = computed(() => {
   if (currentRoundTargetMode.value === 'CHAMPION' || canUseChampionTarget(currentRound.value)) {
-    return [
-      { value: 'TOP_N', label: '普通排序轮' },
-      { value: 'MEDALS', label: '组别金银铜轮' },
-      { value: 'CHAMPION', label: '决赛轮' },
-    ]
+    return [{ value: 'CHAMPION', label: '决赛轮' }]
   }
   return [
     { value: 'TOP_N', label: '普通排序轮' },
@@ -3067,6 +3063,10 @@ const createRoundTargetOptions = computed(() => {
     options.push(buildChampionTargetOption())
     return options
   }
+  if (canUseChampionTargetForNextRound()) {
+    options.push(buildChampionTargetOption())
+    return options
+  }
   options.push(
     {
       value: 'TOP_N',
@@ -3081,9 +3081,6 @@ const createRoundTargetOptions = computed(() => {
       fixedTargetCount: 3,
     },
   )
-  if (canUseChampionTargetForNextRound()) {
-    options.push(buildChampionTargetOption())
-  }
   return options
 })
 const canSubmitRankingRound = computed(() => {
@@ -6721,8 +6718,8 @@ async function finishCreateRound() {
 }
 
 function resetCreateRoundForm() {
-  const defaultOption = createRoundTargetOptions.value.find((item) => item.value === 'MEDALS') || createRoundTargetOptions.value[0]
-  updateCreateRoundTargetMode(defaultOption?.value || 'MEDALS')
+  const defaultOption = createRoundTargetOptions.value[0]
+  updateCreateRoundTargetMode(defaultOption?.value || 'TOP_N')
 }
 
 function updateCreateRoundTargetMode(mode) {

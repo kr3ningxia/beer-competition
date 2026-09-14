@@ -138,9 +138,37 @@ public class RoundValidationPolicy {
                 }
             }
         }
+        validateRankingRoundTargetModes(round, request.getTables());
         if (requireComplete && RoundType.SCORE.name().equals(round.getRoundType()) && entryUuids.isEmpty()) {
             throw new BaseException("首轮必须分配已入库样品");
         }
+    }
+
+    public void validateNextRoundTargetMode(CompetitionRound sourceRound, String requestedTargetMode) {
+        RoundTargetMode targetMode = RoundTargetMode.of(requestedTargetMode);
+        List<RoundTable> sourceTables = roundQuerySupport.listRoundTables(sourceRound.getId());
+        boolean sourceIsMedalRound = !sourceTables.isEmpty()
+                && sourceTables.stream().allMatch(table -> RoundTargetMode.MEDALS.name().equals(table.getTargetMode()));
+        if (sourceIsMedalRound && targetMode != RoundTargetMode.CHAMPION) {
+            throw new BaseException("组别金银铜轮之后只能创建决赛轮");
+        }
+        if (!sourceIsMedalRound && targetMode == RoundTargetMode.CHAMPION) {
+            throw new BaseException("决赛轮只能基于组别金银铜轮创建");
+        }
+    }
+
+    private void validateRankingRoundTargetModes(CompetitionRound round, List<RoundTableAllocationRequest> tables) {
+        if (!RoundType.RANKING.name().equals(round.getRoundType())) {
+            return;
+        }
+        Set<String> targetModes = tables.stream()
+                .map(table -> resolveTargetMode(round, table.getTargetMode()))
+                .collect(Collectors.toSet());
+        if (targetModes.size() != 1) {
+            throw new BaseException("同一排序轮的桌次目标必须一致");
+        }
+        CompetitionRound sourceRound = roundQuerySupport.requireRound(round.getCompetitionId(), round.getSourceRoundId());
+        validateNextRoundTargetMode(sourceRound, targetModes.iterator().next());
     }
 
     public void validateAllocationReferences(CompetitionRound round,

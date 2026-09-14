@@ -129,9 +129,7 @@ public class JudgePerformanceServiceImpl implements JudgePerformanceService {
                 .eq(CompetitionJudgeEvaluation::getCompetitionId, competitionId)
                 .eq(CompetitionJudgeEvaluation::getJudgeAccountId, judge.getId())
                 .last("LIMIT 1"));
-        if (existing != null && STATUS_CONFIRMED.equals(existing.getStatus())) {
-            throw new BaseException("已确认的评审表现不能直接修改");
-        }
+        boolean wasConfirmed = existing != null && STATUS_CONFIRMED.equals(existing.getStatus());
         checkVersion(existing, request.getVersion());
         String status = request.getStatus();
         if (STATUS_CONFIRMED.equals(status)) {
@@ -179,7 +177,9 @@ public class JudgePerformanceServiceImpl implements JudgePerformanceService {
                 throw new BaseException("评价已被其他管理员更新，请刷新后重试");
             }
         }
-        writeLog(competitionId, judgePublicId, STATUS_CONFIRMED.equals(status) ? "确认评审表现" : "保存评审表现草稿");
+        writeLog(competitionId, judgePublicId, STATUS_CONFIRMED.equals(status)
+                ? (wasConfirmed ? "修改已确认的评审表现" : "确认评审表现")
+                : "保存评审表现草稿");
         return buildCompetitionRecords(competition).stream()
                 .filter(item -> judgePublicId.equals(item.getJudgePublicId()))
                 .findFirst()
