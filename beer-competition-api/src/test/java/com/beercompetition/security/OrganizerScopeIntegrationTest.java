@@ -14,6 +14,7 @@ import com.beercompetition.pojo.po.Competition;
 import com.beercompetition.pojo.vo.JudgeAccountVO;
 import com.beercompetition.service.JudgeService;
 import com.beercompetition.service.JudgePerformanceService;
+import com.beercompetition.service.JudgeRecruitmentService;
 import com.beercompetition.service.AdminExportService;
 import com.beercompetition.service.AdminUserService;
 import com.beercompetition.registration.entry.AdminEntryService;
@@ -30,6 +31,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -47,6 +50,9 @@ class OrganizerScopeIntegrationTest extends IntegrationTestBase {
 
     @Autowired
     private JudgePerformanceService judgePerformanceService;
+
+    @Autowired
+    private JudgeRecruitmentService judgeRecruitmentService;
 
     @Autowired
     private CompetitionFeedbackQueryService feedbackQueryService;
@@ -151,6 +157,30 @@ class OrganizerScopeIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    void recruitmentApplicantScoreOnlyCountsOwnOrganizerCompetitions() {
+        createTenantIdentity();
+        Competition tenantCompetition = tenantCompetition();
+        Competition platformCompetition = testData.createCompetition(testRun + "-RECRUIT-PLATFORM", CompetitionStatus.DRAFT);
+        String phone = "137" + String.format("%08d", Math.floorMod(testRun.hashCode(), 100_000_000));
+        var applicant = testData.createJudge(testRun, "RECRUIT", phone, JudgeAccountStatus.ACTIVE);
+        insertConfirmedPerformance(tenantCompetition.getId(), applicant.getId(), "88.0");
+        insertConfirmedPerformance(platformCompetition.getId(), applicant.getId(), "96.0");
+        Long recruitmentId = insertRecruitment(tenantCompetition.getId());
+        insertApplication(recruitmentId, applicant.getId());
+
+        asTenantAdmin();
+
+        var applications = judgeRecruitmentService.applications(recruitmentId, null, null);
+        assertThat(applications).singleElement().satisfies(item -> {
+            assertThat(item.getJudgePublicId()).isEqualTo(applicant.getPublicId());
+            assertThat(item.getJudgeScoreCompetitionCount()).isEqualTo(1);
+            assertThat(item.getJudgeScoreAverage()).isEqualByComparingTo("88.0");
+            assertThat(item.getJudgeScoreLatest()).isEqualByComparingTo("88.0");
+            assertThat(item.getJudgeScoreLatestCompetition()).isEqualTo(tenantCompetition.getName());
+        });
+    }
+
+    @Test
     void organizerOperationLogsResolveScopeFromCompetitionTarget() {
         createTenantIdentity();
         Competition tenantCompetition = tenantCompetition();
@@ -251,6 +281,26 @@ class OrganizerScopeIntegrationTest extends IntegrationTestBase {
                      status, excellent_candidate, task_completed_count, task_total_count, completion_rate)
                 VALUES (?, ?, 60.0, 28.0, ?, 'CONFIRMED', 1, 1, 1, 100.00)
                 """, competitionId, judgeId, totalScore);
+    }
+
+    private Long insertRecruitment(Long competitionId) {
+        String publicId = testRun + "-JR-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        localJdbcTemplate.update("""
+                INSERT INTO judge_recruitment
+                    (public_id, competition_id, status, recruitment_start, recruitment_deadline, venue)
+                VALUES (?, ?, 'OPEN', ?, ?, '测试场地')
+                """, publicId, competitionId,
+                Timestamp.valueOf(LocalDateTime.now().minusDays(1)),
+                Timestamp.valueOf(LocalDateTime.now().plusDays(10)));
+        return localJdbcTemplate.queryForObject("SELECT id FROM judge_recruitment WHERE public_id = ?", Long.class, publicId);
+    }
+
+    private void insertApplication(Long recruitmentId, Long judgeId) {
+        localJdbcTemplate.update("""
+                INSERT INTO judge_recruitment_application (public_id, recruitment_id, judge_account_id, status)
+                VALUES (?, ?, ?, 'APPLIED')
+                """, testRun + "-JRA-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8),
+                recruitmentId, judgeId);
     }
 
     private String incrementPhone(String phone) {

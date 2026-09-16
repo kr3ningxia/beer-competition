@@ -166,13 +166,14 @@ public class JudgePerformanceServiceImpl implements JudgePerformanceService {
             target.setConfirmedBy(BaseContext.getCurrentId());
             target.setConfirmedTime(LocalDateTime.now());
         }
-        target.setVersion(existing == null ? 0 : existing.getVersion() + 1);
+        int currentVersion = existing == null ? 0 : existing.getVersion();
+        target.setVersion(currentVersion + 1);
         if (existing == null) {
             evaluationMapper.insert(target);
         } else {
             boolean updated = evaluationMapper.update(target, new LambdaUpdateWrapper<CompetitionJudgeEvaluation>()
                     .eq(CompetitionJudgeEvaluation::getId, existing.getId())
-                    .eq(CompetitionJudgeEvaluation::getVersion, existing.getVersion())) > 0;
+                    .eq(CompetitionJudgeEvaluation::getVersion, currentVersion)) > 0;
             if (!updated) {
                 throw new BaseException("评价已被其他管理员更新，请刷新后重试");
             }

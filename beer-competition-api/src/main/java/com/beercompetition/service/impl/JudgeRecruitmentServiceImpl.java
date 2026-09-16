@@ -5,9 +5,11 @@ import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.common.util.PiiService;
+import com.beercompetition.competition.access.CompetitionAccessService;
 import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.BeerEntryMapper;
 import com.beercompetition.mapper.AdminOperationLogMapper;
+import com.beercompetition.mapper.CompetitionJudgeEvaluationMapper;
 import com.beercompetition.mapper.JudgeAccountMapper;
 import com.beercompetition.mapper.JudgeAssignmentMapper;
 import com.beercompetition.mapper.JudgeRecruitmentApplicationMapper;
@@ -17,6 +19,7 @@ import com.beercompetition.pojo.dto.JudgeRecruitmentRequest;
 import com.beercompetition.pojo.dto.JudgeRecruitmentReviewRequest;
 import com.beercompetition.pojo.enums.JudgeAccountStatus;
 import com.beercompetition.pojo.po.Competition;
+import com.beercompetition.pojo.po.CompetitionJudgeEvaluation;
 import com.beercompetition.pojo.po.JudgeAccount;
 import com.beercompetition.pojo.po.JudgeAssignment;
 import com.beercompetition.pojo.po.JudgeRecruitment;
@@ -30,10 +33,16 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service @RequiredArgsConstructor
 public class JudgeRecruitmentServiceImpl implements JudgeRecruitmentService {
@@ -41,7 +50,9 @@ public class JudgeRecruitmentServiceImpl implements JudgeRecruitmentService {
  private final AdminOperationLogMapper adminOperationLogMapper;
  private final CompetitionMapper competitionMapper; private final JudgeAccountMapper judgeAccountMapper; private final JudgeAssignmentMapper assignmentMapper;
  private final BeerEntryMapper beerEntryMapper;
+ private final CompetitionJudgeEvaluationMapper competitionJudgeEvaluationMapper;
  private final JudgeAccessService judgeAccessService; private final PiiService piiService;
+ private final CompetitionAccessService competitionAccessService;
  private String pid(String p){return p+UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase();}
  private JudgeRecruitment req(Long id){JudgeRecruitment r=recruitmentMapper.selectById(id);if(r==null)throw new ResourceNotFoundException("招募不存在");return r;}
  private Competition comp(Long id){Competition c=competitionMapper.selectById(id);if(c==null)throw new ResourceNotFoundException("比赛不存在");return c;}
@@ -54,7 +65,7 @@ public class JudgeRecruitmentServiceImpl implements JudgeRecruitmentService {
  @Override @Transactional public JudgeRecruitmentVO publish(Long id){JudgeRecruitment r=req(id);judgeAccessService.requireCompetitionAccess(r.getCompetitionId());if(r.getRecruitmentDeadline().isBefore(LocalDateTime.now()))throw new BaseException("招募截止时间已过");r.setStatus("OPEN");recruitmentMapper.updateById(r);log("JUDGE_RECRUITMENT_PUBLISH",r.getPublicId(),"发布裁判招募");return toVO(r);}
  @Override @Transactional public JudgeRecruitmentVO close(Long id){JudgeRecruitment r=req(id);judgeAccessService.requireCompetitionAccess(r.getCompetitionId());r.setStatus("CLOSED");r.setClosedTime(LocalDateTime.now());recruitmentMapper.updateById(r);log("JUDGE_RECRUITMENT_CLOSE",r.getPublicId(),"关闭裁判招募");return toVO(r);}
  @Override @Transactional public JudgeRecruitmentVO reopen(Long id){JudgeRecruitment r=req(id);judgeAccessService.requireCompetitionAccess(r.getCompetitionId());if(beerEntryMapper.countPublishedResults(r.getCompetitionId())>0)throw new BaseException("比赛结果已发布，不能再开放");r.setStatus("OPEN");r.setReopenedTime(LocalDateTime.now());r.setClosedTime(null);recruitmentMapper.updateById(r);log("JUDGE_RECRUITMENT_REOPEN",r.getPublicId(),"再开放裁判招募");return toVO(r);}
- @Override public List<JudgeRecruitmentApplicationVO> applications(Long id,String status,String keyword){JudgeRecruitment r=req(id);judgeAccessService.requireCompetitionAccess(r.getCompetitionId());return applicationMapper.selectList(new LambdaQueryWrapper<JudgeRecruitmentApplication>().eq(JudgeRecruitmentApplication::getRecruitmentId,id).eq(StringUtils.hasText(status),JudgeRecruitmentApplication::getStatus,status).orderByDesc(JudgeRecruitmentApplication::getCreateTime)).stream().map(this::toAppVO).filter(a->!StringUtils.hasText(keyword)||String.valueOf(a.getJudgeName()).contains(keyword)||String.valueOf(a.getQualification()).contains(keyword)).toList();}
+ @Override public List<JudgeRecruitmentApplicationVO> applications(Long id,String status,String keyword){JudgeRecruitment r=req(id);judgeAccessService.requireCompetitionAccess(r.getCompetitionId());List<JudgeRecruitmentApplication> rows=applicationMapper.selectList(new LambdaQueryWrapper<JudgeRecruitmentApplication>().eq(JudgeRecruitmentApplication::getRecruitmentId,id).eq(StringUtils.hasText(status),JudgeRecruitmentApplication::getStatus,status).orderByDesc(JudgeRecruitmentApplication::getCreateTime));Map<Long,JudgeScoreSummary> scores=judgeScores(rows.stream().map(JudgeRecruitmentApplication::getJudgeAccountId).distinct().toList());return rows.stream().map(a->toAppVO(a,scores.get(a.getJudgeAccountId()))).filter(a->!StringUtils.hasText(keyword)||String.valueOf(a.getJudgeName()).contains(keyword)||String.valueOf(a.getQualification()).contains(keyword)).toList();}
  @Override @Transactional public JudgeRecruitmentApplicationVO review(Long aid,JudgeRecruitmentReviewRequest q){JudgeRecruitmentApplication a=applicationMapper.selectById(aid);if(a==null)throw new ResourceNotFoundException("报名不存在");JudgeRecruitment r=req(a.getRecruitmentId());judgeAccessService.requireCompetitionAccess(r.getCompetitionId());if(!List.of("ACCEPTED","REJECTED").contains(q.getStatus()))throw new BaseException("审核状态无效");if(!List.of("APPLIED","ACCEPTED","REJECTED").contains(a.getStatus()))throw new BaseException("当前状态不能修改");if("ACCEPTED".equals(a.getStatus())&&"REJECTED".equals(q.getStatus())&&assignmentMapper.selectCount(new LambdaQueryWrapper<JudgeAssignment>().eq(JudgeAssignment::getCompetitionId,r.getCompetitionId()).eq(JudgeAssignment::getJudgeAccountId,a.getJudgeAccountId()))>0)throw new BaseException("已分配评审桌，不能取消录用");a.setStatus(q.getStatus());a.setReviewRemark(q.getReviewRemark());a.setProcessedBy(BaseContext.getCurrentId());a.setProcessedTime(LocalDateTime.now());applicationMapper.updateById(a);log("JUDGE_RECRUITMENT_APPLICATION_REVIEW",a.getPublicId(),"报名状态改为"+q.getStatus());return toAppVO(a);}
  @Override public List<JudgeRecruitmentVO> publicList(){LocalDateTime now=LocalDateTime.now();return recruitmentMapper.selectList(new LambdaQueryWrapper<JudgeRecruitment>().eq(JudgeRecruitment::getStatus,"OPEN").le(JudgeRecruitment::getRecruitmentStart,now).and(w->w.ge(JudgeRecruitment::getRecruitmentDeadline,now).or().isNotNull(JudgeRecruitment::getReopenedTime)).orderByAsc(JudgeRecruitment::getRecruitmentDeadline)).stream().map(this::publicVO).toList();}
  @Override public JudgeRecruitmentVO publicGet(Long id){JudgeRecruitment r=req(id);if(!"OPEN".equals(r.getStatus())||(r.getRecruitmentDeadline().isBefore(LocalDateTime.now())&&r.getReopenedTime()==null))throw new BaseException("招募已关闭");return publicVO(r);}
@@ -65,7 +76,42 @@ public class JudgeRecruitmentServiceImpl implements JudgeRecruitmentService {
  private JudgeRecruitmentVO toVO(JudgeRecruitment r){Competition c=comp(r.getCompetitionId());List<JudgeRecruitmentApplication> as=applicationMapper.selectList(new LambdaQueryWrapper<JudgeRecruitmentApplication>().eq(JudgeRecruitmentApplication::getRecruitmentId,r.getId()));Long jid=BaseContext.getCurrentId();JudgeRecruitmentApplication mine=as.stream().filter(a->a.getJudgeAccountId().equals(jid)).findFirst().orElse(null);return JudgeRecruitmentVO.builder().id(r.getId()).publicId(r.getPublicId()).competitionId(c.getId()).competitionCode(c.getCode()).competitionName(c.getName()).competitionDate(c.getCompetitionDate()).status(r.getStatus()).recruitmentStart(r.getRecruitmentStart()).recruitmentDeadline(r.getRecruitmentDeadline()).venue(r.getVenue()).address(r.getAddress()).description(r.getDescription()).requirements(r.getRequirements()).expectedCount(r.getExpectedCount()).applicationCount(as.size()).pendingCount((int)as.stream().filter(a->"APPLIED".equals(a.getStatus())).count()).acceptedCount((int)as.stream().filter(a->"ACCEPTED".equals(a.getStatus())).count()).myApplicationStatus(mine==null?null:mine.getStatus()).myApplicationPublicId(mine==null?null:mine.getPublicId()).build();}
  private JudgeRecruitmentVO publicVO(JudgeRecruitment r){JudgeRecruitmentVO v=toVO(r);v.setApplicationCount(null);v.setPendingCount(null);v.setAcceptedCount(null);v.setExpectedCount(null);return v;}
  private void log(String action,String target,String summary){if(BaseContext.getCurrentId()!=null)adminOperationLogMapper.insert(AdminOperationLog.builder().adminUserId(BaseContext.getCurrentId()).action(action).targetType("JUDGE_RECRUITMENT").targetPublicId(target).summary(summary).build());}
- private JudgeRecruitmentApplicationVO toAppVO(JudgeRecruitmentApplication a){JudgeAccount j=judgeAccountMapper.selectById(a.getJudgeAccountId());Competition c=comp(req(a.getRecruitmentId()).getCompetitionId());return JudgeRecruitmentApplicationVO.builder().id(a.getId()).publicId(a.getPublicId()).recruitmentId(a.getRecruitmentId()).competitionId(c.getId()).competitionName(c.getName()).competitionCode(c.getCode()).competitionDate(c.getCompetitionDate()).judgePublicId(j==null?null:j.getPublicId()).judgeName(j==null?null:j.getName()).maskedPhone(j==null?null:piiService.maskPhone(piiService.decrypt(j.getPhoneEnc()))).qualification(j==null?null:j.getQualification()).breweryConflictFlag(j!=null&&Boolean.TRUE.equals(j.getBreweryConflictFlag())).breweryConflictText(j==null?null:j.getBreweryConflictText()).status(a.getStatus()).availabilityConfirmed(a.getAvailabilityConfirmed()).note(a.getNote()).reviewRemark(a.getReviewRemark()).createTime(a.getCreateTime()).processedTime(a.getProcessedTime()).build();}
+ private JudgeRecruitmentApplicationVO toAppVO(JudgeRecruitmentApplication a){return toAppVO(a,null);}
+ private JudgeRecruitmentApplicationVO toAppVO(JudgeRecruitmentApplication a,JudgeScoreSummary score){JudgeAccount j=judgeAccountMapper.selectById(a.getJudgeAccountId());Competition c=comp(req(a.getRecruitmentId()).getCompetitionId());JudgeScoreSummary s=score==null?JudgeScoreSummary.EMPTY:score;return JudgeRecruitmentApplicationVO.builder().id(a.getId()).publicId(a.getPublicId()).recruitmentId(a.getRecruitmentId()).competitionId(c.getId()).competitionName(c.getName()).competitionCode(c.getCode()).competitionDate(c.getCompetitionDate()).judgePublicId(j==null?null:j.getPublicId()).judgeName(j==null?null:j.getName()).maskedPhone(j==null?null:piiService.maskPhone(piiService.decrypt(j.getPhoneEnc()))).qualification(j==null?null:j.getQualification()).breweryConflictFlag(j!=null&&Boolean.TRUE.equals(j.getBreweryConflictFlag())).breweryConflictText(j==null?null:j.getBreweryConflictText()).status(a.getStatus()).availabilityConfirmed(a.getAvailabilityConfirmed()).note(a.getNote()).reviewRemark(a.getReviewRemark()).judgeScoreAverage(s.average()).judgeScoreCompetitionCount(s.competitionCount()).judgeScoreLatest(s.latest()).judgeScoreLatestCompetition(s.latestCompetition()).createTime(a.getCreateTime()).processedTime(a.getProcessedTime()).build();}
+
+ /** 按当前账号可见的比赛汇总评委历史评分，避免把其他主办方的评价带入本租户视图。 */
+ private Map<Long,JudgeScoreSummary> judgeScores(List<Long> judgeAccountIds){
+  if(judgeAccountIds.isEmpty())return Map.of();
+  List<Long> competitionIds=accessibleCompetitionIds();
+  if(competitionIds.isEmpty())return Map.of();
+  List<CompetitionJudgeEvaluation> evaluations=competitionJudgeEvaluationMapper.selectList(new LambdaQueryWrapper<CompetitionJudgeEvaluation>()
+    .in(CompetitionJudgeEvaluation::getJudgeAccountId,judgeAccountIds)
+    .in(CompetitionJudgeEvaluation::getCompetitionId,competitionIds)
+    .eq(CompetitionJudgeEvaluation::getStatus,"CONFIRMED")
+    .isNotNull(CompetitionJudgeEvaluation::getTotalScore)
+    .orderByDesc(CompetitionJudgeEvaluation::getConfirmedTime)
+    .orderByDesc(CompetitionJudgeEvaluation::getId));
+  if(evaluations.isEmpty())return Map.of();
+  Map<Long,List<CompetitionJudgeEvaluation>> grouped=evaluations.stream().collect(Collectors.groupingBy(CompetitionJudgeEvaluation::getJudgeAccountId,LinkedHashMap::new,Collectors.toList()));
+  Set<Long> latestCompetitionIds=grouped.values().stream().map(items->items.get(0).getCompetitionId()).collect(Collectors.toSet());
+  Map<Long,String> competitionNames=competitionMapper.selectBatchIds(latestCompetitionIds).stream().collect(Collectors.toMap(Competition::getId,Competition::getName));
+  Map<Long,JudgeScoreSummary> result=new HashMap<>();
+  grouped.forEach((judgeId,items)->{
+   CompetitionJudgeEvaluation latest=items.get(0);
+   BigDecimal average=items.stream().map(CompetitionJudgeEvaluation::getTotalScore).reduce(BigDecimal.ZERO,BigDecimal::add).divide(BigDecimal.valueOf(items.size()),1,RoundingMode.HALF_UP);
+   result.put(judgeId,new JudgeScoreSummary(average,items.size(),latest.getTotalScore(),competitionNames.get(latest.getCompetitionId())));
+  });
+  return result;
+ }
+
+ private List<Long> accessibleCompetitionIds(){
+  if(competitionAccessService.canAccessAllOrganizers())return competitionMapper.selectList(null).stream().map(Competition::getId).toList();
+  return competitionMapper.selectList(new LambdaQueryWrapper<Competition>().eq(Competition::getOrganizerId,competitionAccessService.requireCurrentOrganizerId())).stream().map(Competition::getId).toList();
+ }
+
+ private record JudgeScoreSummary(BigDecimal average,int competitionCount,BigDecimal latest,String latestCompetition){
+  private static final JudgeScoreSummary EMPTY=new JudgeScoreSummary(null,0,null,null);
+ }
 }
 
 

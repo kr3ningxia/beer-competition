@@ -25,15 +25,34 @@ class JudgePerformanceServiceIntegrationTest extends IntegrationTestBase {
     private JudgePerformanceService judgePerformanceService;
 
     @Test
-    void confirmedEvaluationCannotBeModified() {
+    void confirmedEvaluationCanBeReeditedWithCurrentVersion() {
         var fixture = lockedScoreFixture();
-        insertEvaluation(fixture.competition().getId(), fixture.professional().getId(), "CONFIRMED", 0);
+        jdbcTemplate.update("UPDATE competition SET status = ? WHERE id = ?",
+                CompetitionStatus.RESULT_CONFIRMING.name(), fixture.competition().getId());
+        insertConfirmedEvaluation(fixture.competition().getId(), fixture.professional().getId(), 0);
+        asAdmin(1L);
+
+        var saved = judgePerformanceService.savePerformance(
+                fixture.competition().getId(), fixture.professional().getPublicId(), confirmedRequest(0, 3));
+
+        assertThat(saved.getEvaluationStatus()).isEqualTo("CONFIRMED");
+        assertThat(saved.getManualScore()).isEqualByComparingTo("52.5");
+        assertThat(saved.getTotalScore()).isEqualByComparingTo("52.5");
+        assertThat(saved.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void staleVersionCannotReeditConfirmedEvaluation() {
+        var fixture = lockedScoreFixture();
+        jdbcTemplate.update("UPDATE competition SET status = ? WHERE id = ?",
+                CompetitionStatus.RESULT_CONFIRMING.name(), fixture.competition().getId());
+        insertConfirmedEvaluation(fixture.competition().getId(), fixture.professional().getId(), 2);
         asAdmin(1L);
 
         assertThatThrownBy(() -> judgePerformanceService.savePerformance(
-                fixture.competition().getId(), fixture.professional().getPublicId(), draftRequest(0)))
+                fixture.competition().getId(), fixture.professional().getPublicId(), confirmedRequest(1, 3)))
                 .isInstanceOf(BaseException.class)
-                .hasMessageContaining("已确认的评审表现不能直接修改");
+                .hasMessageContaining("已被其他管理员更新");
     }
 
     @Test
@@ -106,6 +125,17 @@ class JudgePerformanceServiceIntegrationTest extends IntegrationTestBase {
                      task_completed_count, task_total_count, completion_rate)
                 VALUES (?, ?, ?, ?, 0, 3, 0.00)
                 """, competitionId, judgeId, status, version);
+    }
+
+    private void insertConfirmedEvaluation(Long competitionId, Long judgeId, int version) {
+        jdbcTemplate.update("""
+                INSERT INTO competition_judge_evaluation
+                    (competition_id, judge_account_id, status, version,
+                     judgment_level, feedback_quality_level, rule_execution_level, professionalism_level,
+                     manual_score, comment_score, total_score,
+                     task_completed_count, task_total_count, completion_rate)
+                VALUES (?, ?, 'CONFIRMED', ?, 4, 4, 4, 4, 63.0, 0.0, 63.0, 0, 3, 0.00)
+                """, competitionId, judgeId, version);
     }
 
     private JudgePerformanceSaveRequest draftRequest(int version) {
