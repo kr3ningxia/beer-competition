@@ -54,7 +54,7 @@ import { computed, onMounted } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
   DataBoard, Document, DocumentChecked, Download, Files, Key, Medal, Money,
-  OfficeBuilding, Setting, SwitchButton, User, UserFilled,
+  OfficeBuilding, Setting, SwitchButton, User, UserFilled, Message,
 } from '@element-plus/icons-vue'
 import { getAdminMe } from '@/api/auth'
 import { ADMIN_NAV_GROUPS, canAccessAdminTypes, getAdminTypeLabel } from '@/config/adminAccess'
@@ -77,6 +77,7 @@ const iconComponents = {
   logs: DocumentChecked,
   applications: OfficeBuilding,
   styles: Files,
+  notifications: Message,
 }
 
 const adminType = computed(() => getAdminType())

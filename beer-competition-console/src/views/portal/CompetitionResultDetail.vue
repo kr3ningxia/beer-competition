@@ -91,6 +91,34 @@
           <p>{{ isFeedbackOnlyCompetition ? '调整关键词或组别筛选后再查看' : '调整关键词、组别或奖项筛选后再查看' }}</p>
         </div>
       </section>
+
+      <section v-if="judges.length" class="jury-wall">
+        <div class="jury-heading">
+          <h2>本场评委</h2>
+          <span>{{ judges.length }} 位</span>
+        </div>
+        <div class="jury-grid">
+          <article v-for="judge in judges" :key="judge.snapshotId" class="jury-card">
+            <div class="jury-avatar">
+              <img
+                v-if="judge.avatarUrl && !judge.avatarError"
+                :src="judge.avatarUrl"
+                :alt="`${judge.name || '评委'}头像`"
+                loading="lazy"
+                @error="judge.avatarError = true"
+              />
+              <span v-else>{{ judgeInitial(judge.name) }}</span>
+            </div>
+            <div class="jury-card-body">
+              <h3>{{ judge.name || '匿名评委' }}</h3>
+              <div class="jury-roles">
+                <span v-for="role in judge.roles || []" :key="role">{{ role }}</span>
+              </div>
+              <p>{{ judge.qualification || '赛事专业评审' }}</p>
+            </div>
+          </article>
+        </div>
+      </section>
     </template>
 
     <div v-else class="empty-state brewer-card">
@@ -114,6 +142,7 @@ const groupFilter = ref('all')
 const awardFilter = ref('all')
 
 const entries = computed(() => competition.value?.entries || [])
+const judges = computed(() => competition.value?.judges || [])
 const isFeedbackOnlyCompetition = computed(() => competition.value?.competitionType === 'FEEDBACK_ONLY')
 const champion = computed(() => entries.value.find((entry) => entry.champion || entry.awardType === 'CHAMPION') || null)
 const groupAwardCount = computed(() => entries.value.filter((entry) => !entry.champion && entry.awardType !== 'CHAMPION').length)
@@ -223,6 +252,10 @@ function formatDate(value) {
 
 function formatDateTime(value) {
   return value ? String(value).replace('T', ' ').slice(0, 16) : '-'
+}
+
+function judgeInitial(name) {
+  return String(name || '评').trim().slice(0, 1) || '评'
 }
 </script>
 
@@ -571,6 +604,123 @@ function formatDateTime(value) {
   margin: 0;
 }
 
+.jury-wall {
+  display: grid;
+  gap: 18px;
+  padding: 24px;
+  color: #fff8e9;
+  background:
+    linear-gradient(135deg, rgba(18, 54, 45, 0.98), rgba(29, 69, 56, 0.98)),
+    #12362d;
+  border: 1px solid rgba(216, 144, 33, 0.38);
+  border-radius: 8px;
+  box-shadow: 0 18px 40px rgba(24, 54, 44, 0.16);
+}
+
+.jury-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.jury-heading h2 {
+  margin: 0;
+  color: #fff8e9;
+  font-size: 22px;
+}
+
+.jury-heading span {
+  color: #e6bb67;
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.jury-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.jury-card {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  background: #fffaf0;
+  border: 1px solid rgba(216, 144, 33, 0.25);
+  border-radius: 8px;
+  color: #241a10;
+}
+
+.jury-avatar {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  overflow: hidden;
+  color: #fff8e9;
+  background: #8e3d35;
+  border: 3px solid #f0c96e;
+  border-radius: 50%;
+  font-size: 28px;
+  font-weight: 900;
+}
+
+.jury-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.jury-card-body {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.jury-card h3 {
+  margin: 0;
+  overflow: hidden;
+  font-size: 17px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jury-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  max-height: 48px;
+  overflow: hidden;
+}
+
+.jury-roles span {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 4px 7px;
+  color: #8e3d35;
+  background: #f5dfbd;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jury-card p {
+  display: -webkit-box;
+  min-height: 36px;
+  margin: 0;
+  overflow: hidden;
+  color: #746a5f;
+  font-size: 13px;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 @media (max-width: 820px) {
   .summary-card dl {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -584,6 +734,10 @@ function formatDateTime(value) {
   .search-box,
   .filters select {
     width: 100%;
+  }
+
+  .jury-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -609,6 +763,30 @@ function formatDateTime(value) {
 
   .group-card header span {
     flex: 0 0 auto;
+  }
+
+  .jury-wall {
+    padding: 18px;
+  }
+
+  .jury-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .jury-card {
+    padding: 14px;
+  }
+
+  .jury-avatar {
+    width: 60px;
+    height: 60px;
+    font-size: 23px;
+  }
+}
+
+@media (max-width: 360px) {
+  .jury-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

@@ -1,6 +1,7 @@
 package com.beercompetition.pojo.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -22,4 +23,8 @@ public class PortalProfileUpdateRequest {
     @NotBlank(message = "微信号不能为空")
     @Size(max = 64, message = "微信号不能超过64个字符")
     private String wechat;
+
+    @Email(message = "邮箱格式不正确")
+    @Size(max = 254, message = "邮箱不能超过254个字符")
+    private String email;
 }

@@ -263,6 +263,11 @@ public abstract class IntegrationTestBase {
                 JOIN competition c ON c.id = efc.competition_id
                 WHERE c.code LIKE ?
                 """, prefix + "%");
+        jdbcTemplate.update("""
+                DELETE cjpp FROM competition_judge_public_profile cjpp
+                JOIN competition c ON c.id = cjpp.competition_id
+                WHERE c.code LIKE ?
+                """, prefix + "%");
         jdbcTemplate.update("DELETE FROM competition WHERE code LIKE ?", prefix + "%");
         jdbcTemplate.update("DELETE FROM portal_account WHERE display_name LIKE ?", prefix + "%");
         jdbcTemplate.update("DELETE FROM brewery WHERE company_name LIKE ?", prefix + "%");

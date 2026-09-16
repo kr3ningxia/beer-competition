@@ -16,6 +16,8 @@ import com.beercompetition.pojo.enums.UserRole;
 import com.beercompetition.pojo.po.BankTransferPayment;
 import com.beercompetition.pojo.po.Competition;
 import com.beercompetition.pojo.po.FileAsset;
+import com.beercompetition.service.CompetitionJudgePublicProfileService;
+import com.beercompetition.pojo.vo.FileDownloadVO;
 import com.beercompetition.storage.FileStorageService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -25,6 +27,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -53,6 +56,8 @@ class FileAccessServiceImplTest {
     private FileStorageService fileStorageService;
     @Mock
     private CompetitionAccessService competitionAccessService;
+    @Mock
+    private CompetitionJudgePublicProfileService competitionJudgePublicProfileService;
 
     @InjectMocks
     private FileAccessServiceImpl fileAccessService;
@@ -110,6 +115,47 @@ class FileAccessServiceImplTest {
         assertThatThrownBy(() -> fileAccessService.download(8L))
                 .isInstanceOf(ForbiddenException.class)
                 .hasMessageContaining("文件归属与比赛组织不一致");
+        verify(fileStorageService, never()).download(any());
+    }
+
+    @Test
+    void judgeCanReadOnlyOwnJudgeAvatar() {
+        BaseContext.setCurrentUser(SessionUser.builder()
+                .userId(22L)
+                .role(UserRole.JUDGE.name())
+                .build());
+        FileAsset asset = FileAsset.builder()
+                .id(12L)
+                .businessType("JUDGE_AVATAR")
+                .ownerType("JUDGE_ACCOUNT")
+                .ownerId(22L)
+                .storagePath("judge-avatar/12.png")
+                .fileName("avatar.png")
+                .build();
+        when(fileAssetMapper.selectById(12L)).thenReturn(asset);
+        when(fileStorageService.download("judge-avatar/12.png")).thenReturn(new byte[] {1, 2});
+
+        FileDownloadVO result = fileAccessService.download(12L);
+
+        assertThat(result.getContent()).containsExactly(1, 2);
+    }
+
+    @Test
+    void judgeAvatarWithoutPublishedSnapshotCannotBePublic() {
+        FileAsset asset = FileAsset.builder()
+                .id(13L)
+                .businessType("JUDGE_AVATAR")
+                .ownerType("JUDGE_ACCOUNT")
+                .ownerId(22L)
+                .storagePath("judge-avatar/13.png")
+                .fileName("avatar.png")
+                .build();
+        when(fileAssetMapper.selectById(13L)).thenReturn(asset);
+        when(competitionJudgePublicProfileService.isPublishedAvatarReferenced(13L)).thenReturn(false);
+
+        assertThatThrownBy(() -> fileAccessService.downloadPublic(13L))
+                .isInstanceOf(Exception.class)
+                .hasMessageContaining("评委头像暂未公开");
         verify(fileStorageService, never()).download(any());
     }
 }

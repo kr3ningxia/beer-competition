@@ -92,6 +92,16 @@ export function updateProfile(payload) {
   return request.put('/api/judge/profile', payload)
 }
 
+export function uploadJudgeAvatar(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post('/api/judge/profile/avatar', formData)
+}
+
+export function fetchJudgeAvatar() {
+  return request.get('/api/judge/profile/avatar', { responseType: 'blob' })
+}
+
 export async function fetchCompetitions() {
   const data = await request.get('/api/judge/tasks')
   return data.map((item) => ({

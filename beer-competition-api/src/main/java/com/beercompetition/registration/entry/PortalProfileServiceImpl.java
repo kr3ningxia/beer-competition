@@ -3,18 +3,21 @@ package com.beercompetition.registration.entry;
 import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
+import com.beercompetition.common.util.PiiService;
 import com.beercompetition.file.FileAccessService;
 import com.beercompetition.mapper.BreweryMapper;
 import com.beercompetition.mapper.FileAssetMapper;
 import com.beercompetition.mapper.PortalAccountMapper;
-import com.beercompetition.properties.StorageProperties;
 import com.beercompetition.pojo.dto.PortalProfileUpdateRequest;
 import com.beercompetition.pojo.po.Brewery;
 import com.beercompetition.pojo.po.FileAsset;
 import com.beercompetition.pojo.po.PortalAccount;
 import com.beercompetition.pojo.vo.PortalProfileVO;
+import com.beercompetition.properties.StorageProperties;
+import com.beercompetition.registration.entry.PortalProfileService;
 import com.beercompetition.storage.FileStorageService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -22,8 +25,8 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
-import com.beercompetition.registration.entry.PortalProfileService;
 
 /**
  * 维护当前厂商账号、厂牌资料和头像文件。
@@ -50,6 +53,8 @@ public class PortalProfileServiceImpl implements PortalProfileService {
 
     private final StorageProperties storageProperties;
 
+    private final PiiService piiService;
+
     @Override
     public PortalProfileVO getPortalProfile() {
         // 1) 查询账号与厂牌资料
@@ -73,7 +78,12 @@ public class PortalProfileServiceImpl implements PortalProfileService {
         // 2) 更新当前数据库已有字段
         account.setDisplayName(normalizeRequired(request.getDisplayName(), "账号名称不能为空"));
         account.setWechat(normalizeNullable(request.getWechat()));
-        portalAccountMapper.updateById(account);
+        updateEmail(account, request.getEmail());
+        try {
+            portalAccountMapper.updateById(account);
+        } catch (DuplicateKeyException ex) {
+            throw new BaseException("该邮箱已被其他厂商使用");
+        }
 
         brewery.setCompanyName(normalizeRequired(request.getCompanyName(), "品牌名不能为空"));
         brewery.setContactName(normalizeRequired(request.getContactName(), "联系人不能为空"));
@@ -143,7 +153,31 @@ public class PortalProfileServiceImpl implements PortalProfileService {
                 .phone(account.getPhone())
                 .wechat(StringUtils.hasText(account.getWechat()) ? account.getWechat() : brewery == null ? null : brewery.getWechat())
                 .avatarUrl(resolveAvatarUrl(brewery))
+                .email(resolveEmail(account))
                 .build();
+    }
+
+    private void updateEmail(PortalAccount account, String rawEmail) {
+        String email = StringUtils.hasText(rawEmail) ? rawEmail.trim().toLowerCase(Locale.ROOT) : null;
+        String currentEmail = resolveEmail(account);
+        if (Objects.equals(currentEmail, email)) {
+            return;
+        }
+        if (email == null) {
+            account.setEmailEnc(null);
+            account.setEmailHash(null);
+            account.setEmailLast4(null);
+            account.setEmailBounceStatus(null);
+            return;
+        }
+        account.setEmailEnc(piiService.encrypt(email));
+        account.setEmailHash(piiService.hashEmail(email));
+        account.setEmailLast4(piiService.emailLast4(email));
+        account.setEmailBounceStatus(null);
+    }
+
+    private String resolveEmail(PortalAccount account) {
+        return StringUtils.hasText(account.getEmailEnc()) ? piiService.decrypt(account.getEmailEnc()) : null;
     }
 
     private String resolveAvatarUrl(Brewery brewery) {

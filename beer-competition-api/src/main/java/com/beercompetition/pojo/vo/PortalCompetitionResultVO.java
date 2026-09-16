@@ -1,5 +1,6 @@
 package com.beercompetition.pojo.vo;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Builder;
 import lombok.Data;
 
@@ -19,4 +20,6 @@ public class PortalCompetitionResultVO {
     private LocalDateTime publishedAt;
     private List<PortalResultGroupVO> groups;
     private List<PortalAwardEntryVO> entries;
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private List<PortalPublicJudgeVO> judges;
 }

@@ -39,6 +39,7 @@ import com.beercompetition.pojo.vo.PortalRoundResultVO;
 import com.beercompetition.pojo.vo.PortalScoreDimensionVO;
 import com.beercompetition.pojo.vo.PortalScoreRecordVO;
 import com.beercompetition.service.support.AwardCertificateFileType;
+import com.beercompetition.service.CompetitionJudgePublicProfileService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -88,6 +89,8 @@ public class PortalResultQueryServiceImpl implements PortalResultQueryService {
 
     private final FileAccessService fileAccessService;
 
+    private final CompetitionJudgePublicProfileService competitionJudgePublicProfileService;
+
     @Override
     public List<PortalCompetitionResultVO> listPublishedCompetitionResults() {
         // 1) 查询正式评奖结果和风格对齐会诊断结果
@@ -100,11 +103,11 @@ public class PortalResultQueryServiceImpl implements PortalResultQueryService {
                     .filter(Objects::nonNull)
                     .distinct()
                     .filter(competitionId -> !isCompetitionArchived(competitionId))
-                    .map(competitionId -> buildCompetitionResult(competitionId, awards, context))
+                    .map(competitionId -> buildCompetitionResult(competitionId, awards, context, false))
                     .filter(Objects::nonNull)
                     .toList());
         }
-        results.addAll(listPublishedFeedbackOnlyCompetitionResults(null));
+        results.addAll(listPublishedFeedbackOnlyCompetitionResults(null, false));
 
         // 2) 按发布时间倒序返回公开结果
         return results.stream()
@@ -121,7 +124,7 @@ public class PortalResultQueryServiceImpl implements PortalResultQueryService {
             throw new ResourceNotFoundException("暂无已发布赛事结果");
         }
         if (resolveCompetitionType(competition) == CompetitionType.FEEDBACK_ONLY) {
-            return listPublishedFeedbackOnlyCompetitionResults(competitionId).stream()
+            return listPublishedFeedbackOnlyCompetitionResults(competitionId, true).stream()
                     .findFirst()
                     .orElseThrow(() -> new ResourceNotFoundException("暂无已发布赛事结果"));
         }
@@ -136,7 +139,7 @@ public class PortalResultQueryServiceImpl implements PortalResultQueryService {
         PublishedResultContext context = buildPublishedResultContext(awards);
 
         // 3) 组装并返回公开获奖结果
-        PortalCompetitionResultVO result = buildCompetitionResult(competitionId, awards, context);
+        PortalCompetitionResultVO result = buildCompetitionResult(competitionId, awards, context, true);
         if (result == null) {
             throw new ResourceNotFoundException("暂无已发布赛事结果");
         }
@@ -268,7 +271,8 @@ public class PortalResultQueryServiceImpl implements PortalResultQueryService {
         return new PublishedResultContext(competitionById, entryById, breweryById, categoryById);
     }
 
-    private List<PortalCompetitionResultVO> listPublishedFeedbackOnlyCompetitionResults(Long competitionId) {
+    private List<PortalCompetitionResultVO> listPublishedFeedbackOnlyCompetitionResults(Long competitionId,
+                                                                                         boolean includeJudges) {
         // 1) 查询已发布的风格对齐会
         List<Competition> competitions = competitionMapper.selectList(new LambdaQueryWrapper<Competition>()
                 .eq(competitionId != null, Competition::getId, competitionId)
@@ -305,13 +309,14 @@ public class PortalResultQueryServiceImpl implements PortalResultQueryService {
                 .map(competition -> buildFeedbackOnlyCompetitionResult(
                         competition,
                         resultsByCompetition.getOrDefault(competition.getId(), List.of()),
-                        context))
+                        context,
+                        includeJudges))
                 .filter(Objects::nonNull)
                 .toList();
     }
 
     private PortalCompetitionResultVO buildCompetitionResult(Long competitionId, List<AwardResult> allAwards,
-                                                            PublishedResultContext context) {
+                                                            PublishedResultContext context, boolean includeJudges) {
         Competition competition = context.competitionById().get(competitionId);
         if (competition == null) {
             return null;
@@ -344,12 +349,14 @@ public class PortalResultQueryServiceImpl implements PortalResultQueryService {
                 .publishedAt(resolvePublishedAt(competitionAwards))
                 .groups(new ArrayList<>(groups.values()))
                 .entries(entries)
+                .judges(includeJudges ? competitionJudgePublicProfileService.listPublicProfiles(competitionId) : null)
                 .build();
     }
 
     private PortalCompetitionResultVO buildFeedbackOnlyCompetitionResult(Competition competition,
                                                                         List<RoundResult> results,
-                                                                        PublishedResultContext context) {
+                                                                        PublishedResultContext context,
+                                                                        boolean includeJudges) {
         if (competition == null || results.isEmpty()) {
             return null;
         }
@@ -382,6 +389,7 @@ public class PortalResultQueryServiceImpl implements PortalResultQueryService {
                 .publishedAt(competition.getUpdateTime())
                 .groups(new ArrayList<>(groups.values()))
                 .entries(entries)
+                .judges(includeJudges ? competitionJudgePublicProfileService.listPublicProfiles(competition.getId()) : null)
                 .build();
     }
 

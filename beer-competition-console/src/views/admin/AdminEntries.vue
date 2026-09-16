@@ -103,7 +103,6 @@
             <div class="entry-cell">
               <strong :data-tooltip="entry.name || '未命名酒款'" :title="entry.name || '未命名酒款'">{{ entry.name || '未命名酒款' }}</strong>
               <small :data-tooltip="entry.breweryCompanyName || '未关联厂牌'" :title="entry.breweryCompanyName || '未关联厂牌'">{{ entry.breweryCompanyName || '未关联厂牌' }}</small>
-              <small v-if="entry.boxNumber" class="box-number-meta">箱号 {{ entry.boxNumber }}</small>
             </div>
             <div class="soft-cell">
               <strong :data-tooltip="entry.competitionName || '-'" :title="entry.competitionName || '-'">{{ entry.competitionName || '-' }}</strong>
@@ -1867,10 +1866,6 @@ button:disabled {
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.entry-cell .box-number-meta {
-  color: #e0b84a;
 }
 
 .state-pill {

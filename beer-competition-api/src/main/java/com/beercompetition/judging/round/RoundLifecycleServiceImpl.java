@@ -31,6 +31,8 @@ import com.beercompetition.pojo.po.RoundTableEntry;
 import com.beercompetition.pojo.po.RoundTableMember;
 import com.beercompetition.pojo.po.ScoreRecord;
 import com.beercompetition.service.AwardService;
+import com.beercompetition.service.CompetitionJudgePublicProfileService;
+import com.beercompetition.service.EmailNotificationService;
 import com.beercompetition.judging.assignment.RoundCandidateSyncService;
 import com.beercompetition.service.impl.round.RoundQuerySupport;
 import com.beercompetition.service.impl.round.RoundValidationPolicy;
@@ -81,6 +83,10 @@ public class RoundLifecycleServiceImpl implements RoundLifecycleService {
     private final RoundCandidateSyncService roundCandidateSyncService;
 
     private final BeerCoinSettlementService beerCoinSettlementService;
+
+    private final CompetitionJudgePublicProfileService competitionJudgePublicProfileService;
+
+    private final EmailNotificationService emailNotificationService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -241,10 +247,13 @@ public class RoundLifecycleServiceImpl implements RoundLifecycleService {
             throw new BaseException("决赛轮结果未锁定，暂不能发布结果");
         }
         awardService.publishAwards(competitionId);
+        competitionJudgePublicProfileService.snapshotAtPublication(competitionId);
 
         // 2) 发布比赛状态
         competition.setStatus(CompetitionStatus.PUBLISHED.name());
+        competition.setUpdateTime(LocalDateTime.now());
         competitionMapper.updateById(competition);
+        emailNotificationService.generateScheduledNotifications(LocalDateTime.now());
     }
 
     private void completeFeedbackOnlyFirstRound(Long competitionId, Long roundId, CompetitionRound round) {
@@ -334,8 +343,10 @@ public class RoundLifecycleServiceImpl implements RoundLifecycleService {
             throw new BaseException("诊断结果尚未生成，请先完成首轮评审");
         }
 
-        // 2) 发布比赛与酒款结果
+        // 2) 生成公开评委快照并发布比赛与酒款结果
+        competitionJudgePublicProfileService.snapshotAtPublication(competitionId);
         competition.setStatus(CompetitionStatus.PUBLISHED.name());
+        competition.setUpdateTime(LocalDateTime.now());
         competitionMapper.updateById(competition);
         beerEntryMapper.selectList(new LambdaQueryWrapper<BeerEntry>()
                         .eq(BeerEntry::getCompetitionId, competitionId)
@@ -344,6 +355,7 @@ public class RoundLifecycleServiceImpl implements RoundLifecycleService {
                     entry.setStatus(EntryStatus.RESULT_PUBLISHED.name());
                     beerEntryMapper.updateById(entry);
                 });
+        emailNotificationService.generateScheduledNotifications(LocalDateTime.now());
     }
 
     private CompetitionRound findLockedScoreRound(Long competitionId) {

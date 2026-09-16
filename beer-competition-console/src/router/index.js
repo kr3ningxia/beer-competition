@@ -54,6 +54,7 @@ const routes = [
       { path: 'competitions', component: () => import('@/views/admin/Competitions.vue'), meta: { adminTypes: ALL_ADMIN_TYPES } },
       { path: 'competitions/new', component: () => import('@/views/admin/CompetitionCreate.vue'), meta: { adminTypes: ALL_ADMIN_TYPES } },
       { path: 'competitions/:id', component: () => import('@/views/admin/CompetitionDetail.vue'), meta: { adminTypes: ALL_ADMIN_TYPES } },
+      { path: 'email-notifications', component: () => import('@/views/admin/EmailNotifications.vue'), meta: { adminTypes: ALL_ADMIN_TYPES } },
       { path: 'entries', component: () => import('@/views/admin/AdminEntries.vue'), meta: { adminTypes: ALL_ADMIN_TYPES } },
       { path: 'bank-transfers', component: () => import('@/views/admin/AdminBankTransfers.vue'), meta: { adminTypes: ALL_ADMIN_TYPES } },
       { path: 'judges', component: () => import('@/views/admin/Judges.vue'), meta: { adminTypes: ALL_ADMIN_TYPES } },

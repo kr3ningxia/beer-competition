@@ -25,6 +25,7 @@ export const ADMIN_NAV_GROUPS = Object.freeze([
       { path: '/admin/judge-recruitments', label: '裁判招募', icon: 'judges', adminTypes: ALL_ADMIN_TYPES, matchPrefix: true },
       { path: '/admin/judges', label: '评审人员', icon: 'judges', adminTypes: ALL_ADMIN_TYPES },
       { path: '/admin/exports', label: '数据导出', icon: 'exports', adminTypes: ALL_ADMIN_TYPES },
+      { path: '/admin/email-notifications', label: '邮件通知', icon: 'notifications', adminTypes: ALL_ADMIN_TYPES },
     ],
   },
   {

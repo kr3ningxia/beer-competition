@@ -15,6 +15,8 @@ public class JudgeAccountVO {
     private String maskedWechat;
     private String qualification;
     private String bjcpNumber;
+    private Long avatarAssetId;
+    private Boolean publicProfileConsent;
     private Boolean breweryConflictFlag;
     private String breweryConflictText;
     private Boolean phoneBreweryConflictFlag;

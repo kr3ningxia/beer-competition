@@ -13,6 +13,9 @@ import com.beercompetition.pojo.dto.ConfigNameBatchUpdateRequest;
 import com.beercompetition.pojo.dto.EntryFieldBatchUpdateRequest;
 import com.beercompetition.pojo.dto.JudgeTableBatchUpdateRequest;
 import com.beercompetition.pojo.dto.CompetitionCollectionConfigUpdateRequest;
+import com.beercompetition.pojo.dto.NotificationRuleUpdateRequest;
+import com.beercompetition.pojo.dto.NotificationTemplateUpdateRequest;
+import com.beercompetition.pojo.dto.NotificationTestSendRequest;
 import com.beercompetition.pojo.vo.CompetitionAnalyticsVO;
 import com.beercompetition.pojo.vo.CompetitionDetailVO;
 import com.beercompetition.pojo.vo.CompetitionEntryVO;
@@ -24,6 +27,8 @@ import com.beercompetition.pojo.vo.CompetitionSponsorVO;
 import com.beercompetition.pojo.vo.CompetitionVO;
 import com.beercompetition.pojo.vo.CompetitionCollectionConfigVO;
 import com.beercompetition.pojo.vo.CompetitionCollectionQrVO;
+import com.beercompetition.pojo.vo.CompetitionNotificationConfigVO;
+import com.beercompetition.pojo.vo.EmailDeliveryVO;
 import com.beercompetition.service.CompetitionSponsorService;
 import com.beercompetition.competition.command.CompetitionCommandService;
 import com.beercompetition.competition.configuration.CompetitionConfigurationService;
@@ -31,6 +36,7 @@ import com.beercompetition.competition.collection.CompetitionCollectionService;
 import com.beercompetition.competition.lifecycle.CompetitionLifecycleService;
 import com.beercompetition.competition.query.CompetitionQueryService;
 import com.beercompetition.service.LiveBoardService;
+import com.beercompetition.service.EmailNotificationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -61,6 +67,7 @@ public class AdminCompetitionController {
     private final CompetitionLifecycleService competitionLifecycleService;
     private final CompetitionSponsorService competitionSponsorService;
     private final LiveBoardService liveBoardService;
+    private final EmailNotificationService emailNotificationService;
 
     /**
      * 查询后台比赛列表。
@@ -295,5 +302,41 @@ public class AdminCompetitionController {
     @GetMapping("/{id}/analytics")
     public Result<CompetitionAnalyticsVO> analytics(@PathVariable Long id) {
         return Result.success(competitionQueryService.getCompetitionAnalytics(id));
+    }
+
+    @GetMapping("/{id}/notifications")
+    public Result<CompetitionNotificationConfigVO> notifications(@PathVariable Long id) {
+        return Result.success(emailNotificationService.getConfiguration(id));
+    }
+
+    @PutMapping("/{id}/notifications/rule")
+    public Result<CompetitionNotificationConfigVO> updateNotificationRule(
+            @PathVariable Long id, @RequestBody @Valid NotificationRuleUpdateRequest request) {
+        return Result.success(emailNotificationService.updateRule(id, request));
+    }
+
+    @PutMapping("/{id}/notifications/templates/{eventCode}")
+    public Result<CompetitionNotificationConfigVO> updateNotificationTemplate(
+            @PathVariable Long id, @PathVariable String eventCode,
+            @RequestBody @Valid NotificationTemplateUpdateRequest request) {
+        return Result.success(emailNotificationService.updateTemplate(id, eventCode, request));
+    }
+
+    @PostMapping("/{id}/notifications/test")
+    public Result<String> sendNotificationTest(
+            @PathVariable Long id, @RequestBody @Valid NotificationTestSendRequest request) {
+        return Result.success(emailNotificationService.sendTest(id, request));
+    }
+
+    @GetMapping("/{id}/notifications/deliveries")
+    public Result<List<EmailDeliveryVO>> notificationDeliveries(@PathVariable Long id,
+                                                                 @RequestParam(required = false) String status) {
+        return Result.success(emailNotificationService.listDeliveries(id, status));
+    }
+
+    @PostMapping("/{id}/notifications/deliveries/{deliveryId}/retry")
+    public Result<String> retryNotification(@PathVariable Long id, @PathVariable Long deliveryId) {
+        emailNotificationService.retryDelivery(id, deliveryId);
+        return Result.success("邮件已加入重试队列");
     }
 }

@@ -50,6 +50,30 @@ export function fetchCompetitionQuickSummary(id) {
   return request.get(`/api/admin/competitions/${id}/quick-summary`, { authScope: 'admin' })
 }
 
+export function fetchCompetitionNotifications(id) {
+  return request.get(`/api/admin/competitions/${id}/notifications`, { authScope: 'admin' })
+}
+
+export function updateCompetitionNotificationRule(id, payload) {
+  return request.put(`/api/admin/competitions/${id}/notifications/rule`, payload, { authScope: 'admin' })
+}
+
+export function updateCompetitionNotificationTemplate(id, eventCode, payload) {
+  return request.put(`/api/admin/competitions/${id}/notifications/templates/${eventCode}`, payload, { authScope: 'admin' })
+}
+
+export function sendCompetitionNotificationTest(id, payload) {
+  return request.post(`/api/admin/competitions/${id}/notifications/test`, payload, { authScope: 'admin' })
+}
+
+export function fetchCompetitionNotificationDeliveries(id, params = {}) {
+  return request.get(`/api/admin/competitions/${id}/notifications/deliveries`, { params, authScope: 'admin' })
+}
+
+export function retryCompetitionNotification(id, deliveryId) {
+  return request.post(`/api/admin/competitions/${id}/notifications/deliveries/${deliveryId}/retry`, {}, { authScope: 'admin' })
+}
+
 export function fetchCompetitionProgress(id) {
   return request.get(`/api/admin/competitions/${id}/progress`, { authScope: 'admin' })
 }

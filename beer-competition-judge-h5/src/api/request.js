@@ -87,6 +87,9 @@ service.interceptors.request.use((config) => {
 
 service.interceptors.response.use(
   (response) => {
+    if (response.config.responseType === 'blob') {
+      return response.data
+    }
     const payload = response.data
     if (payload.code === 1) {
       return payload.data

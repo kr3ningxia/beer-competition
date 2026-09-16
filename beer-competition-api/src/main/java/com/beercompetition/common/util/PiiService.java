@@ -15,6 +15,7 @@ import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -34,6 +35,32 @@ public class PiiService {
 
     public String hashPhone(String phone) {
         return hmacSha256(normalizePhone(phone));
+    }
+
+    public String normalizeEmail(String email) {
+        return email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    public String hashEmail(String email) {
+        return hmacSha256(normalizeEmail(email));
+    }
+
+    public String emailLast4(String email) {
+        String value = normalizeEmail(email);
+        int atIndex = value.indexOf('@');
+        String localPart = atIndex > 0 ? value.substring(0, atIndex) : value;
+        return localPart.length() <= 4 ? localPart : localPart.substring(localPart.length() - 4);
+    }
+
+    public String maskEmail(String email) {
+        String value = normalizeEmail(email);
+        int atIndex = value.indexOf('@');
+        if (atIndex <= 0) {
+            return "已填写邮箱";
+        }
+        String localPart = value.substring(0, atIndex);
+        String visible = localPart.length() <= 2 ? localPart.substring(0, 1) : localPart.substring(0, 2);
+        return visible + "***" + value.substring(atIndex);
     }
 
     public String encrypt(String plainText) {

@@ -22,6 +22,10 @@ public class PortalAccount {
     private String phone;
     private String wechat;
     private String displayName;
+    private String emailEnc;
+    private String emailHash;
+    private String emailLast4;
+    private String emailBounceStatus;
     private Long breweryId;
     private Integer status;
     private LocalDateTime createTime;

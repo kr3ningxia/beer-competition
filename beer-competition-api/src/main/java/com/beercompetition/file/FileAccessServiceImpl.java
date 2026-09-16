@@ -25,6 +25,7 @@ import com.beercompetition.pojo.po.PortalAccount;
 import com.beercompetition.pojo.po.Competition;
 import com.beercompetition.pojo.vo.FileDownloadVO;
 import com.beercompetition.competition.collection.CompetitionCollectionServiceImpl;
+import com.beercompetition.service.CompetitionJudgePublicProfileService;
 import com.beercompetition.service.support.AwardCertificateFileType;
 import com.beercompetition.storage.FileStorageService;
 import lombok.RequiredArgsConstructor;
@@ -47,13 +48,15 @@ public class FileAccessServiceImpl implements FileAccessService {
     private static final String BUSINESS_AWARD_CERTIFICATE = "AWARD_CERTIFICATE";
     private static final String BUSINESS_APPLICATION_MATERIAL = "ORGANIZER_APPLICATION_MATERIAL";
     private static final String BUSINESS_BREWERY_AVATAR = "BREWERY_AVATAR";
+    private static final String BUSINESS_JUDGE_AVATAR = "JUDGE_AVATAR";
     private static final String BUSINESS_SPONSOR_LOGO = "COMPETITION_SPONSOR_LOGO";
     private static final String BUSINESS_COLLECTION_QR = CompetitionCollectionServiceImpl.BUSINESS_TYPE_COLLECTION_QR;
     private static final String OWNER_PORTAL_ACCOUNT = "PORTAL_ACCOUNT";
+    private static final String OWNER_JUDGE_ACCOUNT = "JUDGE_ACCOUNT";
     private static final String OWNER_COMPETITION = "COMPETITION";
     private static final String OWNER_AWARD = "AWARD_RESULT";
     private static final String OWNER_APPLICATION = "ORGANIZER_APPLICATION";
-    private static final Set<String> PUBLIC_BUSINESS_TYPES = Set.of(BUSINESS_BREWERY_AVATAR, BUSINESS_SPONSOR_LOGO, BUSINESS_COLLECTION_QR);
+    private static final Set<String> PUBLIC_BUSINESS_TYPES = Set.of(BUSINESS_BREWERY_AVATAR, BUSINESS_JUDGE_AVATAR, BUSINESS_SPONSOR_LOGO, BUSINESS_COLLECTION_QR);
 
     private final FileAssetMapper fileAssetMapper;
     private final BankTransferPaymentMapper bankTransferPaymentMapper;
@@ -65,6 +68,7 @@ public class FileAccessServiceImpl implements FileAccessService {
     private final CompetitionMapper competitionMapper;
     private final FileStorageService fileStorageService;
     private final CompetitionAccessService competitionAccessService;
+    private final CompetitionJudgePublicProfileService competitionJudgePublicProfileService;
 
     @Override
     public FileDownloadVO download(Long fileAssetId) {
@@ -83,6 +87,10 @@ public class FileAccessServiceImpl implements FileAccessService {
     @Override
     public String publicUrl(Long fileAssetId) {
         FileAsset asset = requireAsset(fileAssetId);
+        if (BUSINESS_JUDGE_AVATAR.equals(asset.getBusinessType())
+                && !competitionJudgePublicProfileService.isPublishedAvatarReferenced(asset.getId())) {
+            return null;
+        }
         if (!PUBLIC_BUSINESS_TYPES.contains(asset.getBusinessType())) {
             return null;
         }
@@ -134,7 +142,20 @@ public class FileAccessServiceImpl implements FileAccessService {
             authorizePortal(asset);
             return;
         }
+        if (UserRole.JUDGE.name().equals(role)) {
+            authorizeJudge(asset);
+            return;
+        }
         throw new ForbiddenException("当前身份无权下载文件");
+    }
+
+    private void authorizeJudge(FileAsset asset) {
+        if (BUSINESS_JUDGE_AVATAR.equals(asset.getBusinessType())
+                && OWNER_JUDGE_ACCOUNT.equals(asset.getOwnerType())
+                && Objects.equals(BaseContext.getCurrentId(), asset.getOwnerId())) {
+            return;
+        }
+        throw new ForbiddenException("当前评委无权下载该文件");
     }
 
     private void authorizeAdmin(FileAsset asset) {
@@ -211,6 +232,13 @@ public class FileAccessServiceImpl implements FileAccessService {
     }
 
     private void authorizePublic(FileAsset asset) {
+        if (BUSINESS_JUDGE_AVATAR.equals(asset.getBusinessType())) {
+            if (!OWNER_JUDGE_ACCOUNT.equals(asset.getOwnerType())
+                    || !competitionJudgePublicProfileService.isPublishedAvatarReferenced(asset.getId())) {
+                throw new ResourceNotFoundException("评委头像暂未公开");
+            }
+            return;
+        }
         if (PUBLIC_BUSINESS_TYPES.contains(asset.getBusinessType())) {
             if (BUSINESS_BREWERY_AVATAR.equals(asset.getBusinessType())
                     && !OWNER_PORTAL_ACCOUNT.equals(asset.getOwnerType())) {

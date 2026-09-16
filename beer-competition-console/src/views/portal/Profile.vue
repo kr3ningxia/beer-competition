@@ -46,6 +46,10 @@
             </el-form-item>
           </div>
 
+          <el-form-item label="通知邮箱" prop="email" required>
+            <el-input v-model="profileForm.email" type="email" maxlength="254" placeholder="用于接收送样提醒和比赛结果" />
+          </el-form-item>
+
           <el-form-item prop="wechat">
             <template #label>
               <span class="wechat-label">
@@ -168,10 +172,15 @@ const profileForm = reactive({
   phone: '',
   wechat: '',
   avatarUrl: '',
+  email: '',
 })
 const profileFormRef = ref()
 const profileRules = {
   wechat: [{ required: true, message: '请填写微信号', trigger: 'blur' }],
+  email: [
+    { type: 'email', message: '邮箱格式不正确', trigger: 'blur' },
+    { max: 254, message: '邮箱不能超过254个字符', trigger: 'blur' },
+  ],
 }
 const sameAsAccountName = ref(false)
 const sameAsPhone = ref(false)
@@ -274,6 +283,7 @@ async function saveProfile() {
       companyName: profileForm.companyName,
       contactName: profileForm.contactName,
       wechat: profileForm.wechat,
+      email: profileForm.email,
     })
     Object.assign(profileForm, data)
     setDisplayName('portal', data.displayName)

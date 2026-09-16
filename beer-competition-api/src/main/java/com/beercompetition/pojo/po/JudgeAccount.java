@@ -30,6 +30,9 @@ public class JudgeAccount {
     private String qualification;
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String bjcpNumber;
+    private Long avatarAssetId;
+    private Boolean publicProfileConsent;
+    private LocalDateTime publicProfileConsentTime;
     private Boolean breweryConflictFlag;
     private String breweryConflictText;
     private Integer status;

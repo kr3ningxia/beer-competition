@@ -174,6 +174,7 @@ public class JudgeServiceImpl implements JudgeService {
         applyProfile(account, request.getWechat(), request.getName(), request.getQualification(),
                 request.getBjcpNumber(), request.getBreweryConflictFlag(), request.getBreweryConflictText(),
                 account.getReviewRemark());
+        applyPublicProfileConsent(account, request.getPublicProfileConsent());
         if (JudgeAccountStatus.of(account.getStatus()) == JudgeAccountStatus.PENDING_REVIEW) {
             account.setStatus(JudgeAccountStatus.ACTIVE.getCode());
             account.setSubmittedTime(LocalDateTime.now());
@@ -710,6 +711,17 @@ public class JudgeServiceImpl implements JudgeService {
         account.setReviewRemark(reviewRemark);
     }
 
+    private void applyPublicProfileConsent(JudgeAccount account, Boolean requestedConsent) {
+        boolean consent = Boolean.TRUE.equals(requestedConsent);
+        if (consent && !Boolean.TRUE.equals(account.getPublicProfileConsent())) {
+            account.setPublicProfileConsentTime(LocalDateTime.now());
+        }
+        if (!consent) {
+            account.setPublicProfileConsentTime(null);
+        }
+        account.setPublicProfileConsent(consent);
+    }
+
     private void validateStatusTransition(JudgeAccountStatus currentStatus, JudgeAccountStatus nextStatus) {
         if (nextStatus == JudgeAccountStatus.PROFILE_INCOMPLETE) {
             throw new BaseException("后台不能将评审改为资料未完善");
@@ -802,6 +814,8 @@ public class JudgeServiceImpl implements JudgeService {
                 .maskedWechat(piiService.maskWechat(wechat))
                 .qualification(judge.getQualification())
                 .bjcpNumber(judge.getBjcpNumber())
+                .avatarAssetId(judge.getAvatarAssetId())
+                .publicProfileConsent(Boolean.TRUE.equals(judge.getPublicProfileConsent()))
                 .breweryConflictFlag(Boolean.TRUE.equals(judge.getBreweryConflictFlag()))
                 .breweryConflictText(judge.getBreweryConflictText())
                 .phoneBreweryConflictFlag(phoneConflict.flag())
@@ -829,6 +843,8 @@ public class JudgeServiceImpl implements JudgeService {
                 .maskedWechat(piiService.maskWechat(wechat))
                 .qualification(judge.getQualification())
                 .bjcpNumber(judge.getBjcpNumber())
+                .avatarAssetId(judge.getAvatarAssetId())
+                .publicProfileConsent(Boolean.TRUE.equals(judge.getPublicProfileConsent()))
                 .breweryConflictFlag(Boolean.TRUE.equals(judge.getBreweryConflictFlag()))
                 .breweryConflictText(judge.getBreweryConflictText())
                 .phoneBreweryConflictFlag(phoneConflict.flag())
