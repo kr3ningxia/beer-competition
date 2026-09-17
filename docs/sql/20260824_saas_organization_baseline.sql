@@ -3,7 +3,7 @@
 -- 执行方式：mysql --default-character-set=utf8mb4 ... < 20260824_saas_organization_baseline.sql
 
 SET NAMES utf8mb4;
-SET time_zone = '+00:00';
+SET time_zone = '+08:00';
 
 CREATE TABLE IF NOT EXISTS `enterprise_account` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '企业账户主键',

@@ -143,8 +143,21 @@ ALTER TABLE wechat_pay_notify
     MODIFY COLUMN business_type VARCHAR(32) NOT NULL COMMENT '回调业务类型：PAYMENT/REFUND/BEER_COIN_PURCHASE';
 
 -- 已执行过建表脚本的环境补充数据库级单活动价格约束。
-ALTER TABLE beer_coin_product
-    ADD COLUMN IF NOT EXISTS active_guard TINYINT GENERATED ALWAYS AS (IF(status = 'ACTIVE', 1, NULL)) STORED;
+SET @beer_coin_active_guard_column_exists = (
+    SELECT COUNT(*)
+    FROM information_schema.columns
+    WHERE table_schema = DATABASE()
+      AND table_name = 'beer_coin_product'
+      AND column_name = 'active_guard'
+);
+SET @beer_coin_active_guard_column_sql = IF(
+    @beer_coin_active_guard_column_exists = 0,
+    'ALTER TABLE beer_coin_product ADD COLUMN active_guard TINYINT GENERATED ALWAYS AS (IF(status = ''ACTIVE'', 1, NULL)) STORED',
+    'SELECT 1'
+);
+PREPARE beer_coin_active_guard_column_stmt FROM @beer_coin_active_guard_column_sql;
+EXECUTE beer_coin_active_guard_column_stmt;
+DEALLOCATE PREPARE beer_coin_active_guard_column_stmt;
 
 SET @beer_coin_active_guard_index_exists = (
     SELECT COUNT(*)

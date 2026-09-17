@@ -94,6 +94,7 @@ public interface BeerEntryMapper extends BaseMapper<BeerEntry> {
             )
             <where>
               e.deleted_flag = 0
+              AND e.status != 'CANCELED'
               <if test="competitionId != null">AND e.competition_id = #{competitionId}</if>
               <if test="organizerId != null">AND c.organizer_id = #{organizerId}</if>
               <if test="status != null and status != ''">AND e.status = #{status}</if>
@@ -192,6 +193,7 @@ public interface BeerEntryMapper extends BaseMapper<BeerEntry> {
             )
             <where>
               e.deleted_flag = 0
+              AND e.status != 'CANCELED'
               <if test="competitionId != null">AND e.competition_id = #{competitionId}</if>
               <if test="organizerId != null">AND c.organizer_id = #{organizerId}</if>
               <if test="status != null and status != ''">AND e.status = #{status}</if>

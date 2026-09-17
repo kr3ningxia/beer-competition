@@ -252,6 +252,8 @@ class BankTransferPaymentIntegrationTest extends IntegrationTestBase {
 
     private com.beercompetition.pojo.po.BeerEntry createPendingEntry(BeerCompetitionTestData.Fixture fixture,
                                                                      String name) {
+        jdbcTemplate.update("UPDATE competition SET status = 'REGISTRATION_OPEN' WHERE id = ?",
+                fixture.competition().getId());
         return testData.createEntry(testRun, fixture.competition().getId(), fixture.portalA().brewery().getId(),
                 fixture.category().getId(), testRun + "-" + name, EntryStatus.PENDING_PAYMENT, false);
     }

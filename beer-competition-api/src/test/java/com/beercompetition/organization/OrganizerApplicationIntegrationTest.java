@@ -12,6 +12,7 @@ import com.beercompetition.pojo.enums.AdminType;
 import com.beercompetition.pojo.enums.OrganizerApplicationStatus;
 import com.beercompetition.pojo.enums.UserRole;
 import com.beercompetition.pojo.vo.OrganizerApplicationSubmitVO;
+import com.beercompetition.testsupport.BeerCompetitionTestData;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +24,7 @@ import org.springframework.test.context.ActiveProfiles;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -48,12 +50,18 @@ class OrganizerApplicationIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private BeerCompetitionTestData testData;
+
     private Long applicationId;
     private Long platformAdminId;
     private Long issuedOrganizerId;
     private Long issuedAdminId;
     private Long foreignApplicationId;
     private Long legacyApplicationId;
+    private final List<Long> testPortalAccountIds = new ArrayList<>();
+    private final List<Long> testBreweryIds = new ArrayList<>();
+    private final String portalFixturePrefix = "IT" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
 
     @AfterEach
     void cleanData() {
@@ -89,17 +97,21 @@ class OrganizerApplicationIntegrationTest {
             jdbcTemplate.update("DELETE FROM admin_operation_log WHERE admin_user_id = ?", platformAdminId);
             jdbcTemplate.update("DELETE FROM admin_user WHERE id = ?", platformAdminId);
         }
+        testPortalAccountIds.forEach(id -> jdbcTemplate.update("DELETE FROM portal_account WHERE id = ?", id));
+        testBreweryIds.forEach(id -> jdbcTemplate.update("DELETE FROM brewery WHERE id = ?", id));
     }
 
     @Test
     void signedInPortalApplicationScopeUsesAccountOwnership() {
-        var account = jdbcTemplate.queryForMap(
-                "SELECT id, phone FROM portal_account WHERE status = 1 ORDER BY id LIMIT 1");
-        Long portalAccountId = ((Number) account.get("id")).longValue();
-        String portalPhone = (String) account.get("phone");
-        Long foreignPortalAccountId = jdbcTemplate.queryForObject(
-                "SELECT id FROM portal_account WHERE status = 1 AND id <> ? ORDER BY id LIMIT 1",
-                Long.class, portalAccountId);
+        var account = testData.createPortal(portalFixturePrefix, "A", testPhone(1));
+        var foreignAccount = testData.createPortal(portalFixturePrefix, "B", testPhone(2));
+        testPortalAccountIds.add(account.account().getId());
+        testPortalAccountIds.add(foreignAccount.account().getId());
+        testBreweryIds.add(account.brewery().getId());
+        testBreweryIds.add(foreignAccount.brewery().getId());
+        Long portalAccountId = account.account().getId();
+        String portalPhone = account.account().getPhone();
+        Long foreignPortalAccountId = foreignAccount.account().getId();
 
         OrganizerApplicationSubmitRequest ownRequest = request("登录账号归属测试");
         ownRequest.setContactPhone(portalPhone);
@@ -203,6 +215,11 @@ class OrganizerApplicationIntegrationTest {
         request.setContactName("申请联系人");
         request.setContactPhone("138" + String.format("%08d", Math.abs(System.nanoTime()) % 100000000L));
         return request;
+    }
+
+    private String testPhone(int offset) {
+        long value = Math.floorMod((long) portalFixturePrefix.hashCode() * 10L + offset, 100_000_000L);
+        return "139" + String.format("%08d", value);
     }
 
     private Long findApplicationId(String applicationNo) {

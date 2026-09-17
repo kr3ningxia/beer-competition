@@ -1,6 +1,5 @@
 package com.beercompetition.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.beercompetition.competition.query.CompetitionQueryService;
 import com.beercompetition.pojo.enums.CompetitionStatus;
 import com.beercompetition.pojo.enums.OrganizerType;
@@ -10,6 +9,7 @@ import com.beercompetition.pojo.vo.PortalCompetitionVO;
 import com.beercompetition.mapper.OrganizerMapper;
 import com.beercompetition.testsupport.BeerCompetitionTestData;
 import com.beercompetition.testsupport.IntegrationTestBase;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -30,6 +30,20 @@ class PortalCompetitionListIntegrationTest extends IntegrationTestBase {
 
     @Autowired
     private OrganizerMapper organizerMapper;
+
+    private Long tenantEnterpriseId;
+    private Long tenantOrganizerId;
+
+    @AfterEach
+    void cleanTenantOrganizer() {
+        cleanupByPrefix(testRun);
+        if (tenantOrganizerId != null) {
+            jdbcTemplate.update("DELETE FROM organizer WHERE id = ?", tenantOrganizerId);
+        }
+        if (tenantEnterpriseId != null) {
+            jdbcTemplate.update("DELETE FROM enterprise_account WHERE id = ?", tenantEnterpriseId);
+        }
+    }
 
     @Test
     void portalListsOpenCompetitionsFirstByEarliestRegistrationDeadline() {
@@ -56,10 +70,7 @@ class PortalCompetitionListIntegrationTest extends IntegrationTestBase {
 
     @Test
     void portalUsesTenantOrganizationNameAsThirdPartyInitiator() {
-        Organizer tenant = organizerMapper.selectOne(new LambdaQueryWrapper<Organizer>()
-                .eq(Organizer::getOrganizerType, OrganizerType.TENANT.name())
-                .last("LIMIT 1"));
-        assertThat(tenant).isNotNull();
+        Organizer tenant = createTenantOrganizer();
         assertThat(tenant.getName()).isNotEqualTo(tenant.getContactName());
 
         Competition competition = testData.createCompetition(testRun + "-tenant", CompetitionStatus.REGISTRATION_CLOSED);
@@ -69,6 +80,23 @@ class PortalCompetitionListIntegrationTest extends IntegrationTestBase {
 
         assertThat(result.getOrganizerType()).isEqualTo(OrganizerType.TENANT.name());
         assertThat(result.getOrganizerName()).isEqualTo(tenant.getName());
+    }
+
+    private Organizer createTenantOrganizer() {
+        String accountCode = testRun + "-EA";
+        jdbcTemplate.update("""
+                INSERT INTO enterprise_account (account_code, name, status)
+                VALUES (?, ?, 'ACTIVE')
+                """, accountCode, testRun + "-企业账户");
+        tenantEnterpriseId = jdbcTemplate.queryForObject(
+                "SELECT id FROM enterprise_account WHERE account_code = ?", Long.class, accountCode);
+        jdbcTemplate.update("""
+                INSERT INTO organizer (enterprise_account_id, name, organizer_type, status, contact_name)
+                VALUES (?, ?, 'TENANT', 'ACTIVE', ?)
+                """, tenantEnterpriseId, testRun + "-第三方主办方", testRun + "-联系人");
+        tenantOrganizerId = jdbcTemplate.queryForObject(
+                "SELECT id FROM organizer WHERE enterprise_account_id = ?", Long.class, tenantEnterpriseId);
+        return organizerMapper.selectById(tenantOrganizerId);
     }
 
     private void updateCompetitionSchedule(Competition competition, LocalDateTime registrationDeadline,
