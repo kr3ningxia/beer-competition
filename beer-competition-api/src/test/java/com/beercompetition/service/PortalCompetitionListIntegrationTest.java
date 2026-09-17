@@ -6,6 +6,8 @@ import com.beercompetition.pojo.enums.OrganizerType;
 import com.beercompetition.pojo.po.Competition;
 import com.beercompetition.pojo.po.Organizer;
 import com.beercompetition.pojo.vo.PortalCompetitionVO;
+import com.beercompetition.pojo.vo.PortalCompetitionSummaryVO;
+import com.beercompetition.pojo.vo.PortalHomeSummaryVO;
 import com.beercompetition.mapper.OrganizerMapper;
 import com.beercompetition.testsupport.BeerCompetitionTestData;
 import com.beercompetition.testsupport.IntegrationTestBase;
@@ -80,6 +82,40 @@ class PortalCompetitionListIntegrationTest extends IntegrationTestBase {
 
         assertThat(result.getOrganizerType()).isEqualTo(OrganizerType.TENANT.name());
         assertThat(result.getOrganizerName()).isEqualTo(tenant.getName());
+    }
+
+    @Test
+    void portalCompetitionSummaryContainsListFieldsAndCategoryNames() {
+        Competition competition = testData.createCompetition(testRun + "-summary", CompetitionStatus.REGISTRATION_OPEN);
+        var category = testData.createCategory(competition.getId(), testRun + "-组别");
+        testData.createStyle(competition.getId(), testRun + "-风格");
+
+        PortalCompetitionSummaryVO result = competitionQueryService.listPortalCompetitionSummaries().stream()
+                .filter(item -> competition.getId().equals(item.getId()))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(result.getDescription()).isEqualTo(competition.getDescription());
+        assertThat(result.getSampleArrivalDeadline().toLocalDate())
+                .isEqualTo(competition.getSampleArrivalDeadline().toLocalDate());
+        assertThat(result.getCategories())
+                .extracting(item -> item.getId())
+                .containsExactly(category.getId());
+        assertThat(result.getCategories())
+                .extracting(item -> item.getName())
+                .containsExactly(testRun + "-组别");
+    }
+
+    @Test
+    void portalHomeSummaryUsesTheSameActiveCompetitionPriority() {
+        Competition competition = testData.createCompetition(testRun + "-home-summary", CompetitionStatus.REGISTRATION_OPEN);
+
+        PortalHomeSummaryVO result = competitionQueryService.getPortalHomeSummary();
+
+        assertThat(result.getActiveCompetition()).isNotNull();
+        assertThat(result.getOpenCompetitions())
+                .extracting(item -> item.getId())
+                .contains(competition.getId());
     }
 
     private Organizer createTenantOrganizer() {

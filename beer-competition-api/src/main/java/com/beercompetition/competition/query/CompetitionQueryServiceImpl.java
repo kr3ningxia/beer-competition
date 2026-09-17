@@ -46,7 +46,10 @@ import com.beercompetition.pojo.vo.CompetitionVO;
 import com.beercompetition.pojo.vo.EntryFieldConfigVO;
 import com.beercompetition.pojo.vo.EntrySummaryVO;
 import com.beercompetition.pojo.vo.PortalCompetitionVO;
+import com.beercompetition.pojo.vo.PortalCategorySummaryVO;
+import com.beercompetition.pojo.vo.PortalCompetitionSummaryVO;
 import com.beercompetition.pojo.vo.PortalHomeVO;
+import com.beercompetition.pojo.vo.PortalHomeSummaryVO;
 import com.beercompetition.pojo.vo.ScoreConfigVO;
 import com.beercompetition.pojo.vo.CompetitionFeeTierVO;
 import com.beercompetition.service.impl.competition.CompetitionProgressQueryService;
@@ -233,19 +236,58 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
 
     @Override
     public List<PortalCompetitionVO> listPortalCompetitions() {
-        // 1) 查询非草稿、非归档赛事
-        return competitionMapper.selectList(new LambdaQueryWrapper<Competition>()
-                        .ne(Competition::getStatus, CompetitionStatus.DRAFT.name())
-                        .ne(Competition::getStatus, CompetitionStatus.ARCHIVED.name()))
+        return listPublicCompetitionEntities()
                 .stream()
-                .sorted(Comparator
-                        .comparing((Competition item) -> !CompetitionStatus.REGISTRATION_OPEN.name().equals(item.getStatus()))
-                        .thenComparing(Competition::getRegistrationDeadline,
-                                Comparator.nullsLast(Comparator.naturalOrder()))
-                        .thenComparing(Competition::getCompetitionDate,
-                                Comparator.nullsLast(Comparator.reverseOrder()))
-                        .thenComparing(Competition::getId, Comparator.reverseOrder()))
                 .map(this::toPortalCompetitionVO)
+                .toList();
+    }
+
+    @Override
+    public PortalHomeSummaryVO getPortalHomeSummary() {
+        List<PortalCompetitionSummaryVO> competitions = listPortalCompetitionSummaries();
+        List<PortalCompetitionSummaryVO> openCompetitions = competitions.stream()
+                .filter(item -> CompetitionStatus.REGISTRATION_OPEN.name().equals(item.getStatus()))
+                .toList();
+        PortalCompetitionSummaryVO activeCompetition = competitions.stream()
+                .filter(this::isOngoingPlatformCompetition)
+                .findFirst()
+                .orElse(openCompetitions.stream().findFirst().orElse(competitions.stream().findFirst().orElse(null)));
+
+        return PortalHomeSummaryVO.builder()
+                .activeCompetition(activeCompetition)
+                .openCompetitions(openCompetitions)
+                .build();
+    }
+
+    @Override
+    public List<PortalCompetitionSummaryVO> listPortalCompetitionSummaries() {
+        List<Competition> competitions = listPublicCompetitionEntities();
+        if (competitions.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> competitionIds = competitions.stream().map(Competition::getId).toList();
+        Map<Long, Organizer> organizerById = listOrganizersById(competitions);
+        Map<Long, List<PortalCategorySummaryVO>> categoriesByCompetition = competitionCategoryMapper.selectList(
+                        new LambdaQueryWrapper<CompetitionCategory>()
+                                .in(CompetitionCategory::getCompetitionId, competitionIds)
+                                .orderByAsc(CompetitionCategory::getSortOrder)
+                                .orderByAsc(CompetitionCategory::getId))
+                .stream()
+                .collect(Collectors.groupingBy(
+                        CompetitionCategory::getCompetitionId,
+                        Collectors.mapping(
+                                item -> PortalCategorySummaryVO.builder()
+                                        .id(item.getId())
+                                        .name(item.getName())
+                                        .build(),
+                                Collectors.toList())));
+
+        return competitions.stream()
+                .map(competition -> toPortalCompetitionSummaryVO(
+                        competition,
+                        organizerById.get(competition.getOrganizerId()),
+                        categoriesByCompetition.getOrDefault(competition.getId(), List.of())))
                 .toList();
     }
 
@@ -405,10 +447,18 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
     }
 
     private boolean isOngoingPlatformCompetition(PortalCompetitionVO competition) {
-        return OrganizerType.PLATFORM.name().equals(competition.getOrganizerType())
-                && !ENDED_STATUS.equals(competition.getStatus())
-                && !CompetitionStatus.ARCHIVED.name().equals(competition.getStatus())
-                && !CompetitionStatus.DRAFT.name().equals(competition.getStatus());
+        return isOngoingPlatformCompetition(competition.getOrganizerType(), competition.getStatus());
+    }
+
+    private boolean isOngoingPlatformCompetition(PortalCompetitionSummaryVO competition) {
+        return isOngoingPlatformCompetition(competition.getOrganizerType(), competition.getStatus());
+    }
+
+    private boolean isOngoingPlatformCompetition(String organizerType, String status) {
+        return OrganizerType.PLATFORM.name().equals(organizerType)
+                && !ENDED_STATUS.equals(status)
+                && !CompetitionStatus.ARCHIVED.name().equals(status)
+                && !CompetitionStatus.DRAFT.name().equals(status);
     }
 
     private EntrySummaryVO buildListEntriesSummary(CompetitionEntryStatsVO stats) {
@@ -435,6 +485,60 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
 
     private int toInt(Long value) {
         return value == null ? 0 : Math.toIntExact(value);
+    }
+
+    private List<Competition> listPublicCompetitionEntities() {
+        return competitionMapper.selectList(new LambdaQueryWrapper<Competition>()
+                        .ne(Competition::getStatus, CompetitionStatus.DRAFT.name())
+                        .ne(Competition::getStatus, CompetitionStatus.ARCHIVED.name()))
+                .stream()
+                .sorted(Comparator
+                        .comparing((Competition item) -> !CompetitionStatus.REGISTRATION_OPEN.name().equals(item.getStatus()))
+                        .thenComparing(Competition::getRegistrationDeadline,
+                                Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(Competition::getCompetitionDate,
+                                Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(Competition::getId, Comparator.reverseOrder()))
+                .toList();
+    }
+
+    private Map<Long, Organizer> listOrganizersById(List<Competition> competitions) {
+        List<Long> organizerIds = competitions.stream()
+                .map(Competition::getOrganizerId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (organizerIds.isEmpty()) {
+            return Map.of();
+        }
+        return organizerMapper.selectBatchIds(organizerIds).stream()
+                .collect(Collectors.toMap(Organizer::getId, Function.identity()));
+    }
+
+    private PortalCompetitionSummaryVO toPortalCompetitionSummaryVO(
+            Competition competition,
+            Organizer organizer,
+            List<PortalCategorySummaryVO> categories) {
+        return PortalCompetitionSummaryVO.builder()
+                .id(competition.getId())
+                .code(competition.getCode())
+                .name(competition.getName())
+                .competitionType(competitionReadinessEvaluator.resolveCompetitionType(competition).name())
+                .organizerType(organizer == null ? null : organizer.getOrganizerType())
+                .organizerName(organizer == null ? null : organizer.getName())
+                .competitionDate(competition.getCompetitionDate())
+                .registrationStart(competition.getRegistrationStart())
+                .registrationDeadline(competition.getRegistrationDeadline())
+                .status(competition.getStatus())
+                .entryFee(competition.getEntryFee())
+                .earlyBirdFee(competition.getEarlyBirdFee())
+                .earlyBirdDeadline(competition.getEarlyBirdDeadline())
+                .description(competition.getDescription())
+                .currentStageLabel(competitionReadinessEvaluator.resolveStageLabel(
+                        competitionReadinessEvaluator.parseStatus(competition)))
+                .sampleArrivalDeadline(competition.getSampleArrivalDeadline())
+                .categories(categories)
+                .build();
     }
 
     private PortalCompetitionVO toPortalCompetitionVO(Competition competition) {

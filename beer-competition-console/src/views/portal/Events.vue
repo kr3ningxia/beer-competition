@@ -1,6 +1,14 @@
 <template>
-  <div class="events-page">
+  <div class="events-page" :aria-busy="loading">
     <section class="events-hero">
+      <img
+        class="events-hero-image"
+        src="https://images.unsplash.com/photo-1518099074172-2e47ee6cfdc0?auto=format&fit=crop&w=1200&q=72"
+        alt=""
+        aria-hidden="true"
+        fetchpriority="high"
+        decoding="async"
+      >
       <div>
         <span class="label-chip tone-gold">赛事甄选</span>
         <h1>为你的酒款匹配更合适的赛场</h1>
@@ -8,7 +16,27 @@
     </section>
 
     <section class="event-list">
-      <article v-for="competition in competitions" :key="competition.id" class="event-card brewer-card">
+      <template v-if="loading">
+        <article v-for="item in skeletonCards" :key="item" class="event-card brewer-card event-card-skeleton" aria-hidden="true">
+          <div class="event-main">
+            <span class="skeleton-block skeleton-event-label"></span>
+            <span class="skeleton-block skeleton-event-title"></span>
+            <span class="skeleton-block skeleton-event-copy"></span>
+            <span class="skeleton-block skeleton-event-copy skeleton-event-copy-short"></span>
+            <div class="skeleton-event-facts">
+              <span class="skeleton-block skeleton-event-fact"></span>
+              <span class="skeleton-block skeleton-event-fact"></span>
+            </div>
+          </div>
+          <aside class="event-side">
+            <span class="skeleton-block skeleton-side-title"></span>
+            <span class="skeleton-block skeleton-side-copy"></span>
+            <span class="skeleton-block skeleton-side-copy skeleton-side-copy-short"></span>
+          </aside>
+        </article>
+      </template>
+      <template v-else>
+        <article v-for="competition in competitions" :key="competition.id" class="event-card brewer-card">
         <div class="event-main">
           <div class="event-meta">
             <span :class="['label-chip', stageTone(competition.status)]">{{ stageLabel(competition) }}</span>
@@ -39,8 +67,9 @@
             </RouterLink>
           </div>
         </aside>
-      </article>
-      <div v-if="!competitions.length" class="empty-state brewer-card">
+        </article>
+      </template>
+      <div v-if="!loading && !competitions.length" class="empty-state brewer-card">
         <strong>暂无可展示赛事</strong>
         <p>赛事开放后会在这里显示</p>
       </div>
@@ -52,7 +81,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { isLoggedIn } from '@/utils/auth'
-import { fetchPortalCompetitions } from '@/api/portal'
+import { fetchPortalCompetitionSummaries } from '@/api/portal'
 import {
   canSubmitEntry,
   competitionAction,
@@ -62,9 +91,15 @@ import {
 
 const loggedIn = computed(() => isLoggedIn('portal'))
 const competitions = ref([])
+const loading = ref(true)
+const skeletonCards = [1, 2, 3]
 
 onMounted(async () => {
-  competitions.value = await fetchPortalCompetitions()
+  try {
+    competitions.value = await fetchPortalCompetitionSummaries()
+  } finally {
+    loading.value = false
+  }
 })
 
 function stageTone(status) {
@@ -110,6 +145,9 @@ function entryFeeText(competition) {
 }
 
 .events-hero {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
@@ -117,12 +155,31 @@ function entryFeeText(competition) {
   min-height: 300px;
   padding: 32px;
   color: #fff6df;
-  background:
-    linear-gradient(135deg, rgba(32, 22, 15, 0.94), rgba(91, 50, 18, 0.86)),
-    url("https://images.unsplash.com/photo-1518099074172-2e47ee6cfdc0?auto=format&fit=crop&w=1200&q=72");
-  background-position: center;
-  background-size: cover;
+  background: #2b1d10;
   border-radius: 8px;
+}
+
+.events-hero::after {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  content: '';
+  background: linear-gradient(135deg, rgba(32, 22, 15, 0.94), rgba(91, 50, 18, 0.86));
+  pointer-events: none;
+}
+
+.events-hero-image {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.events-hero > div {
+  position: relative;
+  z-index: 1;
 }
 
 .events-hero h1 {
@@ -159,6 +216,46 @@ function entryFeeText(competition) {
   display: grid;
   gap: 18px;
 }
+
+.skeleton-block {
+  display: block;
+  background: linear-gradient(90deg, rgba(87, 58, 26, 0.08) 25%, rgba(87, 58, 26, 0.18) 50%, rgba(87, 58, 26, 0.08) 75%);
+  background-size: 200% 100%;
+  border-radius: 8px;
+  animation: events-skeleton-shimmer 1.35s ease-in-out infinite;
+}
+
+@keyframes events-skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.event-card-skeleton {
+  min-height: 240px;
+}
+
+.event-card-skeleton .event-main {
+  display: grid;
+  align-content: center;
+  gap: 8px;
+}
+
+.skeleton-event-label { width: 108px; height: 28px; }
+.skeleton-event-title { width: min(72%, 470px); height: 36px; margin-top: 8px; }
+.skeleton-event-copy { width: min(92%, 660px); height: 18px; }
+.skeleton-event-copy-short { width: min(66%, 480px); }
+.skeleton-event-facts { display: grid; gap: 12px; margin-top: 10px; }
+.skeleton-event-fact { width: 190px; height: 42px; }
+
+.event-card-skeleton .event-side {
+  display: grid;
+  align-content: center;
+  gap: 12px;
+}
+
+.skeleton-side-title { width: 190px; height: 28px; }
+.skeleton-side-copy { width: 100%; height: 18px; }
+.skeleton-side-copy-short { width: 74%; }
 
 .event-card {
   display: grid;
@@ -271,6 +368,14 @@ function entryFeeText(competition) {
     display: grid;
     min-height: auto;
     padding: 26px;
+  }
+
+  .event-card-skeleton {
+    min-height: 300px;
+  }
+
+  .skeleton-event-title {
+    width: 92%;
   }
 
   .events-hero h1 {

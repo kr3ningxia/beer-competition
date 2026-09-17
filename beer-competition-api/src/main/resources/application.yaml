@@ -33,6 +33,10 @@ spring:
 
 server:
   port: ${SERVER_PORT:8084}
+  compression:
+    enabled: ${SERVER_COMPRESSION_ENABLED:true}
+    mime-types: application/json,application/xml,text/html,text/plain,text/css,application/javascript,text/javascript
+    min-response-size: 1024
 
 mybatis-plus:
   type-aliases-package: com.beercompetition.pojo.po

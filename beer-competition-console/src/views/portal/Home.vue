@@ -9,8 +9,27 @@
       你有 {{ pendingCount }} 项参赛事项待处理，进入我的参赛查看
     </RouterLink>
 
-    <section class="site-hero">
-      <div v-if="activeCompetition" class="hero-copy">
+    <section class="site-hero" :aria-busy="loading">
+      <img
+        class="site-hero-image"
+        src="https://images.unsplash.com/photo-1518099074172-2e47ee6cfdc0?auto=format&fit=crop&w=1200&q=72"
+        alt=""
+        aria-hidden="true"
+        fetchpriority="high"
+        decoding="async"
+      >
+      <div v-if="loading" class="hero-copy hero-skeleton" aria-hidden="true">
+        <span class="skeleton-block skeleton-label"></span>
+        <span class="skeleton-block skeleton-title"></span>
+        <span class="skeleton-block skeleton-copy"></span>
+        <span class="skeleton-block skeleton-copy skeleton-copy-short"></span>
+        <div class="skeleton-facts">
+          <span class="skeleton-block skeleton-fact"></span>
+          <span class="skeleton-block skeleton-fact"></span>
+          <span class="skeleton-block skeleton-fact"></span>
+        </div>
+      </div>
+      <div v-else-if="activeCompetition" class="hero-copy">
         <div class="hero-labels">
           <span class="label-chip tone-green">{{ activeCompetition.currentStageLabel }}</span>
           <span v-if="isThirdPartyCompetition(activeCompetition)" class="label-chip tone-third-party" :title="activeCompetition.organizerName ? `发起方：${activeCompetition.organizerName}` : ''">第三方赛事</span>
@@ -20,7 +39,7 @@
         <div class="hero-facts">
           <span>报名截止 {{ formatMonthDayTime(activeCompetition.registrationDeadline) || '-' }}</span>
           <span>{{ entryFeeText(activeCompetition) }}</span>
-          <span>送样截止 {{ formatMonthDayTime(activeCompetition.logistics?.sampleArrivalDeadline) || '-' }}</span>
+          <span>送样截止 {{ formatMonthDayTime(activeCompetition.sampleArrivalDeadline) || '-' }}</span>
         </div>
         <div class="hero-actions">
           <RouterLink class="primary-action" :to="heroPrimaryAction.to">{{ heroPrimaryAction.label }}</RouterLink>
@@ -38,7 +57,14 @@
         <h1>厂牌参赛入口</h1>
         <p>当前暂无开放展示赛事，请稍后再回来查看</p>
       </div>
-      <aside class="hero-card">
+      <aside v-if="loading" class="hero-card hero-card-skeleton" aria-hidden="true">
+        <span class="skeleton-block skeleton-card-label"></span>
+        <span class="skeleton-block skeleton-card-title"></span>
+        <span class="skeleton-block skeleton-card-row"></span>
+        <span class="skeleton-block skeleton-card-row"></span>
+        <span class="skeleton-block skeleton-card-row skeleton-card-row-short"></span>
+      </aside>
+      <aside v-else class="hero-card">
         <span>{{ activeCompetition ? 'ENTRY INFO' : 'BEER AWARDS' }}</span>
         <strong>{{ activeCompetition ? '赛事信息' : '等待赛事开放' }}</strong>
         <dl>
@@ -92,7 +118,19 @@
         </div>
         <RouterLink to="/portal/events">全部赛事</RouterLink>
       </div>
-      <div class="event-grid">
+      <div v-if="loading" class="event-grid event-grid-skeleton" aria-hidden="true">
+        <article v-for="item in skeletonCards" :key="item" class="event-card brewer-card">
+          <span class="skeleton-block skeleton-event-label"></span>
+          <span class="skeleton-block skeleton-event-title"></span>
+          <span class="skeleton-block skeleton-event-copy"></span>
+          <span class="skeleton-block skeleton-event-copy skeleton-event-copy-short"></span>
+          <div class="skeleton-event-facts">
+            <span class="skeleton-block skeleton-event-fact"></span>
+            <span class="skeleton-block skeleton-event-fact"></span>
+          </div>
+        </article>
+      </div>
+      <div v-else class="event-grid">
         <article v-for="competition in openCompetitions" :key="competition.id" class="event-card brewer-card">
           <div class="event-card-labels">
             <span :class="['label-chip', competition.id === activeCompetition?.id ? 'tone-green' : 'tone-amber']">
@@ -119,13 +157,21 @@
           </div>
         </article>
       </div>
-      <div v-if="!openCompetitions.length" class="empty-state">
+      <div v-if="!loading && !openCompetitions.length" class="empty-state">
         <strong>暂无开放报名赛事</strong>
         <p>赛事开放后会在这里显示报名入口</p>
       </div>
     </section>
 
     <section class="reason-band">
+      <img
+        class="reason-band-image"
+        src="https://images.unsplash.com/photo-1566633806327-68e152aaf26d?auto=format&fit=crop&w=1200&q=72"
+        alt=""
+        aria-hidden="true"
+        loading="lazy"
+        decoding="async"
+      >
       <div class="reason-lead">
         <span class="label-chip tone-gold">为什么参赛</span>
         <h2>让你的优秀酒款，<br />被更多人知道、喝到</h2>
@@ -174,11 +220,13 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { isLoggedIn } from '@/utils/auth'
-import { fetchPortalEntries, fetchPortalHome, fetchPortalResults } from '@/api/portal'
+import { fetchPortalEntries, fetchPortalHomeSummary, fetchPortalResults } from '@/api/portal'
 import { canSubmitEntry, formatCompetitionFee, isEarlyBirdActive, isEntryResultPublished, isEntryVendorActionPending } from './portalViewModels'
 
 const loggedIn = computed(() => isLoggedIn('portal'))
-const homeData = ref({ activeCompetition: null, openCompetitions: [], competitions: [] })
+const homeData = ref({ activeCompetition: null, openCompetitions: [] })
+const loading = ref(true)
+const skeletonCards = [1, 2, 3]
 const entries = ref([])
 const results = ref([])
 const categoryDialogOpen = ref(false)
@@ -201,7 +249,11 @@ const heroPrimaryAction = computed(() => {
 })
 
 onMounted(async () => {
-  homeData.value = await fetchPortalHome()
+  try {
+    homeData.value = await fetchPortalHomeSummary()
+  } finally {
+    loading.value = false
+  }
   if (loggedIn.value) {
     const [entryData, resultData] = await Promise.all([fetchPortalEntries(), fetchPortalResults()])
     entries.value = entryData
@@ -356,25 +408,93 @@ onBeforeUnmount(() => {
 }
 
 .site-hero {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 360px;
   gap: 28px;
   min-height: 520px;
   padding: 42px;
   color: #fff8e8;
-  background:
-    linear-gradient(135deg, rgba(31, 21, 14, 0.92), rgba(78, 43, 16, 0.74)),
-    url("https://images.unsplash.com/photo-1518099074172-2e47ee6cfdc0?auto=format&fit=crop&w=1200&q=72");
-  background-position: center;
-  background-size: cover;
+  background: #2b1d10;
   border-radius: 8px;
   box-shadow: 0 24px 60px rgba(67, 43, 17, 0.14);
 }
 
+.site-hero::after,
+.reason-band::after {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  content: '';
+  pointer-events: none;
+}
+
+.site-hero::after {
+  background: linear-gradient(135deg, rgba(31, 21, 14, 0.92), rgba(78, 43, 16, 0.74));
+}
+
+.site-hero-image,
+.reason-band-image {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .hero-copy {
+  position: relative;
+  z-index: 1;
   align-self: end;
   max-width: 860px;
 }
+
+.hero-card {
+  position: relative;
+  z-index: 1;
+}
+
+.skeleton-block {
+  display: block;
+  background: linear-gradient(90deg, rgba(255, 250, 240, 0.14) 25%, rgba(255, 250, 240, 0.28) 50%, rgba(255, 250, 240, 0.14) 75%);
+  background-size: 200% 100%;
+  border-radius: 8px;
+  animation: portal-skeleton-shimmer 1.35s ease-in-out infinite;
+}
+
+@keyframes portal-skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.hero-skeleton {
+  display: grid;
+  align-content: end;
+  gap: 14px;
+}
+
+.skeleton-label { width: 118px; height: 28px; }
+.skeleton-title { width: min(76%, 620px); height: 72px; }
+.skeleton-copy { width: min(86%, 720px); height: 22px; }
+.skeleton-copy-short { width: min(62%, 520px); }
+.skeleton-facts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+.skeleton-fact { width: 150px; height: 34px; }
+
+.hero-card-skeleton {
+  display: grid;
+  align-content: end;
+  gap: 14px;
+  min-height: 278px;
+  background: rgba(255, 250, 240, 0.14);
+}
+
+.skeleton-card-label { width: 92px; height: 16px; background-color: rgba(255, 250, 240, 0.2); }
+.skeleton-card-title { width: 160px; height: 30px; background-color: rgba(255, 250, 240, 0.2); }
+.skeleton-card-row { width: 100%; height: 48px; background-color: rgba(255, 250, 240, 0.2); }
+.skeleton-card-row-short { width: 72%; }
 
 .hero-labels,
 .event-card-labels {
@@ -649,6 +769,29 @@ onBeforeUnmount(() => {
   margin-top: 20px;
 }
 
+.event-grid-skeleton .event-card {
+  grid-template-columns: minmax(0, 1fr) 300px;
+}
+
+.event-grid-skeleton .skeleton-event-label,
+.event-grid-skeleton .skeleton-event-title,
+.event-grid-skeleton .skeleton-event-copy {
+  grid-column: 1;
+}
+
+.event-grid-skeleton .skeleton-event-facts {
+  grid-column: 2;
+  grid-row: 1 / span 4;
+  align-self: center;
+}
+
+.skeleton-event-label { width: 108px; height: 28px; }
+.skeleton-event-title { width: min(74%, 460px); height: 32px; margin-top: 12px; }
+.skeleton-event-copy { width: min(92%, 650px); height: 18px; margin-top: 8px; }
+.skeleton-event-copy-short { width: min(66%, 480px); }
+.skeleton-event-facts { display: grid; gap: 12px; }
+.skeleton-event-fact { width: 190px; height: 44px; }
+
 .event-card {
   display: grid;
   grid-template-columns: minmax(360px, 1fr) minmax(280px, 0.42fr);
@@ -730,6 +873,9 @@ dd {
 }
 
 .reason-band {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
   display: grid;
   grid-template-columns: minmax(360px, 0.74fr) minmax(0, 1.26fr);
   gap: 40px;
@@ -737,11 +883,16 @@ dd {
   min-height: 372px;
   padding: 34px 28px;
   color: #fff6df;
-  background:
-    linear-gradient(90deg, rgba(31, 20, 13, 0.98) 0%, rgba(38, 23, 14, 0.96) 40%, rgba(74, 40, 18, 0.9) 100%),
-    url("https://images.unsplash.com/photo-1566633806327-68e152aaf26d?auto=format&fit=crop&w=1200&q=72");
-  background-position: center;
-  background-size: cover;
+  background: #2b1d10;
+}
+
+.reason-band::after {
+  background: linear-gradient(90deg, rgba(31, 20, 13, 0.98) 0%, rgba(38, 23, 14, 0.96) 40%, rgba(74, 40, 18, 0.9) 100%);
+}
+
+.reason-band > *:not(.reason-band-image) {
+  position: relative;
+  z-index: 1;
 }
 
 .reason-lead {
@@ -956,10 +1107,6 @@ details p {
     min-height: auto;
     gap: 20px;
     padding: 20px;
-    background-position: center top;
-    background-image:
-      linear-gradient(135deg, rgba(31, 21, 14, 0.92), rgba(78, 43, 16, 0.74)),
-      url("https://images.unsplash.com/photo-1518099074172-2e47ee6cfdc0?auto=format&fit=crop&w=800&q=70");
   }
 
   .hero-copy h1 {
@@ -1010,6 +1157,17 @@ details p {
 
   .hero-card {
     padding: 18px;
+  }
+
+  .skeleton-title { width: 92%; height: 42px; }
+
+  .event-grid-skeleton .event-card {
+    grid-template-columns: 1fr;
+  }
+
+  .event-grid-skeleton .skeleton-event-facts {
+    grid-column: 1;
+    grid-row: auto;
   }
 
   .hero-card > strong {

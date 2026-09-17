@@ -5,7 +5,9 @@ import com.beercompetition.controller.support.FileResponseHelper;
 import com.beercompetition.file.FileAccessService;
 import com.beercompetition.pojo.vo.PortalCompetitionResultVO;
 import com.beercompetition.pojo.vo.PortalCompetitionVO;
+import com.beercompetition.pojo.vo.PortalCompetitionSummaryVO;
 import com.beercompetition.pojo.vo.PortalHomeVO;
+import com.beercompetition.pojo.vo.PortalHomeSummaryVO;
 import com.beercompetition.competition.query.CompetitionQueryService;
 import com.beercompetition.result.PortalResultQueryService;
 import lombok.RequiredArgsConstructor;
@@ -46,11 +48,27 @@ public class PortalPublicController {
     }
 
     /**
+     * 查询首页所需的轻量赛事摘要。
+     */
+    @GetMapping("/home-summary")
+    public Result<PortalHomeSummaryVO> homeSummary() {
+        return Result.success(competitionQueryService.getPortalHomeSummary());
+    }
+
+    /**
      * 查询厂商端可展示的赛事列表。
      */
     @GetMapping("/competitions")
     public Result<List<PortalCompetitionVO>> publicCompetitions() {
         return Result.success(competitionQueryService.listPortalCompetitions());
+    }
+
+    /**
+     * 查询赛事列表所需的轻量赛事摘要。
+     */
+    @GetMapping("/competition-summaries")
+    public Result<List<PortalCompetitionSummaryVO>> publicCompetitionSummaries() {
+        return Result.success(competitionQueryService.listPortalCompetitionSummaries());
     }
 
     /**

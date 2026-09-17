@@ -4,8 +4,16 @@ export function fetchPortalHome() {
   return request.get('/api/portal/public/home')
 }
 
+export function fetchPortalHomeSummary() {
+  return request.get('/api/portal/public/home-summary')
+}
+
 export function fetchPortalCompetitions() {
   return request.get('/api/portal/public/competitions')
+}
+
+export function fetchPortalCompetitionSummaries() {
+  return request.get('/api/portal/public/competition-summaries')
 }
 
 export function fetchPortalCompetitionDetail(id) {
