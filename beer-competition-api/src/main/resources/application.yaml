@@ -81,7 +81,7 @@ app:
     from-alias: ${APP_ALIYUN_MAIL_FROM_ALIAS:啤酒大赛}
     reply-address: ${APP_ALIYUN_MAIL_REPLY_TO:}
     notification:
-      enabled: ${APP_MAIL_NOTIFICATION_ENABLED:true}
+      enabled: ${APP_MAIL_NOTIFICATION_ENABLED:false}
       batch-size: ${APP_MAIL_NOTIFICATION_BATCH_SIZE:20}
       max-attempts: ${APP_MAIL_NOTIFICATION_MAX_ATTEMPTS:5}
       retry-delay-minutes: ${APP_MAIL_NOTIFICATION_RETRY_DELAY_MINUTES:5}
