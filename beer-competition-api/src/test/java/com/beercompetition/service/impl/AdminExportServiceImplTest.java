@@ -85,6 +85,7 @@ class AdminExportServiceImplTest {
         brewery.setCompanyName("测试厂牌");
         brewery.setContactName("测试联系人");
         brewery.setPhone("13800000001");
+        brewery.setWechat("brewery_wechat");
 
         when(competitionMapper.selectById(1L)).thenReturn(competition);
         when(beerEntryMapper.selectList(any())).thenReturn(List.of(entry));
@@ -100,6 +101,8 @@ class AdminExportServiceImplTest {
 
         assertThat(worksheet).contains("<c r=\"I1\" t=\"inlineStr\" s=\"1\"><is><t>手机号</t>");
         assertThat(worksheet).contains("<c r=\"I2\" t=\"inlineStr\"><is><t>13800000001</t>");
+        assertThat(worksheet).contains("<c r=\"J1\" t=\"inlineStr\" s=\"1\"><is><t>厂牌微信号</t>");
+        assertThat(worksheet).contains("<c r=\"J2\" t=\"inlineStr\"><is><t>brewery_wechat</t>");
     }
 
     @Test
