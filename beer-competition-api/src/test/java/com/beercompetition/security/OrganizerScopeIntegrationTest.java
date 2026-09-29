@@ -39,7 +39,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-@ActiveProfiles("local")
+@ActiveProfiles("test")
 class OrganizerScopeIntegrationTest extends IntegrationTestBase {
 
     @Autowired

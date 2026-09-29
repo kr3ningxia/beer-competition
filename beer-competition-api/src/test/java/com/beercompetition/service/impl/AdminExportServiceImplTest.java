@@ -102,6 +102,39 @@ class AdminExportServiceImplTest {
         assertThat(worksheet).contains("<c r=\"I2\" t=\"inlineStr\"><is><t>13800000001</t>");
     }
 
+    @Test
+    void exportDeliveryIncludesBreweryWechat() throws IOException {
+        Competition competition = new Competition();
+        competition.setId(1L);
+        competition.setName("测试比赛");
+
+        BeerEntry entry = new BeerEntry();
+        entry.setId(10L);
+        entry.setCompetitionId(1L);
+        entry.setBreweryId(20L);
+        entry.setName("测试酒款");
+
+        Brewery brewery = new Brewery();
+        brewery.setId(20L);
+        brewery.setCompanyName("测试厂牌");
+        brewery.setWechat("brewery_wechat");
+
+        when(competitionMapper.selectById(1L)).thenReturn(competition);
+        when(beerEntryMapper.selectList(any())).thenReturn(List.of(entry));
+        when(entryPaymentMapper.selectList(any())).thenReturn(List.of());
+        when(entryDeliveryMapper.selectList(any())).thenReturn(List.of());
+        when(entryScanLabelService.listActiveLabels(anyCollection())).thenReturn(Map.of());
+        when(competitionCategoryMapper.selectList(any())).thenReturn(List.of());
+        when(breweryMapper.selectBatchIds(anyCollection())).thenReturn(List.of(brewery));
+        when(beerEntryExtraFieldMapper.selectList(any())).thenReturn(List.of());
+
+        FileDownloadVO download = adminExportService.exportDelivery(1L, null, null, null, null, null);
+        String worksheet = readWorksheet(download.getContent());
+
+        assertThat(worksheet).contains("<c r=\"F1\" t=\"inlineStr\" s=\"1\"><is><t>厂牌微信号</t>");
+        assertThat(worksheet).contains("<c r=\"F2\" t=\"inlineStr\"><is><t>brewery_wechat</t>");
+    }
+
     private String readWorksheet(byte[] xlsx) throws IOException {
         try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(xlsx), StandardCharsets.UTF_8)) {
             ZipEntry entry = zip.getNextEntry();
@@ -112,6 +145,6 @@ class AdminExportServiceImplTest {
                 entry = zip.getNextEntry();
             }
         }
-        throw new IOException("工作簿中未找到报名台账工作表");
+        throw new IOException("工作簿中未找到工作表");
     }
 }

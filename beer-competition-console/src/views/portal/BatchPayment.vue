@@ -140,9 +140,15 @@
               <div class="wechat-copy">
                 <span>本批应付</span>
                 <strong>{{ formatCurrency(batch.totalAmount) }}</strong>
-                <p>{{ expireText }}</p>
+                <p :class="{ 'expire-expired': paymentExpired }">{{ expireText }}</p>
                 <el-button v-if="paymentOrder?.mode === 'MOCK'" type="primary" :loading="paying" @click="simulatePayment">
                   模拟微信到账
+                </el-button>
+                <el-button v-else-if="paymentExpired && !isWechatPayEnv" type="primary" :loading="creatingPayment" @click="createQr">
+                  重新生成支付码
+                </el-button>
+                <el-button v-else-if="paymentExpired" type="primary" :loading="creatingPayment" @click="startWechatPayment">
+                  重新发起微信支付
                 </el-button>
                 <el-button v-else-if="isWechatPayEnv && wechatRetryAvailable" type="primary" :loading="creatingPayment" @click="startWechatPayment">
                   重新打开微信支付
@@ -310,10 +316,40 @@ const fulfillmentLocation = computed(() => ({
     entryId: fulfillmentEntry.value?.id,
   },
 }))
+const nowTs = ref(Date.now())
+const countdownTimer = window.setInterval(() => { nowTs.value = Date.now() }, 1000)
+
+function parseServerTime(value) {
+  if (!value) return null
+  const normalized = typeof value === 'string' ? value.replace(' ', 'T') : value
+  const parsed = new Date(normalized)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function formatDateTime(value) {
+  return new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(value)
+}
+
+function formatRemaining(millis) {
+  const totalSeconds = Math.max(0, Math.floor(millis / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+}
+
+const expireAt = computed(() => parseServerTime(paymentOrder.value?.expireTime))
+const paymentExpired = computed(() =>
+  orderStatus.value === 'EXPIRED'
+  || (expireAt.value !== null && expireAt.value.getTime() <= nowTs.value))
+
 const expireText = computed(() => {
-  const value = paymentOrder.value?.expireTime
-  if (!value) return '请在支付码有效期内完成付款'
-  return `${new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(value))} 前完成付款`
+  if (paymentExpired.value) {
+    return expireAt.value
+      ? `支付码已于 ${formatDateTime(expireAt.value)} 过期，请重新生成或改用银行转账`
+      : '支付码已过期，请重新生成或改用银行转账'
+  }
+  if (!expireAt.value) return '请在支付码有效期内完成付款'
+  return `请在 ${formatDateTime(expireAt.value)} 前完成付款（剩余 ${formatRemaining(expireAt.value.getTime() - nowTs.value)}）`
 })
 
 onMounted(async () => {
@@ -363,6 +399,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   stopPolling()
   stopAutoRedirect()
+  window.clearInterval(countdownTimer)
 })
 
 watch([paid, batch], ([paymentPaid, currentBatch]) => {
@@ -690,6 +727,7 @@ function formatCurrency(value) {
 .wechat-copy > span { color: #806c55; font-size: 13px; }
 .wechat-copy > strong { color: #744709; font-size: 34px; font-variant-numeric: tabular-nums; }
 .wechat-copy p { margin: 0 0 8px; color: #74624d; }
+.wechat-copy p.expire-expired { color: #b3491f; font-weight: 700; }
 .organizer-payment-remark { max-width: 420px; }
 .organizer-payment-submit { width: 100%; max-width: 420px; min-height: 46px; margin-top: 4px; background: #875515; border: 0; font-weight: 900; }
 .bank-panel { margin-top: 20px; }

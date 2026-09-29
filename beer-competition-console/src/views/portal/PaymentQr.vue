@@ -204,8 +204,10 @@
               <div v-if="paymentOrder?.mode === 'WECHAT' && !isWechatPayEnv" class="wechat-pay-box">
                 <img v-if="paymentQrDataUrl" :src="paymentQrDataUrl" alt="微信支付二维码" />
                 <div>
-                  <strong>微信扫码支付</strong>
-                  <span>{{ paymentExpireText }} 付款成功后可继续下载标签和填写送样信息</span>
+                  <strong>{{ entryPaymentExpired ? '支付码已过期' : '微信扫码支付' }}</strong>
+                  <span :class="{ 'expire-expired': entryPaymentExpired }">
+                    {{ entryPaymentExpired ? paymentExpireText : `${paymentExpireText} 付款成功后可继续下载标签和填写送样信息` }}
+                  </span>
                 </div>
               </div>
               <el-button
@@ -769,9 +771,35 @@ const canCancelSelectedEntry = computed(() => {
   if (!entry) return false
   return entry.status === 'PENDING_PAYMENT' && entry.paymentStatus === 'UNPAID'
 })
+const nowTs = ref(Date.now())
+const countdownTimer = window.setInterval(() => { nowTs.value = Date.now() }, 1000)
+
+function parseServerTime(value) {
+  if (!value) return null
+  const normalized = typeof value === 'string' ? value.replace(' ', 'T') : value
+  const parsed = new Date(normalized)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function formatRemaining(millis) {
+  const totalSeconds = Math.max(0, Math.floor(millis / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${pad(minutes)}:${pad(seconds)}`
+}
+
+const paymentExpireAt = computed(() => parseServerTime(paymentOrder.value?.expireTime))
+const entryPaymentExpired = computed(() =>
+  selectedEntry.value?.paymentStatus === 'EXPIRED'
+  || (paymentExpireAt.value !== null && paymentExpireAt.value.getTime() <= nowTs.value))
 const paymentExpireText = computed(() => {
-  if (!paymentOrder.value?.expireTime) return '请在页面提示时间内完成付款'
-  return `${formatDateTime(paymentOrder.value.expireTime)} 前完成支付`
+  if (entryPaymentExpired.value) {
+    return paymentExpireAt.value
+      ? `支付码已于 ${formatDateTime(paymentExpireAt.value)} 过期，请重新生成`
+      : '支付码已过期，请重新生成'
+  }
+  if (!paymentExpireAt.value) return '请在页面提示时间内完成付款'
+  return `${formatDateTime(paymentExpireAt.value)} 前完成支付（剩余 ${formatRemaining(paymentExpireAt.value.getTime() - nowTs.value)}）`
 })
 const showLabelCard = computed(() => Boolean(selectedEntry.value?.canDownloadLabel))
 const selectedPaymentModeNote = computed(() => {
@@ -988,6 +1016,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
   stopPaymentPolling()
+  window.clearInterval(countdownTimer)
 })
 
 function handleBeforeUnload(event) {
@@ -2288,6 +2317,11 @@ function triggerDownload(objectUrl, fileName) {
 .wechat-pay-box strong {
   color: var(--ink);
   font-size: 16px;
+}
+
+.wechat-pay-box .expire-expired {
+  color: #b3491f;
+  font-weight: 700;
 }
 
 .bank-pending-box,

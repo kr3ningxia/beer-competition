@@ -90,6 +90,28 @@ class EntryLifecycleIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    void adminManualConfirmationRecordsActualChannelAmountAndEvidence() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        var pending = testData.createEntry(testRun, fixture.competition().getId(), fixture.portalA().brewery().getId(),
+                fixture.category().getId(), testRun + "-现场到账", EntryStatus.PENDING_PAYMENT, false);
+        jdbcTemplate.update("UPDATE entry_payment SET pay_method = 'WECHAT', status = 'EXPIRED' WHERE beer_entry_id = ?",
+                pending.getId());
+        asAdmin(1L);
+        assertThatThrownBy(() -> entryPaymentAdminService.confirmPayment(pending.getId()))
+                .hasMessageContaining("到账依据");
+        AdminEntryStatusRequest request = new AdminEntryStatusRequest();
+        request.setReason("现场核对收款流水");
+        entryPaymentAdminService.confirmPayment(pending.getId(), request);
+        Map<String, Object> payment = jdbcTemplate.queryForMap(
+                "SELECT status, pay_method, paid_amount, confirm_remark FROM entry_payment WHERE beer_entry_id = ?",
+                pending.getId());
+        assertThat(payment.get("status")).isEqualTo(EntryPaymentStatus.PAID.name());
+        assertThat(payment.get("pay_method")).isEqualTo("MANUAL");
+        assertThat((BigDecimal) payment.get("paid_amount")).isEqualByComparingTo("100.00");
+        assertThat(payment.get("confirm_remark")).isEqualTo("现场核对收款流水");
+    }
+
+    @Test
     void submitEntryRejectsExtraFieldValueLongerThanStorageLimit() {
         BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
         jdbcTemplate.update("""

@@ -38,7 +38,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
         "app.beer-coin.payment-mode=MOCK",
         "app.sms.mock-enabled=true"
 })
-@ActiveProfiles("local")
+@ActiveProfiles("test")
 class OrganizerApplicationIntegrationTest {
 
     @Autowired

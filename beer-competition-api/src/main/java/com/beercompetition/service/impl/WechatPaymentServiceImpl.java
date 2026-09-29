@@ -51,9 +51,11 @@ import com.beercompetition.service.WechatOAuthService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
@@ -66,6 +68,7 @@ import java.util.Set;
 import java.util.UUID;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class WechatPaymentServiceImpl implements WechatPaymentService {
 
@@ -87,6 +90,8 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
     private static final int JSAPI_PAY_EXPIRE_MINUTES = 30;
     private static final int REFUND_RECONCILE_DELAY_MINUTES = 2;
     private static final int REFUND_RECONCILE_BATCH_SIZE = 100;
+    private static final int EXPIRY_SWEEP_LIMIT = 200;
+    private static final Set<String> WECHAT_TERMINAL_FAILURE_STATES = Set.of("CLOSED", "REVOKED", "PAYERROR");
     private final WechatPayClient wechatPayClient;
     private final BatchPaymentService batchPaymentService;
     private final WechatOAuthService wechatOAuthService;
@@ -110,12 +115,13 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
     private final BeerCoinService beerCoinService;
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public WechatNativePayVO createNativePayment(Long entryId) {
         // 1) 校验厂牌作品与支付资格
         PortalAccount account = requirePortalAccount();
         BeerEntry entry = requireOwnedEntry(entryId, account.getBreweryId());
         rejectTenantWechatPayment(entry.getCompetitionId());
-        EntryPayment payment = ensurePayment(entry);
+        EntryPayment payment = lockPayment(ensurePayment(entry).getId());
         assertStandalonePayment(payment);
         if (EntryPaymentStatus.PAID.name().equals(payment.getStatus())) {
             return toNativePayVO(payment);
@@ -128,6 +134,11 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
         }
         if (hasActiveRefund(entry.getId())) {
             throw new BaseException("退款处理中，不能重新支付");
+        }
+        payment = expirePaymentIfNeeded(payment, entry);
+        payment = reopenExpiredPaymentForPayment(payment, entry);
+        if (EntryPaymentStatus.PAID.name().equals(payment.getStatus())) {
+            return toNativePayVO(payment);
         }
 
         // 2) 复用未过期二维码或处理过期订单
@@ -162,6 +173,7 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public WechatJsapiPayVO createJsapiPayment(Long entryId, String code) {
         // 1) 校验厂牌作品、支付资格与微信授权码
         if (!StringUtils.hasText(code)) {
@@ -170,7 +182,7 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
         PortalAccount account = requirePortalAccount();
         BeerEntry entry = requireOwnedEntry(entryId, account.getBreweryId());
         rejectTenantWechatPayment(entry.getCompetitionId());
-        EntryPayment payment = ensurePayment(entry);
+        EntryPayment payment = lockPayment(ensurePayment(entry).getId());
         assertStandalonePayment(payment);
         if (EntryPaymentStatus.PAID.name().equals(payment.getStatus())) {
             return toJsapiPayVO(payment, null);
@@ -183,6 +195,11 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
         }
         if (hasActiveRefund(entry.getId())) {
             throw new BaseException("退款处理中，不能重新支付");
+        }
+        payment = expirePaymentIfNeeded(payment, entry);
+        payment = reopenExpiredPaymentForPayment(payment, entry);
+        if (EntryPaymentStatus.PAID.name().equals(payment.getStatus())) {
+            return toJsapiPayVO(payment, null);
         }
 
         // 2) 获取 openid 并清理旧的未支付微信订单
@@ -224,11 +241,15 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public EntryPaymentStatusVO getPortalPaymentStatus(Long entryId) {
         // 1) 校验厂牌作品
         PortalAccount account = requirePortalAccount();
         BeerEntry entry = requireOwnedEntry(entryId, account.getBreweryId());
         EntryPayment payment = findPayment(entry.getId());
+        if (payment != null) {
+            payment = lockPayment(payment.getId());
+        }
 
         // 2) 必要时主动查单补偿
         if (payment != null && shouldQueryPayment(payment)) {
@@ -237,7 +258,10 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
             entry = requireEntry(entryId);
         }
 
-        // 3) 返回状态
+        // 3) 超时未支付落过期状态
+        payment = expirePaymentIfNeeded(payment, entry);
+
+        // 4) 返回状态
         return EntryPaymentStatusVO.builder()
                 .entryId(entry.getId())
                 .entryStatus(entry.getStatus())
@@ -446,6 +470,96 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
         }
     }
 
+    /**
+     * 超时未支付时落过期状态。过期只关闭支付入口，不回退酒款状态，厂商仍可原地重新发起付款。
+     * 先主动查单，避免微信回调延迟导致把已到账支付误判为过期。
+     */
+    private EntryPayment expirePaymentIfNeeded(EntryPayment payment, BeerEntry entry) {
+        if (payment == null || !EntryPaymentStatus.UNPAID.name().equals(payment.getStatus())
+                || payment.getExpireTime() == null
+                || payment.getExpireTime().isAfter(LocalDateTime.now())) {
+            return payment;
+        }
+        if (wechatPayProperties.isWechatMode() && StringUtils.hasText(payment.getOutTradeNo())) {
+            syncPaymentQuery(payment, entry);
+            EntryPayment synced = entryPaymentMapper.selectById(payment.getId());
+            if (!EntryPaymentStatus.UNPAID.name().equals(synced.getStatus())) {
+                return synced;
+            }
+            payment = synced;
+        }
+        closeWechatOrderOnExpire(payment);
+        payment.setStatus(EntryPaymentStatus.EXPIRED.name());
+        payment.setWechatTradeState("EXPIRED");
+        payment.setWechatTradeStateDesc("支付已过期");
+        entryPaymentMapper.updateById(payment);
+        return entryPaymentMapper.selectById(payment.getId());
+    }
+
+    private void closeWechatOrderOnExpire(EntryPayment payment) {
+        if (!wechatPayProperties.isWechatMode() || !StringUtils.hasText(payment.getOutTradeNo())) {
+            return;
+        }
+        wechatPayClient.closePayment(payment.getOutTradeNo());
+        payment.setCodeUrl(null);
+    }
+
+    /**
+     * 过期支付原地复用：回到待支付并清空旧微信支付标识，不新建酒款或报名记录。
+     */
+    private EntryPayment reopenExpiredPaymentForPayment(EntryPayment payment, BeerEntry entry) {
+        if (payment == null || !EntryPaymentStatus.EXPIRED.name().equals(payment.getStatus())) {
+            return payment;
+        }
+        if (wechatPayProperties.isWechatMode() && StringUtils.hasText(payment.getOutTradeNo())) {
+            syncPaymentQuery(payment, entry);
+            payment = entryPaymentMapper.selectById(payment.getId());
+            if (EntryPaymentStatus.PAID.name().equals(payment.getStatus())) {
+                return payment;
+            }
+            if (!WECHAT_TERMINAL_FAILURE_STATES.contains(payment.getWechatTradeState())) {
+                wechatPayClient.closePayment(payment.getOutTradeNo());
+            }
+        }
+        payment.setStatus(EntryPaymentStatus.UNPAID.name());
+        payment.setOutTradeNo(null);
+        payment.setCodeUrl(null);
+        payment.setExpireTime(null);
+        payment.setWechatTradeState(null);
+        payment.setWechatTradeStateDesc(null);
+        payment.setLastQueryTime(null);
+        entryPaymentMapper.updateById(payment);
+        return entryPaymentMapper.selectById(payment.getId());
+    }
+
+    @Override
+    public int expireOverdueEntryPayments() {
+        List<EntryPayment> overdue = entryPaymentMapper.selectList(new LambdaQueryWrapper<EntryPayment>()
+                .eq(EntryPayment::getStatus, EntryPaymentStatus.UNPAID.name())
+                .isNull(EntryPayment::getPaymentOrderId)
+                .isNotNull(EntryPayment::getExpireTime)
+                .lt(EntryPayment::getExpireTime, LocalDateTime.now())
+                .orderByAsc(EntryPayment::getExpireTime)
+                .last("LIMIT " + EXPIRY_SWEEP_LIMIT));
+        int expired = 0;
+        for (EntryPayment payment : overdue) {
+            try {
+                Boolean changed = transactionTemplate.execute(status -> {
+                    EntryPayment locked = lockPayment(payment.getId());
+                    BeerEntry entry = beerEntryMapper.selectById(locked.getBeerEntryId());
+                    return entry != null && EntryPaymentStatus.EXPIRED.name()
+                            .equals(expirePaymentIfNeeded(locked, entry).getStatus());
+                });
+                if (Boolean.TRUE.equals(changed)) {
+                    expired++;
+                }
+            } catch (Exception ex) {
+                log.warn("Failed to expire entry payment {}, retry next sweep", payment.getId(), ex);
+            }
+        }
+        return expired;
+    }
+
     private void closeUnpaidWechatOrder(EntryPayment payment, BeerEntry entry) {
         if (!StringUtils.hasText(payment.getOutTradeNo()) || EntryPaymentStatus.PAID.name().equals(payment.getStatus())) {
             return;
@@ -454,6 +568,7 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
             syncPaymentQuery(payment, entry);
             EntryPayment refreshed = entryPaymentMapper.selectById(payment.getId());
             if (refreshed != null && !EntryPaymentStatus.PAID.name().equals(refreshed.getStatus())
+                    && !WECHAT_TERMINAL_FAILURE_STATES.contains(refreshed.getWechatTradeState())
                     && StringUtils.hasText(refreshed.getOutTradeNo())) {
                 wechatPayClient.closePayment(refreshed.getOutTradeNo());
             }
@@ -484,18 +599,25 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
                             null
                     )));
         } else {
+            if (WECHAT_TERMINAL_FAILURE_STATES.contains(result.tradeState())) {
+                payment.setStatus(EntryPaymentStatus.EXPIRED.name());
+                payment.setCodeUrl(null);
+            }
             entryPaymentMapper.updateById(payment);
         }
     }
 
     private void applyPaymentSuccess(WechatPayClient.PaymentNotifyResult result) {
         EntryPayment payment = entryPaymentMapper.selectOne(new LambdaQueryWrapper<EntryPayment>()
-                .eq(EntryPayment::getOutTradeNo, result.outTradeNo()));
+                .eq(EntryPayment::getOutTradeNo, result.outTradeNo()).last("LIMIT 1 FOR UPDATE"));
         if (payment == null) {
             throw new ResourceNotFoundException("支付订单不存在");
         }
         BeerEntry entry = requireEntry(payment.getBeerEntryId());
         if (EntryPaymentStatus.PAID.name().equals(payment.getStatus())) {
+            if (!EntryPayMethod.WECHAT.name().equals(payment.getPayMethod())) {
+                throw new BaseException("该微信订单与已确认的线下收款冲突，请核对重复收款");
+            }
             return;
         }
         if (!"SUCCESS".equals(result.tradeState())) {
@@ -908,6 +1030,15 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
         return entryPaymentMapper.selectOne(new LambdaQueryWrapper<EntryPayment>()
                 .eq(EntryPayment::getBeerEntryId, beerEntryId)
                 .last("LIMIT 1"));
+    }
+
+    private EntryPayment lockPayment(Long paymentId) {
+        EntryPayment payment = entryPaymentMapper.selectOne(new LambdaQueryWrapper<EntryPayment>()
+                .eq(EntryPayment::getId, paymentId).last("LIMIT 1 FOR UPDATE"));
+        if (payment == null) {
+            throw new ResourceNotFoundException("支付记录不存在");
+        }
+        return payment;
     }
 
     private EntryRefund requireRefund(Long refundId) {

@@ -48,6 +48,7 @@
           <option value="">全部支付状态</option>
           <option value="UNPAID">待支付</option>
           <option value="PENDING_CONFIRM">等待转账确认</option>
+          <option value="EXPIRED">支付已过期</option>
           <option value="PAID">已支付</option>
           <option value="REFUNDED">已退款</option>
         </select>
@@ -129,7 +130,6 @@
               <template v-else>
                 <button type="button" @click="openDetail(entry.id, 'profile')">查看</button>
                 <button type="button" :disabled="!entry.canEdit" @click="openDetail(entry.id, 'profile', true)">编辑资料</button>
-                <button type="button" @click="openDetail(entry.id, 'status')">状态处理</button>
               </template>
             </div>
           </div>
@@ -273,12 +273,16 @@
                 <strong>{{ refundStatusText(detail.refundStatus, detail) }}</strong>
               </article>
             </div>
+            <p v-if="detail.payment?.paymentOrderId" class="payment-hint">
+              统一付款订单 {{ detail.payment.paymentOrderNo || detail.payment.paymentOrderId }}，整单应收 {{ formatMoney(detail.payment.paymentOrderAmount) }}
+            </p>
+            <p v-if="paymentHintText" class="payment-hint">{{ paymentHintText }}</p>
             <label class="stack-field">
               <span>处理原因</span>
               <textarea v-model.trim="statusReason" placeholder="可填写现场处理说明"></textarea>
             </label>
             <div class="status-actions">
-              <button type="button" :disabled="!detail.canConfirmPayment" @click="runDetailStatusAction('payment')">确认支付</button>
+              <button type="button" :disabled="!detail.canConfirmPayment" @click="runDetailStatusAction('payment')">人工确认收款</button>
               <button type="button" :disabled="!detail.canMarkStored" @click="runDetailStatusAction('stored')">确认入库</button>
               <button v-if="detail.stored || detail.deliveryStatus === 'RECEIVED'" class="danger" type="button" :disabled="!detail.canUnmarkStored" @click="runDetailStatusAction('unmarkStored')">撤销入库</button>
               <button class="danger" type="button" :disabled="!detail.canCancel" @click="runDetailStatusAction('cancel')">取消报名</button>
@@ -883,6 +887,19 @@ function isRefundedEntry(entry) {
   return entry?.refundStatus === 'SUCCESS' || entry?.paymentStatus === 'REFUNDED'
 }
 
+const paymentHintText = computed(() => {
+  const payment = detail.value?.payment
+  if (!payment) return ''
+  if (detail.value?.paymentStatus === 'EXPIRED') {
+    const expireText = payment.expireTime ? `（${formatTime(payment.expireTime)}）` : ''
+    return `支付码已过期${expireText}，厂商可重新发起付款；已核对到账时可在此人工确认收款`
+  }
+  if (payment.paymentOrderId && detail.value?.paymentStatus === 'UNPAID') {
+    return '该酒款属于统一付款订单；人工确认收款会同时完成整批报名'
+  }
+  return ''
+})
+
 async function openRefundDetail(entry) {
   await openDetail(entry.id, 'refund')
 }
@@ -969,24 +986,50 @@ async function confirmEntryAction() {
 async function runDetailStatusAction(type) {
   const current = detail.value
   if (!current) return
+  if (type === 'payment') {
+    openEntryConfirm({
+      action: 'status',
+      title: '确认已收到报名费？',
+      copy: current.payment?.paymentOrderId
+        ? '确认后，该统一订单内的全部酒款将完成报名。请先核对整笔订单到账。'
+        : '确认后，该酒款将完成报名。请先核对实际到账。',
+      summary: entrySummaryItems(current, [
+        { label: '付款范围', value: current.payment?.paymentOrderId ? '统一订单内全部酒款' : '当前酒款' },
+        { label: '应收金额', value: formatMoney(current.payment?.paymentOrderAmount ?? current.payment?.amount) },
+        ...(current.payment?.paymentOrderId ? [{ label: '订单号', value: current.payment.paymentOrderNo || current.payment.paymentOrderId }] : []),
+        { label: '支付状态', value: paymentLabel(current.paymentStatus) },
+      ]),
+      confirmText: '确认已收款',
+      loadingText: '确认中',
+      reasonLabel: '到账依据',
+      reasonPlaceholder: '填写转账流水、收款记录等核对依据',
+      reasonRequired: true,
+      payload: { type },
+    })
+    return
+  }
   if (type === 'unmarkStored' && !statusReason.value.trim()) {
     ElMessage.warning('请填写撤销入库原因')
     return
   }
   if (type === 'cancel') {
+    const aggregate = Boolean(current.payment?.paymentOrderId)
     openEntryConfirm({
       action: 'status',
       kicker: '报名处理',
-      title: '确认取消报名？',
-      copy: '取消后，该酒款会退出后续分桌、评审和结果流程；已产生的记录仍会保留用于追溯',
+      title: aggregate ? '确认取消整批报名？' : '确认取消报名？',
+      copy: aggregate
+        ? '这款酒属于统一付款订单，取消后整批酒款都会退出报名。请先核对付款情况。'
+        : '取消后，该酒款会退出后续分桌、评审和结果流程；已产生的记录仍会保留用于追溯',
       summary: entrySummaryItems(current, [
         { label: '支付', value: paymentLabel(current.paymentStatus) },
-        { label: '分桌', value: current.assigned ? '已分桌' : '未分桌' },
+        { label: '取消范围', value: aggregate ? '统一订单内全部酒款' : '当前酒款' },
       ]),
       confirmText: '确认取消',
       loadingText: '取消中',
       reasonLabel: '处理原因',
-      reasonPlaceholder: '可填写取消报名的现场说明',
+      reasonPlaceholder: aggregate ? '请填写整批取消原因' : '可填写取消报名的现场说明',
+      reasonRequired: aggregate,
       payload: { type },
     })
     return
@@ -1112,7 +1155,7 @@ function entryStatusLabel(value) {
 }
 
 function paymentLabel(value) {
-  return { UNPAID: '待支付', PENDING_CONFIRM: '等待转账确认', PAID: '已支付', REFUNDED: '已退款', CANCELED: '已取消' }[value] || value || '-'
+  return { UNPAID: '待支付', PENDING_CONFIRM: '等待转账确认', EXPIRED: '支付已过期', PAID: '已支付', REFUNDED: '已退款', CANCELED: '已取消' }[value] || value || '-'
 }
 
 function paymentMethodLabel(value) {
@@ -1200,6 +1243,7 @@ function deliveryMethodLabel(value) {
 
 function paymentTone(value) {
   if (value === 'PENDING_CONFIRM') return 'warning'
+  if (value === 'EXPIRED') return 'danger'
   return value === 'PAID' ? 'success' : value === 'UNPAID' ? 'warning' : value === 'REFUNDED' ? 'success' : 'muted'
 }
 
@@ -1234,7 +1278,7 @@ function traceText(trace) {
 function actionLabel(action) {
   return {
     ENTRY_UPDATE: '编辑报名信息',
-    ENTRY_CONFIRM_PAYMENT: '确认支付',
+    ENTRY_CONFIRM_PAYMENT: '确认收款',
     ENTRY_BANK_TRANSFER_CONFIRM: '确认银行转账',
     ENTRY_BANK_TRANSFER_REJECT: '驳回银行转账',
     ENTRY_MARK_STORED: '确认入库',
@@ -2228,6 +2272,17 @@ button:disabled {
   min-height: 84px;
   padding: 10px;
   resize: vertical;
+}
+
+.payment-hint {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(240, 173, 78, 0.35);
+  border-radius: 8px;
+  background: rgba(240, 173, 78, 0.12);
+  color: #f0c27b;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .status-grid article,

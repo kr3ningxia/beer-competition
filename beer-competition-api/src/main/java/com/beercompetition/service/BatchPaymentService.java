@@ -15,6 +15,12 @@ public interface BatchPaymentService {
 
     PaymentOrderStatusVO simulatePayment(Long orderId);
 
+    void confirmManualPayment(Long orderId, Long adminId, String reason);
+
+    void cancelUnpaidOrder(Long orderId, Long adminId, String reason);
+
+    int expireOverdueOrders();
+
     boolean applyWechatPaymentSuccess(WechatPayClient.PaymentNotifyResult result);
 
     void markBankTransferPending(Long orderId, Long transferId);

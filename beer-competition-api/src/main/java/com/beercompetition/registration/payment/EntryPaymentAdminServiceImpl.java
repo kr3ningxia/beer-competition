@@ -24,6 +24,8 @@ import com.beercompetition.pojo.po.Competition;
 import com.beercompetition.pojo.po.EntryPayment;
 import com.beercompetition.pojo.po.PortalAccount;
 import com.beercompetition.pojo.vo.EntryDetailVO;
+import com.beercompetition.pay.WechatPayClient;
+import com.beercompetition.service.BatchPaymentService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -73,6 +75,8 @@ public class EntryPaymentAdminServiceImpl implements EntryPaymentAdminService {
     private final PortalEntryViewAssembler portalEntryViewAssembler;
 
     private final CompetitionAccessService competitionAccessService;
+    private final BatchPaymentService batchPaymentService;
+    private final WechatPayClient wechatPayClient;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -119,27 +123,68 @@ public class EntryPaymentAdminServiceImpl implements EntryPaymentAdminService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void confirmPayment(Long entryId, AdminEntryStatusRequest request) {
+        String reason = normalizeStatusReason(request);
+        if (!StringUtils.hasText(reason)) {
+            throw new BaseException("请填写人工确认收款的到账依据");
+        }
         // 1) 查询作品并校验状态
         BeerEntry entry = requireAdminEntry(entryId);
         if (!EntryStatus.PENDING_PAYMENT.name().equals(entry.getStatus())) {
             throw new BaseException("只有待支付确认的酒款可以确认支付");
         }
         EntryPayment payment = ensureEntryPayment(entry.getId(), entry.getCompetitionId());
-        assertStandalonePaymentAction(payment, "该酒款已加入统一付款订单，不能单独确认付款");
+        if (payment.getPaymentOrderId() != null) {
+            batchPaymentService.confirmManualPayment(payment.getPaymentOrderId(), BaseContext.getCurrentId(), reason);
+            return;
+        }
+        payment = entryPaymentMapper.selectOne(new LambdaQueryWrapper<EntryPayment>()
+                .eq(EntryPayment::getId, payment.getId()).last("LIMIT 1 FOR UPDATE"));
         if (EntryPaymentStatus.PENDING_CONFIRM.name().equals(payment.getStatus())) {
             throw new BaseException("银行转账记录请在转账确认页面处理");
+        }
+        if (!Set.of(EntryPaymentStatus.UNPAID.name(), EntryPaymentStatus.EXPIRED.name())
+                .contains(payment.getStatus())) {
+            throw new BaseException("当前付款状态不能人工确认收款");
+        }
+        if (wechatPayProperties.isWechatMode() && StringUtils.hasText(payment.getOutTradeNo())) {
+            WechatPayClient.PaymentQueryResult result = wechatPayClient.queryPayment(payment.getOutTradeNo());
+            if ("SUCCESS".equals(result.tradeState())) {
+                if (result.paidAmount() != null && payment.getAmount().compareTo(result.paidAmount()) != 0) {
+                    throw new BaseException("微信支付金额不一致，请先核对流水");
+                }
+                payment.setPayMethod(EntryPayMethod.WECHAT.name());
+                payment.setWechatTransactionId(result.transactionId());
+                payment.setPaidAmount(result.paidAmount() == null ? payment.getAmount() : result.paidAmount());
+                payment.setPaidTime(result.paidTime() == null ? LocalDateTime.now() : result.paidTime());
+                payment.setWechatTradeState("SUCCESS");
+                payment.setWechatTradeStateDesc("支付成功");
+                payment.setStatus(EntryPaymentStatus.PAID.name());
+                entryPaymentMapper.updateById(payment);
+                entry.setStatus(EntryStatus.REGISTERED.name());
+                beerEntryMapper.updateById(entry);
+                writeEntryLog("ENTRY_CONFIRM_PAYMENT", entry.getUuid(),
+                        buildStatusLogSummary("微信查单确认到账", reason));
+                return;
+            }
+            if (!Set.of("CLOSED", "REVOKED", "PAYERROR").contains(result.tradeState())) {
+                wechatPayClient.closePayment(payment.getOutTradeNo());
+            }
+            payment.setCodeUrl(null);
+            payment.setWechatTradeState("CLOSED");
+            payment.setWechatTradeStateDesc("人工确认前已关闭微信支付");
         }
 
         // 2) 更新支付记录和报名状态
         payment.setStatus(EntryPaymentStatus.PAID.name());
-        payment.setPayMethod(resolvePayMethod(payment.getPayMethod()));
+        payment.setPayMethod(EntryPayMethod.MANUAL.name());
+        payment.setPaidAmount(payment.getAmount());
         payment.setPaidTime(LocalDateTime.now());
         payment.setConfirmedByAdminId(BaseContext.getCurrentId());
-        payment.setConfirmRemark(normalizeStatusReason(request));
+        payment.setConfirmRemark(reason);
         entryPaymentMapper.updateById(payment);
         entry.setStatus(EntryStatus.REGISTERED.name());
         beerEntryMapper.updateById(entry);
-        writeEntryLog("ENTRY_CONFIRM_PAYMENT", entry.getUuid(), buildStatusLogSummary("确认支付", normalizeStatusReason(request)));
+        writeEntryLog("ENTRY_CONFIRM_PAYMENT", entry.getUuid(), buildStatusLogSummary("人工确认收款", reason));
     }
 
     private String buildStatusLogSummary(String action, String reason) {
@@ -250,10 +295,6 @@ public class EntryPaymentAdminServiceImpl implements EntryPaymentAdminService {
             return null;
         }
         return value.trim();
-    }
-
-    private String resolvePayMethod(String payMethod) {
-        return StringUtils.hasText(payMethod) ? payMethod : EntryPayMethod.MANUAL.name();
     }
 
     private String writeObjectJson(Object value, String errorMessage) {

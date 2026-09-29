@@ -25,6 +25,9 @@ import com.beercompetition.pojo.po.Competition;
 import com.beercompetition.pojo.po.EntryDelivery;
 import com.beercompetition.pojo.po.EntryPayment;
 import com.beercompetition.pojo.po.EntryRefund;
+import com.beercompetition.pay.WechatPayClient;
+import com.beercompetition.properties.WechatPayProperties;
+import com.beercompetition.service.BatchPaymentService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -70,6 +73,12 @@ public class AdminEntryStatusService {
     private final ObjectMapper objectMapper;
 
     private final CompetitionAccessService competitionAccessService;
+
+    private final BatchPaymentService batchPaymentService;
+
+    private final WechatPayClient wechatPayClient;
+
+    private final WechatPayProperties wechatPayProperties;
 
     @Transactional(rollbackFor = Exception.class)
     public void markStored(Long entryId) {
@@ -146,11 +155,38 @@ public class AdminEntryStatusService {
             throw new BaseException("当前状态不能取消报名");
         }
         EntryPayment payment = ensureEntryPayment(entry.getId(), entry.getCompetitionId());
+        if (payment.getPaymentOrderId() != null) {
+            batchPaymentService.cancelUnpaidOrder(payment.getPaymentOrderId(), BaseContext.getCurrentId(),
+                    normalizeStatusReason(request));
+            return;
+        }
+        payment = entryPaymentMapper.selectOne(new LambdaQueryWrapper<EntryPayment>()
+                .eq(EntryPayment::getId, payment.getId()).last("LIMIT 1 FOR UPDATE"));
+        entry = requireEntry(entryId);
+        if (!EntryStatus.PENDING_PAYMENT.name().equals(entry.getStatus())) {
+            throw new BaseException("当前状态不能取消报名");
+        }
         if (EntryPaymentStatus.PAID.name().equals(payment.getStatus())) {
             throw new BaseException("已支付报名请通过退款申请处理");
         }
         if (EntryPaymentStatus.PENDING_CONFIRM.name().equals(payment.getStatus())) {
             throw new BaseException("银行转账确认中，请先处理转账记录");
+        }
+        if (!Set.of(EntryPaymentStatus.UNPAID.name(), EntryPaymentStatus.EXPIRED.name())
+                .contains(payment.getStatus())) {
+            throw new BaseException("当前付款状态不能取消报名");
+        }
+        if (wechatPayProperties.isWechatMode() && StringUtils.hasText(payment.getOutTradeNo())) {
+            WechatPayClient.PaymentQueryResult result = wechatPayClient.queryPayment(payment.getOutTradeNo());
+            if ("SUCCESS".equals(result.tradeState())) {
+                throw new BaseException("微信支付已到账，请先核对收款");
+            }
+            if (!Set.of("CLOSED", "REVOKED", "PAYERROR").contains(result.tradeState())) {
+                wechatPayClient.closePayment(payment.getOutTradeNo());
+            }
+            payment.setCodeUrl(null);
+            payment.setWechatTradeState("CLOSED");
+            payment.setWechatTradeStateDesc("管理端取消报名已关闭微信支付");
         }
 
         // 2) 更新支付记录并标记取消

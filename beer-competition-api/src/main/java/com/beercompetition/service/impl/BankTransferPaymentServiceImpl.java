@@ -254,7 +254,8 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
         }
         competitionCollectionService.requirePortalPaymentMethodEnabled(
                 batch.getCompetitionId(), EntryPayMethod.WECHAT_QR);
-        if (!PaymentOrderStatus.UNPAID.name().equals(order.getStatus())) {
+        if (!PaymentOrderStatus.UNPAID.name().equals(order.getStatus())
+                && !PaymentOrderStatus.EXPIRED.name().equals(order.getStatus())) {
             throw new BaseException("当前订单不能提交付款确认");
         }
         LocalDateTime submittedTime = LocalDateTime.now();
@@ -583,7 +584,8 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
                     .build();
             entryPaymentMapper.insert(payment);
         }
-        if (!EntryPaymentStatus.UNPAID.name().equals(payment.getStatus())) {
+        if (!EntryPaymentStatus.UNPAID.name().equals(payment.getStatus())
+                && !EntryPaymentStatus.EXPIRED.name().equals(payment.getStatus())) {
             throw new BaseException("这款酒已支付或正在等待转账确认");
         }
         return payment;

@@ -18,7 +18,7 @@ import java.util.UUID;
         "app.beer-coin.payment-mode=MOCK",
         "app.sms.mock-enabled=true"
 })
-@ActiveProfiles("local")
+@ActiveProfiles("test")
 public abstract class IntegrationTestBase {
 
     @Autowired
@@ -271,6 +271,10 @@ public abstract class IntegrationTestBase {
         jdbcTemplate.update("DELETE FROM competition WHERE code LIKE ?", prefix + "%");
         jdbcTemplate.update("DELETE FROM portal_account WHERE display_name LIKE ?", prefix + "%");
         jdbcTemplate.update("DELETE FROM brewery WHERE company_name LIKE ?", prefix + "%");
+        jdbcTemplate.update("""
+                DELETE FROM admin_operation_log
+                WHERE target_public_id LIKE ?
+                """, prefix + "%");
         jdbcTemplate.update("DELETE FROM judge_account WHERE public_id LIKE ?", prefix + "%");
     }
 }

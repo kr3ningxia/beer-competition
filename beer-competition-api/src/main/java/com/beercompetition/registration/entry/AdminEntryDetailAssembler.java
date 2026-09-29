@@ -257,8 +257,12 @@ public class AdminEntryDetailAssembler {
     }
 
     private EntryPaymentVO toEntryPaymentVO(EntryPayment payment, Competition competition) {
+        PaymentOrder order = payment == null || payment.getPaymentOrderId() == null
+                ? null : paymentOrderMapper.selectById(payment.getPaymentOrderId());
         return EntryPaymentVO.builder()
                 .paymentOrderId(payment == null ? null : payment.getPaymentOrderId())
+                .paymentOrderNo(order == null ? null : order.getOrderNo())
+                .paymentOrderAmount(order == null ? null : order.getAmount())
                 .status(payment == null ? EntryPaymentStatus.UNPAID.name() : payment.getStatus())
                 .payMethod(resolvePayMethod(payment == null ? null : payment.getPayMethod()))
                 .amount(payment == null ? competition == null ? null : competition.getEntryFee() : payment.getAmount())
@@ -344,7 +348,11 @@ public class AdminEntryDetailAssembler {
         if (!EntryStatus.PENDING_PAYMENT.name().equals(entry.getStatus())) {
             return false;
         }
-        return payment == null || EntryPaymentStatus.UNPAID.name().equals(payment.getStatus());
+        if (payment == null) {
+            return true;
+        }
+        return EntryPaymentStatus.UNPAID.name().equals(payment.getStatus())
+                || EntryPaymentStatus.EXPIRED.name().equals(payment.getStatus());
     }
 
     private boolean canCancelEntry(BeerEntry entry, EntryPayment payment) {

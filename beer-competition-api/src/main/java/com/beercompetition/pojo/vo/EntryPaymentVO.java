@@ -11,6 +11,8 @@ import java.time.LocalDateTime;
 public class EntryPaymentVO {
 
     private Long paymentOrderId;
+    private String paymentOrderNo;
+    private BigDecimal paymentOrderAmount;
     private String status;
     private String payMethod;
     private BigDecimal amount;

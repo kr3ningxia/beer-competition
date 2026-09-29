@@ -16,6 +16,8 @@ public interface WechatPaymentService {
 
     EntryPaymentStatusVO getPortalPaymentStatus(Long entryId);
 
+    int expireOverdueEntryPayments();
+
     void handlePaymentNotify(WechatPayClient.WechatNotifyRequest request);
 
     void handleRefundNotify(WechatPayClient.WechatNotifyRequest request);

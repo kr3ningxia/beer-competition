@@ -1,9 +1,11 @@
 package com.beercompetition.service;
 
 import com.beercompetition.registration.entry.PortalEntryService;
+import com.beercompetition.registration.entry.AdminEntryService;
 import com.beercompetition.registration.payment.EntryPaymentAdminService;
 import com.beercompetition.registration.refund.EntryRefundService;
 import com.beercompetition.pojo.dto.AdminBankTransferProcessRequest;
+import com.beercompetition.pojo.dto.AdminEntryStatusRequest;
 import com.beercompetition.pojo.dto.PortalEntryBatchQuoteRequest;
 import com.beercompetition.pojo.dto.PortalEntryBatchSubmitRequest;
 import com.beercompetition.pojo.dto.PortalEntryRefundRequest;
@@ -42,6 +44,9 @@ class RegistrationBatchIntegrationTest extends IntegrationTestBase {
 
     @Autowired
     private PortalEntryService portalEntryService;
+
+    @Autowired
+    private AdminEntryService adminEntryService;
 
     @Autowired
     private EntryPaymentAdminService entryPaymentAdminService;
@@ -167,8 +172,97 @@ class RegistrationBatchIntegrationTest extends IntegrationTestBase {
                 .hasMessageContaining("按整批提交银行转账");
 
         asAdmin(1L);
+        AdminEntryStatusRequest confirmation = new AdminEntryStatusRequest();
+        confirmation.setReason("现场核对整批到账");
+        entryPaymentAdminService.confirmPayment(entryId, confirmation);
+        asPortal(fixture.portalA().account().getId());
+        assertThat(registrationBatchService.getPortalBatch(batch.getId()).getPaymentStatus())
+                .isEqualTo(PaymentOrderStatus.PAID.name());
+        assertThat(registrationBatchService.getPortalBatch(batch.getId()).getEntries())
+                .allMatch(item -> EntryPaymentStatus.PAID.name().equals(item.getPaymentStatus()));
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT pay_method FROM payment_order WHERE id = ?", String.class, batch.getPaymentOrderId()))
+                .isEqualTo("MANUAL");
+    }
+
+    @Test
+    void manualConfirmationRequiresReasonAndRejectsCanceledOrderItem() {
+        BeerCompetitionTestData.Fixture fixture = openFixture();
+        asPortal(fixture.portalA().account().getId());
+        var batch = registrationBatchService.submit(fixture.competition().getId(),
+                batchRequest(fixture, "MANUAL-GUARD-1", "现场确认酒款", "已取消酒款"));
+        Long entryId = batch.getEntries().get(0).getId();
+        asAdmin(1L);
         assertThatThrownBy(() -> entryPaymentAdminService.confirmPayment(entryId))
-                .hasMessageContaining("不能单独确认付款");
+                .hasMessageContaining("到账依据");
+        jdbcTemplate.update("UPDATE beer_entry SET status = 'CANCELED' WHERE id = ?", batch.getEntries().get(1).getId());
+        AdminEntryStatusRequest confirmation = new AdminEntryStatusRequest();
+        confirmation.setReason("现场核对到账");
+        assertThatThrownBy(() -> entryPaymentAdminService.confirmPayment(entryId, confirmation))
+                .hasMessageContaining("不处于待支付状态");
+    }
+
+    @Test
+    void adminCancellationCancelsEntireUnpaidBatch() {
+        BeerCompetitionTestData.Fixture fixture = openFixture();
+        asPortal(fixture.portalA().account().getId());
+        var batch = registrationBatchService.submit(fixture.competition().getId(),
+                batchRequest(fixture, "CANCEL-BATCH-1", "取消酒款甲", "取消酒款乙"));
+        asAdmin(1L);
+        AdminEntryStatusRequest cancellation = new AdminEntryStatusRequest();
+        cancellation.setReason("厂商确认撤回整批报名");
+        adminEntryService.cancelEntry(batch.getEntries().get(0).getId(), cancellation);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status FROM payment_order WHERE id = ?", String.class, batch.getPaymentOrderId()))
+                .isEqualTo(PaymentOrderStatus.CANCELED.name());
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM beer_entry WHERE registration_batch_id = ? AND status = 'CANCELED'",
+                Integer.class, batch.getId())).isEqualTo(2);
+        asPortal(fixture.portalA().account().getId());
+        assertThatThrownBy(() -> batchPaymentService.simulatePayment(batch.getPaymentOrderId()))
+                .hasMessageContaining("不能模拟支付");
+    }
+
+    @Test
+    void overdueAggregateOrderExpiresAndReopensInPlaceForRepayment() {
+        BeerCompetitionTestData.Fixture fixture = openFixture();
+        asPortal(fixture.portalA().account().getId());
+        var batch = registrationBatchService.submit(fixture.competition().getId(),
+                batchRequest(fixture, "EXPIRY-1", "过期重付酒款"));
+        Long orderId = batch.getPaymentOrderId();
+        Long entryId = batch.getEntries().get(0).getId();
+
+        batchPaymentService.createNativePayment(orderId);
+        jdbcTemplate.update("UPDATE payment_order SET expire_time = DATE_SUB(NOW(), INTERVAL 5 MINUTE) WHERE id = ?",
+                orderId);
+
+        var expiredStatus = batchPaymentService.getPortalPaymentStatus(orderId);
+        assertThat(expiredStatus.getStatus()).isEqualTo(PaymentOrderStatus.EXPIRED.name());
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status FROM entry_payment WHERE beer_entry_id = ?", String.class, entryId))
+                .isEqualTo(EntryPaymentStatus.EXPIRED.name());
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status FROM payment_order_item WHERE payment_order_id = ?", String.class, orderId))
+                .isEqualTo(EntryPaymentStatus.EXPIRED.name());
+        // 过期不回退酒款状态，厂商仍可原地重付
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status FROM beer_entry WHERE id = ?", String.class, entryId))
+                .isEqualTo(EntryStatus.PENDING_PAYMENT.name());
+
+        var reopened = batchPaymentService.createNativePayment(orderId);
+        assertThat(reopened.getPaymentStatus()).isEqualTo(PaymentOrderStatus.UNPAID.name());
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status FROM entry_payment WHERE beer_entry_id = ?", String.class, entryId))
+                .isEqualTo(EntryPaymentStatus.UNPAID.name());
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT registration_batch_id FROM payment_order WHERE id = ?", Long.class, orderId))
+                .isEqualTo(batch.getId());
+
+        // 重新支付后仍可正常到账并完成报名
+        batchPaymentService.simulatePayment(orderId);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status FROM beer_entry WHERE id = ?", String.class, entryId))
+                .isEqualTo(EntryStatus.REGISTERED.name());
     }
 
     @Test

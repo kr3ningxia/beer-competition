@@ -1,0 +1,15 @@
+app:
+  datasource:
+    database: ${APP_TEST_DB_NAME:beer_competition_test}
+  sms:
+    mock-enabled: true
+  mail:
+    notification:
+      enabled: false
+  storage:
+    provider: local
+    local-base-dir: target/test-uploads
+  beer-coin:
+    payment-mode: MOCK
+  wechat-pay:
+    mode: MOCK

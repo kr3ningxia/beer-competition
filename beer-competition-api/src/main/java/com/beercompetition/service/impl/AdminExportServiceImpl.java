@@ -145,7 +145,7 @@ public class AdminExportServiceImpl implements AdminExportService {
 
         // 2) 组装收样入库工作表
         List<List<String>> rows = new ArrayList<>();
-        rows.add(List.of("比赛名称", "酒款 UUID", "作品编号", "酒款名称", "厂牌名称", "组别", "风格", "送样方式",
+        rows.add(List.of("比赛名称", "酒款 UUID", "作品编号", "酒款名称", "厂牌名称", "厂牌微信号", "组别", "风格", "送样方式",
                 "快递公司", "快递单号", "送样备注", "送样状态", "提交时间", "签收时间", "入库状态", "签收备注"));
         for (BeerEntry entry : context.entries()) {
             EntryScanLabel label = context.labelsByEntryId().get(entry.getId());
@@ -157,6 +157,7 @@ public class AdminExportServiceImpl implements AdminExportService {
                     label == null ? "" : value(label.getShortCode()),
                     value(entry.getName()),
                     brewery == null ? "" : value(brewery.getCompanyName()),
+                    brewery == null ? "" : value(brewery.getWechat()),
                     categoryName(context.categoriesById().get(entry.getCategoryId())),
                     value(entry.getStyle()),
                     deliveryMethodLabel(delivery == null ? "" : delivery.getDeliveryMethod()),

@@ -258,7 +258,11 @@ public class AdminEntryListAssembler {
         if (!EntryStatus.PENDING_PAYMENT.name().equals(entry.getStatus())) {
             return false;
         }
-        return payment == null || EntryPaymentStatus.UNPAID.name().equals(payment.getStatus());
+        if (payment == null) {
+            return true;
+        }
+        return EntryPaymentStatus.UNPAID.name().equals(payment.getStatus())
+                || EntryPaymentStatus.EXPIRED.name().equals(payment.getStatus());
     }
 
     private boolean canCancelEntry(BeerEntry entry, EntryPayment payment) {

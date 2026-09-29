@@ -40,6 +40,7 @@ jobs:
       APP_DB_HOST: 127.0.0.1
       APP_DB_PORT: 3306
       APP_DB_NAME: beer_competition
+      APP_TEST_DB_NAME: beer_competition
       APP_DB_USERNAME: root
       APP_DB_PASSWORD: 0d000721
       APP_REDIS_HOST: 127.0.0.1

@@ -123,6 +123,14 @@ public class AdminEntryDeletionService {
             throw new BaseException("该酒款已有评审或发布数据，请确认高风险删除");
         }
         EntryPayment payment = findEntryPayment(entryId);
+        if (payment != null && payment.getPaymentOrderId() != null
+                && Set.of(EntryPaymentStatus.UNPAID.name(), EntryPaymentStatus.EXPIRED.name(),
+                EntryPaymentStatus.PENDING_CONFIRM.name()).contains(payment.getStatus())) {
+            PaymentOrder order = paymentOrderMapper.selectById(payment.getPaymentOrderId());
+            if (order != null && !"CANCELED".equals(order.getStatus())) {
+                throw new BaseException("该酒款属于统一付款订单，请先整批取消报名再删除");
+            }
+        }
         assertAdministrativeDeletePaymentReady(payment, request.getPaymentDisposition());
 
         entryEvaluationDataService.deleteEntryEvaluationData(entryId);
@@ -146,8 +154,8 @@ public class AdminEntryDeletionService {
     }
 
     private void assertAdministrativeDeletePaymentReady(EntryPayment payment, String disposition) {
-        if (payment == null || Set.of(EntryPaymentStatus.UNPAID.name(), EntryPaymentStatus.CANCELED.name(),
-                EntryPaymentStatus.REFUNDED.name()).contains(payment.getStatus())) {
+        if (payment == null || Set.of(EntryPaymentStatus.UNPAID.name(), EntryPaymentStatus.EXPIRED.name(),
+                EntryPaymentStatus.CANCELED.name(), EntryPaymentStatus.REFUNDED.name()).contains(payment.getStatus())) {
             return;
         }
         if (EntryPaymentStatus.PENDING_CONFIRM.name().equals(payment.getStatus())) {
@@ -175,6 +183,7 @@ public class AdminEntryDeletionService {
 
     private void cancelPendingPaymentForDeletedEntry(EntryPayment payment, String reason) {
         if (payment == null || !(EntryPaymentStatus.UNPAID.name().equals(payment.getStatus())
+                || EntryPaymentStatus.EXPIRED.name().equals(payment.getStatus())
                 || EntryPaymentStatus.PENDING_CONFIRM.name().equals(payment.getStatus()))) {
             return;
         }
