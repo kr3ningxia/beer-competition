@@ -1095,6 +1095,7 @@ CREATE TABLE `judge_recruitment` (
   `status` varchar(32) NOT NULL DEFAULT 'DRAFT',
   `recruitment_start` datetime NOT NULL,
   `recruitment_deadline` datetime NOT NULL,
+  `judging_start_time` time DEFAULT NULL,
   `venue` varchar(255) NOT NULL,
   `address` varchar(500) DEFAULT NULL,
   `description` text,
