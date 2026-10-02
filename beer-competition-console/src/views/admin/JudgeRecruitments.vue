@@ -4,38 +4,29 @@
       <template #actions><button class="tool-button primary" type="button" @click="openCreate">发起招募</button></template>
     </AdminPageHeader>
     <section class="toolbar"><input v-model="keyword" placeholder="搜索比赛名称、编号" @keyup.enter="load"><label v-if="canFilterOrganizers" class="organizer-filter" aria-label="主办方筛选"><OfficeBuilding /><select v-model="organizerType" @change="load"><option v-for="option in organizerOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label><select v-model="status" @change="load"><option value="">全部状态</option><option value="DRAFT">草稿</option><option value="OPEN">招募中</option><option value="CLOSED">已截止</option><option value="ARCHIVED">已归档</option></select><button class="icon-button" type="button" title="刷新" aria-label="刷新" @click="load"><Refresh /></button></section>
-<section class="table-card"><div class="table-head"><span>比赛</span><span>状态</span><span>报名时间</span><span>申请情况</span><span>操作</span></div><div v-for="item in items" :key="item.id" class="table-row"><div><strong>{{ item.competitionName }}</strong></div><span :class="['badge', item.status.toLowerCase()]">{{ statusLabel(item.status) }}</span><span class="time-range">{{ fmtHour(item.recruitmentStart) }} - {{ fmtHour(item.recruitmentDeadline) }}</span><span class="application-summary"><b v-if="item.pendingCount" class="pending">待审核 {{ item.pendingCount }}</b><span v-else>待审核 0</span> · 已录用 {{ item.acceptedCount || 0 }} · 共 {{ item.applicationCount || 0 }}</span><div class="actions"><button class="primary" @click="goDetail(item)">{{ item.pendingCount ? '处理报名' : '查看报名' }}</button><button v-if="item.status==='DRAFT'" @click="edit(item)">编辑</button><button v-if="item.status==='DRAFT'" @click="publish(item)">发布</button></div></div><div v-if="!items.length" class="empty">暂无裁判招募</div></section>
-    <div v-if="editor" class="mask"><section class="dialog"><h2>{{ editing ? '编辑裁判招募' : '发起裁判招募' }}</h2><label>比赛<div class="competition-picker"><input v-model.trim="competitionQuery" placeholder="输入比赛名称搜索" @focus="competitionPickerOpen=true" @input="competitionPickerOpen=true"><button v-if="selectedCompetition" class="picker-clear" type="button" aria-label="清除比赛" @click="clearCompetition">×</button><div v-if="competitionPickerOpen" class="picker-options"><button v-for="c in filteredCompetitions" :key="c.id" type="button" @click="selectCompetition(c)">{{ c.name }}</button><span v-if="!filteredCompetitions.length">没有匹配的比赛</span></div></div></label><div v-if="selectedCompetition" class="competition-meta"><span>比赛日期 {{ selectedCompetition.competitionDate || selectedCompetition.date || '-' }}</span><span>比赛地点 {{ competitionVenue }}</span></div><label>招募开始<input v-model="form.recruitmentStart" type="datetime-local"></label><label>招募截止<input v-model="form.recruitmentDeadline" type="datetime-local"></label><label>赛事介绍<textarea v-model="form.description"></textarea></label><label>裁判要求<textarea v-model="form.requirements"></textarea></label><label>预计需求人数<div class="stepper"><button type="button" aria-label="减少人数" @click="adjustExpectedCount(-1)">−</button><input v-model.number="form.expectedCount" type="number" min="1" max="999" inputmode="numeric"><button type="button" aria-label="增加人数" @click="adjustExpectedCount(1)">＋</button></div></label><footer><button @click="editor=false">取消</button><button class="primary" @click="save">保存草稿</button></footer></section></div>
+<section class="table-card"><div class="table-head"><span>比赛</span><span>状态</span><span>报名时间</span><span>申请情况</span><span>操作</span></div><div v-for="item in items" :key="item.id" class="table-row"><div><strong>{{ item.competitionName }}</strong></div><span :class="['badge', item.status.toLowerCase()]">{{ statusLabel(item.status) }}</span><span class="time-range">{{ fmtHour(item.recruitmentStart) }} - {{ fmtHour(item.recruitmentDeadline) }}</span><span class="application-summary"><b v-if="item.pendingCount" class="pending">待审核 {{ item.pendingCount }}</b><span v-else>待审核 0</span> · 已录用 {{ item.acceptedCount || 0 }} · 共 {{ item.applicationCount || 0 }}</span><div class="actions"><button class="primary" @click="goDetail(item)">{{ item.pendingCount ? '处理报名' : '查看报名' }}</button><button v-if="['DRAFT','OPEN','CLOSED'].includes(item.status)" @click="edit(item)">编辑</button><button v-if="item.status==='DRAFT'" @click="publish(item)">发布</button></div></div><div v-if="!items.length" class="empty">暂无裁判招募</div></section>
+    <JudgeRecruitmentEditor v-model="editor" :recruitment="editing" @saved="load" />
   </div>
 </template>
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { OfficeBuilding, Refresh } from '@element-plus/icons-vue'
 import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
+import JudgeRecruitmentEditor from './components/JudgeRecruitmentEditor.vue'
 import { useRouter } from 'vue-router'
-import { fetchCompetitions, fetchJudgeRecruitments, createJudgeRecruitment, updateJudgeRecruitment, publishJudgeRecruitment } from '@/api/admin'
+import { fetchJudgeRecruitments, publishJudgeRecruitment } from '@/api/admin'
 import { ADMIN_TYPES } from '@/config/adminAccess'
 import { getAdminType } from '@/utils/auth'
 const router=useRouter()
-const items=ref([]), competitions=ref([]), keyword=ref(''), status=ref(''), organizerType=ref('PLATFORM'), editor=ref(false), editing=ref(null), competitionQuery=ref(''), competitionPickerOpen=ref(false)
+const items=ref([]), keyword=ref(''), status=ref(''), organizerType=ref('PLATFORM'), editor=ref(false), editing=ref(null)
 const canFilterOrganizers=computed(()=>getAdminType()===ADMIN_TYPES.PLATFORM_SUPER_ADMIN)
 const organizerOptions=[{label:'啤酒事务局',value:'PLATFORM'},{label:'第三方平台',value:'TENANT'},{label:'所有主办方',value:'ALL'}]
-const form=reactive({competitionId:null,recruitmentStart:'',recruitmentDeadline:'',venue:'',address:'',description:'',requirements:'',expectedCount:null})
-const selectedCompetition = computed(() => competitions.value.find((item) => String(item.id) === String(form.competitionId)) || null)
-const filteredCompetitions = computed(() => { const q=competitionQuery.value.toLowerCase(); return competitions.value.filter((item) => !q || String(item.name || '').toLowerCase().includes(q)) })
-const competitionVenue = computed(() => selectedCompetition.value?.venue || selectedCompetition.value?.location || selectedCompetition.value?.logistics?.venue || selectedCompetition.value?.logistics?.deliveryAddress || selectedCompetition.value?.deliveryAddress || '-')
-const load=async()=>{const params={keyword:keyword.value,status:status.value}; if(canFilterOrganizers.value) params.organizerType=organizerType.value; items.value=await fetchJudgeRecruitments(params); if(!competitions.value.length) competitions.value=await fetchCompetitions({})}
+const load=async()=>{const params={keyword:keyword.value,status:status.value}; if(canFilterOrganizers.value) params.organizerType=organizerType.value; items.value=await fetchJudgeRecruitments(params)}
 onMounted(load)
-const toDateTimeLocal = (value) => value ? String(value).slice(0, 16) : ''
-const defaultDeadline = (value) => { if (!value) return ''; const date = new Date(`${String(value).slice(0, 10)}T00:00:00`); date.setDate(date.getDate() - 1); const pad = (n) => String(n).padStart(2, '0'); return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T23:59` }
-const applyCompetitionDefaults = (competition) => { form.recruitmentStart = toDateTimeLocal(competition?.registrationStart); form.recruitmentDeadline = defaultDeadline(competition?.competitionDate || competition?.date) }
-const reset=()=>{const first=competitions.value[0];Object.assign(form,{competitionId:first?.id||null,recruitmentStart:'',recruitmentDeadline:'',venue:'',address:'',description:first?.description||'',requirements:'',expectedCount:1});if(first) applyCompetitionDefaults(first);competitionQuery.value=first?.name||''}
-function openCreate(){editing.value=null;reset();editor.value=true;competitionPickerOpen.value=false} function edit(i){editing.value=i;Object.assign(form,i);competitionQuery.value=i.competitionName||'';editor.value=true;competitionPickerOpen.value=false}
-function selectCompetition(c){form.competitionId=c.id;form.description=c.description||'';applyCompetitionDefaults(c);competitionQuery.value=c.name;competitionPickerOpen.value=false} function clearCompetition(){form.competitionId=null;competitionQuery.value='';competitionPickerOpen.value=true}
-function adjustExpectedCount(delta){form.expectedCount=Math.min(999,Math.max(1,Number(form.expectedCount||1)+delta))}
-async function save(){form.venue=competitionVenue.value==='-'?'':competitionVenue.value;const fn=editing.value?updateJudgeRecruitment(editing.value.id,form):createJudgeRecruitment(form);await fn;editor.value=false;await load();ElMessage.success('已保存')}
-async function publish(i){await publishJudgeRecruitment(i.id);await load();ElMessage.success('招募已发布')} async function close(i){await closeJudgeRecruitment(i.id);await load();ElMessage.success('招募已关闭')}
+function openCreate(){editing.value=null;editor.value=true}
+function edit(item){editing.value=item;editor.value=true}
+async function publish(i){await publishJudgeRecruitment(i.id);await load();ElMessage.success('招募已发布')}
 function goDetail(item){router.push(`/admin/judge-recruitments/${item.id}`)}
 const fmtHour=v=>v?new Date(v).toLocaleString('zh-CN',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',hour12:false}):'-'; const statusLabel=s=>({DRAFT:'草稿',OPEN:'招募中',CLOSED:'已截止',ARCHIVED:'已归档'}[s]||s)
 </script>
