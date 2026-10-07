@@ -1,13 +1,19 @@
 package com.beercompetition.service.impl;
 
 import com.beercompetition.common.exception.BaseException;
+import com.beercompetition.common.context.BaseContext;
+import com.beercompetition.common.context.SessionUser;
 import com.beercompetition.competition.access.CompetitionAccessService;
 import com.beercompetition.common.util.PiiService;
 import com.beercompetition.judging.access.JudgeAccessService;
 import com.beercompetition.mapper.*;
 import com.beercompetition.pojo.dto.JudgeRecruitmentRequest;
+import com.beercompetition.pojo.dto.JudgeRecruitmentApplicationRequest;
 import com.beercompetition.pojo.po.Competition;
+import com.beercompetition.pojo.po.JudgeAccount;
 import com.beercompetition.pojo.po.JudgeRecruitment;
+import com.beercompetition.pojo.po.JudgeRecruitmentApplication;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,6 +49,11 @@ class JudgeRecruitmentServiceImplTest {
 
     private JudgeRecruitment recruitment;
     private JudgeRecruitmentRequest request;
+
+    @AfterEach
+    void clearContext() {
+        BaseContext.clear();
+    }
 
     @BeforeEach
     void prepare() {
@@ -142,5 +153,86 @@ class JudgeRecruitmentServiceImplTest {
         var result = service.adminGet(1L);
         assertThat(result.getJudgingStartTime()).isNull();
         assertThat(result.getCompetitionDate()).isEqualTo(LocalDate.of(2026, 10, 9));
+    }
+
+    @Test
+    void expiredRecruitmentExposesClosedApplicationWindow() {
+        recruitment.setRecruitmentDeadline(LocalDateTime.now().minusMinutes(1));
+        mockExisting();
+        when(applicationMapper.selectList(any())).thenReturn(List.of());
+
+        var result = service.adminGet(1L);
+
+        assertThat(result.getApplicationWindowOpen()).isFalse();
+    }
+
+    @Test
+    void cannotWithdrawAfterRecruitmentDeadline() {
+        recruitment.setRecruitmentDeadline(LocalDateTime.now().minusMinutes(1));
+        JudgeRecruitmentApplication application = application("APPLIED");
+        when(applicationMapper.selectById(4L)).thenReturn(application);
+        when(recruitmentMapper.selectById(1L)).thenReturn(recruitment);
+        BaseContext.setCurrentUser(SessionUser.builder().userId(7L).role("JUDGE").build());
+
+        assertThatThrownBy(() -> service.withdraw(4L))
+                .isInstanceOf(BaseException.class)
+                .hasMessage("招募已关闭");
+        verify(applicationMapper, never()).updateById(any(JudgeRecruitmentApplication.class));
+    }
+
+    @Test
+    void cannotWithdrawAfterRecruitmentIsClosedBeforeDeadline() {
+        recruitment.setStatus("CLOSED");
+        recruitment.setRecruitmentDeadline(LocalDateTime.now().plusMinutes(1));
+        JudgeRecruitmentApplication application = application("ACCEPTED");
+        when(applicationMapper.selectById(4L)).thenReturn(application);
+        when(recruitmentMapper.selectById(1L)).thenReturn(recruitment);
+        BaseContext.setCurrentUser(SessionUser.builder().userId(7L).role("JUDGE").build());
+
+        assertThatThrownBy(() -> service.withdraw(4L))
+                .isInstanceOf(BaseException.class)
+                .hasMessage("招募已关闭");
+        verify(applicationMapper, never()).updateById(any(JudgeRecruitmentApplication.class));
+    }
+
+    @Test
+    void withdrawnApplicationCanBeSubmittedAgain() {
+        JudgeAccount judge = JudgeAccount.builder()
+                .id(7L)
+                .name("Judge")
+                .qualification("BJCP")
+                .status(1)
+                .build();
+        JudgeRecruitmentApplication application = application("WITHDRAWN");
+        application.setReviewRemark("旧审核意见");
+        application.setProcessedBy(99L);
+        application.setProcessedTime(LocalDateTime.now().minusDays(1));
+        JudgeRecruitmentApplicationRequest applyRequest = new JudgeRecruitmentApplicationRequest();
+        applyRequest.setAvailabilityConfirmed(true);
+        applyRequest.setNote("重新报名");
+        when(judgeAccountMapper.selectById(7L)).thenReturn(judge);
+        when(recruitmentMapper.selectById(1L)).thenReturn(recruitment);
+        when(applicationMapper.selectOne(any())).thenReturn(application);
+        when(competitionMapper.selectById(10L)).thenReturn(Competition.builder().id(10L).name("Test competition").build());
+        BaseContext.setCurrentUser(SessionUser.builder().userId(7L).role("JUDGE").build());
+
+        service.apply(1L, applyRequest);
+
+        assertThat(application.getStatus()).isEqualTo("APPLIED");
+        assertThat(application.getNote()).isEqualTo("重新报名");
+        assertThat(application.getWithdrawnTime()).isNull();
+        assertThat(application.getReviewRemark()).isNull();
+        assertThat(application.getProcessedBy()).isNull();
+        assertThat(application.getProcessedTime()).isNull();
+        verify(applicationMapper).updateById(application);
+    }
+
+    private JudgeRecruitmentApplication application(String status) {
+        JudgeRecruitmentApplication application = new JudgeRecruitmentApplication();
+        application.setId(4L);
+        application.setRecruitmentId(1L);
+        application.setJudgeAccountId(7L);
+        application.setStatus(status);
+        return application;
     }
 }
