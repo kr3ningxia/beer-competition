@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -33,11 +34,11 @@ class JudgePerformanceServiceIntegrationTest extends IntegrationTestBase {
         asAdmin(1L);
 
         var saved = judgePerformanceService.savePerformance(
-                fixture.competition().getId(), fixture.professional().getPublicId(), confirmedRequest(0, 3));
+                fixture.competition().getId(), fixture.professional().getPublicId(), confirmedRequest(0, "42.5"));
 
         assertThat(saved.getEvaluationStatus()).isEqualTo("CONFIRMED");
-        assertThat(saved.getManualScore()).isEqualByComparingTo("52.5");
-        assertThat(saved.getTotalScore()).isEqualByComparingTo("52.5");
+        assertThat(saved.getManualScore()).isEqualByComparingTo("42.5");
+        assertThat(saved.getTotalScore()).isEqualByComparingTo("42.5");
         assertThat(saved.getVersion()).isEqualTo(1);
     }
 
@@ -50,7 +51,7 @@ class JudgePerformanceServiceIntegrationTest extends IntegrationTestBase {
         asAdmin(1L);
 
         assertThatThrownBy(() -> judgePerformanceService.savePerformance(
-                fixture.competition().getId(), fixture.professional().getPublicId(), confirmedRequest(1, 3)))
+                fixture.competition().getId(), fixture.professional().getPublicId(), confirmedRequest(1, "42.5")))
                 .isInstanceOf(BaseException.class)
                 .hasMessageContaining("已被其他管理员更新");
     }
@@ -96,7 +97,7 @@ class JudgePerformanceServiceIntegrationTest extends IntegrationTestBase {
         jdbcTemplate.update("UPDATE competition SET status = ? WHERE id = ?",
                 CompetitionStatus.RESULT_CONFIRMING.name(), fixture.competition().getId());
         asAdmin(1L);
-        JudgePerformanceSaveRequest request = confirmedRequest(0, 4);
+        JudgePerformanceSaveRequest request = confirmedRequest(0, "40");
 
         var saved = judgePerformanceService.savePerformance(
                 fixture.competition().getId(), fixture.professional().getPublicId(), request);
@@ -105,8 +106,36 @@ class JudgePerformanceServiceIntegrationTest extends IntegrationTestBase {
         assertThat(saved.getTaskCompletedCount()).isZero();
         assertThat(saved.getTaskTotalCount()).isEqualTo(3);
         assertThat(saved.getCommentScore()).isZero();
-        assertThat(saved.getTotalScore()).isEqualByComparingTo("63.0");
+        assertThat(saved.getTotalScore()).isEqualByComparingTo("40.0");
         assertThat(saved.getExcellentCandidate()).isFalse();
+    }
+
+    @Test
+    void confirmedEvaluationRequiresManualScore() {
+        var fixture = lockedScoreFixture();
+        jdbcTemplate.update("UPDATE competition SET status = ? WHERE id = ?",
+                CompetitionStatus.RESULT_CONFIRMING.name(), fixture.competition().getId());
+        asAdmin(1L);
+        JudgePerformanceSaveRequest request = draftRequest(0);
+        request.setStatus("CONFIRMED");
+
+        assertThatThrownBy(() -> judgePerformanceService.savePerformance(
+                fixture.competition().getId(), fixture.professional().getPublicId(), request))
+                .isInstanceOf(BaseException.class)
+                .hasMessageContaining("手工评分");
+    }
+
+    @Test
+    void manualScoreCannotExceedFifty() {
+        var fixture = lockedScoreFixture();
+        asAdmin(1L);
+        JudgePerformanceSaveRequest request = draftRequest(0);
+        request.setManualScore(new BigDecimal("50.1"));
+
+        assertThatThrownBy(() -> judgePerformanceService.savePerformance(
+                fixture.competition().getId(), fixture.professional().getPublicId(), request))
+                .isInstanceOf(BaseException.class)
+                .hasMessageContaining("0-50");
     }
 
     private BeerCompetitionTestData.Fixture lockedScoreFixture() {
@@ -145,13 +174,10 @@ class JudgePerformanceServiceIntegrationTest extends IntegrationTestBase {
         return request;
     }
 
-    private JudgePerformanceSaveRequest confirmedRequest(int version, int level) {
+    private JudgePerformanceSaveRequest confirmedRequest(int version, String score) {
         JudgePerformanceSaveRequest request = draftRequest(version);
         request.setStatus("CONFIRMED");
-        request.setJudgmentLevel(level);
-        request.setFeedbackQualityLevel(level);
-        request.setRuleExecutionLevel(level);
-        request.setProfessionalismLevel(level);
+        request.setManualScore(new BigDecimal(score));
         return request;
     }
 }

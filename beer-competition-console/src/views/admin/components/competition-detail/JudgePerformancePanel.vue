@@ -43,8 +43,8 @@
       <div class="performance-table-head">
         <span>排名</span>
         <span>评审</span>
-        <span>人工评价 · 70 分</span>
-        <span>评语投入 · 30 分</span>
+        <span>手工评分 · 50 分</span>
+        <span>字数评分 · 50 分</span>
         <span>完成度</span>
         <span>赛事表现 · 100 分</span>
         <span>操作</span>
@@ -66,7 +66,7 @@
           <template v-if="row.manualScore != null">
             <div class="score-line">
               <strong>{{ formatNumber(row.manualScore) }}</strong>
-              <small>/ 70</small>
+              <small>/ 50</small>
             </div>
           </template>
           <template v-else>
@@ -78,7 +78,7 @@
         <div class="comment-cell">
           <div class="score-line">
             <strong>{{ row.commentScore == null ? '-' : formatNumber(row.commentScore) }}</strong>
-            <small>/ 30</small>
+            <small>/ 50</small>
           </div>
           <small>{{ row.commentTopPercent ? `前 ${row.commentTopPercent}%` : '-' }} · {{ row.commentAverageChars || 0 }} 字/份</small>
         </div>
@@ -119,14 +119,14 @@
           </div>
           <div class="modal-metrics">
             <div>
-              <span>人工评价</span>
+              <span>手工评分</span>
               <strong>{{ selectedRow?.manualScore == null ? '—' : formatNumber(selectedRow.manualScore) }}</strong>
-              <small>/ 70</small>
+              <small>/ 50</small>
             </div>
             <div>
-              <span>评语投入</span>
+              <span>字数评分</span>
               <strong>{{ selectedRow?.commentScore == null ? '—' : formatNumber(selectedRow.commentScore) }}</strong>
-              <small>/ 30</small>
+              <small>/ 50</small>
             </div>
             <div>
               <span>赛事表现</span>
@@ -144,38 +144,32 @@
         <div class="modal-body">
           <section class="eval-column">
             <div class="column-title">
-              <h3>人工评价 <small>70 分</small></h3>
-              <span>
-                已评 {{ selectedItemCount }}/{{ manualItems.length }} 项
-                <strong>当前 {{ formatNumber(liveManualScore) }} / 70</strong>
-              </span>
+              <h3>手工评分 <small>50 分</small></h3>
+              <span>当前 <strong>{{ liveManualScore == null ? '—' : formatNumber(liveManualScore) }} / 50</strong></span>
             </div>
-            <div v-for="item in manualItems" :key="item.key" class="manual-item">
-              <div class="manual-item-label">
-                <strong>{{ item.label }}</strong>
-                <small>
-                  {{ item.weight }} 分
-                  <em v-if="itemContribution(item) != null">当前 {{ formatNumber(itemContribution(item)) }}</em>
-                </small>
+            <label class="manual-score-field">
+              <span>手工评分</span>
+              <div class="manual-score-input">
+                <input
+                  v-model.number="form.manualScore"
+                  type="number"
+                  min="0"
+                  max="50"
+                  step="0.1"
+                  inputmode="decimal"
+                  placeholder="0–50"
+                  :readonly="readonly"
+                  aria-label="手工评分"
+                />
+                <small>/ 50</small>
               </div>
-              <div class="level-options">
-                <button
-                  v-for="level in levels"
-                  :key="level.value"
-                  :class="{ active: form[item.key] === level.value }"
-                  type="button"
-                  :disabled="readonly"
-                  @click="selectLevel(item.key, level.value)"
-                >
-                  {{ level.label }}
-                </button>
-              </div>
-            </div>
+            </label>
+            <small class="manual-score-hint">请输入 0–50 分，最多 1 位小数</small>
           </section>
 
           <section class="stat-column">
             <div class="column-title">
-              <h3>评语投入 <small>30 分</small></h3>
+              <h3>字数评分 <small>50 分</small></h3>
               <span>按锁定评分轮统计</span>
             </div>
             <dl class="stat-list">
@@ -200,8 +194,7 @@
           <label class="evidence-field">
             <span>
               评价依据
-              <em v-if="needsEvidence" :class="['rule-hint', { missing: !form.evidence }]">已选“严重不足/优秀”，必填</em>
-              <em v-else>可选</em>
+              <em>可选</em>
             </span>
             <textarea v-model.trim="form.evidence" maxlength="1000" :readonly="readonly" placeholder="记录具体观察，便于后续复盘"></textarea>
             <small>{{ form.evidence.length }} / 1000</small>
@@ -222,8 +215,8 @@
               <button
                 class="tool-button primary"
                 type="button"
-                :disabled="saving || !summary?.confirmAllowed || selectedItemCount < manualItems.length"
-                :title="selectedItemCount < manualItems.length ? '保存前需完成四项人工评价' : ''"
+                :disabled="saving || !summary?.confirmAllowed || !manualScoreComplete"
+                :title="!manualScoreComplete ? '确认前请输入 0–50 分，最多 1 位小数' : ''"
                 @click="save('CONFIRMED')"
               >
                 保存修改
@@ -234,8 +227,8 @@
               <button
                 class="tool-button primary"
                 type="button"
-                :disabled="saving || !summary?.confirmAllowed || selectedItemCount < manualItems.length"
-                :title="selectedItemCount < manualItems.length ? '确认前需完成四项人工评价' : ''"
+                :disabled="saving || !summary?.confirmAllowed || !manualScoreComplete"
+                :title="!manualScoreComplete ? '确认前请输入 0–50 分，最多 1 位小数' : ''"
                 @click="save('CONFIRMED')"
               >
                 确认评价
@@ -264,21 +257,7 @@ const roleFilter = ref('ALL')
 const modalOpen = ref(false)
 const editing = ref(false)
 const selectedRow = ref(null)
-const form = reactive({ judgmentLevel: null, feedbackQualityLevel: null, ruleExecutionLevel: null, professionalismLevel: null, evidence: '', version: 0 })
-
-const levels = [
-  { value: 1, label: '严重不足', ratio: 0 },
-  { value: 2, label: '待改进', ratio: 0.6 },
-  { value: 3, label: '合格', ratio: 0.75 },
-  { value: 4, label: '良好', ratio: 0.9 },
-  { value: 5, label: '优秀', ratio: 1 },
-]
-const manualItems = [
-  { key: 'judgmentLevel', label: '专业判断与评分依据', weight: 20 },
-  { key: 'feedbackQualityLevel', label: '反馈内容质量', weight: 20 },
-  { key: 'ruleExecutionLevel', label: '规则执行与任务完成', weight: 15 },
-  { key: 'professionalismLevel', label: '协作、公正与职业表现', weight: 15 },
-]
+const form = reactive({ manualScore: null, evidence: '', version: 0 })
 
 const statusCounts = computed(() => {
   const records = summary.value?.records || []
@@ -298,9 +277,15 @@ const visibleRows = computed(() => (summary.value?.records || []).filter((row) =
 }))
 
 const readonly = computed(() => selectedRow.value?.evaluationStatus === 'CONFIRMED' && !editing.value)
-const selectedItemCount = computed(() => manualItems.filter((item) => form[item.key] != null).length)
-const liveManualScore = computed(() => manualItems.reduce((sum, item) => sum + (itemContribution(item) || 0), 0))
-const needsEvidence = computed(() => manualItems.some((item) => form[item.key] === 1 || form[item.key] === 5))
+const manualScoreComplete = computed(() => {
+  if (form.manualScore === null || form.manualScore === '') return false
+  const score = Number(form.manualScore)
+  return Number.isFinite(score)
+    && score >= 0
+    && score <= 50
+    && Math.abs(score * 10 - Math.round(score * 10)) < 1e-8
+})
+const liveManualScore = computed(() => (manualScoreComplete.value ? Number(form.manualScore) : null))
 
 watch(() => props.competition?.id, () => loadData())
 onMounted(loadData)
@@ -321,10 +306,7 @@ async function loadData() {
 function openModal(row) {
   selectedRow.value = row
   editing.value = false
-  form.judgmentLevel = row.judgmentLevel || null
-  form.feedbackQualityLevel = row.feedbackQualityLevel || null
-  form.ruleExecutionLevel = row.ruleExecutionLevel || null
-  form.professionalismLevel = row.professionalismLevel || null
+  form.manualScore = row.manualScore ?? null
   form.evidence = row.evidence || ''
   form.version = row.version || 0
   modalOpen.value = true
@@ -336,24 +318,14 @@ function closeModal() {
   selectedRow.value = null
 }
 
-function selectLevel(key, value) {
-  if (readonly.value) return
-  form[key] = form[key] === value ? null : value
-}
-
-function itemContribution(item) {
-  const level = levels.find((entry) => entry.value === form[item.key])
-  return level ? item.weight * level.ratio : null
-}
-
 async function save(status) {
   if (!selectedRow.value || !props.competition?.id) return
-  if (status === 'CONFIRMED' && selectedItemCount.value < manualItems.length) {
-    ElMessage.warning('确认评价前请完成四项人工评价')
+  if (form.manualScore !== null && form.manualScore !== '' && !manualScoreComplete.value) {
+    ElMessage.warning('手工评分需为 0–50 分，最多 1 位小数')
     return
   }
-  if (needsEvidence.value && !form.evidence) {
-    ElMessage.warning('选择严重不足或优秀时请填写评价依据')
+  if (status === 'CONFIRMED' && !manualScoreComplete.value) {
+    ElMessage.warning('确认评价前请输入 0–50 分，最多 1 位小数')
     return
   }
   saving.value = true
@@ -425,7 +397,6 @@ svg {
 .score-line,
 .row-actions,
 .column-title,
-.manual-item-label,
 .task-line,
 .modal-identity,
 .modal-metrics,
@@ -917,70 +888,57 @@ svg {
   font-variant-numeric: tabular-nums;
 }
 
-.manual-item {
+.manual-score-field {
   display: grid;
   gap: 10px;
-  padding: 12px;
+  padding: 18px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(7, 14, 17, 0.4);
 }
 
-.manual-item-label {
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.manual-item-label strong {
-  font-size: 14px;
-}
-
-.manual-item-label small {
-  display: flex;
-  gap: 10px;
+.manual-score-field > span {
   color: var(--muted);
-  font-size: 12px;
-  white-space: nowrap;
+  font-size: 13px;
 }
 
-.manual-item-label em {
-  color: var(--gold);
-  font-style: normal;
+.manual-score-input {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.manual-score-input input {
+  width: 100%;
+  min-height: 48px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  color: var(--text);
+  border: 1px solid rgba(219, 232, 237, 0.18);
+  border-radius: 8px;
+  background: rgba(7, 14, 17, 0.55);
+  outline: 0;
+  font-size: 22px;
   font-variant-numeric: tabular-nums;
 }
 
-.level-options {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 6px;
+.manual-score-input input:focus {
+  border-color: rgba(216, 169, 53, 0.55);
 }
 
-.level-options button {
-  min-height: 38px;
-  color: #a9bbc2;
-  border: 1px solid rgba(219, 232, 237, 0.14);
-  border-radius: 7px;
-  background: rgba(255, 255, 255, 0.035);
-  font-size: 13px;
-  cursor: pointer;
-  transition: color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
-}
-
-.level-options button:hover:not(:disabled) {
-  border-color: rgba(216, 169, 53, 0.3);
-  background: rgba(216, 169, 53, 0.07);
-}
-
-.level-options button.active {
-  color: var(--gold);
-  border-color: rgba(216, 169, 53, 0.5);
-  background: rgba(216, 169, 53, 0.12);
-  font-weight: 700;
-}
-
-.level-options button:disabled {
-  cursor: default;
+.manual-score-input input:read-only {
   opacity: 0.78;
+  cursor: default;
+}
+
+.manual-score-input small,
+.manual-score-hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.manual-score-hint {
+  margin: 0;
 }
 
 .stat-list {

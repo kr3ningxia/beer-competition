@@ -1,5 +1,7 @@
 package com.beercompetition.pojo.po;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -26,6 +28,7 @@ public class CompetitionJudgeEvaluation {
     private Integer feedbackQualityLevel;
     private Integer ruleExecutionLevel;
     private Integer professionalismLevel;
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private BigDecimal manualScore;
     private Integer commentTotalChars;
     private Integer commentAverageChars;

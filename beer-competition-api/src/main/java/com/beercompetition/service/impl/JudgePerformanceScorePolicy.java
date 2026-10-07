@@ -2,7 +2,9 @@ package com.beercompetition.service.impl;
 
 final class JudgePerformanceScorePolicy {
 
-    private static final int COMMENT_SCORE_MAX = 30;
+    private static final int COMMENT_SCORE_MAX = 50;
+    private static final int COMMENT_SCORE_MIN = 10;
+    private static final int COMMENT_SCORE_STEP = 10;
     private static final int DEFAULT_CROSS_MIN = 50;
     private static final int DEFAULT_OTHER_MIN = 30;
 
@@ -32,7 +34,24 @@ final class JudgePerformanceScorePolicy {
     }
 
     static double commentScore(double percentile, boolean completed) {
-        return completed ? Math.min(COMMENT_SCORE_MAX, 12 + 20 * percentile) : 0;
+        // 按评语字数百分位划分五档：前 20% 为 50 分，之后每档递减 10 分，后 20% 为 10 分。
+        if (!completed) {
+            return 0;
+        }
+        double normalizedPercentile = Math.max(0, Math.min(1, percentile));
+        if (normalizedPercentile >= 0.8) {
+            return COMMENT_SCORE_MAX;
+        }
+        if (normalizedPercentile >= 0.6) {
+            return COMMENT_SCORE_MAX - COMMENT_SCORE_STEP;
+        }
+        if (normalizedPercentile >= 0.4) {
+            return COMMENT_SCORE_MAX - COMMENT_SCORE_STEP * 2;
+        }
+        if (normalizedPercentile > 0.2) {
+            return COMMENT_SCORE_MAX - COMMENT_SCORE_STEP * 3;
+        }
+        return COMMENT_SCORE_MIN;
     }
 
     static int topPercent(double percentile) {
@@ -42,14 +61,4 @@ final class JudgePerformanceScorePolicy {
         return Math.max(1, (int) Math.ceil((1 - percentile) * 100));
     }
 
-    static double weightedLevel(int level, int weight) {
-        double ratio = switch (level) {
-            case 1 -> 0;
-            case 2 -> 0.6;
-            case 3 -> 0.75;
-            case 4 -> 0.9;
-            default -> 1;
-        };
-        return weight * ratio;
-    }
 }

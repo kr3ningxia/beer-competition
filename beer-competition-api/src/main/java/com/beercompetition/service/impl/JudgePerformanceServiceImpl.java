@@ -70,6 +70,8 @@ public class JudgePerformanceServiceImpl implements JudgePerformanceService {
     private static final String TARGET_TYPE = "JUDGE_PERFORMANCE";
     private static final String STATUS_DRAFT = "DRAFT";
     private static final String STATUS_CONFIRMED = "CONFIRMED";
+    private static final BigDecimal MANUAL_SCORE_MAX = BigDecimal.valueOf(50);
+    private static final BigDecimal EXCELLENT_MANUAL_SCORE_MIN = BigDecimal.valueOf(40);
     private final CompetitionAccessService competitionAccessService;
     private final JudgeAccessService judgeAccessService;
     private final AdminOperationLogMapper adminOperationLogMapper;
@@ -136,16 +138,12 @@ public class JudgePerformanceServiceImpl implements JudgePerformanceService {
             if (!canConfirm(competition, hasLockedScoreRound)) {
                 throw new BaseException(confirmReason(competition, hasLockedScoreRound));
             }
-            validateConfirmation(request, current);
+            validateConfirmation(request);
         }
         BigDecimal manualScore = manualScore(request);
         BigDecimal commentScore = current.getCommentScore();
         BigDecimal totalScore = manualScore == null || commentScore == null ? null : manualScore.add(commentScore);
         CompetitionJudgeEvaluation target = existing == null ? newEvaluation(competitionId, judge.getId()) : existing;
-        target.setJudgmentLevel(request.getJudgmentLevel());
-        target.setFeedbackQualityLevel(request.getFeedbackQualityLevel());
-        target.setRuleExecutionLevel(request.getRuleExecutionLevel());
-        target.setProfessionalismLevel(request.getProfessionalismLevel());
         target.setManualScore(manualScore);
         target.setCommentTotalChars(current.getCommentTotalChars());
         target.setCommentAverageChars(current.getCommentAverageChars());
@@ -460,14 +458,9 @@ public class JudgePerformanceServiceImpl implements JudgePerformanceService {
         return "请等比赛进入结果确认阶段后再确认评审表现";
     }
 
-    private void validateConfirmation(JudgePerformanceSaveRequest request, JudgePerformanceVO current) {
-        if (request.getJudgmentLevel() == null || request.getFeedbackQualityLevel() == null || request.getRuleExecutionLevel() == null || request.getProfessionalismLevel() == null) {
-            throw new BaseException("确认评价前请完成四项人工评价");
-        }
-        if ((request.getJudgmentLevel() == 1 || request.getJudgmentLevel() == 5 || request.getFeedbackQualityLevel() == 1 || request.getFeedbackQualityLevel() == 5
-                || request.getRuleExecutionLevel() == 1 || request.getRuleExecutionLevel() == 5 || request.getProfessionalismLevel() == 1 || request.getProfessionalismLevel() == 5)
-                && !StringUtils.hasText(request.getEvidence())) {
-            throw new BaseException("选择严重不足或优秀时请填写评价依据");
+    private void validateConfirmation(JudgePerformanceSaveRequest request) {
+        if (request.getManualScore() == null) {
+            throw new BaseException("确认评价前请输入手工评分（0-50分）");
         }
     }
 
@@ -483,20 +476,26 @@ public class JudgePerformanceServiceImpl implements JudgePerformanceService {
     }
 
     private BigDecimal manualScore(JudgePerformanceSaveRequest request) {
-        if (request.getJudgmentLevel() == null || request.getFeedbackQualityLevel() == null || request.getRuleExecutionLevel() == null || request.getProfessionalismLevel() == null) return null;
-        return scale(JudgePerformanceScorePolicy.weightedLevel(request.getJudgmentLevel(), 20)
-                + JudgePerformanceScorePolicy.weightedLevel(request.getFeedbackQualityLevel(), 20)
-                + JudgePerformanceScorePolicy.weightedLevel(request.getRuleExecutionLevel(), 15)
-                + JudgePerformanceScorePolicy.weightedLevel(request.getProfessionalismLevel(), 15));
+        BigDecimal score = request.getManualScore();
+        if (score == null) {
+            return null;
+        }
+        if (score.signum() < 0 || score.compareTo(MANUAL_SCORE_MAX) > 0) {
+            throw new BaseException("手工评分必须在 0-50 分之间");
+        }
+        if (score.scale() > 1) {
+            throw new BaseException("手工评分最多保留 1 位小数");
+        }
+        return score.setScale(1, RoundingMode.HALF_UP);
     }
 
     private boolean isExcellent(JudgePerformanceVO current, BigDecimal manual, BigDecimal total) {
-        return total != null && manual != null && total.compareTo(BigDecimal.valueOf(85)) >= 0 && manual.compareTo(BigDecimal.valueOf(56)) >= 0
+        return total != null && manual != null && total.compareTo(BigDecimal.valueOf(85)) >= 0 && manual.compareTo(EXCELLENT_MANUAL_SCORE_MIN) >= 0
                 && current.getCompletionRate() != null && current.getCompletionRate().compareTo(BigDecimal.valueOf(100)) >= 0;
     }
 
     private boolean isExcellent(JudgeStats stats, BigDecimal manual, BigDecimal total) {
-        return total != null && manual != null && total.compareTo(BigDecimal.valueOf(85)) >= 0 && manual.compareTo(BigDecimal.valueOf(56)) >= 0 && stats.isComplete(stats.taskTotal);
+        return total != null && manual != null && total.compareTo(BigDecimal.valueOf(85)) >= 0 && manual.compareTo(EXCELLENT_MANUAL_SCORE_MIN) >= 0 && stats.isComplete(stats.taskTotal);
     }
 
     private Map<Long, String> evaluatorNames(Iterable<CompetitionJudgeEvaluation> evaluations) {
