@@ -226,7 +226,8 @@ function logout() {
 .identity-copy small { color: #60757e; font-size: 10px; }
 .identity-button > svg, .logout-button svg { width: 16px; height: 16px; }
 .logout-button { display: grid; place-items: center; padding: 0; }
-.content, .page { min-width: 0; min-height: 0; height: 100vh; overflow: hidden; }
+.content { min-width: 0; min-height: 0; height: 100vh; overflow: hidden; }
+.page { min-width: 0; min-height: 0; height: 100vh; overflow-x: hidden; overflow-y: auto; scrollbar-gutter: stable; }
 
 @media (max-width: 980px) {
   .admin-shell { grid-template-columns: 1fr; height: auto; overflow: visible; }
