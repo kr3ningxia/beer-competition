@@ -33,6 +33,14 @@ public class AdminExportController {
     }
 
     /**
+     * 导出本场比赛全部裁判报名信息，包含联系方式与审核资料。
+     */
+    @GetMapping("/judges")
+    public ResponseEntity<byte[]> exportJudgeApplications(@PathVariable Long id) {
+        return FileResponseHelper.attachment(adminExportService.exportJudgeApplications(id));
+    }
+
+    /**
      * 按筛选条件导出报名台账。
      */
     @GetMapping("/entries")

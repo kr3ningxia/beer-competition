@@ -138,10 +138,12 @@ import {
   Refresh,
   RefreshLeft,
   Search,
+  User,
 } from '@element-plus/icons-vue'
 import {
   exportCompetitionDelivery,
   exportCompetitionEntries,
+  exportCompetitionJudges,
   exportCompetitionLabels,
   exportCompetitionScoringData,
   fetchAdminEntries,
@@ -229,6 +231,17 @@ const exportTemplates = [
     action: '导出评分',
     icon: DataAnalysis,
     tone: 'amber',
+  },
+  {
+    key: 'judges',
+    title: '评审报名信息',
+    stage: '裁判招募',
+    description: '导出本场比赛全部报名评审及联系方式，包含微信号、资质、利益冲突和审核记录',
+    fileType: 'Excel',
+    scope: '本场全部报名记录',
+    action: '导出评审',
+    icon: User,
+    tone: 'gold',
   },
 ]
 
@@ -330,6 +343,10 @@ async function runExport(type) {
       blob = await exportCompetitionScoringData(selectedCompetitionId.value)
       fallbackName = `${selectedCompetition.value?.name || '比赛'}-评分数据.xlsx`
     }
+    if (type === 'judges') {
+      blob = await exportCompetitionJudges(selectedCompetitionId.value)
+      fallbackName = `${selectedCompetition.value?.name || '比赛'}-评审报名信息.xlsx`
+    }
     downloadBlob(blob, fallbackName)
     ElMessage.success('导出文件已开始下载')
   } catch {
@@ -366,6 +383,7 @@ function downloadBlob(blob, fileName) {
 }
 
 function exportErrorMessage(type) {
+  if (type === 'judges') return '评审信息导出失败，请确认本场已有报名评审'
   if (!exportCount.value && type !== 'scoring') return '当前筛选范围没有可导出的酒款'
   if (type === 'labels') return '这场比赛还没有生成现场标签'
   return '导出失败，请稍后重试'

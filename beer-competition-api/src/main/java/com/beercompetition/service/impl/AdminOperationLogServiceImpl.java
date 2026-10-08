@@ -359,6 +359,7 @@ public class AdminOperationLogServiceImpl implements AdminOperationLogService {
         put(items, "EXPORT_DELIVERY", "导出送样数据", "export", RISK_WARNING);
         put(items, "EXPORT_LABELS", "导出标签", "export", RISK_WARNING);
         put(items, "EXPORT_SCORING", "导出评分数据", "export", RISK_CRITICAL);
+        put(items, "EXPORT_JUDGE_APPLICATIONS", "导出评审报名信息", "export", RISK_CRITICAL);
         put(items, "ADMIN_USER_CREATE", "新增管理员", "account", RISK_WARNING);
         put(items, "ADMIN_USER_UPDATE", "更新管理员", "account", RISK_NORMAL);
         put(items, "ADMIN_USER_ENABLE", "启用管理员", "account", RISK_WARNING);

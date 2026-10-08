@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
+import com.beercompetition.common.util.PiiService;
 import com.beercompetition.common.util.SimpleXlsxBuilder;
 import com.beercompetition.billing.beercoin.BeerCoinSettlementService;
 import com.beercompetition.competition.access.CompetitionAccessService;
@@ -15,10 +16,14 @@ import com.beercompetition.mapper.CompetitionCategoryMapper;
 import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.EntryDeliveryMapper;
 import com.beercompetition.mapper.EntryPaymentMapper;
+import com.beercompetition.mapper.JudgeAccountMapper;
+import com.beercompetition.mapper.JudgeRecruitmentApplicationMapper;
+import com.beercompetition.mapper.JudgeRecruitmentMapper;
 import com.beercompetition.pojo.enums.EntryDeliveryStatus;
 import com.beercompetition.pojo.enums.EntryPaymentStatus;
 import com.beercompetition.pojo.enums.EntryScanLabelStatus;
 import com.beercompetition.pojo.enums.EntryStatus;
+import com.beercompetition.pojo.enums.JudgeAccountStatus;
 import com.beercompetition.pojo.po.AdminOperationLog;
 import com.beercompetition.pojo.po.BeerEntry;
 import com.beercompetition.pojo.po.BeerEntryExtraField;
@@ -28,6 +33,9 @@ import com.beercompetition.pojo.po.CompetitionCategory;
 import com.beercompetition.pojo.po.EntryDelivery;
 import com.beercompetition.pojo.po.EntryPayment;
 import com.beercompetition.pojo.po.EntryScanLabel;
+import com.beercompetition.pojo.po.JudgeAccount;
+import com.beercompetition.pojo.po.JudgeRecruitment;
+import com.beercompetition.pojo.po.JudgeRecruitmentApplication;
 import com.beercompetition.pojo.vo.FileDownloadVO;
 import com.beercompetition.service.AdminExportService;
 import com.beercompetition.service.EntryScanLabelService;
@@ -85,6 +93,10 @@ public class AdminExportServiceImpl implements AdminExportService {
     private final EntryScanLabelService entryScanLabelService;
     private final EntryLabelFileGenerator entryLabelFileGenerator;
     private final BeerCoinSettlementService beerCoinSettlementService;
+    private final JudgeRecruitmentMapper judgeRecruitmentMapper;
+    private final JudgeRecruitmentApplicationMapper judgeRecruitmentApplicationMapper;
+    private final JudgeAccountMapper judgeAccountMapper;
+    private final PiiService piiService;
 
     @Override
     public FileDownloadVO exportEntries(Long competitionId, Long categoryId, String entryStatus, String paymentStatus,
@@ -239,6 +251,78 @@ public class AdminExportServiceImpl implements AdminExportService {
         } catch (IOException ex) {
             throw new BaseException("导出瓶贴失败");
         }
+    }
+
+    @Override
+    public FileDownloadVO exportJudgeApplications(Long competitionId) {
+        Competition competition = requireCompetition(competitionId);
+        JudgeRecruitment recruitment = judgeRecruitmentMapper.selectOne(new LambdaQueryWrapper<JudgeRecruitment>()
+                .eq(JudgeRecruitment::getCompetitionId, competitionId));
+        if (recruitment == null) {
+            throw new BaseException("当前比赛暂无裁判招募");
+        }
+
+        List<JudgeRecruitmentApplication> applications = judgeRecruitmentApplicationMapper.selectList(
+                new LambdaQueryWrapper<JudgeRecruitmentApplication>()
+                        .eq(JudgeRecruitmentApplication::getRecruitmentId, recruitment.getId())
+                        .orderByAsc(JudgeRecruitmentApplication::getCreateTime)
+                        .orderByAsc(JudgeRecruitmentApplication::getId));
+        if (applications.isEmpty()) {
+            throw new BaseException("当前比赛暂无报名评审");
+        }
+
+        Set<Long> judgeIds = applications.stream()
+                .map(JudgeRecruitmentApplication::getJudgeAccountId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        Map<Long, JudgeAccount> judgesById = judgeIds.isEmpty()
+                ? Map.of()
+                : judgeAccountMapper.selectBatchIds(judgeIds).stream()
+                .collect(Collectors.toMap(JudgeAccount::getId, Function.identity(), (left, right) -> left,
+                        LinkedHashMap::new));
+
+        List<List<String>> rows = new ArrayList<>();
+        rows.add(List.of(
+                "比赛名称", "比赛编号", "比赛日期", "评审地点", "评审开始时间", "招募状态",
+                "评审编号", "评审姓名", "手机号", "微信号", "评审资质", "BJCP编号",
+                "利益冲突", "利益冲突说明", "账号状态", "报名状态", "可参加比赛日期",
+                "报名备注", "报名审核备注", "评审资料备注", "报名时间", "处理时间", "撤回时间"));
+        for (JudgeRecruitmentApplication application : applications) {
+            JudgeAccount judge = judgesById.get(application.getJudgeAccountId());
+            rows.add(List.of(
+                    value(competition.getName()),
+                    value(competition.getCode()),
+                    value(competition.getCompetitionDate()),
+                    value(recruitment.getVenue()),
+                    value(recruitment.getJudgingStartTime()),
+                    judgeRecruitmentStatusLabel(recruitment.getStatus()),
+                    judge == null ? "" : value(judge.getPublicId()),
+                    judge == null ? "" : value(judge.getName()),
+                    judge == null ? "" : decryptPii(judge.getPhoneEnc()),
+                    judge == null ? "" : decryptPii(judge.getWechatEnc()),
+                    judge == null ? "" : value(judge.getQualification()),
+                    judge == null ? "" : value(judge.getBjcpNumber()),
+                    judge == null ? "" : booleanLabel(judge.getBreweryConflictFlag()),
+                    judge == null ? "" : value(judge.getBreweryConflictText()),
+                    judge == null ? "" : judgeAccountStatusLabel(judge.getStatus()),
+                    judgeApplicationStatusLabel(application.getStatus()),
+                    Boolean.TRUE.equals(application.getAvailabilityConfirmed()) ? "已确认" : "未确认",
+                    value(application.getNote()),
+                    value(application.getReviewRemark()),
+                    judge == null ? "" : value(judge.getReviewRemark()),
+                    dateTime(application.getCreateTime()),
+                    dateTime(application.getProcessedTime()),
+                    dateTime(application.getWithdrawnTime())
+            ));
+        }
+
+        logExport("EXPORT_JUDGE_APPLICATIONS", competition,
+                "recruitmentId=" + recruitment.getId() + ", scope=all-applications", applications.size());
+        return FileDownloadVO.builder()
+                .fileName(safeFilename(competition.getName()) + "-评审报名信息.xlsx")
+                .contentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                .content(SimpleXlsxBuilder.build(List.of(new SimpleXlsxBuilder.Sheet("评审报名信息", rows))))
+                .build();
     }
 
     @Override
@@ -522,6 +606,42 @@ public class AdminExportServiceImpl implements AdminExportService {
             case "ONSITE" -> "现场交样";
             default -> value(method);
         };
+    }
+
+    private String judgeRecruitmentStatusLabel(String status) {
+        return switch (value(status)) {
+            case "DRAFT" -> "草稿";
+            case "OPEN" -> "报名中";
+            case "CLOSED" -> "已截止";
+            case "ARCHIVED" -> "已归档";
+            default -> value(status);
+        };
+    }
+
+    private String judgeApplicationStatusLabel(String status) {
+        return switch (value(status)) {
+            case "APPLIED" -> "待审核";
+            case "ACCEPTED" -> "已录用";
+            case "REJECTED" -> "不录用";
+            case "WITHDRAWN" -> "已撤回";
+            default -> value(status);
+        };
+    }
+
+    private String judgeAccountStatusLabel(Integer status) {
+        try {
+            return JudgeAccountStatus.of(status).getLabel();
+        } catch (RuntimeException ex) {
+            return value(status);
+        }
+    }
+
+    private String booleanLabel(Boolean value) {
+        return Boolean.TRUE.equals(value) ? "有" : "无";
+    }
+
+    private String decryptPii(String encryptedValue) {
+        return StringUtils.hasText(encryptedValue) ? value(piiService.decrypt(encryptedValue)) : "";
     }
 
     private String categoryName(CompetitionCategory category) {
