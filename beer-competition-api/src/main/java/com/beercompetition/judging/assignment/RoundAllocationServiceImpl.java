@@ -180,7 +180,6 @@ public class RoundAllocationServiceImpl implements RoundAllocationService {
 
         // 2) 清理旧编排数据
         List<RoundTable> oldTables = roundQuerySupport.listRoundTables(roundId);
-        validateCandidateCoverage(round, request);
         List<Long> oldTableIds = oldTables.stream().map(RoundTable::getId).toList();
         if (!oldTableIds.isEmpty()) {
             roundResultMapper.delete(new LambdaQueryWrapper<RoundResult>().in(RoundResult::getRoundTableId, oldTableIds));
@@ -199,33 +198,6 @@ public class RoundAllocationServiceImpl implements RoundAllocationService {
         long currentRevision = normalizeAllocationRevision(round);
         if (request.getAllocationRevision() == null || request.getAllocationRevision() != currentRevision) {
             throw new BaseException("轮次草稿已被更新，请重新加载后继续编辑");
-        }
-    }
-
-    private void validateCandidateCoverage(CompetitionRound round, RoundAllocationRequest request) {
-        if (!RoundType.RANKING.name().equals(round.getRoundType())) {
-            return;
-        }
-        String targetMode = request.getTables().stream()
-                .map(RoundTableAllocationRequest::getTargetMode)
-                .filter(StringUtils::hasText)
-                .findFirst()
-                .orElse(RoundTargetMode.TOP_N.name());
-        Set<Long> expectedEntryIds = roundQuerySupport.filterCandidatesForTargetMode(
-                        roundQuerySupport.listSubmittedCandidateResults(round.getSourceRoundId()), targetMode)
-                .stream()
-                .map(RoundResult::getBeerEntryId)
-                .collect(Collectors.toSet());
-        Set<Long> submittedEntryIds = roundQuerySupport.loadEntryByUuids(round.getCompetitionId(), request.getTables().stream()
-                        .flatMap(table -> safeList(table.getEntryUuids()).stream())
-                        .filter(StringUtils::hasText)
-                        .collect(Collectors.toSet()))
-                .values()
-                .stream()
-                .map(BeerEntry::getId)
-                .collect(Collectors.toSet());
-        if (!submittedEntryIds.equals(expectedEntryIds)) {
-            throw new BaseException("晋级候选已更新，请重新加载后继续编辑");
         }
     }
 

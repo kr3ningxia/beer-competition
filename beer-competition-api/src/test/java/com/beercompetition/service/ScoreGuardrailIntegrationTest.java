@@ -308,10 +308,10 @@ class ScoreGuardrailIntegrationTest extends IntegrationTestBase {
         Long draftRoundId = jdbcTemplate.queryForObject(
                 "SELECT id FROM competition_round WHERE source_round_id = ?", Long.class, scoreRound.round().getId());
 
+        // 候选只进入候选池等待主办方分配，不再自动落桌
         submitScoreRound(fixture, scoreRound, fixture.entryA1().getUuid(), fixture.entryA2().getUuid());
-        assertThat(jdbcTemplate.queryForObject(
-                "SELECT beer_entry_id FROM round_table_entry WHERE round_id = ?",
-                Long.class, draftRoundId)).isEqualTo(fixture.entryA1().getId());
+        assertThat(draftEntryIds(draftRoundId)).isEmpty();
+        assertThat(draftSourceUuids(fixture, draftRoundId)).containsExactly(fixture.entryA1().getUuid());
 
         asJudge(fixture.captain().getId());
         judgeRoundTaskService.reopenScoreRoundTable(scoreRound.table().getId());
@@ -320,14 +320,15 @@ class ScoreGuardrailIntegrationTest extends IntegrationTestBase {
                 String.class, scoreRound.table().getId())).isEqualTo(RoundStatus.PUBLISHED.name());
         assertThat(jdbcTemplate.queryForObject("SELECT status FROM competition_round WHERE id = ?",
                 String.class, scoreRound.round().getId())).isEqualTo(RoundStatus.PUBLISHED.name());
+        // 本桌重新打开后，本桌候选立即从候选池移除
+        assertThat(draftSourceUuids(fixture, draftRoundId)).isEmpty();
 
         scoreService.finalizeTableScore(fixture.entryA1().getUuid(), finalizeRequest(44, false));
         scoreService.finalizeTableScore(fixture.entryA2().getUuid(), finalizeRequest(47, true));
         confirmScoreTable(fixture, scoreRound.table().getId());
 
-        assertThat(jdbcTemplate.queryForObject(
-                "SELECT beer_entry_id FROM round_table_entry WHERE round_id = ?",
-                Long.class, draftRoundId)).isEqualTo(fixture.entryA2().getId());
+        assertThat(draftEntryIds(draftRoundId)).isEmpty();
+        assertThat(draftSourceUuids(fixture, draftRoundId)).containsExactly(fixture.entryA2().getUuid());
         assertThat(jdbcTemplate.queryForObject("SELECT status FROM competition_round WHERE id = ?",
                 String.class, scoreRound.round().getId())).isEqualTo(RoundStatus.SUBMITTED.name());
     }
@@ -350,9 +351,7 @@ class ScoreGuardrailIntegrationTest extends IntegrationTestBase {
         finalizeScoreEntry(fixture, fixture.entryB1().getUuid(), true);
         confirmScoreTable(fixture, firstTable.table().getId());
 
-        assertThat(jdbcTemplate.queryForList(
-                "SELECT beer_entry_id FROM round_table_entry WHERE round_id = ? ORDER BY beer_entry_id",
-                Long.class, draftRoundId)).containsExactly(fixture.entryA1().getId());
+        assertThat(draftEntryIds(draftRoundId)).isEmpty();
         CompetitionRoundVO draftRound = roundQueryService.listCompetitionRounds(fixture.competition().getId()).stream()
                 .filter(round -> round.getId().equals(draftRoundId))
                 .findFirst()
@@ -365,15 +364,28 @@ class ScoreGuardrailIntegrationTest extends IntegrationTestBase {
 
         asJudge(fixture.captain().getId());
         judgeRoundTaskService.reopenScoreRoundTable(firstTable.table().getId());
-        assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM round_table_entry WHERE round_id = ?",
-                Integer.class, draftRoundId)).isZero();
+        assertThat(draftEntryIds(draftRoundId)).isEmpty();
+        assertThat(draftSourceUuids(fixture, draftRoundId)).isEmpty();
 
         confirmScoreTable(fixture, firstTable.table().getId());
         confirmScoreTable(fixture, secondTable.table().getId());
-        assertThat(jdbcTemplate.queryForList(
+        assertThat(draftEntryIds(draftRoundId)).isEmpty();
+        assertThat(draftSourceUuids(fixture, draftRoundId))
+                .containsExactlyInAnyOrder(fixture.entryA1().getUuid(), fixture.entryB1().getUuid());
+    }
+
+    private List<Long> draftEntryIds(Long draftRoundId) {
+        return jdbcTemplate.queryForList(
                 "SELECT beer_entry_id FROM round_table_entry WHERE round_id = ? ORDER BY beer_entry_id",
-                Long.class, draftRoundId)).containsExactly(fixture.entryA1().getId(), fixture.entryB1().getId());
+                Long.class, draftRoundId);
+    }
+
+    private List<String> draftSourceUuids(BeerCompetitionTestData.Fixture fixture, Long draftRoundId) {
+        return roundQueryService.listCompetitionRounds(fixture.competition().getId()).stream()
+                .filter(round -> round.getId().equals(draftRoundId))
+                .findFirst()
+                .orElseThrow()
+                .getSourceEntryUuids();
     }
 
     private NextRoundCreateRequest nextRoundRequest(BeerCompetitionTestData.Fixture fixture, Long sourceRoundId, int targetCount) {

@@ -108,8 +108,8 @@ public class RankingServiceImpl implements RankingService {
         if (!RoundType.RANKING.name().equals(round.getRoundType()) || !isRankingEditableStatus(round.getStatus())) {
             throw new BaseException("当前轮次不能提交排序");
         }
-        if (RoundStatus.SUBMITTED.name().equals(table.getStatus()) || RoundStatus.LOCKED.name().equals(table.getStatus())) {
-            throw new BaseException("本桌排序已提交或已锁定，不能调整");
+        if (RoundStatus.LOCKED.name().equals(table.getStatus())) {
+            throw new BaseException("本桌排序已锁定，不能调整");
         }
         assertCompetitionNotArchived(table.getCompetitionId());
         requireRankingCaptainMember(roundTableId, judgeId);

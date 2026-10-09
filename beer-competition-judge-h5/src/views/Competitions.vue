@@ -76,15 +76,15 @@
     <section class="card ranking-action-card">
       <div class="split">
         <div>
-          <h2 class="section-title compact">{{ canSubmitRanking ? '本桌排序' : '本桌排序任务' }}</h2>
-          <p v-if="rankingTaskHint" class="task-hint">{{ rankingTaskHint }}</p>
+          <h2 class="section-title compact">{{ rankingCardTitle }}</h2>
+          <p v-if="rankingCardHint" class="task-hint">{{ rankingCardHint }}</p>
         </div>
         <span v-if="showRankingFilledProgress" class="pill status-warn">{{ rankingFilledCount }}/{{ rankingSlots.length }}</span>
       </div>
       <button class="scan-button ranking-button" type="button" @click="router.push(`/ranking/${current.roundTableId}`)">
-        {{ canSubmitRanking ? '进入选择排序' : '查看本桌候选' }}
+        {{ rankingCardAction }}
       </button>
-      <p v-if="!canSubmitRanking" class="caption">本轮由桌长提交排序结果。</p>
+      <p v-if="!isRankingCaptain" class="caption">本轮由桌长提交排序结果。</p>
     </section>
 
     <section class="card">
@@ -180,20 +180,6 @@
           </select>
         </label>
       </div>
-      <section v-if="isScoreRoundCaptain && entries.length" :class="['round-checkout', { ready: tableReadyForReview }]">
-        <div>
-          <strong>{{ tableCheckoutTitle }}</strong>
-          <p>{{ tableCheckoutText }}</p>
-        </div>
-        <button
-          class="button secondary checkout-button"
-          type="button"
-          :disabled="!canOpenTableWorkbench"
-          @click="router.push('/captain')"
-        >
-          {{ tableCheckoutActionLabel }}
-        </button>
-      </section>
       <div v-if="isScoreRoundCaptain && displayedEntries.length" class="captain-entry-list">
         <article
           v-for="entry in displayedEntries"
@@ -306,24 +292,19 @@ const canSubmitRanking = computed(() => (
   current.value?.taskType === 'RANKING_ROUND'
   && currentRoundTable.value?.canSubmitRanking !== false
 ))
+const isRankingCaptain = computed(() => current.value?.taskType === 'RANKING_ROUND')
+const rankingTableStatus = computed(() => currentRoundTable.value?.status || '')
+const rankingTableSubmitted = computed(() => rankingTableStatus.value === 'SUBMITTED')
+const rankingTableLocked = computed(() => rankingTableStatus.value === 'LOCKED')
 const currentRoundNo = computed(() => parseRoundNo(current.value?.roundName || current.value?.flightName))
 const showRankingFilledProgress = computed(() => (
   canSubmitRanking.value
   || currentRoundNo.value <= 1
 ))
-const rankingTaskHint = computed(() => (
-  canSubmitRanking.value
-    ? ''
-    : '请查看本桌候选，排序由桌长提交。'
-))
 const myScoredCount = computed(() => entries.value.filter((entry) => entry.scored).length)
 const finalizedCount = computed(() => entries.value.filter((entry) => entry.finalized).length)
 const advancedCount = computed(() => entries.value.filter((entry) => entry.advanced).length)
 const advanceTargetCount = computed(() => Number(captainBoard.value?.roundTable?.targetCount || current.value?.targetCount || 0))
-const myPendingScoreCount = computed(() => entries.value.filter((entry) => !entry.scored).length)
-const readyFinalizeCount = computed(() => entries.value.filter((entry) => readyForFinalize(entry)).length)
-const pendingTableScoreCount = computed(() => entries.value.reduce((sum, entry) => sum + entryMissingScoreCount(entry), 0))
-const peerReadyWaitingMeCount = computed(() => entries.value.filter((entry) => !entry.scored && tableScoresComplete(entry)).length)
 const rankingFilledCount = computed(() => rankingSlots.value.filter((slot) => slot.beerEntryId).length)
 const scoreConfirmationVisible = computed(() => (
   !isCaptain.value
@@ -337,6 +318,29 @@ const rankingConfirmationVisible = computed(() => (
 ))
 const confirmationProgressText = computed(() => `确认 ${scoreConfirmation.value?.confirmedCount || 0}/${scoreConfirmation.value?.requiredCount || 0}`)
 const rankingConfirmationProgressText = computed(() => `确认 ${rankingConfirmation.value?.confirmedCount || 0}/${rankingConfirmation.value?.requiredCount || 0}`)
+const rankingCardTitle = computed(() => {
+  if (!isRankingCaptain.value) return '本桌排序任务'
+  if (rankingTableLocked.value) return '本桌排序已锁定'
+  if (rankingTableSubmitted.value) return '本桌排序已提交'
+  if (rankingFilledCount.value > 0) return '本桌排序待确认'
+  return '本桌排序'
+})
+const rankingCardHint = computed(() => {
+  if (!isRankingCaptain.value) return '请查看本桌候选，排序由桌长提交。'
+  if (rankingTableLocked.value) return '主办方已锁定本轮排序。'
+  if (rankingTableSubmitted.value) return '管理员锁定前仍可修改，修改后需同桌重新确认。'
+  if (rankingFilledCount.value > 0) {
+    const confirmed = rankingConfirmation.value?.confirmedCount || 0
+    const required = rankingConfirmation.value?.requiredCount || 0
+    return `等待同桌确认（${confirmed}/${required}），修改后需重新提交。`
+  }
+  return ''
+})
+const rankingCardAction = computed(() => {
+  if (!isRankingCaptain.value) return '查看本桌候选'
+  if (rankingTableLocked.value) return '查看本桌排序'
+  return rankingFilledCount.value > 0 ? '修改本桌排序' : '进入选择排序'
+})
 const scoreConfirmationProgressLabel = computed(() => (
   scoreConfirmation.value?.mineConfirmed ? '已确认结果' : '待确认结果'
 ))
@@ -382,16 +386,6 @@ const progressCount = computed(() => (
     : `${current.value?.myScoredCount || 0} / ${current.value?.totalEntries || 0}`
 ))
 const taskSectionTitle = computed(() => (isCaptain.value ? '本桌酒款' : '我的本轮酒款'))
-const tableReadyForReview = computed(() => {
-  if (!entries.value.length) return false
-  if (isFeedbackOnlyCompetition.value) return finalizedCount.value === entries.value.length
-  const targetOk = advanceTargetCount.value <= 0 || advancedCount.value === advanceTargetCount.value
-  return finalizedCount.value === entries.value.length && targetOk
-})
-const tableSubmitted = computed(() => (
-  captainBoard.value?.roundTable?.status === 'SUBMITTED'
-  || currentRoundTable.value?.status === 'SUBMITTED'
-))
 const scoreFilterOptions = [
   { value: 'all', label: '全部' },
   { value: 'scored', label: '已打分' },
@@ -416,50 +410,6 @@ const displayedEntries = computed(() => {
     })
     .map(({ entry }) => entry)
 })
-const tableCheckoutTitle = computed(() => {
-  if (!entries.value.length) return ''
-  if (tableSubmitted.value) return '本桌已提交'
-  if (tableReadyForReview.value) return '等待同桌确认'
-  if (readyFinalizeCount.value > 0 && myPendingScoreCount.value > 0) return '处理本桌待办'
-  if (readyFinalizeCount.value > 0) return '有酒款可汇总'
-  if (myPendingScoreCount.value > 0) return '先完成个人评分'
-  if (pendingTableScoreCount.value > 0) return '等待同桌评分'
-  return '本桌结果未完成'
-})
-const tableCheckoutText = computed(() => {
-  if (!entries.value.length) return ''
-  if (tableSubmitted.value) return '等待主办方确认轮次。'
-  if (readyFinalizeCount.value > 0 && myPendingScoreCount.value > 0) {
-    return `${readyFinalizeCount.value} 款可汇总，另有 ${myPendingScoreCount.value} 款个人评分待提交。`
-  }
-  if (myPendingScoreCount.value > 0) {
-    if (peerReadyWaitingMeCount.value > 0) {
-      return `${peerReadyWaitingMeCount.value} 款同桌评分已齐，提交你的个人评分后即可汇总。`
-    }
-    return `还有 ${myPendingScoreCount.value} 款个人评分待提交，下方可查看同桌进度。`
-  }
-  if (readyFinalizeCount.value > 0) {
-    return `${readyFinalizeCount.value} 款评分已齐，请填写桌长意见。`
-  }
-  if (pendingTableScoreCount.value > 0) {
-    return `还差 ${pendingTableScoreCount.value} 份同桌评分，齐全后再填写桌长意见。`
-  }
-  if (isFeedbackOnlyCompetition.value) {
-    return '酒款诊断意见已齐，等待同桌确认。'
-  }
-  if (advanceTargetCount.value > 0 && advancedCount.value !== advanceTargetCount.value) {
-    return `酒款意见已完成，还需按本桌目标确认 ${advanceTargetCount.value} 款晋级酒。`
-  }
-  return '酒款意见和晋级名单已齐，等待同桌确认。'
-})
-const tableCheckoutActionLabel = computed(() => {
-  if (tableSubmitted.value) return '查看'
-  if (tableReadyForReview.value) return '核对'
-  if (readyFinalizeCount.value > 0) return '去汇总'
-  if (myPendingScoreCount.value > 0) return '去评分'
-  return '看进度'
-})
-const canOpenTableWorkbench = computed(() => Boolean(entries.value.length))
 const emptyStateTitle = computed(() => {
   if (loadingTasks.value) return '正在载入本桌酒款'
   if (!current.value?.roundTableId) return '你还没有加入本轮评审桌'
@@ -1046,47 +996,6 @@ onBeforeUnmount(() => {
   font-size: 16px;
   font-weight: 850;
   font-variant-numeric: tabular-nums;
-}
-
-.round-checkout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: center;
-  margin-top: 12px;
-  border: 1px solid #fedf89;
-  border-radius: 8px;
-  padding: 10px;
-  background: #fffaeb;
-}
-
-.round-checkout.ready {
-  border-color: #abefc6;
-  background: #ecfdf3;
-}
-
-.round-checkout strong,
-.round-checkout p {
-  display: block;
-  margin: 0;
-}
-
-.round-checkout strong {
-  color: #26313d;
-  font-size: 14px;
-}
-
-.round-checkout p {
-  margin-top: 3px;
-  color: #667085;
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.checkout-button {
-  min-width: 64px;
-  min-height: 38px;
-  padding: 8px 12px;
 }
 
 .entry-list {

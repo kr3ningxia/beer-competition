@@ -24,6 +24,7 @@ import com.beercompetition.pojo.dto.AdminLoginRequest;
 import com.beercompetition.pojo.dto.RefreshTokenRequest;
 import com.beercompetition.pojo.dto.SmsLoginRequest;
 import com.beercompetition.pojo.dto.SmsSendRequest;
+import com.beercompetition.pojo.enums.CompetitionStatus;
 import com.beercompetition.pojo.enums.JudgeAccountStatus;
 import com.beercompetition.pojo.enums.JudgeRoleType;
 import com.beercompetition.pojo.enums.RoundStatus;
@@ -742,6 +743,9 @@ public class AuthServiceImpl implements AuthService {
         }
         JudgeTable table = judgeTableMapper.selectById(assignment.getTableId());
         Competition competition = competitionMapper.selectById(assignment.getCompetitionId());
+        if (!isCompetitionVisibleToJudge(competition)) {
+            return null;
+        }
         return new CurrentJudgeContext(competition, table == null ? null : table.getTableName(), assignment.getRole());
     }
 
@@ -766,11 +770,23 @@ public class AuthServiceImpl implements AuthService {
                 continue;
             }
             Competition competition = competitionMapper.selectById(table.getCompetitionId());
+            if (!isCompetitionVisibleToJudge(competition)) {
+                continue;
+            }
             bestContext = new CurrentJudgeContext(competition, table.getTableName(), member.getRole());
             bestRoundId = round.getId();
             bestTableId = table.getId();
         }
         return bestContext;
+    }
+
+    private boolean isCompetitionVisibleToJudge(Competition competition) {
+        if (competition == null) {
+            return true;
+        }
+        String status = competition.getStatus();
+        return !CompetitionStatus.PUBLISHED.name().equals(status)
+                && !CompetitionStatus.ARCHIVED.name().equals(status);
     }
 
     private boolean isVisibleJudgeTask(CompetitionRound round, RoundTable table, RoundTableMember member) {

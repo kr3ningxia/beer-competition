@@ -1,6 +1,7 @@
 package com.beercompetition.service;
 
 import com.beercompetition.judging.round.RoundLifecycleService;
+import com.beercompetition.judging.round.JudgeRoundTaskService;
 import com.beercompetition.judging.scoring.RankingService;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ForbiddenException;
@@ -36,6 +37,9 @@ class RankingAndAwardGuardrailIntegrationTest extends IntegrationTestBase {
 
     @Autowired
     private RankingService rankingService;
+
+    @Autowired
+    private JudgeRoundTaskService judgeRoundTaskService;
 
     @Autowired
     private RoundLifecycleService roundLifecycleService;
@@ -185,6 +189,37 @@ class RankingAndAwardGuardrailIntegrationTest extends IntegrationTestBase {
         assertThatThrownBy(() -> rankingService.confirmRankingRoundTable(rankingRound.table().getId(), confirmationRequest(staleVersion)))
                 .isInstanceOf(BaseException.class)
                 .hasMessageContaining("已更新");
+    }
+
+    @Test
+    void captainCanResubmitRankingAfterAutoSubmitUntilLocked() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        BeerCompetitionTestData.RankingRound rankingRound = testData.createRankingRound(
+                fixture, List.of(fixture.entryA1(), fixture.entryA2()), RoundTargetMode.TOP_N, 1, RoundStatus.IN_PROGRESS, 1);
+
+        asJudge(fixture.captain().getId());
+        rankingService.submitRanking(rankingRound.table().getId(), rankingRequest(result(fixture.entryA1().getId(), 1)));
+
+        asJudge(fixture.professional().getId());
+        RankingConfirmationVO confirmation = rankingService.getRankingConfirmation(rankingRound.table().getId());
+        rankingService.confirmRankingRoundTable(rankingRound.table().getId(), confirmationRequest(confirmation.getResultVersion()));
+
+        asJudge(fixture.cross().getId());
+        confirmation = rankingService.getRankingConfirmation(rankingRound.table().getId());
+        rankingService.confirmRankingRoundTable(rankingRound.table().getId(), confirmationRequest(confirmation.getResultVersion()));
+
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM round_table WHERE id = ?",
+                String.class, rankingRound.table().getId())).isEqualTo(RoundStatus.SUBMITTED.name());
+
+        // 主办方锁定前桌长仍能改：可见性字段保持 true，重提会作废本轮确认并把本桌拉回进行中。
+        asJudge(fixture.captain().getId());
+        assertThat(judgeRoundTaskService.getMyRoundTable(rankingRound.table().getId()).getCanSubmitRanking()).isTrue();
+
+        rankingService.submitRanking(rankingRound.table().getId(), rankingRequest(result(fixture.entryA2().getId(), 1)));
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM round_table WHERE id = ?",
+                String.class, rankingRound.table().getId())).isEqualTo(RoundStatus.IN_PROGRESS.name());
+        assertThat(jdbcTemplate.queryForObject("SELECT result_version FROM round_table WHERE id = ?",
+                Integer.class, rankingRound.table().getId())).isEqualTo(3);
     }
 
     @Test

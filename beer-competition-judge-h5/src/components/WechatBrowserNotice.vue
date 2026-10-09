@@ -7,7 +7,10 @@
         <div class="menu-pointer" aria-hidden="true">
           <span class="menu-pointer-label">点击右上角</span>
           <span class="menu-dots"><i></i><i></i><i></i></span>
-          <span class="menu-pointer-line"></span>
+          <svg class="menu-pointer-arrow" viewBox="0 0 46 46" fill="none">
+            <path d="M5 41 L39 7" />
+            <path d="M20 5 L41 5 L41 26" />
+          </svg>
         </div>
 
         <section class="wechat-notice-sheet">
@@ -20,7 +23,7 @@
           </div>
 
           <h2 id="wechat-notice-title">建议使用浏览器打开</h2>
-          <p class="notice-description">微信内置浏览器可能影响摄像头扫码和评分提交。请点击右上角「···」，选择「在浏览器中打开」，再登录评审端。</p>
+          <p class="notice-description">为了获得更佳的使用体验，建议在浏览器中打开。</p>
 
           <div class="notice-step" aria-label="操作步骤">
             <div class="notice-step-item">
@@ -244,27 +247,32 @@ h2 {
   background: #fff;
 }
 
-.menu-pointer-line {
+.menu-pointer-arrow {
   position: absolute;
-  right: 13px;
-  top: 36px;
-  width: 2px;
-  height: 43px;
-  transform: rotate(-27deg);
-  transform-origin: top center;
-  background: #d17932;
+  top: 30px;
+  right: 6px;
+  width: 46px;
+  height: 46px;
+  overflow: visible;
+  animation: menu-pointer-pulse 1.5s ease-in-out infinite;
 }
 
-.menu-pointer-line::after {
-  position: absolute;
-  right: -4px;
-  bottom: -1px;
-  width: 8px;
-  height: 8px;
-  border-right: 2px solid #d17932;
-  border-bottom: 2px solid #d17932;
-  transform: rotate(45deg);
-  content: '';
+.menu-pointer-arrow path {
+  stroke: #f2a65a;
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@keyframes menu-pointer-pulse {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+
+  50% {
+    transform: translate(4px, -4px);
+  }
 }
 
 .wechat-notice-enter-active,
@@ -294,6 +302,10 @@ h2 {
   .wechat-notice-enter-active .wechat-notice-sheet,
   .wechat-notice-leave-active .wechat-notice-sheet {
     transition: none;
+  }
+
+  .menu-pointer-arrow {
+    animation: none;
   }
 }
 

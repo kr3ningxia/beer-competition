@@ -290,9 +290,9 @@ public class JudgeRoundTableQueryService {
     }
 
     private boolean canSubmitRanking(RoundTableMember member, CompetitionRound round, RoundTable table) {
+        // 桌长在主办方锁定轮次前都能重新修改排序：本桌自动提交为 SUBMITTED 后仍可进入，重改会作废同桌确认。
         return RoundType.RANKING.name().equals(round.getRoundType())
                 && isRankingEditableStatus(round.getStatus())
-                && !RoundStatus.SUBMITTED.name().equals(table.getStatus())
                 && !RoundStatus.LOCKED.name().equals(table.getStatus())
                 && JudgeRoleType.CAPTAIN.name().equals(member.getRole())
                 && Objects.equals(member.getSystemTaskRequired(), FLAG_TRUE);

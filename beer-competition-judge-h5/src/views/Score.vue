@@ -46,10 +46,31 @@
             </button>
           </div>
 
-          <div v-if="visibleExtraFields(entry).length" class="entry-extra-list">
-            <div v-for="field in visibleExtraFields(entry)" :key="field.key" class="entry-extra-row">
+          <div v-if="visibleExtraFields(entry).length" ref="extraListEl" class="entry-extra-list">
+            <div
+              v-for="field in visibleExtraFields(entry)"
+              :key="field.key"
+              :class="['entry-extra-row', { expanded: isExtraExpanded(field.key) }]"
+            >
               <span>{{ field.label }}</span>
-              <strong>{{ field.value }}</strong>
+              <div class="entry-extra-value">
+                <strong
+                  :data-extra-key="field.key"
+                  :class="{ clamped: !isExtraExpanded(field.key) }"
+                >{{ field.value }}</strong>
+                <button
+                  v-if="overflowExtraKeys.has(field.key)"
+                  class="entry-extra-toggle"
+                  type="button"
+                  :aria-expanded="isExtraExpanded(field.key)"
+                  :aria-label="isExtraExpanded(field.key) ? '收起' : '展开'"
+                  @click="toggleExtra(field.key)"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m9 18 6-6-6-6" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -172,7 +193,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { createScore, fetchEntry, fetchMe, fetchMyScore, fetchScoreConfig, startScore, updateScore } from '@/api/judge'
 import StyleDetailDialog from '@/components/StyleDetailDialog.vue'
@@ -188,6 +209,9 @@ const existingScore = ref(null)
 const message = ref('')
 const submitting = ref(false)
 const styleDetailOpen = ref(false)
+const expandedExtraKeys = ref(new Set())
+const overflowExtraKeys = ref(new Set())
+const extraListEl = ref(null)
 
 const form = reactive({
   beerUuid: uuid,
@@ -340,6 +364,47 @@ function visibleExtraFields(source) {
   return (source?.extraFields || []).filter((field) => String(field?.value || '').trim())
 }
 
+function isExtraExpanded(key) {
+  return expandedExtraKeys.value.has(key)
+}
+
+function toggleExtra(key) {
+  const next = new Set(expandedExtraKeys.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  expandedExtraKeys.value = next
+}
+
+function measureExtraOverflow() {
+  nextTick(() => {
+    const nodes = extraListEl.value
+      ? extraListEl.value.querySelectorAll('strong[data-extra-key]')
+      : []
+    const next = new Set()
+    nodes.forEach((el) => {
+      const key = el.dataset.extraKey
+      if (!key) return
+      el.style.display = '-webkit-box'
+      el.style.webkitBoxOrient = 'vertical'
+      el.style.webkitLineClamp = '2'
+      el.style.overflow = 'hidden'
+      const clampedHeight = el.getBoundingClientRect().height
+      el.style.display = 'block'
+      el.style.webkitLineClamp = 'unset'
+      el.style.overflow = 'visible'
+      const fullHeight = el.getBoundingClientRect().height
+      el.style.display = ''
+      el.style.webkitBoxOrient = ''
+      el.style.webkitLineClamp = ''
+      el.style.overflow = ''
+      if (fullHeight > clampedHeight + 1) next.add(key)
+    })
+    overflowExtraKeys.value = next
+    const pruned = new Set([...expandedExtraKeys.value].filter((key) => next.has(key)))
+    if (pruned.size !== expandedExtraKeys.value.size) expandedExtraKeys.value = pruned
+  })
+}
+
 function displayShortCode(source) {
   return source?.shortCode ? `编号： ${source.shortCode}` : '编号'
 }
@@ -432,6 +497,16 @@ async function submit() {
     throw error
   }
 }
+
+watch(() => Boolean(entry.value && config.value), measureExtraOverflow, { flush: 'post' })
+
+onMounted(() => {
+  window.addEventListener('resize', measureExtraOverflow)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', measureExtraOverflow)
+})
 
 onMounted(async () => {
   me.value = await fetchMe()
@@ -696,13 +771,65 @@ onMounted(async () => {
   line-height: 1.4;
 }
 
+.entry-extra-value {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
 .entry-extra-row strong {
+  min-width: 0;
+  flex: 1 1 auto;
   color: #050b16;
   text-align: right;
   font-size: 16px;
   line-height: 1.4;
   font-weight: 800;
   overflow-wrap: anywhere;
+}
+
+.entry-extra-row strong.clamped {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.entry-extra-row.expanded {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+
+.entry-extra-row.expanded strong {
+  text-align: left;
+}
+
+.entry-extra-toggle {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 0;
+  margin: -8px 0;
+  padding: 8px 0;
+  background: transparent;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.entry-extra-toggle svg {
+  width: 21px;
+  height: 21px;
+  stroke: #5d5d57;
+  stroke-width: 2.2;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.18s ease;
+}
+
+.entry-extra-row.expanded .entry-extra-toggle svg {
+  transform: rotate(90deg);
 }
 
 .locked-alert {

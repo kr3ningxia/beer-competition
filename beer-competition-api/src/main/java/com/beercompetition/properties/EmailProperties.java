@@ -11,6 +11,6 @@ public class EmailProperties {
     private String accessKeySecret;
     private String endpoint = "dm.aliyuncs.com";
     private String fromAddress = "beernotice@notify.beermatters.cn";
-    private String fromAlias = "啤酒大赛";
+    private String fromAlias = "啤酒事务局赛事平台";
     private String replyAddress;
 }

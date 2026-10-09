@@ -142,8 +142,9 @@ public class RoundOverviewQueryService {
                 .flatMap(table -> entriesByTable.getOrDefault(table.getId(), List.of()).stream())
                 .map(RoundTableEntry::getBeerEntryId)
                 .collect(Collectors.toSet());
+        // 候选酒款由主办方手动分桌，草稿允许存在未分桌候选；这里只判断分桌中是否残留已失效的候选。
         boolean candidatesSynced = RoundType.SCORE.name().equals(round.getRoundType())
-                || assignedEntryIds.equals(sourceCandidateEntryIds);
+                || sourceCandidateEntryIds.containsAll(assignedEntryIds);
         return CompetitionRoundVO.builder()
                 .id(round.getId())
                 .roundNo(round.getRoundNo())

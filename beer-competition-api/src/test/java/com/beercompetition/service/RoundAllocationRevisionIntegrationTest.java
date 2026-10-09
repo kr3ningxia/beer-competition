@@ -72,9 +72,8 @@ class RoundAllocationRevisionIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
-    void candidateSyncInvalidatesOldDraftAndCurrentSaveCannotOmitCandidate() {
+    void sourceCandidateSyncKeepsCandidatesInPoolWithoutAutoAssigning() {
         DraftFixture draft = createDraftRound();
-        RoundAllocationRequest staleRequest = allocationRequest(draft, 0L, List.of());
         jdbcTemplate.update("UPDATE round_table SET status = 'SUBMITTED' WHERE id = ?", draft.sourceTableId());
         jdbcTemplate.update("""
                 INSERT INTO round_result
@@ -84,24 +83,24 @@ class RoundAllocationRevisionIntegrationTest extends IntegrationTestBase {
 
         roundCandidateSyncService.syncDependentDrafts(draft.sourceRound());
 
-        assertThat(allocationRevision(draft.roundId())).isEqualTo(1L);
+        // 新候选只进入候选池，不自动落桌，revision 不变
+        assertThat(allocationRevision(draft.roundId())).isZero();
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM round_table_entry WHERE round_id = ?", Integer.class, draft.roundId()))
-                .isEqualTo(1);
-        assertThatThrownBy(() -> roundAllocationService.saveRoundAllocation(
-                draft.competitionId(), draft.roundId(), staleRequest))
-                .isInstanceOf(BaseException.class)
-                .hasMessageContaining("轮次草稿已被更新");
+                .isZero();
 
-        RoundAllocationRequest missingCandidateRequest = allocationRequest(draft, 1L, List.of());
-        assertThatThrownBy(() -> roundAllocationService.saveRoundAllocation(
-                draft.competitionId(), draft.roundId(), missingCandidateRequest))
-                .isInstanceOf(BaseException.class)
-                .hasMessageContaining("晋级候选已更新");
+        // 草稿允许先保存未分桌状态
+        roundAllocationService.saveRoundAllocation(draft.competitionId(), draft.roundId(),
+                allocationRequest(draft, 0L, List.of()));
+        assertThat(allocationRevision(draft.roundId())).isEqualTo(1L);
 
+        // 主办方随后把候选分配到桌上
         roundAllocationService.saveRoundAllocation(draft.competitionId(), draft.roundId(),
                 allocationRequest(draft, 1L, List.of(draft.candidateEntryUuid())));
         assertThat(allocationRevision(draft.roundId())).isEqualTo(2L);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM round_table_entry WHERE round_id = ?", Integer.class, draft.roundId()))
+                .isEqualTo(1);
     }
 
     @Test

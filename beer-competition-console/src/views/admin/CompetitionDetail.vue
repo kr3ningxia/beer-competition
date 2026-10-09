@@ -3094,11 +3094,10 @@ const currentRoundMetrics = computed(() => buildCurrentRoundMetrics())
 const roundPyramidNodes = computed(() => buildRoundPyramidNodes())
 const currentRoundTableSummaries = computed(() => currentRoundTables.value.map((table) => buildRoundTableSummary(table)))
 const roundTodoHint = computed(() => buildRoundTodoHint())
-const advancedCategoryStats = computed(() => {
-  const map = new Map()
-  createRoundCandidatePool.value.forEach((entry) => map.set(entry.categoryName, (map.get(entry.categoryName) || 0) + 1))
-  return [...map.entries()].map(([category, count]) => ({ category, count }))
-})
+const advancedCategoryStats = computed(() => (
+  [...new Set(createRoundCandidatePool.value.map((entry) => entry.categoryName).filter(Boolean))]
+    .map((category) => ({ category }))
+))
 const entryAutoAssignCategoryOptions = computed(() => {
   const map = new Map()
   currentPoolEntries.value.forEach((entry) => {
@@ -5634,7 +5633,7 @@ function buildRoundValidationIssues(round) {
     issues.push(remainingCount ? `上一轮还有 ${remainingCount} 桌待确认` : '等待上一轮桌次确认')
   }
   if (round.type === 'RANKING' && round.sourceReady && !round.sourceLocked) issues.push('请先锁定上一轮')
-  if (round.type === 'RANKING' && round.sourceReady && !round.candidatesSynced) issues.push('候选酒款更新未完成，请刷新后重试')
+  if (round.type === 'RANKING' && round.sourceReady && !round.candidatesSynced) issues.push('分桌中存在已失效的晋级酒款，请刷新后重试')
   if (!round.tables.length) issues.push(`${round.name}至少需要 1 张桌`)
   const tableNames = round.tables.map((table) => table.name?.trim() || '')
   const duplicateTableNames = tableNames.filter((name, index, list) => name && list.indexOf(name) !== index)
@@ -5642,6 +5641,11 @@ function buildRoundValidationIssues(round) {
   if (duplicateTableNames.length) issues.push(`轮次桌名称不能重复：${duplicateTableNames[0]}`)
   const assigned = round.tables.flatMap((table) => table.entryUuids)
   if (!assigned.length) issues.push(`${round.name}尚未分配酒款`)
+  if (assigned.length && round.type === 'RANKING' && round.sourceReady) {
+    const assignedSet = new Set(assigned)
+    const unassignedCount = (round.sourceEntryUuids || []).filter((uuid) => !assignedSet.has(uuid)).length
+    if (unassignedCount) issues.push(`还有 ${unassignedCount} 款晋级酒款未分桌`)
+  }
   const duplicates = assigned.filter((uuid, index, list) => list.indexOf(uuid) !== index)
   if (duplicates.length) issues.push(`${round.name}存在重复分配酒款`)
   round.tables.forEach((table) => issues.push(...getRoundTableIssues(table)))
@@ -6439,7 +6443,7 @@ async function persistCurrentRoundAllocation(options = {}) {
     return true
   } catch (error) {
     const message = String(error?.userMessage || error?.message || '')
-    if (message.includes('轮次草稿已被更新') || message.includes('晋级候选已更新')) {
+    if (message.includes('轮次草稿已被更新')) {
       clearRoundAllocationDirty(competitionId, targetRoundId)
       await refreshRoundProgress(true)
       if (!error?.userNotified) ElMessage.warning(message)

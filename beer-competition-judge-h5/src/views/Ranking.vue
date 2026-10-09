@@ -289,7 +289,13 @@ let qrReader = null
 let scanLocked = false
 
 const canSubmitFinal = computed(() => Boolean(table.value?.canSubmitRanking))
-const canEdit = computed(() => !['SUBMITTED', 'LOCKED'].includes(table.value?.status) && !submitting.value && !savingDraft.value)
+// 桌长在主办方锁定前都可修改：SUBMITTED 状态下仍可编辑（提交会作废同桌确认）；参与评审只在轮次进行中编辑自己的参考排序。
+const canEdit = computed(() => (
+  !submitting.value
+  && !savingDraft.value
+  && table.value?.status !== 'LOCKED'
+  && (canSubmitFinal.value || table.value?.status !== 'SUBMITTED')
+))
 const isMedalMode = computed(() => table.value?.targetMode === 'MEDALS')
 const isDraggingEntry = computed(() => Boolean(draggedEntryId.value || pointerDragging.value))
 const rankingConfirmation = computed(() => table.value?.rankingConfirmation || null)
@@ -676,7 +682,8 @@ async function loadTable() {
   table.value = await fetchRoundTable(route.params.roundTableId)
   submitBlockedMessage.value = ''
   entries.value = table.value.entries || []
-  const sourceSlots = table.value.canSubmitRanking || table.value?.status === 'LOCKED'
+  const showOfficialRankings = table.value.canSubmitRanking || ['SUBMITTED', 'LOCKED'].includes(table.value?.status)
+  const sourceSlots = showOfficialRankings
     ? table.value.rankings
     : table.value.myRankingDraft
   slots.value = (sourceSlots || table.value.rankings || []).map((slot) => ({

@@ -82,7 +82,7 @@ app:
     access-key-secret: ${APP_ALIYUN_ACCESS_KEY_SECRET:}
     endpoint: ${APP_ALIYUN_MAIL_ENDPOINT:dm.aliyuncs.com}
     from-address: ${APP_ALIYUN_MAIL_FROM:beernotice@notify.beermatters.cn}
-    from-alias: ${APP_ALIYUN_MAIL_FROM_ALIAS:啤酒大赛}
+    from-alias: ${APP_ALIYUN_MAIL_FROM_ALIAS:啤酒事务局赛事平台}
     reply-address: ${APP_ALIYUN_MAIL_REPLY_TO:}
     notification:
       enabled: ${APP_MAIL_NOTIFICATION_ENABLED:false}

@@ -19,11 +19,11 @@ class AliyunEmailSenderSmokeTest {
         properties.setEndpoint(environmentOrDefault("APP_ALIYUN_MAIL_ENDPOINT", "dm.aliyuncs.com"));
         properties.setFromAddress(environmentOrDefault(
                 "APP_ALIYUN_MAIL_FROM", "beernotice@notify.beermatters.cn"));
-        properties.setFromAlias(environmentOrDefault("APP_ALIYUN_MAIL_FROM_ALIAS", "啤酒大赛"));
+        properties.setFromAlias(environmentOrDefault("APP_ALIYUN_MAIL_FROM_ALIAS", "啤酒事务局赛事平台"));
 
         String requestId = new AliyunEmailSender(properties).send(
                 requiredEnvironment("APP_MAIL_SMOKE_TO"),
-                "啤酒大赛邮件接入测试",
+                "啤酒事务局赛事平台邮件接入测试",
                 "<h2>邮件接入测试成功</h2><p>这是一封用于验证阿里云邮件推送的测试邮件。</p>");
 
         assertThat(requestId).isNotBlank();

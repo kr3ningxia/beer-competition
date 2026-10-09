@@ -31,10 +31,17 @@
                   <span class="judge-meta-flag">需回避</span>
                 </span>
               </p>
-              <em v-if="getRoundJudgeAssignmentSummary(judge.publicId)" class="assignment-status">{{ getRoundJudgeAssignmentSummary(judge.publicId) }}</em>
             </div>
             <div class="resource-card-actions">
+              <span
+                v-if="isRoundJudgeAssigned(judge.publicId)"
+                class="assign-chip"
+                :title="getRoundJudgeAssignmentDetail(judge.publicId)"
+              >
+                {{ getRoundJudgeAssignmentPosition(judge.publicId) }}
+              </span>
               <button
+                v-else
                 type="button"
                 :disabled="!canAddRoundJudge(judge)"
                 @click="addJudgeToRankingTarget(judge)"
@@ -183,7 +190,7 @@
             </div>
             <div
               v-else
-              :class="['role-lane', { active: isSelectedRankingRole(table.id, 'PARTICIPANT') }]"
+              :class="['role-lane', 'participant-lane', { active: isSelectedRankingRole(table.id, 'PARTICIPANT') }]"
               @click.stop="selectRankingRole(table.id, 'PARTICIPANT')"
               @dragover.prevent
               @drop.prevent="dropRankingJudge(table.id, 'PARTICIPANT')"
@@ -250,7 +257,10 @@
           </div>
         </section>
         <section v-if="currentRound?.type === 'RANKING'" class="control-section">
-          <strong>轮次目标</strong>
+          <strong class="control-title">
+            轮次目标
+            <span class="help-hint" tabindex="0" role="img" aria-label="查看说明" :data-tooltip="currentRoundTargetHint">i</span>
+          </strong>
           <label class="stack-field target-mode-field">
             <select
               :value="currentRoundTargetMode"
@@ -261,7 +271,6 @@
                 {{ option.label }}
               </option>
             </select>
-            <span class="help-hint" tabindex="0" role="img" aria-label="查看说明" :data-tooltip="currentRoundTargetHint">i</span>
           </label>
         </section>
         <section class="control-section">
@@ -284,7 +293,7 @@
             <Warning />
             <span>{{ issue }}</span>
           </p>
-          <p v-if="currentRoundAdvisories.length" class="advisory-label">风险提示（不影响发布）</p>
+          <p v-if="currentRoundAdvisories.length" class="advisory-label">风险提示</p>
           <p v-for="warning in currentRoundAdvisories" :key="warning" class="advisory">
             <Warning />
             <span>{{ warning }}</span>
@@ -544,18 +553,24 @@
             />
             <div>
               <strong>{{ formatEntryName(entry) }}</strong>
-              <span class="entry-meta-line">
-                <small>{{ entry.shortCode }} · {{ entry.categoryName }} · {{ entry.style }}</small>
-                <em :class="{ pending: !getRoundEntryAssignment(entry.uuid) }">{{ getRoundEntryStatusLabel(entry.uuid) }}</em>
-              </span>
+              <small class="entry-meta-line" :title="formatEntryMeta(entry)">{{ formatEntryMeta(entry) }}</small>
             </div>
             <button
+              v-if="!getRoundEntryAssignment(entry.uuid)"
+              class="entry-add-action"
               type="button"
-              :disabled="!selectedRoundTableId || Boolean(getRoundEntryAssignment(entry.uuid))"
+              :disabled="!selectedRoundTableId"
               @click="$emit('addEntryToSelectedTable', entry.uuid)"
             >
-              {{ getRoundEntryActionLabel(entry.uuid) }}
+              加入
             </button>
+            <span
+              v-else
+              class="assign-chip"
+              :title="getRoundEntryStatusLabel(entry.uuid)"
+            >
+              {{ getRoundEntryAssignment(entry.uuid) }}
+            </span>
           </article>
           <p v-if="!filteredRoundPool.length" class="resource-empty">暂无可分配酒款</p>
         </div>
@@ -705,7 +720,10 @@
           </div>
         </section>
         <section v-if="currentRound?.type === 'RANKING'" class="control-section">
-          <strong>轮次目标</strong>
+          <strong class="control-title">
+            轮次目标
+            <span class="help-hint" tabindex="0" role="img" aria-label="查看说明" :data-tooltip="currentRoundTargetHint">i</span>
+          </strong>
           <label class="stack-field target-mode-field">
             <select
               :value="currentRoundTargetMode"
@@ -716,7 +734,6 @@
                 {{ option.label }}
               </option>
             </select>
-            <span class="help-hint" tabindex="0" role="img" aria-label="查看说明" :data-tooltip="currentRoundTargetHint">i</span>
           </label>
         </section>
         <section class="control-section">
@@ -1198,20 +1215,22 @@ function findRoundMembership(judgePublicId) {
   return memberships
 }
 
-function formatRoundMembership(membership) {
-  const label = membership.role === 'CAPTAIN'
-    ? '桌长'
-    : (membership.round.type === 'SCORE' ? formatRoundMemberRole(membership.role) : '参与评审')
-  const roundPrefix = membership.round.id === props.activeRoundId ? '' : `${membership.round.name} `
-  return `已在 ${roundPrefix}${membership.table.name} · ${label}`
+function roundMembershipRoleLabel(membership) {
+  if (membership.role === 'CAPTAIN') return '桌长'
+  return membership.round.type === 'SCORE' ? formatRoundMemberRole(membership.role) : '参与评审'
 }
 
-function getRoundJudgeAssignmentSummary(judgePublicId) {
+function getRoundJudgeAssignmentPosition(judgePublicId) {
   const memberships = findRoundMembership(judgePublicId)
   if (!memberships.length) return ''
   const current = memberships.find((item) => item.round.id === props.activeRoundId) || memberships[0]
-  const roundCount = memberships.length
-  return `${formatRoundMembership(current)}${roundCount > 1 ? ` 等 ${roundCount} 轮` : ''}`
+  return `${current.table.name} · ${roundMembershipRoleLabel(current)}`
+}
+
+function getRoundJudgeAssignmentDetail(judgePublicId) {
+  return findRoundMembership(judgePublicId)
+    .map((membership) => `${membership.round.name} ${membership.table.name} · ${roundMembershipRoleLabel(membership)}`)
+    .join('；')
 }
 
 function canAddRoundJudge(judge) {
@@ -1239,8 +1258,8 @@ function getRoundEntryStatusLabel(uuid) {
   return tableName ? `已分配到 ${tableName}` : '未分配'
 }
 
-function getRoundEntryActionLabel(uuid) {
-  return props.getRoundEntryAssignment(uuid) ? '已分配' : '加入'
+function formatEntryMeta(entry) {
+  return [entry?.shortCode, entry?.categoryName, entry?.style].filter(Boolean).join(' · ')
 }
 
 function resolveRoundMemberRole(judge) {
@@ -1868,8 +1887,10 @@ dt,
 
 .resource-card.entry {
   grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 10px;
   align-items: center;
-  min-height: 66px;
+  padding: 9px 10px;
+  min-height: 0;
 }
 
 .resource-card.assigned {
@@ -1889,12 +1910,11 @@ dt,
 }
 
 .resource-card.assigned .assignment-status,
-.resource-card.assigned .entry-meta-line em {
+.resource-card.assigned .assign-chip {
   opacity: 1;
 }
 
-.assignment-status,
-.entry-meta-line em {
+.assignment-status {
   display: inline-flex;
   align-items: center;
   width: fit-content;
@@ -1912,12 +1932,6 @@ dt,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.entry-meta-line em.pending {
-  color: #8da1aa;
-  border-color: rgba(219, 232, 237, 0.1);
-  background: rgba(255, 255, 255, 0.026);
 }
 
 .resource-body {
@@ -2073,39 +2087,35 @@ dt,
 }
 
 .entry-meta-line {
-  display: flex;
-  gap: 7px;
-  align-items: center;
+  display: block;
   min-width: 0;
-}
-
-.entry-meta-line small {
-  min-width: 0;
-  flex: 1 1 auto;
-}
-
-.entry-meta-line em {
-  flex: 0 0 auto;
-  max-width: 132px;
-  min-height: 22px;
-  padding: 0 7px;
-  color: #7ee08a;
-  border: 1px solid rgba(111, 207, 122, 0.22);
-  border-radius: 999px;
-  background: rgba(111, 207, 122, 0.08);
+  color: #8da1aa;
   font-size: 12px;
-  font-style: normal;
-  font-weight: 800;
-  line-height: 20px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.entry-meta-line em.pending {
-  color: #8da1aa;
-  border-color: rgba(219, 232, 237, 0.1);
-  background: rgba(255, 255, 255, 0.026);
+.assign-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  max-width: 132px;
+  padding: 0 9px;
+  color: #7ee08a;
+  border: 1px solid rgba(111, 207, 122, 0.22);
+  border-radius: 999px;
+  background: rgba(111, 207, 122, 0.08);
+  font-size: 12px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entry-add-action {
+  min-height: 26px;
+  padding: 0 10px;
 }
 
 .resource-card strong,
@@ -2237,6 +2247,17 @@ p {
 
 .role-lane.active {
   border-color: rgba(216, 169, 53, 0.34);
+}
+
+/* 排序轮只有「桌长 / 参与评审」两条泳道，参与评审占用右侧剩余两列并让成员两人一行 */
+.ranking-role-grid .participant-lane {
+  grid-column: span 2;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ranking-role-grid .participant-lane > header,
+.ranking-role-grid .participant-lane > .role-empty {
+  grid-column: 1 / -1;
 }
 
 .mini-card {
@@ -2378,6 +2399,16 @@ p {
 
 .control-section > strong {
   font-size: 14px;
+}
+
+.control-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.control-title .help-hint {
+  margin-left: 0;
 }
 
 .control-section > button,
@@ -3148,6 +3179,11 @@ p {
   .overview-summary,
   .overview-content-grid,
   .role-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ranking-role-grid .participant-lane {
+    grid-column: auto;
     grid-template-columns: 1fr;
   }
 

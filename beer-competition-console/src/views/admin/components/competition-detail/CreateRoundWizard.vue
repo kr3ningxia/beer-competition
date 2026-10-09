@@ -11,10 +11,7 @@
 
       <section v-if="advancedCategoryStats.length" class="summary-panel">
         <div class="summary-list">
-          <span v-for="item in advancedCategoryStats" :key="item.category">
-            <strong>{{ item.count }}</strong>
-            {{ item.category }}
-          </span>
+          <span v-for="item in advancedCategoryStats" :key="item.category">{{ item.category }}</span>
         </div>
       </section>
 
@@ -185,9 +182,7 @@ button:disabled {
 }
 
 .summary-panel {
-  display: grid;
-  grid-template-columns: 180px minmax(0, 1fr);
-  gap: 10px;
+  display: block;
 }
 
 .round-config-panel {
@@ -310,25 +305,22 @@ button:disabled {
 }
 
 .summary-list {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
 .summary-list span {
-  display: grid;
-  gap: 4px;
-  color: #8da1aa;
-}
-
-.summary-list strong {
-  color: #e6edf0;
+  max-width: 100%;
+  padding: 8px 12px;
+  color: #cbd7dc;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 760px) {
-  .summary-panel,
-  .round-config-panel,
-  .summary-list {
+  .round-config-panel {
     grid-template-columns: 1fr;
   }
 }

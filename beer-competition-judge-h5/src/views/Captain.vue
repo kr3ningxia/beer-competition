@@ -116,9 +116,30 @@
         </div>
 
         <div v-if="visibleExtraFields(entry).length" class="entry-extra-list">
-          <div v-for="field in visibleExtraFields(entry)" :key="field.key" class="entry-extra-row">
+          <div
+            v-for="field in visibleExtraFields(entry)"
+            :key="field.key"
+            :class="['entry-extra-row', { expanded: isExtraExpanded(field.key) }]"
+          >
             <span>{{ field.label }}</span>
-            <strong>{{ field.value }}</strong>
+            <div class="entry-extra-value">
+              <strong
+                :ref="(el) => setExtraValueRef(field.key, el)"
+                :class="{ clamped: !isExtraExpanded(field.key) }"
+              >{{ field.value }}</strong>
+              <button
+                v-if="overflowExtraKeys.has(field.key)"
+                class="entry-extra-toggle"
+                type="button"
+                :aria-expanded="isExtraExpanded(field.key)"
+                :aria-label="isExtraExpanded(field.key) ? '收起' : '展开'"
+                @click="toggleExtra(field.key)"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="m9 18 6-6-6-6" />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -234,7 +255,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   fetchCaptainBoard,
@@ -267,6 +288,9 @@ const advanceLimitDialogOpen = ref(false)
 const reopenDialogOpen = ref(false)
 const reopening = ref(false)
 const styleDetailOpen = ref(false)
+const expandedExtraKeys = ref(new Set())
+const overflowExtraKeys = ref(new Set())
+const extraValueRefs = new Map()
 const form = reactive({
   consensusScore: '',
   comments: '',
@@ -654,6 +678,48 @@ function visibleExtraFields(source) {
   return (source?.extraFields || []).filter((field) => String(field?.value || '').trim())
 }
 
+function setExtraValueRef(key, el) {
+  if (el) extraValueRefs.set(key, el)
+  else extraValueRefs.delete(key)
+}
+
+function isExtraExpanded(key) {
+  return expandedExtraKeys.value.has(key)
+}
+
+function toggleExtra(key) {
+  const next = new Set(expandedExtraKeys.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  expandedExtraKeys.value = next
+}
+
+function measureExtraOverflow() {
+  nextTick(() => {
+    const next = new Set()
+    for (const [key, el] of extraValueRefs) {
+      if (!el) continue
+      el.style.display = '-webkit-box'
+      el.style.webkitBoxOrient = 'vertical'
+      el.style.webkitLineClamp = '2'
+      el.style.overflow = 'hidden'
+      const clampedHeight = el.clientHeight
+      el.style.display = 'block'
+      el.style.webkitLineClamp = 'unset'
+      el.style.overflow = 'visible'
+      const fullHeight = el.clientHeight
+      el.style.display = ''
+      el.style.webkitBoxOrient = ''
+      el.style.webkitLineClamp = ''
+      el.style.overflow = ''
+      if (fullHeight > clampedHeight + 1) next.add(key)
+    }
+    overflowExtraKeys.value = next
+    const pruned = new Set([...expandedExtraKeys.value].filter((key) => next.has(key)))
+    if (pruned.size !== expandedExtraKeys.value.size) expandedExtraKeys.value = pruned
+  })
+}
+
 function openStyleDetail() {
   if (!entry.value) return
   styleDetailOpen.value = true
@@ -685,6 +751,16 @@ watch(uuid, async () => {
   styleDetailOpen.value = false
   if (uuid.value) await loadDetail()
   else await loadBoard()
+})
+
+watch(() => entry.value, measureExtraOverflow, { flush: 'post' })
+
+onMounted(() => {
+  window.addEventListener('resize', measureExtraOverflow)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', measureExtraOverflow)
 })
 
 onMounted(async () => {
@@ -969,12 +1045,64 @@ onMounted(async () => {
   line-height: 1.45;
 }
 
+.entry-extra-value {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
 .entry-extra-row strong {
+  min-width: 0;
+  flex: 1 1 auto;
   color: #18222f;
   text-align: right;
   font-size: 14px;
   line-height: 1.45;
   overflow-wrap: anywhere;
+}
+
+.entry-extra-row strong.clamped {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.entry-extra-row.expanded {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+
+.entry-extra-row.expanded strong {
+  text-align: left;
+}
+
+.entry-extra-toggle {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 0;
+  margin: -8px 0;
+  padding: 8px 0;
+  background: transparent;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.entry-extra-toggle svg {
+  width: 19px;
+  height: 19px;
+  stroke: #667085;
+  stroke-width: 2.2;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.18s ease;
+}
+
+.entry-extra-row.expanded .entry-extra-toggle svg {
+  transform: rotate(90deg);
 }
 
 .score-title {

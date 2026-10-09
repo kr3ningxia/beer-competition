@@ -12,7 +12,6 @@
 
       <div class="hero-identity">
         <div class="hero-copy">
-          <p>{{ entry?.competitionName || '酒款信息' }}</p>
           <div class="code-lockup">
             <span>编号：</span>
             <strong>{{ shortCodeText(entry) }}</strong>
@@ -62,10 +61,31 @@
 
       <section v-if="entry.extraFields?.length" class="card scan-card">
         <h2 class="scan-section-title">补充信息</h2>
-        <div class="extra-list">
-          <div v-for="field in entry.extraFields" :key="field.key" class="extra-row">
-            <span>{{ field.label }}</span>
-            <strong>{{ field.value }}</strong>
+        <div ref="extraListEl" class="extra-list">
+          <div
+            v-for="field in entry.extraFields"
+            :key="field.key"
+            :class="['extra-row', { expanded: isExtraExpanded(field.key) }]"
+          >
+            <div class="extra-row-body">
+              <span>{{ field.label }}</span>
+              <strong
+                :data-extra-key="field.key"
+                :class="{ clamped: !isExtraExpanded(field.key) }"
+              >{{ field.value }}</strong>
+            </div>
+            <button
+              v-if="overflowExtraKeys.has(field.key)"
+              class="extra-row-toggle"
+              type="button"
+              :aria-expanded="isExtraExpanded(field.key)"
+              :aria-label="isExtraExpanded(field.key) ? '收起' : '展开'"
+              @click="toggleExtra(field.key)"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m9 18 6-6-6-6" />
+              </svg>
+            </button>
           </div>
         </div>
       </section>
@@ -124,7 +144,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { fetchCompetitions, fetchEntry, fetchMe, resolveScanEntry } from '@/api/judge'
 import JudgeBottomNav from '@/components/JudgeBottomNav.vue'
@@ -140,6 +160,9 @@ const me = ref(null)
 const currentTask = ref(null)
 const loading = ref(true)
 const styleDetailOpen = ref(false)
+const expandedExtraKeys = ref(new Set())
+const overflowExtraKeys = ref(new Set())
+const extraListEl = ref(null)
 const scoreButtonLabel = computed(() => (
   me.value?.role === 'CAPTAIN' ? '填写我的专业评分' : '开始评分'
 ))
@@ -185,6 +208,57 @@ function closeStyleDetail() {
   styleDetailOpen.value = false
 }
 
+function isExtraExpanded(key) {
+  return expandedExtraKeys.value.has(key)
+}
+
+function toggleExtra(key) {
+  const next = new Set(expandedExtraKeys.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  expandedExtraKeys.value = next
+}
+
+function measureExtraOverflow() {
+  nextTick(() => {
+    const nodes = extraListEl.value
+      ? extraListEl.value.querySelectorAll('strong[data-extra-key]')
+      : []
+    const next = new Set()
+    nodes.forEach((el) => {
+      const key = el.dataset.extraKey
+      if (!key) return
+      el.style.display = '-webkit-box'
+      el.style.webkitBoxOrient = 'vertical'
+      el.style.webkitLineClamp = '2'
+      el.style.overflow = 'hidden'
+      const clampedHeight = el.getBoundingClientRect().height
+      el.style.display = 'block'
+      el.style.webkitLineClamp = 'unset'
+      el.style.overflow = 'visible'
+      const fullHeight = el.getBoundingClientRect().height
+      el.style.display = ''
+      el.style.webkitBoxOrient = ''
+      el.style.webkitLineClamp = ''
+      el.style.overflow = ''
+      if (fullHeight > clampedHeight + 1) next.add(key)
+    })
+    overflowExtraKeys.value = next
+    const pruned = new Set([...expandedExtraKeys.value].filter((key) => next.has(key)))
+    if (pruned.size !== expandedExtraKeys.value.size) expandedExtraKeys.value = pruned
+  })
+}
+
+watch(entry, measureExtraOverflow, { flush: 'post' })
+
+onMounted(() => {
+  window.addEventListener('resize', measureExtraOverflow)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', measureExtraOverflow)
+})
+
 </script>
 
 <style scoped>
@@ -199,7 +273,7 @@ function closeStyleDetail() {
 }
 
 .scan-hero {
-  min-height: 176px;
+  min-height: 132px;
   padding: 24px 24px 22px;
   color: #fff;
   background: #3a4737;
@@ -240,20 +314,12 @@ function closeStyleDetail() {
   display: flex;
   gap: 14px;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-top: 18px;
+  align-items: center;
+  margin-top: 16px;
 }
 
 .hero-copy {
   min-width: 0;
-  padding-top: 4px;
-}
-
-.hero-copy p {
-  margin: 0 0 10px;
-  color: rgba(239, 244, 235, 0.78);
-  font-size: 16px;
-  line-height: 1.25;
 }
 
 .code-lockup {
@@ -432,10 +498,18 @@ dd {
 
 .extra-row {
   display: grid;
-  gap: 7px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
   border-radius: 18px;
   padding: 16px 17px;
   background: #f8f7f5;
+}
+
+.extra-row-body {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
 }
 
 .extra-row span {
@@ -445,10 +519,47 @@ dd {
 }
 
 .extra-row strong {
+  min-width: 0;
   color: #020817;
   font-size: 18px;
   font-weight: 900;
   line-height: 1.45;
+}
+
+.extra-row strong.clamped {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.extra-row.expanded {
+  align-items: start;
+}
+
+.extra-row-toggle {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.extra-row-toggle svg {
+  width: 21px;
+  height: 21px;
+  stroke: #5d5d57;
+  stroke-width: 2.2;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.18s ease;
+}
+
+.extra-row.expanded .extra-row-toggle svg {
+  transform: rotate(90deg);
 }
 
 .primary-action {
@@ -499,21 +610,12 @@ dd {
 
 @media (max-width: 420px) {
   .scan-hero {
-    min-height: 164px;
+    min-height: 122px;
     padding: 22px 19px 18px;
   }
 
   .hero-back {
     font-size: 19px;
-  }
-
-  .hero-identity {
-    align-items: flex-start;
-    margin-top: 16px;
-  }
-
-  .hero-copy p {
-    font-size: 15px;
   }
 
   .code-lockup span {

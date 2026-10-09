@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="admin-exports-page">
     <AdminPageHeader title="数据导出">
       <template #actions>
@@ -71,21 +71,17 @@
     </section>
 
     <section class="summary-strip">
-      <article>
+      <article class="summary-competition">
         <small>当前比赛</small>
         <strong>{{ selectedCompetition?.name || '未选择' }}</strong>
       </article>
       <article>
         <small>筛选范围</small>
-        <strong>{{ exportCount }}</strong>
+        <strong>{{ exportCount }} 款</strong>
       </article>
       <article>
         <small>比赛状态</small>
         <strong>{{ statusLabel(selectedCompetition?.status) }}</strong>
-      </article>
-      <article>
-        <small>瓶贴张数</small>
-        <strong>{{ labelCopies }} / 款</strong>
       </article>
     </section>
 
@@ -95,27 +91,21 @@
           <span :class="['template-icon', template.tone]">
             <component :is="template.icon" />
           </span>
-          <div>
-            <small>{{ template.stage }}</small>
-            <h2>{{ template.title }}</h2>
-          </div>
+          <h2>{{ template.title }}</h2>
+          <span class="file-chip">{{ template.fileType }}</span>
         </div>
-        <p>{{ template.description }}</p>
-        <dl class="template-facts">
-          <div>
-            <dt>文件</dt>
-            <dd>{{ template.fileType }}</dd>
-          </div>
-          <div>
-            <dt>范围</dt>
-            <dd>{{ template.scope }}</dd>
-          </div>
-        </dl>
+        <p class="card-summary" :title="template.summary">{{ template.summary }}</p>
         <label v-if="template.key === 'labels'" class="copies-field">
           <span>每款标签张数</span>
           <input v-model.number="labelCopies" type="number" min="1" max="6" />
         </label>
-        <button class="export-button" type="button" :disabled="!selectedCompetitionId || exportingKey === template.key" @click="runExport(template.key)">
+        <button
+          class="export-button"
+          type="button"
+          :title="template.scope"
+          :disabled="!selectedCompetitionId || exportingKey === template.key"
+          @click="runExport(template.key)"
+        >
           <Download />
           {{ exportingKey === template.key ? '正在导出' : template.action }}
         </button>
@@ -191,10 +181,9 @@ const exportTemplates = [
   {
     key: 'entries',
     title: '报名酒款台账',
-    stage: '报名核对',
-    description: '导出酒款、厂牌、组别、支付状态和报名信息，用于报名截止后的资料复核',
+    summary: '酒款 · 厂牌 · 组别 · 报名资料',
     fileType: 'Excel',
-    scope: '当前筛选范围',
+    scope: '按当前筛选范围导出',
     action: '导出台账',
     icon: Document,
     tone: 'blue',
@@ -202,10 +191,9 @@ const exportTemplates = [
   {
     key: 'delivery',
     title: '样品入库清单',
-    stage: '现场准备',
-    description: '导出送样、快递单号、签收和入库状态，用于现场样品核对',
+    summary: '送样 · 快递单号 · 签收 · 入库状态',
     fileType: 'Excel',
-    scope: '当前筛选范围',
+    scope: '按当前筛选范围导出',
     action: '导出清单',
     icon: Box,
     tone: 'green',
@@ -213,8 +201,7 @@ const exportTemplates = [
   {
     key: 'labels',
     title: '批量参赛标签',
-    stage: '贴瓶打印',
-    description: '导出 A4 打印版参赛标签，每页 4 张，标签包含二维码、参赛编号和组别',
+    summary: 'A4 标签 · 二维码 · 参赛编号 · 组别',
     fileType: 'PDF',
     scope: '已支付且已生成参赛标签',
     action: '下载 PDF',
@@ -224,10 +211,9 @@ const exportTemplates = [
   {
     key: 'scoring',
     title: '评分数据',
-    stage: '结果复盘',
-    description: '导出评分、维度、桌长汇总、轮次和奖项数据，用于赛后归档',
+    summary: '评分 · 维度 · 桌长汇总 · 奖项',
     fileType: 'Excel',
-    scope: '整场比赛',
+    scope: '整场比赛，不受筛选影响',
     action: '导出评分',
     icon: DataAnalysis,
     tone: 'amber',
@@ -235,8 +221,7 @@ const exportTemplates = [
   {
     key: 'judges',
     title: '评审报名信息',
-    stage: '裁判招募',
-    description: '导出本场比赛全部报名评审及联系方式，包含微信号、资质、利益冲突和审核记录',
+    summary: '微信号 · 资质 · 利益冲突 · 审核记录',
     fileType: 'Excel',
     scope: '本场全部报名记录',
     action: '导出评审',
@@ -418,18 +403,13 @@ function statusLabel(status) {
   background-size: 68px 68px, 68px 68px, auto, auto;
 }
 
-.head-actions,
-.filter-panel,
-.summary-strip,
 .card-head,
 .export-button {
   display: flex;
   align-items: center;
 }
 
-.template-facts dt,
 .field span,
-.card-head small,
 .summary-strip small {
   color: var(--muted);
   font-size: 12px;
@@ -438,8 +418,7 @@ function statusLabel(status) {
 
 h1,
 h2,
-p,
-dl {
+p {
   margin: 0;
 }
 
@@ -461,10 +440,6 @@ button:disabled {
 svg {
   width: 1em;
   height: 1em;
-}
-
-.head-actions {
-  gap: 10px;
 }
 
 .tool-button,
@@ -490,7 +465,7 @@ svg {
 
 .filter-panel {
   display: grid;
-  grid-template-columns: minmax(260px, 1.3fr) minmax(260px, 1.3fr) repeat(4, minmax(140px, 1fr));
+  grid-template-columns: minmax(240px, 1.3fr) minmax(200px, 1fr) minmax(220px, 1.1fr) repeat(4, minmax(130px, 1fr));
   gap: 12px;
   margin-top: 18px;
   padding: 16px;
@@ -520,8 +495,7 @@ svg {
 }
 
 .field input,
-.field select,
-.copies-field input {
+.field select {
   width: 100%;
   min-height: 38px;
   padding: 0 10px;
@@ -548,7 +522,7 @@ svg {
 
 .summary-strip {
   display: grid;
-  grid-template-columns: 2fr repeat(3, 1fr);
+  grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr));
   gap: 12px;
   margin-top: 12px;
 }
@@ -556,8 +530,8 @@ svg {
 .summary-strip article {
   display: grid;
   gap: 6px;
-  min-height: 78px;
-  padding: 14px;
+  min-height: 72px;
+  padding: 14px 16px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.04);
@@ -572,7 +546,7 @@ svg {
 
 .export-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   gap: 14px;
   margin-top: 14px;
 }
@@ -580,32 +554,48 @@ svg {
 .export-card {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  min-height: 320px;
-  padding: 18px;
+  gap: 12px;
+  padding: 16px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 10px;
   background: rgba(18, 29, 34, 0.92);
+  transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.export-card:hover {
+  border-color: rgba(216, 169, 53, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3);
 }
 
 .card-head {
-  gap: 12px;
+  gap: 10px;
+}
+
+.card-head h2 {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 16px;
+  font-weight: 800;
 }
 
 .template-icon {
   display: grid;
   place-items: center;
-  width: 46px;
-  height: 46px;
+  width: 40px;
+  height: 40px;
   flex: 0 0 auto;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 9px;
   background: rgba(255, 255, 255, 0.04);
 }
 
 .template-icon svg {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
 }
 
 .template-icon.blue {
@@ -624,41 +614,32 @@ svg {
   background: rgba(216, 169, 53, 0.1);
 }
 
-.card-head h2 {
-  margin-top: 3px;
-  font-size: 18px;
-}
-
-.export-card p {
-  min-height: 66px;
-  color: #a8bac2;
-  line-height: 1.65;
-}
-
-.template-facts {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.template-facts div {
-  display: grid;
-  gap: 5px;
-  padding: 11px;
-  border: 1px solid rgba(218, 232, 237, 0.08);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.template-facts dd {
-  margin: 0;
+.file-chip {
+  flex: 0 0 auto;
+  padding: 3px 9px;
+  color: var(--muted);
+  font-size: 11px;
   font-weight: 800;
+  letter-spacing: 0.03em;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.card-summary {
+  overflow: hidden;
+  color: #94a9b1;
+  font-size: 12.5px;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .copies-field {
-  display: grid;
-  gap: 7px;
-  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .copies-field span {
@@ -667,21 +648,25 @@ svg {
   font-weight: 800;
 }
 
-.export-card:not(:has(.copies-field)) .export-button {
-  margin-top: auto;
+.copies-field input {
+  width: 76px;
+  min-height: 34px;
+  padding: 0 10px;
+  text-align: center;
+  color: var(--text);
+  border: 1px solid rgba(218, 232, 237, 0.12);
+  border-radius: 8px;
+  background: #0d161a;
 }
 
 .export-button {
   width: 100%;
+  margin-top: auto;
 }
 
 @media (max-width: 1320px) {
   .filter-panel {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .export-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -690,14 +675,9 @@ svg {
     padding: 0 18px 18px;
   }
 
-  .summary-strip,
   .filter-panel,
-  .export-grid {
+  .summary-strip {
     grid-template-columns: 1fr;
-  }
-
-  .head-actions {
-    justify-content: flex-start;
   }
 }
 </style>

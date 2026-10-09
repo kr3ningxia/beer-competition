@@ -20,11 +20,10 @@
         <div class="partner-pinned">
           <article v-for="group in pinnedPartnerGroups" :key="group.key" :class="{ featured: group.featured }">
             <span>{{ group.label }}</span>
-            <div :class="['partner-logos', `sponsors-${group.sponsors.length}`]">
-              <div v-for="sponsor in group.sponsors" :key="sponsor.key" class="partner-logo-item">
+            <div class="partner-logos">
+              <div v-for="sponsor in group.sponsors" :key="sponsor.key" class="partner-logo-item" :title="sponsor.name">
                 <img v-if="sponsor.logoUrl" :src="sponsor.logoUrl" :alt="sponsor.name" />
                 <i v-else class="partner-logo-placeholder" aria-hidden="true">{{ sponsor.name.slice(0, 2) }}</i>
-                <strong>{{ sponsor.name }}</strong>
               </div>
             </div>
           </article>
@@ -33,11 +32,10 @@
           <div :key="activePartnerPageKey" class="partner-page">
             <article v-for="group in activePartnerPage" :key="group.key" :class="{ featured: group.featured }">
               <span>{{ group.label }}</span>
-              <div :class="['partner-logos', `sponsors-${group.sponsors.length}`]">
-                <div v-for="sponsor in group.sponsors" :key="sponsor.key" class="partner-logo-item">
+              <div class="partner-logos">
+                <div v-for="sponsor in group.sponsors" :key="sponsor.key" class="partner-logo-item" :title="sponsor.name">
                   <img v-if="sponsor.logoUrl" :src="sponsor.logoUrl" :alt="sponsor.name" />
                   <i v-else class="partner-logo-placeholder" aria-hidden="true">{{ sponsor.name.slice(0, 2) }}</i>
-                  <strong>{{ sponsor.name }}</strong>
                 </div>
               </div>
             </article>
@@ -467,7 +465,7 @@ function normalizeFoamBottom(percent) {
 
 .board-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(590px, 36%);
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
   gap: 28px;
   align-items: end;
   height: 174px;
@@ -586,27 +584,28 @@ function normalizeFoamBottom(percent) {
 
 .partner-wall {
   position: relative;
-  display: grid;
-  grid-template-rows: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: clamp(14px, 1.4vw, 24px);
   height: 100%;
   overflow: hidden;
 }
 
 .partner-pinned,
 .partner-page {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  display: flex;
+  align-items: center;
+  gap: clamp(14px, 1.4vw, 24px);
 }
 
 .partner-wall article {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 3px;
+  grid-template-rows: auto auto;
+  gap: 6px;
+  flex: 0 0 auto;
   min-width: 0;
-  min-height: 0;
-  padding: 8px 10px;
+  padding: 8px 12px;
   border: 1px solid rgba(225, 178, 91, 0.18);
   border-radius: 8px;
   background: rgba(18, 19, 17, 0.62);
@@ -620,46 +619,33 @@ function normalizeFoamBottom(percent) {
 
 .partner-wall span {
   color: #8f8878;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1;
   font-weight: 900;
 }
 
 .partner-logos {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
   align-items: center;
-  gap: 5px;
+  gap: clamp(6px, 0.6vw, 12px);
   min-width: 0;
-}
-
-.partner-logos.sponsors-1 {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.partner-logos.sponsors-2 {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .partner-logo-item {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
-  justify-items: center;
-  align-items: center;
-  gap: 3px;
+  place-items: center;
   min-width: 0;
-  min-height: 0;
 }
 
 .partner-logo-item img,
 .partner-logo-placeholder {
-  width: clamp(36px, 2.55vw, 54px);
-  height: clamp(36px, 2.55vw, 54px);
+  width: clamp(92px, 7.2vw, 128px);
+  height: clamp(92px, 7.2vw, 128px);
   min-width: 0;
   object-fit: contain;
-  padding: 4px;
+  padding: 6px;
   border: 1px solid rgba(225, 178, 91, 0.2);
-  border-radius: 8px;
+  border-radius: 10px;
   background: #fff;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
 }
@@ -668,22 +654,9 @@ function normalizeFoamBottom(percent) {
   display: grid;
   place-items: center;
   color: #8b682f;
-  font-size: 13px;
+  font-size: clamp(20px, 1.8vw, 30px);
   font-style: normal;
   font-weight: 950;
-}
-
-.partner-wall strong {
-  width: 100%;
-  overflow: hidden;
-  color: var(--text);
-  font-size: clamp(10px, 0.65vw, 12px);
-  line-height: 1.15;
-  font-weight: 800;
-  text-align: center;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
 }
 
 .partner-page-enter-active,
@@ -1418,15 +1391,20 @@ function normalizeFoamBottom(percent) {
   }
 
   .board-header {
-    grid-template-columns: minmax(0, 1fr) minmax(500px, 36%);
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
     gap: 26px;
     height: 160px;
     padding-bottom: 10px;
   }
 
+  .partner-logo-item img,
+  .partner-logo-placeholder {
+    width: clamp(84px, 6.6vw, 114px);
+    height: clamp(84px, 6.6vw, 114px);
+  }
+
   .partner-wall article {
-    min-height: 50px;
-    padding: 9px 12px;
+    padding: 8px 11px;
   }
 
   .scoreboard-stage {
@@ -1484,23 +1462,21 @@ function normalizeFoamBottom(percent) {
   .partner-wall,
   .partner-pinned,
   .partner-page {
-    gap: 8px;
+    gap: clamp(10px, 1vw, 16px);
   }
 
   .partner-wall article {
-    padding: 7px 9px;
+    padding: 6px 9px;
   }
 
   .partner-logo-item img,
   .partner-logo-placeholder {
-    width: 34px;
-    height: 34px;
+    width: clamp(78px, 6.6vw, 122px);
+    height: clamp(78px, 6.6vw, 122px);
   }
 
-  .partner-wall strong {
-    font-size: 10px;
-    line-height: 1;
-    -webkit-line-clamp: 1;
+  .partner-wall span {
+    font-size: 11px;
   }
 
   .scoreboard-stage {

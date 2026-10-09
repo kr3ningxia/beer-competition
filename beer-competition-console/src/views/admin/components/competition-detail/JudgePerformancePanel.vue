@@ -117,60 +117,49 @@
             </div>
             <span :class="['status-chip', statusTone(selectedRow?.evaluationStatus)]">{{ statusLabel(selectedRow?.evaluationStatus) }}</span>
           </div>
-          <div class="modal-metrics">
-            <div>
-              <span>手工评分</span>
-              <strong>{{ selectedRow?.manualScore == null ? '—' : formatNumber(selectedRow.manualScore) }}</strong>
-              <small>/ 50</small>
-            </div>
-            <div>
-              <span>字数评分</span>
-              <strong>{{ selectedRow?.commentScore == null ? '—' : formatNumber(selectedRow.commentScore) }}</strong>
-              <small>/ 50</small>
-            </div>
-            <div>
-              <span>赛事表现</span>
-              <strong>{{ selectedRow?.totalScore == null ? '待确认' : formatNumber(selectedRow.totalScore) }}</strong>
-              <small v-if="selectedRow?.totalScore != null">/ 100</small>
-            </div>
-            <div>
-              <span>比赛排名</span>
-              <strong>{{ selectedRow?.overallRank ? `${selectedRow.overallRank} / ${selectedRow.participantCount || '-'}` : '-' }}</strong>
-            </div>
-          </div>
           <button class="icon-close" type="button" aria-label="关闭" @click="closeModal"><Close /></button>
         </header>
 
         <div class="modal-body">
-          <section class="eval-column">
-            <div class="column-title">
-              <h3>手工评分 <small>50 分</small></h3>
-              <span>当前 <strong>{{ liveManualScore == null ? '—' : formatNumber(liveManualScore) }} / 50</strong></span>
+          <section class="stack-card">
+            <div class="card-title">
+              <h3>
+                手工评分
+                <span class="help-hint" tabindex="0" role="img" aria-label="手工评分规则" data-tooltip="0–50 分，最多 1 位小数，由主办方按评委现场表现录入。">?</span>
+              </h3>
             </div>
-            <label class="manual-score-field">
-              <span>手工评分</span>
-              <div class="manual-score-input">
-                <input
-                  v-model.number="form.manualScore"
-                  type="number"
-                  min="0"
-                  max="50"
-                  step="0.1"
-                  inputmode="decimal"
-                  placeholder="0–50"
-                  :readonly="readonly"
-                  aria-label="手工评分"
-                />
-                <small>/ 50</small>
-              </div>
-            </label>
-            <small class="manual-score-hint">请输入 0–50 分，最多 1 位小数</small>
+            <div class="manual-score-input">
+              <input
+                v-model.number="form.manualScore"
+                type="number"
+                min="0"
+                max="50"
+                step="0.1"
+                inputmode="decimal"
+                placeholder="0–50"
+                :readonly="readonly"
+                aria-label="手工评分"
+              />
+              <small>/ 50</small>
+            </div>
+            <div class="result-line">
+              <span>
+                赛事表现
+                <span class="help-hint" tabindex="0" role="img" aria-label="赛事表现说明" data-tooltip="手工评分 + 字数评分，满分 100。">?</span>
+              </span>
+              <strong v-if="selectedRow?.totalScore != null">{{ formatNumber(selectedRow.totalScore) }}<small> / 100</small></strong>
+              <em v-else>待确认</em>
+              <span v-if="selectedRow?.excellentCandidate" class="candidate-badge">优秀候选</span>
+            </div>
           </section>
 
-          <section class="stat-column">
-            <div class="column-title">
-              <h3>字数评分 <small>50 分</small></h3>
-              <span>按锁定评分轮统计</span>
+          <section class="stack-card">
+            <div class="card-title">
+              <h3>
+                字数评分
+                <span class="help-hint" tabindex="0" role="img" aria-label="字数评分规则" data-tooltip="按评语字数在全部评审中的百分位分档：前 20% 得 50 分，之后每档递减 10 分，后 20% 得 10 分；数据取自锁定的评分轮，锁定后不再变化。">?</span>
+              </h3>
+              <strong class="card-score">{{ selectedRow?.commentScore == null ? '—' : formatNumber(selectedRow.commentScore) }}<small> / 50</small></strong>
             </div>
             <dl class="stat-list">
               <div><dt>有效评语</dt><dd>{{ selectedRow?.commentRecordCount || 0 }} 份</dd></div>
@@ -185,9 +174,9 @@
               </div>
               <span class="completion-bar"><i :style="{ width: barWidth(selectedRow?.completionRate) }"></i></span>
             </div>
-            <div v-if="selectedRow?.excellentCandidate || selectedRow?.sampleWarning" class="remark-block">
-              <span v-if="selectedRow?.excellentCandidate" class="candidate-badge">优秀候选</span>
-              <span v-if="selectedRow?.sampleWarning" class="sample-badge">样本较少</span>
+            <div v-if="selectedRow?.sampleWarning" class="remark-block">
+              <span class="sample-badge">样本较少</span>
+              <span class="help-hint" tabindex="0" role="img" aria-label="样本较少说明" data-tooltip="参与统计的评审不足 5 人或有效评语少于 3 份，字数档位参考价值有限。">?</span>
             </div>
           </section>
 
@@ -203,6 +192,7 @@
 
         <footer class="modal-foot">
           <div class="foot-meta">
+            <span v-if="selectedRow?.overallRank">参赛排名 {{ selectedRow.overallRank }} / {{ selectedRow.participantCount || '-' }}</span>
             <span v-if="selectedRow?.evaluatedByName">评价人 {{ selectedRow.evaluatedByName }}</span>
             <span v-if="selectedRow?.confirmedTime">确认于 {{ formatTime(selectedRow.confirmedTime) }}</span>
           </div>
@@ -285,7 +275,6 @@ const manualScoreComplete = computed(() => {
     && score <= 50
     && Math.abs(score * 10 - Math.round(score * 10)) < 1e-8
 })
-const liveManualScore = computed(() => (manualScoreComplete.value ? Number(form.manualScore) : null))
 
 watch(() => props.competition?.id, () => loadData())
 onMounted(loadData)
@@ -396,10 +385,10 @@ svg {
 .search-control,
 .score-line,
 .row-actions,
-.column-title,
+.card-title,
 .task-line,
 .modal-identity,
-.modal-metrics,
+.result-line,
 .remark-block,
 .foot-actions,
 .foot-meta {
@@ -758,7 +747,7 @@ svg {
 .modal-head {
   flex: 0 0 auto;
   display: grid;
-  grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 22px;
   padding: 18px 22px;
@@ -794,35 +783,6 @@ svg {
 .status-chip.draft { color: #f7d774; border: 1px solid rgba(247, 215, 116, 0.24); background: rgba(247, 215, 116, 0.08); }
 .status-chip.confirmed { color: var(--green); border: 1px solid rgba(111, 207, 122, 0.3); background: rgba(111, 207, 122, 0.1); }
 
-.modal-metrics {
-  justify-content: flex-end;
-  gap: 26px;
-}
-
-.modal-metrics div {
-  display: flex;
-  align-items: baseline;
-  gap: 5px;
-  white-space: nowrap;
-}
-
-.modal-metrics span {
-  margin-right: 2px;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.modal-metrics strong {
-  color: var(--gold);
-  font-size: 19px;
-  font-variant-numeric: tabular-nums;
-}
-
-.modal-metrics small {
-  color: var(--muted);
-  font-size: 12px;
-}
-
 .icon-close {
   display: grid;
   place-items: center;
@@ -840,66 +800,77 @@ svg {
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.85fr);
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: stretch;
+  gap: 14px 16px;
   overflow: auto;
-  padding: 18px 22px;
+  padding: 16px 20px;
 }
 
-.eval-column,
-.stat-column {
+.stack-card {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.025);
 }
 
-.column-title {
+.card-title {
   justify-content: space-between;
   gap: 12px;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--line);
 }
 
-.column-title h3 {
+.card-title h3 {
+  display: flex;
+  align-items: center;
   font-size: 15px;
 }
 
-.column-title h3 small {
-  margin-left: 5px;
+.card-score {
+  color: var(--gold);
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+}
+
+.card-score small {
   color: var(--muted);
   font-size: 12px;
   font-weight: 400;
 }
 
-.column-title span {
+.result-line {
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 
-.column-title span strong {
-  margin-left: 6px;
+.result-line strong {
   color: var(--gold);
-  font-size: 15px;
+  font-size: 17px;
   font-variant-numeric: tabular-nums;
 }
 
-.manual-score-field {
-  display: grid;
-  gap: 10px;
-  padding: 18px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(7, 14, 17, 0.4);
+.result-line strong small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
 }
 
-.manual-score-field > span {
+.result-line em {
   color: var(--muted);
-  font-size: 13px;
+  font-style: normal;
+}
+
+.result-line .candidate-badge {
+  margin-left: auto;
 }
 
 .manual-score-input {
@@ -931,31 +902,77 @@ svg {
   cursor: default;
 }
 
-.manual-score-input small,
-.manual-score-hint {
+.manual-score-input small {
   color: var(--muted);
   font-size: 12px;
 }
 
-.manual-score-hint {
-  margin: 0;
+.help-hint {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 5px;
+  color: #a9bac2;
+  border: 1px solid rgba(169, 186, 194, 0.55);
+  border-radius: 50%;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1;
+  cursor: help;
+  outline: none;
+}
+
+.help-hint::after {
+  position: absolute;
+  z-index: 5;
+  bottom: calc(100% + 8px);
+  left: -2px;
+  width: max-content;
+  max-width: 260px;
+  padding: 8px 10px;
+  color: #e6edf0;
+  border: 1px solid rgba(219, 232, 237, 0.14);
+  border-radius: 6px;
+  background: #1a252a;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+  content: attr(data-tooltip);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.45;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.help-hint:hover::after,
+.help-hint:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .stat-list {
   display: grid;
-  gap: 9px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
   margin: 0;
 }
 
 .stat-list div {
   display: flex;
-  justify-content: space-between;
-  gap: 12px;
+  align-items: baseline;
+  gap: 8px;
   font-size: 13px;
 }
 
 .stat-list dt {
+  flex: 0 0 auto;
+  min-width: 66px;
   color: var(--muted);
+  white-space: nowrap;
 }
 
 .stat-list dd {
@@ -1020,7 +1037,7 @@ svg {
 
 .evidence-field textarea {
   width: 100%;
-  min-height: 96px;
+  min-height: 84px;
   box-sizing: border-box;
   padding: 11px 12px;
   color: var(--text);
@@ -1055,6 +1072,7 @@ svg {
 
 .foot-meta {
   gap: 14px;
+  flex-wrap: wrap;
   color: var(--faint);
   font-size: 12px;
 }
@@ -1077,16 +1095,6 @@ svg {
   .panel-actions {
     width: 100%;
     justify-content: flex-start;
-  }
-
-  .modal-head {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .modal-metrics {
-    grid-column: 1 / -1;
-    justify-content: flex-start;
-    gap: 18px;
   }
 }
 

@@ -131,21 +131,21 @@ public class EmailNotificationTemplateRenderer {
             default -> "请按赛事安排完成送样";
         };
         return "<div style=\"max-width:640px;margin:0 auto;padding:28px;font-family:Arial,'Microsoft YaHei',sans-serif;color:#25343a;line-height:1.8;background:#fffdf7\">"
-                + "<div style=\"border-bottom:3px solid #c28a2c;padding-bottom:16px\"><span style=\"font-size:12px;letter-spacing:2px;color:#2f7651\">BEER COMPETITION</span><h1 style=\"margin:8px 0 0;color:#263b31;font-size:25px\">" + timing + "</h1></div>"
+                + "<div style=\"border-bottom:3px solid #c28a2c;padding-bottom:16px\"><span style=\"font-size:12px;letter-spacing:2px;color:#2f7651\">BEER MATTERS</span><h1 style=\"margin:8px 0 0;color:#263b31;font-size:25px\">" + timing + "</h1></div>"
                 + "<p>您好，{{delivery.recipient}}：</p><p>您报名参加的 <strong>{{competition.name}}</strong> 已进入送样阶段，请按以下信息安排寄送。</p>"
                 + "<table style=\"width:100%;border-collapse:collapse;margin:20px 0\"><tr><td style=\"padding:10px;border-bottom:1px solid #e8e2d6;color:#68736d\">收样时间</td><td style=\"padding:10px;border-bottom:1px solid #e8e2d6\">{{sample.arrivalStart}} 至 {{sample.arrivalDeadline}}</td></tr>"
                 + "<tr><td style=\"padding:10px;border-bottom:1px solid #e8e2d6;color:#68736d\">收样人</td><td style=\"padding:10px;border-bottom:1px solid #e8e2d6\">{{delivery.recipient}} · {{delivery.phone}}</td></tr>"
                 + "<tr><td style=\"padding:10px;border-bottom:1px solid #e8e2d6;color:#68736d\">收样地址</td><td style=\"padding:10px;border-bottom:1px solid #e8e2d6\">{{delivery.address}}</td></tr></table>"
                 + "<p style=\"padding:14px 16px;background:#eef5ef;color:#2f5e42\">当前待寄送 {{pendingDeliveryCount}} 款，请核对外箱标识和物流信息。</p>"
-                + "<p>{{delivery.note}}</p><p style=\"color:#7a827d;font-size:13px\">如已完成寄送，可忽略本提醒。登录赛事平台可查看报名与送样状态。</p>"
-                + "<p><a href=\"{{portalUrl}}\" style=\"display:inline-block;padding:11px 18px;color:#fff;background:#2f7651;text-decoration:none\">进入赛事平台</a></p></div>";
+                + "<p>{{delivery.note}}</p><p style=\"color:#7a827d;font-size:13px\">如已完成寄送，可忽略本提醒。登录啤酒事务局赛事平台可查看报名与送样状态。</p>"
+                + "<p><a href=\"{{portalUrl}}\" style=\"display:inline-block;padding:11px 18px;color:#fff;background:#2f7651;text-decoration:none\">进入啤酒事务局赛事平台</a></p></div>";
     }
 
     private String resultBody() {
         return "<div style=\"max-width:700px;margin:0 auto;padding:28px;font-family:Arial,'Microsoft YaHei',sans-serif;color:#25343a;line-height:1.8;background:#fffdf7\">"
-                + "<div style=\"border-bottom:3px solid #c28a2c;padding-bottom:16px\"><span style=\"font-size:12px;letter-spacing:2px;color:#2f7651\">BEER COMPETITION</span><h1 style=\"margin:8px 0 0;color:#263b31;font-size:25px\">比赛结果已公布</h1></div>"
+                + "<div style=\"border-bottom:3px solid #c28a2c;padding-bottom:16px\"><span style=\"font-size:12px;letter-spacing:2px;color:#2f7651\">BEER MATTERS</span><h1 style=\"margin:8px 0 0;color:#263b31;font-size:25px\">比赛结果已公布</h1></div>"
                 + "<p>您好，{{delivery.recipient}}：</p><p><strong>{{competition.name}}</strong> 的结果现已发布，以下为您本场赛事的结果：</p>"
-                + "{{resultTable}}<p style=\"color:#7a827d;font-size:13px\">登录赛事平台可查看完整结果、评分反馈和可下载的证书。</p>"
+                + "{{resultTable}}<p style=\"color:#7a827d;font-size:13px\">登录啤酒事务局赛事平台可查看完整结果、评分反馈和可下载的证书。</p>"
                 + "<p><a href=\"{{resultUrl}}\" style=\"display:inline-block;padding:11px 18px;color:#fff;background:#2f7651;text-decoration:none\">查看我的结果</a></p></div>";
     }
 }

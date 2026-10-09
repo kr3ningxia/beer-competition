@@ -187,7 +187,7 @@ public class JudgeRoundTaskServiceImpl implements JudgeRoundTaskService {
             return null;
         }
         Competition competition = competitionById.get(round.getCompetitionId());
-        if (competition != null && CompetitionStatus.ARCHIVED.name().equals(competition.getStatus())) {
+        if (!isCompetitionVisibleToJudge(competition)) {
             return null;
         }
         String taskType = resolveTaskType(round, member);
@@ -278,6 +278,15 @@ public class JudgeRoundTaskServiceImpl implements JudgeRoundTaskService {
         return RoundStatus.IN_PROGRESS.name().equals(status)
                 || RoundStatus.SUBMITTED.name().equals(status)
                 || RoundStatus.LOCKED.name().equals(status);
+    }
+
+    private boolean isCompetitionVisibleToJudge(Competition competition) {
+        if (competition == null) {
+            return true;
+        }
+        String status = competition.getStatus();
+        return !CompetitionStatus.PUBLISHED.name().equals(status)
+                && !CompetitionStatus.ARCHIVED.name().equals(status);
     }
 
     private void validateScoreRoundTableReady(RoundTable table) {

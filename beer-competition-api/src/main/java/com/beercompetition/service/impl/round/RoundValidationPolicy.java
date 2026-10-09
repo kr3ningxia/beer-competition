@@ -373,8 +373,12 @@ public class RoundValidationPolicy {
                 .stream()
                 .map(RoundTableEntry::getBeerEntryId)
                 .collect(Collectors.toSet());
+        long unassignedCount = candidateEntryIds.stream().filter(id -> !assignedEntryIds.contains(id)).count();
+        if (unassignedCount > 0) {
+            throw new BaseException("还有 " + unassignedCount + " 款晋级酒款未分桌，请先完成分桌再发布");
+        }
         if (!assignedEntryIds.equals(candidateEntryIds)) {
-            throw new BaseException("晋级酒款已变化，请重新载入后核对分桌");
+            throw new BaseException("分桌中存在已不在晋级名单的酒款，请重新载入后核对分桌");
         }
     }
 
