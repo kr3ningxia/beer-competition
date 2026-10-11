@@ -55,6 +55,7 @@ import static com.beercompetition.service.impl.round.RoundConstants.CATEGORY_MOD
 import static com.beercompetition.service.impl.round.RoundConstants.FLAG_FALSE;
 import static com.beercompetition.service.impl.round.RoundConstants.FLAG_TRUE;
 import com.beercompetition.judging.assignment.RoundAllocationService;
+import com.beercompetition.judging.round.RoundTableCategoryService;
 
 /**
  * 在事务内创建轮次并持久化分桌、评委和候选酒款分配。
@@ -84,6 +85,8 @@ public class RoundAllocationServiceImpl implements RoundAllocationService {
     private final RoundValidationPolicy roundValidationPolicy;
 
     private final RoundCandidateSyncService roundCandidateSyncService;
+
+    private final RoundTableCategoryService roundTableCategoryService;
 
     private final BeerCoinSettlementService beerCoinSettlementService;
 
@@ -262,6 +265,7 @@ public class RoundAllocationServiceImpl implements RoundAllocationService {
                         .sortOrder(entryIndex++)
                         .build());
             }
+            roundTableCategoryService.ensureStates(table);
             tableIndex++;
         }
     }
@@ -381,6 +385,7 @@ public class RoundAllocationServiceImpl implements RoundAllocationService {
             }
         }
         roundCandidateSyncService.syncDraftRound(competitionId, round.getId());
+        tables.forEach(roundTableCategoryService::ensureStates);
     }
 
     private Long resolveCategoryId(RoundTableAllocationRequest table, Map<String, BeerEntry> entryMap) {

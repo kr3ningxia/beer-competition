@@ -40,4 +40,5 @@ public class RoundTableVO {
     private List<RoundTableMemberVO> members;
     private List<RoundTableJudgeProgressVO> judgeDetails;
     private List<RoundRankingSlotVO> rankings;
+    private List<RoundTableCategoryRankingVO> categoryRankings;
 }

@@ -197,6 +197,7 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from
 import { useRoute, useRouter } from 'vue-router'
 import { createScore, fetchEntry, fetchMe, fetchMyScore, fetchScoreConfig, startScore, updateScore } from '@/api/judge'
 import StyleDetailDialog from '@/components/StyleDetailDialog.vue'
+import { clearDraft, draftKey, readDraft, writeDraft } from '@/utils/draftCache'
 import { formatAbvWithUnit } from '@/utils/formatters'
 
 const route = useRoute()
@@ -212,6 +213,9 @@ const styleDetailOpen = ref(false)
 const expandedExtraKeys = ref(new Set())
 const overflowExtraKeys = ref(new Set())
 const extraListEl = ref(null)
+let draftTimer = null
+let draftReady = false
+let draftStorageKey = ''
 
 const form = reactive({
   beerUuid: uuid,
@@ -451,6 +455,45 @@ function countEffectiveChars(text) {
   return String(text || '').replace(/\s+/g, '').length
 }
 
+function collectScoreDraft() {
+  return {
+    dimensions: form.dimensions.map((item) => ({
+      key: item.key,
+      score: item.score,
+      note: String(item.note || ''),
+    })),
+  }
+}
+
+function hasScoreDraftContent() {
+  return form.dimensions.some((item) => hasScore(item) || String(item.note || '').trim())
+}
+
+function persistScoreDraft() {
+  if (!draftReady || !draftStorageKey || entry.value?.locked || submitting.value) return
+  if (!hasScoreDraftContent()) {
+    clearDraft(draftStorageKey)
+    return
+  }
+  writeDraft(draftStorageKey, collectScoreDraft())
+}
+
+function scheduleScoreDraftSave() {
+  if (!draftReady) return
+  window.clearTimeout(draftTimer)
+  draftTimer = window.setTimeout(persistScoreDraft, 700)
+}
+
+function flushScoreDraft() {
+  if (!draftReady) return
+  window.clearTimeout(draftTimer)
+  persistScoreDraft()
+}
+
+function handleDraftVisibility() {
+  if (document.visibilityState === 'hidden') flushScoreDraft()
+}
+
 function openStyleDetail() {
   if (!entry.value) return
   styleDetailOpen.value = true
@@ -491,6 +534,9 @@ async function submit() {
       await createScore(payload)
       message.value = '评分已提交'
     }
+    draftReady = false
+    window.clearTimeout(draftTimer)
+    clearDraft(draftStorageKey)
     window.setTimeout(() => router.push('/competitions'), 360)
   } catch (error) {
     submitting.value = false
@@ -498,14 +544,22 @@ async function submit() {
   }
 }
 
+watch(() => form.dimensions, scheduleScoreDraftSave, { deep: true })
+
 watch(() => Boolean(entry.value && config.value), measureExtraOverflow, { flush: 'post' })
 
 onMounted(() => {
   window.addEventListener('resize', measureExtraOverflow)
+  window.addEventListener('pagehide', flushScoreDraft)
+  document.addEventListener('visibilitychange', handleDraftVisibility)
 })
 
 onUnmounted(() => {
+  flushScoreDraft()
   window.removeEventListener('resize', measureExtraOverflow)
+  window.removeEventListener('pagehide', flushScoreDraft)
+  document.removeEventListener('visibilitychange', handleDraftVisibility)
+  window.clearTimeout(draftTimer)
 })
 
 onMounted(async () => {
@@ -519,12 +573,17 @@ onMounted(async () => {
   }).catch(() => {})
   existingScore.value = await fetchMyScore(uuid)
   form.judgeRoleType = scoreRole
+  draftStorageKey = draftKey(me.value?.id, uuid, scoreRole)
 
   if (existingScore.value) {
     form.dimensions = buildDimensionForm(config.value.dimensions, existingScore.value.dimensions, existingScore.value.comments)
+    clearDraft(draftStorageKey)
   } else {
-    form.dimensions = buildDimensionForm(config.value.dimensions)
+    const draft = readDraft(draftStorageKey)
+    form.dimensions = buildDimensionForm(config.value.dimensions, draft?.dimensions)
   }
+  await nextTick()
+  draftReady = true
 })
 
 </script>

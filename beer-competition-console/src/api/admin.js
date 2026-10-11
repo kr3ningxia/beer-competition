@@ -328,6 +328,14 @@ export function changeRoundTableJudgeMembers(competitionId, roundId, roundTableI
   return request.patch(`/api/admin/competitions/${competitionId}/rounds/${roundId}/tables/${roundTableId}/judge-members`, payload, { authScope: 'admin' })
 }
 
+export function removeRoundTableEntry(competitionId, roundId, roundTableId, payload) {
+  return request.post(`/api/admin/competitions/${competitionId}/rounds/${roundId}/tables/${roundTableId}/entries/remove`, payload, { authScope: 'admin' })
+}
+
+export function addRoundTableEntry(competitionId, roundId, roundTableId, payload) {
+  return request.post(`/api/admin/competitions/${competitionId}/rounds/${roundId}/tables/${roundTableId}/entries/add`, payload, { authScope: 'admin' })
+}
+
 export function publishRound(competitionId, roundId) {
   return request.post(`/api/admin/competitions/${competitionId}/rounds/${roundId}/publish`, {}, { authScope: 'admin' })
 }

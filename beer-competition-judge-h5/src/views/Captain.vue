@@ -279,6 +279,7 @@ import {
 } from '@/api/judge'
 import JudgeBottomNav from '@/components/JudgeBottomNav.vue'
 import StyleDetailDialog from '@/components/StyleDetailDialog.vue'
+import { clearDraft, draftKey, readDraft, writeDraft } from '@/utils/draftCache'
 import { formatAbvWithUnit } from '@/utils/formatters'
 import { isRankingTaskType, selectCurrentTask } from '@/utils/judgeTasks'
 
@@ -302,6 +303,9 @@ const styleDetailOpen = ref(false)
 const expandedExtraKeys = ref(new Set())
 const overflowExtraKeys = ref(new Set())
 const extraValueRefs = new Map()
+let draftTimer = null
+let draftReady = false
+let captainDraftKey = ''
 const form = reactive({
   consensusScore: '',
   comments: '',
@@ -539,6 +543,45 @@ const finalButtonText = computed(() => {
   return tableSubmitted.value ? '本桌结果已提交' : '本桌结果已锁定'
 })
 
+function collectCaptainDraft() {
+  return {
+    consensusScore: form.consensusScore,
+    comments: form.comments,
+    advanced: form.advanced,
+  }
+}
+
+function hasCaptainDraftContent() {
+  return String(form.consensusScore ?? '').trim() !== ''
+    || String(form.comments || '').trim() !== ''
+    || Boolean(form.advanced)
+}
+
+function persistCaptainDraft() {
+  if (!draftReady || !captainDraftKey || tableLocked.value) return
+  if (!hasCaptainDraftContent()) {
+    clearDraft(captainDraftKey)
+    return
+  }
+  writeDraft(captainDraftKey, collectCaptainDraft())
+}
+
+function scheduleCaptainDraftSave() {
+  if (!draftReady) return
+  window.clearTimeout(draftTimer)
+  draftTimer = window.setTimeout(persistCaptainDraft, 700)
+}
+
+function flushCaptainDraft() {
+  if (!draftReady) return
+  window.clearTimeout(draftTimer)
+  persistCaptainDraft()
+}
+
+function handleCaptainDraftVisibility() {
+  if (document.visibilityState === 'hidden') flushCaptainDraft()
+}
+
 async function loadBoard() {
   loadingBoard.value = true
   try {
@@ -555,12 +598,25 @@ async function loadBoard() {
 
 async function loadDetail() {
   if (!uuid.value) return
+  draftReady = false
+  window.clearTimeout(draftTimer)
   entry.value = await fetchEntry(uuid.value)
   tableScores.value = await fetchTableScores(uuid.value)
   expandedCommentIds.value = new Set()
-  form.consensusScore = finalScore.value?.consensusScore || finalScore.value?.totalScore || ''
-  form.comments = finalScore.value?.comments || ''
-  form.advanced = Boolean(finalScore.value?.advanced || entry.value.advanced)
+  captainDraftKey = draftKey(me.value?.id, uuid.value)
+  if (finalScore.value) {
+    form.consensusScore = finalScore.value?.consensusScore || finalScore.value?.totalScore || ''
+    form.comments = finalScore.value?.comments || ''
+    form.advanced = Boolean(finalScore.value?.advanced || entry.value.advanced)
+    clearDraft(captainDraftKey)
+  } else {
+    const draft = readDraft(captainDraftKey)
+    form.consensusScore = draft?.consensusScore ?? ''
+    form.comments = draft?.comments ?? ''
+    form.advanced = Boolean(draft?.advanced ?? entry.value?.advanced)
+  }
+  await nextTick()
+  draftReady = true
 }
 
 async function redirectRankingTaskIfNeeded() {
@@ -593,6 +649,9 @@ async function submitFinal() {
     payload.advanced = form.advanced
   }
   await finalizeTableScore(uuid.value, payload)
+  draftReady = false
+  window.clearTimeout(draftTimer)
+  clearDraft(captainDraftKey)
   message.value = '桌长意见已保存'
   window.setTimeout(() => router.push('/captain'), 420)
 }
@@ -781,20 +840,31 @@ function displayShortCode(source) {
 }
 
 watch(uuid, async () => {
+  flushCaptainDraft()
+  draftReady = false
+  window.clearTimeout(draftTimer)
   message.value = ''
   styleDetailOpen.value = false
   if (uuid.value) await loadDetail()
   else await loadBoard()
 })
 
+watch(form, scheduleCaptainDraftSave, { deep: true })
+
 watch(() => entry.value, measureExtraOverflow, { flush: 'post' })
 
 onMounted(() => {
   window.addEventListener('resize', measureExtraOverflow)
+  window.addEventListener('pagehide', flushCaptainDraft)
+  document.addEventListener('visibilitychange', handleCaptainDraftVisibility)
 })
 
 onUnmounted(() => {
+  flushCaptainDraft()
   window.removeEventListener('resize', measureExtraOverflow)
+  window.removeEventListener('pagehide', flushCaptainDraft)
+  document.removeEventListener('visibilitychange', handleCaptainDraftVisibility)
+  window.clearTimeout(draftTimer)
 })
 
 onMounted(async () => {

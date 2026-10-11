@@ -156,6 +156,21 @@ class JudgeRoundMemberChangeIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    void removingCaptainWithoutReplacementClearsTableCaptain() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        BeerCompetitionTestData.ScoreRound scoreRound = testData.createPublishedScoreRound(
+                fixture, List.of(fixture.entryA1(), fixture.entryA2()), 1);
+
+        asAdmin(1L);
+        judgeService.changeRoundTableMembers(fixture.competition().getId(), scoreRound.round().getId(),
+                scoreRound.table().getId(), removeRequest(fixture.captain().getPublicId()));
+
+        assertThat(jdbcTemplate.queryForObject("SELECT captain_judge_id FROM round_table WHERE id = ?",
+                Long.class, scoreRound.table().getId())).isNull();
+        assertThat(memberValue(scoreRound.table().getId(), fixture.captain().getId(), "status")).isEqualTo("REMOVED");
+    }
+
+    @Test
     void activeJudgeCannotBeAddedToAnotherTableInTheSameRound() {
         BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
         BeerCompetitionTestData.RankingRound rankingRound = testData.createRankingRound(

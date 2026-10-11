@@ -11,6 +11,18 @@
         <span>同桌确认</span>
         <strong>{{ confirmedCount }} / {{ requiredCount }}</strong>
       </div>
+      <nav v-if="isMultiCategory" class="category-tabs" aria-label="评审组别">
+        <button
+          v-for="category in categories"
+          :key="category.categoryId"
+          type="button"
+          :class="['category-tab', { active: String(activeCategoryId) === String(category.categoryId) }]"
+          @click="switchCategory(category.categoryId)"
+        >
+          <span>{{ category.categoryName }}</span>
+          <small>{{ category.confirmedCount || 0 }}/{{ category.requiredCount || 0 }}</small>
+        </button>
+      </nav>
     </section>
 
     <section class="card confirmation-card">
@@ -45,18 +57,22 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { confirmRankingRoundTable, fetchMe, fetchRankingConfirmation } from '@/api/judge'
+import { confirmRankingRoundTable, fetchMe, fetchRankingConfirmation, fetchRoundTable } from '@/api/judge'
 import JudgeBottomNav from '@/components/JudgeBottomNav.vue'
 
 const route = useRoute()
 const me = ref(null)
 const confirmation = ref(null)
+const table = ref(null)
+const activeCategoryId = ref(null)
 const submitting = ref(false)
 const message = ref('')
 
 const slots = computed(() => confirmation.value?.slots || [])
 const confirmedCount = computed(() => Number(confirmation.value?.confirmedCount || 0))
 const requiredCount = computed(() => Number(confirmation.value?.requiredCount || 0))
+const categories = computed(() => table.value?.categories || [])
+const isMultiCategory = computed(() => categories.value.length > 1)
 const mineConfirmed = computed(() => Boolean(confirmation.value?.mineConfirmed))
 const readyForConfirmation = computed(() => Boolean(confirmation.value?.readyForConfirmation))
 const tableSubmitted = computed(() => ['SUBMITTED', 'LOCKED'].includes(confirmation.value?.status))
@@ -88,7 +104,13 @@ function displayShortCode(slot) {
 }
 
 async function loadConfirmation() {
-  confirmation.value = await fetchRankingConfirmation(route.params.roundTableId)
+  confirmation.value = await fetchRankingConfirmation(route.params.roundTableId, activeCategoryId.value || undefined)
+}
+
+async function switchCategory(categoryId) {
+  if (String(categoryId) === String(activeCategoryId.value)) return
+  activeCategoryId.value = categoryId
+  await loadConfirmation()
 }
 
 async function submitConfirm() {
@@ -97,6 +119,7 @@ async function submitConfirm() {
   message.value = ''
   try {
     confirmation.value = await confirmRankingRoundTable(route.params.roundTableId, {
+      categoryId: activeCategoryId.value || undefined,
       resultVersion: confirmation.value?.resultVersion,
     })
     message.value = confirmation.value?.status === 'SUBMITTED' ? '本桌排序已提交' : '已确认本桌排序'
@@ -110,6 +133,9 @@ async function submitConfirm() {
 
 onMounted(async () => {
   me.value = await fetchMe()
+  table.value = await fetchRoundTable(route.params.roundTableId)
+  const preferred = categories.value.find((item) => item.readyForConfirmation) || categories.value[0]
+  activeCategoryId.value = preferred?.categoryId || null
   await loadConfirmation()
 })
 </script>
@@ -157,6 +183,59 @@ onMounted(async () => {
 .confirmation-progress span,
 .confirmation-progress strong {
   font-weight: 850;
+}
+
+.category-tabs {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.category-tab {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  min-height: 46px;
+  padding: 11px 14px;
+  color: #344054;
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+  font-weight: 800;
+  text-align: left;
+  transition: border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.category-tab span {
+  min-width: 0;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.category-tab small {
+  flex: 0 0 auto;
+  border-radius: 6px;
+  padding: 4px 8px;
+  color: #667085;
+  background: #f2f4f7;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.category-tab.active {
+  color: #9a5b26;
+  border-color: #9a5b26;
+  background: #fff7ec;
+  box-shadow: 0 0 0 2px rgba(154, 91, 38, 0.12);
+}
+
+.category-tab.active small {
+  color: #9a5b26;
+  background: rgba(154, 91, 38, 0.14);
 }
 
 .compact {

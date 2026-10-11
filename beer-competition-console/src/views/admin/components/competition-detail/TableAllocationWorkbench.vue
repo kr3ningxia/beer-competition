@@ -130,7 +130,9 @@
               </header>
               <article
                 v-if="table.captainPublicId"
-                class="mini-card"
+                :class="['mini-card', { 'replace-target': isJudgeDragActive && table.captainPublicId !== draggingJudgePublicId }]"
+                @dragover.prevent
+                @drop.prevent.stop="$emit('dropOnRoundMember', table.id, table.captainPublicId, 'CAPTAIN')"
               >
                 <span class="avatar small">{{ getJudgeInitial(getJudge(table.captainPublicId)?.name) }}</span>
                 <div>
@@ -167,7 +169,9 @@
               <article
                 v-for="member in getScoreRoleMembers(table, role.value)"
                 :key="member.judgePublicId"
-                class="mini-card"
+                :class="['mini-card', { 'replace-target': isJudgeDragActive && member.judgePublicId !== draggingJudgePublicId }]"
+                @dragover.prevent
+                @drop.prevent.stop="$emit('dropOnRoundMember', table.id, member.judgePublicId, role.value)"
               >
                 <span class="avatar small">{{ getJudgeInitial(member.name) }}</span>
                 <div>
@@ -202,7 +206,9 @@
               <article
                 v-for="member in getRankingParticipants(table)"
                 :key="member.judgePublicId"
-                class="mini-card"
+                :class="['mini-card', { 'replace-target': isJudgeDragActive && member.judgePublicId !== draggingJudgePublicId }]"
+                @dragover.prevent
+                @drop.prevent.stop="$emit('dropOnRoundMember', table.id, member.judgePublicId, 'PARTICIPANT')"
               >
                 <span class="avatar small">{{ getJudgeInitial(member.name) }}</span>
                 <div>
@@ -546,11 +552,13 @@
             @dragend="$emit('clearDrag')"
           >
             <input
+              v-if="currentRound?.status === 'DRAFT'"
               type="checkbox"
               :checked="selectedEntryUuids.includes(entry.uuid)"
               :disabled="Boolean(getRoundEntryAssignment(entry.uuid))"
               @change="$emit('toggleEntrySelection', entry.uuid)"
             />
+            <span v-else class="entry-select-placeholder" aria-hidden="true"></span>
             <div>
               <strong>{{ formatEntryName(entry) }}</strong>
               <small class="entry-meta-line" :title="formatEntryMeta(entry)">{{ formatEntryMeta(entry) }}</small>
@@ -952,6 +960,7 @@ const props = defineProps({
   getRoundTableAdvisories: { type: Function, default: () => [] },
   getBaseTableAdvisories: { type: Function, default: () => [] },
   disabledJudgePool: { type: Array, default: () => [] },
+  draggingJudgePublicId: { type: String, default: '' },
 })
 
 const emit = defineEmits([
@@ -973,6 +982,7 @@ const emit = defineEmits([
   'dropOnRole',
   'clearDrag',
   'dropRoundJudge',
+  'dropOnRoundMember',
   'generateFirstRound',
   'toggleEntrySelection',
   'addSelectedToTable',
@@ -1034,6 +1044,7 @@ const isLiveRoundJudgeChange = computed(() => props.currentRound?.type === 'SCOR
   ? props.currentRound?.status === 'PUBLISHED'
   : props.currentRound?.status === 'IN_PROGRESS')
 const canEditRoundJudges = computed(() => props.currentRound?.status === 'DRAFT' || isLiveRoundJudgeChange.value)
+const isJudgeDragActive = computed(() => Boolean(props.draggingJudgePublicId))
 const displayRounds = computed(() => {
   if (props.currentRound?.isPreparationDraft && !firstRoundExists.value) return [props.currentRound]
   return props.rounds
@@ -1893,6 +1904,12 @@ dt,
   min-height: 0;
 }
 
+/* 进行中轮次隐藏选择框时保留占位，避免酒款名被挤进 18px 的选择列 */
+.entry-select-placeholder {
+  width: 18px;
+  height: 18px;
+}
+
 .resource-card.assigned {
   border-color: rgba(219, 232, 237, 0.075);
   background: rgba(255, 255, 255, 0.014);
@@ -2270,6 +2287,28 @@ p {
   border: 1px solid rgba(219, 232, 237, 0.1);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.026);
+}
+
+/* 拖入评委时，桌内评委卡作为"替换"落点高亮 */
+.mini-card.replace-target {
+  position: relative;
+  border-color: rgba(242, 153, 74, 0.75);
+  border-style: dashed;
+  background: rgba(242, 153, 74, 0.1);
+}
+
+.mini-card.replace-target::after {
+  content: '替换';
+  position: absolute;
+  top: -8px;
+  right: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #f2994a;
+  color: #1a1a1a;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 16px;
 }
 
 .desk-summary {

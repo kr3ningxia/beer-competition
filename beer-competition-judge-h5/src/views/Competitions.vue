@@ -35,7 +35,7 @@
         </template>
         <template v-else-if="isRankingRound">
         <span>候选 <strong>{{ entries.length }}款</strong></span>
-        <span v-if="showRankingFilledProgress">已排序 <strong>{{ rankingFilledCount }}/{{ rankingSlots.length }}</strong></span>
+        <span v-if="showRankingFilledProgress">已排序 <strong>{{ rankingProgressLabel }}</strong></span>
         </template>
         <span v-if="scoreConfirmationVisible"><strong>{{ scoreConfirmationProgressLabel }}</strong></span>
       </div>
@@ -79,7 +79,7 @@
           <h2 class="section-title compact">{{ rankingCardTitle }}</h2>
           <p v-if="rankingCardHint" class="task-hint">{{ rankingCardHint }}</p>
         </div>
-        <span v-if="showRankingFilledProgress" class="pill status-warn">{{ rankingFilledCount }}/{{ rankingSlots.length }}</span>
+        <span v-if="showRankingFilledProgress" class="pill status-warn">{{ rankingProgressLabel }}</span>
       </div>
       <button class="scan-button ranking-button" type="button" @click="router.push(`/ranking/${current.roundTableId}`)">
         {{ rankingCardAction }}
@@ -306,6 +306,17 @@ const finalizedCount = computed(() => entries.value.filter((entry) => entry.fina
 const advancedCount = computed(() => entries.value.filter((entry) => entry.advanced).length)
 const advanceTargetCount = computed(() => Number(captainBoard.value?.roundTable?.targetCount || current.value?.targetCount || 0))
 const rankingFilledCount = computed(() => rankingSlots.value.filter((slot) => slot.beerEntryId).length)
+const rankingGroups = computed(() => currentRoundTable.value?.categories || [])
+const rankingGroupTotal = computed(() => rankingGroups.value.length)
+const rankingGroupsRanked = computed(() => rankingGroups.value.filter((group) => Number(group.resultCount || 0) > 0).length)
+const isMultiGroupRanking = computed(() => rankingGroupTotal.value > 1)
+const rankingAllGroupsRanked = computed(() => !isMultiGroupRanking.value || rankingGroupsRanked.value >= rankingGroupTotal.value)
+// 多组别奖牌桌按“组别”展示进度，单组别/非奖牌桌仍按名次槽位展示。
+const rankingProgressLabel = computed(() => (
+  isMultiGroupRanking.value
+    ? `${rankingGroupsRanked.value}/${rankingGroupTotal.value} 组`
+    : `${rankingFilledCount.value}/${rankingSlots.value.length}`
+))
 const scoreConfirmationVisible = computed(() => (
   !isCaptain.value
   && !isRankingRound.value
@@ -317,10 +328,15 @@ const rankingConfirmationVisible = computed(() => (
   && Boolean(rankingConfirmation.value?.readyForConfirmation)
 ))
 const confirmationProgressText = computed(() => `确认 ${scoreConfirmation.value?.confirmedCount || 0}/${scoreConfirmation.value?.requiredCount || 0}`)
-const rankingConfirmationProgressText = computed(() => `确认 ${rankingConfirmation.value?.confirmedCount || 0}/${rankingConfirmation.value?.requiredCount || 0}`)
+const rankingConfirmationProgressText = computed(() => {
+  const confirmed = rankingConfirmation.value?.confirmedCount || 0
+  const required = rankingConfirmation.value?.requiredCount || 0
+  return isMultiGroupRanking.value ? `确认 ${confirmed}/${required} 组` : `确认 ${confirmed}/${required}`
+})
 const rankingCardTitle = computed(() => {
   if (!isRankingCaptain.value) return '本桌排序任务'
   if (rankingTableLocked.value) return '本桌排序已锁定'
+  if (!rankingAllGroupsRanked.value) return '本桌排序'
   if (rankingTableSubmitted.value) return '本桌排序已提交'
   if (rankingFilledCount.value > 0) return '本桌排序待确认'
   return '本桌排序'
@@ -328,6 +344,9 @@ const rankingCardTitle = computed(() => {
 const rankingCardHint = computed(() => {
   if (!isRankingCaptain.value) return '请查看本桌候选，排序由桌长提交。'
   if (rankingTableLocked.value) return '主办方已锁定本轮排序。'
+  if (!rankingAllGroupsRanked.value) {
+    return `还有 ${rankingGroupTotal.value - rankingGroupsRanked.value} 组未排序，全部提交后再等同桌确认。`
+  }
   if (rankingTableSubmitted.value) return '管理员锁定前仍可修改，修改后需同桌重新确认。'
   if (rankingFilledCount.value > 0) {
     const confirmed = rankingConfirmation.value?.confirmedCount || 0
@@ -339,6 +358,7 @@ const rankingCardHint = computed(() => {
 const rankingCardAction = computed(() => {
   if (!isRankingCaptain.value) return '查看本桌候选'
   if (rankingTableLocked.value) return '查看本桌排序'
+  if (!rankingAllGroupsRanked.value) return '继续排序'
   return rankingFilledCount.value > 0 ? '修改本桌排序' : '进入选择排序'
 })
 const scoreConfirmationProgressLabel = computed(() => (
@@ -360,6 +380,9 @@ const myReviewStatsText = computed(() => ({
 const rankingConfirmationHint = computed(() => {
   if (!rankingConfirmation.value?.mineConfirmed) {
     return '桌长已整理本桌排序，请核对顺序和候选酒款后确认。'
+  }
+  if (isMultiGroupRanking.value && !rankingAllGroupsRanked.value) {
+    return '你已完成确认，等待其余组别提交。'
   }
   const confirmed = Number(rankingConfirmation.value?.confirmedCount || 0)
   const required = Number(rankingConfirmation.value?.requiredCount || 0)

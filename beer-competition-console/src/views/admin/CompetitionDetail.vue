@@ -758,6 +758,7 @@
             :get-round-table-advisories="getRoundTableAdvisories"
             :get-base-table-advisories="getBaseTableAdvisories"
             :disabled-judge-pool="disabledJudgePool"
+            :dragging-judge-public-id="draggingJudgePublicId"
             @update:allocation-mode="handleAllocationModeChange"
             @select-round="selectRound"
             @update:judge-keyword="judgeKeyword = $event"
@@ -794,6 +795,7 @@
             @add-round-participant="addRoundParticipantToSelectedTable"
             @remove-round-participant="removeRoundParticipant"
             @drop-round-judge="dropRoundJudge"
+            @drop-on-round-member="dropOnRoundMember"
             @publish-current-round="publishCurrentRound"
           />
         </section>
@@ -1945,13 +1947,17 @@
         </section>
 
         <template v-if="isRoundScoreDetailRanking">
-          <section class="ranking-detail-slots">
+          <section
+            v-for="group in roundRankingDetailSections"
+            :key="group.categoryId"
+            class="ranking-detail-slots"
+          >
             <header>
-              <h3>排序结果</h3>
-              <span>{{ roundRankingDetailStats.resultStatusText }}</span>
+              <h3>{{ group.heading }}</h3>
+              <span>{{ group.statusText }}</span>
             </header>
             <article
-              v-for="slot in roundRankingDetailSlots"
+              v-for="slot in group.slots"
               :key="slot.rank"
               :class="{ filled: slot.uuid }"
             >
@@ -2195,6 +2201,7 @@ import {
   statusMeta,
 } from './competitionStore'
 import {
+  addRoundTableEntry,
   closeCompetitionRegistration,
   completeFirstRound,
   confirmCompetitionAwards,
@@ -2232,6 +2239,7 @@ import {
   publishCompetitionResults,
   publishRound,
   reopenCompetitionRegistration,
+  removeRoundTableEntry,
   returnCompetitionToSampleCheck,
   saveRoundAllocation,
   updateCompetitionFeedbackComment,
@@ -2385,6 +2393,7 @@ const allocationDraftSaving = ref(false)
 const selectedTableLocalId = ref(null)
 const selectedRole = ref('CAPTAIN')
 const draggingItem = ref(null)
+const draggingJudgePublicId = computed(() => (draggingItem.value?.type === 'judge' ? draggingItem.value.judgePublicId : ''))
 const awardCertificateInput = ref(null)
 const certificateTargetAward = ref(null)
 const certificateActionIds = ref(new Set())
@@ -2850,8 +2859,13 @@ const roundRankingDetailSlots = computed(() => getRankingSlots(roundScoreDetailT
 }))
 const roundRankingDetailStats = computed(() => {
   const table = roundScoreDetailTable.value
-  const targetCount = Number(table?.targetCount || 0)
-  const filledCount = getFilledRankingCount(table || {})
+  const categoryRankings = table?.categoryRankings || []
+  const multiGroup = categoryRankings.length > 1
+  const perGroupTarget = Number(table?.targetCount || 0)
+  const targetCount = multiGroup ? categoryRankings.length * perGroupTarget : perGroupTarget
+  const filledCount = multiGroup
+    ? categoryRankings.reduce((sum, group) => sum + Number(group.filledCount || 0), 0)
+    : getFilledRankingCount(table || {})
   const captainName = getJudge(table?.captainPublicId)?.name || '未指定'
   const statusText = roundStatusLabels[table?.status] || roundStatusLabels[currentRound.value?.status] || table?.status || currentRound.value?.status || '-'
   return {
@@ -2866,6 +2880,25 @@ const roundRankingDetailStats = computed(() => {
       : (targetCount > 0 && filledCount >= targetCount ? '已完成' : `待选择 ${Math.max(0, targetCount - filledCount)} 款`),
   }
 })
+const roundRankingDetailCategorySections = computed(() => (roundScoreDetailTable.value?.categoryRankings || []).map((group) => ({
+  categoryId: group.categoryId,
+  heading: group.categoryName ? `排序结果 · ${group.categoryName}` : '排序结果',
+  statusText: Number(group.filledCount || 0) > 0 ? `已选择 ${group.filledCount} 项，未选名额留空` : '暂未选择奖项',
+  slots: (group.rankings || []).map((slot) => {
+    const entry = buildRoundDetailEntryDisplay(slot.uuid)
+    return { ...slot, entryName: entry.name, entryMeta: entry.meta }
+  }),
+})))
+const roundRankingDetailSections = computed(() => (
+  roundRankingDetailCategorySections.value.length
+    ? roundRankingDetailCategorySections.value
+    : [{
+        categoryId: '__all__',
+        heading: '排序结果',
+        statusText: roundRankingDetailStats.value.resultStatusText,
+        slots: roundRankingDetailSlots.value,
+      }]
+))
 const roundScoreDetailStats = computed(() => roundScoreDetailJudges.value.reduce((summary, judge) => {
   const total = Number(judge.totalCount || 0)
   const submitted = Number(judge.submittedCount || 0)
@@ -3797,6 +3830,7 @@ async function loadFeedbackReview(force = false) {
   if (!competitionId) return
   if (!force && feedbackReviewCompetitionId.value === competitionId && feedbackReviewEntries.value.length) return
   if (feedbackReviewLoading.value) return
+  const contextChanged = feedbackReviewCompetitionId.value !== competitionId
   feedbackReviewLoading.value = true
   try {
     if (hasFeedbackFilters()) {
@@ -3818,7 +3852,7 @@ async function loadFeedbackReview(force = false) {
       feedbackFilterOptions.categoryNames = data?.categoryNames || []
     }
     feedbackReviewCompetitionId.value = competitionId
-    feedbackPagination.page = 1
+    if (contextChanged) feedbackPagination.page = 1
     if (!feedbackReviewEntries.value.some((entry) => feedbackEntryKey(entry) === selectedFeedbackEntryKey.value)) {
       selectedFeedbackEntryKey.value = feedbackEntryKey(feedbackReviewEntries.value[0])
     }
@@ -4211,6 +4245,7 @@ function applyRoundState(preferredRoundId = activeRoundId.value, options = {}) {
         .map((member) => member.judgePublicId)
         .filter(Boolean),
       rankings: table.rankings || buildEmptyRankings(Number(table.targetCount || 3), table.targetMode),
+      categoryRankings: table.categoryRankings || [],
     })),
   }))
   rounds.value.forEach((round) => {
@@ -5111,7 +5146,8 @@ function buildRoundTableSummary(table) {
   const captainName = getJudge(table.captainPublicId)?.name || '未指定'
   const isRankingRound = currentRound.value?.type === 'RANKING'
   const progress = getRoundTableProgressSummary(currentRound.value, table)
-  const filledCount = isRankingRound ? getFilledRankingCount(table) : 0
+  const groupProgress = isRankingRound ? resolveRankingGroupProgress(table) : null
+  const filledCount = groupProgress ? groupProgress.filled : 0
   const statusText = issues[0]
     || progress.statusText
   return {
@@ -5127,7 +5163,7 @@ function buildRoundTableSummary(table) {
     targetLabel: isFeedbackOnlyCompetition.value && !isRankingRound ? '诊断' : (isRankingRound ? resolveTableTargetLabel(table) : '晋级'),
     targetDisplay: isRankingRound && table.targetMode === 'CHAMPION'
       ? (filledCount ? '已选择' : '待选择')
-      : (isFeedbackOnlyCompetition.value && !isRankingRound ? '首轮反馈' : (isRankingRound ? `${filledCount} / ${table.targetCount}` : `${table.targetCount} 款`)),
+      : (isFeedbackOnlyCompetition.value && !isRankingRound ? '首轮反馈' : (isRankingRound ? `${filledCount} / ${groupProgress.target}` : `${table.targetCount} 款`)),
     statusText,
     tone: issues.length ? 'warning' : table.status === 'LOCKED' ? 'done' : 'ok',
   }
@@ -5198,8 +5234,9 @@ function getRoundTableProgressSummary(round, table) {
     }
   }
   if (round.type === 'RANKING') {
-    const filled = getFilledRankingCount(table)
-    const target = Number(table.targetCount || 0)
+    const groupProgress = resolveRankingGroupProgress(table)
+    const filled = groupProgress.filled
+    const target = groupProgress.target
     const submitted = ['SUBMITTED', 'LOCKED'].includes(table.status)
     const statusText = table.targetMode === 'MEDALS'
       ? (submitted ? '已提交' : (filled ? '已选择' : (roundStatusLabels[table.status] || '待排序')))
@@ -5681,7 +5718,6 @@ function getRoundTableIssues(table) {
   if (!Number(table.targetCount || 0)) issues.push(`${tableName}${targetLabel}不能为空`)
   if (table.targetMode !== 'MEDALS' && Number(table.targetCount || 0) > table.entryUuids.length) issues.push(`${tableName}${targetLabel}超过候选酒款数`)
   if (table.targetMode === 'MEDALS' && Number(table.targetCount || 0) !== 3) issues.push(`${tableName}奖牌轮固定为金、银、铜 3 个名额`)
-  if (table.targetMode === 'MEDALS' && table.categoryMode !== 'CATEGORY') issues.push(`${tableName}奖牌轮只能包含一个投递组别`)
   if (table.targetMode === 'CHAMPION' && Number(table.targetCount || 0) !== 1) issues.push(`${tableName}决赛轮固定为总冠军 1 名`)
   return issues
 }
@@ -5975,6 +6011,10 @@ function addEntryToSelectedRoundTable(uuid, notify = true) {
     ElMessage.warning('请先选择要加入的轮次桌')
     return
   }
+  if (isLiveRoundEntryChange()) {
+    openLiveEntryAdd(table, uuid)
+    return
+  }
   if (currentRound.value?.status !== 'DRAFT') return
   const entry = currentPoolEntries.value.find((item) => item.uuid === uuid)
   if (!entry) return
@@ -6217,6 +6257,86 @@ function dropRoundJudge(tableId, role) {
   clearDrag()
 }
 
+// 拖到某张评委卡上：替换该位评委（拖到泳道空白处仍是新增）。
+async function dropOnRoundMember(tableId, targetJudgePublicId, laneRole) {
+  const dragged = draggingItem.value
+  clearDrag()
+  if (!dragged || dragged.type !== 'judge') return
+  const newPublicId = dragged.judgePublicId
+  if (!newPublicId || newPublicId === targetJudgePublicId) return
+  if (!isLiveRoundMemberChange() && currentRound.value?.status !== 'DRAFT') return
+  const table = currentRoundTables.value.find((item) => item.id === tableId)
+  if (!table) return
+  const newJudge = getJudge(newPublicId)
+  const oldJudge = getJudge(targetJudgePublicId)
+  const replacingCaptain = laneRole === 'CAPTAIN' || table.captainPublicId === targetJudgePublicId
+
+  // 进行中轮且换的是桌长：沿用既有"更换桌长"流程（自带确认）。
+  if (replacingCaptain && isLiveRoundMemberChange()) {
+    updateRoundTableCaptain(tableId, newPublicId)
+    return
+  }
+
+  const memberRole = replacingCaptain
+    ? 'CAPTAIN'
+    : (currentRound.value?.type === 'SCORE' ? normalizeScoreJudgeRole(laneRole) : 'PROFESSIONAL')
+  const memberRoleLabel = replacingCaptain ? '桌长' : (currentRound.value?.type === 'SCORE' ? roleLabels[memberRole] : '参与评审')
+  const replaceSummary = `${oldJudge?.name || memberRoleLabel} → ${newJudge?.name || '该评委'}`
+
+  if (isLiveRoundMemberChange()) {
+    openBusinessConfirm({
+      action: 'changeRoundJudgeMembers',
+      kicker: '替换评委',
+      title: `确认用${newJudge?.name || '该评委'}替换${oldJudge?.name || '该评审'}？`,
+      copy: '被替换评委会标记离场，新评委接手其未完成的评分与确认任务；历史评分与确认记录保留。',
+      summary: [
+        { label: '评审桌', value: table.name || '-' },
+        { label: '角色', value: memberRoleLabel },
+        { label: '替换', value: replaceSummary },
+      ],
+      reasonLabel: '替换原因',
+      reasonPlaceholder: '例如：评委临时更换',
+      confirmText: '确认替换',
+      loadingText: '处理中',
+      payload: {
+        tableId,
+        add: [{ judgePublicId: newPublicId, role: memberRole }],
+        removeJudgePublicIds: [targetJudgePublicId],
+      },
+    })
+    return
+  }
+
+  // 草稿轮：先确认再本地替换，避免误拖到相邻卡片时静默换人。
+  try {
+    await ElMessageBox.confirm(
+      `用${newJudge?.name || '该评委'}替换「${oldJudge?.name || memberRoleLabel}」？原位置会空出。`,
+      replacingCaptain ? '更换桌长' : '替换评委',
+      { confirmButtonText: '确认替换', cancelButtonText: '取消', type: 'warning' },
+    )
+  } catch {
+    return
+  }
+  if (replacingCaptain) {
+    table.captainPublicId = newPublicId
+    table.members = [
+      { judgePublicId: newPublicId, name: newJudge?.name || '', role: 'CAPTAIN', roleLabel: '桌长', systemTaskRequired: true },
+      ...(table.members || []).filter((member) => member.role !== 'CAPTAIN'
+        && member.judgePublicId !== targetJudgePublicId
+        && member.judgePublicId !== newPublicId),
+    ]
+  } else {
+    table.members = (table.members || [])
+      .filter((member) => member.judgePublicId !== newPublicId)
+      .map((member) => member.judgePublicId === targetJudgePublicId
+        ? { ...member, judgePublicId: newPublicId, name: newJudge?.name || '', role: memberRole, roleLabel: memberRoleLabel }
+        : member)
+  }
+  table.participantPublicIds = getTableParticipantPublicIds(table)
+  markRoundAllocationDirty()
+  ElMessage.success(`${newJudge?.name || '该评委'}已替换${oldJudge?.name || memberRoleLabel}`)
+}
+
 function removeRoundParticipant(tableId, judgePublicId) {
   const table = currentRoundTables.value.find((item) => item.id === tableId)
   if (!table) return
@@ -6279,6 +6399,90 @@ async function runChangeRoundJudgeMembers() {
 
 function normalizeScoreJudgeRole(role) {
   return role === 'CROSS' ? 'CROSS' : 'PROFESSIONAL'
+}
+
+function isLiveRoundEntryChange() {
+  return currentRound.value?.type === 'SCORE'
+    && (currentRound.value?.status === 'PUBLISHED' || currentRound.value?.status === 'SUBMITTED')
+}
+
+function findRoundPoolEntry(uuid) {
+  return roundEntryPool.value.find((entry) => entry.uuid === uuid)
+    || (competition.value?.entryPool || []).find((entry) => entry.uuid === uuid)
+    || null
+}
+
+function describePoolEntry(uuid) {
+  const entry = findRoundPoolEntry(uuid)
+  if (!entry) return uuid
+  const code = entry.shortCode && entry.shortCode !== '-' ? entry.shortCode : ''
+  return `${entry.name || uuid}${code ? `（${code}）` : ''}`
+}
+
+function openLiveEntryRemove(table, uuid) {
+  openBusinessConfirm({
+    action: 'removeRoundTableEntry',
+    kicker: '摘除酒款',
+    title: `确认从「${table.name || '评审桌'}」摘除${describePoolEntry(uuid)}？`,
+    copy: '该酒款已产生的评分与桌长汇总会保留；如本桌已提交结果会退回进行中，重新加入后可还原。',
+    summary: [
+      { label: '评审桌', value: table.name || '-' },
+      { label: '酒款', value: describePoolEntry(uuid) },
+    ],
+    reasonLabel: '摘除原因',
+    reasonPlaceholder: '例如：样品重复录入、分错评审桌',
+    confirmText: '确认摘除',
+    loadingText: '处理中',
+    payload: { tableId: table.id, entryUuid: uuid },
+  })
+}
+
+function openLiveEntryAdd(table, uuid) {
+  openBusinessConfirm({
+    action: 'addRoundTableEntry',
+    kicker: '加入酒款',
+    title: `确认把${describePoolEntry(uuid)}加入「${table.name || '评审桌'}」？`,
+    copy: '回补此前摘除的酒款会还原原评分；新入库的酒款需要本桌重新评分。',
+    summary: [
+      { label: '评审桌', value: table.name || '-' },
+      { label: '酒款', value: describePoolEntry(uuid) },
+    ],
+    reasonLabel: '加入原因',
+    reasonPlaceholder: '例如：现场补录新到样品',
+    confirmText: '确认加入',
+    loadingText: '处理中',
+    payload: { tableId: table.id, entryUuid: uuid },
+  })
+}
+
+async function runRemoveRoundTableEntry() {
+  const payload = businessConfirm.payload || {}
+  const targetRoundId = currentRound.value?.id
+  const pool = roundEntryPool.value
+  const detail = await removeRoundTableEntry(competition.value.id, targetRoundId, payload.tableId, {
+    entryUuid: payload.entryUuid,
+    reason: businessConfirm.reason.trim(),
+  })
+  competition.value = normalizeDetail(detail)
+  resetForms()
+  applyRoundState(targetRoundId, { preferredTableId: payload.tableId })
+  roundEntryPool.value = pool
+  ElMessage.success('酒款已摘除，历史评分已保留')
+}
+
+async function runAddRoundTableEntry() {
+  const payload = businessConfirm.payload || {}
+  const targetRoundId = currentRound.value?.id
+  const pool = roundEntryPool.value
+  const detail = await addRoundTableEntry(competition.value.id, targetRoundId, payload.tableId, {
+    entryUuid: payload.entryUuid,
+    reason: businessConfirm.reason.trim(),
+  })
+  competition.value = normalizeDetail(detail)
+  resetForms()
+  applyRoundState(targetRoundId, { preferredTableId: payload.tableId })
+  roundEntryPool.value = pool
+  ElMessage.success('酒款已加入当前桌')
 }
 
 function updateRoundTableScope(tableId, scopeValue) {
@@ -6357,9 +6561,13 @@ function addRoundTable() {
 }
 
 function removeEntryFromRoundTable(tableId, uuid) {
-  if (currentRound.value?.status !== 'DRAFT') return
   const table = currentRoundTables.value.find((item) => item.id === tableId)
   if (!table) return
+  if (isLiveRoundEntryChange()) {
+    openLiveEntryRemove(table, uuid)
+    return
+  }
+  if (currentRound.value?.status !== 'DRAFT') return
   table.entryUuids = table.entryUuids.filter((entryUuid) => entryUuid !== uuid)
   syncRoundTableScope(table)
   if (table.rankings?.length) {
@@ -6746,6 +6954,20 @@ function getFilledRankingCount(table) {
   return getRankingSlots(table).filter((slot) => slot.uuid).length
 }
 
+// 多组别奖牌桌的进度按组别合计（每组各自的金/银/铜），避免被并成一张名次表。
+function resolveRankingGroupProgress(table) {
+  const groups = table?.categoryRankings || []
+  if (groups.length <= 1) {
+    return { multiGroup: false, filled: getFilledRankingCount(table || {}), target: Number(table?.targetCount || 0), groups }
+  }
+  return {
+    multiGroup: true,
+    filled: groups.reduce((sum, group) => sum + Number(group.filledCount || 0), 0),
+    target: groups.length * Number(table?.targetCount || 0),
+    groups,
+  }
+}
+
 function buildRoundDetailEntryDisplay(uuid) {
   if (!uuid) return { name: '待选择', meta: '尚未填入酒款' }
   const entry = entryLookup.value.get(uuid) || {}
@@ -6959,6 +7181,8 @@ async function confirmBusinessAction() {
     if (businessConfirm.action === 'replaceCertificate') runChooseAwardCertificate(businessConfirm.payload?.award)
     if (businessConfirm.action === 'deleteCertificate') await runDeleteAwardCertificate(businessConfirm.payload?.award)
     if (businessConfirm.action === 'changeRoundJudgeMembers') await runChangeRoundJudgeMembers()
+    if (businessConfirm.action === 'removeRoundTableEntry') await runRemoveRoundTableEntry()
+    if (businessConfirm.action === 'addRoundTableEntry') await runAddRoundTableEntry()
     businessConfirm.open = false
   } finally {
     businessConfirm.loading = false

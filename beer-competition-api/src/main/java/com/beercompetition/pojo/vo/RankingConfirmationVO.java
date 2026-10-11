@@ -11,6 +11,8 @@ import java.util.List;
 public class RankingConfirmationVO {
 
     private Long roundTableId;
+    private Long categoryId;
+    private String categoryName;
     private String tableName;
     private String status;
     private String targetMode;

@@ -10,6 +10,9 @@ import java.util.List;
 @Data
 public class RankingSubmitRequest {
 
+    /** 奖牌轮桌内组别；普通排序轮可为空。 */
+    private Long categoryId;
+
     @Valid
     @NotEmpty(message = "排序结果不能为空")
     private List<@NotNull(message = "排序结果项不能为空") RankingResultItemRequest> results;

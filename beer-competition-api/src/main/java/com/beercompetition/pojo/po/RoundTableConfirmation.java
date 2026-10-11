@@ -20,6 +20,8 @@ public class RoundTableConfirmation {
     @TableId(type = IdType.AUTO)
     private Long id;
     private Long roundTableId;
+    /** 组别独立确认维度；旧单组别记录允许为空。 */
+    private Long categoryId;
     private Long judgeAccountId;
     private Integer resultVersion;
     private String status;

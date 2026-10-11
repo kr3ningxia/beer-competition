@@ -58,17 +58,30 @@
           <div class="table-meta">
             <span>桌长 <strong>{{ getJudge(table.captainPublicId)?.name || '未指定' }}</strong></span>
             <span>候选 <strong>{{ table.entryUuids.length }}</strong></span>
-            <span>已选 <strong>{{ getFilledRankingCount(table) }} / {{ table.targetCount }}</strong></span>
+            <span>已选 <strong>{{ filledLabel(table) }}</strong></span>
           </div>
 
           <section class="ranking-slots">
             <h4>排序名额</h4>
-            <article v-for="slot in getRankingSlots(table)" :key="slot.rank" :class="{ filled: slot.uuid }">
-              <span>
-                <strong>{{ slot.label }}</strong>
-                <small>{{ slot.uuid || '待选择' }}</small>
-              </span>
-            </article>
+            <template v-if="rankingGroups(table).length > 1">
+              <div v-for="group in rankingGroups(table)" :key="group.categoryId" class="ranking-slot-group">
+                <p class="ranking-slot-group-title">{{ group.categoryName }}</p>
+                <article v-for="slot in group.rankings" :key="slot.rank" :class="{ filled: slot.uuid }">
+                  <span>
+                    <strong>{{ slot.label }}</strong>
+                    <small>{{ slot.uuid || '待选择' }}</small>
+                  </span>
+                </article>
+              </div>
+            </template>
+            <template v-else>
+              <article v-for="slot in getRankingSlots(table)" :key="slot.rank" :class="{ filled: slot.uuid }">
+                <span>
+                  <strong>{{ slot.label }}</strong>
+                  <small>{{ slot.uuid || '待选择' }}</small>
+                </span>
+              </article>
+            </template>
           </section>
 
           <section class="candidate-list">
@@ -158,8 +171,29 @@ defineEmits([
 ])
 
 const candidateCount = computed(() => new Set(props.currentRoundTables.flatMap((table) => table.entryUuids)).size)
-const targetCount = computed(() => props.currentRoundTables.reduce((sum, table) => sum + Number(table.targetCount || 0), 0))
-const filledCount = computed(() => props.currentRoundTables.reduce((sum, table) => sum + props.getFilledRankingCount(table), 0))
+const targetCount = computed(() => props.currentRoundTables.reduce((sum, table) => sum + targetForTable(table), 0))
+const filledCount = computed(() => props.currentRoundTables.reduce((sum, table) => sum + filledForTable(table), 0))
+
+function rankingGroups(table) {
+  return table?.categoryRankings || []
+}
+
+function targetForTable(table) {
+  const per = Number(table?.targetCount || 0)
+  const groups = rankingGroups(table)
+  return groups.length > 1 ? groups.length * per : per
+}
+
+function filledForTable(table) {
+  const groups = rankingGroups(table)
+  return groups.length > 1
+    ? groups.reduce((sum, group) => sum + Number(group.filledCount || 0), 0)
+    : props.getFilledRankingCount(table)
+}
+
+function filledLabel(table) {
+  return `${filledForTable(table)} / ${targetForTable(table)}`
+}
 const statusText = computed(() => props.roundStatusLabels[props.currentRound?.status] || props.currentRound?.status || '-')
 const targetSummaryLabel = computed(() => {
   const modes = new Set(props.currentRoundTables.map((table) => table.targetMode).filter(Boolean))
@@ -364,6 +398,18 @@ button:disabled {
   display: grid;
   gap: 3px;
   min-width: 0;
+}
+
+.ranking-slot-group {
+  display: grid;
+  gap: 8px;
+}
+
+.ranking-slot-group-title {
+  margin: 0;
+  color: #8da1aa;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .candidate-list div {

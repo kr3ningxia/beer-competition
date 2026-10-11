@@ -22,6 +22,8 @@ public class RoundResult {
     private Long competitionId;
     private Long roundId;
     private Long roundTableId;
+    /** 组别奖牌轮的桌内组别；旧单组别结果允许为空。 */
+    private Long categoryId;
     private Long beerEntryId;
     private String resultType;
     private Integer rankNo;

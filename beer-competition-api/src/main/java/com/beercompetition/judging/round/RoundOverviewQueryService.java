@@ -24,6 +24,7 @@ import com.beercompetition.pojo.po.RoundTableMember;
 import com.beercompetition.pojo.po.ScoreRecord;
 import com.beercompetition.pojo.vo.CompetitionRoundVO;
 import com.beercompetition.pojo.vo.RoundRankingSlotVO;
+import com.beercompetition.pojo.vo.RoundTableCategoryRankingVO;
 import com.beercompetition.pojo.vo.RoundTableMemberVO;
 import com.beercompetition.pojo.vo.RoundTableJudgeEntryScoreVO;
 import com.beercompetition.pojo.vo.RoundTableJudgeProgressVO;
@@ -253,7 +254,40 @@ public class RoundOverviewQueryService {
                 .members(buildRoundTableMembers(table, judgeById, members))
                 .judgeDetails(buildJudgeDetails(table, entries, entryById, judgeById, members))
                 .rankings(buildRankings(table, results, entryById))
+                .categoryRankings(buildCategoryRankings(table, results, entries, entryById, categoryNameById))
                 .build();
+    }
+
+    /** 多组别奖牌桌按组别分别组装名次，供后台排序详情分组展示；单组别/非奖牌桌返回空。 */
+    private List<RoundTableCategoryRankingVO> buildCategoryRankings(RoundTable table,
+                                                                    List<RoundResult> results,
+                                                                    List<RoundTableEntry> entries,
+                                                                    Map<Long, BeerEntry> entryById,
+                                                                    Map<Long, String> categoryNameById) {
+        if (!RoundTargetMode.MEDALS.name().equals(table.getTargetMode())) {
+            return List.of();
+        }
+        List<Long> categoryIds = entries.stream()
+                .map(entry -> entryById.get(entry.getBeerEntryId()))
+                .filter(Objects::nonNull)
+                .map(BeerEntry::getCategoryId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (categoryIds.size() <= 1) {
+            return List.of();
+        }
+        return categoryIds.stream().map(categoryId -> {
+            List<RoundRankingSlotVO> slots = buildRankings(table, results.stream()
+                    .filter(result -> Objects.equals(result.getCategoryId(), categoryId))
+                    .toList(), entryById);
+            return RoundTableCategoryRankingVO.builder()
+                    .categoryId(categoryId)
+                    .categoryName(categoryNameById.getOrDefault(categoryId, ""))
+                    .filledCount((int) slots.stream().filter(slot -> StringUtils.hasText(slot.getUuid())).count())
+                    .rankings(slots)
+                    .build();
+        }).toList();
     }
 
     private List<RoundTableMemberVO> buildRoundTableMembers(RoundTable table,

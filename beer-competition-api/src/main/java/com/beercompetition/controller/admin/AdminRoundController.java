@@ -5,11 +5,13 @@ import com.beercompetition.pojo.dto.AdminConfirmationOverrideRequest;
 import com.beercompetition.pojo.dto.FirstRoundCreateRequest;
 import com.beercompetition.pojo.dto.NextRoundCreateRequest;
 import com.beercompetition.pojo.dto.RoundAllocationRequest;
+import com.beercompetition.pojo.dto.RoundEntryChangeRequest;
 import com.beercompetition.pojo.dto.JudgeRoundMemberChangeRequest;
 import com.beercompetition.pojo.vo.CompetitionDetailVO;
 import com.beercompetition.pojo.vo.ResultDraftVO;
 import com.beercompetition.competition.query.CompetitionQueryService;
 import com.beercompetition.judging.assignment.RoundAllocationService;
+import com.beercompetition.judging.assignment.RoundEntryAdjustmentService;
 import com.beercompetition.judging.round.RoundLifecycleService;
 import com.beercompetition.judging.round.RoundQueryService;
 import com.beercompetition.judging.scoring.ScoreConfirmationService;
@@ -37,6 +39,7 @@ public class AdminRoundController {
 
     private final CompetitionQueryService competitionQueryService;
     private final RoundAllocationService roundAllocationService;
+    private final RoundEntryAdjustmentService roundEntryAdjustmentService;
     private final RoundLifecycleService roundLifecycleService;
     private final RoundQueryService roundQueryService;
     private final ScoreConfirmationService scoreConfirmationService;
@@ -72,6 +75,30 @@ public class AdminRoundController {
                                                                @PathVariable Long roundTableId,
                                                                @RequestBody @Valid JudgeRoundMemberChangeRequest request) {
         judgeService.changeRoundTableMembers(id, roundId, roundTableId, request);
+        return Result.success(competitionQueryService.getCompetitionDetail(id));
+    }
+
+    /**
+     * 首轮评审进行中摘除某款酒，保留其评分数据以便回补。
+     */
+    @PostMapping("/rounds/{roundId}/tables/{roundTableId}/entries/remove")
+    public Result<CompetitionDetailVO> removeRoundTableEntry(@PathVariable Long id,
+                                                             @PathVariable Long roundId,
+                                                             @PathVariable Long roundTableId,
+                                                             @RequestBody @Valid RoundEntryChangeRequest request) {
+        roundEntryAdjustmentService.removeEntryFromRoundTable(id, roundId, roundTableId, request.getEntryUuid(), request.getReason());
+        return Result.success(competitionQueryService.getCompetitionDetail(id));
+    }
+
+    /**
+     * 首轮评审进行中把酒款加入某桌，覆盖回补已摘除酒款与补充新入库酒款。
+     */
+    @PostMapping("/rounds/{roundId}/tables/{roundTableId}/entries/add")
+    public Result<CompetitionDetailVO> addRoundTableEntry(@PathVariable Long id,
+                                                          @PathVariable Long roundId,
+                                                          @PathVariable Long roundTableId,
+                                                          @RequestBody @Valid RoundEntryChangeRequest request) {
+        roundEntryAdjustmentService.addEntryToRoundTable(id, roundId, roundTableId, request.getEntryUuid(), request.getReason());
         return Result.success(competitionQueryService.getCompetitionDetail(id));
     }
 

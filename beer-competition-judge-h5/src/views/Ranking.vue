@@ -16,6 +16,19 @@
         <span :class="['pill', submitted || draftSaved ? 'status-ok' : 'status-warn']">{{ rankingStatusText }}</span>
       </div>
 
+      <nav v-if="isMultiCategory" class="category-tabs" aria-label="评审组别">
+        <button
+          v-for="category in categories"
+          :key="category.categoryId"
+          type="button"
+          :class="['category-tab', { active: String(activeCategoryId) === String(category.categoryId) }]"
+          @click="switchCategory(category.categoryId)"
+        >
+          <span>{{ category.categoryName }}</span>
+          <small>{{ category.resultCount || 0 }}/3</small>
+        </button>
+      </nav>
+
       <div :class="['slot-list', { dragging: isDraggingEntry }]">
         <article
           v-for="slot in slots"
@@ -76,7 +89,7 @@
               @change="selectSlotEntry(slot, $event.target.value)"
             >
               <option value="">选择酒款</option>
-              <option v-for="entry in entries" :key="entry.id" :value="entry.id">
+              <option v-for="entry in categoryEntries" :key="entry.id" :value="entry.id">
                 {{ displayEntryOption(entry) }}
               </option>
             </select>
@@ -111,7 +124,7 @@
       </div>
       <div class="entry-list">
         <article
-          v-for="entry in entries"
+          v-for="entry in categoryEntries"
           :key="entry.id"
           :class="['entry-row', { dragging: draggedEntryId === entry.id, used: isEntryUsed(entry.id) }]"
           @click="handleEntryClick(entry, $event)"
@@ -254,14 +267,17 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Html5Qrcode } from 'html5-qrcode'
-import { fetchRoundTable, saveRankingDraft, submitRanking } from '@/api/judge'
+import { fetchMe, fetchRankingConfirmation, fetchRoundTable, saveRankingDraft, submitRanking } from '@/api/judge'
 import StyleDetailDialog from '@/components/StyleDetailDialog.vue'
+import { clearDraft, draftKey, readDraft, writeDraft } from '@/utils/draftCache'
 import { formatAbvWithUnit } from '@/utils/formatters'
 
 const route = useRoute()
 const router = useRouter()
+const me = ref(null)
 const table = ref(null)
 const entries = ref([])
+const activeCategoryId = ref(null)
 const slots = ref([])
 const message = ref('')
 const submitBlockedMessage = ref('')
@@ -289,6 +305,13 @@ let qrReader = null
 let scanLocked = false
 
 const canSubmitFinal = computed(() => Boolean(table.value?.canSubmitRanking))
+const categories = computed(() => table.value?.categories || [])
+const isMultiCategory = computed(() => categories.value.length > 1)
+const activeCategory = computed(() => categories.value.find((item) => String(item.categoryId) === String(activeCategoryId.value)) || categories.value[0] || null)
+const categoryEntries = computed(() => {
+  if (!activeCategory.value) return entries.value
+  return entries.value.filter((entry) => String(entry.categoryId) === String(activeCategory.value.categoryId))
+})
 // 桌长在主办方锁定前都可修改：SUBMITTED 状态下仍可编辑（提交会作废同桌确认）；参与评审只在轮次进行中编辑自己的参考排序。
 const canEdit = computed(() => (
   !submitting.value
@@ -370,6 +393,47 @@ const submitButtonText = computed(() => {
   return submitted.value ? '重新提交同桌确认' : '提交同桌确认'
 })
 const confirmTitle = computed(() => '提交同桌确认')
+
+function markLocalChange() {
+  draftSaved.value = false
+  hasLocalChanges.value = true
+  if (canSubmitFinal.value) {
+    submitted.value = false
+    table.value = { ...table.value, status: 'IN_PROGRESS', rankingConfirmation: { ...rankingConfirmation.value, readyForFinalSubmit: false } }
+  }
+}
+
+function categoryDraftKey(categoryId) {
+  return draftKey(me.value?.id, route.params.roundTableId, 'ranking', categoryId || '')
+}
+
+function collectSelectionMap() {
+  const selections = {}
+  slots.value.forEach((slot) => {
+    if (slot.beerEntryId) selections[slot.rank] = slot.beerEntryId
+  })
+  return selections
+}
+
+function persistCategoryDraft(categoryId) {
+  if (!categoryId) return
+  writeDraft(categoryDraftKey(categoryId), { selections: collectSelectionMap() })
+}
+
+function restoreCategoryDraft(categoryId) {
+  if (!categoryId) return false
+  const selections = readDraft(categoryDraftKey(categoryId))?.selections
+  if (!selections || typeof selections !== 'object') return false
+  let changed = false
+  slots.value.forEach((slot) => {
+    const desired = selections[slot.rank] || null
+    if (String(slot.beerEntryId || '') !== String(desired || '')) {
+      slot.beerEntryId = desired
+      changed = true
+    }
+  })
+  return changed
+}
 
 function displayShortCode(entry) {
   return entry?.shortCode || '编号'
@@ -517,23 +581,15 @@ function assignEntryToSlot(entryId, targetSlot) {
     sourceSlot.beerEntryId = replacedEntryId || null
   }
   targetSlot.beerEntryId = entryId
-  draftSaved.value = false
-  hasLocalChanges.value = true
-  if (canSubmitFinal.value) {
-    submitted.value = false
-    table.value = { ...table.value, status: 'IN_PROGRESS', rankingConfirmation: { ...rankingConfirmation.value, readyForFinalSubmit: false } }
-  }
+  markLocalChange()
+  persistCategoryDraft(activeCategoryId.value)
 }
 
 function clearSlot(slot) {
   submitBlockedMessage.value = ''
   slot.beerEntryId = null
-  draftSaved.value = false
-  hasLocalChanges.value = true
-  if (canSubmitFinal.value) {
-    submitted.value = false
-    table.value = { ...table.value, status: 'IN_PROGRESS', rankingConfirmation: { ...rankingConfirmation.value, readyForFinalSubmit: false } }
-  }
+  markLocalChange()
+  persistCategoryDraft(activeCategoryId.value)
 }
 
 async function openSlotScanner(slot) {
@@ -608,7 +664,7 @@ function assignCodeToActiveSlot(value) {
 
 function findEntryByCode(code) {
   const normalized = String(code || '').trim().toUpperCase()
-  return entries.value.find((entry) => {
+  return categoryEntries.value.find((entry) => {
     const candidates = [
       entry.shortCode,
       entry.uuid,
@@ -649,8 +705,10 @@ async function confirmSubmit() {
   submitting.value = true
   try {
     await submitRanking(route.params.roundTableId, {
+      categoryId: activeCategoryId.value || undefined,
       results: submitResults.value,
     })
+    clearDraft(categoryDraftKey(activeCategoryId.value))
     message.value = '排序已提交，等待同桌评审确认'
     confirmOpen.value = false
     submitted.value = true
@@ -667,8 +725,10 @@ async function saveDraft() {
   savingDraft.value = true
   try {
     await saveRankingDraft(route.params.roundTableId, {
+      categoryId: activeCategoryId.value || undefined,
       results: submitResults.value,
     })
+    clearDraft(categoryDraftKey(activeCategoryId.value))
     draftSaved.value = true
     message.value = '我的参考排序已保存'
   } catch {
@@ -682,21 +742,45 @@ async function loadTable() {
   table.value = await fetchRoundTable(route.params.roundTableId)
   submitBlockedMessage.value = ''
   entries.value = table.value.entries || []
+  if (!activeCategoryId.value || !categories.value.some((item) => String(item.categoryId) === String(activeCategoryId.value))) {
+    activeCategoryId.value = categories.value[0]?.categoryId || null
+  }
+  if (activeCategoryId.value) {
+    table.value = { ...table.value, rankingConfirmation: await fetchRankingConfirmation(route.params.roundTableId, activeCategoryId.value) }
+  }
   const showOfficialRankings = table.value.canSubmitRanking || ['SUBMITTED', 'LOCKED'].includes(table.value?.status)
+  const category = activeCategory.value
   const sourceSlots = showOfficialRankings
-    ? table.value.rankings
-    : table.value.myRankingDraft
+    ? (category?.rankings || table.value.rankings)
+    : (category?.myRankingDraft || table.value.myRankingDraft)
   slots.value = (sourceSlots || table.value.rankings || []).map((slot) => ({
     ...slot,
     beerEntryId: slot.beerEntryId || null,
   }))
-  hasLocalChanges.value = false
   submitted.value = table.value.canSubmitRanking
     && (['SUBMITTED', 'LOCKED'].includes(table.value?.status) || slots.value.some((slot) => slot.beerEntryId))
   draftSaved.value = !table.value.canSubmitRanking && slots.value.some((slot) => slot.beerEntryId)
+  hasLocalChanges.value = false
+  if (table.value?.status !== 'LOCKED' && restoreCategoryDraft(activeCategoryId.value)) {
+    markLocalChange()
+  }
+}
+
+async function switchCategory(categoryId) {
+  if (String(categoryId) === String(activeCategoryId.value)) return
+  if (hasLocalChanges.value) persistCategoryDraft(activeCategoryId.value)
+  activeCategoryId.value = categoryId
+  hasLocalChanges.value = false
+  draftSaved.value = false
+  await loadTable()
 }
 
 onMounted(async () => {
+  try {
+    me.value = await fetchMe()
+  } catch {
+    me.value = null
+  }
   await loadTable()
 })
 
@@ -739,6 +823,59 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 10px;
   margin-top: 12px;
+}
+
+.category-tabs {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 14px;
+}
+
+.category-tab {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  min-height: 46px;
+  padding: 11px 14px;
+  color: #344054;
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+  font-weight: 800;
+  text-align: left;
+  transition: border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.category-tab span {
+  min-width: 0;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.category-tab small {
+  flex: 0 0 auto;
+  border-radius: 6px;
+  padding: 4px 8px;
+  color: #667085;
+  background: #f2f4f7;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.category-tab.active {
+  color: #9a5b26;
+  border-color: #9a5b26;
+  background: #fff7ec;
+  box-shadow: 0 0 0 2px rgba(154, 91, 38, 0.12);
+}
+
+.category-tab.active small {
+  color: #9a5b26;
+  background: rgba(154, 91, 38, 0.14);
 }
 
 .slot-drop {

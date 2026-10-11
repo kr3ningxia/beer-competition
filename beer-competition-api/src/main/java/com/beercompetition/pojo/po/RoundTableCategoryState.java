@@ -10,22 +10,20 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
+/** 一张评审桌内一个投递组别的独立排序与确认状态。 */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@TableName("round_judge_ranking_draft")
-public class RoundJudgeRankingDraft {
+@TableName("round_table_category_state")
+public class RoundTableCategoryState {
 
     @TableId(type = IdType.AUTO)
     private Long id;
-    private Long competitionId;
-    private Long roundId;
     private Long roundTableId;
-    /** 组别独立的参考排序草稿。 */
     private Long categoryId;
-    private Long judgeAccountId;
-    private String rankingsJson;
+    private Integer resultVersion;
+    private String status;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

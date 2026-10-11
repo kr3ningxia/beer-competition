@@ -1418,12 +1418,13 @@ CREATE TABLE `round_judge_ranking_draft` (
   `competition_id` bigint NOT NULL COMMENT '所属比赛ID',
   `round_id` bigint NOT NULL COMMENT '评审轮次ID',
   `round_table_id` bigint NOT NULL COMMENT '评审桌ID',
+  `category_id` bigint DEFAULT NULL COMMENT '桌内组别ID，旧单组别草稿可为空',
   `judge_account_id` bigint NOT NULL COMMENT '评委账号ID',
   `rankings_json` json NOT NULL COMMENT '评委个人排序草稿JSON',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_round_judge_ranking_draft` (`round_table_id`,`judge_account_id`),
+  UNIQUE KEY `uk_round_judge_ranking_draft` (`round_table_id`,`category_id`,`judge_account_id`),
   KEY `idx_round_judge_ranking_draft_round` (`round_id`),
   KEY `idx_round_judge_ranking_draft_judge` (`judge_account_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='排序轮评委个人排序草稿表';
@@ -1441,6 +1442,7 @@ CREATE TABLE `round_result` (
   `competition_id` bigint NOT NULL COMMENT '所属比赛ID',
   `round_id` bigint NOT NULL COMMENT '评审轮次ID',
   `round_table_id` bigint NOT NULL COMMENT '评审桌ID',
+  `category_id` bigint DEFAULT NULL COMMENT '桌内组别ID，旧单组别结果可为空',
   `beer_entry_id` bigint NOT NULL COMMENT '参赛酒款ID',
   `result_type` varchar(32) NOT NULL COMMENT '结果类型',
   `rank_no` int DEFAULT NULL COMMENT '名次',
@@ -1449,7 +1451,7 @@ CREATE TABLE `round_result` (
   `submitted_time` datetime DEFAULT NULL COMMENT '提交时间',
   `locked_flag` tinyint NOT NULL DEFAULT '0' COMMENT '是否锁定',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_round_result_slot` (`round_table_id`,`result_type`,`rank_no`),
+  UNIQUE KEY `uk_round_result_slot` (`round_table_id`,`category_id`,`result_type`,`rank_no`),
   KEY `idx_round_result_entry` (`beer_entry_id`),
   KEY `idx_round_result_competition` (`competition_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='评审轮次结果表';
@@ -1499,15 +1501,34 @@ DROP TABLE IF EXISTS `round_table_confirmation`;
 CREATE TABLE `round_table_confirmation` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
   `round_table_id` bigint NOT NULL COMMENT '评审桌ID',
+  `category_id` bigint DEFAULT NULL COMMENT '桌内组别ID，旧单组别确认可为空',
   `judge_account_id` bigint NOT NULL COMMENT '评委账号ID',
   `result_version` int NOT NULL COMMENT '结果版本号',
   `status` varchar(32) NOT NULL DEFAULT 'AGREED' COMMENT '确认状态',
   `confirmed_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '确认时间',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_round_table_confirmation_version` (`round_table_id`,`judge_account_id`,`result_version`),
+  UNIQUE KEY `uk_round_table_confirmation_version` (`round_table_id`,`category_id`,`judge_account_id`,`result_version`),
   KEY `idx_round_table_confirmation_judge` (`judge_account_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='评审桌结果确认表';
 /*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `round_table_category_state`
+--
+
+DROP TABLE IF EXISTS `round_table_category_state`;
+CREATE TABLE `round_table_category_state` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `round_table_id` bigint NOT NULL COMMENT '评审桌ID',
+  `category_id` bigint NOT NULL COMMENT '桌内投递组别ID',
+  `result_version` int NOT NULL DEFAULT '0' COMMENT '组别结果版本号',
+  `status` varchar(32) NOT NULL DEFAULT 'DRAFT' COMMENT '组别排序状态',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_round_table_category_state` (`round_table_id`,`category_id`),
+  KEY `idx_round_table_category_state_category` (`category_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='评审桌内组别排序状态';
 
 --
 -- Table structure for table `round_table_entry`

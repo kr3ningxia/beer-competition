@@ -265,8 +265,8 @@ public class RoundValidationPolicy {
                 validateTargetCountForMode(table.getTableName(), table.getTargetMode(), table.getTargetCount());
             }
             if (RoundTargetMode.MEDALS.name().equals(table.getTargetMode())
-                    && (table.getCategoryId() == null || !RoundConstants.CATEGORY_MODE_CATEGORY.equals(table.getCategoryMode()))) {
-                throw new BaseException(table.getTableName() + "奖牌轮必须只包含一个投递组别");
+                    && entries.stream().anyMatch(entry -> entry.getBeerEntryId() == null)) {
+                throw new BaseException(table.getTableName() + "存在无效酒款");
             }
         }
     }
@@ -287,6 +287,10 @@ public class RoundValidationPolicy {
     }
 
     public void validateRankingSubmit(RoundTable table, RankingSubmitRequest request) {
+        validateRankingSubmit(table, request, request.getCategoryId());
+    }
+
+    public void validateRankingSubmit(RoundTable table, RankingSubmitRequest request, Long categoryId) {
         int targetCount = table.getTargetCount() == null ? 0 : table.getTargetCount();
         boolean allowEmptyMedalSlots = RoundTargetMode.MEDALS.name().equals(table.getTargetMode());
         // 奖牌排序允许个别奖项空缺；普通 TopN 和总冠军排序必须正好填满目标数量。
@@ -302,10 +306,18 @@ public class RoundValidationPolicy {
                 .stream()
                 .map(RoundTableEntry::getBeerEntryId)
                 .collect(Collectors.toSet());
+        if (allowEmptyMedalSlots && categoryId != null) {
+            Map<Long, BeerEntry> entries = roundQuerySupport.loadEntries(tableEntryIds);
+            tableEntryIds = entries.values().stream()
+                    .filter(entry -> Objects.equals(entry.getCategoryId(), categoryId))
+                    .map(BeerEntry::getId)
+                    .collect(Collectors.toSet());
+            if (tableEntryIds.isEmpty()) throw new BaseException("当前组别没有可排序酒款");
+        }
         validateRankingItems(request.getResults(), tableEntryIds, targetCount, "排序");
     }
 
-    public void validateRankingDraft(RoundTable table, List<RankingResultItemRequest> results) {
+    public void validateRankingDraft(RoundTable table, Long categoryId, List<RankingResultItemRequest> results) {
         int targetCount = table.getTargetCount() == null ? 0 : table.getTargetCount();
         if (results.size() > targetCount) {
             throw new BaseException("参考排序数量不能超过名额数量");
@@ -315,7 +327,19 @@ public class RoundValidationPolicy {
                 .stream()
                 .map(RoundTableEntry::getBeerEntryId)
                 .collect(Collectors.toSet());
+        if (RoundTargetMode.MEDALS.name().equals(table.getTargetMode()) && categoryId != null) {
+            Map<Long, BeerEntry> entries = roundQuerySupport.loadEntries(tableEntryIds);
+            tableEntryIds = entries.values().stream()
+                    .filter(entry -> Objects.equals(entry.getCategoryId(), categoryId))
+                    .map(BeerEntry::getId)
+                    .collect(Collectors.toSet());
+        }
         validateRankingItems(results, tableEntryIds, targetCount, "参考排序");
+    }
+
+    /** 兼容单组别排序草稿。 */
+    public void validateRankingDraft(RoundTable table, List<RankingResultItemRequest> results) {
+        validateRankingDraft(table, null, results);
     }
 
     public boolean isRankingRoundTableReady(RoundTable table) {
@@ -323,15 +347,36 @@ public class RoundValidationPolicy {
                 .eq(RoundResult::getRoundTableId, table.getId())));
         // 奖牌桌允许空奖项，只要已有有效排序结果即可进入确认；其他模式必须达到目标数量。
         if (RoundTargetMode.MEDALS.name().equals(table.getTargetMode())) {
-            return resultCount > 0;
+            List<Long> categoryIds = roundQuerySupport.loadEntries(roundTableEntryMapper.selectList(new LambdaQueryWrapper<RoundTableEntry>()
+                            .eq(RoundTableEntry::getRoundTableId, table.getId())).stream()
+                    .map(RoundTableEntry::getBeerEntryId).collect(Collectors.toSet())).values().stream()
+                    .map(BeerEntry::getCategoryId).filter(Objects::nonNull).distinct().toList();
+            if (categoryIds.size() <= 1) return resultCount > 0;
+            return categoryIds.stream().allMatch(categoryId -> isRankingRoundTableReady(table, categoryId));
         }
         int targetCount = table.getTargetCount() == null ? 0 : table.getTargetCount();
         return targetCount > 0 && resultCount == targetCount;
     }
 
+    public boolean isRankingRoundTableReady(RoundTable table, Long categoryId) {
+        if (!RoundTargetMode.MEDALS.name().equals(table.getTargetMode()) || categoryId == null) {
+            return isRankingRoundTableReady(table);
+        }
+        long resultCount = roundResultMapper.selectCount(new LambdaQueryWrapper<RoundResult>()
+                .eq(RoundResult::getRoundTableId, table.getId())
+                .eq(RoundResult::getCategoryId, categoryId));
+        return resultCount > 0;
+    }
+
     public void validateRankingRoundTableReady(RoundTable table) {
         if (!isRankingRoundTableReady(table)) {
             throw new BaseException("请先提交本桌排序结果");
+        }
+    }
+
+    public void validateRankingRoundTableReady(RoundTable table, Long categoryId) {
+        if (!isRankingRoundTableReady(table, categoryId)) {
+            throw new BaseException("请先提交当前组别排序结果");
         }
     }
 

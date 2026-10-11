@@ -12,6 +12,7 @@ import com.beercompetition.mapper.EntryFieldConfigMapper;
 import com.beercompetition.mapper.RoundResultMapper;
 import com.beercompetition.mapper.RoundJudgeRankingDraftMapper;
 import com.beercompetition.mapper.RoundTableConfirmationMapper;
+import com.beercompetition.mapper.RoundTableCategoryStateMapper;
 import com.beercompetition.mapper.RoundTableEntryMapper;
 import com.beercompetition.mapper.RoundTableMemberMapper;
 import com.beercompetition.mapper.ScoreRecordMapper;
@@ -40,6 +41,7 @@ import com.beercompetition.pojo.po.RoundResult;
 import com.beercompetition.pojo.po.RoundJudgeRankingDraft;
 import com.beercompetition.pojo.po.RoundTable;
 import com.beercompetition.pojo.po.RoundTableConfirmation;
+import com.beercompetition.pojo.po.RoundTableCategoryState;
 import com.beercompetition.pojo.po.RoundTableEntry;
 import com.beercompetition.pojo.po.RoundTableMember;
 import com.beercompetition.pojo.po.ScoreRecord;
@@ -49,6 +51,7 @@ import com.beercompetition.pojo.vo.JudgeRoundTableVO;
 import com.beercompetition.pojo.vo.RankingConfirmationSlotVO;
 import com.beercompetition.pojo.vo.RankingConfirmationVO;
 import com.beercompetition.pojo.vo.RoundRankingSlotVO;
+import com.beercompetition.pojo.vo.RoundTableCategoryVO;
 import com.beercompetition.pojo.vo.ScoreConfirmationEntryVO;
 import com.beercompetition.pojo.vo.ScoreConfirmationVO;
 import com.beercompetition.service.EntryScanLabelService;
@@ -98,6 +101,8 @@ public class JudgeRoundTableQueryService {
 
     private final RoundTableConfirmationMapper roundTableConfirmationMapper;
 
+    private final RoundTableCategoryStateMapper roundTableCategoryStateMapper;
+
     private final RoundJudgeRankingDraftMapper roundJudgeRankingDraftMapper;
 
     private final EntryScanLabelService entryScanLabelService;
@@ -109,6 +114,8 @@ public class JudgeRoundTableQueryService {
     private final RoundQuerySupport roundQuerySupport;
 
     private final RoundValidationPolicy roundValidationPolicy;
+
+    private final RoundTableCategoryService roundTableCategoryService;
 
     public JudgeRoundTableVO getMyRoundTable(Long roundTableId) {
         // 1) 校验当前评审对轮次桌的访问权限和轮次可见状态
@@ -177,6 +184,8 @@ public class JudgeRoundTableQueryService {
                         .toList())
                 .rankings(buildRankings(table, results, entryById))
                 .myRankingDraft(RoundType.RANKING.name().equals(round.getRoundType()) ? buildMyRankingDraft(table, entryById, judgeId) : List.of())
+                .categories(RoundType.RANKING.name().equals(round.getRoundType()) && RoundTargetMode.MEDALS.name().equals(table.getTargetMode())
+                        ? buildCategoryViews(table, entryById, member) : List.of())
                 .build();
     }
 
@@ -185,6 +194,52 @@ public class JudgeRoundTableQueryService {
                 .eq(RoundTableMember::getRoundTableId, roundTableId)
                 .eq(RoundTableMember::getSystemTaskRequired, FLAG_TRUE)
                 .ne(RoundTableMember::getRole, JudgeRoleType.CAPTAIN.name())));
+    }
+
+    private List<RoundTableCategoryVO> buildCategoryViews(RoundTable table,
+                                                           Map<Long, BeerEntry> entryById,
+                                                           RoundTableMember currentMember) {
+        Map<Long, String> categoryNames = roundQuerySupport.listCategoryNames(table.getCompetitionId());
+        List<RoundTableCategoryState> states = roundTableCategoryService.listStates(table);
+        List<Long> categoryIds = states.stream().map(RoundTableCategoryState::getCategoryId).toList();
+        Set<Long> requiredJudges = roundTableMemberMapper.selectList(new LambdaQueryWrapper<RoundTableMember>()
+                        .eq(RoundTableMember::getRoundTableId, table.getId())
+                        .ne(RoundTableMember::getStatus, "REMOVED")
+                        .ne(RoundTableMember::getRole, JudgeRoleType.CAPTAIN.name()))
+                .stream().map(RoundTableMember::getJudgeAccountId).collect(Collectors.toSet());
+        return categoryIds.stream().map(categoryId -> {
+            RoundTableCategoryState state = states.stream()
+                    .filter(item -> Objects.equals(item.getCategoryId(), categoryId)).findFirst().orElse(null);
+            List<Long> categoryEntryIds = entryById.values().stream()
+                    .filter(entry -> Objects.equals(entry.getCategoryId(), categoryId))
+                    .map(BeerEntry::getId).toList();
+            LambdaQueryWrapper<RoundResult> resultQuery = new LambdaQueryWrapper<RoundResult>()
+                    .eq(RoundResult::getRoundTableId, table.getId())
+                    .eq(RoundResult::getCategoryId, categoryId)
+                    .orderByAsc(RoundResult::getRankNo);
+            List<RoundResult> results = roundResultMapper.selectList(resultQuery);
+            int version = state == null || state.getResultVersion() == null ? 0 : state.getResultVersion();
+            int confirmed = Math.toIntExact(roundTableConfirmationMapper.selectCount(new LambdaQueryWrapper<RoundTableConfirmation>()
+                    .eq(RoundTableConfirmation::getRoundTableId, table.getId())
+                    .eq(RoundTableConfirmation::getCategoryId, categoryId)
+                    .eq(RoundTableConfirmation::getResultVersion, version)
+                    .eq(RoundTableConfirmation::getStatus, "AGREED")
+                    .in(!requiredJudges.isEmpty(), RoundTableConfirmation::getJudgeAccountId, requiredJudges)));
+            return RoundTableCategoryVO.builder()
+                    .categoryId(categoryId)
+                    .categoryName(categoryNames.getOrDefault(categoryId, "未命名组别"))
+                    .resultVersion(version)
+                    .status(state == null ? RoundStatus.DRAFT.name() : state.getStatus())
+                    .entryCount(categoryEntryIds.size())
+                    .resultCount(results.size())
+                    .confirmedCount(confirmed)
+                    .requiredCount(requiredJudges.size())
+                    .readyForConfirmation(roundValidationPolicy.isRankingRoundTableReady(table, categoryId))
+                    .readyForFinalSubmit(results.size() > 0 && (requiredJudges.isEmpty() || confirmed >= requiredJudges.size()))
+                    .rankings(buildRankings(table, results, entryById))
+                    .myRankingDraft(buildMyRankingDraft(table, entryById, currentMember == null ? null : currentMember.getJudgeAccountId(), categoryId))
+                    .build();
+        }).toList();
     }
 
     private CompetitionEntryVO toEntryVO(BeerEntry entry,
@@ -397,10 +452,6 @@ public class JudgeRoundTableQueryService {
         Map<Long, EntryScanLabel> labelByEntryId = entryScanLabelService.listActiveLabels(entryIds);
         Long judgeId = currentMember == null ? null : currentMember.getJudgeAccountId();
         int version = currentResultVersion(table);
-        boolean mineConfirmed = judgeId != null && roundTableConfirmationMapper.selectCount(new LambdaQueryWrapper<RoundTableConfirmation>()
-                .eq(RoundTableConfirmation::getRoundTableId, table.getId())
-                .eq(RoundTableConfirmation::getJudgeAccountId, judgeId)
-                .eq(RoundTableConfirmation::getResultVersion, version)) > 0;
         List<RankingConfirmationSlotVO> slots = results.stream()
                 .map(result -> {
                     BeerEntry entry = entryById.get(result.getBeerEntryId());
@@ -416,16 +467,65 @@ public class JudgeRoundTableQueryService {
                             .build();
                 })
                 .toList();
+
+        // 多组别奖牌桌的确认按组别独立进行：只要有一个组别已提交结果，就应开放确认入口。
+        List<Long> categoryIds = RoundTargetMode.MEDALS.name().equals(table.getTargetMode())
+                ? roundTableCategoryService.listCategoryIds(table)
+                : List.of();
+        int confirmedCount;
+        int requiredCount;
+        boolean mineConfirmed;
+        boolean readyForConfirmation;
+        if (categoryIds.size() > 1) {
+            List<RoundTableCategoryState> states = roundTableCategoryService.listStates(table);
+            Set<Long> requiredJudges = roundTableMemberMapper.selectList(new LambdaQueryWrapper<RoundTableMember>()
+                            .eq(RoundTableMember::getRoundTableId, table.getId())
+                            .ne(RoundTableMember::getStatus, "REMOVED")
+                            .ne(RoundTableMember::getRole, JudgeRoleType.CAPTAIN.name()))
+                    .stream().map(RoundTableMember::getJudgeAccountId).collect(Collectors.toSet());
+            // 多组别按“组别”统计确认进度：已完成确认的组数 / 已提交待确认的组数。
+            int readyGroups = 0;
+            int confirmedGroups = 0;
+            boolean allReadyConfirmedByMe = true;
+            for (Long categoryId : categoryIds) {
+                if (!roundValidationPolicy.isRankingRoundTableReady(table, categoryId)) {
+                    continue;
+                }
+                RoundTableCategoryState state = states.stream()
+                        .filter(item -> Objects.equals(item.getCategoryId(), categoryId)).findFirst().orElse(null);
+                int categoryVersion = state == null || state.getResultVersion() == null ? 0 : state.getResultVersion();
+                readyGroups++;
+                int confirmed = countCategoryConfirmations(table, categoryId, categoryVersion, requiredJudges);
+                if (requiredJudges.isEmpty() || confirmed >= requiredJudges.size()) {
+                    confirmedGroups++;
+                }
+                boolean mine = judgeId != null
+                        && countCategoryConfirmations(table, categoryId, categoryVersion, Set.of(judgeId)) > 0;
+                if (!mine) allReadyConfirmedByMe = false;
+            }
+            readyForConfirmation = readyGroups > 0;
+            mineConfirmed = readyGroups > 0 && allReadyConfirmedByMe;
+            confirmedCount = confirmedGroups;
+            requiredCount = readyGroups;
+        } else {
+            confirmedCount = resolveRankingConfirmationConfirmedCount(table);
+            requiredCount = resolveRankingConfirmationRequiredCount(table);
+            mineConfirmed = judgeId != null && roundTableConfirmationMapper.selectCount(new LambdaQueryWrapper<RoundTableConfirmation>()
+                    .eq(RoundTableConfirmation::getRoundTableId, table.getId())
+                    .eq(RoundTableConfirmation::getJudgeAccountId, judgeId)
+                    .eq(RoundTableConfirmation::getResultVersion, version)) > 0;
+            readyForConfirmation = roundValidationPolicy.isRankingRoundTableReady(table);
+        }
         return RankingConfirmationVO.builder()
                 .roundTableId(table.getId())
                 .tableName(table.getTableName())
                 .status(table.getStatus())
                 .targetMode(table.getTargetMode())
                 .resultVersion(version)
-                .confirmedCount(resolveRankingConfirmationConfirmedCount(table))
-                .requiredCount(resolveRankingConfirmationRequiredCount(table))
+                .confirmedCount(confirmedCount)
+                .requiredCount(requiredCount)
                 .mineConfirmed(mineConfirmed)
-                .readyForConfirmation(roundValidationPolicy.isRankingRoundTableReady(table))
+                .readyForConfirmation(readyForConfirmation)
                 .readyForFinalSubmit(isRankingConfirmationReady(table))
                 .overrideFlag(Objects.equals(table.getConfirmationOverrideFlag(), FLAG_TRUE))
                 .overrideReason(table.getConfirmationOverrideReason())
@@ -434,10 +534,29 @@ public class JudgeRoundTableQueryService {
                 .build();
     }
 
+    private int countCategoryConfirmations(RoundTable table, Long categoryId, int version, Set<Long> judgeIds) {
+        if (judgeIds.isEmpty()) {
+            return 0;
+        }
+        return Math.toIntExact(roundTableConfirmationMapper.selectCount(new LambdaQueryWrapper<RoundTableConfirmation>()
+                .eq(RoundTableConfirmation::getRoundTableId, table.getId())
+                .eq(RoundTableConfirmation::getCategoryId, categoryId)
+                .eq(RoundTableConfirmation::getResultVersion, version)
+                .eq(RoundTableConfirmation::getStatus, "AGREED")
+                .in(RoundTableConfirmation::getJudgeAccountId, judgeIds)));
+    }
+
     private List<RoundRankingSlotVO> buildMyRankingDraft(RoundTable table, Map<Long, BeerEntry> entryById, Long judgeId) {
-        RoundJudgeRankingDraft draft = roundJudgeRankingDraftMapper.selectOne(new LambdaQueryWrapper<RoundJudgeRankingDraft>()
+        return buildMyRankingDraft(table, entryById, judgeId, null);
+    }
+
+    private List<RoundRankingSlotVO> buildMyRankingDraft(RoundTable table, Map<Long, BeerEntry> entryById, Long judgeId, Long categoryId) {
+        LambdaQueryWrapper<RoundJudgeRankingDraft> draftQuery = new LambdaQueryWrapper<RoundJudgeRankingDraft>()
                 .eq(RoundJudgeRankingDraft::getRoundTableId, table.getId())
-                .eq(RoundJudgeRankingDraft::getJudgeAccountId, judgeId));
+                .eq(RoundJudgeRankingDraft::getJudgeAccountId, judgeId);
+        if (categoryId == null) draftQuery.isNull(RoundJudgeRankingDraft::getCategoryId);
+        else draftQuery.eq(RoundJudgeRankingDraft::getCategoryId, categoryId);
+        RoundJudgeRankingDraft draft = roundJudgeRankingDraftMapper.selectOne(draftQuery);
         if (draft == null || !StringUtils.hasText(draft.getRankingsJson())) {
             return emptyRankingSlots(table);
         }

@@ -173,7 +173,7 @@ public class RoundQuerySupport {
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
         Map<Long, RoundTable> sourceTables = loadRoundTables(sourceTableIds);
-        Map<Long, RoundResult> highestAvailableByTable = candidates.stream()
+        Map<String, RoundResult> highestAvailableByGroup = candidates.stream()
                 .filter(result -> result.getRoundTableId() != null)
                 .filter(result -> result.getRankNo() != null && result.getRankNo() >= 1 && result.getRankNo() <= 3)
                 .filter(result -> {
@@ -181,11 +181,12 @@ public class RoundQuerySupport {
                     return sourceTable != null && RoundTargetMode.MEDALS.name().equals(sourceTable.getTargetMode());
                 })
                 .collect(Collectors.toMap(
-                        RoundResult::getRoundTableId,
+                        // 多组别奖牌桌按“组别”取各组的最高奖项，避免同组被并成一条；无组别时退回按桌。
+                        result -> result.getCategoryId() != null ? "cat:" + result.getCategoryId() : "tbl:" + result.getRoundTableId(),
                         Function.identity(),
                         (left, right) -> left.getRankNo() <= right.getRankNo() ? left : right,
                         LinkedHashMap::new));
-        return List.copyOf(highestAvailableByTable.values());
+        return List.copyOf(highestAvailableByGroup.values());
     }
 
     public List<JudgeTable> listBaseTables(Long competitionId) {

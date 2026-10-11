@@ -496,8 +496,11 @@ public class JudgeServiceImpl implements JudgeService {
             table.setCaptainJudgeId(captain.getId());
             roundTableMapper.updateById(table);
         } else if (removedJudgeIds.contains(table.getCaptainJudgeId())) {
+            // updateById 默认跳过 null 字段，需显式 set 才能把桌长清空。
             table.setCaptainJudgeId(null);
-            roundTableMapper.updateById(table);
+            roundTableMapper.update(null, new LambdaUpdateWrapper<RoundTable>()
+                    .eq(RoundTable::getId, table.getId())
+                    .set(RoundTable::getCaptainJudgeId, null));
         }
         writeAdminLog("JUDGE_ROUND_MEMBER_CHANGE", "COMP-" + competitionId,
                 "调整轮次评委，round=" + roundId + ", table=" + roundTableId);

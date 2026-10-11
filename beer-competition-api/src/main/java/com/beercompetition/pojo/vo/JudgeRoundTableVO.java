@@ -27,4 +27,5 @@ public class JudgeRoundTableVO {
     private List<CompetitionEntryVO> entries;
     private List<RoundRankingSlotVO> rankings;
     private List<RoundRankingSlotVO> myRankingDraft;
+    private List<RoundTableCategoryVO> categories;
 }

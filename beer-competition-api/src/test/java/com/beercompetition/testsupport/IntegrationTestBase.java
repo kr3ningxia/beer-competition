@@ -121,6 +121,12 @@ public abstract class IntegrationTestBase {
                 WHERE c.code LIKE ?
                 """, prefix + "%");
         jdbcTemplate.update("""
+                DELETE rcs FROM round_table_category_state rcs
+                JOIN round_table rt ON rt.id = rcs.round_table_id
+                JOIN competition c ON c.id = rt.competition_id
+                WHERE c.code LIKE ?
+                """, prefix + "%");
+        jdbcTemplate.update("""
                 DELETE jss FROM judge_score_session jss
                 JOIN competition c ON c.id = jss.competition_id
                 WHERE c.code LIKE ?

@@ -170,16 +170,30 @@ public class ScoreConfirmationServiceImpl implements ScoreConfirmationService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void refreshAfterMemberChange(Long roundTableId) {
+        refreshReadiness(roundTableId);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void refreshAfterEntryChange(Long roundTableId) {
+        refreshReadiness(roundTableId);
+    }
+
+    private void refreshReadiness(Long roundTableId) {
         RoundTable table = roundQuerySupport.requireRoundTable(roundTableId);
         CompetitionRound round = competitionRoundMapper.selectById(table.getRoundId());
         if (round == null || table.getCaptainJudgeId() == null) {
             return;
         }
-        boolean ready = RoundType.SCORE.name().equals(round.getRoundType())
-                ? isScoreRoundTableReady(table)
-                : roundValidationPolicy.isRankingRoundTableReady(table);
-        if (ready) {
-            autoSubmitRoundTableIfReady(table, round);
+        try {
+            boolean ready = RoundType.SCORE.name().equals(round.getRoundType())
+                    ? isScoreRoundTableReady(table)
+                    : roundValidationPolicy.isRankingRoundTableReady(table);
+            if (ready) {
+                autoSubmitRoundTableIfReady(table, round);
+            }
+        } catch (BaseException ex) {
+            // 桌内数据暂时不满足自动提交条件（如晋级数量超出目标），保留进行中状态交由主办方处理。
         }
     }
 

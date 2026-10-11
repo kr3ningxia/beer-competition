@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -96,8 +97,9 @@ public class JudgeTaskController {
      * 查询排序轮确认状态。
      */
     @GetMapping("/round-tables/{roundTableId}/ranking-confirmation")
-    public Result<RankingConfirmationVO> rankingConfirmation(@PathVariable Long roundTableId) {
-        return Result.success(rankingService.getRankingConfirmation(roundTableId));
+    public Result<RankingConfirmationVO> rankingConfirmation(@PathVariable Long roundTableId,
+                                                             @RequestParam(required = false) Long categoryId) {
+        return Result.success(rankingService.getRankingConfirmation(roundTableId, categoryId));
     }
 
     /**

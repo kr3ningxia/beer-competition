@@ -16,4 +16,6 @@ public interface ScoreConfirmationService {
     void overrideScoreConfirmation(Long competitionId, Long roundTableId, AdminConfirmationOverrideRequest request);
 
     void refreshAfterMemberChange(Long roundTableId);
+
+    void refreshAfterEntryChange(Long roundTableId);
 }

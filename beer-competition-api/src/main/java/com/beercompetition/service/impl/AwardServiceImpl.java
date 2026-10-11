@@ -369,7 +369,7 @@ public class AwardServiceImpl implements AwardService {
                 continue;
             }
             if (RoundTargetMode.MEDALS.name().equals(table.getTargetMode())) {
-                if (table.getCategoryId() == null || !table.getCategoryId().equals(entry.getCategoryId())) {
+                if (result.getCategoryId() != null && !result.getCategoryId().equals(entry.getCategoryId())) {
                     throw new BaseException(table.getTableName() + "奖牌轮酒款组别不一致");
                 }
                 String awardName = medalName(result.getRankNo(), result.getSlotLabel());

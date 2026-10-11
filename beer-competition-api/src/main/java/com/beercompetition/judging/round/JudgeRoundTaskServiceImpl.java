@@ -1,6 +1,7 @@
 package com.beercompetition.judging.round;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ForbiddenException;
@@ -147,17 +148,20 @@ public class JudgeRoundTaskServiceImpl implements JudgeRoundTaskService {
         }
         requireRankingCaptainMember(roundTableId, judgeId);
 
-        table.setStatus(RoundStatus.PUBLISHED.name());
-        table.setResultVersion(currentResultVersion(table) + 1);
-        table.setConfirmationOverrideFlag(FLAG_FALSE);
-        table.setConfirmationOverrideReason(null);
-        table.setConfirmationOverrideBy(null);
-        table.setConfirmationOverrideTime(null);
-        roundTableMapper.updateById(table);
+        // updateById 默认跳过 null 字段，覆盖标记需用显式 set 才能清空。
+        roundTableMapper.update(null, new LambdaUpdateWrapper<RoundTable>()
+                .eq(RoundTable::getId, table.getId())
+                .set(RoundTable::getStatus, RoundStatus.PUBLISHED.name())
+                .set(RoundTable::getResultVersion, currentResultVersion(table) + 1)
+                .set(RoundTable::getConfirmationOverrideFlag, FLAG_FALSE)
+                .set(RoundTable::getConfirmationOverrideReason, null)
+                .set(RoundTable::getConfirmationOverrideBy, null)
+                .set(RoundTable::getConfirmationOverrideTime, null));
         if (RoundStatus.SUBMITTED.name().equals(round.getStatus())) {
-            round.setStatus(RoundStatus.PUBLISHED.name());
-            round.setSubmittedTime(null);
-            competitionRoundMapper.updateById(round);
+            competitionRoundMapper.update(null, new LambdaUpdateWrapper<CompetitionRound>()
+                    .eq(CompetitionRound::getId, round.getId())
+                    .set(CompetitionRound::getStatus, RoundStatus.PUBLISHED.name())
+                    .set(CompetitionRound::getSubmittedTime, null));
         }
         roundCandidateSyncService.syncDependentDrafts(round);
     }

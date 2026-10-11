@@ -136,8 +136,10 @@ export function submitRanking(roundTableId, payload) {
   return request.post(`/api/judge/round-tables/${roundTableId}/ranking`, payload)
 }
 
-export function fetchRankingConfirmation(roundTableId) {
-  return request.get(`/api/judge/round-tables/${roundTableId}/ranking-confirmation`)
+export function fetchRankingConfirmation(roundTableId, categoryId) {
+  return request.get(`/api/judge/round-tables/${roundTableId}/ranking-confirmation`, {
+    params: categoryId ? { categoryId } : undefined,
+  })
 }
 
 export function confirmRankingRoundTable(roundTableId, payload) {

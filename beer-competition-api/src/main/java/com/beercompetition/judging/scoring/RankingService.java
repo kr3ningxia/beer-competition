@@ -14,6 +14,8 @@ public interface RankingService {
 
     RankingConfirmationVO getRankingConfirmation(Long roundTableId);
 
+    RankingConfirmationVO getRankingConfirmation(Long roundTableId, Long categoryId);
+
     RankingConfirmationVO confirmRankingRoundTable(Long roundTableId, RoundTableConfirmationRequest request);
 
     void finalizeRanking(Long roundTableId);

@@ -1,7 +1,6 @@
 package com.beercompetition.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ForbiddenException;
@@ -17,7 +16,6 @@ import com.beercompetition.mapper.JudgeAssignmentMapper;
 import com.beercompetition.mapper.JudgeRecruitmentApplicationMapper;
 import com.beercompetition.mapper.JudgeTableMapper;
 import com.beercompetition.mapper.JudgeScoreSessionMapper;
-import com.beercompetition.mapper.RoundResultMapper;
 import com.beercompetition.mapper.RoundTableEntryMapper;
 import com.beercompetition.mapper.RoundTableMapper;
 import com.beercompetition.mapper.RoundTableMemberMapper;
@@ -32,8 +30,6 @@ import com.beercompetition.pojo.enums.JudgeRoleType;
 import com.beercompetition.pojo.enums.CompetitionStatus;
 import com.beercompetition.pojo.enums.CompetitionType;
 import com.beercompetition.pojo.enums.EntryScanLabelStatus;
-import com.beercompetition.pojo.enums.RoundEntryStatus;
-import com.beercompetition.pojo.enums.RoundResultType;
 import com.beercompetition.pojo.enums.RoundStatus;
 import com.beercompetition.pojo.enums.RoundType;
 import com.beercompetition.pojo.po.BeerEntry;
@@ -46,7 +42,6 @@ import com.beercompetition.pojo.po.JudgeAccount;
 import com.beercompetition.pojo.po.JudgeAssignment;
 import com.beercompetition.pojo.po.JudgeTable;
 import com.beercompetition.pojo.po.JudgeScoreSession;
-import com.beercompetition.pojo.po.RoundResult;
 import com.beercompetition.pojo.po.RoundTable;
 import com.beercompetition.pojo.po.RoundTableEntry;
 import com.beercompetition.pojo.po.RoundTableMember;
@@ -56,6 +51,7 @@ import com.beercompetition.pojo.vo.ScoreRecordVO;
 import com.beercompetition.service.ReviewStatsService;
 import com.beercompetition.service.ScoreService;
 import com.beercompetition.judging.assignment.RoundCandidateSyncService;
+import com.beercompetition.judging.scoring.ScoreRoundResultSupport;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -99,10 +95,10 @@ public class ScoreServiceImpl implements ScoreService {
     private final RoundTableMapper roundTableMapper;
     private final RoundTableEntryMapper roundTableEntryMapper;
     private final RoundTableMemberMapper roundTableMemberMapper;
-    private final RoundResultMapper roundResultMapper;
     private final ScoreRecordMapper scoreRecordMapper;
     private final ReviewStatsService reviewStatsService;
     private final RoundCandidateSyncService roundCandidateSyncService;
+    private final ScoreRoundResultSupport scoreRoundResultSupport;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -328,10 +324,10 @@ public class ScoreServiceImpl implements ScoreService {
 
         // 3) 同步第一轮晋级状态
         if (!feedbackOnly) {
-            syncFirstRoundAdvance(roundEntry, finalRecord);
+            scoreRoundResultSupport.syncFirstRoundAdvance(roundEntry, finalRecord);
         }
         if (changed) {
-            bumpRoundTableResultVersion(roundEntry.getRoundTableId());
+            scoreRoundResultSupport.bumpResultVersion(roundEntry.getRoundTableId());
         }
         autoSubmitScoreRoundTableIfNoRequiredConfirmations(roundEntry.getRoundTableId());
         reviewStatsService.evictReviewStats(roundEntry.getRoundId(), roundEntry.getRoundTableId(), BaseContext.getCurrentId(), JudgeRoleType.CAPTAIN.name());
@@ -466,20 +462,6 @@ public class ScoreServiceImpl implements ScoreService {
         return left.compareTo(right);
     }
 
-    private void bumpRoundTableResultVersion(Long roundTableId) {
-        RoundTable table = roundTableMapper.selectById(roundTableId);
-        if (table == null) {
-            return;
-        }
-        roundTableMapper.update(null, new LambdaUpdateWrapper<RoundTable>()
-                .eq(RoundTable::getId, roundTableId)
-                .set(RoundTable::getResultVersion, (table.getResultVersion() == null ? 0 : table.getResultVersion()) + 1)
-                .set(RoundTable::getConfirmationOverrideFlag, FLAG_FALSE)
-                .set(RoundTable::getConfirmationOverrideReason, null)
-                .set(RoundTable::getConfirmationOverrideBy, null)
-                .set(RoundTable::getConfirmationOverrideTime, null));
-    }
-
     private void requireAllTableScoresSubmitted(RoundTableEntry roundEntry) {
         List<RoundTableMember> requiredMembers = roundTableMemberMapper.selectList(new LambdaQueryWrapper<RoundTableMember>()
                 .eq(RoundTableMember::getRoundTableId, roundEntry.getRoundTableId())
@@ -599,28 +581,6 @@ public class ScoreServiceImpl implements ScoreService {
             return JudgeRoleType.PROFESSIONAL.name().equals(requestedRole);
         }
         return memberRole.equals(requestedRole);
-    }
-
-    private void syncFirstRoundAdvance(RoundTableEntry roundEntry, ScoreRecord finalRecord) {
-        boolean advanced = Integer.valueOf(1).equals(finalRecord.getAdvancedFlag());
-        roundEntry.setStatus(advanced ? RoundEntryStatus.ADVANCED.name() : RoundEntryStatus.ELIMINATED.name());
-        roundTableEntryMapper.updateById(roundEntry);
-        roundResultMapper.delete(new LambdaQueryWrapper<RoundResult>()
-                .eq(RoundResult::getRoundTableId, roundEntry.getRoundTableId())
-                .eq(RoundResult::getBeerEntryId, roundEntry.getBeerEntryId())
-                .eq(RoundResult::getResultType, RoundResultType.ADVANCE.name()));
-        if (advanced) {
-            roundResultMapper.insert(RoundResult.builder()
-                    .competitionId(roundEntry.getCompetitionId())
-                    .roundId(roundEntry.getRoundId())
-                    .roundTableId(roundEntry.getRoundTableId())
-                    .beerEntryId(roundEntry.getBeerEntryId())
-                    .resultType(RoundResultType.ADVANCE.name())
-                    .submittedBy(finalRecord.getJudgeAccountId())
-                    .submittedTime(LocalDateTime.now())
-                    .lockedFlag(0)
-                    .build());
-        }
     }
 
     private CompetitionType resolveCompetitionType(Competition competition) {
