@@ -452,7 +452,8 @@ public class ScoreServiceImpl implements ScoreService {
         long advancedCount = finalScoreByEntry.values().stream()
                 .filter(score -> Objects.equals(score.getAdvancedFlag(), FLAG_TRUE))
                 .count();
-        return advancedCount == (table.getTargetCount() == null ? 0 : table.getTargetCount());
+        // 所有酒款均已汇总，且晋级数量不超过目标即可提交（允许缺额）。
+        return advancedCount <= (table.getTargetCount() == null ? 0 : table.getTargetCount());
     }
 
     private int compareDecimal(BigDecimal left, BigDecimal right) {

@@ -156,6 +156,10 @@ export function confirmScoreRoundTable(roundTableId, payload) {
   return request.post(`/api/judge/round-tables/${roundTableId}/score-confirmation`, payload)
 }
 
+export function submitScoreRoundTable(roundTableId) {
+  return request.post(`/api/judge/round-tables/${roundTableId}/score-submit`)
+}
+
 export async function fetchEntry(uuid) {
   const entry = await request.get(`/api/judge/entries/${uuid}`)
   return normalizeEntry(entry)

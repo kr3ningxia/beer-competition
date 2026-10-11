@@ -563,7 +563,8 @@ public class JudgeRoundTableQueryService {
                 .filter(score -> Objects.equals(score.getAdvancedFlag(), FLAG_TRUE))
                 .count();
         int targetCount = table.getTargetCount() == null ? 0 : table.getTargetCount();
-        return advancedCount == targetCount;
+        // 所有酒款均已汇总，且晋级数量不超过目标即可视为可提交（允许缺额）。
+        return advancedCount <= targetCount;
     }
 
     private List<RankingResultItemRequest> readRankingDraft(String rankingsJson) {

@@ -162,8 +162,9 @@ public class RoundLifecycleServiceImpl implements RoundLifecycleService {
                     .filter(Objects::nonNull)
                     .filter(score -> Objects.equals(score.getAdvancedFlag(), FLAG_TRUE))
                     .count();
-            if (advancedCount != table.getTargetCount()) {
-                throw new BaseException(table.getTableName() + "晋级数量必须等于目标数量 " + table.getTargetCount());
+            // 允许实际晋级少于目标数量（缺额），但不能超过。
+            if (advancedCount > table.getTargetCount()) {
+                throw new BaseException(table.getTableName() + "晋级数量不能超过目标数量 " + table.getTargetCount());
             }
         }
 

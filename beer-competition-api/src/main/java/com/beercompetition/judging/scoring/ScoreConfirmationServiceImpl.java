@@ -306,8 +306,9 @@ public class ScoreConfirmationServiceImpl implements ScoreConfirmationService {
                 .filter(score -> Objects.equals(score.getAdvancedFlag(), FLAG_TRUE))
                 .count();
         int targetCount = table.getTargetCount() == null ? 0 : table.getTargetCount();
-        if (advancedCount != targetCount) {
-            throw new BaseException("晋级数量必须等于目标数量 " + targetCount);
+        // 允许实际晋级少于目标数量（缺额），但不能超过。
+        if (advancedCount > targetCount) {
+            throw new BaseException("晋级数量不能超过目标数量 " + targetCount);
         }
     }
 
@@ -445,7 +446,8 @@ public class ScoreConfirmationServiceImpl implements ScoreConfirmationService {
                 .filter(score -> Objects.equals(score.getAdvancedFlag(), FLAG_TRUE))
                 .count();
         int targetCount = table.getTargetCount() == null ? 0 : table.getTargetCount();
-        return advancedCount == targetCount;
+        // 所有酒款均已汇总，且晋级数量不超过目标即可进入确认（允许少选，即缺额）。
+        return advancedCount <= targetCount;
     }
 
     private CompetitionType resolveCompetitionType(Competition competition) {

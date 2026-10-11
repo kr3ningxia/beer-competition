@@ -4904,7 +4904,7 @@ function buildFirstRoundCompletionStatus() {
   if (isFeedbackOnlyCompetition.value) return { ...base, ready: true, hint: '全部桌次已完成诊断' }
   const advancePending = tables.filter((table) => {
     const target = Number(table.targetCount || 0)
-    return target <= 0 || Number(table.advancedCount || 0) !== target
+    return target <= 0 || Number(table.advancedCount || 0) > target
   }).length
   if (advancePending) return { ...base, hint: `${advancePending} 桌晋级数待核对` }
   return { ...base, ready: true, hint: '全部桌次已汇总' }
@@ -5214,10 +5214,9 @@ function getRoundTableProgressSummary(round, table) {
   }
   const judgeProgress = normalizeProgress(table.judgeProgress)
   const captainProgress = normalizeProgress(table.captainProgress)
-  const advancedCount = Number(table.advancedCount || 0)
   const target = Number(table.targetCount || 0)
   let statusText = roundStatusLabels[table.status] || '已发布'
-  if (table.status === 'LOCKED' || (captainProgress >= 100 && target > 0 && advancedCount >= target)) statusText = '已完成'
+  if (table.status === 'LOCKED' || (captainProgress >= 100 && target > 0)) statusText = '已完成'
   else if (captainProgress > 0) statusText = '桌长汇总中'
   else if (judgeProgress >= 100) statusText = '待桌长汇总'
   else if (judgeProgress > 0) statusText = '评分中'

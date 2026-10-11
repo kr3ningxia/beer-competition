@@ -50,6 +50,14 @@
           {{ captainSummaryActionLabel }}
         </button>
         <button
+          v-else-if="canSubmitTable"
+          class="button primary full check-action"
+          type="button"
+          @click="submitTable"
+        >
+          {{ submittingTable ? '提交中...' : '提交本桌结果' }}
+        </button>
+        <button
           v-else
           class="button secondary full check-action"
           type="button"
@@ -58,6 +66,7 @@
           {{ tableReviewStateText }}
         </button>
         <p v-if="tableSubmitHint" class="submit-hint">{{ tableSubmitHint }}</p>
+        <p v-if="message" class="message">{{ message }}</p>
       </section>
 
       <section class="card">
@@ -218,7 +227,7 @@
           <input :checked="form.advanced" type="checkbox" :disabled="tableLocked" @change="handleAdvanceToggle" />
           <span>加入晋级名单</span>
         </label>
-        <p v-if="!isFeedbackOnlyCompetition" class="caption">本桌需晋级 {{ advanceTargetCount }} 款，当前已选 {{ previewAdvancedCount }} 款。</p>
+        <p v-if="!isFeedbackOnlyCompetition" class="caption">本桌最多可晋级 {{ advanceTargetCount }} 款，当前已选 {{ previewAdvancedCount }} 款（可少于名额）。</p>
         <button class="button primary full" type="button" :disabled="!canFinalize" @click="submitFinal">
           {{ finalButtonText }}
         </button>
@@ -230,7 +239,7 @@
     <section v-if="advanceLimitDialogOpen" class="advance-limit-overlay" role="dialog" aria-modal="true" aria-labelledby="advance-limit-title">
       <div class="advance-limit-dialog">
         <h2 id="advance-limit-title">晋级名额已满</h2>
-        <p>本桌需晋级 {{ advanceTargetCount }} 款，当前已选 {{ advancedUuids.length }} 款。请先取消其他酒款的晋级，再加入这款。</p>
+        <p>本桌最多可晋级 {{ advanceTargetCount }} 款，当前已选 {{ advancedUuids.length }} 款。请先取消其他酒款的晋级，再加入这款。</p>
         <button class="button primary full" type="button" @click="advanceLimitDialogOpen = false">知道了</button>
       </div>
     </section>
@@ -266,6 +275,7 @@ import {
   fetchTableScores,
   finalizeTableScore,
   reopenScoreRoundTable,
+  submitScoreRoundTable,
 } from '@/api/judge'
 import JudgeBottomNav from '@/components/JudgeBottomNav.vue'
 import StyleDetailDialog from '@/components/StyleDetailDialog.vue'
@@ -287,6 +297,7 @@ const loadingBoard = ref(false)
 const advanceLimitDialogOpen = ref(false)
 const reopenDialogOpen = ref(false)
 const reopening = ref(false)
+const submittingTable = ref(false)
 const styleDetailOpen = ref(false)
 const expandedExtraKeys = ref(new Set())
 const overflowExtraKeys = ref(new Set())
@@ -335,7 +346,8 @@ const previewAdvancedCount = computed(() => {
 const tableReadyForReview = computed(() => {
   if (!boardEntries.value.length) return false
   if (isFeedbackOnlyCompetition.value) return finalizedCount.value === boardEntries.value.length
-  const targetOk = numericAdvanceTarget.value <= 0 || advancedUuids.value.length === numericAdvanceTarget.value
+  // 已选晋级不超过目标即可进入核对（允许少于目标，即缺额）。
+  const targetOk = numericAdvanceTarget.value <= 0 || advancedUuids.value.length <= numericAdvanceTarget.value
   return finalizedCount.value === boardEntries.value.length && targetOk
 })
 const tableReviewProgressText = computed(() => (
@@ -394,8 +406,8 @@ const captainSummaryBadges = computed(() => {
   const badges = [
     `待汇总 ${unfinalizedCount.value} 款`,
   ]
-  if (!isFeedbackOnlyCompetition.value && numericAdvanceTarget.value > 0 && finalizedCount.value === boardEntries.value.length && advancedUuids.value.length !== numericAdvanceTarget.value) {
-    badges.push(`晋级需 ${numericAdvanceTarget.value} 款`)
+  if (!isFeedbackOnlyCompetition.value && numericAdvanceTarget.value > 0 && finalizedCount.value === boardEntries.value.length && advancedUuids.value.length > numericAdvanceTarget.value) {
+    badges.push(`已选晋级超过名额 ${numericAdvanceTarget.value} 款`)
   }
   return badges
 })
@@ -448,6 +460,12 @@ const canOpenNextAction = computed(() => (
 const currentBoardEntry = computed(() => boardEntries.value.find((item) => item.uuid === uuid.value) || null)
 const tableSubmitted = computed(() => board.value?.roundTable?.status === 'SUBMITTED')
 const tableLocked = computed(() => ['SUBMITTED', 'LOCKED'].includes(board.value?.roundTable?.status))
+const canSubmitTable = computed(() => (
+  tableReadyForReview.value
+  && confirmationReady.value
+  && Boolean(board.value?.roundTable?.canSubmitTableScore)
+  && !submittingTable.value
+))
 const tableReviewStateText = computed(() => {
   if (tableSubmitted.value) return '本桌结果已提交'
   if (board.value?.roundTable?.status === 'LOCKED') return '本桌结果已锁定'
@@ -458,7 +476,7 @@ const tableSubmitHint = computed(() => {
   if (tableSubmitted.value) return '管理员锁定前仍可修改，修改后需重新确认。'
   if (board.value?.roundTable?.status === 'LOCKED') return '本桌结果已锁定。'
   if (tableReadyForReview.value && !confirmationReady.value) return `等待同桌评审确认（${confirmationProgressText.value}），可修改评价，修改后需重新确认。`
-  if (tableReadyForReview.value && (scoreConfirmation.value?.overrideFlag || board.value?.roundTable?.confirmationOverrideFlag)) return '现场确认通过后将进入主办方确认轮次。'
+  if (tableReadyForReview.value && canSubmitTable.value) return '同桌确认已齐，可提交本桌结果。'
   if (tableReadyForReview.value && !board.value?.roundTable?.canSubmitTableScore) return '本桌结果请由桌长处理。'
   if (tableReadyForReview.value) return '可修改评价，修改后需重新确认。'
   return ''
@@ -739,6 +757,22 @@ async function confirmReopenTable() {
     await loadBoard()
   } finally {
     reopening.value = false
+  }
+}
+
+async function submitTable() {
+  const roundTableId = board.value?.roundTable?.id || board.value?.competition?.roundTableId
+  if (!roundTableId || !canSubmitTable.value) return
+  submittingTable.value = true
+  message.value = ''
+  try {
+    await submitScoreRoundTable(roundTableId)
+    message.value = '本桌结果已提交'
+    await loadBoard()
+  } catch (error) {
+    message.value = error?.response?.data?.message || error?.message || '提交失败，请稍后再试。'
+  } finally {
+    submittingTable.value = false
   }
 }
 
