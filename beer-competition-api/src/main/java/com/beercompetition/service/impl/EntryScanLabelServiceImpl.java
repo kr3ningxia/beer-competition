@@ -27,7 +27,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class EntryScanLabelServiceImpl implements EntryScanLabelService {
 
-    private static final int SHORT_CODE_BOUND = 36 * 36 * 36 * 36 * 36;
+    private static final String SHORT_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+    private static final int SHORT_CODE_LENGTH = 5;
     private static final int CODE_RETRY_LIMIT = 20;
     private static final String LABEL_CODE_PREFIX = "BE-";
     private static final String TOKEN_PREFIX = "Q";
@@ -151,8 +152,12 @@ public class EntryScanLabelServiceImpl implements EntryScanLabelService {
 
     private String generateShortCode() {
         for (int i = 0; i < CODE_RETRY_LIMIT; i++) {
-            String suffix = Integer.toString(ThreadLocalRandom.current().nextInt(SHORT_CODE_BOUND), 36).toUpperCase();
-            String code = "0".repeat(5 - suffix.length()) + suffix;
+            StringBuilder codeBuilder = new StringBuilder(SHORT_CODE_LENGTH);
+            for (int position = 0; position < SHORT_CODE_LENGTH; position++) {
+                int index = ThreadLocalRandom.current().nextInt(SHORT_CODE_ALPHABET.length());
+                codeBuilder.append(SHORT_CODE_ALPHABET.charAt(index));
+            }
+            String code = codeBuilder.toString();
             if (!existsByShortCode(code)) {
                 return code;
             }
