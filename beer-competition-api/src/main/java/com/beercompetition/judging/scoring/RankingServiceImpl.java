@@ -112,6 +112,8 @@ public class RankingServiceImpl implements RankingService {
         Long judgeId = BaseContext.getCurrentId();
         roundQuerySupport.requireActiveJudge(judgeId);
         RoundTable table = roundQuerySupport.requireRoundTable(roundTableId);
+        // 锁住物理桌行，避免排序提交与确认自动提交同时修改同一桌。
+        table = roundTableMapper.selectByIdForUpdate(roundTableId);
         CompetitionRound round = competitionRoundMapper.selectById(table.getRoundId());
         if (!RoundType.RANKING.name().equals(round.getRoundType()) || !isRankingEditableStatus(round.getStatus())) {
             throw new BaseException("当前轮次不能提交排序");
@@ -218,6 +220,8 @@ public class RankingServiceImpl implements RankingService {
         Long judgeId = BaseContext.getCurrentId();
         roundQuerySupport.requireActiveJudge(judgeId);
         RoundTable table = roundQuerySupport.requireRoundTable(roundTableId);
+        // 锁住物理桌行，串行化确认写入与自动提交判定，避免并发确认互相看不到未提交记录。
+        table = roundTableMapper.selectByIdForUpdate(roundTableId);
         CompetitionRound round = competitionRoundMapper.selectById(table.getRoundId());
         if (round == null || !RoundType.RANKING.name().equals(round.getRoundType()) || !isRankingEditableStatus(round.getStatus())) {
             throw new BaseException("当前轮次不能确认本桌排序");
@@ -237,27 +241,18 @@ public class RankingServiceImpl implements RankingService {
         // 2) 写入当前版本确认记录
         int version = currentResultVersionFor(table, categoryId);
         validateConfirmationVersion(request, version);
-        LambdaQueryWrapper<RoundTableConfirmation> existingQuery = new LambdaQueryWrapper<RoundTableConfirmation>()
-                .eq(RoundTableConfirmation::getRoundTableId, roundTableId)
-                .eq(RoundTableConfirmation::getJudgeAccountId, judgeId)
-                .eq(RoundTableConfirmation::getResultVersion, version);
-        if (categoryId == null) existingQuery.isNull(RoundTableConfirmation::getCategoryId);
-        else existingQuery.eq(RoundTableConfirmation::getCategoryId, categoryId);
-        RoundTableConfirmation existing = roundTableConfirmationMapper.selectOne(existingQuery);
-        if (existing == null) {
-            roundTableConfirmationMapper.insert(RoundTableConfirmation.builder()
-                    .roundTableId(roundTableId)
-                    .categoryId(categoryId)
-                    .judgeAccountId(judgeId)
-                    .resultVersion(version)
-                    .status("AGREED")
-                    .confirmedTime(LocalDateTime.now())
-                    .build());
-        }
+        roundTableConfirmationMapper.upsert(RoundTableConfirmation.builder()
+                .roundTableId(roundTableId)
+                .categoryId(categoryId)
+                .judgeAccountId(judgeId)
+                .resultVersion(version)
+                .status("AGREED")
+                .confirmedTime(LocalDateTime.now())
+                .build());
 
         // 3) 当前版本确认完成后自动提交本桌排序
-        autoSubmitRoundTableIfReady(roundTableMapper.selectById(roundTableId), round);
-        return buildRankingConfirmation(roundTableMapper.selectById(roundTableId), member, categoryId);
+        autoSubmitRoundTableIfReady(table, round);
+        return buildRankingConfirmation(roundTableMapper.selectByIdForUpdate(roundTableId), member, categoryId);
     }
 
     @Override
@@ -312,14 +307,8 @@ public class RankingServiceImpl implements RankingService {
         Long categoryId = roundTableCategoryService.resolveCategoryId(table, request.getCategoryId());
         roundValidationPolicy.validateRankingDraft(table, categoryId, request.getResults());
 
-        // 2) 用覆盖写方式保存草稿，保证同一评审同一桌同一组别只有一份参考排序
-        LambdaQueryWrapper<RoundJudgeRankingDraft> draftDeleteQuery = new LambdaQueryWrapper<RoundJudgeRankingDraft>()
-                .eq(RoundJudgeRankingDraft::getRoundTableId, roundTableId)
-                .eq(RoundJudgeRankingDraft::getJudgeAccountId, judgeId);
-        if (categoryId == null) draftDeleteQuery.isNull(RoundJudgeRankingDraft::getCategoryId);
-        else draftDeleteQuery.eq(RoundJudgeRankingDraft::getCategoryId, categoryId);
-        roundJudgeRankingDraftMapper.delete(draftDeleteQuery);
-        roundJudgeRankingDraftMapper.insert(RoundJudgeRankingDraft.builder()
+        // 2) 使用数据库唯一键覆盖写，避免并发自动保存产生重复草稿。
+        roundJudgeRankingDraftMapper.upsert(RoundJudgeRankingDraft.builder()
                 .competitionId(table.getCompetitionId())
                 .roundId(table.getRoundId())
                 .roundTableId(roundTableId)
@@ -516,10 +505,12 @@ public class RankingServiceImpl implements RankingService {
                 .eq(RoundTableConfirmation::getRoundTableId, table.getId())
                 .eq(RoundTableConfirmation::getResultVersion, currentResultVersionFor(table, categoryId))
                 .eq(RoundTableConfirmation::getStatus, "AGREED")
-                .in(RoundTableConfirmation::getJudgeAccountId, requiredJudgeIds);
+                .in(RoundTableConfirmation::getJudgeAccountId, requiredJudgeIds)
+                // 事务可能在等待桌行锁后才继续，使用当前读确保看到前一个确认事务已提交的记录。
+                .last("FOR UPDATE");
         if (categoryId == null) query.isNull(RoundTableConfirmation::getCategoryId);
         else query.eq(RoundTableConfirmation::getCategoryId, categoryId);
-        return Math.toIntExact(roundTableConfirmationMapper.selectCount(query));
+        return roundTableConfirmationMapper.selectList(query).size();
     }
 
     private void validateRankingRoundTableConfirmations(RoundTable table) {

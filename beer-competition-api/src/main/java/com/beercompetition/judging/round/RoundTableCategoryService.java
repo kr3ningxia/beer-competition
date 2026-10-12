@@ -68,8 +68,9 @@ public class RoundTableCategoryService {
     }
 
     public Long resolveCategoryId(RoundTable table, Long requestedCategoryId) {
+        // 普通排序轮没有组别维度。忽略客户端残留或篡改的 categoryId，统一使用旧单组别语义的 NULL。
+        if (!"MEDALS".equals(table.getTargetMode())) return null;
         List<Long> categoryIds = listCategoryIds(table);
-        if (!"MEDALS".equals(table.getTargetMode())) return requestedCategoryId;
         if (requestedCategoryId != null) {
             if (!categoryIds.contains(requestedCategoryId)) {
                 throw new BaseException("当前评审桌不包含所选组别");

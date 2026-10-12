@@ -1419,12 +1419,13 @@ CREATE TABLE `round_judge_ranking_draft` (
   `round_id` bigint NOT NULL COMMENT '评审轮次ID',
   `round_table_id` bigint NOT NULL COMMENT '评审桌ID',
   `category_id` bigint DEFAULT NULL COMMENT '桌内组别ID，旧单组别草稿可为空',
+  `category_key` bigint GENERATED ALWAYS AS (coalesce(`category_id`,0)) STORED COMMENT '用于草稿唯一约束的组别键',
   `judge_account_id` bigint NOT NULL COMMENT '评委账号ID',
   `rankings_json` json NOT NULL COMMENT '评委个人排序草稿JSON',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_round_judge_ranking_draft` (`round_table_id`,`category_id`,`judge_account_id`),
+  UNIQUE KEY `uk_round_judge_ranking_draft` (`round_table_id`,`category_key`,`judge_account_id`),
   KEY `idx_round_judge_ranking_draft_round` (`round_id`),
   KEY `idx_round_judge_ranking_draft_judge` (`judge_account_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='排序轮评委个人排序草稿表';
@@ -1502,12 +1503,13 @@ CREATE TABLE `round_table_confirmation` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
   `round_table_id` bigint NOT NULL COMMENT '评审桌ID',
   `category_id` bigint DEFAULT NULL COMMENT '桌内组别ID，旧单组别确认可为空',
+  `category_key` bigint GENERATED ALWAYS AS (coalesce(`category_id`,0)) STORED COMMENT '用于确认唯一约束的组别键',
   `judge_account_id` bigint NOT NULL COMMENT '评委账号ID',
   `result_version` int NOT NULL COMMENT '结果版本号',
   `status` varchar(32) NOT NULL DEFAULT 'AGREED' COMMENT '确认状态',
   `confirmed_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '确认时间',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_round_table_confirmation_version` (`round_table_id`,`category_id`,`judge_account_id`,`result_version`),
+  UNIQUE KEY `uk_round_table_confirmation_version` (`round_table_id`,`category_key`,`judge_account_id`,`result_version`),
   KEY `idx_round_table_confirmation_judge` (`judge_account_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='评审桌结果确认表';
 /*!40101 SET character_set_client = @saved_cs_client */;

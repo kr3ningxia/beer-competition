@@ -9,6 +9,7 @@ import com.beercompetition.mapper.RoundTableMapper;
 import com.beercompetition.pojo.dto.AwardConfirmItemRequest;
 import com.beercompetition.pojo.dto.AwardConfirmRequest;
 import com.beercompetition.pojo.dto.RankingResultItemRequest;
+import com.beercompetition.pojo.dto.RankingDraftSaveRequest;
 import com.beercompetition.pojo.dto.RankingSubmitRequest;
 import com.beercompetition.pojo.dto.RoundTableConfirmationRequest;
 import com.beercompetition.pojo.enums.AwardType;
@@ -255,6 +256,48 @@ class RankingAndAwardGuardrailIntegrationTest extends IntegrationTestBase {
                 String.class, rankingRound.table().getId())).isEqualTo(RoundStatus.SUBMITTED.name());
         assertThat(jdbcTemplate.queryForObject("SELECT status FROM competition_round WHERE id = ?",
                 String.class, rankingRound.round().getId())).isEqualTo(RoundStatus.SUBMITTED.name());
+    }
+
+    @Test
+    void ordinaryRankingIgnoresCategoryIdAndDraftSaveIsIdempotent() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        BeerCompetitionTestData.RankingRound rankingRound = testData.createRankingRound(
+                fixture, List.of(fixture.entryA1(), fixture.entryA2()), RoundTargetMode.TOP_N, 1, RoundStatus.IN_PROGRESS, 1);
+
+        RankingDraftSaveRequest draft = new RankingDraftSaveRequest();
+        draft.setCategoryId(fixture.category().getId());
+        draft.setResults(List.of(result(fixture.entryA1().getId(), 1)));
+        asJudge(fixture.professional().getId());
+        rankingService.saveRankingDraft(rankingRound.table().getId(), draft);
+        draft.setResults(List.of(result(fixture.entryA2().getId(), 1)));
+        rankingService.saveRankingDraft(rankingRound.table().getId(), draft);
+
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM round_judge_ranking_draft
+                WHERE round_table_id = ? AND judge_account_id = ? AND category_id IS NULL
+                """, Integer.class, rankingRound.table().getId(), fixture.professional().getId())).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM round_judge_ranking_draft
+                WHERE round_table_id = ? AND judge_account_id = ? AND category_id IS NOT NULL
+                """, Integer.class, rankingRound.table().getId(), fixture.professional().getId())).isZero();
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT rankings_json FROM round_judge_ranking_draft
+                WHERE round_table_id = ? AND judge_account_id = ? AND category_id IS NULL
+                """, String.class, rankingRound.table().getId(), fixture.professional().getId()))
+                .contains(String.valueOf(fixture.entryA2().getId()));
+
+        asJudge(fixture.captain().getId());
+        rankingService.submitRanking(rankingRound.table().getId(), rankingRequest(result(fixture.entryA1().getId(), 1)));
+        asJudge(fixture.professional().getId());
+        RankingConfirmationVO confirmation = rankingService.getRankingConfirmation(rankingRound.table().getId());
+        RoundTableConfirmationRequest confirmationRequest = confirmationRequest(confirmation.getResultVersion());
+        confirmationRequest.setCategoryId(fixture.category().getId());
+        rankingService.confirmRankingRoundTable(rankingRound.table().getId(), confirmationRequest);
+        rankingService.confirmRankingRoundTable(rankingRound.table().getId(), confirmationRequest);
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM round_table_confirmation
+                WHERE round_table_id = ? AND judge_account_id = ? AND category_id IS NULL AND result_version = ?
+                """, Integer.class, rankingRound.table().getId(), fixture.professional().getId(), confirmation.getResultVersion())).isEqualTo(1);
     }
 
     @Test
