@@ -54,7 +54,7 @@ class RankingAndAwardGuardrailIntegrationTest extends IntegrationTestBase {
     private RoundTableMapper roundTableMapper;
 
     @Test
-    void championCandidatesUseHighestAvailableMedalFromEachTable() {
+    void championCandidatesOnlyTakeGoldMedalFromEachMedalTable() {
         BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
         BeerCompetitionTestData.RankingRound goldTable = testData.createRankingRound(
                 fixture, List.of(fixture.entryA1(), fixture.entryA2(), fixture.entryB1()),
@@ -75,7 +75,29 @@ class RankingAndAwardGuardrailIntegrationTest extends IntegrationTestBase {
                 goldTableSilver, silverTableBronze, bronze, invalid, nonMedal, silver, gold),
                 RoundTargetMode.CHAMPION.name());
 
-        assertThat(selected).containsExactlyInAnyOrder(gold, silver, bronze);
+        // 只有奖牌桌 rank 1 的金奖晋级总冠军轮；银奖、铜奖、非奖牌桌与非法名次均不晋级。
+        assertThat(selected).containsExactly(gold);
+    }
+
+    @Test
+    void championCandidatesSkipCategoryWhoseOnlyMedalIsNotGold() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        BeerCompetitionTestData.RankingRound medalTable = testData.createRankingRound(
+                fixture, List.of(fixture.entryA1(), fixture.entryA2(), fixture.entryB1()),
+                RoundTargetMode.MEDALS, 3, RoundStatus.SUBMITTED, 1);
+        Long goldCategory = 9001L;
+        Long bronzeOnlyCategory = 9002L;
+
+        RoundResult goldWinner = candidateWithCategory(
+                medalTable.table().getId(), fixture.entryA1().getId(), 1, "金奖", goldCategory);
+        RoundResult bronzeOnly = candidateWithCategory(
+                medalTable.table().getId(), fixture.entryB1().getId(), 3, "铜奖", bronzeOnlyCategory);
+
+        List<RoundResult> selected = roundQuerySupport.filterCandidatesForTargetMode(
+                List.of(goldWinner, bronzeOnly), RoundTargetMode.CHAMPION.name());
+
+        // 同一奖牌桌内按组别取金奖：只有铜奖、没有金奖的组别不产生冠军轮候选。
+        assertThat(selected).containsExactly(goldWinner);
     }
 
     @Test
@@ -302,6 +324,16 @@ class RankingAndAwardGuardrailIntegrationTest extends IntegrationTestBase {
                 .beerEntryId(entryId)
                 .rankNo(rankNo)
                 .slotLabel(slotLabel)
+                .build();
+    }
+
+    private RoundResult candidateWithCategory(Long tableId, Long entryId, int rankNo, String slotLabel, Long categoryId) {
+        return RoundResult.builder()
+                .roundTableId(tableId)
+                .beerEntryId(entryId)
+                .rankNo(rankNo)
+                .slotLabel(slotLabel)
+                .categoryId(categoryId)
                 .build();
     }
 
