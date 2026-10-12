@@ -477,12 +477,12 @@ const tableReviewStateText = computed(() => {
   return '等待同桌确认'
 })
 const tableSubmitHint = computed(() => {
-  if (tableSubmitted.value) return '管理员锁定前仍可修改，修改后需重新确认。'
+  if (tableSubmitted.value) return '管理员锁定前仍可修改，修改后会重置同桌确认。'
   if (board.value?.roundTable?.status === 'LOCKED') return '本桌结果已锁定。'
-  if (tableReadyForReview.value && !confirmationReady.value) return `等待同桌评审确认（${confirmationProgressText.value}），可修改评价，修改后需重新确认。`
+  if (tableReadyForReview.value && !confirmationReady.value) return `同桌确认进行中（${confirmationProgressText.value}）。可直接修改评价，修改后会重置同桌确认。`
   if (tableReadyForReview.value && canSubmitTable.value) return '同桌确认已齐，可提交本桌结果。'
   if (tableReadyForReview.value && !board.value?.roundTable?.canSubmitTableScore) return '本桌结果请由桌长处理。'
-  if (tableReadyForReview.value) return '可修改评价，修改后需重新确认。'
+  if (tableReadyForReview.value) return '可直接修改评价，修改后会重置同桌确认。'
   return ''
 })
 const currentSubmittedCount = computed(() => Number(currentBoardEntry.value?.submittedCount || peerScores.value.length || 0))

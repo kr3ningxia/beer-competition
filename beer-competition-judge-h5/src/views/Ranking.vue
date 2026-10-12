@@ -209,6 +209,7 @@
             <strong>{{ item.shortCode }}</strong>
           </div>
         </div>
+        <p v-if="submitted" class="confirm-warning">重新提交会重置同桌确认，需同桌评委再确认一遍。</p>
         <p v-if="submitError" class="confirm-error">{{ submitError }}</p>
         <div class="confirm-actions">
           <button class="button secondary" type="button" :disabled="submitting" @click="confirmOpen = false">
@@ -339,7 +340,7 @@ const waitingForConfirmations = computed(() => (
 ))
 const submitBlockedReason = computed(() => {
   if (waitingForConfirmations.value) {
-    return `同桌确认未完成，当前 ${rankingConfirmation.value?.confirmedCount || 0}/${rankingConfirmation.value?.requiredCount || 0}。`
+    return `同桌确认进行中（${rankingConfirmation.value?.confirmedCount || 0}/${rankingConfirmation.value?.requiredCount || 0}）。可直接调整酒款顺序后重新提交，重新提交会重置同桌确认。`
   }
   if (readyForFinalSubmit.value && submitted.value && !hasLocalChanges.value) return '同桌确认已完成，等待主办方确认。'
   if (!canEdit.value) return readonlyText.value
@@ -389,8 +390,8 @@ const rankingModeText = computed(() => {
 const submitButtonText = computed(() => {
   if (table.value?.status === 'SUBMITTED' && !hasLocalChanges.value) return '本桌排序已提交'
   if (readyForFinalSubmit.value && submitted.value && !hasLocalChanges.value) return '确认已齐'
-  if (waitingForConfirmations.value) return '等待同桌确认'
-  return submitted.value ? '重新提交同桌确认' : '提交同桌确认'
+  if (submitted.value && !hasLocalChanges.value) return '修改酒款后可重新提交'
+  return submitted.value ? '重新提交（重置同桌确认）' : '提交同桌确认'
 })
 const confirmTitle = computed(() => '提交同桌确认')
 
