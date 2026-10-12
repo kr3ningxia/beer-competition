@@ -19,7 +19,12 @@ import com.beercompetition.pojo.enums.RoundTargetMode;
 import com.beercompetition.pojo.po.RoundResult;
 import com.beercompetition.pojo.po.RoundTable;
 import com.beercompetition.pojo.vo.RankingConfirmationVO;
+import com.beercompetition.mapper.CompetitionRoundMapper;
+import com.beercompetition.pojo.enums.RoundType;
+import com.beercompetition.pojo.po.BeerEntry;
+import com.beercompetition.pojo.po.CompetitionRound;
 import com.beercompetition.service.impl.round.RoundQuerySupport;
+import com.beercompetition.service.impl.round.RoundValidationPolicy;
 import com.beercompetition.testsupport.BeerCompetitionTestData;
 import com.beercompetition.testsupport.IntegrationTestBase;
 import org.junit.jupiter.api.Test;
@@ -52,6 +57,12 @@ class RankingAndAwardGuardrailIntegrationTest extends IntegrationTestBase {
 
     @Autowired
     private RoundTableMapper roundTableMapper;
+
+    @Autowired
+    private CompetitionRoundMapper competitionRoundMapper;
+
+    @Autowired
+    private RoundValidationPolicy roundValidationPolicy;
 
     @Test
     void championCandidatesOnlyTakeGoldMedalFromEachMedalTable() {
@@ -98,6 +109,56 @@ class RankingAndAwardGuardrailIntegrationTest extends IntegrationTestBase {
 
         // 同一奖牌桌内按组别取金奖：只有铜奖、没有金奖的组别不产生冠军轮候选。
         assertThat(selected).containsExactly(goldWinner);
+    }
+
+    @Test
+    void championAllocationSaveRejectsNonGoldEntry() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        BeerCompetitionTestData.RankingRound medalRound = testData.createRankingRound(
+                fixture, List.of(fixture.entryA1(), fixture.entryA2(), fixture.entryB1()),
+                RoundTargetMode.MEDALS, 3, RoundStatus.LOCKED, 1);
+        insertStandaloneResult(fixture, medalRound, fixture.entryA1(), 1, "金奖");
+        insertStandaloneResult(fixture, medalRound, fixture.entryA2(), 2, "银奖");
+        insertStandaloneResult(fixture, medalRound, fixture.entryB1(), 3, "铜奖");
+
+        CompetitionRound championRound = insertRankingRound(fixture, medalRound.round().getId());
+        insertRoundTable(fixture, championRound.getId(), RoundTargetMode.CHAMPION, 1, "决赛桌");
+
+        // 保存分桌时只有各组别金奖可进入决赛轮，银奖、铜奖应被拒绝。
+        assertThatThrownBy(() -> roundValidationPolicy.validateEntrySource(championRound, List.of(fixture.entryB1())))
+                .isInstanceOf(BaseException.class)
+                .hasMessageContaining("晋级酒款");
+        assertThatThrownBy(() -> roundValidationPolicy.validateEntrySource(championRound, List.of(fixture.entryA2())))
+                .isInstanceOf(BaseException.class)
+                .hasMessageContaining("晋级酒款");
+        roundValidationPolicy.validateEntrySource(championRound, List.of(fixture.entryA1()));
+    }
+
+    @Test
+    void multiCategoryMedalTableDoesNotAutoSubmitUntilEveryCategoryConfirmed() {
+        BeerCompetitionTestData.Fixture fixture = testData.createFixture(testRun);
+        BeerCompetitionTestData.RankingRound medalRound = testData.createRankingRound(
+                fixture, List.of(fixture.entryA1(), fixture.entryA2()),
+                RoundTargetMode.MEDALS, 3, RoundStatus.IN_PROGRESS, 1);
+        Long tableId = medalRound.table().getId();
+        Long firstCategory = fixture.category().getId();
+        Long secondCategory = testData.createCategory(fixture.competition().getId(), "第二组别").getId();
+        insertCategoryState(tableId, firstCategory, 1);
+        insertCategoryState(tableId, secondCategory, 1);
+        insertCategoryResult(fixture, medalRound, fixture.entryA1(), firstCategory, 1);
+        insertCategoryResult(fixture, medalRound, fixture.entryA2(), secondCategory, 1);
+
+        // 两个非桌长评委各只确认了一个组别，整桌不应视为完成。
+        insertConfirmation(tableId, firstCategory, fixture.professional().getId(), 1);
+        insertConfirmation(tableId, secondCategory, fixture.cross().getId(), 1);
+        rankingService.refreshRankingTableReadiness(tableId);
+        assertThat(tableStatus(tableId)).isEqualTo(RoundStatus.IN_PROGRESS.name());
+
+        // 两个组别分别集齐所有评委确认后才自动提交。
+        insertConfirmation(tableId, firstCategory, fixture.cross().getId(), 1);
+        insertConfirmation(tableId, secondCategory, fixture.professional().getId(), 1);
+        rankingService.refreshRankingTableReadiness(tableId);
+        assertThat(tableStatus(tableId)).isEqualTo(RoundStatus.SUBMITTED.name());
     }
 
     @Test
@@ -335,6 +396,78 @@ class RankingAndAwardGuardrailIntegrationTest extends IntegrationTestBase {
                 .slotLabel(slotLabel)
                 .categoryId(categoryId)
                 .build();
+    }
+
+    private void insertStandaloneResult(BeerCompetitionTestData.Fixture fixture,
+                                        BeerCompetitionTestData.RankingRound rankingRound,
+                                        BeerEntry entry, int rankNo, String slotLabel) {
+        jdbcTemplate.update("""
+                INSERT INTO round_result (competition_id, round_id, round_table_id, category_id, beer_entry_id, result_type, rank_no, slot_label)
+                VALUES (?, ?, ?, NULL, ?, 'RANK', ?, ?)
+                """, fixture.competition().getId(), rankingRound.round().getId(),
+                rankingRound.table().getId(), entry.getId(), rankNo, slotLabel);
+    }
+
+    private void insertCategoryResult(BeerCompetitionTestData.Fixture fixture,
+                                      BeerCompetitionTestData.RankingRound rankingRound,
+                                      BeerEntry entry, Long categoryId, int rankNo) {
+        jdbcTemplate.update("""
+                INSERT INTO round_result (competition_id, round_id, round_table_id, category_id, beer_entry_id, result_type, rank_no, slot_label)
+                VALUES (?, ?, ?, ?, ?, 'RANK', ?, '金奖')
+                """, fixture.competition().getId(), rankingRound.round().getId(),
+                rankingRound.table().getId(), categoryId, entry.getId(), rankNo);
+    }
+
+    private void insertCategoryState(Long roundTableId, Long categoryId, int resultVersion) {
+        jdbcTemplate.update("""
+                INSERT INTO round_table_category_state (round_table_id, category_id, result_version, status)
+                VALUES (?, ?, ?, 'IN_PROGRESS')
+                """, roundTableId, categoryId, resultVersion);
+    }
+
+    private void insertConfirmation(Long roundTableId, Long categoryId, Long judgeId, int resultVersion) {
+        jdbcTemplate.update("""
+                INSERT INTO round_table_confirmation (round_table_id, category_id, judge_account_id, result_version, status)
+                VALUES (?, ?, ?, ?, 'AGREED')
+                """, roundTableId, categoryId, judgeId, resultVersion);
+    }
+
+    private String tableStatus(Long roundTableId) {
+        return jdbcTemplate.queryForObject("SELECT status FROM round_table WHERE id = ?", String.class, roundTableId);
+    }
+
+    private CompetitionRound insertRankingRound(BeerCompetitionTestData.Fixture fixture, Long sourceRoundId) {
+        CompetitionRound round = CompetitionRound.builder()
+                .competitionId(fixture.competition().getId())
+                .roundNo(3)
+                .roundName("决赛轮")
+                .roundType(RoundType.RANKING.name())
+                .sourceRoundId(sourceRoundId)
+                .status(RoundStatus.DRAFT.name())
+                .sortOrder(3)
+                .build();
+        competitionRoundMapper.insert(round);
+        return round;
+    }
+
+    private RoundTable insertRoundTable(BeerCompetitionTestData.Fixture fixture, Long roundId,
+                                        RoundTargetMode targetMode, int targetCount, String name) {
+        RoundTable table = RoundTable.builder()
+                .competitionId(fixture.competition().getId())
+                .roundId(roundId)
+                .tableName(name)
+                .captainJudgeId(fixture.captain().getId())
+                .categoryId(fixture.category().getId())
+                .categoryMode("SINGLE")
+                .targetCount(targetCount)
+                .targetMode(targetMode.name())
+                .status(RoundStatus.DRAFT.name())
+                .resultVersion(1)
+                .confirmationOverrideFlag(0)
+                .sortOrder(0)
+                .build();
+        roundTableMapper.insert(table);
+        return table;
     }
 
     private RoundTable insertTable(BeerCompetitionTestData.Fixture fixture, Long roundId,

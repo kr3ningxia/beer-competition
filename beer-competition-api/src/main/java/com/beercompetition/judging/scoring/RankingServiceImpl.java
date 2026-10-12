@@ -329,6 +329,18 @@ public class RankingServiceImpl implements RankingService {
                 .build());
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void refreshRankingTableReadiness(Long roundTableId) {
+        // 评委调整（换人/改酒款）后重算本桌确认是否完成；多组别奖牌桌按组别判定，满足才自动提交。
+        RoundTable table = roundQuerySupport.requireRoundTable(roundTableId);
+        CompetitionRound round = competitionRoundMapper.selectById(table.getRoundId());
+        if (round == null || !RoundType.RANKING.name().equals(round.getRoundType())) {
+            return;
+        }
+        autoSubmitRoundTableIfReady(table, round);
+    }
+
     private RoundTableMember requireRoundTableMember(Long roundTableId, Long judgeId) {
         RoundTableMember member = roundTableMemberMapper.selectOne(new LambdaQueryWrapper<RoundTableMember>()
                 .eq(RoundTableMember::getRoundTableId, roundTableId)

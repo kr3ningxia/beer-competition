@@ -21,4 +21,9 @@ public interface RankingService {
     void finalizeRanking(Long roundTableId);
 
     void saveRankingDraft(Long roundTableId, RankingDraftSaveRequest request);
+
+    /**
+     * 评委调整（换人/改酒款）后重算本桌确认是否完成，满足则自动提交。
+     */
+    void refreshRankingTableReadiness(Long roundTableId);
 }

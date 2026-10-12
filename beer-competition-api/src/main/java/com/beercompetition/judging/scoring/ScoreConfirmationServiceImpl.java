@@ -76,6 +76,8 @@ public class ScoreConfirmationServiceImpl implements ScoreConfirmationService {
 
     private final RoundCandidateSyncService roundCandidateSyncService;
 
+    private final RankingService rankingService;
+
     @Override
     public ScoreConfirmationVO getScoreConfirmation(Long roundTableId) {
         // 1) 校验评审身份、轮次可见状态和本桌成员关系
@@ -120,7 +122,8 @@ public class ScoreConfirmationServiceImpl implements ScoreConfirmationService {
         RoundTableConfirmation existing = roundTableConfirmationMapper.selectOne(new LambdaQueryWrapper<RoundTableConfirmation>()
                 .eq(RoundTableConfirmation::getRoundTableId, roundTableId)
                 .eq(RoundTableConfirmation::getJudgeAccountId, judgeId)
-                .eq(RoundTableConfirmation::getResultVersion, version));
+                .eq(RoundTableConfirmation::getResultVersion, version)
+                .isNull(RoundTableConfirmation::getCategoryId));
         if (existing == null) {
             roundTableConfirmationMapper.insert(RoundTableConfirmation.builder()
                     .roundTableId(roundTableId)
@@ -152,10 +155,11 @@ public class ScoreConfirmationServiceImpl implements ScoreConfirmationService {
         if (RoundStatus.SUBMITTED.name().equals(table.getStatus()) || RoundStatus.LOCKED.name().equals(table.getStatus())) {
             throw new BaseException("本桌结果已提交或已锁定");
         }
-        if (RoundType.SCORE.name().equals(round.getRoundType())) {
-            validateScoreRoundTableReady(table);
-        } else {
+        boolean rankingRound = RoundType.RANKING.name().equals(round.getRoundType());
+        if (rankingRound) {
             roundValidationPolicy.validateRankingRoundTableReady(table);
+        } else {
+            validateScoreRoundTableReady(table);
         }
 
         // 2) 记录人工确认原因并自动提交本桌结果
@@ -164,7 +168,11 @@ public class ScoreConfirmationServiceImpl implements ScoreConfirmationService {
         table.setConfirmationOverrideBy(BaseContext.getCurrentId());
         table.setConfirmationOverrideTime(LocalDateTime.now());
         roundTableMapper.updateById(table);
-        autoSubmitRoundTableIfReady(roundTableMapper.selectById(roundTableId), round);
+        if (rankingRound) {
+            rankingService.refreshRankingTableReadiness(roundTableId);
+        } else {
+            autoSubmitRoundTableIfReady(roundTableMapper.selectById(roundTableId), round);
+        }
     }
 
     @Override
@@ -182,15 +190,17 @@ public class ScoreConfirmationServiceImpl implements ScoreConfirmationService {
     private void refreshReadiness(Long roundTableId) {
         RoundTable table = roundQuerySupport.requireRoundTable(roundTableId);
         CompetitionRound round = competitionRoundMapper.selectById(table.getRoundId());
-        if (round == null || table.getCaptainJudgeId() == null) {
+        if (round == null) {
             return;
         }
         try {
-            boolean ready = RoundType.SCORE.name().equals(round.getRoundType())
-                    ? isScoreRoundTableReady(table)
-                    : roundValidationPolicy.isRankingRoundTableReady(table);
-            if (ready) {
-                autoSubmitRoundTableIfReady(table, round);
+            if (RoundType.SCORE.name().equals(round.getRoundType())) {
+                if (table.getCaptainJudgeId() != null && isScoreRoundTableReady(table)) {
+                    autoSubmitRoundTableIfReady(table, round);
+                }
+            } else if (RoundType.RANKING.name().equals(round.getRoundType())) {
+                // 排序轮（含多组别奖牌桌）就绪判定统一走 RankingService，避免确认计数口径分叉。
+                rankingService.refreshRankingTableReadiness(roundTableId);
             }
         } catch (BaseException ex) {
             // 桌内数据暂时不满足自动提交条件（如晋级数量超出目标），保留进行中状态交由主办方处理。
@@ -351,31 +361,6 @@ public class ScoreConfirmationServiceImpl implements ScoreConfirmationService {
                 .in(RoundTableConfirmation::getJudgeAccountId, requiredJudgeIds)));
     }
 
-    private int resolveRankingConfirmationRequiredCount(RoundTable table) {
-        return Math.toIntExact(roundTableMemberMapper.selectCount(new LambdaQueryWrapper<RoundTableMember>()
-                .eq(RoundTableMember::getRoundTableId, table.getId())
-                .ne(RoundTableMember::getStatus, "REMOVED")
-                .ne(RoundTableMember::getRole, JudgeRoleType.CAPTAIN.name())));
-    }
-
-    private int resolveRankingConfirmationConfirmedCount(RoundTable table) {
-        Set<Long> requiredJudgeIds = roundTableMemberMapper.selectList(new LambdaQueryWrapper<RoundTableMember>()
-                        .eq(RoundTableMember::getRoundTableId, table.getId())
-                        .ne(RoundTableMember::getStatus, "REMOVED")
-                        .ne(RoundTableMember::getRole, JudgeRoleType.CAPTAIN.name()))
-                .stream()
-                .map(RoundTableMember::getJudgeAccountId)
-                .collect(Collectors.toSet());
-        if (requiredJudgeIds.isEmpty()) {
-            return 0;
-        }
-        return Math.toIntExact(roundTableConfirmationMapper.selectCount(new LambdaQueryWrapper<RoundTableConfirmation>()
-                .eq(RoundTableConfirmation::getRoundTableId, table.getId())
-                .eq(RoundTableConfirmation::getResultVersion, currentResultVersion(table))
-                .eq(RoundTableConfirmation::getStatus, "AGREED")
-                .in(RoundTableConfirmation::getJudgeAccountId, requiredJudgeIds)));
-    }
-
     private void validateConfirmationVersion(RoundTableConfirmationRequest request, int currentVersion) {
         if (request == null || request.getResultVersion() == null || !Objects.equals(request.getResultVersion(), currentVersion)) {
             throw new BaseException("本桌结果已更新，请重新核对后确认");
@@ -389,17 +374,12 @@ public class ScoreConfirmationServiceImpl implements ScoreConfirmationService {
         if (RoundStatus.SUBMITTED.name().equals(table.getStatus()) || RoundStatus.LOCKED.name().equals(table.getStatus())) {
             return;
         }
-        if (RoundType.SCORE.name().equals(round.getRoundType())) {
-            validateScoreRoundTableReady(table);
-            if (!isScoreConfirmationReady(table)) {
-                return;
-            }
-        } else if (RoundType.RANKING.name().equals(round.getRoundType())) {
-            roundValidationPolicy.validateRankingRoundTableReady(table);
-            if (!isRankingConfirmationReady(table)) {
-                return;
-            }
-        } else {
+        // 仅处理评分轮自动提交；排序轮的就绪判定与提交统一由 RankingService 负责。
+        if (!RoundType.SCORE.name().equals(round.getRoundType())) {
+            return;
+        }
+        validateScoreRoundTableReady(table);
+        if (!isScoreConfirmationReady(table)) {
             return;
         }
         table.setStatus(RoundStatus.SUBMITTED.name());
@@ -410,17 +390,6 @@ public class ScoreConfirmationServiceImpl implements ScoreConfirmationService {
             competitionRoundMapper.updateById(round);
         }
         roundCandidateSyncService.syncDependentDrafts(round);
-    }
-
-    private boolean isRankingConfirmationReady(RoundTable table) {
-        if (!roundValidationPolicy.isRankingRoundTableReady(table)) {
-            return false;
-        }
-        if (Objects.equals(table.getConfirmationOverrideFlag(), FLAG_TRUE)) {
-            return true;
-        }
-        int required = resolveRankingConfirmationRequiredCount(table);
-        return required <= 0 || resolveRankingConfirmationConfirmedCount(table) >= required;
     }
 
     private boolean isScoreConfirmationReady(RoundTable table) {

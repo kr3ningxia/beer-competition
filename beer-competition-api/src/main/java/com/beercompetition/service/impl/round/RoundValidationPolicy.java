@@ -213,7 +213,9 @@ public class RoundValidationPolicy {
                     });
             return;
         }
-        Set<Long> allowedEntryIds = roundQuerySupport.listCandidateResults(round.getSourceRoundId()).stream()
+        // 候选范围与目标模式一致：总冠军轮只接受各组别金奖，其余轮次沿用全部晋级候选。
+        Set<Long> allowedEntryIds = roundQuerySupport
+                .resolveCandidateResultsForRound(round, roundQuerySupport.listRoundTables(round.getId())).stream()
                 .map(RoundResult::getBeerEntryId)
                 .collect(Collectors.toSet());
         entries.stream()
