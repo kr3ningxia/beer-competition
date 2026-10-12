@@ -155,7 +155,7 @@ public class RoundQuerySupport {
         if (round.getSourceRoundId() == null) {
             return List.of();
         }
-        // 候选池跟随当前轮次桌的目标模式：总冠军轮每桌接收最高可用奖项，其余轮次沿用全部晋级候选。
+        // 候选池跟随当前轮次桌的目标模式：总冠军轮只接收各组别金奖，其余轮次沿用全部晋级候选。
         String targetMode = tables.stream()
                 .map(RoundTable::getTargetMode)
                 .filter(StringUtils::hasText)
@@ -173,20 +173,20 @@ public class RoundQuerySupport {
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
         Map<Long, RoundTable> sourceTables = loadRoundTables(sourceTableIds);
-        Map<String, RoundResult> highestAvailableByGroup = candidates.stream()
+        Map<String, RoundResult> goldByGroup = candidates.stream()
                 .filter(result -> result.getRoundTableId() != null)
-                .filter(result -> result.getRankNo() != null && result.getRankNo() >= 1 && result.getRankNo() <= 3)
+                .filter(result -> result.getRankNo() != null && result.getRankNo() == 1)
                 .filter(result -> {
                     RoundTable sourceTable = sourceTables.get(result.getRoundTableId());
                     return sourceTable != null && RoundTargetMode.MEDALS.name().equals(sourceTable.getTargetMode());
                 })
                 .collect(Collectors.toMap(
-                        // 多组别奖牌桌按“组别”取各组的最高奖项，避免同组被并成一条；无组别时退回按桌。
+                        // 多组别奖牌桌按“组别”取该组金奖（rank 1），银奖、铜奖不晋级；无组别时退回按桌。
                         result -> result.getCategoryId() != null ? "cat:" + result.getCategoryId() : "tbl:" + result.getRoundTableId(),
                         Function.identity(),
-                        (left, right) -> left.getRankNo() <= right.getRankNo() ? left : right,
+                        (left, right) -> left,
                         LinkedHashMap::new));
-        return List.copyOf(highestAvailableByGroup.values());
+        return List.copyOf(goldByGroup.values());
     }
 
     public List<JudgeTable> listBaseTables(Long competitionId) {
