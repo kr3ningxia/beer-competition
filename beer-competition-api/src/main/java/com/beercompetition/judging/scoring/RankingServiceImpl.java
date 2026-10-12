@@ -237,11 +237,13 @@ public class RankingServiceImpl implements RankingService {
         // 2) 写入当前版本确认记录
         int version = currentResultVersionFor(table, categoryId);
         validateConfirmationVersion(request, version);
-        RoundTableConfirmation existing = roundTableConfirmationMapper.selectOne(new LambdaQueryWrapper<RoundTableConfirmation>()
+        LambdaQueryWrapper<RoundTableConfirmation> existingQuery = new LambdaQueryWrapper<RoundTableConfirmation>()
                 .eq(RoundTableConfirmation::getRoundTableId, roundTableId)
-                .eq(RoundTableConfirmation::getCategoryId, categoryId)
                 .eq(RoundTableConfirmation::getJudgeAccountId, judgeId)
-                .eq(RoundTableConfirmation::getResultVersion, version));
+                .eq(RoundTableConfirmation::getResultVersion, version);
+        if (categoryId == null) existingQuery.isNull(RoundTableConfirmation::getCategoryId);
+        else existingQuery.eq(RoundTableConfirmation::getCategoryId, categoryId);
+        RoundTableConfirmation existing = roundTableConfirmationMapper.selectOne(existingQuery);
         if (existing == null) {
             roundTableConfirmationMapper.insert(RoundTableConfirmation.builder()
                     .roundTableId(roundTableId)
@@ -310,11 +312,13 @@ public class RankingServiceImpl implements RankingService {
         Long categoryId = roundTableCategoryService.resolveCategoryId(table, request.getCategoryId());
         roundValidationPolicy.validateRankingDraft(table, categoryId, request.getResults());
 
-        // 2) 用覆盖写方式保存草稿，保证同一评审同一桌只有一份参考排序
-        roundJudgeRankingDraftMapper.delete(new LambdaQueryWrapper<RoundJudgeRankingDraft>()
+        // 2) 用覆盖写方式保存草稿，保证同一评审同一桌同一组别只有一份参考排序
+        LambdaQueryWrapper<RoundJudgeRankingDraft> draftDeleteQuery = new LambdaQueryWrapper<RoundJudgeRankingDraft>()
                 .eq(RoundJudgeRankingDraft::getRoundTableId, roundTableId)
-                .eq(RoundJudgeRankingDraft::getCategoryId, categoryId)
-                .eq(RoundJudgeRankingDraft::getJudgeAccountId, judgeId));
+                .eq(RoundJudgeRankingDraft::getJudgeAccountId, judgeId);
+        if (categoryId == null) draftDeleteQuery.isNull(RoundJudgeRankingDraft::getCategoryId);
+        else draftDeleteQuery.eq(RoundJudgeRankingDraft::getCategoryId, categoryId);
+        roundJudgeRankingDraftMapper.delete(draftDeleteQuery);
         roundJudgeRankingDraftMapper.insert(RoundJudgeRankingDraft.builder()
                 .competitionId(table.getCompetitionId())
                 .roundId(table.getRoundId())

@@ -553,10 +553,12 @@ public class JudgeRoundTableQueryService {
     private List<RoundRankingSlotVO> buildMyRankingDraft(RoundTable table, Map<Long, BeerEntry> entryById, Long judgeId, Long categoryId) {
         LambdaQueryWrapper<RoundJudgeRankingDraft> draftQuery = new LambdaQueryWrapper<RoundJudgeRankingDraft>()
                 .eq(RoundJudgeRankingDraft::getRoundTableId, table.getId())
-                .eq(RoundJudgeRankingDraft::getJudgeAccountId, judgeId);
+                .eq(RoundJudgeRankingDraft::getJudgeAccountId, judgeId)
+                .orderByDesc(RoundJudgeRankingDraft::getId);
         if (categoryId == null) draftQuery.isNull(RoundJudgeRankingDraft::getCategoryId);
         else draftQuery.eq(RoundJudgeRankingDraft::getCategoryId, categoryId);
-        RoundJudgeRankingDraft draft = roundJudgeRankingDraftMapper.selectOne(draftQuery);
+        List<RoundJudgeRankingDraft> drafts = roundJudgeRankingDraftMapper.selectList(draftQuery);
+        RoundJudgeRankingDraft draft = drafts.isEmpty() ? null : drafts.get(0);
         if (draft == null || !StringUtils.hasText(draft.getRankingsJson())) {
             return emptyRankingSlots(table);
         }
