@@ -53,7 +53,10 @@
         </div>
           <div class="category-main">
             <ul class="category-list">
-              <li v-for="category in visibleCategories" :key="category.id">{{ category.name }}</li>
+              <li v-for="category in visibleCategories" :key="category.id">
+                {{ category.name }}
+                <small v-if="category.styleNames?.length">{{ category.styleNames.length }} 种风格</small>
+              </li>
             </ul>
             <span v-if="!competition.categories?.length" class="muted">暂未配置</span>
             <button v-if="competition.categories?.length > 9" class="text-link expand-link" :aria-expanded="categoriesExpanded" @click="categoriesExpanded = !categoriesExpanded">
@@ -297,7 +300,8 @@ dd { margin: 7px 0 0; font-weight: 600; overflow-wrap: anywhere; line-height: 1.
 .category-heading .portal-section-title { margin: 0; }
 .category-heading > span { font-size: 13px; color: #746a5f; }
 .category-list { display: flex; flex-wrap: wrap; gap: 10px; list-style: none; margin: 0; padding: 0; }
-.category-list li { display: flex; align-items: center; max-width: 100%; min-height: 36px; box-sizing: border-box; padding: 7px 16px; border: 1px solid #dfd3b9; border-radius: 4px; background: #fffdf7; font-size: 15px; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
+.category-list li { display: flex; align-items: center; gap: 8px; max-width: 100%; min-height: 36px; box-sizing: border-box; padding: 7px 16px; border: 1px solid #dfd3b9; border-radius: 4px; background: #fffdf7; font-size: 15px; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
+.category-list li small { color: #8b7a62; font-size: 12px; font-weight: 500; white-space: nowrap; }
 .requirements-meta { margin-top: 24px; padding-top: 18px; border-top: 1px solid #e8e0d1; }
 .requirements-meta .field-row { margin-top: 12px; grid-template-columns: 88px minmax(0,1fr); gap: 16px; }
 .requirements-meta .field-row:first-child { margin-top: 0; }

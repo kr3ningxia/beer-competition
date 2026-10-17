@@ -28,6 +28,7 @@ public class OrganizerApplicationAdminVO {
     private String reviewRemark;
     private Long organizerId;
     private Long initialAdminUserId;
+    private Integer initialAdminStatus;
     private LocalDateTime submittedTime;
     private LocalDateTime reviewedTime;
     private LocalDateTime accountIssuedTime;

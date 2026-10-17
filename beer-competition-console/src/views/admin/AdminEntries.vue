@@ -1159,7 +1159,7 @@ function paymentLabel(value) {
 }
 
 function paymentMethodLabel(value) {
-  return { WECHAT: '微信支付', WECHAT_QR: '微信收款码', BANK_TRANSFER: '银行转账', MANUAL: '人工确认', MOCK: '测试支付' }[value] || '未记录'
+  return { WECHAT: '微信支付', WECHAT_QR: '收款码', BANK_TRANSFER: '银行转账', MANUAL: '人工确认', MOCK: '测试支付' }[value] || '未记录'
 }
 
 function refundStatusText(value, entry) {

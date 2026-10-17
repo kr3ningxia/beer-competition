@@ -66,11 +66,10 @@
           <button v-if="keyword || statusFilter !== 'ALL'" class="text-button" type="button" @click="clearFilters">清除筛选</button>
         </div>
         <div v-else class="table-body">
-          <button
+          <div
             v-for="application in filteredApplications"
             :key="application.id"
             class="application-row"
-            type="button"
             @click="openDetail(application)"
           >
             <span class="organization-cell">
@@ -86,10 +85,16 @@
               <i></i>
               {{ statusLabel(application.status) }}
             </span>
-            <span class="account-cell">
+            <span :class="['account-cell', { disabled: isAccountDisabled(application) }]">
               <template v-if="application.status === 'ACCOUNT_ISSUED'">
-                <Check />
-                已开通
+                <template v-if="isAccountDisabled(application)">
+                  <Close />
+                  已停用
+                </template>
+                <template v-else>
+                  <Check />
+                  已开通
+                </template>
               </template>
               <template v-else-if="application.status === 'APPROVED'">
                 待发放
@@ -97,9 +102,21 @@
               <template v-else>-</template>
             </span>
             <span class="row-action-cell">
-              <span class="row-action">{{ actionLabel(application) }} <ArrowRight /></span>
+              <button
+                v-if="application.status === 'ACCOUNT_ISSUED'"
+                :class="['row-action-button', { enable: isAccountDisabled(application) }]"
+                type="button"
+                :disabled="accountActionId === application.id"
+                @click.stop="toggleAccountStatus(application)"
+              >
+                <Loading v-if="accountActionId === application.id" class="spinning" />
+                {{ isAccountDisabled(application) ? '启用账号' : '停用账号' }}
+              </button>
+              <button class="row-action" type="button" @click.stop="openDetail(application)">
+                {{ actionLabel(application) }} <ArrowRight />
+              </button>
             </span>
-          </button>
+          </div>
         </div>
       </div>
     </section>
@@ -214,11 +231,37 @@
                 <Key v-else />
                 {{ actionLoading ? '发放中' : '发放初始账号' }}
               </button>
-              <span v-if="selectedApplication.status === 'ACCOUNT_ISSUED'" class="completed-action"><Check /> 账号已发放</span>
+              <span v-if="selectedApplication.status === 'ACCOUNT_ISSUED' && !isAccountDisabled(selectedApplication)" class="completed-action"><Check /> 账号已发放</span>
+              <span v-else-if="selectedApplication.status === 'ACCOUNT_ISSUED'" class="completed-action muted"><Close /> 账号已停用</span>
               <span v-if="selectedApplication.status === 'REJECTED'" class="completed-action muted"><Close /> 本次申请已结束</span>
             </template>
           </footer>
         </aside>
+      </div>
+    </Transition>
+
+    <Transition name="modal">
+      <div v-if="accountConfirm" class="modal-layer" @click.self="closeAccountConfirm">
+        <section class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="account-confirm-title">
+          <header class="confirm-head">
+            <h2 id="account-confirm-title">{{ accountConfirm.disabling ? '停用账号' : '启用账号' }}</h2>
+            <button class="icon-button small" type="button" aria-label="关闭" title="关闭" @click="closeAccountConfirm">
+              <Close />
+            </button>
+          </header>
+          <p class="confirm-copy">{{ accountConfirm.message }}</p>
+          <div class="confirm-actions">
+            <button class="ghost-button" type="button" @click="closeAccountConfirm">取消</button>
+            <button
+              :class="accountConfirm.disabling ? 'danger-button' : 'primary-button'"
+              type="button"
+              :disabled="accountActionId === accountConfirm.application.id"
+              @click="confirmAccountStatus"
+            >
+              {{ accountConfirm.disabling ? '停用' : '启用' }}
+            </button>
+          </div>
+        </section>
       </div>
     </Transition>
 
@@ -274,6 +317,7 @@ import {
   View,
   Warning,
 } from '@element-plus/icons-vue'
+import { updateAdminUserStatus } from '@/api/admin'
 import {
   downloadOrganizerApplicationMaterial,
   fetchOrganizerApplications,
@@ -291,6 +335,8 @@ const statusFilter = ref('ALL')
 const drawerOpen = ref(false)
 const selectedApplication = ref(null)
 const actionLoading = ref(false)
+const accountActionId = ref(null)
+const accountConfirm = ref(null)
 const materialLoading = ref(false)
 const materialViewing = ref(false)
 const reviewLoading = ref(false)
@@ -305,6 +351,7 @@ const statusFilters = [
   { label: '待补资料', value: 'NEED_MORE_INFO' },
   { label: '待发放', value: 'APPROVED' },
   { label: '已开通', value: 'ACCOUNT_ISSUED' },
+  { label: '已停用', value: 'DISABLED' },
   { label: '已拒绝', value: 'REJECTED' },
 ]
 
@@ -316,7 +363,11 @@ if (statusFilters.some((item) => item.value === requestedStatus)) {
 const filteredApplications = computed(() => {
   const search = keyword.value.toLowerCase()
   return applications.value.filter((item) => {
-    const matchesStatus = statusFilter.value === 'ALL' || item.status === statusFilter.value
+    const matchesStatus = statusFilter.value === 'ALL'
+      ? !isAccountDisabled(item)
+      : statusFilter.value === 'DISABLED'
+        ? isAccountDisabled(item)
+        : item.status === statusFilter.value
     const matchesKeyword = !search || [item.organizationName, item.applicationNo, item.contactName, item.contactEmail]
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(search))
@@ -324,10 +375,14 @@ const filteredApplications = computed(() => {
   })
 })
 
-const statusCounts = computed(() => applications.value.reduce((counts, item) => {
-  counts[item.status] = (counts[item.status] || 0) + 1
+const statusCounts = computed(() => {
+  const counts = applications.value.reduce((result, item) => {
+    result[item.status] = (result[item.status] || 0) + 1
+    return result
+  }, {})
+  counts.DISABLED = applications.value.filter(isAccountDisabled).length
   return counts
-}, {}))
+})
 
 onMounted(loadApplications)
 
@@ -336,7 +391,8 @@ async function loadApplications() {
   loadError.value = false
   accessDenied.value = false
   try {
-    applications.value = await fetchOrganizerApplications(statusFilter.value) || []
+    const queryStatus = statusFilter.value === 'DISABLED' ? 'ALL' : statusFilter.value
+    applications.value = await fetchOrganizerApplications(queryStatus) || []
   } catch (error) {
     applications.value = []
     accessDenied.value = error?.response?.status === 403
@@ -540,6 +596,42 @@ function copyCredential(value) {
 function closeCredential() {
   credentialVisible.value = false
   credentialData.value = null
+}
+
+function isAccountDisabled(application) {
+  return application?.initialAdminStatus === 0
+}
+
+function toggleAccountStatus(application) {
+  if (!application?.initialAdminUserId || accountActionId.value) return
+  const disabling = !isAccountDisabled(application)
+  accountConfirm.value = {
+    application,
+    disabling,
+    message: disabling
+      ? `停用后，「${application.organizationName}」的登录账号将无法登录。`
+      : `启用后，「${application.organizationName}」的登录账号将恢复使用。`,
+  }
+}
+
+function closeAccountConfirm() {
+  if (accountActionId.value) return
+  accountConfirm.value = null
+}
+
+async function confirmAccountStatus() {
+  const pending = accountConfirm.value
+  if (!pending) return
+  const { application, disabling } = pending
+  accountActionId.value = application.id
+  try {
+    await updateAdminUserStatus(application.initialAdminUserId, { status: disabling ? 0 : 1 })
+    application.initialAdminStatus = disabling ? 0 : 1
+    accountConfirm.value = null
+    ElMessage.success(disabling ? '账号已停用' : '账号已启用')
+  } finally {
+    accountActionId.value = null
+  }
 }
 
 function actionLabel(application) {
@@ -849,7 +941,7 @@ svg {
 .application-row,
 .skeleton-row {
   display: grid;
-  grid-template-columns: minmax(230px, 1.65fr) minmax(120px, 0.85fr) minmax(140px, 0.95fr) minmax(110px, 0.78fr) minmax(90px, 0.65fr) minmax(130px, 0.9fr);
+  grid-template-columns: minmax(220px, 1.55fr) minmax(120px, 0.85fr) minmax(140px, 0.95fr) minmax(110px, 0.78fr) minmax(90px, 0.65fr) minmax(175px, 1.05fr);
   gap: 14px;
   align-items: center;
 }
@@ -884,6 +976,7 @@ svg {
   padding: 11px 14px;
   color: var(--text);
   text-align: left;
+  cursor: pointer;
   background: rgba(255, 255, 255, 0.026);
   border: 1px solid rgba(219, 232, 237, 0.08);
   border-radius: 8px;
@@ -1008,17 +1101,54 @@ svg {
   color: var(--green);
 }
 
+.account-cell.disabled {
+  color: var(--red);
+}
+
+.account-cell.disabled svg {
+  color: var(--red);
+}
+
 .row-action-cell {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: 14px;
 }
 
 .row-action {
   gap: 5px;
+  padding: 0;
   color: var(--gold-soft);
+  background: transparent;
+  border: 0;
   font-size: 12px;
   font-weight: 900;
   white-space: nowrap;
+}
+
+.row-action-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  color: var(--red);
+  background: transparent;
+  border: 0;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.row-action-button.enable {
+  color: var(--green);
+}
+
+.row-action-button:hover,
+.row-action-button:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  outline: 0;
 }
 
 .row-action svg {
@@ -1444,6 +1574,46 @@ svg {
   height: 16px;
 }
 
+.confirm-modal {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(430px, calc(100% - 32px));
+  padding: 21px 23px 20px;
+  color: var(--text);
+  background: #152125;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.42);
+  transform: translate(-50%, -50%);
+}
+
+.confirm-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.confirm-head h2 {
+  font-size: 19px;
+  line-height: 1.3;
+}
+
+.confirm-copy {
+  margin-top: 16px;
+  color: #c8d5d9;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 22px;
+}
+
 .credential-modal {
   position: absolute;
   top: 50%;
@@ -1593,6 +1763,8 @@ svg {
   transform: translateX(24px);
 }
 
+.modal-enter-from .confirm-modal,
+.modal-leave-to .confirm-modal,
 .modal-enter-from .credential-modal,
 .modal-leave-to .credential-modal {
   transform: translate(-50%, calc(-50% + 10px));
@@ -1636,7 +1808,7 @@ svg {
   }
 
   .application-row {
-    grid-template-columns: minmax(220px, 1.5fr) minmax(110px, 0.85fr) minmax(125px, 0.95fr) minmax(105px, 0.8fr) minmax(80px, 0.6fr) minmax(120px, 0.85fr);
+    grid-template-columns: minmax(210px, 1.45fr) minmax(110px, 0.85fr) minmax(125px, 0.95fr) minmax(105px, 0.8fr) minmax(80px, 0.6fr) minmax(165px, 0.95fr);
   }
 }
 

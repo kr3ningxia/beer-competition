@@ -6,6 +6,7 @@ import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.common.result.PageResult;
 import com.beercompetition.competition.access.CompetitionAccessService;
+import com.beercompetition.competition.configuration.CompetitionCategoryStyleService;
 import com.beercompetition.mapper.AdminOperationLogMapper;
 import com.beercompetition.mapper.BeerEntryExtraFieldMapper;
 import com.beercompetition.mapper.BeerEntryMapper;
@@ -67,6 +68,8 @@ public class AdminEntryServiceImpl implements AdminEntryService {
     private final CompetitionCategoryMapper competitionCategoryMapper;
 
     private final CompetitionStyleConfigMapper competitionStyleConfigMapper;
+
+    private final CompetitionCategoryStyleService competitionCategoryStyleService;
 
     private final EntryFieldConfigMapper entryFieldConfigMapper;
 
@@ -136,6 +139,10 @@ public class AdminEntryServiceImpl implements AdminEntryService {
         }
         CompetitionCategory category = requireCompetitionCategory(entry.getCompetitionId(), request.getCategoryId());
         CompetitionStyleConfig selectedStyle = resolveEditableCompetitionStyle(entry, request.getStyle());
+        String nextStyle = normalizeRequired(request.getStyle(), "基础风格不能为空");
+        if (!Objects.equals(entry.getStyle(), nextStyle) || !Objects.equals(entry.getCategoryId(), category.getId())) {
+            competitionCategoryStyleService.requireStyleAllowed(category.getId(), nextStyle);
+        }
         List<EntryFieldConfig> fieldConfigs = listEntryFieldConfigs(entry.getCompetitionId());
         Map<String, String> normalizedExtraFields = normalizeExtraFields(fieldConfigs, request.getExtraFields());
         String reason = normalizeRequired(request.getReason(), "请填写修改原因");

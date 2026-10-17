@@ -3,6 +3,7 @@ package com.beercompetition.competition.query;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.billing.beercoin.BeerCoinService;
+import com.beercompetition.competition.configuration.CompetitionCategoryStyleService;
 import com.beercompetition.mapper.CompetitionCategoryMapper;
 import com.beercompetition.mapper.CompetitionScoreConfigMapper;
 import com.beercompetition.mapper.CompetitionFeeTierMapper;
@@ -11,6 +12,7 @@ import com.beercompetition.mapper.EntryFieldConfigMapper;
 import com.beercompetition.mapper.JudgeAccountMapper;
 import com.beercompetition.mapper.JudgeAssignmentMapper;
 import com.beercompetition.mapper.JudgeTableMapper;
+import com.beercompetition.mapper.OrganizerMapper;
 import com.beercompetition.mapper.ScoreRecordMapper;
 import com.beercompetition.pojo.dto.DimensionRequest;
 import com.beercompetition.pojo.enums.JudgeRoleType;
@@ -24,6 +26,7 @@ import com.beercompetition.pojo.po.EntryFieldConfig;
 import com.beercompetition.pojo.po.JudgeAccount;
 import com.beercompetition.pojo.po.JudgeAssignment;
 import com.beercompetition.pojo.po.JudgeTable;
+import com.beercompetition.pojo.po.Organizer;
 import com.beercompetition.pojo.po.ScoreRecord;
 import com.beercompetition.pojo.vo.CompetitionAlertVO;
 import com.beercompetition.pojo.vo.CompetitionCheckVO;
@@ -75,6 +78,8 @@ public class CompetitionDetailAssembler {
 
     private final CompetitionStyleConfigMapper competitionStyleConfigMapper;
 
+    private final CompetitionCategoryStyleService competitionCategoryStyleService;
+
     private final EntryFieldConfigMapper entryFieldConfigMapper;
 
     private final JudgeTableMapper judgeTableMapper;
@@ -88,6 +93,8 @@ public class CompetitionDetailAssembler {
     private final CompetitionFeeTierMapper competitionFeeTierMapper;
 
     private final ScoreRecordMapper scoreRecordMapper;
+
+    private final OrganizerMapper organizerMapper;
 
     private final CompetitionProgressQueryService competitionProgressQueryService;
 
@@ -118,6 +125,9 @@ public class CompetitionDetailAssembler {
 
     public CompetitionDetailVO buildOverview(Competition competition, boolean includeStyleSnapshot) {
         Long competitionId = competition.getId();
+        Organizer organizer = competition.getOrganizerId() == null
+                ? null
+                : organizerMapper.selectById(competition.getOrganizerId());
         List<CompetitionConfigNameVO> categories = listCategories(competitionId);
         List<CompetitionConfigNameVO> styles = includeStyleSnapshot ? listStyles(competitionId) : List.of();
         List<EntryFieldConfigVO> entryFields = listEntryFields(competitionId);
@@ -137,6 +147,9 @@ public class CompetitionDetailAssembler {
                 .id(competition.getId())
                 .code(competition.getCode())
                 .name(competition.getName())
+                .organizerId(competition.getOrganizerId())
+                .organizerType(organizer == null ? null : organizer.getOrganizerType())
+                .organizerName(organizer == null ? null : organizer.getName())
                 .competitionType(competitionReadinessEvaluator.resolveCompetitionType(competition).name())
                 .competitionDate(competition.getCompetitionDate())
                 .registrationStart(competition.getRegistrationStart())
@@ -214,6 +227,7 @@ public class CompetitionDetailAssembler {
     }
 
     private List<CompetitionConfigNameVO> listCategories(Long competitionId) {
+        Map<Long, List<String>> styleScopes = competitionCategoryStyleService.listStyleNamesByCategory(competitionId);
         return competitionCategoryMapper.selectList(new LambdaQueryWrapper<CompetitionCategory>()
                         .eq(CompetitionCategory::getCompetitionId, competitionId)
                         .orderByAsc(CompetitionCategory::getSortOrder)
@@ -223,6 +237,7 @@ public class CompetitionDetailAssembler {
                         .id(item.getId())
                         .name(item.getName())
                         .sortOrder(item.getSortOrder())
+                        .styleNames(styleScopes.get(item.getId()))
                         .build())
                 .toList();
     }

@@ -14,6 +14,8 @@ import com.beercompetition.mapper.CompetitionStyleConfigMapper;
 import com.beercompetition.mapper.EntryFieldConfigMapper;
 import com.beercompetition.mapper.JudgeAssignmentMapper;
 import com.beercompetition.mapper.JudgeTableMapper;
+import com.beercompetition.pojo.dto.CategoryStyleScopeBatchUpdateRequest;
+import com.beercompetition.pojo.dto.CategoryStyleScopeItemRequest;
 import com.beercompetition.pojo.dto.CompetitionStyleLibraryUpdateRequest;
 import com.beercompetition.pojo.dto.ConfigNameBatchUpdateRequest;
 import com.beercompetition.pojo.dto.ConfigNameItemRequest;
@@ -53,6 +55,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -77,18 +80,9 @@ public class CompetitionConfigurationServiceImpl implements CompetitionConfigura
 
     private static final int FLAG_TRUE = 1;
 
-    private static final int CROSS_MIN_DIMENSIONS = 2;
+    private static final int FLEXIBLE_MIN_DIMENSIONS = 2;
 
-    private static final int CROSS_MAX_DIMENSIONS = 3;
-
-    private static final List<String> PROFESSIONAL_DIMENSION_LABELS = List.of("香气", "外观", "味道", "口感", "整体印象");
-
-    private static final List<BigDecimal> PROFESSIONAL_DIMENSION_MAX_SCORES = List.of(
-                BigDecimal.valueOf(12),
-                BigDecimal.valueOf(3),
-                BigDecimal.valueOf(20),
-                BigDecimal.valueOf(5),
-                BigDecimal.valueOf(10));
+    private static final int FLEXIBLE_MAX_DIMENSIONS = 8;
 
     private static final int DEFAULT_MIN_COMMENT_LENGTH = 0;
 
@@ -118,6 +112,8 @@ public class CompetitionConfigurationServiceImpl implements CompetitionConfigura
 
     private final StyleLibraryService styleLibraryService;
 
+    private final CompetitionCategoryStyleService competitionCategoryStyleService;
+
     private final ObjectMapper objectMapper;
 
     private final CompetitionQueryService competitionQueryService;
@@ -131,9 +127,39 @@ public class CompetitionConfigurationServiceImpl implements CompetitionConfigura
         Competition competition = getCompetitionOrThrow(id);
         assertCategoriesEditable(competition);
         List<ConfigNameItemRequest> items = normalizeNameItems(request.getItems(), "投递组别");
+        Map<String, List<String>> scopesByCategory = validateCategoryStyleScopes(id, items);
 
-        // 2) 替换当前比赛投递组别
-        replaceCategories(id, items);
+        // 2) 替换当前比赛投递组别和可选风格范围
+        Map<String, Long> categoryIds = replaceCategories(id, items);
+        competitionCategoryStyleService.replaceScopes(id, remapScopeKeys(scopesByCategory, categoryIds, items));
+
+        // 3) 重新计算配置检查并返回详情
+        return competitionQueryService.getCompetitionDetail(id);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public CompetitionDetailVO updateCategoryStyleScopes(Long id, CategoryStyleScopeBatchUpdateRequest request) {
+        // 1) 参数规范化与阶段权限校验
+        Competition competition = getCompetitionOrThrow(id);
+        assertRegistrationConfigEditable(competition, "投递组别的可选风格");
+        List<CategoryStyleScopeItemRequest> items = normalizeScopeItems(request.getItems());
+        Map<Long, CompetitionCategory> categories = listCompetitionCategories(id);
+        Map<Long, List<String>> scopesByCategory = new LinkedHashMap<>();
+        Set<String> activeStyleNames = listActiveStyleNames(id);
+        for (CategoryStyleScopeItemRequest item : items) {
+            CompetitionCategory category = categories.get(item.getCategoryId());
+            if (category == null) {
+                throw new BaseException("投递组别不属于当前赛事");
+            }
+            List<String> names = normalizeStyleNames(item.getStyleNames(), category.getName(), activeStyleNames);
+            if (!names.isEmpty()) {
+                scopesByCategory.put(category.getId(), names);
+            }
+        }
+
+        // 2) 替换当前比赛的可选风格范围
+        competitionCategoryStyleService.replaceScopes(id, scopesByCategory);
 
         // 3) 重新计算配置检查并返回详情
         return competitionQueryService.getCompetitionDetail(id);
@@ -147,11 +173,13 @@ public class CompetitionConfigurationServiceImpl implements CompetitionConfigura
         assertRegistrationConfigEditable(competition, "基础风格库");
         String styleLibraryVersion = normalizeRequired(request.getStyleLibraryVersion(), "基础风格库不能为空");
         List<StyleItemVO> snapshotStyles = styleLibraryService.listEnabledStyles(styleLibraryVersion);
+        Map<Long, List<String>> remappedScopes = remapScopesForStyleLibraryChange(id, snapshotStyles);
         competition.setStyleLibraryVersion(styleLibraryVersion);
 
-        // 2) 更新比赛风格库版本并重建比赛风格快照
+        // 2) 更新比赛风格库版本并重建比赛风格快照，同时保留可映射的组别范围
         competitionMapper.updateById(competition);
         replaceStyleSnapshot(id, styleLibraryVersion, snapshotStyles);
+        competitionCategoryStyleService.replaceScopes(id, remappedScopes);
 
         // 3) 重新计算配置检查并返回详情
         return competitionQueryService.getCompetitionDetail(id);
@@ -264,17 +292,124 @@ public class CompetitionConfigurationServiceImpl implements CompetitionConfigura
         return StringUtils.hasText(primary) ? primary : (fallback == null ? "" : fallback);
     }
 
-    private void replaceCategories(Long competitionId, List<ConfigNameItemRequest> items) {
+    private Map<String, Long> replaceCategories(Long competitionId, List<ConfigNameItemRequest> items) {
         competitionCategoryMapper.delete(new LambdaQueryWrapper<CompetitionCategory>()
                 .eq(CompetitionCategory::getCompetitionId, competitionId));
+        Map<String, Long> categoryIds = new LinkedHashMap<>();
         int sort = 0;
         for (ConfigNameItemRequest item : items) {
-            competitionCategoryMapper.insert(CompetitionCategory.builder()
+            CompetitionCategory category = CompetitionCategory.builder()
                     .competitionId(competitionId)
                     .name(item.getName())
                     .sortOrder(resolveSort(item.getSortOrder(), sort++))
-                    .build());
+                    .build();
+            competitionCategoryMapper.insert(category);
+            categoryIds.put(category.getName(), category.getId());
         }
+        return categoryIds;
+    }
+
+    private Map<String, List<String>> validateCategoryStyleScopes(Long competitionId, List<ConfigNameItemRequest> items) {
+        boolean hasRestriction = items.stream()
+                .anyMatch(item -> item.getStyleNames() != null && !item.getStyleNames().isEmpty());
+        if (!hasRestriction) {
+            return Map.of();
+        }
+        Set<String> activeStyleNames = listActiveStyleNames(competitionId);
+        Map<String, List<String>> scopesByCategory = new LinkedHashMap<>();
+        for (ConfigNameItemRequest item : items) {
+            List<String> names = normalizeStyleNames(item.getStyleNames(), item.getName(), activeStyleNames);
+            if (!names.isEmpty()) {
+                scopesByCategory.put(item.getName(), names);
+            }
+        }
+        return scopesByCategory;
+    }
+
+    private Map<Long, List<String>> remapScopeKeys(Map<String, List<String>> scopesByCategoryName,
+                                                   Map<String, Long> categoryIds,
+                                                   List<ConfigNameItemRequest> items) {
+        Map<Long, List<String>> result = new LinkedHashMap<>();
+        for (ConfigNameItemRequest item : items) {
+            List<String> names = scopesByCategoryName.get(item.getName());
+            Long categoryId = categoryIds.get(item.getName());
+            if (categoryId != null && names != null && !names.isEmpty()) {
+                result.put(categoryId, names);
+            }
+        }
+        return result;
+    }
+
+    private List<CategoryStyleScopeItemRequest> normalizeScopeItems(List<CategoryStyleScopeItemRequest> items) {
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+        List<CategoryStyleScopeItemRequest> normalized = new ArrayList<>(items);
+        assertUniqueKeys(normalized.stream().map(item -> String.valueOf(item.getCategoryId())).toList(), "投递组别");
+        return normalized;
+    }
+
+    private Map<Long, CompetitionCategory> listCompetitionCategories(Long competitionId) {
+        return competitionCategoryMapper.selectList(new LambdaQueryWrapper<CompetitionCategory>()
+                        .eq(CompetitionCategory::getCompetitionId, competitionId))
+                .stream()
+                .collect(Collectors.toMap(CompetitionCategory::getId, Function.identity(), (left, right) -> left, LinkedHashMap::new));
+    }
+
+    private Set<String> listActiveStyleNames(Long competitionId) {
+        return competitionStyleConfigMapper.selectList(new LambdaQueryWrapper<CompetitionStyleConfig>()
+                        .eq(CompetitionStyleConfig::getCompetitionId, competitionId)
+                        .eq(CompetitionStyleConfig::getActiveFlag, FLAG_TRUE))
+                .stream()
+                .map(CompetitionStyleConfig::getName)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private List<String> normalizeStyleNames(List<String> styleNames, String categoryName, Set<String> activeStyleNames) {
+        return competitionCategoryStyleService.normalizeKnownNames(styleNames, activeStyleNames, categoryName);
+    }
+
+    private Map<Long, List<String>> remapScopesForStyleLibraryChange(Long competitionId, List<StyleItemVO> nextStyles) {
+        Map<Long, List<String>> currentScopes = competitionCategoryStyleService.listStyleNamesByCategory(competitionId);
+        if (currentScopes.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, String> codeByCurrentName = competitionStyleConfigMapper.selectList(
+                        new LambdaQueryWrapper<CompetitionStyleConfig>()
+                                .eq(CompetitionStyleConfig::getCompetitionId, competitionId)
+                                .eq(CompetitionStyleConfig::getActiveFlag, FLAG_TRUE))
+                .stream()
+                .filter(style -> StringUtils.hasText(style.getStyleCode()))
+                .collect(Collectors.toMap(CompetitionStyleConfig::getName, CompetitionStyleConfig::getStyleCode,
+                        (left, right) -> left));
+        Map<String, String> nextNameByCode = nextStyles.stream()
+                .filter(style -> StringUtils.hasText(style.getStyleCode()))
+                .collect(Collectors.toMap(StyleItemVO::getStyleCode, StyleItemVO::getName, (left, right) -> left));
+        Set<String> nextNames = nextStyles.stream().map(StyleItemVO::getName).collect(Collectors.toSet());
+        Map<Long, String> categoryNames = listCompetitionCategories(competitionId).entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().getName()));
+        Map<Long, List<String>> remapped = new LinkedHashMap<>();
+        List<String> lostCategories = new ArrayList<>();
+        currentScopes.forEach((categoryId, names) -> {
+            List<String> next = names.stream()
+                    .map(name -> {
+                        String nextName = nextNameByCode.get(codeByCurrentName.get(name));
+                        return nextName != null ? nextName : (nextNames.contains(name) ? name : null);
+                    })
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .toList();
+            if (next.isEmpty()) {
+                lostCategories.add(categoryNames.getOrDefault(categoryId, String.valueOf(categoryId)));
+                return;
+            }
+            remapped.put(categoryId, next);
+        });
+        if (!lostCategories.isEmpty()) {
+            throw new BaseException("切换后以下组别没有匹配的可选风格，请先调整范围或改为全部风格："
+                    + String.join("、", lostCategories));
+        }
+        return remapped;
     }
 
     private void reconcileEntryFields(Long competitionId, List<EntryFieldItemRequest> items) {
@@ -420,12 +555,12 @@ public class CompetitionConfigurationServiceImpl implements CompetitionConfigura
                 dimension.setLabel(normalizeRequired(dimension.getLabel(), "评分维度名称不能为空"));
                 dimension.setNotePrompt(normalizeNullable(dimension.getNotePrompt()));
             });
-            if (config.getJudgeRoleType() == JudgeRoleType.CROSS
-                    && (config.getDimensions().size() < CROSS_MIN_DIMENSIONS || config.getDimensions().size() > CROSS_MAX_DIMENSIONS)) {
-                throw new BaseException("跨界评审需配置 2-3 个维度");
-            }
-            if (config.getJudgeRoleType() == JudgeRoleType.PROFESSIONAL) {
-                validateProfessionalScoreDimensions(config.getDimensions());
+            if (isFlexibleDimensionRole(config.getJudgeRoleType())) {
+                int dimensionCount = config.getDimensions().size();
+                if (dimensionCount < FLEXIBLE_MIN_DIMENSIONS || dimensionCount > FLEXIBLE_MAX_DIMENSIONS) {
+                    throw new BaseException(scoreRoleLabel(config.getJudgeRoleType()) + "需配置 "
+                            + FLEXIBLE_MIN_DIMENSIONS + "-" + FLEXIBLE_MAX_DIMENSIONS + " 个维度");
+                }
             }
             if (config.getJudgeRoleType() == JudgeRoleType.CAPTAIN && config.getDimensions().size() != 1) {
                 throw new BaseException("桌长评分表只能配置 1 个共识评分维度");
@@ -441,19 +576,12 @@ public class CompetitionConfigurationServiceImpl implements CompetitionConfigura
         }
     }
 
-    private void validateProfessionalScoreDimensions(List<DimensionRequest> dimensions) {
-        if (dimensions.size() != PROFESSIONAL_DIMENSION_LABELS.size()) {
-            throw new BaseException("专业评审评分表需固定为香气、外观、味道、口感、整体印象 5 个维度");
-        }
-        for (int index = 0; index < PROFESSIONAL_DIMENSION_LABELS.size(); index++) {
-            DimensionRequest dimension = dimensions.get(index);
-            String expectedLabel = PROFESSIONAL_DIMENSION_LABELS.get(index);
-            BigDecimal expectedScore = PROFESSIONAL_DIMENSION_MAX_SCORES.get(index);
-            if (!expectedLabel.equals(dimension.getLabel()) || dimension.getMaxScore() == null
-                    || dimension.getMaxScore().compareTo(expectedScore) != 0) {
-                throw new BaseException("专业评审评分表需固定为香气12、外观3、味道20、口感5、整体印象10");
-            }
-        }
+    private boolean isFlexibleDimensionRole(JudgeRoleType role) {
+        return role == JudgeRoleType.CROSS || role == JudgeRoleType.PROFESSIONAL;
+    }
+
+    private String scoreRoleLabel(JudgeRoleType role) {
+        return role == JudgeRoleType.PROFESSIONAL ? "专业评审" : "跨界评审";
     }
 
     private List<ConfigNameItemRequest> normalizeNameItems(List<ConfigNameItemRequest> items, String label) {

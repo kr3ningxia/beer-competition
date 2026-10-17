@@ -81,7 +81,7 @@ class CompetitionCollectionServiceTest {
 
         assertThatThrownBy(() -> service.updateAdminConfig(1L, request))
                 .isInstanceOf(BaseException.class)
-                .hasMessage("微信收款码文件无效");
+                .hasMessage("收款码文件无效");
     }
 
     @Test

@@ -90,7 +90,7 @@
             </div>
             <div class="form-grid">
               <el-form-item label="投递组别" prop="categoryId">
-                <el-select v-model="activeEntry.categoryId" placeholder="请选择投递组别…">
+                <el-select v-model="activeEntry.categoryId" placeholder="请选择投递组别…" @change="handleCategoryChange">
                   <el-option
                     v-for="item in competition.categories || []"
                     :key="item.id"
@@ -100,13 +100,24 @@
                 </el-select>
               </el-form-item>
               <el-form-item label="基础风格" prop="style">
-                <el-select v-model="activeEntry.style" filterable placeholder="请选择或搜索基础风格…">
-                  <el-option
-                    v-for="item in competition.styles || []"
-                    :key="item.id || item.name"
-                    :label="styleLabel(item)"
-                    :value="item.name"
-                  />
+                <el-select
+                  v-model="activeEntry.style"
+                  filterable
+                  :disabled="!activeEntry.categoryId"
+                  :placeholder="activeEntry.categoryId ? '请选择或搜索基础风格…' : '请先选择投递组别…'"
+                >
+                  <el-option-group
+                    v-for="group in styleOptionGroups"
+                    :key="group.name"
+                    :label="group.name"
+                  >
+                    <el-option
+                      v-for="item in group.styles"
+                      :key="item.id || item.name"
+                      :label="styleLabel(item)"
+                      :value="item.name"
+                    />
+                  </el-option-group>
                 </el-select>
               </el-form-item>
               <el-form-item label="ABV" prop="abv" required>
@@ -306,6 +317,31 @@ const currencyFormatter = new Intl.NumberFormat('zh-CN', {
 
 const configuredFields = computed(() => normalizeEntryFields(competition.value?.entryFields || []))
 const activeEntry = computed(() => entries.value[activeIndex.value] || entries.value[0])
+const activeCategory = computed(() => (
+  (competition.value?.categories || []).find((item) => item.id === activeEntry.value?.categoryId)
+))
+const availableStyles = computed(() => {
+  const styles = competition.value?.styles || []
+  const styleNames = activeCategory.value?.styleNames
+  if (!Array.isArray(styleNames) || !styleNames.length) return styles
+  const allowed = new Set(styleNames)
+  return styles.filter((style) => allowed.has(style.name))
+})
+const styleOptionGroups = computed(() => {
+  const groups = []
+  const byName = new Map()
+  availableStyles.value.forEach((style) => {
+    const name = style.categoryName || '未分类'
+    let group = byName.get(name)
+    if (!group) {
+      group = { name, styles: [] }
+      byName.set(name, group)
+      groups.push(group)
+    }
+    group.styles.push(style)
+  })
+  return groups
+})
 const hasRulesUrl = computed(() => Boolean(competition.value?.rulesUrl))
 const availablePaymentMethods = computed(() => {
   if (!collectionConfig.value?.tenantCompetition) {
@@ -316,7 +352,7 @@ const availablePaymentMethods = computed(() => {
   }
   const enabledMethods = collectionConfig.value.enabledMethods || []
   return [
-    ...(enabledMethods.includes('WECHAT_QR') ? [{ value: 'WECHAT', label: '微信收款' }] : []),
+    ...(enabledMethods.includes('WECHAT_QR') ? [{ value: 'WECHAT', label: '收款码' }] : []),
     ...(enabledMethods.includes('BANK_TRANSFER') ? [{ value: 'BANK_TRANSFER', label: '银行转账' }] : []),
   ]
 })
@@ -441,6 +477,18 @@ function createEmptyEntry() {
   }
 }
 
+function isStyleAllowedForCategory(category, styleName) {
+  const styleNames = category?.styleNames
+  return !Array.isArray(styleNames) || !styleNames.length || styleNames.includes(styleName)
+}
+
+function handleCategoryChange() {
+  const style = activeEntry.value?.style
+  if (!style || isStyleAllowedForCategory(activeCategory.value, style)) return
+  activeEntry.value.style = ''
+  ElMessage.info('已切换投递组别，请重新选择基础风格')
+}
+
 function addEntry() {
   if (entries.value.length >= MAX_BATCH_ENTRIES) return
   entries.value.push(createEmptyEntry())
@@ -526,7 +574,8 @@ function entryErrorCount(entry) {
   let count = 0
   if (!entry.name?.trim()) count += 1
   if (!entry.categoryId) count += 1
-  if (!entry.style) count += 1
+  const category = (competition.value?.categories || []).find((item) => item.id === entry.categoryId)
+  if (!entry.style || !isStyleAllowedForCategory(category, entry.style)) count += 1
   if (!isValidAbvInput(entry.abv)) count += 1
   configuredFields.value.forEach((field) => {
     if (field.required && !hasFieldValue(entry.extraFields?.[field.fieldKey])) count += 1
@@ -568,6 +617,10 @@ function restoreDraft() {
         entry.extraFields?.[field.fieldKey] ?? emptyFieldValue(field),
       ])),
     }))
+    entries.value.forEach((entry) => {
+      const category = (competition.value?.categories || []).find((item) => item.id === entry.categoryId)
+      if (!isStyleAllowedForCategory(category, entry.style)) entry.style = ''
+    })
     activeIndex.value = Math.min(Number(draft.activeIndex || 0), entries.value.length - 1)
     rulesAccepted.value = Boolean(draft.rulesAccepted)
     payMode.value = draft.payMode === 'BANK_TRANSFER' ? 'BANK_TRANSFER' : 'WECHAT'

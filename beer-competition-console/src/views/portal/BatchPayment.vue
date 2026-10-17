@@ -291,7 +291,7 @@ const availablePaymentMethods = computed(() => {
   }
   const enabledMethods = collectionConfig.value?.enabledMethods || []
   return [
-    ...(enabledMethods.includes('WECHAT_QR') ? [{ value: 'WECHAT_QR', label: '微信收款' }] : []),
+    ...(enabledMethods.includes('WECHAT_QR') ? [{ value: 'WECHAT_QR', label: '收款码' }] : []),
     ...(enabledMethods.includes('BANK_TRANSFER') ? [{ value: 'BANK_TRANSFER', label: '银行转账' }] : []),
   ]
 })

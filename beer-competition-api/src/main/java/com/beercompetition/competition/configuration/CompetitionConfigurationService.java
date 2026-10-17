@@ -1,5 +1,6 @@
 package com.beercompetition.competition.configuration;
 
+import com.beercompetition.pojo.dto.CategoryStyleScopeBatchUpdateRequest;
 import com.beercompetition.pojo.dto.CompetitionStyleLibraryUpdateRequest;
 import com.beercompetition.pojo.dto.ConfigNameBatchUpdateRequest;
 import com.beercompetition.pojo.dto.EntryFieldBatchUpdateRequest;
@@ -16,6 +17,8 @@ import java.util.List;
 public interface CompetitionConfigurationService {
 
     CompetitionDetailVO updateCategories(Long id, ConfigNameBatchUpdateRequest request);
+
+    CompetitionDetailVO updateCategoryStyleScopes(Long id, CategoryStyleScopeBatchUpdateRequest request);
 
     CompetitionDetailVO updateStyles(Long id, CompetitionStyleLibraryUpdateRequest request);
 

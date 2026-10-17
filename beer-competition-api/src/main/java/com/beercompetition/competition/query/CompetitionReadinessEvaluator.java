@@ -78,18 +78,9 @@ public class CompetitionReadinessEvaluator {
 
     private static final String GROUP_DATA_ISSUE = "data_issue";
 
-    private static final int CROSS_MIN_DIMENSIONS = 2;
+    private static final int FLEXIBLE_MIN_DIMENSIONS = 2;
 
-    private static final int CROSS_MAX_DIMENSIONS = 3;
-
-    private static final List<String> PROFESSIONAL_DIMENSION_LABELS = List.of("香气", "外观", "味道", "口感", "整体印象");
-
-    private static final List<BigDecimal> PROFESSIONAL_DIMENSION_MAX_SCORES = List.of(
-                BigDecimal.valueOf(12),
-                BigDecimal.valueOf(3),
-                BigDecimal.valueOf(20),
-                BigDecimal.valueOf(5),
-                BigDecimal.valueOf(10));
+    private static final int FLEXIBLE_MAX_DIMENSIONS = 8;
 
     private final ScoreRecordMapper scoreRecordMapper;
 
@@ -552,24 +543,13 @@ public class CompetitionReadinessEvaluator {
     }
 
     private boolean isScoreConfigShapeReady(ScoreConfigVO config) {
-        if (JudgeRoleType.CROSS.name().equals(config.getJudgeRoleType())) {
-            return config.getDimensions().size() >= CROSS_MIN_DIMENSIONS && config.getDimensions().size() <= CROSS_MAX_DIMENSIONS;
+        int dimensionCount = config.getDimensions().size();
+        if (JudgeRoleType.CROSS.name().equals(config.getJudgeRoleType())
+                || JudgeRoleType.PROFESSIONAL.name().equals(config.getJudgeRoleType())) {
+            return dimensionCount >= FLEXIBLE_MIN_DIMENSIONS && dimensionCount <= FLEXIBLE_MAX_DIMENSIONS;
         }
         if (JudgeRoleType.CAPTAIN.name().equals(config.getJudgeRoleType())) {
-            return config.getDimensions().size() == 1;
-        }
-        if (JudgeRoleType.PROFESSIONAL.name().equals(config.getJudgeRoleType())) {
-            if (config.getDimensions().size() != PROFESSIONAL_DIMENSION_LABELS.size()) {
-                return false;
-            }
-            for (int index = 0; index < PROFESSIONAL_DIMENSION_LABELS.size(); index++) {
-                DimensionRequest dimension = config.getDimensions().get(index);
-                if (!PROFESSIONAL_DIMENSION_LABELS.get(index).equals(dimension.getLabel())
-                        || dimension.getMaxScore() == null
-                        || dimension.getMaxScore().compareTo(PROFESSIONAL_DIMENSION_MAX_SCORES.get(index)) != 0) {
-                    return false;
-                }
-            }
+            return dimensionCount == 1;
         }
         return true;
     }

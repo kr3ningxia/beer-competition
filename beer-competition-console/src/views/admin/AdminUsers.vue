@@ -685,7 +685,7 @@ svg {
 .table-head,
 .table-row {
   display: grid;
-  grid-template-columns: minmax(150px, 1fr) minmax(150px, 0.9fr) minmax(155px, 0.9fr) 96px minmax(160px, 0.9fr) minmax(160px, 0.9fr) minmax(286px, auto);
+  grid-template-columns: minmax(150px, 1fr) minmax(150px, 0.9fr) minmax(155px, 0.9fr) 124px minmax(160px, 0.9fr) minmax(160px, 0.9fr) minmax(286px, auto);
   gap: 12px;
   align-items: center;
 }
@@ -737,6 +737,7 @@ svg {
   min-width: 56px;
   padding: 7px 10px;
   font-weight: 850;
+  white-space: nowrap;
   border-radius: 8px;
 }
 

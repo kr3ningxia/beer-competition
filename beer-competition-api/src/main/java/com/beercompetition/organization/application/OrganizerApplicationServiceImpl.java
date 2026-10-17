@@ -475,10 +475,19 @@ public class OrganizerApplicationServiceImpl implements OrganizerApplicationServ
                 .reviewRemark(application.getReviewRemark())
                 .organizerId(application.getOrganizerId())
                 .initialAdminUserId(application.getInitialAdminUserId())
+                .initialAdminStatus(findAdminStatus(application.getInitialAdminUserId()))
                 .submittedTime(application.getSubmittedTime())
                 .reviewedTime(application.getReviewedTime())
                 .accountIssuedTime(application.getAccountIssuedTime())
                 .build();
+    }
+
+    private Integer findAdminStatus(Long adminUserId) {
+        if (adminUserId == null) {
+            return null;
+        }
+        AdminUser adminUser = adminUserMapper.selectById(adminUserId);
+        return adminUser == null ? null : adminUser.getStatus();
     }
 
     private String findMaterialFileName(Long assetId) {

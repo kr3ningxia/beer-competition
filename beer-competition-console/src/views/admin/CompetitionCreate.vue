@@ -93,6 +93,12 @@
                     <span>元 / 款</span>
                   </div>
                 </label>
+              </div>
+              <label class="tier-toggle" :class="{ enabled: draft.earlyBirdEnabled }">
+                <span>启用早鸟价</span>
+                <el-switch v-model="draft.earlyBirdEnabled" aria-label="启用早鸟价" />
+              </label>
+              <div v-if="draft.earlyBirdEnabled" class="form-grid two">
                 <label>
                   <span>早鸟价</span>
                   <div class="fee-field">
@@ -274,9 +280,28 @@
               </div>
             </div>
             <div class="category-list">
-              <div v-for="(category, index) in draft.categories" :key="category.id" class="category-row">
-                <input v-model.trim="category.name" :aria-label="`投递组别 ${index + 1}`" :disabled="syncCategoriesWithStyleLibrary" placeholder="例如 浅色拉格" />
-                <button class="icon-button" :disabled="syncCategoriesWithStyleLibrary" title="删除投递组别" type="button" @click="removeCategory(index)"><Delete /></button>
+              <div
+                v-for="(category, index) in draft.categories"
+                :key="category.id"
+                :class="['category-row', 'category-scope-row', { expanded: category.expanded }]"
+              >
+                <div class="category-scope-head">
+                  <input v-model.trim="category.name" :aria-label="`投递组别 ${index + 1}`" :disabled="syncCategoriesWithStyleLibrary" placeholder="例如 浅色拉格" />
+                  <button
+                    class="scope-summary-button"
+                    type="button"
+                    :aria-expanded="Boolean(category.expanded)"
+                    @click="toggleCategoryScope(category)"
+                  >
+                    <span :class="{ warning: !isCategoryRestricted(category) }">{{ categoryScopeSummary(category) }}</span>
+                    <Right class="scope-chevron" />
+                  </button>
+                  <button class="icon-button" :disabled="syncCategoriesWithStyleLibrary" title="删除投递组别" type="button" @click="removeCategory(index)"><Delete /></button>
+                </div>
+                <p v-if="!category.expanded && categoryScopeNames(category)" class="category-scope-meta">{{ categoryScopeNames(category) }}</p>
+                <div v-if="category.expanded" class="category-scope-picker">
+                  <CategoryStyleScopePicker v-model="category.styleNames" :style-items="selectedStyleItems" />
+                </div>
               </div>
             </div>
           </section>
@@ -369,10 +394,10 @@
               </div>
             </div>
             <div v-if="wechatCollectionEnabled" class="collection-upload wide-field">
-              <span class="field-label">微信收款码 <b>*</b></span>
+              <span class="field-label">收款码 <b>*</b></span>
               <input ref="collectionQrInput" class="collection-file-input" type="file" accept="image/jpeg,image/png,image/webp" @change="selectCollectionQr" />
-              <button v-if="!collectionDraft.qrFile" class="upload-dropzone" type="button" @click="collectionQrInput?.click()"><span class="upload-icon">↑</span><strong>上传微信收款码</strong><small>支持 JPG、PNG、WEBP，请上传清晰完整的收款码</small></button>
-              <div v-else class="qr-preview-card"><img :src="collectionDraft.qrPreviewUrl" alt="微信收款码预览" /><div><strong>{{ collectionDraft.qrFile.name }}</strong><small>厂商付款时将看到此收款码</small><button type="button" @click="collectionQrInput?.click()">更换图片</button></div></div>
+              <button v-if="!collectionDraft.qrFile" class="upload-dropzone" type="button" @click="collectionQrInput?.click()"><span class="upload-icon">↑</span><strong>上传收款码</strong><small>支持 JPG、PNG、WEBP，请上传清晰完整的收款码</small></button>
+              <div v-else class="qr-preview-card"><img :src="collectionDraft.qrPreviewUrl" alt="收款码预览" /><div><strong>{{ collectionDraft.qrFile.name }}</strong><small>厂商付款时将看到此收款码</small><button type="button" @click="collectionQrInput?.click()">更换图片</button></div></div>
             </div>
             <template v-if="bankCollectionEnabled">
               <label><span>收款户名 <b>*</b></span><input v-model.trim="collectionDraft.bankAccountName" placeholder="请输入银行卡开户名称" /></label>
@@ -420,28 +445,36 @@
                   <span></span>
                 </div>
                 <div v-for="(dimension, index) in config.dimensions" :key="dimension.key || dimension.label" class="dimension-row">
-                  <input v-model.trim="dimension.label" :disabled="config.locked" placeholder="维度名称" />
-                  <input v-model.number="dimension.maxScore" :disabled="config.locked" min="1" step="1" type="number" />
+                  <input v-model.trim="dimension.label" placeholder="维度名称" />
+                  <input v-model.number="dimension.maxScore" min="1" step="1" type="number" />
                   <input v-model.trim="dimension.notePrompt" placeholder="例如 描述香气表现" />
                   <button
+                    v-if="isFlexibleScoreRole(config.role)"
                     class="icon-button"
                     type="button"
-                    :disabled="config.locked || config.dimensions.length <= 2"
+                    :disabled="config.dimensions.length <= FLEXIBLE_DIMENSION_MIN"
                     @click="removeDimension(config, index)"
                   >
                     <Delete />
                   </button>
+                  <span v-else></span>
                 </div>
                 <div class="score-foot">
                   <label>
                     <span>备注合计字数下限</span>
                     <input v-model.number="config.minCommentLength" min="0" type="number" />
                   </label>
-                  <button v-if="config.role === 'CROSS'" class="tool-button" type="button" :disabled="config.dimensions.length >= 3" @click="addCrossDimension(config)">
+                  <button
+                    v-if="isFlexibleScoreRole(config.role)"
+                    class="tool-button"
+                    type="button"
+                    :disabled="config.dimensions.length >= FLEXIBLE_DIMENSION_MAX"
+                    @click="addDimension(config)"
+                  >
                     <Plus />
                     添加维度
                   </button>
-                  <span v-else class="status-pill">{{ config.locked ? '维度固定' : '共识分' }}</span>
+                  <span v-else class="status-pill">共识分</span>
                 </div>
               </div>
             </article>
@@ -512,11 +545,11 @@
                 </div>
                 <div>
                   <dt>早鸟价</dt>
-                  <dd>{{ draft.earlyBirdFee ? `${draft.earlyBirdFee} 元 / 款` : '-' }}</dd>
+                  <dd>{{ draft.earlyBirdEnabled && draft.earlyBirdFee !== '' && draft.earlyBirdFee !== null ? `${draft.earlyBirdFee} 元 / 款` : '-' }}</dd>
                 </div>
                 <div>
                   <dt>早鸟截止</dt>
-                  <dd>{{ formatDateTime(draft.earlyBirdDeadline) }}</dd>
+                  <dd>{{ draft.earlyBirdEnabled ? formatDateTime(draft.earlyBirdDeadline) : '-' }}</dd>
                 </div>
                 <div>
                   <dt>赛事简介</dt>
@@ -556,7 +589,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { getAdminMe } from '@/api/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Back, CircleCheck, Delete, InfoFilled, Plus, Warning } from '@element-plus/icons-vue'
+import { Back, CircleCheck, Delete, InfoFilled, Plus, Right, Warning } from '@element-plus/icons-vue'
 import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import {
   defaultScoreConfigs,
@@ -571,7 +604,8 @@ import {
   updateCompetitionCollection,
 } from '@/api/admin'
 import { fetchBeerCoinOverview } from '@/api/beerCoin'
-import { defaultStyleLibraryValue, fallbackStyleLibraries, formatStyleItemName, getStyleLibrary, normalizeStyleLibraries } from './styleLibraries'
+import { defaultStyleLibraryValue, fallbackStyleLibraries, getStyleLibrary, normalizeStyleLibraries } from './styleLibraries'
+import CategoryStyleScopePicker from './components/CategoryStyleScopePicker.vue'
 
 const router = useRouter()
 const activeSection = ref('base-info')
@@ -606,9 +640,9 @@ const fieldTypeOptions = [
 ]
 
 const collectionMethodOptions = [
-  { label: '微信收款', value: 'WECHAT' },
+  { label: '收款码', value: 'WECHAT' },
   { label: '银行转账', value: 'BANK' },
-  { label: '微信支付+银行转账', value: 'BOTH' },
+  { label: '收款码+银行转账', value: 'BOTH' },
 ]
 
 function pad2(value) {
@@ -655,6 +689,7 @@ const draft = reactive({
   registrationStart: defaultSchedule.registrationStart,
   registrationDeadline: defaultSchedule.registrationDeadline,
   entryFee: '',
+  earlyBirdEnabled: false,
   earlyBirdFee: '',
   earlyBirdDeadline: '',
   tierPricingEnabled: false,
@@ -670,18 +705,20 @@ const draft = reactive({
   deliveryAddress: '',
   deliveryNote: '',
   logisticsVisibility: 'PAYMENT_CONFIRMED',
-  categories: [{ id: 'cat-1', name: '' }],
+  categories: [{ id: 'cat-1', name: '', styleNames: null, expanded: false }],
   styleLibraryVersion: defaultStyleLibraryValue,
   entryFields: [],
   scoreConfigs: createScoreConfigs(),
 })
+const FLEXIBLE_DIMENSION_MIN = 2
+const FLEXIBLE_DIMENSION_MAX = 8
 const collectionDraft = reactive({ methodMode: 'BOTH', qrFile: null, qrPreviewUrl: '', qrAssetId: null, bankAccountName: '', bankAccountNo: '', bankName: '', collectionNote: '', paymentContact: '' })
 const initialDraftSnapshot = JSON.stringify(toDraftSnapshot(draft))
 const initialCollectionSnapshot = JSON.stringify(toCollectionSnapshot(collectionDraft))
 
 const scoreDescriptions = {
-  CROSS: '每场比赛可配置 2-3 个维度，总分 50',
-  PROFESSIONAL: '固定 BJCP 口径，允许调整备注提示',
+  CROSS: '每场比赛可配置 2-8 个维度，总分 50',
+  PROFESSIONAL: '每场比赛可配置 2-8 个维度，总分 50',
   CAPTAIN: '桌长填写独立共识分和综合评语',
 }
 
@@ -690,6 +727,26 @@ const styleLibraryOptions = ref(normalizeStyleLibraries(fallbackStyleLibraries))
 const syncCategoriesWithStyleLibrary = ref(false)
 let manualCategoriesBeforeStyleSync = []
 const selectedStyleLibrary = computed(() => getStyleLibrary(draft.styleLibraryVersion, styleLibraryOptions.value))
+const selectedStyleItems = computed(() => (
+  (selectedStyleLibrary.value?.styleItems || []).filter((style) => style.status !== 0)
+))
+const allStyleNames = computed(() => selectedStyleItems.value.map((style) => style.name).filter(Boolean))
+const allStyleNameSet = computed(() => new Set(allStyleNames.value))
+const styleCategoryGroups = computed(() => {
+  const groups = []
+  const byName = new Map()
+  selectedStyleItems.value.forEach((style) => {
+    const categoryName = style.categoryName || '未归类'
+    let group = byName.get(categoryName)
+    if (!group) {
+      group = { name: categoryName, styles: [] }
+      byName.set(categoryName, group)
+      groups.push(group)
+    }
+    group.styles.push(style)
+  })
+  return groups
+})
 const reviewItems = computed(() => buildReviewItems(draft))
 const reviewBlockingItems = computed(() => reviewItems.value.filter((item) => item.status !== 'done'))
 const reviewBlockingText = computed(() => `请先处理：${reviewBlockingItems.value.map((item) => item.label).join('、')}`)
@@ -754,12 +811,49 @@ function selectCollectionQr(event) {
 
 function addCategory() {
   if (syncCategoriesWithStyleLibrary.value) return
-  draft.categories.push({ id: `cat-${Date.now()}`, name: '' })
+  draft.categories.push({ id: `cat-${Date.now()}`, name: '', styleNames: null, expanded: false })
 }
 
 function removeCategory(index) {
   if (syncCategoriesWithStyleLibrary.value) return
   removeItem(draft.categories, index)
+}
+
+function isCategoryRestricted(category) {
+  return Array.isArray(category.styleNames)
+}
+
+function categoryStyleCount(category) {
+  if (!isCategoryRestricted(category)) return allStyleNames.value.length
+  return category.styleNames.filter((name) => allStyleNameSet.value.has(name)).length
+}
+
+function categoryScopeSummary(category) {
+  if (!isCategoryRestricted(category)) return `不限风格（${allStyleNames.value.length} 个可选）`
+  const count = categoryStyleCount(category)
+  if (!count) return '未选风格'
+  const groupCount = styleCategoryGroups.value
+    .filter((group) => group.styles.some((style) => category.styleNames.includes(style.name)))
+    .length
+  return `限 ${groupCount} 类 · ${count} 个风格`
+}
+
+function categoryScopeNames(category) {
+  if (!isCategoryRestricted(category)) return ''
+  const names = styleCategoryGroups.value
+    .filter((group) => group.styles.some((style) => category.styleNames.includes(style.name)))
+    .map((group) => group.name)
+  if (!names.length) return ''
+  return names.length > 4 ? `${names.slice(0, 4).join('、')} +${names.length - 4} 类` : names.join('、')
+}
+
+function toggleCategoryScope(category) {
+  category.expanded = !category.expanded
+}
+
+function categoryStylePayload(category) {
+  if (!isCategoryRestricted(category)) return null
+  return category.styleNames.filter((name) => allStyleNameSet.value.has(name))
 }
 
 function addEntryField() {
@@ -786,14 +880,22 @@ function moveFieldOption(field, index, offset) {
   field.options.splice(target, 0, item)
 }
 
-function addCrossDimension(config) {
-  if (config.dimensions.length >= 3) {
-    ElMessage.warning('跨界评审需配置 2-3 个维度')
+function isFlexibleScoreRole(role) {
+  return role === 'CROSS' || role === 'PROFESSIONAL'
+}
+
+function addDimension(config) {
+  if (!isFlexibleScoreRole(config.role)) return
+  if (config.dimensions.length >= FLEXIBLE_DIMENSION_MAX) {
+    ElMessage.warning(`${roleLabels[config.role]}最多配置 ${FLEXIBLE_DIMENSION_MAX} 个维度`)
     return
   }
-  const next = config.dimensions.length + 1
+  const keyPrefix = config.role.toLowerCase()
+  const existingKeys = new Set(config.dimensions.map((dimension) => dimension.key))
+  let nextIndex = config.dimensions.length + 1
+  while (existingKeys.has(`${keyPrefix}_${nextIndex}`)) nextIndex += 1
   config.dimensions.push({
-    key: `cross_${next}`,
+    key: `${keyPrefix}_${nextIndex}`,
     label: '',
     maxScore: 10,
     notePrompt: '请补充这个维度的具体反馈',
@@ -801,6 +903,11 @@ function addCrossDimension(config) {
 }
 
 function removeDimension(config, index) {
+  if (!isFlexibleScoreRole(config.role)) return
+  if (config.dimensions.length <= FLEXIBLE_DIMENSION_MIN) {
+    ElMessage.warning(`${roleLabels[config.role]}至少保留 ${FLEXIBLE_DIMENSION_MIN} 个维度`)
+    return
+  }
   config.dimensions.splice(index, 1)
 }
 
@@ -818,13 +925,32 @@ async function submitDraft() {
     return
   }
   if (isTenantOrganizer.value && wechatCollectionEnabled.value && !collectionDraft.qrFile && !collectionDraft.qrAssetId) {
-    ElMessage.warning('请上传微信收款码')
+    ElMessage.warning('请上传收款码')
     scrollToSection('collection-config')
     return
   }
   if (isTenantOrganizer.value && bankCollectionEnabled.value && (!collectionDraft.bankAccountName || !collectionDraft.bankAccountNo || !collectionDraft.bankName)) {
     ElMessage.warning('请完整填写收款户名、银行账号和开户银行')
     scrollToSection('collection-config')
+    return
+  }
+  const invalidScope = draft.categories.find((category) => (
+    category.name && isCategoryRestricted(category) && !categoryStylePayload(category).length
+  ))
+  if (invalidScope) {
+    ElMessage.warning(`「${invalidScope.name}」至少选择 1 个风格，或改为不限风格`)
+    invalidScope.expanded = true
+    scrollToSection('entry-config')
+    return
+  }
+  const unmatchedScope = draft.categories.find((category) => (
+    category.name && isCategoryRestricted(category)
+    && category.styleNames.some((name) => !allStyleNameSet.value.has(name))
+  ))
+  if (unmatchedScope) {
+    ElMessage.warning(`「${unmatchedScope.name}」有风格不在当前风格库，请先移除`)
+    unmatchedScope.expanded = true
+    scrollToSection('entry-config')
     return
   }
   try {
@@ -835,8 +961,8 @@ async function submitDraft() {
       registrationStart: toBackendDateTime(draft.registrationStart),
       registrationDeadline: toBackendDateTime(draft.registrationDeadline),
       entryFee: Number(draft.entryFee || 0),
-      earlyBirdFee: draft.earlyBirdFee === '' || draft.earlyBirdFee === null ? null : Number(draft.earlyBirdFee),
-      earlyBirdDeadline: toBackendDateTime(draft.earlyBirdDeadline),
+      earlyBirdFee: draft.earlyBirdEnabled && draft.earlyBirdFee !== '' && draft.earlyBirdFee !== null ? Number(draft.earlyBirdFee) : null,
+      earlyBirdDeadline: draft.earlyBirdEnabled ? toBackendDateTime(draft.earlyBirdDeadline) : null,
       tierPricingEnabled: draft.tierPricingEnabled,
       feeTiers: draft.tierPricingEnabled ? draft.feeTiers.map(({ startQuantity, discountRatePercent }) => ({ startQuantity: Number(startQuantity), discountRate: Number(discountRatePercent) / 100 })) : [],
       description: draft.description,
@@ -853,7 +979,11 @@ async function submitDraft() {
       styleLibraryVersion: draft.styleLibraryVersion,
       categories: draft.categories
         .filter((category) => category.name)
-        .map((category, index) => ({ name: category.name, sortOrder: index })),
+        .map((category, index) => ({
+          name: category.name,
+          sortOrder: index,
+          styleNames: categoryStylePayload(category),
+        })),
       entryFields: draft.entryFields
         .filter((field) => field.label)
         .map((field, index) => ({
@@ -982,36 +1112,45 @@ function formatInteger(value) {
   return Number.isFinite(amount) ? amount.toLocaleString('zh-CN', { maximumFractionDigits: 0 }) : '0'
 }
 
-function getStyleLibraryCategoryNames(library) {
+function getStyleLibraryCategoryGroups(library) {
   const sourceItems = library?.styleItems?.length ? library.styleItems : (library?.styles || []).map((name) => ({ name }))
-  const names = []
-  const seen = new Set()
+  const groups = []
+  const byName = new Map()
   sourceItems
     .filter((item) => item && item.status !== 0)
     .forEach((item) => {
-      const name = formatStyleItemName(item)
-      if (!name || seen.has(name)) return
-      seen.add(name)
-      names.push(name)
+      const categoryName = item.categoryName || '未分类'
+      let group = byName.get(categoryName)
+      if (!group) {
+        group = { name: categoryName, styleNames: [] }
+        byName.set(categoryName, group)
+        groups.push(group)
+      }
+      if (item.name) group.styleNames.push(item.name)
     })
-  return names
+  return groups
 }
 
-function replaceDraftCategories(names) {
+function replaceDraftCategories(groups) {
   draft.categories.splice(
     0,
     draft.categories.length,
-    ...names.map((name, index) => ({ id: `cat-sync-${Date.now()}-${index}`, name })),
+    ...groups.map((group, index) => ({
+      id: `cat-sync-${Date.now()}-${index}`,
+      name: group.name,
+      styleNames: [...group.styleNames],
+      expanded: false,
+    })),
   )
 }
 
 function syncCategoriesFromSelectedLibrary() {
-  const names = getStyleLibraryCategoryNames(selectedStyleLibrary.value)
-  if (!names.length) {
-    ElMessage.warning('当前风格库没有可同步的风格')
+  const groups = getStyleLibraryCategoryGroups(selectedStyleLibrary.value)
+  if (!groups.length) {
+    ElMessage.warning('当前风格库没有可用的风格分类')
     return false
   }
-  replaceDraftCategories(names)
+  replaceDraftCategories(groups)
   return true
 }
 
@@ -1038,6 +1177,24 @@ watch(() => draft.styleLibraryVersion, (nextValue, previousValue) => {
     syncCategoriesWithStyleLibrary.value = false
     draft.categories.splice(0, draft.categories.length, ...cloneCategories(manualCategoriesBeforeStyleSync))
   }
+})
+
+watch(() => draft.styleLibraryVersion, (nextValue, previousValue) => {
+  if (!nextValue || !previousValue || nextValue === previousValue) return
+  if (syncCategoriesWithStyleLibrary.value) return
+  const previousLibrary = getStyleLibrary(previousValue, styleLibraryOptions.value)
+  const nextLibrary = getStyleLibrary(nextValue, styleLibraryOptions.value)
+  if (!previousLibrary?.styleItems?.length || !nextLibrary?.styleItems?.length) return
+  const codeByName = new Map(previousLibrary.styleItems.map((style) => [style.name, style.styleCode]))
+  const nameByCode = new Map(nextLibrary.styleItems
+    .filter((style) => style.styleCode)
+    .map((style) => [style.styleCode, style.name]))
+  draft.categories.forEach((category) => {
+    if (!Array.isArray(category.styleNames)) return
+    category.styleNames = [...new Set(category.styleNames.map((name) => (
+      nameByCode.get(codeByName.get(name)) || name
+    )))]
+  })
 })
 
 function getCategoryNames(source) {
@@ -1072,6 +1229,7 @@ function toDraftSnapshot(source) {
     registrationStart: source.registrationStart,
     registrationDeadline: source.registrationDeadline,
     entryFee: source.entryFee,
+    earlyBirdEnabled: Boolean(source.earlyBirdEnabled),
     earlyBirdFee: source.earlyBirdFee,
     earlyBirdDeadline: source.earlyBirdDeadline,
     tierPricingEnabled: Boolean(source.tierPricingEnabled),
@@ -1087,7 +1245,10 @@ function toDraftSnapshot(source) {
     deliveryAddress: source.deliveryAddress,
     deliveryNote: source.deliveryNote,
     logisticsVisibility: source.logisticsVisibility,
-    categories: source.categories.map((category) => ({ name: category.name })),
+    categories: source.categories.map((category) => ({
+      name: category.name,
+      styleNames: category.styleNames?.length ? [...category.styleNames] : null,
+    })),
     styleLibraryVersion: source.styleLibraryVersion,
     entryFields: source.entryFields.map((field) => ({
       label: field.label,
@@ -1196,7 +1357,6 @@ function createScoreConfigs() {
   }
   return defaultScoreConfigs().map((config) => ({
     ...config,
-    locked: config.role === 'PROFESSIONAL',
     minCommentLength: config.role === 'CROSS' ? 50 : 30,
     dimensions: config.dimensions.map((dimension, index) => ({
       key: dimension.key || `${config.role.toLowerCase()}_${index + 1}`,
@@ -1216,8 +1376,9 @@ function buildReviewItems(source) {
   if (source.entryFee === '' || source.entryFee === null || Number(source.entryFee) < 0) missingBaseFields.push('报名费')
   if (!source.description) missingBaseFields.push('赛事简介')
 
-  const earlyBirdIncomplete = Boolean(source.earlyBirdFee || source.earlyBirdFee === 0) !== Boolean(source.earlyBirdDeadline)
-  const earlyBirdInvalid = !earlyBirdIncomplete && source.earlyBirdDeadline
+  const earlyBirdIncomplete = source.earlyBirdEnabled
+    && (!(source.earlyBirdFee || source.earlyBirdFee === 0) || !source.earlyBirdDeadline)
+  const earlyBirdInvalid = source.earlyBirdEnabled && !earlyBirdIncomplete
     && (!isDeadlineAfterStart(source.registrationStart, source.earlyBirdDeadline)
       || !isOptionalDeadlineAfterStart(source.earlyBirdDeadline, source.registrationDeadline)
       || !isFutureDateTime(source.earlyBirdDeadline)
@@ -1230,11 +1391,28 @@ function buildReviewItems(source) {
       || (index > 0 && Number(tier.discountRatePercent) > Number(source.feeTiers[index - 1].discountRatePercent))))
   const categoryNames = getCategoryNames(source)
   const duplicatedCategories = getDuplicateItems(categoryNames)
+  const invalidScopeCategories = source.categories.filter((category) => (
+    category.name && Array.isArray(category.styleNames) && !category.styleNames.length
+  ))
+  const unmatchedScopeCategories = source.categories.filter((category) => (
+    category.name && Array.isArray(category.styleNames)
+    && category.styleNames.some((name) => !allStyleNameSet.value.has(name))
+  ))
   const scoreErrors = source.scoreConfigs
     .filter((config) => getScoreTotal(config) !== 50)
     .map((config) => `${roleLabels[config.role]} ${getScoreTotal(config)} 分`)
-  const crossConfig = source.scoreConfigs.find((config) => config.role === 'CROSS')
-  const crossDimensionValid = crossConfig && crossConfig.dimensions.length >= 2 && crossConfig.dimensions.length <= 3
+  const flexibleConfigs = source.scoreConfigs.filter((config) => isFlexibleScoreRole(config.role))
+  const invalidDimensionConfig = flexibleConfigs.find((config) => (
+    config.dimensions.length < FLEXIBLE_DIMENSION_MIN || config.dimensions.length > FLEXIBLE_DIMENSION_MAX
+  ))
+  const blankDimensionConfig = flexibleConfigs.find((config) => (
+    config.dimensions.some((dimension) => !String(dimension.label || '').trim())
+  ))
+  const duplicateDimensionConfig = flexibleConfigs.find((config) => {
+    const labels = config.dimensions.map((dimension) => String(dimension.label || '').trim())
+    return new Set(labels).size !== labels.length
+  })
+  const dimensionValid = !invalidDimensionConfig && !blankDimensionConfig && !duplicateDimensionConfig
   const visibleFields = getJudgeVisibleFields(source)
   const incompleteEntryFields = getIncompleteEntryFields(source)
   const logisticsSummary = [
@@ -1278,12 +1456,14 @@ function buildReviewItems(source) {
       key: 'earlyBird',
       label: '早鸟价',
       target: 'base-info',
-      status: !earlyBirdIncomplete && !earlyBirdInvalid ? 'done' : 'pending',
-      detail: earlyBirdIncomplete
-        ? '早鸟价和截止时间需要同时填写'
-        : earlyBirdInvalid
-          ? '早鸟价需不高于报名费，截止时间需晚于当前时间且在报名窗口内'
-          : source.earlyBirdFee ? `早鸟 ${source.earlyBirdFee} 元 / 款，截止 ${formatDateTime(source.earlyBirdDeadline)}` : '未设置早鸟价',
+      status: !source.earlyBirdEnabled || (!earlyBirdIncomplete && !earlyBirdInvalid) ? 'done' : 'pending',
+      detail: !source.earlyBirdEnabled
+        ? '未启用早鸟价'
+        : earlyBirdIncomplete
+          ? '早鸟价和截止时间需要同时填写'
+          : earlyBirdInvalid
+            ? '早鸟价需不高于报名费，截止时间需晚于当前时间且在报名窗口内'
+            : `早鸟 ${source.earlyBirdFee} 元 / 款，截止 ${formatDateTime(source.earlyBirdDeadline)}`,
     },
     {
       key: 'rulesUrl',
@@ -1316,12 +1496,17 @@ function buildReviewItems(source) {
       key: 'categories',
       label: '投递组别',
       target: 'entry-config',
-      status: categoryNames.length && !duplicatedCategories.length ? 'done' : 'pending',
+      status: categoryNames.length && !duplicatedCategories.length
+        && !invalidScopeCategories.length && !unmatchedScopeCategories.length ? 'done' : 'pending',
       detail: !categoryNames.length
         ? '请至少配置一个投递组别'
         : duplicatedCategories.length
           ? `组别名称重复：${duplicatedCategories.join('、')}`
-          : summarizeList(categoryNames, '未配置'),
+          : invalidScopeCategories.length
+            ? `「${invalidScopeCategories[0].name}」未选择可选风格`
+            : unmatchedScopeCategories.length
+              ? `「${unmatchedScopeCategories[0].name}」有风格不在当前风格库`
+              : summarizeList(categoryNames, '未配置'),
     },
     {
       key: 'entryFields',
@@ -1340,11 +1525,17 @@ function buildReviewItems(source) {
       detail: scoreErrors.length ? `总分需为 50：${scoreErrors.join('、')}` : '三类评分表均为 50 分',
     },
     {
-      key: 'crossDimensions',
-      label: '跨界评审',
+      key: 'scoreDimensions',
+      label: '评审维度',
       target: 'score-config',
-      status: crossDimensionValid ? 'done' : 'pending',
-      detail: crossDimensionValid ? `${crossConfig.dimensions.length} 个评分维度` : '跨界评审需配置 2-3 个维度',
+      status: dimensionValid ? 'done' : 'pending',
+      detail: invalidDimensionConfig
+        ? `${roleLabels[invalidDimensionConfig.role]}需配置 ${FLEXIBLE_DIMENSION_MIN}-${FLEXIBLE_DIMENSION_MAX} 个维度`
+        : blankDimensionConfig
+          ? `${roleLabels[blankDimensionConfig.role]}存在未命名的维度`
+          : duplicateDimensionConfig
+            ? `${roleLabels[duplicateDimensionConfig.role]}存在重名维度`
+            : '跨界评审与专业评审维度已配置',
     },
   ]
 }
@@ -1553,6 +1744,78 @@ label span {
 .category-list {
   scrollbar-color: rgba(255, 255, 255, 0.16) rgba(255, 255, 255, 0.035);
   scrollbar-width: thin;
+}
+
+.category-row.category-scope-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  align-items: stretch;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.category-row.category-scope-row.expanded {
+  border-color: rgba(224, 184, 74, 0.3);
+}
+
+.category-scope-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 40px;
+  gap: 8px;
+  align-items: center;
+}
+
+.scope-summary-button {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 40px;
+  padding: 0 10px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(7, 14, 17, 0.72);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.scope-summary-button:hover {
+  color: var(--text);
+  border-color: rgba(219, 232, 237, 0.28);
+}
+
+.scope-summary-button .warning {
+  color: var(--gold-soft);
+}
+
+.scope-chevron {
+  width: 13px;
+  height: 13px;
+  transition: transform 0.16s ease;
+}
+
+.category-scope-row.expanded .scope-chevron {
+  transform: rotate(90deg);
+}
+
+.category-scope-meta {
+  margin: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.category-scope-picker {
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
 }
 
 .form-section::-webkit-scrollbar,
@@ -1990,6 +2253,7 @@ textarea::placeholder {
 }
 
 .collection-upload {
+  position: relative;
   display: grid;
   gap: 9px;
 }
@@ -2324,9 +2588,10 @@ textarea::placeholder {
 }
 
 .category-list {
-  grid-template-columns: repeat(auto-fill, minmax(240px, 300px));
-  justify-content: start;
-  max-height: 260px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  max-height: 560px;
   overflow-y: auto;
   padding-right: 6px;
 }

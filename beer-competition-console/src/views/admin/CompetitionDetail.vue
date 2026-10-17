@@ -217,10 +217,6 @@
                     <span>比赛日期</span>
                     <input v-model="baseForm.competitionDate" type="date" :disabled="!editable.baseInfo" />
                   </label>
-                  <label>
-                    <span>比赛编号</span>
-                    <input v-model.trim="baseForm.code" :disabled="!editable.baseInfo" />
-                  </label>
                 </div>
                 <label class="tier-toggle" :class="{ enabled: baseForm.tierPricingEnabled }">
                   <span>启用阶梯报名费</span>
@@ -267,16 +263,119 @@
                 <div class="base-form-grid">
                   <label>
                     <span>普通报名费</span>
-                    <input v-model.number="baseForm.entryFee" min="0" type="number" :disabled="!editable.basePrice" />
+                    <div class="fee-field">
+                      <input v-model.number="baseForm.entryFee" min="0" step="0.01" type="number" :disabled="!editable.basePrice" />
+                      <span>元 / 款</span>
+                    </div>
                   </label>
+                </div>
+                <label class="tier-toggle" :class="{ enabled: baseForm.earlyBirdEnabled }">
+                  <span>启用早鸟价</span>
+                  <el-switch v-model="baseForm.earlyBirdEnabled" aria-label="启用早鸟价" :disabled="!editable.basePrice" />
+                </label>
+                <div v-if="baseForm.earlyBirdEnabled" class="base-form-grid">
                   <label>
                     <span>早鸟价</span>
-                    <input v-model.number="baseForm.earlyBirdFee" min="0" type="number" :disabled="!editable.basePrice" />
+                    <div class="fee-field">
+                      <input v-model.number="baseForm.earlyBirdFee" min="0" step="0.01" type="number" :disabled="!editable.basePrice" />
+                      <span>元 / 款</span>
+                    </div>
                   </label>
                   <label>
                     <span>早鸟截止时间</span>
                     <input v-model="baseForm.earlyBirdDeadline" type="datetime-local" :disabled="!editable.basePrice" />
                   </label>
+                </div>
+              </section>
+
+              <section v-if="isTenantCompetition" class="form-subgroup collection-config-group">
+                <h3>报名收款</h3>
+                <div v-if="!collectionEditable" class="edit-banner locked">
+                  <Lock />
+                  进入评审准备后收款配置已锁定，厂商付款页仍按既有配置展示
+                </div>
+                <div class="collection-method-switch" role="radiogroup" aria-label="支持的收款方式">
+                  <button
+                    v-for="option in collectionMethodOptions"
+                    :key="option.value"
+                    type="button"
+                    role="radio"
+                    :aria-checked="collectionForm.methodMode === option.value"
+                    :class="{ active: collectionForm.methodMode === option.value }"
+                    :disabled="!collectionEditable"
+                    @click="collectionForm.methodMode = option.value"
+                  >
+                    {{ option.label }}
+                  </button>
+                </div>
+                <div v-if="collectionWechatEnabled" class="collection-qr-card">
+                  <button
+                    v-if="collectionQrPreviewUrl"
+                    class="collection-qr-thumb"
+                    type="button"
+                    title="点击放大查看"
+                    aria-label="放大查看收款码"
+                    @click="collectionQrPreviewOpen = true"
+                  >
+                    <img :src="collectionQrPreviewUrl" alt="收款码" />
+                  </button>
+                  <div v-else class="collection-qr-thumb empty" aria-hidden="true">
+                    <Plus />
+                  </div>
+                  <div class="collection-qr-meta">
+                    <strong>{{ collectionQrStatusText }}</strong>
+                    <small v-if="collectionForm.qrFile">已选择新收款码，保存后生效</small>
+                  </div>
+                  <button
+                    v-if="collectionEditable"
+                    class="tool-button collection-qr-action"
+                    type="button"
+                    @click="collectionQrInput?.click()"
+                  >
+                    <Plus />
+                    {{ collectionQrAssetId ? '更换收款码' : '上传收款码' }}
+                  </button>
+                </div>
+                <input
+                  ref="collectionQrInput"
+                  class="hidden-file-input"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  @change="selectCollectionQr"
+                />
+                <div v-if="collectionBankEnabled" class="base-form-grid">
+                  <label>
+                    <span>收款户名</span>
+                    <input v-model.trim="collectionForm.bankAccountName" :disabled="!collectionEditable" placeholder="请输入银行开户名称" />
+                  </label>
+                  <label>
+                    <span>银行账号</span>
+                    <input v-model.trim="collectionForm.bankAccountNo" :disabled="!collectionEditable" placeholder="请输入收款银行账号" />
+                  </label>
+                  <label class="wide-field">
+                    <span>开户银行</span>
+                    <input v-model.trim="collectionForm.bankName" :disabled="!collectionEditable" placeholder="请输入开户银行及支行" />
+                  </label>
+                </div>
+                <div class="base-form-grid">
+                  <label class="wide-field">
+                    <span>付款备注要求</span>
+                    <input v-model.trim="collectionForm.collectionNote" :disabled="!collectionEditable" maxlength="255" placeholder="例如：付款时请备注厂牌名称" />
+                  </label>
+                  <label class="wide-field">
+                    <span>付款咨询联系</span>
+                    <input v-model.trim="collectionForm.paymentContact" :disabled="!collectionEditable" maxlength="128" placeholder="微信号或手机号，付款的厂商遇到问题时联系" />
+                  </label>
+                </div>
+                <div class="collection-save-row">
+                  <button
+                    class="tool-button"
+                    type="button"
+                    :disabled="!collectionEditable || collectionSaving"
+                    @click="saveCollectionConfig"
+                  >
+                    {{ collectionSaving ? '保存中' : '保存收款配置' }}
+                  </button>
                 </div>
               </section>
 
@@ -508,26 +607,165 @@
               <div v-if="editable.categories" class="panel-actions">
                 <button class="tool-button" type="button" @click="syncCategoryFormFromStyleLibrary">
                   <CircleCheck />
-                  同步当前风格库
+                  按分类生成
                 </button>
-                <button class="tool-button" type="button" @click="categoryForm.push('')">
+                <button class="tool-button" type="button" @click="addCategoryItem">
                   <Plus />
                   添加组别
                 </button>
               </div>
             </div>
-            <div v-if="editable.categories" class="category-editor-list">
-              <label v-for="(_, index) in categoryForm" :key="`category-${index}`">
-                <input v-model.trim="categoryForm[index]" placeholder="例如 IPA" />
-                <button class="icon-button" type="button" @click="removeItem(categoryForm, index)">
-                  <Delete />
-                </button>
-              </label>
+            <div v-if="categoryForm.length" class="category-scope-list">
+              <div
+                v-for="(item, index) in categoryForm"
+                :key="item.localId"
+                :class="['category-scope-row', { expanded: item.expanded }]"
+              >
+                <div class="category-scope-head">
+                  <input
+                    v-if="editable.categories"
+                    v-model.trim="item.name"
+                    placeholder="例如 IPA"
+                    :aria-label="`投递组别 ${index + 1}`"
+                  />
+                  <strong v-else class="category-scope-name">{{ item.name || '未命名组别' }}</strong>
+                  <button
+                    class="scope-summary-button"
+                    type="button"
+                    :disabled="!editable.styleLibrary"
+                    :aria-expanded="item.expanded"
+                    @click="toggleCategoryScope(item)"
+                  >
+                    <span :class="{ warning: !isCategoryRestricted(item) }">{{ categoryScopeSummary(item) }}</span>
+                    <Right class="scope-chevron" />
+                  </button>
+                  <button
+                    v-if="editable.categories"
+                    class="icon-button"
+                    type="button"
+                    title="删除投递组别"
+                    @click="removeCategoryItem(index)"
+                  >
+                    <Delete />
+                  </button>
+                </div>
+
+                <p v-if="!item.expanded && categoryScopeNames(item)" class="category-scope-meta">{{ categoryScopeNames(item) }}</p>
+
+                <div v-if="item.expanded" class="category-scope-picker">
+                  <div class="scope-toolbar">
+                    <label class="scope-restrict-switch">
+                      <span>限定可选风格</span>
+                      <el-switch
+                        :model-value="isCategoryRestricted(item)"
+                        :disabled="!editable.styleLibrary"
+                        aria-label="限定该组别的可选风格"
+                        @change="toggleCategoryRestriction(item, $event)"
+                      />
+                    </label>
+                    <input
+                      v-if="isCategoryRestricted(item)"
+                      v-model.trim="item.search"
+                      class="scope-search"
+                      type="search"
+                      placeholder="搜索分类、风格名或编号"
+                      @input="handleScopeSearch(item)"
+                    />
+                    <span v-if="isCategoryRestricted(item)" class="scope-count">已选 {{ selectedStyleCount(item) }} 个风格</span>
+                    <button
+                      v-if="isCategoryRestricted(item)"
+                      class="text-action"
+                      type="button"
+                      @click="setCategoryScopeAll(item)"
+                    >
+                      改为不限风格
+                    </button>
+                    <button
+                      v-if="isCategoryRestricted(item)"
+                      class="text-action"
+                      type="button"
+                      @click="clearCategoryScope(item)"
+                    >
+                      清空已选
+                    </button>
+                  </div>
+
+                  <div v-if="unmatchedStyleNames(item).length" class="scope-unmatched">
+                    <span>{{ unmatchedStyleNames(item).length }} 个已选风格不在当前风格库</span>
+                    <button class="text-action" type="button" @click="removeUnmatchedStyles(item)">移除</button>
+                  </div>
+
+                  <div v-if="!isCategoryRestricted(item)" class="scope-unrestricted">
+                    <span>不限风格：厂商选择该组别后，可从全部 {{ allStyleNames.length }} 个风格中任选一项</span>
+                    <button class="text-action" type="button" @click="toggleCategoryRestriction(item, true)">限定可选风格</button>
+                  </div>
+
+                  <template v-else>
+                  <p class="scope-restrict-hint">厂商选择该组别后，只能从下方勾选的风格中选择</p>
+                  <div class="scope-picker-grid">
+                    <div class="scope-category-rail">
+                      <div
+                        v-if="item.search"
+                        :class="['scope-category-item', { active: item.activeCategory === SCOPE_SEARCH_KEY }]"
+                        @click="item.activeCategory = SCOPE_SEARCH_KEY"
+                      >
+                        <span class="scope-category-name">搜索结果</span>
+                        <small>{{ searchResultStyles(item).length }}</small>
+                      </div>
+                      <div
+                        v-for="group in visibleScopeCategories(item)"
+                        :key="group.name"
+                        :class="['scope-category-item', { active: item.activeCategory === group.name }]"
+                        @click="item.activeCategory = group.name"
+                      >
+                        <el-checkbox
+                          :model-value="categoryStyleState(item, group).checked"
+                          :indeterminate="categoryStyleState(item, group).indeterminate"
+                          @click.stop
+                          @change="toggleCategoryStyles(item, group, $event)"
+                        />
+                        <span class="scope-category-name" :title="group.name">{{ group.name }}</span>
+                        <small>{{ categoryStyleState(item, group).count }}/{{ group.styles.length }}</small>
+                      </div>
+                      <p v-if="!visibleScopeCategories(item).length" class="empty-line">没有匹配的分类</p>
+                    </div>
+
+                    <div class="scope-style-pane">
+                      <div class="scope-style-head">
+                        <strong>{{ scopePaneTitle(item) }}</strong>
+                        <span>{{ categoryScopeStyles(item).length }} 个</span>
+                        <button
+                          class="text-action"
+                          type="button"
+                          :disabled="!categoryScopeStyles(item).length"
+                          @click="toggleAllVisibleStyles(item)"
+                        >
+                          {{ allVisibleStylesSelected(item) ? '取消全选' : '全选' }}
+                        </button>
+                      </div>
+                      <label
+                        v-for="style in categoryScopeStyles(item)"
+                        :key="style.id || style.name"
+                        class="scope-style-row"
+                      >
+                        <el-checkbox
+                          :model-value="isStyleSelected(item, style.name)"
+                          @change="toggleStyleSelection(item, style, $event)"
+                        />
+                        <span v-if="style.styleCode" class="scope-style-code">{{ style.styleCode }}</span>
+                        <span class="scope-style-name" :title="style.name">{{ style.name }}</span>
+                        <small v-if="item.search && style.categoryName" class="scope-style-category">{{ style.categoryName }}</small>
+                      </label>
+                      <p v-if="!categoryScopeStyles(item).length" class="empty-line">
+                        {{ item.search ? '没有匹配的风格' : '请选择左侧分类' }}
+                      </p>
+                    </div>
+                  </div>
+                  </template>
+                </div>
+              </div>
             </div>
-            <div v-else class="pill-list">
-              <span v-for="category in categoryForm" :key="category">{{ category }}</span>
-              <p v-if="categoryForm.length === 0" class="empty-line">当前没有投递组别数据，请管理员修正</p>
-            </div>
+            <p v-else class="empty-line">当前没有投递组别数据，请管理员修正</p>
           </article>
 
           <article class="panel-card library-card">
@@ -581,13 +819,15 @@
               <div>
                 <h2>报名补充信息</h2>
               </div>
-              <button v-if="editable.entryFields" class="tool-button" type="button" @click="addEntryField">
-                <Plus />
-                添加字段
-              </button>
-              <button v-if="editable.entryFields" class="tool-button primary" type="button" @click="saveEntryFields">
-                保存补充信息
-              </button>
+              <div v-if="editable.entryFields" class="panel-actions">
+                <button class="tool-button" type="button" @click="addEntryField">
+                  <Plus />
+                  添加字段
+                </button>
+                <button class="tool-button primary" type="button" @click="saveEntryFields">
+                  保存补充信息
+                </button>
+              </div>
             </div>
             <div class="data-table field-table">
               <div class="table-head">
@@ -629,23 +869,69 @@
         </section>
 
         <section v-if="activeTab === 'entries'" class="tab-panel">
-          <div class="overview-grid">
-            <article class="metric-card compact-metric"><small>参赛酒款</small><strong>{{ competition.entriesSummary.total }}</strong></article>
-            <article class="metric-card compact-metric"><small>待支付</small><strong>{{ competition.entriesSummary.pendingPayment }}</strong></article>
-            <article class="metric-card compact-metric"><small>已入库</small><strong>{{ competition.entriesSummary.stored }}</strong></article>
-            <article class="metric-card compact-metric"><small>{{ isFeedbackOnlyCompetition ? '评审轨迹' : '晋级轨迹' }}</small><strong>{{ roundEntryPool.length }}</strong></article>
+          <div class="entry-filter-panel" role="search" aria-label="参赛酒款筛选">
+            <label class="entry-filter-field entry-filter-keyword">
+              <span>编号/酒款</span>
+              <div class="entry-filter-input">
+                <Search />
+                <input
+                  v-model.trim="entryFilters.keyword"
+                  placeholder="输入编号、酒款或厂牌"
+                  @keyup.enter="applyEntryFilters"
+                />
+              </div>
+            </label>
+            <label class="entry-filter-field">
+              <span>入库状态</span>
+              <select v-model="entryFilters.deliveryStatus" @change="applyEntryFilters">
+                <option value="">全部状态</option>
+                <option value="NOT_SUBMITTED">待送样</option>
+                <option value="SUBMITTED">已送样</option>
+                <option value="RECEIVED">已入库</option>
+              </select>
+            </label>
+            <label class="entry-filter-field">
+              <span>支付状态</span>
+              <select v-model="entryFilters.paymentStatus" @change="applyEntryFilters">
+                <option value="">全部状态</option>
+                <option value="UNPAID">待支付</option>
+                <option value="PENDING_CONFIRM">待确认</option>
+                <option value="EXPIRED">支付已过期</option>
+                <option value="PAID">已支付</option>
+                <option value="REFUNDED">已退款</option>
+              </select>
+            </label>
+            <label v-if="entryCategoryOptions.length" class="entry-filter-field">
+              <span>参赛组别</span>
+              <select v-model="entryFilters.categoryId" @change="applyEntryFilters">
+                <option value="">全部组别</option>
+                <option v-for="category in entryCategoryOptions" :key="category.id" :value="String(category.id)">
+                  {{ category.name }}
+                </option>
+              </select>
+            </label>
+            <div class="entry-filter-actions">
+              <button class="entry-filter-submit" type="button" @click="applyEntryFilters">
+                <Search />
+                筛选
+              </button>
+              <button class="entry-filter-reset" type="button" :disabled="!hasEntryFilters" @click="resetEntryFilters">
+                重置
+              </button>
+            </div>
           </div>
           <article class="panel-card">
             <div class="panel-heading">
               <div>
                 <h2>参赛酒款</h2>
               </div>
+              <span class="entry-result-count">共 {{ entryPageTotal }} 款</span>
               <button class="tool-button" type="button" @click="openAdminEntries">
                 打开酒款管理
                 <Right />
               </button>
             </div>
-              <div class="data-table entries-table">
+            <div class="data-table entries-table">
               <div class="table-head">
                 <span>参赛酒款</span>
                 <span>编号</span>
@@ -680,7 +966,7 @@
                 </div>
                 <div class="entry-actions">
                   <button class="mini-action" type="button" @click="openAdminEntry(entry)">查看</button>
-                  <button v-if="!isRefundedEntry(entry)" class="mini-action" type="button" :disabled="!entry.canMarkStored" @click="markEntryStoredAction(entry)">确认入库</button>
+                  <button v-if="!isRefundedEntry(entry)" class="mini-action" type="button" :disabled="!canMarkEntryStored(entry)" @click="markEntryStoredAction(entry)">确认入库</button>
                 </div>
               </div>
               <footer class="competition-pagination">
@@ -967,104 +1253,6 @@
           </section>
         </section>
 
-        <section v-if="activeTab === 'collection' && isTenantOrganizer" class="tab-panel collection-config-panel">
-          <div v-if="!collectionEditable" class="edit-banner locked">
-            <Lock />
-            报名截止后收款配置已锁定，厂商付款页仍按既有配置展示
-          </div>
-
-          <article class="panel-card">
-            <div class="panel-heading">
-              <div>
-                <h2>支持的收款方式</h2>
-              </div>
-            </div>
-            <div class="collection-method-switch" role="radiogroup" aria-label="支持的收款方式">
-              <button
-                v-for="option in collectionMethodOptions"
-                :key="option.value"
-                type="button"
-                role="radio"
-                :aria-checked="collectionForm.methodMode === option.value"
-                :class="{ active: collectionForm.methodMode === option.value }"
-                :disabled="!collectionEditable"
-                @click="collectionForm.methodMode = option.value"
-              >
-                {{ option.label }}
-              </button>
-            </div>
-          </article>
-
-          <article v-if="collectionWechatEnabled" class="panel-card">
-            <div class="panel-heading">
-              <div>
-                <h2>微信收款码</h2>
-              </div>
-              <div v-if="collectionEditable" class="panel-actions">
-                <button class="tool-button" type="button" @click="collectionQrInput?.click()">
-                  <Plus />
-                  {{ collectionQrAssetId ? '更换收款码' : '上传收款码' }}
-                </button>
-              </div>
-            </div>
-            <input
-              ref="collectionQrInput"
-              class="hidden-file-input"
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              @change="selectCollectionQr"
-            />
-            <div class="collection-qr-row">
-              <img v-if="collectionQrPreviewUrl" :src="collectionQrPreviewUrl" alt="微信收款码" />
-              <div>
-                <strong>{{ collectionQrStatusText }}</strong>
-                <small v-if="collectionForm.qrFile">已选择新收款码，保存后生效</small>
-                <small v-else>厂商付款时将看到此收款码</small>
-              </div>
-            </div>
-          </article>
-
-          <article v-if="collectionBankEnabled" class="panel-card">
-            <div class="panel-heading">
-              <div>
-                <h2>银行转账账户</h2>
-              </div>
-            </div>
-            <div class="base-form-grid">
-              <label>
-                <span>收款户名</span>
-                <input v-model.trim="collectionForm.bankAccountName" :disabled="!collectionEditable" placeholder="请输入银行开户名称" />
-              </label>
-              <label>
-                <span>银行账号</span>
-                <input v-model.trim="collectionForm.bankAccountNo" :disabled="!collectionEditable" placeholder="请输入收款银行账号" />
-              </label>
-              <label class="wide-field">
-                <span>开户银行</span>
-                <input v-model.trim="collectionForm.bankName" :disabled="!collectionEditable" placeholder="请输入开户银行及支行" />
-              </label>
-            </div>
-          </article>
-
-          <article class="panel-card">
-            <div class="panel-heading">
-              <div>
-                <h2>付款说明</h2>
-              </div>
-            </div>
-            <div class="base-form-grid">
-              <label class="wide-field">
-                <span>付款备注要求</span>
-                <input v-model.trim="collectionForm.collectionNote" :disabled="!collectionEditable" maxlength="255" placeholder="例如：付款时请备注厂牌名称" />
-              </label>
-              <label class="wide-field">
-                <span>付款咨询联系</span>
-                <input v-model.trim="collectionForm.paymentContact" :disabled="!collectionEditable" maxlength="128" placeholder="微信号或手机号，付款的厂商遇到问题时联系" />
-              </label>
-            </div>
-          </article>
-        </section>
-
         <section v-if="activeTab === 'score'" class="tab-panel score-config-panel">
           <div class="score-panels">
             <article v-for="config in scoreConfigForm" :key="config.role" class="panel-card score-config-card">
@@ -1077,11 +1265,11 @@
                     {{ getScoreTotal(config) }} / 50
                   </span>
                   <button
-                    v-if="editable.scoreConfigs && config.role === 'CROSS'"
+                    v-if="editable.scoreConfigs && isFlexibleScoreRole(config.role)"
                     class="tool-button"
                     type="button"
-                    :disabled="config.dimensions.length >= 3"
-                    @click="addCrossScoreDimension(config)"
+                    :disabled="config.dimensions.length >= FLEXIBLE_DIMENSION_MAX"
+                    @click="addScoreDimension(config)"
                   >
                     <Plus />
                     添加维度
@@ -1107,17 +1295,17 @@
                   <span></span>
                 </div>
                 <div v-for="(dimension, index) in config.dimensions" :key="dimension.localId" class="dimension-row">
-                  <input v-if="editable.scoreConfigs && config.role === 'CROSS'" v-model.trim="dimension.label" placeholder="维度名称" />
+                  <input v-if="editable.scoreConfigs && isFlexibleScoreRole(config.role)" v-model.trim="dimension.label" placeholder="维度名称" />
                   <span v-else>{{ dimension.label }}</span>
-                  <input v-if="editable.scoreConfigs && config.role === 'CROSS'" v-model.number="dimension.maxScore" min="1" type="number" />
+                  <input v-if="editable.scoreConfigs && isFlexibleScoreRole(config.role)" v-model.number="dimension.maxScore" min="1" type="number" />
                   <strong v-else>{{ dimension.maxScore }}</strong>
                   <input v-if="editable.scoreConfigs" v-model.trim="dimension.notePrompt" placeholder="这个维度的备注提示" />
                   <span v-else>{{ dimension.notePrompt || '-' }}</span>
                   <button
-                    v-if="editable.scoreConfigs && config.role === 'CROSS'"
+                    v-if="editable.scoreConfigs && isFlexibleScoreRole(config.role)"
                     class="icon-button"
                     type="button"
-                    :disabled="config.dimensions.length <= 2"
+                    :disabled="config.dimensions.length <= FLEXIBLE_DIMENSION_MIN"
                     @click="removeScoreDimension(config, index)"
                   >
                     <Delete />
@@ -2116,6 +2304,16 @@
       </div>
     </el-dialog>
 
+    <el-dialog
+      v-model="collectionQrPreviewOpen"
+      title="收款码"
+      width="min(520px, 92vw)"
+      append-to-body
+      destroy-on-close
+    >
+      <img v-if="collectionQrPreviewUrl" :src="collectionQrPreviewUrl" alt="收款码" class="collection-qr-zoom" />
+    </el-dialog>
+
     <datalist id="competition-box-number-options">
       <option v-for="boxNumber in entryBoxNumberOptions" :key="boxNumber" :value="boxNumber" />
     </datalist>
@@ -2174,7 +2372,6 @@ import {
   CircleCheck,
   Clock,
   Close,
-  Coin,
   DataAnalysis,
   Delete,
   EditPen,
@@ -2213,11 +2410,11 @@ import {
   deleteCompetition,
   downloadAwardCertificate,
   exportCompetitionScoringData,
+  fetchAdminEntries,
   fetchCompetitionAnalytics,
   fetchCompetitionAwardRules,
   fetchCompetitionAwards,
   fetchCompetitionEntryPool,
-  fetchCompetitionEntryPoolPage,
   fetchCompetitionFeedbackReview,
   fetchCompetitionFeedbackReviewPage,
   fetchAdminEntryDetail,
@@ -2246,6 +2443,7 @@ import {
   updateCompetitionBaseInfo,
   updateCompetitionRefundPolicy,
   updateCompetitionCategories,
+  updateCompetitionCategoryStyleScopes,
   updateCompetitionCollection,
   updateCompetitionEntryFields,
   updateCompetitionJudgeAssignments,
@@ -2257,11 +2455,10 @@ import {
   uploadCompetitionCollectionQr,
   uploadCompetitionSponsorLogo,
 } from '@/api/admin'
-import { getAdminMe } from '@/api/auth'
 import { fetchBeerCoinOverview } from '@/api/beerCoin'
 import { ADMIN_TYPES } from '@/config/adminAccess'
 import { getAdminType } from '@/utils/auth'
-import { fallbackStyleLibraries, formatStyleItemName, getStyleLibrary, normalizeStyleLibraries } from './styleLibraries'
+import { fallbackStyleLibraries, getStyleLibrary, normalizeStyleLibraries } from './styleLibraries'
 import CreateRoundWizard from './components/competition-detail/CreateRoundWizard.vue'
 import CompetitionAnalyticsPanel from './components/competition-detail/CompetitionAnalyticsPanel.vue'
 import JudgePerformancePanel from './components/competition-detail/JudgePerformancePanel.vue'
@@ -2270,7 +2467,7 @@ import { createSerialTaskQueue, drainDirtyTask, matchesCompetitionRequest } from
 
 const route = useRoute()
 const router = useRouter()
-const detailTabKeys = new Set(['overview', 'analysis', 'baseInfo', 'sponsors', 'entryConfig', 'collection', 'entries', 'judges', 'rounds', 'score', 'feedback', 'performance', 'results'])
+const detailTabKeys = new Set(['overview', 'analysis', 'baseInfo', 'sponsors', 'entryConfig', 'entries', 'judges', 'rounds', 'score', 'feedback', 'performance', 'results'])
 const roundProgressPollIntervalMs = 8000
 const activeTab = ref(normalizeDetailTab(route.query.tab))
 const loading = ref(false)
@@ -2300,6 +2497,7 @@ const allocationSaveCoordinator = createSerialTaskQueue((pendingCount) => {
 })
 const allocationDraftDirtyVersions = new Map()
 const categoryForm = reactive([])
+const SCOPE_SEARCH_KEY = '__search__'
 const baseForm = reactive({
   name: '',
   code: '',
@@ -2307,6 +2505,7 @@ const baseForm = reactive({
   registrationStart: '',
   registrationDeadline: '',
   entryFee: 0,
+  earlyBirdEnabled: false,
   earlyBirdFee: '',
   earlyBirdDeadline: '',
   tierPricingEnabled: false,
@@ -2350,6 +2549,8 @@ const entryFieldForm = reactive([])
 const judgeTableForm = reactive([])
 const judgeAssignmentForm = reactive([])
 const scoreConfigForm = reactive([])
+const FLEXIBLE_DIMENSION_MIN = 2
+const FLEXIBLE_DIMENSION_MAX = 8
 const judgePool = ref([])
 let judgePoolSearchToken = 0
 let judgePoolSearchTimer = null
@@ -2373,6 +2574,12 @@ const feedbackFilters = reactive({
 })
 const feedbackPagination = reactive({ page: 1, pageSize: 20 })
 const entryPagination = reactive({ page: 1, pageSize: 20 })
+const entryFilters = reactive({
+  keyword: '',
+  deliveryStatus: '',
+  paymentStatus: '',
+  categoryId: '',
+})
 const feedbackEditor = reactive({
   visible: false,
   saving: false,
@@ -2486,7 +2693,6 @@ const tabs = [
   { key: 'baseInfo', label: '基础信息', icon: Setting },
   { key: 'sponsors', label: '赞助商', icon: Medal },
   { key: 'entryConfig', label: '报名配置', icon: Setting },
-  { key: 'collection', label: '报名收款', icon: Coin },
   { key: 'score', label: '评分表', icon: Finished },
   { key: 'entries', label: '参赛酒款', icon: Tickets },
   { key: 'judges', label: '分桌分配', icon: Files },
@@ -2497,7 +2703,6 @@ const tabs = [
 ]
 
 const detailTabs = computed(() => tabs
-  .filter((tab) => tab.key !== 'collection' || isTenantOrganizer.value)
   .map((tab) => {
     const disabledReason = resolveDetailTabDisabledReason(tab.key)
     return {
@@ -2571,11 +2776,13 @@ const beerCoinBlockReason = computed(() => {
   return ''
 })
 const editable = computed(() => competition.value?.editableScopes || {})
-const isTenantOrganizer = ref(false)
+const isTenantCompetition = computed(() => competition.value?.organizerType === 'TENANT')
 const collectionConfig = ref(null)
+const collectionSaving = ref(false)
 const collectionQrInput = ref(null)
 const collectionQrLocalUrl = ref('')
 const collectionQrRemoteUrl = ref('')
+const collectionQrPreviewOpen = ref(false)
 const collectionForm = reactive({
   methodMode: 'BOTH',
   qrFile: null,
@@ -2586,9 +2793,9 @@ const collectionForm = reactive({
   paymentContact: '',
 })
 const collectionMethodOptions = [
-  { label: '微信收款', value: 'WECHAT' },
+  { label: '收款码', value: 'WECHAT' },
   { label: '银行转账', value: 'BANK' },
-  { label: '微信支付+银行转账', value: 'BOTH' },
+  { label: '收款码+银行转账', value: 'BOTH' },
 ]
 const collectionEditable = computed(() => Boolean(editable.value.collection))
 const collectionWechatEnabled = computed(() => ['WECHAT', 'BOTH'].includes(collectionForm.methodMode))
@@ -2629,6 +2836,210 @@ const styleCategorySummary = computed(() => {
   })
   return [...counts.entries()].map(([name, count]) => ({ name, count }))
 })
+const allStyleNames = computed(() => selectedStyleItems.value.map((style) => style.name).filter(Boolean))
+const allStyleNameSet = computed(() => new Set(allStyleNames.value))
+const styleCategoryGroups = computed(() => {
+  const groups = []
+  const byName = new Map()
+  selectedStyleItems.value.forEach((style) => {
+    const categoryName = style.categoryName || '未归类'
+    let group = byName.get(categoryName)
+    if (!group) {
+      group = { name: categoryName, styles: [] }
+      byName.set(categoryName, group)
+      groups.push(group)
+    }
+    group.styles.push(style)
+  })
+  return groups
+})
+const styleCategoryByName = computed(() => new Map(styleCategoryGroups.value.map((group) => [group.name, group])))
+
+function createCategoryItem(name = '', styleNames = null) {
+  return {
+    localId: `category-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    name,
+    styleNames: Array.isArray(styleNames) && styleNames.length ? [...styleNames] : null,
+    expanded: false,
+    search: '',
+    activeCategory: '',
+  }
+}
+
+function isCategoryRestricted(item) {
+  return Array.isArray(item.styleNames)
+}
+
+function selectedStyleCount(item) {
+  if (!isCategoryRestricted(item)) return allStyleNames.value.length
+  return item.styleNames.filter((name) => allStyleNameSet.value.has(name)).length
+}
+
+function categoryScopeSummary(item) {
+  if (!isCategoryRestricted(item)) return `不限风格（${allStyleNames.value.length} 个可选）`
+  const count = selectedStyleCount(item)
+  if (!count) return '未选风格'
+  const groupCount = styleCategoryGroups.value
+    .filter((group) => group.styles.some((style) => item.styleNames.includes(style.name)))
+    .length
+  return `限 ${groupCount} 类 · ${count} 个风格`
+}
+
+function categoryScopeNames(item) {
+  if (!isCategoryRestricted(item)) return ''
+  const names = styleCategoryGroups.value
+    .filter((group) => group.styles.some((style) => item.styleNames.includes(style.name)))
+    .map((group) => group.name)
+  if (!names.length) return ''
+  return names.length > 4 ? `${names.slice(0, 4).join('、')} +${names.length - 4} 类` : names.join('、')
+}
+
+function unmatchedStyleNames(item) {
+  if (!isCategoryRestricted(item)) return []
+  return item.styleNames.filter((name) => !allStyleNameSet.value.has(name))
+}
+
+function removeUnmatchedStyles(item) {
+  item.styleNames = item.styleNames.filter((name) => allStyleNameSet.value.has(name))
+}
+
+function ensureActiveCategory(item) {
+  if (item.activeCategory && (item.activeCategory === SCOPE_SEARCH_KEY || styleCategoryByName.value.has(item.activeCategory))) {
+    return
+  }
+  const selectedGroup = styleCategoryGroups.value
+    .find((group) => group.styles.some((style) => item.styleNames?.includes(style.name)))
+  item.activeCategory = selectedGroup?.name || styleCategoryGroups.value[0]?.name || ''
+}
+
+function toggleCategoryScope(item) {
+  item.expanded = !item.expanded
+  if (item.expanded) ensureActiveCategory(item)
+}
+
+function toggleCategoryRestriction(item, restricted) {
+  item.styleNames = restricted ? [] : null
+  item.expanded = true
+  if (restricted) ensureActiveCategory(item)
+}
+
+function setCategoryScopeAll(item) {
+  item.styleNames = null
+}
+
+function clearCategoryScope(item) {
+  item.styleNames = []
+}
+
+function matchesScopeQuery(style, query) {
+  if (!query) return true
+  return [style.name, style.styleCode, style.categoryName]
+    .filter(Boolean)
+    .some((value) => String(value).toLowerCase().includes(query))
+}
+
+function categoryStyleState(item, group) {
+  const selected = new Set(item.styleNames || [])
+  const count = group.styles.filter((style) => selected.has(style.name)).length
+  return {
+    count,
+    total: group.styles.length,
+    checked: count > 0 && count === group.styles.length,
+    indeterminate: count > 0 && count < group.styles.length,
+  }
+}
+
+function toggleCategoryStyles(item, group, checked) {
+  if (!isCategoryRestricted(item)) item.styleNames = []
+  const selected = new Set(item.styleNames)
+  group.styles.forEach((style) => {
+    if (checked) selected.add(style.name)
+    else selected.delete(style.name)
+  })
+  item.styleNames = [...selected]
+}
+
+function isStyleSelected(item, styleName) {
+  return isCategoryRestricted(item) && item.styleNames.includes(styleName)
+}
+
+function toggleStyleSelection(item, style, checked) {
+  if (!isCategoryRestricted(item)) item.styleNames = []
+  const selected = new Set(item.styleNames)
+  if (checked) selected.add(style.name)
+  else selected.delete(style.name)
+  item.styleNames = [...selected]
+}
+
+function visibleScopeCategories(item) {
+  const query = item.search.toLowerCase()
+  if (!query) {
+    const selected = []
+    const rest = []
+    styleCategoryGroups.value.forEach((group) => {
+      (group.styles.some((style) => isStyleSelected(item, style.name)) ? selected : rest).push(group)
+    })
+    return [...selected, ...rest]
+  }
+  return styleCategoryGroups.value.filter((group) => (
+    group.name.toLowerCase().includes(query) || group.styles.some((style) => matchesScopeQuery(style, query))
+  ))
+}
+
+function searchResultStyles(item) {
+  const query = item.search.toLowerCase()
+  if (!query) return []
+  return selectedStyleItems.value.filter((style) => matchesScopeQuery(style, query))
+}
+
+function categoryScopeStyles(item) {
+  const query = item.search.toLowerCase()
+  if (item.activeCategory === SCOPE_SEARCH_KEY) {
+    return searchResultStyles(item)
+  }
+  const group = styleCategoryByName.value.get(item.activeCategory) || visibleScopeCategories(item)[0]
+  if (!group) return []
+  return query ? group.styles.filter((style) => matchesScopeQuery(style, query)) : group.styles
+}
+
+function scopePaneTitle(item) {
+  if (item.activeCategory === SCOPE_SEARCH_KEY) return '搜索结果'
+  return item.activeCategory || '风格'
+}
+
+function handleScopeSearch(item) {
+  if (item.search) {
+    item.activeCategory = SCOPE_SEARCH_KEY
+    return
+  }
+  ensureActiveCategory(item)
+}
+
+function allVisibleStylesSelected(item) {
+  const styles = categoryScopeStyles(item)
+  return styles.length > 0 && styles.every((style) => isStyleSelected(item, style.name))
+}
+
+function toggleAllVisibleStyles(item) {
+  const styles = categoryScopeStyles(item)
+  if (!styles.length) return
+  const selectAll = !allVisibleStylesSelected(item)
+  if (!isCategoryRestricted(item)) item.styleNames = []
+  const selected = new Set(item.styleNames)
+  styles.forEach((style) => {
+    if (selectAll) selected.add(style.name)
+    else selected.delete(style.name)
+  })
+  item.styleNames = [...selected]
+}
+
+function addCategoryItem() {
+  categoryForm.push(createCategoryItem())
+}
+
+function removeCategoryItem(index) {
+  categoryForm.splice(index, 1)
+}
 const registrationWindowInfo = computed(() => resolveRegistrationWindowInfo())
 const headerMetaItems = computed(() => buildHeaderMetaItems())
 const stagePrimaryAction = computed(() => resolveStagePrimaryAction())
@@ -2651,6 +3062,7 @@ function clearCollectionQrLocalUrl() {
 }
 
 function releaseCollectionQrUrls() {
+  collectionQrPreviewOpen.value = false
   clearCollectionQrLocalUrl()
   if (collectionQrRemoteUrl.value) URL.revokeObjectURL(collectionQrRemoteUrl.value)
   collectionQrRemoteUrl.value = ''
@@ -2706,13 +3118,14 @@ async function saveCollectionConfig() {
   const competitionId = competition.value?.id || route.params.id
   if (!competitionId) return
   if (collectionWechatEnabled.value && !collectionForm.qrFile && !collectionQrAssetId.value) {
-    ElMessage.warning('请上传微信收款码')
+    ElMessage.warning('请上传收款码')
     return
   }
   if (collectionBankEnabled.value && (!collectionForm.bankAccountName || !collectionForm.bankAccountNo || !collectionForm.bankName)) {
     ElMessage.warning('请完整填写收款户名、银行账号和开户银行')
     return
   }
+  collectionSaving.value = true
   try {
     let qrAssetId = collectionQrAssetId.value
     if (collectionWechatEnabled.value && collectionForm.qrFile) {
@@ -2732,22 +3145,17 @@ async function saveCollectionConfig() {
     ElMessage.success('收款配置已保存')
   } catch (error) {
     ElMessage.warning(error?.message || '收款配置保存失败，请稍后重试')
+  } finally {
+    collectionSaving.value = false
   }
 }
-
-watch(activeTab, (tab) => {
-  if (tab === 'collection' && isTenantOrganizer.value && !collectionConfig.value) loadCollectionConfig()
-})
 
 const tabSaveAction = computed(() => {
   if (activeTab.value === 'baseInfo' && (editable.value.baseInfo || editable.value.description)) {
     return { label: '保存基础信息', handler: saveBaseInfo }
   }
-  if (activeTab.value === 'entryConfig' && editable.value.entryStructure) {
+  if (activeTab.value === 'entryConfig' && (editable.value.entryStructure || editable.value.styleLibrary || editable.value.entryFields)) {
     return { label: '保存报名配置', handler: saveEntryConfig }
-  }
-  if (activeTab.value === 'collection' && collectionEditable.value) {
-    return { label: '保存收款配置', handler: saveCollectionConfig }
   }
   if (activeTab.value === 'score' && editable.value.scoreConfigs) {
     return { label: '保存评分表', handler: saveScoreConfigs }
@@ -2790,6 +3198,13 @@ const currentRoundTargetCount = computed(() => currentRoundTables.value.reduce((
 const advancedPool = computed(() => roundEntryPool.value.filter((entry) => entry.advanced))
 const entryTotalPages = computed(() => Math.max(Math.ceil(entryPageTotal.value / entryPagination.pageSize), 1))
 const entryVisiblePages = computed(() => buildPaginationPages(entryPagination.page, entryTotalPages.value))
+const entryCategoryOptions = computed(() => competition.value?.categories || [])
+const hasEntryFilters = computed(() => Boolean(
+  entryFilters.keyword.trim()
+  || entryFilters.deliveryStatus
+  || entryFilters.paymentStatus
+  || entryFilters.categoryId,
+))
 const paginatedRoundEntryPool = computed(() => {
   return entryPageRecords.value
 })
@@ -3408,16 +3823,6 @@ onMounted(() => {
   nextTick(setupStyleDistributionObserver)
   roundProgressPollTimer = window.setInterval(refreshRoundProgress, roundProgressPollIntervalMs)
   window.addEventListener('beforeunload', handleAllocationBeforeUnload)
-  getAdminMe()
-    .then((user) => {
-      isTenantOrganizer.value = user?.organizerType === 'TENANT'
-      if (isTenantOrganizer.value) {
-        loadCollectionConfig()
-      } else if (activeTab.value === 'collection') {
-        activeTab.value = 'overview'
-      }
-    })
-    .catch(() => {})
 })
 onUnmounted(() => {
   releaseCollectionQrUrls()
@@ -3443,7 +3848,8 @@ watch(() => route.params.id, loadDetail)
 watch(() => route.query.tab, (tab) => {
   const nextTab = normalizeDetailTab(tab)
   if (nextTab !== activeTab.value) {
-    activeTab.value = competition.value && resolveDetailTabDisabledReason(nextTab) ? 'overview' : nextTab
+    const visibleTab = detailTabs.value.find((item) => item.key === nextTab)
+    activeTab.value = visibleTab?.enabled ? nextTab : 'overview'
   }
 })
 watch(activeTab, (tab) => {
@@ -3562,6 +3968,21 @@ function changeEntryPageSize() {
   loadEntryPage()
 }
 
+function applyEntryFilters() {
+  entryPagination.page = 1
+  loadEntryPage()
+}
+
+function resetEntryFilters() {
+  Object.assign(entryFilters, {
+    keyword: '',
+    deliveryStatus: '',
+    paymentStatus: '',
+    categoryId: '',
+  })
+  applyEntryFilters()
+}
+
 function changeFeedbackPage(page) {
   feedbackPagination.page = Math.min(Math.max(page, 1), feedbackTotalPages.value)
   if (feedbackServerMode.value) loadFeedbackReview(true)
@@ -3588,6 +4009,8 @@ async function loadDetail() {
   loading.value = true
   competition.value = null
   beerCoinOverview.value = null
+  collectionConfig.value = null
+  releaseCollectionQrUrls()
   resetLoadedSections()
   try {
     const data = await fetchCompetitionOverview(competitionKey)
@@ -3665,6 +4088,10 @@ async function loadActiveTabData(tab) {
   }
   if (tab === 'analysis') {
     await loadCompetitionAnalytics()
+    return
+  }
+  if (tab === 'baseInfo' && isTenantCompetition.value && !collectionConfig.value) {
+    await loadCollectionConfig()
   }
 }
 
@@ -3717,9 +4144,14 @@ async function loadEntryPage() {
   const requestGeneration = detailRequestGeneration
   if (!competitionKey) return
   try {
-    const data = await fetchCompetitionEntryPoolPage(competitionKey, {
+    const data = await fetchAdminEntries({
+      competitionId: competitionKey,
       page: entryPagination.page,
       pageSize: entryPagination.pageSize,
+      keyword: entryFilters.keyword.trim() || undefined,
+      paymentStatus: entryFilters.paymentStatus || undefined,
+      deliveryStatus: entryFilters.deliveryStatus || undefined,
+      categoryId: entryFilters.categoryId || undefined,
     })
     if (!isCurrentCompetitionRequest(competitionKey, requestGeneration)) return
     entryPageRecords.value = data?.records || []
@@ -3791,6 +4223,7 @@ function shouldRefreshRoundProgress() {
 function normalizeDetailTab(tab) {
   const value = Array.isArray(tab) ? tab[0] : tab
   if (value === 'progress') return 'rounds'
+  if (value === 'collection') return 'baseInfo'
   return detailTabKeys.has(value) ? value : 'overview'
 }
 
@@ -4131,6 +4564,8 @@ function resetSponsorForm() {
 
 function resetForms() {
   const logistics = competition.value.logistics || {}
+  const hasEarlyBird = (competition.value.earlyBirdFee !== null && competition.value.earlyBirdFee !== undefined)
+    || Boolean(competition.value.earlyBirdDeadline)
   Object.assign(baseForm, {
     name: competition.value.name || '',
     code: competition.value.code || '',
@@ -4138,6 +4573,7 @@ function resetForms() {
     registrationStart: toInputDateTime(competition.value.registrationStart),
     registrationDeadline: toInputDateTime(competition.value.registrationDeadline),
     entryFee: competition.value.entryFee ?? 0,
+    earlyBirdEnabled: hasEarlyBird,
     earlyBirdFee: competition.value.earlyBirdFee ?? '',
     earlyBirdDeadline: toInputDateTime(competition.value.earlyBirdDeadline),
     tierPricingEnabled: Boolean(competition.value.tierPricingEnabled),
@@ -4161,7 +4597,9 @@ function resetForms() {
   })
   resetSponsorForm()
   selectedStyleLibraryVersion.value = competition.value.styleLibraryVersion || ''
-  categoryForm.splice(0, categoryForm.length, ...competition.value.categories.map((item) => item.name))
+  categoryForm.splice(0, categoryForm.length, ...competition.value.categories.map((item) => (
+    createCategoryItem(item.name, item.styleNames)
+  )))
   entryFieldForm.splice(0, entryFieldForm.length, ...competition.value.entryFields.map((item, index) => ({
     ...item,
     localId: item.id || `field-${index}`,
@@ -4364,6 +4802,11 @@ function isRefundedEntry(entry) {
   return entry?.refundStatus === 'SUCCESS' || entry?.paymentStatus === 'REFUNDED'
 }
 
+function canMarkEntryStored(entry) {
+  return entry?.status === 'REGISTERED'
+    && !['REQUESTED', 'APPROVED', 'PROCESSING'].includes(entry?.refundStatus)
+}
+
 function compareEntryDisplayPriority(left, right) {
   const priorityDelta = entryDisplayPriority(left) - entryDisplayPriority(right)
   if (priorityDelta !== 0) return priorityDelta
@@ -4469,6 +4912,10 @@ function buildHeaderMetaItems() {
   const items = []
   const deadline = competition.value.registrationDeadline
   const date = competition.value.date || competition.value.competitionDate
+
+  if (isTenantCompetition.value && competition.value.organizerName) {
+    items.push({ key: 'organizer', label: `主办方 ${competition.value.organizerName}` })
+  }
 
   if (status === 'REGISTRATION_OPEN') {
     items.push({ key: 'registrationDeadline', label: deadline ? `报名截止 ${formatDateTime(deadline)}` : '报名截止待设置' })
@@ -4717,7 +5164,8 @@ async function selectRound(roundId) {
 
 function ensureActiveTabAvailable() {
   if (!competition.value) return
-  if (resolveDetailTabDisabledReason(activeTab.value)) {
+  const tab = detailTabs.value.find((item) => item.key === activeTab.value)
+  if (!tab || !tab.enabled) {
     activeTab.value = 'overview'
   }
 }
@@ -4729,7 +5177,7 @@ function resolveDetailTabDisabledReason(tabKey) {
   const hasFeedback = feedbackReviewEntries.value.length > 0
   const hasAwards = awardDrafts.value.length > 0
 
-  if (tabKey === 'overview' || tabKey === 'baseInfo' || tabKey === 'entryConfig' || tabKey === 'collection' || tabKey === 'score') {
+  if (tabKey === 'overview' || tabKey === 'baseInfo' || tabKey === 'entryConfig' || tabKey === 'score') {
     return ''
   }
   if (tabKey === 'entries') {
@@ -7906,17 +8354,18 @@ async function saveBaseInfo() {
     ElMessage.warning('参赛细则链接必须以 http:// 或 https:// 开头')
     return
   }
-  if (!baseForm.name || !baseForm.code || !baseForm.competitionDate || !baseForm.registrationDeadline) {
-    ElMessage.warning('请补齐比赛名称、编号、比赛日期和报名截止时间')
+  if (!baseForm.name || !baseForm.competitionDate || !baseForm.registrationDeadline) {
+    ElMessage.warning('请补齐比赛名称、比赛日期和报名截止时间')
     return
   }
+  const earlyBirdEnabled = Boolean(baseForm.earlyBirdEnabled)
   const hasEarlyBirdFee = baseForm.earlyBirdFee !== '' && baseForm.earlyBirdFee !== null && baseForm.earlyBirdFee !== undefined
   const hasEarlyBirdDeadline = Boolean(baseForm.earlyBirdDeadline)
-  if (hasEarlyBirdFee !== hasEarlyBirdDeadline) {
-    ElMessage.warning('早鸟价和早鸟价截止时间需要同时填写')
+  if (earlyBirdEnabled && (!hasEarlyBirdFee || !hasEarlyBirdDeadline)) {
+    ElMessage.warning('请填写早鸟价和早鸟截止时间')
     return
   }
-  if (hasEarlyBirdFee) {
+  if (earlyBirdEnabled) {
     if (Number(baseForm.earlyBirdFee) > Number(baseForm.entryFee || 0)) {
       ElMessage.warning('早鸟价不能高于报名费')
       return
@@ -7938,8 +8387,8 @@ async function saveBaseInfo() {
     registrationStart: toBackendDateTime(baseForm.registrationStart),
     registrationDeadline: toBackendDateTime(baseForm.registrationDeadline),
     entryFee: Number(baseForm.entryFee || 0),
-    earlyBirdFee: hasEarlyBirdFee ? Number(baseForm.earlyBirdFee) : null,
-    earlyBirdDeadline: toBackendDateTime(baseForm.earlyBirdDeadline),
+    earlyBirdFee: earlyBirdEnabled ? Number(baseForm.earlyBirdFee) : null,
+    earlyBirdDeadline: earlyBirdEnabled ? toBackendDateTime(baseForm.earlyBirdDeadline) : null,
     tierPricingEnabled: baseForm.tierPricingEnabled,
     feeTiers: baseForm.tierPricingEnabled ? baseForm.feeTiers.map(({ startQuantity, discountRatePercent }) => ({ startQuantity: Number(startQuantity), discountRate: Number(discountRatePercent) / 100 })) : [],
     description: baseForm.description,
@@ -8179,42 +8628,42 @@ async function saveSponsors() {
   ElMessage.success('赞助商配置已保存')
 }
 
-function getSelectedStyleCategoryNames() {
-  const names = []
-  const seen = new Set()
-  selectedStyleItems.value.forEach((style) => {
-    const name = formatStyleItemName(style)
-    if (!name || seen.has(name)) return
-    seen.add(name)
-    names.push(name)
-  })
-  return names
-}
-
 async function syncCategoryFormFromStyleLibrary() {
-  const names = getSelectedStyleCategoryNames()
-  if (!names.length) {
-    ElMessage.warning('当前风格库没有可同步的风格')
+  const groups = styleCategoryGroups.value
+  if (!groups.length) {
+    ElMessage.warning('当前风格库没有可用分类')
     return
   }
-  if (categoryForm.filter(Boolean).length) {
+  if (categoryForm.length) {
     try {
-      await ElMessageBox.confirm('将用当前风格库的可用风格替换现有投递组别，保存前仍可继续调整。', '同步投递组别', {
-        confirmButtonText: '同步',
-        cancelButtonText: '取消',
-        type: 'warning',
-      })
+      await ElMessageBox.confirm(
+        `将按当前风格库的 ${groups.length} 个分类重建投递组别，并为每组预置该分类下的风格，保存前仍可调整。`,
+        '按分类生成投递组别',
+        { confirmButtonText: '生成', cancelButtonText: '取消', type: 'warning' },
+      )
     } catch {
       return
     }
   }
-  categoryForm.splice(0, categoryForm.length, ...names)
-  ElMessage.success('已同步当前风格库的投递组别')
+  categoryForm.splice(0, categoryForm.length, ...groups.map((group) => (
+    createCategoryItem(group.name, group.styles.map((style) => style.name))
+  )))
+  ElMessage.success('已按风格分类生成投递组别')
+}
+
+function categoryScopePayload(item) {
+  if (!isCategoryRestricted(item)) return null
+  return item.styleNames.filter((name) => allStyleNameSet.value.has(name))
 }
 
 async function saveEntryConfig() {
   const library = getStyleLibrary(selectedStyleLibraryVersion.value, styleLibraryOptions.value)
-  const categoryItems = categoryForm.filter(Boolean).map((name, index) => ({ name, sortOrder: index }))
+  const namedCategories = categoryForm.filter((item) => item.name.trim())
+  const categoryItems = namedCategories.map((item, index) => ({
+    name: item.name.trim(),
+    sortOrder: index,
+    styleNames: categoryScopePayload(item),
+  }))
   const fieldItems = entryFieldForm
     .filter((field) => field.fieldLabel)
     .map((field, index) => ({
@@ -8235,11 +8684,40 @@ async function saveEntryConfig() {
     ElMessage.warning('请选择风格库')
     return
   }
-  let detail = await updateCompetitionStyles(competition.value.id, {
-    styleLibraryVersion: library.value,
-  })
-  detail = await updateCompetitionCategories(competition.value.id, { items: categoryItems })
-  detail = await updateCompetitionEntryFields(competition.value.id, { items: fieldItems })
+  const invalidScope = namedCategories.find((item) => (
+    isCategoryRestricted(item) && !categoryScopePayload(item).length
+  ))
+  if (invalidScope) {
+    ElMessage.warning(`「${invalidScope.name}」至少选择 1 个风格，或改为不限风格`)
+    invalidScope.expanded = true
+    return
+  }
+  const unmatchedScope = namedCategories.find((item) => unmatchedStyleNames(item).length)
+  if (unmatchedScope) {
+    ElMessage.warning(`「${unmatchedScope.name}」有风格不在当前风格库，请先移除`)
+    unmatchedScope.expanded = true
+    return
+  }
+  let detail = competition.value
+  if (editable.value.styleLibrary && selectedStyleLibraryVersion.value !== competition.value.styleLibraryVersion) {
+    detail = await updateCompetitionStyles(competition.value.id, { styleLibraryVersion: library.value })
+  }
+  if (editable.value.categories) {
+    detail = await updateCompetitionCategories(competition.value.id, { items: categoryItems })
+  } else if (editable.value.styleLibrary) {
+    detail = await updateCompetitionCategoryStyleScopes(competition.value.id, {
+      items: competition.value.categories.map((category) => {
+        const item = namedCategories.find((entry) => entry.name === category.name)
+        return {
+          categoryId: category.id,
+          styleNames: item ? categoryScopePayload(item) : null,
+        }
+      }),
+    })
+  }
+  if (editable.value.entryFields) {
+    detail = await updateCompetitionEntryFields(competition.value.id, { items: fieldItems })
+  }
   competition.value = normalizeDetail(detail)
   resetForms()
   applyRoundState()
@@ -8247,14 +8725,27 @@ async function saveEntryConfig() {
 }
 
 async function saveScoreConfigs() {
-  const crossConfig = scoreConfigForm.find((config) => config.role === 'CROSS')
-  if (!crossConfig || crossConfig.dimensions.length < 2 || crossConfig.dimensions.length > 3) {
-    ElMessage.warning('跨界评审需配置 2-3 个维度')
+  const flexibleConfigs = scoreConfigForm.filter((config) => isFlexibleScoreRole(config.role))
+  const invalidDimensionConfig = flexibleConfigs.find((config) => (
+    config.dimensions.length < FLEXIBLE_DIMENSION_MIN || config.dimensions.length > FLEXIBLE_DIMENSION_MAX
+  ))
+  if (invalidDimensionConfig) {
+    ElMessage.warning(`${roleLabels[invalidDimensionConfig.role]}需配置 ${FLEXIBLE_DIMENSION_MIN}-${FLEXIBLE_DIMENSION_MAX} 个维度`)
     return
   }
-  const professionalConfig = scoreConfigForm.find((config) => config.role === 'PROFESSIONAL')
-  if (!isProfessionalScoreConfigFixed(professionalConfig)) {
-    ElMessage.warning('专业评审评分表需固定为香气12、外观3、味道20、口感5、整体印象10')
+  const blankDimensionConfig = flexibleConfigs.find((config) => (
+    config.dimensions.some((dimension) => !String(dimension.label || '').trim())
+  ))
+  if (blankDimensionConfig) {
+    ElMessage.warning(`${roleLabels[blankDimensionConfig.role]}存在未命名的维度`)
+    return
+  }
+  const duplicateDimensionConfig = flexibleConfigs.find((config) => {
+    const labels = config.dimensions.map((dimension) => String(dimension.label || '').trim())
+    return new Set(labels).size !== labels.length
+  })
+  if (duplicateDimensionConfig) {
+    ElMessage.warning(`${roleLabels[duplicateDimensionConfig.role]}存在重名维度`)
     return
   }
   if (!scoreConfigForm.every((config) => getScoreTotal(config) === 50)) {
@@ -8276,6 +8767,24 @@ async function saveScoreConfigs() {
   await loadDetail()
   ElMessage.success('评分表已保存')
 }
+
+watch(selectedStyleLibraryVersion, (next, previous) => {
+  if (!next || !previous || next === previous) return
+  const previousLibrary = getStyleLibrary(previous, styleLibraryOptions.value)
+  const nextLibrary = getStyleLibrary(next, styleLibraryOptions.value)
+  if (!previousLibrary?.styleItems?.length || !nextLibrary?.styleItems?.length) return
+  const codeByName = new Map(previousLibrary.styleItems.map((style) => [style.name, style.styleCode]))
+  const nameByCode = new Map(nextLibrary.styleItems
+    .filter((style) => style.styleCode)
+    .map((style) => [style.styleCode, style.name]))
+  categoryForm.forEach((item) => {
+    if (!Array.isArray(item.styleNames)) return
+    item.styleNames = [...new Set(item.styleNames.map((name) => (
+      nameByCode.get(codeByName.get(name)) || name
+    )))]
+    if (item.expanded) ensureActiveCategory(item)
+  })
+})
 
 async function saveStyleLibrary() {
   const library = getStyleLibrary(selectedStyleLibraryVersion.value, styleLibraryOptions.value)
@@ -8316,44 +8825,33 @@ async function saveEntryFields() {
   ElMessage.success('报名补充信息已保存')
 }
 
-function isProfessionalScoreConfigFixed(config) {
-  const expected = [
-    ['香气', 12],
-    ['外观', 3],
-    ['味道', 20],
-    ['口感', 5],
-    ['整体印象', 10],
-  ]
-  return Boolean(config)
-    && config.dimensions.length === expected.length
-    && expected.every(([label, maxScore], index) => (
-      config.dimensions[index]?.label === label
-      && Number(config.dimensions[index]?.maxScore) === maxScore
-    ))
+function isFlexibleScoreRole(role) {
+  return role === 'CROSS' || role === 'PROFESSIONAL'
 }
 
-function addCrossScoreDimension(config) {
-  if (config.role !== 'CROSS') return
-  if (config.dimensions.length >= 3) {
-    ElMessage.warning('跨界评审最多配置 3 个维度')
+function addScoreDimension(config) {
+  if (!isFlexibleScoreRole(config.role)) return
+  if (config.dimensions.length >= FLEXIBLE_DIMENSION_MAX) {
+    ElMessage.warning(`${roleLabels[config.role]}最多配置 ${FLEXIBLE_DIMENSION_MAX} 个维度`)
     return
   }
+  const keyPrefix = config.role.toLowerCase()
   const existingKeys = new Set(config.dimensions.map((dimension) => dimension.key))
   let nextIndex = config.dimensions.length + 1
-  while (existingKeys.has(`cross_${nextIndex}`)) nextIndex += 1
+  while (existingKeys.has(`${keyPrefix}_${nextIndex}`)) nextIndex += 1
   config.dimensions.push({
-    key: `cross_${nextIndex}`,
+    key: `${keyPrefix}_${nextIndex}`,
     label: '',
     maxScore: 10,
     notePrompt: '',
-    localId: `CROSS-${Date.now()}-${nextIndex}`,
+    localId: `${keyPrefix}-${Date.now()}-${nextIndex}`,
   })
 }
 
 function removeScoreDimension(config, index) {
-  if (config.role !== 'CROSS') return
-  if (config.dimensions.length <= 2) {
-    ElMessage.warning('跨界评审至少保留 2 个维度')
+  if (!isFlexibleScoreRole(config.role)) return
+  if (config.dimensions.length <= FLEXIBLE_DIMENSION_MIN) {
+    ElMessage.warning(`${roleLabels[config.role]}至少保留 ${FLEXIBLE_DIMENSION_MIN} 个维度`)
     return
   }
   config.dimensions.splice(index, 1)

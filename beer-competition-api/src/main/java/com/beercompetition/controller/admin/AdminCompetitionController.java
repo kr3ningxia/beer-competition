@@ -2,6 +2,7 @@ package com.beercompetition.controller.admin;
 
 import com.beercompetition.common.result.Result;
 import com.beercompetition.common.result.PageResult;
+import com.beercompetition.pojo.dto.CategoryStyleScopeBatchUpdateRequest;
 import com.beercompetition.pojo.dto.CompetitionBaseInfoUpdateRequest;
 import com.beercompetition.pojo.dto.CompetitionCreateRequest;
 import com.beercompetition.pojo.dto.CompetitionReopenRegistrationRequest;
@@ -165,6 +166,16 @@ public class AdminCompetitionController {
     public Result<CompetitionDetailVO> updateCategories(@PathVariable Long id,
                                                         @RequestBody @Valid ConfigNameBatchUpdateRequest request) {
         return Result.success(competitionConfigurationService.updateCategories(id, request));
+    }
+
+    /**
+     * 更新投递组别的可选风格范围。
+     */
+    @PutMapping("/{id}/category-style-scopes")
+    public Result<CompetitionDetailVO> updateCategoryStyleScopes(
+            @PathVariable Long id,
+            @RequestBody @Valid CategoryStyleScopeBatchUpdateRequest request) {
+        return Result.success(competitionConfigurationService.updateCategoryStyleScopes(id, request));
     }
 
     /**

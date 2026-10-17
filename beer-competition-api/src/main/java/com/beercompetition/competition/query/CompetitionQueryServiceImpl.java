@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.common.result.PageResult;
+import com.beercompetition.competition.configuration.CompetitionCategoryStyleService;
 import com.beercompetition.mapper.BeerEntryMapper;
 import com.beercompetition.mapper.CompetitionCategoryMapper;
 import com.beercompetition.mapper.CompetitionMapper;
@@ -93,6 +94,8 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
     private final CompetitionCategoryMapper competitionCategoryMapper;
 
     private final CompetitionStyleConfigMapper competitionStyleConfigMapper;
+
+    private final CompetitionCategoryStyleService competitionCategoryStyleService;
 
     private final EntryFieldConfigMapper entryFieldConfigMapper;
 
@@ -614,6 +617,7 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
     }
 
     private List<CompetitionConfigNameVO> listCategories(Long competitionId) {
+        Map<Long, List<String>> styleScopes = competitionCategoryStyleService.listStyleNamesByCategory(competitionId);
         return competitionCategoryMapper.selectList(new LambdaQueryWrapper<CompetitionCategory>()
                         .eq(CompetitionCategory::getCompetitionId, competitionId)
                         .orderByAsc(CompetitionCategory::getSortOrder)
@@ -623,6 +627,7 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
                         .id(item.getId())
                         .name(item.getName())
                         .sortOrder(item.getSortOrder())
+                        .styleNames(styleScopes.get(item.getId()))
                         .build())
                 .toList();
     }

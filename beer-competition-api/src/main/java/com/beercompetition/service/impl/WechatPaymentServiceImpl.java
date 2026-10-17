@@ -450,7 +450,7 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
         boolean wechatQr = payment != null && EntryPayMethod.WECHAT_QR.name().equals(payment.getPayMethod());
         if (wechatQr) {
             if (!EntryRefundStatus.APPROVED.name().equals(refund.getStatus())) {
-                throw new BaseException("只有已通过的微信收款码退款可以确认完成");
+                throw new BaseException("只有已通过的收款码退款可以确认完成");
             }
         } else if (!EntryRefundStatus.PROCESSING.name().equals(refund.getStatus())) {
             throw new BaseException("只有已登记银行卡退款的记录可以确认完成");

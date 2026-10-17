@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
+import com.beercompetition.competition.configuration.CompetitionCategoryStyleService;
 import com.beercompetition.mapper.BeerEntryExtraFieldMapper;
 import com.beercompetition.mapper.BeerEntryMapper;
 import com.beercompetition.mapper.CompetitionCategoryMapper;
@@ -66,6 +67,8 @@ public class PortalEntryCreationService {
 
     private final CompetitionStyleConfigMapper competitionStyleConfigMapper;
 
+    private final CompetitionCategoryStyleService competitionCategoryStyleService;
+
     private final EntryPaymentMapper entryPaymentMapper;
 
     private final EntryDeliveryMapper entryDeliveryMapper;
@@ -93,6 +96,7 @@ public class PortalEntryCreationService {
         requireRulesAcceptedIfConfigured(competition, request);
         CompetitionCategory category = requireCompetitionCategory(competitionId, request.getCategoryId());
         CompetitionStyleConfig selectedStyle = requireCompetitionStyle(competitionId, request.getStyle());
+        competitionCategoryStyleService.requireStyleAllowed(category.getId(), selectedStyle.getName());
         int existingCount = Math.toIntExact(beerEntryMapper.selectCount(new LambdaQueryWrapper<BeerEntry>()
                 .eq(BeerEntry::getCompetitionId, competitionId)
                 .eq(BeerEntry::getBreweryId, account.getBreweryId())

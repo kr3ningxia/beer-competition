@@ -215,6 +215,10 @@ export function updateCompetitionStyles(id, payload) {
   return request.put(`/api/admin/competitions/${id}/styles`, payload, { authScope: 'admin' })
 }
 
+export function updateCompetitionCategoryStyleScopes(id, payload) {
+  return request.put(`/api/admin/competitions/${id}/category-style-scopes`, payload, { authScope: 'admin' })
+}
+
 export function updateCompetitionEntryFields(id, payload) {
   return request.put(`/api/admin/competitions/${id}/entry-fields`, payload, { authScope: 'admin' })
 }

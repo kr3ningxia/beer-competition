@@ -145,7 +145,7 @@ public class CompetitionCollectionServiceImpl implements CompetitionCollectionSe
             default -> throw new BaseException("该赛事不支持当前付款方式");
         };
         if (config.getEnabledMethods() == null || !config.getEnabledMethods().contains(configuredMethod)) {
-            String methodName = payMethod == EntryPayMethod.WECHAT_QR ? "微信收款" : "银行转账";
+            String methodName = payMethod == EntryPayMethod.WECHAT_QR ? "收款码" : "银行转账";
             throw new BaseException("该赛事未开放" + methodName);
         }
     }
@@ -229,7 +229,7 @@ public class CompetitionCollectionServiceImpl implements CompetitionCollectionSe
     private void validateMethodConfiguration(List<String> methods,
                                              CompetitionCollectionConfigUpdateRequest request) {
         if (methods.contains(METHOD_WECHAT_QR) && request.getWechatQrAssetId() == null) {
-            throw new BaseException("启用微信收款码后必须上传二维码");
+            throw new BaseException("启用收款码后必须上传二维码");
         }
         if (methods.contains(METHOD_BANK_TRANSFER)
                 && (!StringUtils.hasText(request.getBankAccountName())
@@ -248,20 +248,20 @@ public class CompetitionCollectionServiceImpl implements CompetitionCollectionSe
                 || !OWNER_TYPE_COMPETITION.equals(asset.getOwnerType())
                 || !Objects.equals(asset.getOwnerId(), competition.getId())
                 || !Objects.equals(asset.getOrganizerId(), competition.getOrganizerId())) {
-            throw new BaseException("微信收款码文件无效");
+            throw new BaseException("收款码文件无效");
         }
     }
 
     private void validateQrFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new BaseException("请上传微信收款码");
+            throw new BaseException("请上传收款码");
         }
         if (file.getSize() > MAX_QR_SIZE) {
-            throw new BaseException("微信收款码不能超过 5MB");
+            throw new BaseException("收款码不能超过 5MB");
         }
         String contentType = file.getContentType() == null ? "" : file.getContentType().toLowerCase(Locale.ROOT);
         if (!QR_CONTENT_TYPES.contains(contentType)) {
-            throw new BaseException("微信收款码仅支持 JPG、PNG 或 WEBP 图片");
+            throw new BaseException("收款码仅支持 JPG、PNG 或 WEBP 图片");
         }
     }
 
@@ -274,7 +274,7 @@ public class CompetitionCollectionServiceImpl implements CompetitionCollectionSe
         try {
             return file.getBytes();
         } catch (IOException ex) {
-            throw new BaseException("读取微信收款码失败");
+            throw new BaseException("读取收款码失败");
         }
     }
 

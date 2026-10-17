@@ -77,6 +77,10 @@
                 @change="toggleVisibility(selectedLibrary, $event)"
               />
             </div>
+            <button class="tool-button outline" type="button" :disabled="!normalizedPreviewItems.length" @click="exportLibrary(selectedLibrary)">
+              <Download />
+              导出风格库
+            </button>
             <button v-if="canMaintain && selectedLibrary.canEdit" class="tool-button outline" type="button" @click="startEdit(selectedLibrary)">
               <EditPen />
               编辑
@@ -288,10 +292,35 @@
           </section>
         </section>
 
-        <details class="import-box">
+        <details class="import-box" open>
           <summary>批量导入</summary>
-          <textarea v-model="importText" rows="5" placeholder="每行：分类 | 风格名称 | 编号 | 评审可见说明"></textarea>
-          <button type="button" @click="applyImportText">导入到列表</button>
+          <div class="import-body">
+            <div class="import-toolbar">
+              <button type="button" @click="downloadTemplate">
+                <Download />
+                下载模板
+              </button>
+              <button type="button" @click="pickImportFile">
+                <Upload />
+                选择 Excel 文件
+              </button>
+              <input ref="importFileInput" class="import-file-input" type="file" accept=".xlsx,.xls" @change="handleImportFile" />
+            </div>
+            <p class="import-hint">
+              按模板填写后导入。列依次为：分类、风格名称、编号、评审可见说明。「风格名称」必填；「分类」留空时归入「未分类」；「编号」「评审可见说明」可留空。
+            </p>
+            <div v-if="importPreview.length" class="import-preview">
+              <p class="import-preview-text">
+                已解析 <strong>{{ importPreview.length }}</strong> 条风格，涉及 {{ importPreviewCategoryCount }} 个分类
+                <span v-if="importFileName">（{{ importFileName }}）</span>
+              </p>
+              <div class="import-preview-actions">
+                <button type="button" class="primary" @click="applyImport('append')">追加到列表</button>
+                <button type="button" @click="applyImport('replace')">替换列表</button>
+                <button type="button" class="ghost" @click="resetImportState">清空</button>
+              </div>
+            </div>
+          </div>
         </details>
 
         <footer>
@@ -307,11 +336,14 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Close, CopyDocument, Delete, DocumentCopy, EditPen, Files, Plus, Search } from '@element-plus/icons-vue'
+import { Close, CopyDocument, Delete, DocumentCopy, Download, EditPen, Files, Plus, Search, Upload } from '@element-plus/icons-vue'
 import { fetchEnabledStyleLibraries, fetchStyleLibraries, saveStyleLibrary, updateStyleLibrary, updateStyleLibraryVisibility } from '@/api/admin'
 import { ADMIN_TYPES } from '@/config/adminAccess'
 import { getAdminType } from '@/utils/auth'
 import { defaultStyleLibraryValue, fallbackStyleLibraries, getStyleLibrary, normalizeStyleLibraries } from './styleLibraries'
+import { downloadStyleImportTemplate, exportStyleLibrary, parseStyleImportFile } from './styleLibraryExcel'
+
+const UNCATEGORIZED = '未分类'
 
 const route = useRoute()
 const isPlatformLibrary = computed(() => getAdminType() === ADMIN_TYPES.PLATFORM_SUPER_ADMIN)
@@ -331,7 +363,9 @@ const editingCode = ref('')
 const editorCategory = ref('')
 const editorKeyword = ref('')
 const selectedStyleId = ref('')
-const importText = ref('')
+const importFileInput = ref(null)
+const importPreview = ref([])
+const importFileName = ref('')
 const visibilityUpdating = ref(false)
 const editor = reactive(createEmptyEditor())
 
@@ -383,6 +417,7 @@ const editorStyles = computed(() => {
   })
 })
 const selectedStyle = computed(() => editor.styles.find((style) => style.localId === selectedStyleId.value))
+const importPreviewCategoryCount = computed(() => new Set(importPreview.value.map((item) => item.categoryName || UNCATEGORIZED)).size)
 
 onMounted(loadStyleLibraries)
 
@@ -428,7 +463,7 @@ function startCreate() {
   editingCode.value = ''
   editorCategory.value = ''
   selectedStyleId.value = ''
-  importText.value = ''
+  resetImportState()
   editorOpen.value = true
 }
 
@@ -459,7 +494,7 @@ function startEdit(library) {
   })
   editorCategory.value = categories[0]?.name || ''
   selectedStyleId.value = styles[0]?.localId || ''
-  importText.value = ''
+  resetImportState()
   editorOpen.value = true
 }
 
@@ -489,7 +524,7 @@ function startClone(library) {
   editingCode.value = ''
   editorCategory.value = categories[0]?.name || ''
   selectedStyleId.value = styles[0]?.localId || ''
-  importText.value = ''
+  resetImportState()
   editorOpen.value = true
 }
 
@@ -636,31 +671,88 @@ function removeStyle(localId) {
   selectedStyleId.value = editorStyles.value[0]?.localId || editor.styles[0]?.localId || ''
 }
 
-function applyImportText() {
-  const rows = importText.value.split('\n').map((line) => line.trim()).filter(Boolean)
-  if (!rows.length) {
-    ElMessage.warning('请先填写导入内容')
+async function exportLibrary(library) {
+  const items = getStyleItems(library)
+  if (!items.length) {
+    ElMessage.warning('当前风格库没有可导出的风格')
     return
   }
-  rows.forEach((line) => {
-    const [categoryName = '', name = '', styleCode = '', description = ''] = line.split('|').map((part) => part.trim())
-    if (!categoryName || !name) return
-    if (!cleanEditorCategories.value.includes(categoryName)) {
-      editor.categories.push({ localId: createLocalId('category'), name: categoryName })
-    }
-    editor.styles.push({
+  try {
+    await exportStyleLibrary({ name: library.label, items })
+    ElMessage.success('已开始下载风格库 Excel')
+  } catch {
+    ElMessage.error('导出失败，请重试')
+  }
+}
+
+async function downloadTemplate() {
+  try {
+    await downloadStyleImportTemplate()
+  } catch {
+    ElMessage.error('生成模板失败，请重试')
+  }
+}
+
+function pickImportFile() {
+  importFileInput.value?.click()
+}
+
+async function handleImportFile(event) {
+  const input = event.target
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  importFileName.value = file.name
+  try {
+    const items = await parseStyleImportFile(file)
+    importPreview.value = items
+    ElMessage.success(`已解析 ${items.length} 条风格，请选择追加或替换`)
+  } catch (error) {
+    importPreview.value = []
+    ElMessage.warning(error?.message || '解析 Excel 失败')
+  }
+}
+
+function ensureEditorCategory(name) {
+  const target = String(name || '').trim()
+  if (!target) return
+  if (editor.categories.some((category) => category.name.trim() === target)) return
+  editor.categories.push({ localId: createLocalId('category'), name: target })
+}
+
+function applyImport(mode) {
+  const items = importPreview.value
+  if (!items.length) return
+  if (mode === 'replace') {
+    editor.categories = []
+    editor.styles = []
+  }
+  let firstAddedId = ''
+  items.forEach((item) => {
+    const categoryName = String(item.categoryName || '').trim() || UNCATEGORIZED
+    ensureEditorCategory(categoryName)
+    const style = {
       localId: createLocalId('style'),
       categoryName,
-      name,
-      styleCode,
-      description,
+      name: item.name,
+      styleCode: item.styleCode,
+      description: item.description,
       status: 1,
-    })
+    }
+    editor.styles.push(style)
+    if (!firstAddedId) firstAddedId = style.localId
   })
-  editorCategory.value = cleanEditorCategories.value[0] || ''
-  selectedStyleId.value = editor.styles[0]?.localId || ''
-  importText.value = ''
-  ElMessage.success('已导入到列表，请检查后保存')
+  const firstAdded = editor.styles.find((style) => style.localId === firstAddedId)
+  editorCategory.value = firstAdded?.categoryName || cleanEditorCategories.value[0] || ''
+  selectedStyleId.value = firstAddedId
+  resetImportState()
+  ElMessage.success(`已${mode === 'replace' ? '替换' : '追加'} ${items.length} 条风格，请检查后保存`)
+}
+
+function resetImportState() {
+  importPreview.value = []
+  importFileName.value = ''
+  if (importFileInput.value) importFileInput.value.value = ''
 }
 
 function getStyleItems(library) {
@@ -837,6 +929,7 @@ small,
 
 .tool-button.primary,
 .library-summary button,
+.import-box button.primary,
 .editor-dialog footer button.primary {
   color: var(--gold-soft);
   border-color: rgba(216, 169, 53, 0.32);
@@ -1312,12 +1405,66 @@ small,
   font-weight: 800;
 }
 
-.import-box textarea {
+.import-body {
+  display: grid;
+  gap: 10px;
   margin-top: 10px;
 }
 
-.import-box button {
-  margin-top: 10px;
+.import-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.import-toolbar button {
+  gap: 6px;
+}
+
+.import-toolbar button svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+}
+
+.import-preview-actions button.ghost {
+  color: var(--muted);
+  background: transparent;
+}
+
+.import-file-input {
+  display: none;
+}
+
+.import-hint {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.import-preview {
+  display: grid;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(217, 170, 57, 0.24);
+  border-radius: 8px;
+  background: rgba(217, 170, 57, 0.06);
+}
+
+.import-preview-text {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.import-preview-text strong {
+  color: var(--gold-soft);
+}
+
+.import-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .editor-dialog footer {
@@ -1498,6 +1645,11 @@ small,
   color: var(--text);
   border-color: var(--line-strong);
   background: rgba(255, 255, 255, 0.025);
+}
+
+.tool-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .search-field {

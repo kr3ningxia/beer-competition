@@ -5,6 +5,7 @@ import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ForbiddenException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
+import com.beercompetition.competition.configuration.CompetitionCategoryStyleService;
 import com.beercompetition.mapper.AdminOperationLogMapper;
 import com.beercompetition.mapper.BeerEntryExtraFieldMapper;
 import com.beercompetition.mapper.BeerEntryMapper;
@@ -65,6 +66,8 @@ public class PortalEntryMutationService {
     private final CompetitionMapper competitionMapper;
 
     private final CompetitionStyleConfigMapper competitionStyleConfigMapper;
+
+    private final CompetitionCategoryStyleService competitionCategoryStyleService;
 
     private final EntryPaymentMapper entryPaymentMapper;
 
@@ -344,7 +347,12 @@ public class PortalEntryMutationService {
 
     private CompetitionStyleConfig resolveEditableCompetitionStyle(BeerEntry entry, String styleName) {
         String normalized = normalizeRequired(styleName, "基础风格不能为空");
-        return Objects.equals(entry.getStyle(), normalized) ? null : requireCompetitionStyle(entry.getCompetitionId(), normalized);
+        if (Objects.equals(entry.getStyle(), normalized)) {
+            return null;
+        }
+        CompetitionStyleConfig style = requireCompetitionStyle(entry.getCompetitionId(), normalized);
+        competitionCategoryStyleService.requireStyleAllowed(entry.getCategoryId(), normalized);
+        return style;
     }
 
     private List<EntryFieldConfig> listEntryFieldConfigs(Long competitionId) {
