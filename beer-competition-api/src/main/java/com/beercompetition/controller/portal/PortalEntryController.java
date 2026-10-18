@@ -125,7 +125,7 @@ public class PortalEntryController {
     }
 
     /**
-     * 下载报名酒款的 A4 四联参赛标签 PDF。
+     * 下载报名酒款的 A4 九宫格参赛标签 PDF。
      */
     @GetMapping("/entries/{id}/label/pdf")
     public ResponseEntity<byte[]> entryLabelPdf(@PathVariable Long id) {

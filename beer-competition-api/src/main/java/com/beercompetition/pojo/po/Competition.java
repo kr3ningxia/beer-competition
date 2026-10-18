@@ -32,6 +32,7 @@ public class Competition {
     private LocalDateTime registrationDeadline;
     private String status;
     private String competitionType;
+    private String brewType;
     private BigDecimal entryFee;
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private BigDecimal earlyBirdFee;

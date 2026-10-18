@@ -11,6 +11,7 @@ import com.beercompetition.mapper.CompetitionFeeTierMapper;
 import com.beercompetition.pojo.dto.CompetitionBaseInfoUpdateRequest;
 import com.beercompetition.pojo.dto.CompetitionCreateRequest;
 import com.beercompetition.pojo.dto.CompetitionRefundPolicyUpdateRequest;
+import com.beercompetition.pojo.enums.BrewType;
 import com.beercompetition.pojo.enums.CompetitionDeliveryMethod;
 import com.beercompetition.pojo.enums.CompetitionStatus;
 import com.beercompetition.pojo.enums.LogisticsVisibility;
@@ -108,6 +109,9 @@ public class CompetitionCommandServiceImpl implements CompetitionCommandService 
         // 2) 应用允许修改的基础字段
         competition.setName(normalizeRequired(request.getName(), "比赛名称不能为空"));
         competition.setCode(nextCode);
+        if (StringUtils.hasText(request.getBrewType())) {
+            competition.setBrewType(BrewType.of(request.getBrewType()).name());
+        }
         competition.setCompetitionDate(request.getCompetitionDate());
         competition.setRegistrationStart(request.getRegistrationStart());
         competition.setRegistrationDeadline(request.getRegistrationDeadline());
@@ -292,6 +296,7 @@ public class CompetitionCommandServiceImpl implements CompetitionCommandService 
     private boolean onlyDescriptionChangedOrUnchanged(Competition competition, CompetitionBaseInfoUpdateRequest request) {
         return Objects.equals(competition.getName(), request.getName())
                 && Objects.equals(competition.getCode(), request.getCode())
+                && brewTypeUnchanged(competition, request.getBrewType())
                 && Objects.equals(competition.getCompetitionDate(), request.getCompetitionDate())
                 && Objects.equals(competition.getRegistrationStart(), request.getRegistrationStart())
                 && Objects.equals(competition.getRegistrationDeadline(), request.getRegistrationDeadline())
@@ -308,6 +313,11 @@ public class CompetitionCommandServiceImpl implements CompetitionCommandService 
                 && Objects.equals(competition.getDeliveryAddress(), normalizeNullable(request.getDeliveryAddress()))
                 && Objects.equals(competition.getDeliveryNote(), normalizeNullable(request.getDeliveryNote()))
                 && Objects.equals(competition.getLogisticsVisibility(), normalizeLogisticsVisibility(request.getLogisticsVisibility()));
+    }
+
+    private boolean brewTypeUnchanged(Competition competition, String value) {
+        return !StringUtils.hasText(value)
+                || Objects.equals(competition.getBrewType(), BrewType.of(value).name());
     }
 
     private boolean compareBigDecimal(BigDecimal left, BigDecimal right) {

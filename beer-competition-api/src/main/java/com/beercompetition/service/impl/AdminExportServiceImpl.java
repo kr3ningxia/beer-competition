@@ -220,7 +220,7 @@ public class AdminExportServiceImpl implements AdminExportService {
         // 3) 按格式生成 PDF 或兼容的图片文件包
         List<LabelRenderItem> expandedItems = expandLabelRenderItems(labelItems);
         if (LABEL_EXPORT_FORMAT_PDF.equalsIgnoreCase(value(format))) {
-            byte[] content = entryLabelFileGenerator.buildFourUpPdf(expandedItems);
+            byte[] content = entryLabelFileGenerator.buildLabelSheetPdf(expandedItems);
             logExport("EXPORT_LABELS", context.competition(), context.filters() + ", copies=" + normalizedCopies + ", format=pdf", labelEntries.size());
             return FileDownloadVO.builder()
                     .fileName(safeFilename(context.competition().getName()) + "-批量参赛标签.pdf")
@@ -233,10 +233,11 @@ public class AdminExportServiceImpl implements AdminExportService {
             ByteArrayOutputStream output = new ByteArrayOutputStream();
             try (ZipOutputStream zip = new ZipOutputStream(output, StandardCharsets.UTF_8)) {
                 int pageNo = 1;
-                for (int index = 0; index < expandedItems.size(); index += 4) {
-                    List<LabelRenderItem> pageItems = expandedItems.subList(index, Math.min(index + 4, expandedItems.size()));
+                for (int index = 0; index < expandedItems.size(); index += EntryLabelFileGenerator.LABELS_PER_PAGE) {
+                    List<LabelRenderItem> pageItems = expandedItems.subList(index,
+                            Math.min(index + EntryLabelFileGenerator.LABELS_PER_PAGE, expandedItems.size()));
                     String name = "label-sheets/page-" + String.format("%03d", pageNo) + ".png";
-                    SimpleXlsxBuilder.writeZipEntry(zip, name, entryLabelFileGenerator.buildFourUpPng(pageItems));
+                    SimpleXlsxBuilder.writeZipEntry(zip, name, entryLabelFileGenerator.buildLabelSheetPng(pageItems));
                     pageNo++;
                 }
                 SimpleXlsxBuilder.writeZipEntry(zip, "labels.html", buildLabelsHtml(pageNo - 1));

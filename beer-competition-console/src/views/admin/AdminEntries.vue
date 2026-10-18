@@ -14,13 +14,28 @@
     </AdminPageHeader>
 
     <section class="filter-panel">
-      <label class="field search-field">
+      <div class="field search-field">
         <span>关键词</span>
         <div>
           <Search />
-          <input v-model.trim="filters.keyword" placeholder="搜索酒款、厂牌、短编号、运单号" @keyup.enter="applyFilters" />
+          <input
+            v-model.trim="filters.keyword"
+            aria-label="搜索酒款、厂牌、短编号、运单号"
+            placeholder="搜索酒款、厂牌、短编号、运单号"
+            @keyup.enter="applyFilters"
+          />
+          <button class="scan-trigger" type="button" title="扫码查酒款" aria-label="扫码查酒款" @click="openScanDialog">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 8V6a2 2 0 0 1 2-2h2" />
+              <path d="M16 4h2a2 2 0 0 1 2 2v2" />
+              <path d="M20 16v2a2 2 0 0 1-2 2h-2" />
+              <path d="M8 20H6a2 2 0 0 1-2-2v-2" />
+              <path d="M4 12h16" />
+            </svg>
+            扫码
+          </button>
         </div>
-      </label>
+      </div>
       <label class="field">
         <span>比赛</span>
         <select v-model="filters.competitionId" @change="onCompetitionChange">
@@ -100,7 +115,7 @@
           <span>操作</span>
         </div>
         <div class="table-body">
-          <div v-for="entry in entries" :key="entry.id" :class="['table-row', { refunded: isRefundedEntry(entry), 'refund-priority': hasRefundPriority(entry) }]">
+          <div v-for="entry in entries" :key="entry.id" :class="['table-row', { refunded: isRefundedEntry(entry), 'refund-priority': hasRefundPriority(entry), 'scan-focus': entry.id === scanFocusId }]">
             <div class="entry-cell">
               <strong :data-tooltip="entry.name || '未命名酒款'" :title="entry.name || '未命名酒款'">{{ entry.name || '未命名酒款' }}</strong>
               <small :data-tooltip="entry.breweryCompanyName || '未关联厂牌'" :title="entry.breweryCompanyName || '未关联厂牌'">{{ entry.breweryCompanyName || '未关联厂牌' }}</small>
@@ -378,6 +393,36 @@
       </aside>
     </div>
 
+    <div v-if="scanDialog.open" class="stage-confirm-backdrop scan-backdrop" @click.self="closeScanDialog">
+      <section class="stage-confirm-dialog scan-dialog" role="dialog" aria-modal="true" aria-labelledby="entry-scan-title">
+        <header>
+          <span class="confirm-kicker">快捷筛选</span>
+          <h2 id="entry-scan-title">扫码查酒款</h2>
+          <p class="confirm-copy">将酒款标签上的二维码放入取景框，识别后自动筛选出该酒款。</p>
+        </header>
+        <div class="scan-frame">
+          <div id="admin-entry-qr-reader" class="scan-reader"></div>
+          <span class="scan-corner top-left" aria-hidden="true"></span>
+          <span class="scan-corner top-right" aria-hidden="true"></span>
+          <span class="scan-corner bottom-left" aria-hidden="true"></span>
+          <span class="scan-corner bottom-right" aria-hidden="true"></span>
+          <span class="scan-sweep" aria-hidden="true"></span>
+        </div>
+        <p class="scan-message">{{ scanDialog.message }}</p>
+        <div class="scan-manual">
+          <input
+            v-model.trim="scanDialog.manualCode"
+            placeholder="或输入短编号，如 ABCDE"
+            @keyup.enter="submitScanCode(scanDialog.manualCode)"
+          />
+          <button class="confirm-button ghost" type="button" @click="submitScanCode(scanDialog.manualCode)">查询</button>
+        </div>
+        <footer>
+          <button class="confirm-button ghost" type="button" @click="closeScanDialog">关闭</button>
+        </footer>
+      </section>
+    </div>
+
     <div v-if="offlineRefundDialog.open" class="stage-confirm-backdrop" @click.self="closeOfflineRefundDialog">
       <section class="stage-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="offline-refund-title">
         <header><span class="confirm-kicker">银行卡退款</span><h2 id="offline-refund-title">确认退款并上传凭证</h2></header>
@@ -466,7 +511,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
@@ -529,6 +574,11 @@ const entryConfirm = reactive({
   payload: null,
 })
 const deleteDialog = reactive({ open: false, loading: false, impact: null, entryId: null, reason: '', confirmationCode: '', manualRefunded: false, highRiskConfirmed: false })
+const scanDialog = reactive({ open: false, message: '将二维码放入取景框内', manualCode: '' })
+const scanFocusId = ref(null)
+let qrReader = null
+let scanLocked = false
+let scanFocusTimer = null
 const canSubmitDelete = computed(() => Boolean(deleteDialog.reason.trim() && deleteDialog.confirmationCode.trim()
   && (!deleteDialog.impact?.highRisk || deleteDialog.highRiskConfirmed)
   && (deleteDialog.impact?.paymentStatus !== 'PAID' || deleteDialog.manualRefunded)))
@@ -648,6 +698,126 @@ onMounted(async () => {
   await loadEntries()
   if (route.query.entryId) await openDetail(Number(route.query.entryId), normalizeDetailTab(route.query.entryTab))
 })
+
+onBeforeUnmount(() => {
+  window.clearTimeout(scanFocusTimer)
+  stopEntryScanner()
+})
+
+async function openScanDialog() {
+  Object.assign(scanDialog, { open: true, message: '将二维码放入取景框内', manualCode: '' })
+  scanLocked = false
+  await nextTick()
+  await startEntryScanner()
+}
+
+async function startEntryScanner() {
+  try {
+    const { Html5Qrcode } = await import('html5-qrcode')
+    const reader = new Html5Qrcode('admin-entry-qr-reader')
+    qrReader = reader
+    await reader.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 200, height: 200 } },
+      (decodedText) => {
+        if (scanLocked) return
+        const code = normalizeScanCode(decodedText)
+        if (!code) return
+        scanLocked = true
+        submitScanCode(code)
+      },
+    )
+    if (!scanDialog.open) {
+      try {
+        if (reader.isScanning) await reader.stop()
+        await reader.clear()
+      } catch {
+        // 关闭弹窗时相机尚未启动完成，忽略清理失败。
+      }
+    }
+  } catch {
+    scanDialog.message = '无法打开摄像头，请检查浏览器权限，或手动输入短编号'
+  }
+}
+
+async function closeScanDialog() {
+  scanDialog.open = false
+  await stopEntryScanner()
+}
+
+async function stopEntryScanner() {
+  const reader = qrReader
+  qrReader = null
+  if (!reader) return
+  try {
+    if (reader.isScanning) await reader.stop()
+    await reader.clear()
+  } catch {
+    // 相机关闭失败不影响后续筛选。
+  }
+}
+
+function submitScanCode(raw) {
+  const code = normalizeScanCode(raw)
+  if (!code) {
+    scanDialog.message = '请输入酒款编号'
+    return
+  }
+  scanLocked = true
+  scanDialog.message = '已识别，正在筛选酒款'
+  closeScanDialog().finally(() => applyScannedCode(code))
+}
+
+async function applyScannedCode(code) {
+  Object.assign(filters, {
+    competitionId: '',
+    status: '',
+    paymentStatus: '',
+    deliveryStatus: '',
+    refundStatus: '',
+    categoryId: '',
+    assigned: '',
+    keyword: code,
+    page: 1,
+  })
+  categoryOptions.value = []
+  boxNumberOptions.value = []
+  router.replace({ path: '/admin/entries', query: { keyword: code } })
+  await loadEntries()
+  const matched = entries.value.find((entry) => matchesScanCode(entry, code))
+  if (!total.value) {
+    ElMessage.warning('没有找到对应酒款，请确认二维码属于当前后台管理的比赛')
+    return
+  }
+  scanFocusId.value = (matched || entries.value[0]).id
+  window.clearTimeout(scanFocusTimer)
+  scanFocusTimer = window.setTimeout(() => {
+    scanFocusId.value = null
+  }, 2600)
+  ElMessage.success(matched ? `已定位到 ${matched.name || matched.shortCode || '酒款'}` : `已筛选出 ${total.value} 款酒款`)
+}
+
+function matchesScanCode(entry, code) {
+  return [entry.scanToken, entry.shortCode, entry.labelCode, entry.uuid]
+    .filter(Boolean)
+    .some((value) => String(value).toUpperCase() === code)
+}
+
+function normalizeScanCode(value) {
+  const text = String(value || '').trim()
+  if (!text) return ''
+  try {
+    const url = new URL(text)
+    const parts = url.pathname.split('/').filter(Boolean)
+    const scanIndex = parts.indexOf('q')
+    if (scanIndex >= 0 && parts[scanIndex + 1]) {
+      return decodeURIComponent(parts[scanIndex + 1]).toUpperCase()
+    }
+  } catch {
+    // 普通编号会进入这里，直接使用原文本。
+  }
+  return text.toUpperCase()
+}
 
 async function loadCompetitions() {
   competitions.value = await fetchCompetitions({ includeArchived: false })
@@ -1680,6 +1850,164 @@ button:disabled {
   transform: translateY(-1px);
 }
 
+.scan-backdrop {
+  z-index: 95;
+}
+
+.scan-dialog {
+  width: min(440px, 100%);
+  gap: 14px;
+}
+
+.scan-dialog .confirm-copy {
+  font-size: 13px;
+}
+
+.scan-frame {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(219, 232, 237, 0.12);
+  border-radius: 10px;
+  background: #05090b;
+}
+
+.scan-reader {
+  position: relative;
+  width: min(100%, 340px);
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #05070a;
+}
+
+.scan-reader :deep(div) {
+  border: 0 !important;
+}
+
+.scan-reader :deep(#admin-entry-qr-reader__scan_region) {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.scan-reader :deep(video) {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.scan-reader :deep(canvas),
+.scan-reader :deep(img) {
+  max-width: 100%;
+}
+
+.scan-corner {
+  position: absolute;
+  z-index: 2;
+  width: 26px;
+  height: 26px;
+  border: 0 solid rgba(224, 184, 74, 0.9);
+  pointer-events: none;
+}
+
+.scan-corner.top-left {
+  top: 12px;
+  left: 12px;
+  border-top-width: 3px;
+  border-left-width: 3px;
+  border-top-left-radius: 8px;
+}
+
+.scan-corner.top-right {
+  top: 12px;
+  right: 12px;
+  border-top-width: 3px;
+  border-right-width: 3px;
+  border-top-right-radius: 8px;
+}
+
+.scan-corner.bottom-left {
+  bottom: 12px;
+  left: 12px;
+  border-bottom-width: 3px;
+  border-left-width: 3px;
+  border-bottom-left-radius: 8px;
+}
+
+.scan-corner.bottom-right {
+  right: 12px;
+  bottom: 12px;
+  border-right-width: 3px;
+  border-bottom-width: 3px;
+  border-bottom-right-radius: 8px;
+}
+
+.scan-sweep {
+  position: absolute;
+  top: 12%;
+  right: 18px;
+  left: 18px;
+  z-index: 2;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(224, 184, 74, 0.85), transparent);
+  pointer-events: none;
+  animation: scan-sweep 2.4s ease-in-out infinite;
+}
+
+@keyframes scan-sweep {
+  0% {
+    top: 12%;
+    opacity: 0.35;
+  }
+
+  50% {
+    opacity: 0.95;
+  }
+
+  100% {
+    top: 86%;
+    opacity: 0.35;
+  }
+}
+
+.scan-message {
+  min-height: 18px;
+  margin: -2px 0 0;
+  color: #8ea1aa;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.scan-manual {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.scan-manual input {
+  min-height: 40px;
+  padding: 0 12px;
+  color: var(--confirm-text);
+  border: 1px solid var(--confirm-line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  font: inherit;
+}
+
+.scan-manual .confirm-button {
+  min-height: 40px;
+  white-space: nowrap;
+}
+
 .filter-panel {
   flex: 0 0 auto;
   display: grid;
@@ -1722,16 +2050,51 @@ button:disabled {
   position: relative;
 }
 
-.search-field svg {
+.search-field > div > svg {
   position: absolute;
   left: 10px;
   top: 10px;
   width: 18px;
   color: #7f949d;
+  pointer-events: none;
 }
 
 .search-field input {
+  padding-right: 78px;
   padding-left: 36px;
+}
+
+.scan-trigger {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 9px;
+  color: #ffdc73;
+  border: 1px solid rgba(216, 169, 53, 0.32);
+  border-radius: 6px;
+  background: rgba(216, 169, 53, 0.12);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.scan-trigger:hover {
+  background: rgba(216, 169, 53, 0.2);
+}
+
+.scan-trigger svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .table-card,
@@ -1813,6 +2176,22 @@ button:disabled {
 
 .table-row.refunded .row-actions {
   opacity: 1;
+}
+
+.table-row.scan-focus {
+  border-color: rgba(224, 184, 74, 0.55);
+  background: rgba(216, 169, 53, 0.14);
+  animation: scan-focus-pulse 1.4s ease-out;
+}
+
+@keyframes scan-focus-pulse {
+  from {
+    box-shadow: 0 0 0 8px rgba(224, 184, 74, 0.22);
+  }
+
+  to {
+    box-shadow: 0 0 0 0 rgba(224, 184, 74, 0);
+  }
 }
 
 .table-body {

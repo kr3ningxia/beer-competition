@@ -29,6 +29,7 @@ import com.beercompetition.service.support.EntryLabelFileGenerator.LabelRenderIt
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import com.beercompetition.registration.entry.EntryDocumentService;
@@ -105,11 +106,12 @@ public class EntryDocumentServiceImpl implements EntryDocumentService {
         BeerEntry entry = requireOwnedEntry(entryId, account.getBreweryId());
         assertCanDownloadPortalLabel(entry);
 
-        // 2) 查询标签上下文并生成 A4 四联 PDF
+        // 2) 查询标签上下文并生成 A4 九宫格 PDF
         CompetitionCategory category = competitionCategoryMapper.selectById(entry.getCategoryId());
         EntryScanLabel label = entryScanLabelService.requireActiveLabel(entry.getId());
         LabelRenderItem item = toLabelRenderItem(entry, label, category == null ? null : category.getName());
-        byte[] content = entryLabelFileGenerator.buildFourUpPdf(List.of(item, item, item, item));
+        byte[] content = entryLabelFileGenerator.buildLabelSheetPdf(
+                Collections.nCopies(EntryLabelFileGenerator.LABELS_PER_PAGE, item));
 
         // 3) 返回下载文件
         return FileDownloadVO.builder()
@@ -128,7 +130,8 @@ public class EntryDocumentServiceImpl implements EntryDocumentService {
         CompetitionCategory category = competitionCategoryMapper.selectById(entry.getCategoryId());
         EntryScanLabel label = entryScanLabelService.requireActiveLabel(entry.getId());
         LabelRenderItem item = toLabelRenderItem(entry, label, category == null ? null : category.getName());
-        byte[] content = entryLabelFileGenerator.buildFourUpPng(List.of(item, item, item, item));
+        byte[] content = entryLabelFileGenerator.buildLabelSheetPng(
+                Collections.nCopies(EntryLabelFileGenerator.LABELS_PER_PAGE, item));
 
         return FileDownloadVO.builder()
                 .fileName(buildPortalLabelPngFilename(entry, label))

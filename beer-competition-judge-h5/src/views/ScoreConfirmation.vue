@@ -5,11 +5,15 @@
         <span class="back-icon" aria-hidden="true"></span>
         返回任务
       </button>
-      <p class="eyebrow">本桌结果核对</p>
-      <h1 class="page-title">{{ confirmation?.tableName || '评审桌' }}</h1>
-      <div class="confirmation-progress">
-        <span>同桌确认</span>
-        <strong>{{ confirmedCount }} / {{ requiredCount }}</strong>
+      <div class="confirmation-head">
+        <div class="confirmation-heading">
+          <p class="eyebrow">本桌结果核对</p>
+          <h1 class="page-title">{{ confirmation?.tableName || '评审桌' }}</h1>
+        </div>
+        <div class="confirmation-progress">
+          <span>同桌确认</span>
+          <strong>{{ confirmedCount }} / {{ requiredCount }}</strong>
+        </div>
       </div>
     </section>
 
@@ -139,23 +143,54 @@ onMounted(async () => {
   transform: rotate(45deg);
 }
 
-.confirmation-top {
-  display: grid;
-  gap: 8px;
-}
-
-.confirmation-progress {
+.confirmation-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-radius: 8px;
-  padding: 10px 12px;
-  color: #fff;
-  background: rgba(255, 255, 255, 0.1);
+  gap: 10px;
 }
 
-.confirmation-progress span,
+.confirmation-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.confirmation-heading .eyebrow {
+  flex: 0 0 auto;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.confirmation-heading .page-title {
+  overflow: hidden;
+  font-size: 22px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.confirmation-progress {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  align-items: baseline;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  padding: 5px 10px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  font-variant-numeric: tabular-nums;
+}
+
+.confirmation-progress span {
+  color: rgba(248, 250, 252, 0.72);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .confirmation-progress strong {
+  font-size: 15px;
   font-weight: 850;
 }
 

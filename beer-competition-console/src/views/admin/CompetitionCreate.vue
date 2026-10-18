@@ -66,6 +66,22 @@
                   <span>比赛日期</span>
                   <input v-model="draft.date" type="date" />
                 </label>
+                <label>
+                  <span>比赛类型</span>
+                  <el-select
+                    v-model="draft.brewType"
+                    class="form-select"
+                    popper-class="competition-create-select-popper"
+                    aria-label="比赛类型"
+                  >
+                    <el-option
+                      v-for="option in brewTypeOptions"
+                      :key="option.value"
+                      :label="option.label"
+                      :value="option.value"
+                    />
+                  </el-select>
+                </label>
               </div>
             </section>
 
@@ -605,6 +621,7 @@ import {
 } from '@/api/admin'
 import { fetchBeerCoinOverview } from '@/api/beerCoin'
 import { defaultStyleLibraryValue, fallbackStyleLibraries, getStyleLibrary, normalizeStyleLibraries } from './styleLibraries'
+import { brewTypeOptions } from '@/utils/competitionMeta'
 import CategoryStyleScopePicker from './components/CategoryStyleScopePicker.vue'
 
 const router = useRouter()
@@ -685,6 +702,7 @@ const defaultSchedule = createDefaultSchedule()
 const draft = reactive({
   name: '',
   competitionType: 'AWARD',
+  brewType: 'COMMERCIAL',
   date: defaultSchedule.competitionDate,
   registrationStart: defaultSchedule.registrationStart,
   registrationDeadline: defaultSchedule.registrationDeadline,
@@ -957,6 +975,7 @@ async function submitDraft() {
     const created = await createCompetition({
       name: draft.name,
       competitionType: draft.competitionType,
+      brewType: draft.brewType,
       competitionDate: draft.date,
       registrationStart: toBackendDateTime(draft.registrationStart),
       registrationDeadline: toBackendDateTime(draft.registrationDeadline),
@@ -1225,6 +1244,7 @@ function toDraftSnapshot(source) {
   return {
     name: source.name,
     competitionType: source.competitionType,
+    brewType: source.brewType,
     date: source.date,
     registrationStart: source.registrationStart,
     registrationDeadline: source.registrationDeadline,

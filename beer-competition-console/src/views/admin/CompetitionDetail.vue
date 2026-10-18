@@ -199,10 +199,19 @@
           </div>
 
           <article class="panel-card base-info-card">
-            <div class="panel-heading">
+            <div class="panel-heading base-info-heading">
               <div>
                 <h2>基础信息</h2>
               </div>
+              <button
+                class="tool-button primary"
+                type="button"
+                :disabled="!baseInfoDirty"
+                @click="saveBaseInfo"
+              >
+                <Check />
+                保存基础信息
+              </button>
             </div>
             <div class="base-info-groups">
               <label class="wide-field">
@@ -216,6 +225,12 @@
                   <label>
                     <span>比赛日期</span>
                     <input v-model="baseForm.competitionDate" type="date" :disabled="!editable.baseInfo" />
+                  </label>
+                  <label>
+                    <span>比赛类型</span>
+                    <select v-model="baseForm.brewType" :disabled="!editable.baseInfo">
+                      <option v-for="option in brewTypeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                    </select>
                   </label>
                 </div>
                 <label class="tier-toggle" :class="{ enabled: baseForm.tierPricingEnabled }">
@@ -1535,7 +1550,6 @@
                   <span>奖项</span>
                   <span>组别</span>
                   <span>获奖酒款</span>
-                  <span>来源路径</span>
                   <span>状态</span>
                   <span>奖状</span>
                   <span>奖状上传</span>
@@ -1549,7 +1563,7 @@
                     <strong>{{ award.awardName || '奖项' }}</strong>
                     <small v-if="award.awardType === 'CHAMPION'">全场</small>
                   </div>
-                  <span>{{ formatAwardScope(award) }}</span>
+                  <span :title="formatAwardScope(award)">{{ formatAwardScope(award) }}</span>
                   <el-select
                     v-model="award.beerEntryId"
                     class="award-select"
@@ -1571,7 +1585,6 @@
                       :value="entry.id"
                     />
                   </el-select>
-                  <span class="award-path-cell" :title="getAwardPath(award)">{{ getAwardPath(award) }}</span>
                   <em :class="['award-status-pill', award.status]">{{ formatAwardStatus(award) }}</em>
                   <div class="award-certificate-cell">
                     <strong :class="{ uploaded: award.certificateUploaded }">
@@ -2147,7 +2160,13 @@
             <article
               v-for="slot in group.slots"
               :key="slot.rank"
-              :class="{ filled: slot.uuid }"
+              :class="{ filled: slot.uuid, actionable: Boolean(slot.uuid) }"
+              :role="slot.uuid ? 'button' : undefined"
+              :tabindex="slot.uuid ? 0 : undefined"
+              :title="slot.uuid ? '查看酒款信息与评语' : undefined"
+              @click="slot.uuid && openRoundEntryInspect(slot.uuid, { awardLabel: slot.label, awardGroup: group.categoryName })"
+              @keydown.enter.prevent="slot.uuid && openRoundEntryInspect(slot.uuid, { awardLabel: slot.label, awardGroup: group.categoryName })"
+              @keydown.space.prevent="slot.uuid && openRoundEntryInspect(slot.uuid, { awardLabel: slot.label, awardGroup: group.categoryName })"
             >
               <strong>{{ slot.label }}</strong>
               <span>{{ slot.entryName }}</span>
@@ -2160,11 +2179,17 @@
               <h3>本桌候选酒款</h3>
               <span>{{ roundScoreDetailEntries.length }} 款</span>
             </header>
-            <article v-for="entry in roundScoreDetailEntries" :key="entry.uuid">
+            <button
+              v-for="entry in roundScoreDetailEntries"
+              :key="entry.uuid"
+              class="ranking-detail-candidate"
+              type="button"
+              @click="openRoundEntryInspect(entry.uuid)"
+            >
               <strong>{{ entry.name }}</strong>
               <span>{{ entry.shortCode || entry.uuid }}</span>
               <small>{{ entry.categoryName }}</small>
-            </article>
+            </button>
           </section>
         </template>
 
@@ -2199,18 +2224,30 @@
           </span>
         </section>
 
-        <section v-if="!isRoundScoreDetailRanking && !isFeedbackOnlyCompetition" class="round-score-detail-advanced">
+        <section v-if="!isRoundScoreDetailRanking" class="round-score-detail-entries">
           <header>
-            <h3>已选择晋级酒款</h3>
-            <span>{{ roundScoreDetailAdvancedEntries.length }} / {{ roundScoreDetailCaptainStats.advance.total }} 款</span>
+            <h3>本桌酒款</h3>
+            <span v-if="!isFeedbackOnlyCompetition">已晋级 {{ roundScoreDetailAdvancedEntries.length }} / {{ roundScoreDetailCaptainStats.advance.total }} 款</span>
+            <span v-else>{{ roundScoreDetailEntries.length }} 款</span>
           </header>
-          <div v-if="roundScoreDetailAdvancedEntries.length" class="round-score-detail-advanced-list">
-            <article v-for="entry in roundScoreDetailAdvancedEntries" :key="entry.uuid">
-              <strong>{{ entry.name }}</strong>
-              <span>{{ entry.shortCode || entry.uuid }}</span>
-            </article>
+          <div v-if="roundScoreDetailEntries.length" class="round-score-detail-entry-grid">
+            <button
+              v-for="entry in roundScoreDetailEntries"
+              :key="entry.uuid"
+              :class="['round-score-detail-entry', { advanced: entry.advanced }]"
+              type="button"
+              @click="openRoundEntryInspect(entry.uuid)"
+            >
+              <span class="round-score-detail-entry-main">
+                <strong>{{ entry.name }}</strong>
+                <small>{{ [entry.shortCode || entry.uuid, entry.categoryName].filter(Boolean).join(' · ') }}</small>
+              </span>
+              <em v-if="!isFeedbackOnlyCompetition" :class="{ advanced: entry.advanced }">{{ entry.advanced ? '已晋级' : '未晋级' }}</em>
+              <em v-else class="open">查看</em>
+              <Right class="round-score-detail-entry-icon" />
+            </button>
           </div>
-          <p v-else class="round-score-detail-advanced-empty">暂未选择晋级酒款</p>
+          <p v-else class="round-score-detail-advanced-empty">本桌暂无酒款</p>
         </section>
 
         <button
@@ -2247,6 +2284,172 @@
               </div>
             </div>
           </article>
+        </section>
+      </div>
+    </el-dialog>
+
+    <el-dialog
+      v-model="roundEntryInspectOpen"
+      class="round-entry-inspect-dialog-shell"
+      width="min(1120px, 94vw)"
+      align-center
+      append-to-body
+      destroy-on-close
+    >
+      <template #header>
+        <div class="round-entry-inspect-head">
+          <div class="round-entry-inspect-title">
+            <strong>{{ roundEntryInspectTitle }}</strong>
+            <small>{{ roundEntryInspectMeta || '-' }}</small>
+          </div>
+          <div class="round-entry-inspect-actions">
+            <button
+              class="tool-button"
+              type="button"
+              :disabled="!roundEntryInspectContext?.beerEntryId"
+              @click="jumpToRoundEntryManagement"
+            >
+              <Tickets />
+              <span>报名详情</span>
+            </button>
+            <button class="tool-button primary" type="button" @click="jumpToRoundEntryFeedbackReview">
+              <EditPen />
+              <span>评语复核</span>
+            </button>
+          </div>
+        </div>
+      </template>
+
+      <div v-if="roundEntryInspectLoading" class="round-entry-inspect-loading">正在加载酒款信息与评审意见</div>
+      <div v-else class="round-entry-inspect-layout">
+        <aside class="round-entry-inspect-side">
+          <section class="round-entry-inspect-card">
+            <header>
+              <h3>{{ isRoundScoreDetailRanking ? '评分与名次' : '评分结果' }}</h3>
+              <span>{{ [roundEntryInspectFeedback?.roundName, roundEntryInspectFeedback?.tableName].filter(Boolean).join(' · ') || [roundEntryInspectContext?.roundName, roundEntryInspectContext?.tableName].filter(Boolean).join(' · ') || '-' }}</span>
+            </header>
+            <div class="round-entry-inspect-result">
+              <span>
+                <small>共识分</small>
+                <strong>{{ roundEntryInspectFeedback?.consensusScore ?? '-' }}</strong>
+              </span>
+              <span>
+                <small>个人评分</small>
+                <strong>{{ roundEntryInspectFeedback ? `${roundEntryInspectFeedback.personalSubmitted || 0} / ${roundEntryInspectFeedback.personalTotal || 0}` : '-' }}</strong>
+              </span>
+              <span v-if="isRoundScoreDetailRanking">
+                <small>{{ roundEntryInspectContext?.awardGroupName ? `${roundEntryInspectContext.awardGroupName} · 名次` : '本轮结果' }}</small>
+                <strong :class="{ award: roundEntryInspectContext?.awardLabel }">
+                  {{ roundEntryInspectContext?.awardLabel || '未入选' }}
+                </strong>
+              </span>
+              <span v-else-if="!isFeedbackOnlyCompetition">
+                <small>晋级</small>
+                <strong :class="{ advanced: roundEntryInspectContext?.advanced }">
+                  {{ roundEntryInspectContext?.advanced ? '已晋级' : '未晋级' }}
+                </strong>
+              </span>
+            </div>
+          </section>
+
+          <section class="round-entry-inspect-card">
+            <header><h3>基本信息</h3></header>
+            <dl class="round-entry-inspect-dl">
+              <div><dt>酒款名称</dt><dd>{{ roundEntryInspectDetail?.name || roundEntryInspectContext?.name || '-' }}</dd></div>
+              <div><dt>短编号</dt><dd>{{ roundEntryInspectDetail?.shortCode || roundEntryInspectContext?.shortCode || '-' }}</dd></div>
+              <div><dt>厂牌</dt><dd>{{ roundEntryInspectDetail?.breweryCompanyName || '-' }}</dd></div>
+              <div><dt>投递组别</dt><dd>{{ roundEntryInspectDetail?.categoryName || roundEntryInspectContext?.categoryName || '-' }}</dd></div>
+              <div><dt>基础风格</dt><dd>{{ roundEntryInspectDetail?.style || roundEntryInspectContext?.style || '-' }}</dd></div>
+              <div><dt>酒精度</dt><dd>{{ roundEntryInspectDetail?.abv == null ? '-' : `${roundEntryInspectDetail.abv}%` }}</dd></div>
+              <div><dt>箱号</dt><dd>{{ roundEntryInspectDetail?.boxNumber || '-' }}</dd></div>
+              <div><dt>报名时间</dt><dd>{{ formatDateTime(roundEntryInspectDetail?.submittedAt) }}</dd></div>
+              <div><dt>样品状态</dt><dd>{{ roundEntryInspectDetail ? (roundEntryInspectDetail.stored ? '已入库' : '未入库') : '-' }}</dd></div>
+            </dl>
+          </section>
+
+          <section v-if="roundEntryInspectDetail?.extraFields?.length" class="round-entry-inspect-card">
+            <header><h3>报名补充信息</h3></header>
+            <dl class="round-entry-inspect-dl">
+              <div v-for="field in roundEntryInspectDetail.extraFields" :key="field.key || field.label">
+                <dt>{{ field.label || field.key }}</dt>
+                <dd>{{ field.value || '-' }}</dd>
+              </div>
+            </dl>
+          </section>
+        </aside>
+
+        <section class="round-entry-inspect-main">
+          <template v-if="roundEntryInspectFeedback">
+            <section class="feedback-block">
+              <div class="feedback-block-title">
+                <h2>桌长最终意见</h2>
+                <span>{{ [roundEntryInspectFeedback.roundName, roundEntryInspectFeedback.tableName].filter(Boolean).join(' · ') }}</span>
+              </div>
+              <article v-if="roundEntryInspectFeedback.captainOpinion?.submitted" class="captain-opinion-card">
+                <div class="captain-opinion-meta">
+                  <span>桌长 <strong>{{ roundEntryInspectFeedback.captainOpinion.captainName || '未知桌长' }}</strong></span>
+                  <span>共识分 <strong class="score-highlight">{{ roundEntryInspectFeedback.captainOpinion.consensusScore }}</strong> / {{ roundEntryInspectFeedback.captainOpinion.maxConsensus || 50 }}</span>
+                  <em v-if="!isFeedbackOnlyCompetition" :class="{ advanced: roundEntryInspectFeedback.captainOpinion.advanced }">{{ roundEntryInspectFeedback.captainOpinion.advanced ? '已晋级' : '未晋级' }}</em>
+                  <small>提交于 {{ formatFeedbackTime(roundEntryInspectFeedback.captainOpinion.submittedAt) }}</small>
+                  <small>评语 {{ formatCommentCount(roundEntryInspectFeedback.captainOpinion.commentCharCount) }}</small>
+                </div>
+                <p>{{ roundEntryInspectFeedback.captainOpinion.comments || '暂无综合评语' }}</p>
+              </article>
+              <article v-else class="captain-missing-card">
+                <Warning />
+                <span>桌长尚未提交最终意见</span>
+              </article>
+            </section>
+
+            <section class="feedback-block">
+              <div class="feedback-block-title">
+                <h2>评审原始评分与评语</h2>
+                <span>{{ roundEntryInspectFeedback.personalSubmitted || 0 }} / {{ roundEntryInspectFeedback.personalTotal || 0 }} 已提交</span>
+              </div>
+              <div class="judge-score-list">
+                <article
+                  v-for="judge in roundEntryInspectFeedback.judges"
+                  :key="`${roundEntryInspectFeedback.beerUuid}-${judge.judgePublicId || judge.judgeName}-${judge.role}`"
+                  :class="['judge-score-card', { missing: !judge.scored }]"
+                >
+                  <header>
+                    <span>
+                      <strong>{{ judge.judgeName }}</strong>
+                      <small :class="{ captain: judge.role === 'CAPTAIN' }">{{ judge.roleLabel || feedbackRoleLabel(judge.role) }}</small>
+                      <em v-if="feedbackJudgeAnomalyLabel(judge.anomaly)" :class="['judge-anomaly', judge.anomaly]">{{ feedbackJudgeAnomalyLabel(judge.anomaly) }}</em>
+                    </span>
+                    <span v-if="judge.scored" class="judge-score-meta">
+                      <small>提交于 {{ formatFeedbackTime(judge.submittedAt) }}</small>
+                      <small v-if="judge.durationSeconds">用时 {{ formatJudgeDuration(judge.durationSeconds) }}</small>
+                      <small>评语 {{ formatCommentCount(judge.commentCharCount) }}</small>
+                      <strong>总分 {{ judge.totalScore }} / {{ judge.maxTotal || 50 }}</strong>
+                    </span>
+                  </header>
+                  <p v-if="!judge.scored" class="judge-missing-text">该评审尚未提交个人评分</p>
+                  <div v-else class="judge-dimension-list">
+                    <div v-for="dimension in judge.dimensions" :key="dimension.key || dimension.label" class="judge-dimension-row">
+                      <span>{{ dimension.label || dimension.key }}</span>
+                      <strong>{{ dimension.score ?? '-' }} / {{ dimension.maxScore ?? '-' }}</strong>
+                      <p v-if="dimension.note">{{ dimension.note }}</p>
+                    </div>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <section v-if="roundEntryInspectIssues.length" class="feedback-block">
+              <h2 class="feedback-issue-title">复核提示</h2>
+              <ul class="feedback-issue-list">
+                <li v-for="issue in roundEntryInspectIssues" :key="issue.message" :class="issue.severity">
+                  <Warning />
+                  <span>{{ issue.message }}</span>
+                </li>
+              </ul>
+            </section>
+          </template>
+          <div v-else class="round-entry-inspect-empty">
+            暂无该酒款的评审意见，评分提交后可在评语复核中查看。
+          </div>
         </section>
       </div>
     </el-dialog>
@@ -2458,6 +2661,7 @@ import {
 import { fetchBeerCoinOverview } from '@/api/beerCoin'
 import { ADMIN_TYPES } from '@/config/adminAccess'
 import { getAdminType } from '@/utils/auth'
+import { brewTypeOptions } from '@/utils/competitionMeta'
 import { fallbackStyleLibraries, getStyleLibrary, normalizeStyleLibraries } from './styleLibraries'
 import CreateRoundWizard from './components/competition-detail/CreateRoundWizard.vue'
 import CompetitionAnalyticsPanel from './components/competition-detail/CompetitionAnalyticsPanel.vue'
@@ -2502,6 +2706,7 @@ const baseForm = reactive({
   name: '',
   code: '',
   competitionDate: '',
+  brewType: 'COMMERCIAL',
   registrationStart: '',
   registrationDeadline: '',
   entryFee: 0,
@@ -2523,6 +2728,7 @@ const baseForm = reactive({
   deliveryNote: '',
   logisticsVisibility: 'PAYMENT_CONFIRMED',
 })
+const baseFormBaseline = ref('')
 const refundPolicySaving = ref(false)
 const sponsorForm = reactive([])
 const sponsorLogoInputRefs = new Map()
@@ -2663,6 +2869,16 @@ const selectedRoundTableId = ref('')
 const roundProgressSection = ref(null)
 const roundScoreDetailDialogOpen = ref(false)
 const roundScoreDetailTableId = ref('')
+const roundEntryInspectOpen = ref(false)
+const roundEntryInspectLoading = ref(false)
+const roundEntryInspectContext = ref(null)
+const roundEntryInspectDetail = ref(null)
+const roundEntryInspectFeedback = ref(null)
+const roundEntryInspectFeedbackCache = ref(null)
+const roundEntryInspectFeedbackCompetitionId = ref('')
+const roundEntryInspectFeedbackLoadedAt = ref(0)
+const pendingFeedbackEntryKey = ref('')
+let roundEntryInspectRequestToken = 0
 const roundKeyword = ref('')
 const roundCategoryFilter = ref('全部')
 const selectedEntryUuids = ref([])
@@ -2810,6 +3026,8 @@ const collectionQrStatusText = computed(() => (collectionQrAssetId.value ? '已�
 const refundPolicyDirty = computed(() => (
   baseForm.refundApprovalMode !== (competition.value?.refundApprovalMode || 'AUTO_APPROVE')
 ))
+// 退款审批方式由独立的「保存退款设置」负责，不计入基础信息的未保存更改
+const baseInfoDirty = computed(() => baseFormBaseline.value !== serializeBaseForm())
 const refundPolicyTooltip = computed(() => {
   const deadline = competition.value?.refundPolicyEditableUntil
   const cutoff = deadline ? formatDateTime(deadline) : '报名截止时间'
@@ -3151,9 +3369,6 @@ async function saveCollectionConfig() {
 }
 
 const tabSaveAction = computed(() => {
-  if (activeTab.value === 'baseInfo' && (editable.value.baseInfo || editable.value.description)) {
-    return { label: '保存基础信息', handler: saveBaseInfo }
-  }
   if (activeTab.value === 'entryConfig' && (editable.value.entryStructure || editable.value.styleLibrary || editable.value.entryFields)) {
     return { label: '保存报名配置', handler: saveEntryConfig }
   }
@@ -3256,8 +3471,11 @@ const roundScoreDetailEntries = computed(() => {
     const entry = entryLookup.value.get(uuid) || {}
     return {
       uuid,
+      id: entry.id || null,
       name: entry.name || '未命名酒款',
       shortCode: entry.shortCode || '',
+      labelCode: entry.labelCode || '',
+      style: entry.style || '',
       categoryName: entry.categoryName || entry.category || '-',
       advanced: advancedEntryUuids.has(uuid),
     }
@@ -3297,6 +3515,7 @@ const roundRankingDetailStats = computed(() => {
 })
 const roundRankingDetailCategorySections = computed(() => (roundScoreDetailTable.value?.categoryRankings || []).map((group) => ({
   categoryId: group.categoryId,
+  categoryName: group.categoryName || '',
   heading: group.categoryName ? `排序结果 · ${group.categoryName}` : '排序结果',
   statusText: Number(group.filledCount || 0) > 0 ? `已选择 ${group.filledCount} 项，未选名额留空` : '暂未选择奖项',
   slots: (group.rankings || []).map((slot) => {
@@ -3346,6 +3565,18 @@ const roundScoreDetailConfirmationText = computed(() => {
   const table = roundScoreDetailTable.value
   return `${Number(table?.confirmationConfirmedCount || 0)} / ${Number(table?.confirmationRequiredCount || 0)}`
 })
+const roundEntryInspectTitle = computed(() => roundEntryInspectContext.value?.name || '酒款详情')
+const roundEntryInspectMeta = computed(() => {
+  const context = roundEntryInspectContext.value
+  return [
+    context?.shortCode || context?.uuid,
+    context?.roundName,
+    context?.tableName,
+    context?.categoryName,
+    context?.style,
+  ].filter(Boolean).join(' · ')
+})
+const roundEntryInspectIssues = computed(() => buildFeedbackIssues(roundEntryInspectFeedback.value))
 const canOverrideRoundScoreConfirmation = computed(() => {
   const table = roundScoreDetailTable.value
   return Boolean(
@@ -3933,6 +4164,11 @@ const entryAutoAssignSubmitDisabled = computed(() => {
   return !entryAutoAssignForm.categoryId || entryAutoAssignStats.value.unassigned === 0
 })
 watch(feedbackPageEntries, (entries) => {
+  if (pendingFeedbackEntryKey.value && entries.some((entry) => feedbackEntryKey(entry) === pendingFeedbackEntryKey.value)) {
+    selectedFeedbackEntryKey.value = pendingFeedbackEntryKey.value
+    pendingFeedbackEntryKey.value = ''
+    return
+  }
   if (entries.length && !entries.some((entry) => feedbackEntryKey(entry) === selectedFeedbackEntryKey.value)) {
     selectedFeedbackEntryKey.value = feedbackEntryKey(entries[0])
   }
@@ -4491,6 +4727,7 @@ async function submitFeedbackCommentEdit() {
   try {
     await updateCompetitionFeedbackComment(competitionId, feedbackEditor.scoreRecordId, payload)
     ElMessage.success('评价已保存')
+    roundEntryInspectFeedbackCache.value = null
     resetFeedbackEditor()
     await loadFeedbackReview(true)
   } catch {
@@ -4562,6 +4799,11 @@ function resetSponsorForm() {
   })))
 }
 
+function serializeBaseForm() {
+  const { refundApprovalMode, ...rest } = baseForm
+  return JSON.stringify(rest)
+}
+
 function resetForms() {
   const logistics = competition.value.logistics || {}
   const hasEarlyBird = (competition.value.earlyBirdFee !== null && competition.value.earlyBirdFee !== undefined)
@@ -4570,6 +4812,7 @@ function resetForms() {
     name: competition.value.name || '',
     code: competition.value.code || '',
     competitionDate: toInputDate(competition.value.competitionDate || competition.value.date),
+    brewType: competition.value.brewType || 'COMMERCIAL',
     registrationStart: toInputDateTime(competition.value.registrationStart),
     registrationDeadline: toInputDateTime(competition.value.registrationDeadline),
     entryFee: competition.value.entryFee ?? 0,
@@ -4637,6 +4880,7 @@ function resetForms() {
       localId: `${item.judgeRoleType}-${index}`,
     })),
   })))
+  baseFormBaseline.value = serializeBaseForm()
 }
 
 function applyRoundState(preferredRoundId = activeRoundId.value, options = {}) {
@@ -5733,6 +5977,129 @@ function formatReviewedEntryProgress(table) {
 function openRoundTableScoreDetail(tableId) {
   roundScoreDetailTableId.value = tableId
   roundScoreDetailDialogOpen.value = true
+}
+
+async function ensureRoundEntryFeedback() {
+  const competitionId = String(competition.value?.id || route.params.id || '')
+  if (!competitionId) return []
+  if (
+    roundEntryInspectFeedbackCompetitionId.value === competitionId
+    && roundEntryInspectFeedbackCache.value !== null
+    && Date.now() - roundEntryInspectFeedbackLoadedAt.value < 60000
+  ) {
+    return roundEntryInspectFeedbackCache.value
+  }
+  try {
+    roundEntryInspectFeedbackCache.value = (await fetchCompetitionFeedbackReview(competitionId)) || []
+  } catch {
+    roundEntryInspectFeedbackCache.value = []
+  }
+  roundEntryInspectFeedbackCompetitionId.value = competitionId
+  roundEntryInspectFeedbackLoadedAt.value = Date.now()
+  return roundEntryInspectFeedbackCache.value
+}
+
+function resolveRoundEntryAward(uuid) {
+  const table = roundScoreDetailTable.value
+  if (!table || !isRoundScoreDetailRanking.value) return null
+  for (const group of table.categoryRankings || []) {
+    const slot = (group.rankings || []).find((item) => item.uuid === uuid)
+    if (slot) return { label: slot.label, groupName: group.categoryName || '' }
+  }
+  const slot = (table.rankings || []).find((item) => item.uuid === uuid)
+  return slot ? { label: slot.label, groupName: table.categoryName || '' } : null
+}
+
+async function openRoundEntryInspect(uuid, options = {}) {
+  if (!uuid) return
+  const table = roundScoreDetailTable.value
+  const meta = entryLookup.value.get(uuid) || {}
+  const award = options.awardLabel
+    ? { label: options.awardLabel, groupName: options.awardGroup || '' }
+    : resolveRoundEntryAward(uuid)
+  roundEntryInspectContext.value = {
+    uuid,
+    tableId: table?.id || '',
+    roundName: currentRound.value?.name || '',
+    tableName: table?.name || '',
+    name: meta.name || '未命名酒款',
+    shortCode: meta.shortCode || meta.labelCode || '',
+    categoryName: meta.categoryName || '-',
+    style: meta.style || '',
+    advanced: Boolean(roundScoreDetailAdvancedEntries.value.find((entry) => entry.uuid === uuid)),
+    awardLabel: award?.label || '',
+    awardGroupName: award?.groupName || '',
+    beerEntryId: meta.id || null,
+  }
+  roundEntryInspectDetail.value = null
+  roundEntryInspectFeedback.value = null
+  roundEntryInspectOpen.value = true
+  roundEntryInspectLoading.value = true
+  const requestToken = ++roundEntryInspectRequestToken
+  try {
+    const detailPromise = meta.id ? fetchAdminEntryDetail(meta.id).catch(() => null) : Promise.resolve(null)
+    const [feedbackEntries, detail] = await Promise.all([ensureRoundEntryFeedback(), detailPromise])
+    if (requestToken !== roundEntryInspectRequestToken) return
+    const feedback = feedbackEntries.find((entry) => (
+      entry.beerUuid === uuid
+      && (!table?.id || String(entry.roundTableId) === String(table.id))
+    )) || feedbackEntries.find((entry) => entry.beerUuid === uuid) || null
+    const beerEntryId = meta.id || feedback?.beerEntryId || null
+    roundEntryInspectFeedback.value = feedback
+    roundEntryInspectContext.value = {
+      ...roundEntryInspectContext.value,
+      name: meta.name || feedback?.entryName || roundEntryInspectContext.value.name,
+      shortCode: meta.shortCode || feedback?.shortCode || feedback?.labelCode || roundEntryInspectContext.value.shortCode,
+      categoryName: meta.categoryName || feedback?.categoryName || roundEntryInspectContext.value.categoryName,
+      style: meta.style || feedback?.style || roundEntryInspectContext.value.style,
+      beerEntryId,
+    }
+    const fallbackDetail = detail || (beerEntryId && !meta.id
+      ? await fetchAdminEntryDetail(beerEntryId).catch(() => null)
+      : null)
+    if (requestToken !== roundEntryInspectRequestToken) return
+    roundEntryInspectDetail.value = fallbackDetail
+  } catch {
+    if (requestToken === roundEntryInspectRequestToken) ElMessage.error('酒款信息加载失败')
+  } finally {
+    if (requestToken === roundEntryInspectRequestToken) roundEntryInspectLoading.value = false
+  }
+}
+
+function jumpToRoundEntryManagement() {
+  const context = roundEntryInspectContext.value
+  if (!context?.beerEntryId) {
+    ElMessage.warning('暂无法获取该酒款的报名详情')
+    return
+  }
+  roundEntryInspectOpen.value = false
+  roundScoreDetailDialogOpen.value = false
+  router.push({
+    path: '/admin/entries',
+    query: {
+      competitionId: String(competition.value?.id || route.params.id || ''),
+      entryId: String(context.beerEntryId),
+      entryTab: 'profile',
+    },
+  })
+}
+
+function jumpToRoundEntryFeedbackReview() {
+  const context = roundEntryInspectContext.value
+  roundEntryInspectOpen.value = false
+  roundScoreDetailDialogOpen.value = false
+  pendingFeedbackEntryKey.value = roundEntryInspectFeedback.value
+    ? feedbackEntryKey(roundEntryInspectFeedback.value)
+    : `${context?.tableId || 'table'}-${context?.uuid || ''}`
+  Object.assign(feedbackFilters, {
+    keyword: context?.shortCode || context?.uuid || '',
+    tableName: '全部',
+    categoryName: '全部',
+    judgeType: '全部',
+    status: 'all',
+    advanced: 'all',
+  })
+  activeTab.value = 'feedback'
 }
 
 function buildFallbackRoundScoreDetailJudges(table) {
@@ -7377,7 +7744,8 @@ async function finishCreateRound() {
 }
 
 function resetCreateRoundForm() {
-  const defaultOption = createRoundTargetOptions.value[0]
+  const options = createRoundTargetOptions.value
+  const defaultOption = options.find((option) => option.value === 'MEDALS') || options[0]
   updateCreateRoundTargetMode(defaultOption?.value || 'TOP_N')
 }
 
@@ -7557,11 +7925,6 @@ function getEntryPath(uuid) {
   return parts.join(' -> ') || '-'
 }
 
-function getAwardPath(award) {
-  const entry = resolveAwardEntry(award)
-  return entry ? getEntryPath(entry.uuid) : '-'
-}
-
 function openBusinessConfirm(config) {
   Object.assign(businessConfirm, {
     open: true,
@@ -7661,6 +8024,21 @@ async function publishResultsAction() {
 }
 
 async function runPrepareJudging() {
+  if (canEditBaseJudgeTables.value) {
+    const localTableCount = judgeTableForm.filter((table) => table.tableName?.trim()).length
+    if (!localTableCount) {
+      ElMessage.warning('请先在分桌分配中创建至少 1 张评审桌')
+      activeTab.value = 'judges'
+      return
+    }
+    // 默认评审桌只存在于本地表单，必须先落库，否则后端会以“评审桌未完成”阻断进入评审准备
+    const needsFlush = isCurrentRoundAllocationDirty()
+      || (competition.value?.judgeTables?.length ?? 0) === 0
+    if (needsFlush) {
+      const saved = await saveJudgeDraft({ silent: true, allowIncomplete: true })
+      if (!saved) return
+    }
+  }
   const detail = await prepareCompetitionJudging(competition.value.id)
   competition.value = normalizeDetail(detail)
   resetForms()
@@ -7696,6 +8074,10 @@ function prepareJudgingAction() {
   const storedCount = Number(competition.value?.entriesSummary?.stored || 0)
   const totalCount = Number(competition.value?.entriesSummary?.total || 0)
   const notStoredCount = Math.max(totalCount - storedCount, 0)
+  const localTableCount = judgeTableForm.filter((table) => table.tableName?.trim()).length
+  const judgeTableCount = canEditBaseJudgeTables.value
+    ? localTableCount
+    : (competition.value?.judgeTables?.length ?? 0)
   openBusinessConfirm({
     action: 'prepareJudging',
     kicker: '评审准备',
@@ -7706,7 +8088,7 @@ function prepareJudgingAction() {
     summary: competitionSummaryItems([
       { label: '进入评审', value: `${storedCount} 款` },
       { label: '未入库', value: `${notStoredCount} 款` },
-      { label: '评审桌', value: `${competition.value?.judgeTables?.length ?? 0} 张` },
+      { label: '评审桌', value: `${judgeTableCount} 张` },
       { label: '评分表', value: `${competition.value?.scoreConfigs?.length ?? 0} 套` },
     ]),
     confirmText: '进入评审准备中',
@@ -8384,6 +8766,7 @@ async function saveBaseInfo() {
     name: baseForm.name,
     code: baseForm.code,
     competitionDate: baseForm.competitionDate,
+    brewType: baseForm.brewType,
     registrationStart: toBackendDateTime(baseForm.registrationStart),
     registrationDeadline: toBackendDateTime(baseForm.registrationDeadline),
     entryFee: Number(baseForm.entryFee || 0),

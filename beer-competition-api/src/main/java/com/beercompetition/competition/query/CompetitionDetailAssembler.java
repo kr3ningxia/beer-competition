@@ -151,6 +151,7 @@ public class CompetitionDetailAssembler {
                 .organizerType(organizer == null ? null : organizer.getOrganizerType())
                 .organizerName(organizer == null ? null : organizer.getName())
                 .competitionType(competitionReadinessEvaluator.resolveCompetitionType(competition).name())
+                .brewType(competitionReadinessEvaluator.resolveBrewType(competition).name())
                 .competitionDate(competition.getCompetitionDate())
                 .registrationStart(competition.getRegistrationStart())
                 .registrationDeadline(competition.getRegistrationDeadline())

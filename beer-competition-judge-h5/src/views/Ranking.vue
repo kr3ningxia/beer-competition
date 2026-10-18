@@ -1,12 +1,14 @@
 <template>
   <main class="app-shell">
     <section class="top-panel">
-      <button class="back-link" type="button" @click="$router.push('/competitions')">
-        <span class="back-icon" aria-hidden="true"></span>
-        返回任务
-      </button>
-      <p class="eyebrow">{{ table?.roundName || '排序轮次' }}</p>
-      <h1 class="page-title">{{ table?.tableName || '排序任务' }}</h1>
+      <div class="top-row">
+        <button class="back-link" type="button" @click="$router.push('/competitions')">
+          <span class="back-icon" aria-hidden="true"></span>
+          返回任务
+        </button>
+        <p class="eyebrow">{{ table?.roundName || '排序轮次' }}</p>
+        <h1 class="page-title">{{ table?.tableName || '排序任务' }}</h1>
+      </div>
       <p v-if="rankingModeText" class="ranking-mode">{{ rankingModeText }}</p>
     </section>
 
@@ -791,20 +793,47 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.top-panel {
+  padding: 14px 16px;
+}
+
+.top-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+
 .back-link {
-  justify-self: start;
   display: inline-flex;
+  flex: 0 0 auto;
   gap: 7px;
   align-items: center;
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 999px;
-  margin: 0 0 14px;
+  margin: 0;
   padding: 7px 11px;
   color: rgba(255, 255, 255, 0.9);
   background: rgba(255, 255, 255, 0.08);
   font-size: 13px;
   font-weight: 750;
   line-height: 1;
+}
+
+.eyebrow {
+  flex: 0 0 auto;
+  margin: 0;
+  font-size: 12px;
+}
+
+.page-title {
+  min-width: 0;
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .back-icon {
@@ -1078,8 +1107,6 @@ onBeforeUnmount(() => {
   padding: 12px;
   color: #18222f;
   background: #fff;
-  touch-action: none;
-  user-select: none;
   transition: border-color 0.18s ease, background-color 0.18s ease, transform 0.18s ease;
 }
 

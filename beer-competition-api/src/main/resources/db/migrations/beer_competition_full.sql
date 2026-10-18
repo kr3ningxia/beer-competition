@@ -328,6 +328,7 @@ CREATE TABLE `competition` (
   `registration_deadline` datetime NOT NULL COMMENT '报名截止时间',
   `status` varchar(32) NOT NULL COMMENT '比赛流程状态',
   `competition_type` varchar(32) NOT NULL DEFAULT 'AWARD' COMMENT '比赛类型',
+  `brew_type` varchar(16) NOT NULL DEFAULT 'COMMERCIAL' COMMENT '酿造类型：COMMERCIAL 商酿 / HOMEBREW 家酿 / MIXED 商酿家酿混合',
   `entry_fee` decimal(10,2) NOT NULL DEFAULT '0.00' COMMENT '标准报名费',
   `early_bird_fee` decimal(10,2) DEFAULT NULL COMMENT '早鸟报名费',
   `early_bird_deadline` datetime DEFAULT NULL COMMENT '早鸟价截止时间',

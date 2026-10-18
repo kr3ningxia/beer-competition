@@ -16,6 +16,7 @@ public class PortalCompetitionVO {
     private String code;
     private String name;
     private String competitionType;
+    private String brewType;
     private String organizerType;
     private String organizerName;
     private LocalDate competitionDate;

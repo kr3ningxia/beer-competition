@@ -20,6 +20,7 @@ public class CompetitionDetailVO {
     private String organizerType;
     private String organizerName;
     private String competitionType;
+    private String brewType;
     private LocalDate competitionDate;
     private LocalDateTime registrationStart;
     private LocalDateTime registrationDeadline;

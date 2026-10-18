@@ -32,7 +32,7 @@
       <div v-else-if="activeCompetition" class="hero-copy">
         <div class="hero-labels">
           <span class="label-chip tone-green">{{ activeCompetition.currentStageLabel }}</span>
-          <span v-if="isThirdPartyCompetition(activeCompetition)" class="label-chip tone-third-party" :title="activeCompetition.organizerName ? `发起方：${activeCompetition.organizerName}` : ''">第三方赛事</span>
+          <span v-if="competitionMetaLabel(activeCompetition)" class="label-chip tone-third-party">{{ competitionMetaLabel(activeCompetition) }}</span>
         </div>
         <h1>{{ activeCompetition.name }}</h1>
         <p>{{ activeCompetition.description || '查看报名窗口、投递组别、基础风格和当前应付金额，确认后报名参赛' }}</p>
@@ -136,7 +136,7 @@
             <span :class="['label-chip', competition.id === activeCompetition?.id ? 'tone-green' : 'tone-amber']">
               {{ competition.id === activeCompetition?.id ? '重点赛事' : competition.currentStageLabel }}
             </span>
-            <span v-if="isThirdPartyCompetition(competition)" class="label-chip tone-third-party" :title="competition.organizerName ? `发起方：${competition.organizerName}` : ''">第三方赛事</span>
+            <span v-if="competitionMetaLabel(competition)" class="label-chip tone-third-party">{{ competitionMetaLabel(competition) }}</span>
           </div>
           <h3>{{ competition.name }}</h3>
           <p>{{ competition.description || competition.code }}</p>
@@ -222,6 +222,7 @@ import { RouterLink } from 'vue-router'
 import { isLoggedIn } from '@/utils/auth'
 import { fetchPortalEntries, fetchPortalHomeSummary, fetchPortalResults } from '@/api/portal'
 import { canSubmitEntry, formatCompetitionFee, isEarlyBirdActive, isEntryResultPublished, isEntryVendorActionPending } from './portalViewModels'
+import { brewTypeLabel } from '@/utils/competitionMeta'
 
 const loggedIn = computed(() => isLoggedIn('portal'))
 const homeData = ref({ activeCompetition: null, openCompetitions: [] })
@@ -332,6 +333,17 @@ function earlyBirdDeadlineText(competition) {
 
 function isThirdPartyCompetition(competition) {
   return competition?.organizerType === 'TENANT'
+}
+
+function competitionMetaLabel(competition) {
+  if (!competition) return ''
+  const parts = []
+  if (isThirdPartyCompetition(competition) && competition.organizerName) {
+    parts.push(`主办方：${competition.organizerName}`)
+  }
+  const typeLabel = brewTypeLabel(competition.brewType)
+  if (typeLabel) parts.push(typeLabel)
+  return parts.join(' · ')
 }
 
 function openCategoryDialog(event) {

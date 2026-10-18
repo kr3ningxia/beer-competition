@@ -9,11 +9,7 @@
       <header class="detail-hero">
         <div class="hero-meta">
           <span :class="['label-chip', stageTone(competition.status)]">{{ stageLabel }}</span>
-          <div v-if="competition.organizerType === 'TENANT'" class="event-source">
-            <span class="source-label">第三方赛事</span>
-            <span v-if="competition.organizerName" class="source-name">发起方：{{ competition.organizerName }}</span>
-          </div>
-          <span v-else-if="competition.organizerType === 'PLATFORM' && competition.organizerName" class="platform-organizer">主办方：{{ competition.organizerName }}</span>
+          <span v-if="organizerMetaText" class="organizer-name">{{ organizerMetaText }}</span>
         </div>
         <h1>{{ competition.name }}</h1>
         <div class="hero-actions">
@@ -117,6 +113,7 @@ import { computed, nextTick, onMounted, onBeforeUnmount, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { ArrowLeft, ArrowRight, Search } from '@element-plus/icons-vue'
 import { isLoggedIn } from '@/utils/auth'
+import { brewTypeLabel } from '@/utils/competitionMeta'
 import { fetchPortalCompetitionDetail, fetchPortalEntries } from '@/api/portal'
 import {
   buildTierLadder, canSubmitEntry, competitionResultPath, entrySummaryForCompetition,
@@ -179,6 +176,13 @@ const hasEventEntries = computed(() => eventEntries.value.length > 0)
 const entriesPath = computed(() => '/portal/entries?competitionId=' + competition.value.id)
 const submitPath = computed(() => '/portal/submit?competitionId=' + competition.value.id)
 const stageLabel = computed(() => isCompetitionResultPublished(competition.value) ? '结果已发布' : competition.value.currentStageLabel)
+const organizerMetaText = computed(() => {
+  const parts = []
+  if (competition.value.organizerName) parts.push(`主办方：${competition.value.organizerName}`)
+  const typeLabel = brewTypeLabel(competition.value.brewType)
+  if (typeLabel) parts.push(typeLabel)
+  return parts.join(' · ')
+})
 const visibleCategories = computed(() => categoriesExpanded.value ? competition.value.categories : competition.value.categories?.slice(0, 9))
 const requiredFields = computed(() => (competition.value.entryFields || []).filter(field => field.required))
 const filteredStyles = computed(() => {
@@ -269,11 +273,7 @@ function stageTone(status) { return ({ PUBLISHED: 'tone-gold', REGISTRATION_OPEN
 .detail-hero h1 { margin: 0; font-size: 36px; line-height: 1.3; overflow-wrap: anywhere; }
 .hero-meta { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px 24px; }
 .hero-meta > .label-chip { flex-shrink: 0; }
-.event-source { display: flex; align-items: baseline; justify-content: flex-end; gap: 8px; min-width: 0; max-width: 60%; color: #ead9b7; font-size: 14px; line-height: 1.8; }
-.source-label { flex-shrink: 0; padding: 1px 8px; border: 1px solid rgba(234,217,183,.55); border-radius: 4px; font-size: 12px; line-height: 22px; }
-.source-name, .platform-organizer { overflow-wrap: anywhere; }
-.source-name::before { content: '·'; margin-right: 8px; }
-.platform-organizer { max-width: 60%; color: #ead9b7; font-size: 14px; line-height: 26px; }
+.organizer-name { max-width: 60%; color: #ead9b7; font-size: 14px; line-height: 26px; overflow-wrap: anywhere; }
 .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; }
 .hero-actions:empty { display: none; }
 .primary-action, .secondary-action { display: inline-flex; justify-content: center; align-items: center; min-height: 40px; padding: 8px 16px; box-sizing: border-box; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 700; }
@@ -342,8 +342,7 @@ a:focus-visible, button:focus-visible { outline: 2px solid #875716; outline-offs
   .detail-hero { padding: 24px 20px; }
   .detail-hero h1 { font-size: 28px; }
   .hero-meta { flex-wrap: wrap; }
-  .event-source { flex-basis: 100%; max-width: 100%; justify-content: flex-start; }
-  .platform-organizer { flex-basis: 100%; max-width: 100%; }
+  .organizer-name { flex-basis: 100%; max-width: 100%; }
   .date-summary { grid-template-columns: 1fr; gap: 14px; padding: 20px; }
   .date-summary div { display: flex; justify-content: space-between; gap: 12px; }
   .date-summary dd { margin: 0; text-align: right; }

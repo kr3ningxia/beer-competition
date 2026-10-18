@@ -43,3 +43,13 @@ tmp/
 .codex-tmp/
 output/
 uploads/
+
+# Ad-hoc local DB backups
+backups/local_pre_overwrite/
+
+# Python caches
+__pycache__/
+*.pyc
+
+# Office temp lock files
+~$*

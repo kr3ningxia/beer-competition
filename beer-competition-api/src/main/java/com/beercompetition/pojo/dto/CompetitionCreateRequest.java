@@ -24,6 +24,8 @@ public class CompetitionCreateRequest {
 
     private String competitionType;
 
+    private String brewType;
+
     @NotNull(message = "报名开始时间不能为空")
     private LocalDateTime registrationStart;
 

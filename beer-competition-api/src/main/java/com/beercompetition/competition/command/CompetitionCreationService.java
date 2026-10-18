@@ -17,6 +17,7 @@ import com.beercompetition.pojo.dto.EntryFieldItemRequest;
 import com.beercompetition.pojo.dto.ScoreConfigItemRequest;
 import com.beercompetition.pojo.enums.CompetitionDeliveryMethod;
 import com.beercompetition.pojo.enums.CompetitionStatus;
+import com.beercompetition.pojo.enums.BrewType;
 import com.beercompetition.pojo.enums.CompetitionType;
 import com.beercompetition.pojo.enums.JudgeRoleType;
 import com.beercompetition.pojo.enums.LogisticsVisibility;
@@ -141,6 +142,7 @@ public class CompetitionCreationService {
                 .registrationDeadline(request.getRegistrationDeadline())
                 .status(CompetitionStatus.DRAFT.name())
                 .competitionType(CompetitionType.of(request.getCompetitionType()).name())
+                .brewType(BrewType.of(request.getBrewType()).name())
                 .entryFee(request.getEntryFee())
                 .earlyBirdFee(request.getEarlyBirdFee())
                 .earlyBirdDeadline(request.getEarlyBirdDeadline())
@@ -344,6 +346,7 @@ public class CompetitionCreationService {
         validateEarlyBirdConfig(request.getEarlyBirdFee(), request.getEarlyBirdDeadline(),
                 request.getEntryFee(), request.getRegistrationStart(), request.getRegistrationDeadline());
         CompetitionType.of(request.getCompetitionType());
+        BrewType.of(request.getBrewType());
         normalizeRulesUrl(request.getRulesUrl());
         if (!StringUtils.hasText(request.getStyleLibraryVersion())) {
             throw new BaseException("基础风格库不能为空");
@@ -415,6 +418,7 @@ public class CompetitionCreationService {
                 .code(competition.getCode())
                 .name(competition.getName())
                 .competitionType(resolveCompetitionType(competition).name())
+                .brewType(resolveBrewType(competition).name())
                 .competitionDate(competition.getCompetitionDate())
                 .registrationStart(competition.getRegistrationStart())
                 .registrationDeadline(competition.getRegistrationDeadline())
@@ -637,6 +641,10 @@ public class CompetitionCreationService {
 
     private CompetitionType resolveCompetitionType(Competition competition) {
         return CompetitionType.of(competition == null ? null : competition.getCompetitionType());
+    }
+
+    private BrewType resolveBrewType(Competition competition) {
+        return BrewType.of(competition == null ? null : competition.getBrewType());
     }
 
     private int countDoneChecks(List<CompetitionCheckVO> checks) {

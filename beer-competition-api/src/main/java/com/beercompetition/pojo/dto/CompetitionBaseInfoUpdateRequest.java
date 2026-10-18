@@ -24,6 +24,8 @@ public class CompetitionBaseInfoUpdateRequest {
     @NotNull(message = "比赛日期不能为空")
     private LocalDate competitionDate;
 
+    private String brewType;
+
     private LocalDateTime registrationStart;
 
     @NotNull(message = "报名截止时间不能为空")

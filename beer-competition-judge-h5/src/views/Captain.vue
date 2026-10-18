@@ -23,10 +23,7 @@
     <template v-if="!uuid">
       <section :class="['card', 'captain-check-card', { ready: tableReadyForReview }]">
         <div class="split">
-          <div>
-            <h2 class="section-title compact">{{ captainSummaryTitle }}</h2>
-            <p class="captain-check-text">{{ tableCheckText }}</p>
-          </div>
+          <h2 class="section-title compact">{{ captainSummaryTitle }}</h2>
           <span :class="['pill', tableReadyForReview ? 'status-ok' : 'status-warn']">{{ tableReviewProgressText }}</span>
         </div>
         <div v-if="captainSummaryBadges.length" class="check-blockers">
@@ -65,7 +62,6 @@
         >
           {{ tableReviewStateText }}
         </button>
-        <p v-if="tableSubmitHint" class="submit-hint">{{ tableSubmitHint }}</p>
         <p v-if="message" class="message">{{ message }}</p>
       </section>
 
@@ -325,7 +321,6 @@ const myPendingScoreCount = computed(() => boardEntries.value.filter((item) => !
 const readyFinalizeEntries = computed(() => boardEntries.value.filter((item) => readyForFinalize(item)))
 const readyFinalizeCount = computed(() => readyFinalizeEntries.value.length)
 const pendingTableScoreCount = computed(() => boardEntries.value.reduce((sum, item) => sum + entryMissingScoreCount(item), 0))
-const peerReadyWaitingMeCount = computed(() => boardEntries.value.filter((item) => !item.scored && tableScoresComplete(item)).length)
 const initialBoardLoading = computed(() => loadingBoard.value && !board.value)
 const scoreConfirmation = computed(() => board.value?.scoreConfirmation || board.value?.roundTable?.scoreConfirmation || null)
 const confirmationConfirmedCount = computed(() => Number(scoreConfirmation.value?.confirmedCount ?? board.value?.roundTable?.confirmationConfirmedCount ?? 0))
@@ -415,22 +410,6 @@ const captainSummaryBadges = computed(() => {
   }
   return badges
 })
-const tableCheckText = computed(() => {
-  if (captainSummaryState.value === 'loading') return '正在同步本轮酒款和评分进度。'
-  if (!boardEntries.value.length) return '请联系现场工作人员确认本轮评审桌和酒款配置。'
-  if (tableSubmitted.value) return '管理员锁定前仍可修改。'
-  if (tableReadyForReview.value) return isFeedbackOnlyCompetition.value ? '酒款诊断意见已齐，等待同桌确认。' : '酒款意见和晋级名单已齐，等待同桌确认。'
-  if (captainSummaryState.value === 'advance-check') return isFeedbackOnlyCompetition.value ? '酒款诊断意见已完成，等待同桌确认。' : '酒款意见已完成，还需按本桌目标确认晋级名单。'
-  if (captainSummaryState.value === 'mixed-todos') return `${readyFinalizeCount.value} 款可汇总，另有 ${myPendingScoreCount.value} 款个人评分待提交。`
-  if (captainSummaryState.value === 'ready-finalize') return '同桌评分已齐，请填写桌长意见。'
-  if (captainSummaryState.value === 'need-score') {
-    if (peerReadyWaitingMeCount.value > 0) {
-      return `${peerReadyWaitingMeCount.value} 款同桌评分已齐，提交你的个人评分后即可汇总。`
-    }
-    return `还有 ${myPendingScoreCount.value} 款个人评分待提交，下方可查看同桌进度。`
-  }
-  return `还差 ${pendingTableScoreCount.value} 份同桌评分，齐全后再填写桌长意见。`
-})
 const nextActionEntry = computed(() => (
   readyFinalizeEntries.value[0]
   || boardEntries.value.find((item) => !item.finalized)
@@ -475,15 +454,6 @@ const tableReviewStateText = computed(() => {
   if (board.value?.roundTable?.status === 'LOCKED') return '本桌结果已锁定'
   if (confirmationReady.value) return '确认已齐'
   return '等待同桌确认'
-})
-const tableSubmitHint = computed(() => {
-  if (tableSubmitted.value) return '管理员锁定前仍可修改，修改后会重置同桌确认。'
-  if (board.value?.roundTable?.status === 'LOCKED') return '本桌结果已锁定。'
-  if (tableReadyForReview.value && !confirmationReady.value) return `同桌确认进行中（${confirmationProgressText.value}）。可直接修改评价，修改后会重置同桌确认。`
-  if (tableReadyForReview.value && canSubmitTable.value) return '同桌确认已齐，可提交本桌结果。'
-  if (tableReadyForReview.value && !board.value?.roundTable?.canSubmitTableScore) return '本桌结果请由桌长处理。'
-  if (tableReadyForReview.value) return '可直接修改评价，修改后会重置同桌确认。'
-  return ''
 })
 const currentSubmittedCount = computed(() => Number(currentBoardEntry.value?.submittedCount || peerScores.value.length || 0))
 const currentExpectedCount = computed(() => Number(currentBoardEntry.value?.expectedCount || 0))
@@ -677,12 +647,6 @@ function readyForFinalize(item) {
 
 function canModifyFinalOpinion(item) {
   return Boolean(item.finalized && !tableLocked.value)
-}
-
-function tableScoresComplete(item) {
-  const expected = Number(item.expectedCount || 0)
-  const submitted = Number(item.submittedCount || 0)
-  return expected > 0 && submitted >= expected
 }
 
 function entryMissingScoreCount(item) {
@@ -894,15 +858,16 @@ onMounted(async () => {
 }
 
 .captain-stats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
   gap: 8px;
   margin-top: 12px;
 }
 
 .captain-stats div {
+  flex: 1 1 0;
+  min-width: 0;
   border-radius: 8px;
-  padding: 10px 12px;
+  padding: 9px 10px;
   color: #fff;
   background: rgba(255, 255, 255, 0.1);
 }
@@ -937,18 +902,11 @@ onMounted(async () => {
   background: #ecfdf3;
 }
 
-.captain-check-text {
-  margin: 6px 0 0;
-  color: #667085;
-  font-size: 13px;
-  line-height: 1.45;
-}
-
 .check-blockers {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 12px;
+  margin-top: 10px;
 }
 
 .check-blockers span {
@@ -961,7 +919,7 @@ onMounted(async () => {
 }
 
 .check-action {
-  margin-top: 12px;
+  margin-top: 16px;
 }
 
 .board-list,

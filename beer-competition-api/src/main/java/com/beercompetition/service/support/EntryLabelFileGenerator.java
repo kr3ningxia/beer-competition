@@ -45,11 +45,12 @@ public class EntryLabelFileGenerator {
     private static final int LABEL_IMAGE_HEIGHT = 1440;
     private static final int A4_IMAGE_WIDTH = 2480;
     private static final int A4_IMAGE_HEIGHT = 3508;
-    private static final int LABELS_PER_PAGE = 4;
+    public static final int LABELS_PER_PAGE = 9;
+    private static final int LABEL_COLUMNS = 3;
+    private static final int LABEL_ROWS = 3;
     private static final float PDF_MARGIN_X = 30f;
     private static final float PDF_MARGIN_Y = 36f;
     private static final float PDF_GAP_X = 20f;
-    private static final float PDF_GAP_Y = 56f;
     private static final int CATEGORY_TEXT_MAX_WIDTH = 820;
     private static final int CATEGORY_TEXT_MAX_LINES = 3;
     private static final int CATEGORY_TEXT_LAST_BASELINE = 1360;
@@ -70,12 +71,12 @@ public class EntryLabelFileGenerator {
         }
     }
 
-    public byte[] buildFourUpPng(List<LabelRenderItem> items) {
+    public byte[] buildLabelSheetPng(List<LabelRenderItem> items) {
         if (items == null || items.isEmpty()) {
             throw new BaseException("没有可导出的参赛标签");
         }
         try {
-            BufferedImage image = buildFourUpImage(items);
+            BufferedImage image = buildLabelSheetImage(items);
             ByteArrayOutputStream output = new ByteArrayOutputStream();
             ImageIO.write(image, "png", output);
             return output.toByteArray();
@@ -84,7 +85,7 @@ public class EntryLabelFileGenerator {
         }
     }
 
-    public byte[] buildFourUpPdf(List<LabelRenderItem> items) {
+    public byte[] buildLabelSheetPdf(List<LabelRenderItem> items) {
         if (items == null || items.isEmpty()) {
             throw new BaseException("没有可导出的参赛标签");
         }
@@ -92,7 +93,7 @@ public class EntryLabelFileGenerator {
             for (int index = 0; index < items.size(); index += LABELS_PER_PAGE) {
                 PDPage page = new PDPage(PDRectangle.A4);
                 document.addPage(page);
-                drawLabelPage(document, page, items.subList(index, Math.min(index + LABELS_PER_PAGE, items.size())));
+                drawLabelSheetPage(document, page, items.subList(index, Math.min(index + LABELS_PER_PAGE, items.size())));
             }
             document.save(output);
             return output.toByteArray();
@@ -141,7 +142,7 @@ public class EntryLabelFileGenerator {
         return image;
     }
 
-    private BufferedImage buildFourUpImage(List<LabelRenderItem> items) throws Exception {
+    private BufferedImage buildLabelSheetImage(List<LabelRenderItem> items) throws Exception {
         BufferedImage sheet = new BufferedImage(A4_IMAGE_WIDTH, A4_IMAGE_HEIGHT, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = sheet.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
@@ -150,20 +151,12 @@ public class EntryLabelFileGenerator {
         g.fillRect(0, 0, A4_IMAGE_WIDTH, A4_IMAGE_HEIGHT);
 
         PDRectangle mediaBox = PDRectangle.A4;
-        float labelWidth = (mediaBox.getWidth() - PDF_MARGIN_X * 2 - PDF_GAP_X) / 2;
-        float labelHeight = labelWidth * LABEL_IMAGE_HEIGHT / LABEL_IMAGE_WIDTH;
-        float topY = mediaBox.getHeight() - PDF_MARGIN_Y - labelHeight;
-        float bottomY = topY - PDF_GAP_Y - labelHeight;
-        float rightX = PDF_MARGIN_X + labelWidth + PDF_GAP_X;
+        float labelWidth = labelWidth(mediaBox);
+        float labelHeight = labelHeight(labelWidth);
         float scaleX = A4_IMAGE_WIDTH / mediaBox.getWidth();
         float scaleY = A4_IMAGE_HEIGHT / mediaBox.getHeight();
+        float[][] positions = labelPositions(mediaBox, labelWidth, labelHeight);
 
-        float[][] positions = new float[][]{
-                {PDF_MARGIN_X, topY},
-                {rightX, topY},
-                {PDF_MARGIN_X, bottomY},
-                {rightX, bottomY}
-        };
         for (int i = 0; i < Math.min(items.size(), LABELS_PER_PAGE); i++) {
             BufferedImage label = buildLabelImage(items.get(i));
             int x = Math.round(positions[i][0] * scaleX);
@@ -176,20 +169,12 @@ public class EntryLabelFileGenerator {
         return sheet;
     }
 
-    private void drawLabelPage(PDDocument document, PDPage page, List<LabelRenderItem> items) throws Exception {
+    private void drawLabelSheetPage(PDDocument document, PDPage page, List<LabelRenderItem> items) throws Exception {
         PDRectangle mediaBox = page.getMediaBox();
-        float labelWidth = (mediaBox.getWidth() - PDF_MARGIN_X * 2 - PDF_GAP_X) / 2;
-        float labelHeight = labelWidth * LABEL_IMAGE_HEIGHT / LABEL_IMAGE_WIDTH;
-        float topY = mediaBox.getHeight() - PDF_MARGIN_Y - labelHeight;
-        float bottomY = topY - PDF_GAP_Y - labelHeight;
-        float rightX = PDF_MARGIN_X + labelWidth + PDF_GAP_X;
+        float labelWidth = labelWidth(mediaBox);
+        float labelHeight = labelHeight(labelWidth);
+        float[][] positions = labelPositions(mediaBox, labelWidth, labelHeight);
 
-        float[][] positions = new float[][]{
-                {PDF_MARGIN_X, topY},
-                {rightX, topY},
-                {PDF_MARGIN_X, bottomY},
-                {rightX, bottomY}
-        };
         try (PDPageContentStream contentStream = new PDPageContentStream(document, page)) {
             for (int i = 0; i < items.size(); i++) {
                 BufferedImage image = buildLabelImage(items.get(i));
@@ -197,6 +182,29 @@ public class EntryLabelFileGenerator {
                 contentStream.drawImage(pdfImage, positions[i][0], positions[i][1], labelWidth, labelHeight);
             }
         }
+    }
+
+    private static float labelWidth(PDRectangle mediaBox) {
+        return (mediaBox.getWidth() - PDF_MARGIN_X * 2 - PDF_GAP_X * (LABEL_COLUMNS - 1)) / LABEL_COLUMNS;
+    }
+
+    private static float labelHeight(float labelWidth) {
+        return labelWidth * LABEL_IMAGE_HEIGHT / LABEL_IMAGE_WIDTH;
+    }
+
+    private static float[][] labelPositions(PDRectangle mediaBox, float labelWidth, float labelHeight) {
+        float gapY = (mediaBox.getHeight() - PDF_MARGIN_Y * 2 - labelHeight * LABEL_ROWS) / (LABEL_ROWS - 1);
+        float[][] positions = new float[LABELS_PER_PAGE][];
+        for (int row = 0; row < LABEL_ROWS; row++) {
+            float y = mediaBox.getHeight() - PDF_MARGIN_Y - labelHeight - row * (labelHeight + gapY);
+            for (int column = 0; column < LABEL_COLUMNS; column++) {
+                positions[row * LABEL_COLUMNS + column] = new float[]{
+                        PDF_MARGIN_X + column * (labelWidth + PDF_GAP_X),
+                        y
+                };
+            }
+        }
+        return positions;
     }
 
     private BufferedImage buildQrImage(String text, int size) throws Exception {

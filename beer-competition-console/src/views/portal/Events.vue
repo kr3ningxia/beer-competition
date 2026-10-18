@@ -40,10 +40,7 @@
         <div class="event-main">
           <div class="event-meta">
             <span :class="['label-chip', stageTone(competition.status)]">{{ stageLabel(competition) }}</span>
-            <div v-if="competition.organizerType === 'TENANT'" class="event-source">
-              <span class="source-label">第三方赛事</span>
-              <span v-if="competition.organizerName" class="source-name">发起方：{{ competition.organizerName }}</span>
-            </div>
+            <span v-if="competitionMetaLabel(competition)" class="event-organizer">{{ competitionMetaLabel(competition) }}</span>
           </div>
           <h2>{{ competition.name }}</h2>
           <p>{{ competition.description || competition.code }}</p>
@@ -82,6 +79,7 @@ import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { isLoggedIn } from '@/utils/auth'
 import { fetchPortalCompetitionSummaries } from '@/api/portal'
+import { brewTypeLabel } from '@/utils/competitionMeta'
 import {
   canSubmitEntry,
   competitionAction,
@@ -110,6 +108,16 @@ function stageTone(status) {
 
 function stageLabel(competition) {
   return isCompetitionResultPublished(competition) ? '结果已发布' : competition.currentStageLabel
+}
+
+function competitionMetaLabel(competition) {
+  const parts = []
+  if (competition?.organizerType === 'TENANT' && competition.organizerName) {
+    parts.push(`主办方：${competition.organizerName}`)
+  }
+  const typeLabel = brewTypeLabel(competition?.brewType)
+  if (typeLabel) parts.push(typeLabel)
+  return parts.join(' · ')
 }
 
 function primaryAction(competition) {
@@ -281,10 +289,7 @@ function entryFeeText(competition) {
 
 .event-meta { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px 14px; }
 .event-meta > .label-chip { flex-shrink: 0; }
-.event-source { display: flex; align-items: baseline; min-width: 0; max-width: 100%; gap: 8px; color: #746a5f; font-size: 14px; line-height: 1.8; }
-.source-label { flex-shrink: 0; padding: 1px 8px; border: 1px solid #cfc5b4; border-radius: 4px; font-size: 12px; line-height: 22px; }
-.source-name { overflow-wrap: anywhere; }
-.source-name::before { content: '·'; margin-right: 8px; }
+.event-organizer { min-width: 0; max-width: 100%; color: #746a5f; font-size: 14px; line-height: 26px; overflow-wrap: anywhere; }
 
 .event-main p,
 .event-side p {

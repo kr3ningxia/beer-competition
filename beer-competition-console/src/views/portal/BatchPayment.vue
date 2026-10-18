@@ -36,31 +36,39 @@
           </div>
 
           <template v-else-if="bankPending && organizerQrPending">
-            <div class="pending-panel organizer-qr-pending">
-              <el-icon><Clock /></el-icon>
-              <div>
-                <span>付款信息已提交</span>
-                <h2>等待主办方确认</h2>
-                <div v-if="editingOrganizerRemark" class="organizer-remark-editor">
-                  <el-input
-                    v-model.trim="organizerRemarkDraft"
-                    maxlength="255"
-                    placeholder="付款备注（选填）"
-                  />
-                  <div class="organizer-remark-actions">
-                    <el-button type="primary" :loading="savingOrganizerRemark" @click="saveOrganizerRemark">保存备注</el-button>
-                    <el-button text @click="cancelOrganizerRemarkEdit">取消</el-button>
+            <div class="organizer-qr-pending">
+              <div class="pending-panel">
+                <el-icon><Clock /></el-icon>
+                <div>
+                  <span>付款信息已提交</span>
+                  <h2>等待主办方确认</h2>
+                  <div v-if="editingOrganizerRemark" class="organizer-remark-editor">
+                    <el-input
+                      v-model.trim="organizerRemarkDraft"
+                      maxlength="255"
+                      placeholder="付款备注（选填）"
+                    />
+                    <div class="organizer-remark-actions">
+                      <el-button type="primary" :loading="savingOrganizerRemark" @click="saveOrganizerRemark">保存备注</el-button>
+                      <el-button text @click="cancelOrganizerRemarkEdit">取消</el-button>
+                    </div>
                   </div>
+                  <div v-else class="organizer-remark-row">
+                    <p v-if="organizerPaymentRemark" class="submitted-remark">付款备注：{{ organizerPaymentRemark }}</p>
+                    <button type="button" class="organizer-remark-action" @click="startOrganizerRemarkEdit">
+                      {{ organizerPaymentRemark ? '修改备注' : '填写付款备注' }}
+                    </button>
+                  </div>
+                  <p v-if="collectionConfig?.collectionNote" class="collection-note">
+                    收款备注：{{ collectionConfig.collectionNote }}
+                  </p>
                 </div>
-                <div v-else class="organizer-remark-row">
-                  <p v-if="organizerPaymentRemark" class="submitted-remark">付款备注：{{ organizerPaymentRemark }}</p>
-                  <button type="button" class="organizer-remark-action" @click="startOrganizerRemarkEdit">
-                    {{ organizerPaymentRemark ? '修改备注' : '填写付款备注' }}
-                  </button>
+              </div>
+              <div v-if="organizerQrUrl" class="qr-side">
+                <div class="qr-frame">
+                  <img :src="organizerQrUrl" width="220" height="220" alt="赛事收款码" />
                 </div>
-                <p v-if="collectionConfig?.collectionNote" class="collection-note">
-                  收款备注：{{ collectionConfig.collectionNote }}
-                </p>
+                <span class="qr-caption">如尚未完成付款，请扫码支付</span>
               </div>
             </div>
           </template>
@@ -749,6 +757,8 @@ function formatCurrency(value) {
 .success-panel p, .pending-panel p { margin: 0; color: #76644f; }
 .success-actions { display: flex; gap: 8px; margin-top: 16px; }
 .pending-edit-button { margin-top: 16px; }
+.organizer-qr-pending { display: flex; align-items: center; justify-content: center; gap: 42px; min-height: 330px; }
+.organizer-qr-pending .pending-panel { min-height: 0; justify-content: flex-start; }
 .organizer-qr-pending .submitted-remark { color: #80500f; font-weight: 800; }
 .organizer-qr-pending .collection-note { margin-top: 8px; font-size: 13px; }
 .organizer-remark-row { display: flex; align-items: baseline; gap: 12px; margin-top: 12px; }
@@ -773,5 +783,5 @@ function formatCurrency(value) {
 .summary-actions a { display: flex; min-height: 42px; align-items: center; justify-content: center; color: #fff; background: #875515; border-radius: 7px; font-weight: 900; text-decoration: none; }
 .loading-state { padding: 80px; text-align: center; }
 @media (max-width: 1000px) { .payment-layout { grid-template-columns: 1fr; } .order-summary { position: static; } }
-@media (max-width: 700px) { .payment-heading, .method-head, .wechat-panel { align-items: flex-start; flex-direction: column; } .wechat-panel { width: 100%; box-sizing: border-box; gap: 24px; } .qr-side { align-self: center; flex-basis: auto; width: min(100%, 240px); } .qr-frame { width: 100%; } .bank-account { grid-template-columns: 1fr; } }
+@media (max-width: 700px) { .payment-heading, .method-head, .wechat-panel, .organizer-qr-pending { align-items: flex-start; flex-direction: column; } .wechat-panel, .organizer-qr-pending { width: 100%; box-sizing: border-box; gap: 24px; } .organizer-qr-pending { align-items: center; } .qr-side { align-self: center; flex-basis: auto; width: min(100%, 240px); } .qr-frame { width: 100%; } .bank-account { grid-template-columns: 1fr; } }
 </style>

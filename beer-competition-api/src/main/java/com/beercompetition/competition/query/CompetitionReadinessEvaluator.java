@@ -9,6 +9,7 @@ import com.beercompetition.mapper.RoundTableEntryMapper;
 import com.beercompetition.mapper.ScoreRecordMapper;
 import com.beercompetition.mapper.OrganizerMapper;
 import com.beercompetition.pojo.dto.DimensionRequest;
+import com.beercompetition.pojo.enums.BrewType;
 import com.beercompetition.pojo.enums.CompetitionStatus;
 import com.beercompetition.pojo.enums.CompetitionType;
 import com.beercompetition.pojo.enums.AwardResultStatus;
@@ -570,6 +571,10 @@ public class CompetitionReadinessEvaluator {
 
     public CompetitionType resolveCompetitionType(Competition competition) {
         return CompetitionType.of(competition == null ? null : competition.getCompetitionType());
+    }
+
+    public BrewType resolveBrewType(Competition competition) {
+        return BrewType.of(competition == null ? null : competition.getBrewType());
     }
 
     private boolean isBaseInfoReady(Competition competition) {
