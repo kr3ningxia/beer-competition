@@ -571,7 +571,7 @@ function createEmptyEditor() {
   return {
     code: createLibraryCode(),
     name: '',
-    version: '',
+    version: String(new Date().getFullYear()),
     language: '中文',
     source: '组委会',
     visibility: 'PRIVATE',
@@ -606,7 +606,7 @@ function buildPayload() {
 }
 
 function validatePayload(payload) {
-  if (!payload.code || !payload.name || !payload.version || !payload.language || !payload.source) return '请补全风格库基础信息'
+  if (!payload.name) return '请填写风格库名称'
   if (!payload.categories.length) return '请至少配置 1 个分类'
   if (!payload.styles.length) return '请至少配置 1 个风格'
   const categorySet = new Set(payload.categories.map((category) => category.name))
