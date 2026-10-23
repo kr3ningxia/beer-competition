@@ -2,9 +2,11 @@
   <div class="batch-payment-page">
     <header class="payment-heading brewer-card">
       <div>
-        <span class="section-kicker">报名付款</span>
         <h1>{{ paid ? '报名已完成' : refunded ? '订单已退款' : bankPending ? '等待到账确认' : '完成统一付款' }}</h1>
-        <p v-if="batch">{{ batch.competitionName }} · {{ batch.entryCount }} 款酒</p>
+        <p v-if="batch">
+          {{ batch.competitionName }}
+          <span v-if="paymentContactText" class="payment-contact">· 付款咨询 {{ paymentContactText }}</span>
+        </p>
       </div>
       <RouterLink to="/portal/my">返回我的参赛</RouterLink>
     </header>
@@ -85,12 +87,8 @@
           </template>
 
           <template v-else>
-            <div class="method-head">
-              <div>
-                <span class="section-kicker">当前付款方式</span>
-                <h2>{{ currentPayModeLabel }}</h2>
-              </div>
-              <el-dropdown v-if="!editingBankTransfer && availablePaymentMethods.length > 1" placement="bottom-end" trigger="click" @command="switchPayMode">
+            <div v-if="!editingBankTransfer && availablePaymentMethods.length > 1" class="method-head method-head-compact">
+              <el-dropdown placement="bottom-end" trigger="click" @command="switchPayMode">
                 <button class="change-method-button" type="button">
                   <span>更换付款方式</span>
                   <el-icon><ArrowDown /></el-icon>
@@ -121,7 +119,7 @@
                   <img v-if="organizerQrUrl" :src="organizerQrUrl" width="220" height="220" alt="赛事收款码" />
                   <span v-else class="qr-loading">收款码加载中…</span>
                 </div>
-                <span class="qr-caption">请使用微信扫码付款</span>
+                <span class="qr-caption">请完成付款</span>
               </div>
               <div class="wechat-copy">
                 <span>本批应付</span><strong>{{ formatCurrency(batch.totalAmount) }}</strong>
@@ -304,7 +302,6 @@ const availablePaymentMethods = computed(() => {
   ]
 })
 const alternativePaymentMethods = computed(() => availablePaymentMethods.value.filter((method) => method.value !== payMode.value))
-const currentPayModeLabel = computed(() => availablePaymentMethods.value.find((method) => method.value === payMode.value)?.label || '付款方式')
 const organizerQrUrl = computed(() => {
   const value = collectionConfig.value?.wechatQrUrl || ''
   if (!value || /^https?:\/\//i.test(value) || value.startsWith('data:')) return value
@@ -714,15 +711,16 @@ function formatCurrency(value) {
 .payment-heading h1 { margin: 4px 0; color: #2b1d10; font-size: 26px; }
 .payment-heading p { margin: 0; color: #756552; }
 .payment-heading a { color: #80500f; font-weight: 800; text-decoration: none; }
-.section-kicker { color: #96611b; font-size: 11px; font-weight: 900; letter-spacing: .08em; }
+.payment-contact { color: #80500f; font-weight: 700; }
 .payment-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 18px; align-items: start; }
 .payment-main, .order-summary { padding: 24px; }
 .method-head { display: flex; justify-content: space-between; gap: 18px; align-items: center; }
-.method-head h2 { margin: 5px 0 0; color: #2b1d10; }
+.method-head-compact { justify-content: flex-end; }
+.method-head + section { margin-top: 20px; }
 .change-method-button { display: inline-flex; gap: 5px; align-items: center; padding: 7px 2px; color: #806c55; background: transparent; border: 0; cursor: pointer; font-weight: 700; }
 .change-method-button:hover { color: #80500f; }
 .change-method-button:focus-visible { color: #80500f; outline: 2px solid rgba(174, 111, 25, .35); outline-offset: 3px; border-radius: 3px; }
-.wechat-panel { display: flex; justify-content: center; gap: 42px; align-items: center; min-height: 330px; margin-top: 20px; padding: 30px 32px; background: #fff8e8; border: 1px solid rgba(87,58,26,.12); border-radius: 8px; }
+.wechat-panel { display: flex; justify-content: center; gap: 42px; align-items: center; min-height: 330px; padding: 30px 32px; background: #fff8e8; border: 1px solid rgba(87,58,26,.12); border-radius: 8px; }
 .qr-side { display: grid; justify-items: center; gap: 10px; flex: 0 0 240px; }
 .qr-frame { display: grid; width: 240px; aspect-ratio: 1; height: auto; min-width: 0; place-items: center; overflow: hidden; padding: 9px; background: #fff; border: 1px solid rgba(87,58,26,.14); border-radius: 8px; box-sizing: border-box; box-shadow: 0 8px 18px rgba(87,58,26,.08); }
 .qr-frame img { display: block; width: 100%; height: 100%; object-fit: contain; }
@@ -738,7 +736,7 @@ function formatCurrency(value) {
 .wechat-copy p.expire-expired { color: #b3491f; font-weight: 700; }
 .organizer-payment-remark { max-width: 420px; }
 .organizer-payment-submit { width: 100%; max-width: 420px; min-height: 46px; margin-top: 4px; background: #875515; border: 0; font-weight: 900; }
-.bank-panel { margin-top: 20px; }
+.bank-panel { margin-top: 0; }
 .bank-account { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 1px; overflow: hidden; background: rgba(87,58,26,.12); border: 1px solid rgba(87,58,26,.12); border-radius: 8px; }
 .bank-account div { padding: 13px 15px; background: #fff8e8; }
 .bank-account dt { color: #8a7761; font-size: 12px; }

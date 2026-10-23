@@ -5,6 +5,7 @@ import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ForbiddenException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
+import com.beercompetition.mapper.AdminUserMapper;
 import com.beercompetition.mapper.BeerCoinConsumptionAllocationMapper;
 import com.beercompetition.mapper.BeerCoinLedgerMapper;
 import com.beercompetition.mapper.BeerCoinLotMapper;
@@ -17,6 +18,7 @@ import com.beercompetition.mapper.CompetitionCoinSettlementMapper;
 import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.EnterpriseAccountMapper;
 import com.beercompetition.mapper.OrganizerMapper;
+import com.beercompetition.mapper.OrganizerMemberMapper;
 import com.beercompetition.pay.WechatPayClient;
 import com.beercompetition.pojo.dto.BeerCoinAdjustmentRequest;
 import com.beercompetition.pojo.dto.BeerCoinPricingRequest;
@@ -31,6 +33,7 @@ import com.beercompetition.pojo.enums.BeerCoinSettlementType;
 import com.beercompetition.pojo.enums.CompetitionStatus;
 import com.beercompetition.pojo.enums.EntryStatus;
 import com.beercompetition.pojo.enums.OrganizerType;
+import com.beercompetition.pojo.po.AdminUser;
 import com.beercompetition.pojo.po.BeerCoinConsumptionAllocation;
 import com.beercompetition.pojo.po.BeerCoinLedger;
 import com.beercompetition.pojo.po.BeerCoinLot;
@@ -43,6 +46,7 @@ import com.beercompetition.pojo.po.CompetitionCoinSettlement;
 import com.beercompetition.pojo.po.CompetitionCoinSettlementEntry;
 import com.beercompetition.pojo.po.EnterpriseAccount;
 import com.beercompetition.pojo.po.Organizer;
+import com.beercompetition.pojo.po.OrganizerMember;
 import com.beercompetition.pojo.vo.BeerCoinLedgerVO;
 import com.beercompetition.pojo.vo.BeerCoinLotVO;
 import com.beercompetition.pojo.vo.BeerCoinAccountOptionVO;
@@ -78,9 +82,11 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * 啤酒币定价、钱包、购买支付及赛事结算应用服务。
@@ -116,6 +122,8 @@ public class BeerCoinServiceImpl implements BeerCoinService, BeerCoinSettlementS
     private final CompetitionCoinSettlementEntryMapper settlementEntryMapper;
     private final EnterpriseAccountMapper enterpriseAccountMapper;
     private final OrganizerMapper organizerMapper;
+    private final OrganizerMemberMapper organizerMemberMapper;
+    private final AdminUserMapper adminUserMapper;
     private final CompetitionMapper competitionMapper;
     private final BeerEntryMapper beerEntryMapper;
     private final AdminIdentityService adminIdentityService;
@@ -963,11 +971,16 @@ public class BeerCoinServiceImpl implements BeerCoinService, BeerCoinSettlementS
     }
 
     private List<BeerCoinAccountOptionVO> listActiveAccountOptions() {
-        List<Long> tenantAccountIds = organizerMapper.selectList(new LambdaQueryWrapper<Organizer>()
-                        .eq(Organizer::getOrganizerType, OrganizerType.TENANT.name())
-                        .isNotNull(Organizer::getEnterpriseAccountId))
-                .stream()
+        List<Organizer> tenantOrganizers = organizerMapper.selectList(new LambdaQueryWrapper<Organizer>()
+                .eq(Organizer::getOrganizerType, OrganizerType.TENANT.name())
+                .isNotNull(Organizer::getEnterpriseAccountId));
+        if (tenantOrganizers.isEmpty()) {
+            return List.of();
+        }
+        Set<Long> disabledAccountIds = disabledOrganizerAccountIds(tenantOrganizers);
+        List<Long> tenantAccountIds = tenantOrganizers.stream()
                 .map(Organizer::getEnterpriseAccountId)
+                .filter(accountId -> !disabledAccountIds.contains(accountId))
                 .distinct()
                 .toList();
         if (tenantAccountIds.isEmpty()) {
@@ -984,6 +997,34 @@ public class BeerCoinServiceImpl implements BeerCoinService, BeerCoinSettlementS
                         .name(account.getName())
                         .build())
                 .toList();
+    }
+
+    Set<Long> disabledOrganizerAccountIds(List<Organizer> organizers) {
+        List<OrganizerMember> members = organizerMemberMapper.selectList(new LambdaQueryWrapper<OrganizerMember>()
+                .in(OrganizerMember::getOrganizerId, organizers.stream().map(Organizer::getId).toList()));
+        Map<Long, List<OrganizerMember>> membersByOrganizer = members.stream()
+                .collect(Collectors.groupingBy(OrganizerMember::getOrganizerId));
+        Set<Long> adminUserIds = members.stream()
+                .map(OrganizerMember::getAdminUserId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Set<Long> activeAdminUserIds = adminUserIds.isEmpty()
+                ? Set.of()
+                : adminUserMapper.selectList(new LambdaQueryWrapper<AdminUser>()
+                                .in(AdminUser::getId, adminUserIds)
+                                .eq(AdminUser::getStatus, 1))
+                        .stream()
+                        .map(AdminUser::getId)
+                        .collect(Collectors.toSet());
+        return organizers.stream()
+                .filter(organizer -> {
+                    List<OrganizerMember> organizerMembers = membersByOrganizer.get(organizer.getId());
+                    return organizerMembers != null && !organizerMembers.isEmpty()
+                            && organizerMembers.stream()
+                            .noneMatch(member -> activeAdminUserIds.contains(member.getAdminUserId()));
+                })
+                .map(Organizer::getEnterpriseAccountId)
+                .collect(Collectors.toSet());
     }
 
     private BeerCoinWalletVO toWallet(Long accountId) {

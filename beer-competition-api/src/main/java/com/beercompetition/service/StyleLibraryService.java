@@ -21,5 +21,10 @@ public interface StyleLibraryService {
 
     StyleLibraryVO setVisibility(String code, String visibility);
 
+    /**
+     * 删除风格库及其分类、风格条目；已被比赛引用的风格库不允许删除。
+     */
+    void deleteLibrary(String code);
+
     List<StyleItemVO> listEnabledStyles(String code);
 }

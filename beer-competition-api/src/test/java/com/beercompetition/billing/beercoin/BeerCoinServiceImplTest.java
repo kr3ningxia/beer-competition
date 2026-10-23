@@ -1,5 +1,6 @@
 package com.beercompetition.billing.beercoin;
 
+import com.beercompetition.mapper.AdminUserMapper;
 import com.beercompetition.mapper.BeerCoinConsumptionAllocationMapper;
 import com.beercompetition.mapper.BeerCoinLedgerMapper;
 import com.beercompetition.mapper.BeerCoinLotMapper;
@@ -12,11 +13,15 @@ import com.beercompetition.mapper.CompetitionCoinSettlementMapper;
 import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.EnterpriseAccountMapper;
 import com.beercompetition.mapper.OrganizerMapper;
+import com.beercompetition.mapper.OrganizerMemberMapper;
 import com.beercompetition.pay.WechatPayClient;
 import com.beercompetition.pojo.enums.BeerCoinPurchaseOrderStatus;
+import com.beercompetition.pojo.po.AdminUser;
 import com.beercompetition.pojo.po.BeerCoinLedger;
 import com.beercompetition.pojo.po.BeerCoinLot;
 import com.beercompetition.pojo.po.BeerCoinPurchaseOrder;
+import com.beercompetition.pojo.po.Organizer;
+import com.beercompetition.pojo.po.OrganizerMember;
 import com.beercompetition.properties.BeerCoinPaymentProperties;
 import com.beercompetition.properties.WechatPayProperties;
 import com.beercompetition.security.AdminIdentityService;
@@ -26,6 +31,8 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -43,6 +50,11 @@ class BeerCoinServiceImplTest {
     private final BeerCoinPurchaseOrderMapper purchaseOrderMapper = mock(BeerCoinPurchaseOrderMapper.class);
     private final BeerCoinLotMapper lotMapper = mock(BeerCoinLotMapper.class);
     private final BeerCoinLedgerMapper ledgerMapper = mock(BeerCoinLedgerMapper.class);
+    private final EnterpriseAccountMapper enterpriseAccountMapper = mock(EnterpriseAccountMapper.class);
+    private final OrganizerMapper organizerMapper = mock(OrganizerMapper.class);
+    private final OrganizerMemberMapper organizerMemberMapper = mock(OrganizerMemberMapper.class);
+    private final AdminUserMapper adminUserMapper = mock(AdminUserMapper.class);
+    private final AdminIdentityService adminIdentityService = mock(AdminIdentityService.class);
     private final BeerCoinServiceImpl service = new BeerCoinServiceImpl(
             productMapper,
             tierMapper,
@@ -52,17 +64,38 @@ class BeerCoinServiceImplTest {
             mock(BeerCoinConsumptionAllocationMapper.class),
             mock(CompetitionCoinSettlementMapper.class),
             mock(CompetitionCoinSettlementEntryMapper.class),
-            mock(EnterpriseAccountMapper.class),
-            mock(OrganizerMapper.class),
+            enterpriseAccountMapper,
+            organizerMapper,
+            organizerMemberMapper,
+            adminUserMapper,
             mock(CompetitionMapper.class),
             mock(BeerEntryMapper.class),
-            mock(AdminIdentityService.class),
+            adminIdentityService,
             mock(WechatPayClient.class),
             mock(WechatOAuthService.class),
             new WechatPayProperties(),
             new BeerCoinPaymentProperties(),
             new ObjectMapper()
     );
+
+    @Test
+    void disablesAccountOptionsForOrganizersWithoutActiveAdmin() {
+        when(organizerMemberMapper.selectList(any())).thenReturn(List.of(
+                OrganizerMember.builder().organizerId(1L).adminUserId(101L).build(),
+                OrganizerMember.builder().organizerId(2L).adminUserId(102L).build()
+        ));
+        // 模拟数据库按 status = 1 过滤后的结果：停用管理员不在返回列表中。
+        when(adminUserMapper.selectList(any())).thenReturn(List.of(
+                AdminUser.builder().id(101L).status(1).build()
+        ));
+
+        Set<Long> disabledAccountIds = service.disabledOrganizerAccountIds(List.of(
+                Organizer.builder().id(1L).enterpriseAccountId(11L).organizerType("TENANT").build(),
+                Organizer.builder().id(2L).enterpriseAccountId(22L).organizerType("TENANT").build()
+        ));
+
+        assertThat(disabledAccountIds).containsExactly(22L);
+    }
 
     @Test
     void chargesOneCoinPerEffectiveEntryWithCompetitionMinimum() {

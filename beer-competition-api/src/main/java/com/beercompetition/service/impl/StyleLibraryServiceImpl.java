@@ -4,12 +4,14 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.competition.access.CompetitionAccessService;
+import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.StyleCategoryMapper;
 import com.beercompetition.mapper.StyleItemMapper;
 import com.beercompetition.mapper.StyleLibraryMapper;
 import com.beercompetition.pojo.dto.StyleCategoryRequest;
 import com.beercompetition.pojo.dto.StyleItemRequest;
 import com.beercompetition.pojo.dto.StyleLibraryUpsertRequest;
+import com.beercompetition.pojo.po.Competition;
 import com.beercompetition.pojo.po.StyleCategory;
 import com.beercompetition.pojo.po.StyleItem;
 import com.beercompetition.pojo.po.StyleLibrary;
@@ -47,6 +49,7 @@ public class StyleLibraryServiceImpl implements StyleLibraryService {
     private final StyleLibraryMapper styleLibraryMapper;
     private final StyleCategoryMapper styleCategoryMapper;
     private final StyleItemMapper styleItemMapper;
+    private final CompetitionMapper competitionMapper;
     private final ObjectMapper objectMapper;
     private final CompetitionAccessService competitionAccessService;
 
@@ -168,6 +171,27 @@ public class StyleLibraryServiceImpl implements StyleLibraryService {
         library.setVisibility(normalizedVisibility);
         styleLibraryMapper.updateById(library);
         return buildLibraryVO(library);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteLibrary(String code) {
+        competitionAccessService.requireStyleLibraryWriteAccess();
+        StyleLibrary library = getLibraryOrThrow(normalizeRequired(code, "风格库编码不能为空"));
+        if (!canEdit(library)) {
+            throw new com.beercompetition.common.exception.ForbiddenException("当前账号无权删除该风格库");
+        }
+        // 已被比赛引用的风格库删除后会让比赛配置无法再解析基础风格，直接阻止删除
+        Long referencedCount = competitionMapper.selectCount(new LambdaQueryWrapper<Competition>()
+                .eq(Competition::getStyleLibraryVersion, library.getCode()));
+        if (referencedCount != null && referencedCount > 0) {
+            throw new BaseException("该风格库已被 " + referencedCount + " 场比赛引用，无法删除");
+        }
+        styleItemMapper.delete(new LambdaQueryWrapper<StyleItem>()
+                .eq(StyleItem::getLibraryId, library.getId()));
+        styleCategoryMapper.delete(new LambdaQueryWrapper<StyleCategory>()
+                .eq(StyleCategory::getLibraryId, library.getId()));
+        styleLibraryMapper.deleteById(library.getId());
     }
 
     @Override

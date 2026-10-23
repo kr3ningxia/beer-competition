@@ -2,8 +2,10 @@ package com.beercompetition.service.impl;
 
 import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.context.SessionUser;
+import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ForbiddenException;
 import com.beercompetition.competition.access.CompetitionAccessService;
+import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.StyleCategoryMapper;
 import com.beercompetition.mapper.StyleItemMapper;
 import com.beercompetition.mapper.StyleLibraryMapper;
@@ -27,9 +29,10 @@ class StyleLibraryServiceImplTest {
     private final StyleLibraryMapper styleLibraryMapper = mock(StyleLibraryMapper.class);
     private final StyleCategoryMapper styleCategoryMapper = mock(StyleCategoryMapper.class);
     private final StyleItemMapper styleItemMapper = mock(StyleItemMapper.class);
+    private final CompetitionMapper competitionMapper = mock(CompetitionMapper.class);
     private final CompetitionAccessService competitionAccessService = mock(CompetitionAccessService.class);
     private final StyleLibraryServiceImpl styleLibraryService = new StyleLibraryServiceImpl(
-            styleLibraryMapper, styleCategoryMapper, styleItemMapper, new ObjectMapper(), competitionAccessService);
+            styleLibraryMapper, styleCategoryMapper, styleItemMapper, competitionMapper, new ObjectMapper(), competitionAccessService);
 
     @Test
     void organizerCanListPublicAndOwnLibraries() {
@@ -107,5 +110,36 @@ class StyleLibraryServiceImplTest {
         when(styleItemMapper.selectList(any())).thenReturn(List.of());
 
         assertThat(styleLibraryService.getLibrary("TENANT_PRIVATE").getCanEdit()).isTrue();
+    }
+
+    @Test
+    void organizerAdminCanDeleteOwnUnreferencedLibrary() {
+        when(competitionAccessService.isPlatformSuperAdmin()).thenReturn(false);
+        when(competitionAccessService.isOrganizerAdmin()).thenReturn(true);
+        when(competitionAccessService.requireCurrentOrganizerId()).thenReturn(64L);
+        when(styleLibraryMapper.selectOne(any())).thenReturn(StyleLibrary.builder()
+                .id(11L).code("TENANT_PRIVATE").organizerId(64L).visibility("PRIVATE").status(1).build());
+        when(competitionMapper.selectCount(any())).thenReturn(0L);
+
+        styleLibraryService.deleteLibrary("TENANT_PRIVATE");
+
+        verify(styleItemMapper).delete(any());
+        verify(styleCategoryMapper).delete(any());
+        verify(styleLibraryMapper).deleteById(11L);
+    }
+
+    @Test
+    void deleteIsBlockedWhenCompetitionStillReferencesLibrary() {
+        when(competitionAccessService.isPlatformSuperAdmin()).thenReturn(false);
+        when(competitionAccessService.isOrganizerAdmin()).thenReturn(true);
+        when(competitionAccessService.requireCurrentOrganizerId()).thenReturn(64L);
+        when(styleLibraryMapper.selectOne(any())).thenReturn(StyleLibrary.builder()
+                .id(11L).code("TENANT_PRIVATE").organizerId(64L).visibility("PRIVATE").status(1).build());
+        when(competitionMapper.selectCount(any())).thenReturn(2L);
+
+        assertThatThrownBy(() -> styleLibraryService.deleteLibrary("TENANT_PRIVATE"))
+                .isInstanceOf(BaseException.class)
+                .hasMessageContaining("已被 2 场比赛引用");
+        verify(styleLibraryMapper, never()).deleteById(11L);
     }
 }

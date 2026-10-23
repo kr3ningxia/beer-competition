@@ -199,6 +199,10 @@ export function updateStyleLibraryVisibility(code, visibility) {
   return request.patch(`/api/admin/style-libraries/${code}/visibility`, { visibility }, { authScope: 'admin' })
 }
 
+export function deleteStyleLibrary(code) {
+  return request.delete(`/api/admin/style-libraries/${code}`, { authScope: 'admin' })
+}
+
 export function updateCompetitionBaseInfo(id, payload) {
   return request.put(`/api/admin/competitions/${id}/base-info`, payload, { authScope: 'admin' })
 }

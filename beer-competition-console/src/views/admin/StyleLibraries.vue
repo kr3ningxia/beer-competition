@@ -85,6 +85,16 @@
               <EditPen />
               编辑
             </button>
+            <button
+              v-if="canMaintain && selectedLibrary.canEdit"
+              class="tool-button outline danger icon-only"
+              type="button"
+              aria-label="删除风格库"
+              title="删除风格库"
+              @click="openDeleteDialog(selectedLibrary)"
+            >
+              <Delete />
+            </button>
             <button v-if="canCloneSelected" class="tool-button outline" type="button" @click="startClone(selectedLibrary)">
               <CopyDocument />
               复制副本
@@ -329,6 +339,26 @@
         </footer>
       </form>
     </section>
+
+    <div v-if="deleteDialog.open" class="confirm-backdrop" @click.self="closeDeleteDialog">
+      <section class="confirm-dialog danger-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-library-title">
+        <header>
+          <span class="confirm-kicker">危险操作</span>
+          <h2 id="delete-library-title">删除风格库</h2>
+        </header>
+        <p class="confirm-copy">删除「{{ deleteDialog.library?.label }}」后，其分类和风格条目会一并移除，且无法恢复。已被比赛引用的风格库不能删除。</p>
+        <div class="confirm-summary">
+          <span><small>可见范围</small><strong>{{ deleteDialog.library?.visibilityLabel }}</strong></span>
+          <span><small>分类 / 风格</small><strong>{{ deleteDialog.library?.categoryCount }} / {{ deleteDialog.library?.styleCount }}</strong></span>
+        </div>
+        <footer>
+          <button class="confirm-button ghost" type="button" :disabled="deleteDialog.loading" @click="closeDeleteDialog">取消</button>
+          <button class="confirm-button primary danger" type="button" :disabled="deleteDialog.loading" @click="confirmDeleteLibrary">
+            {{ deleteDialog.loading ? '删除中' : '确认删除' }}
+          </button>
+        </footer>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -337,7 +367,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Close, CopyDocument, Delete, DocumentCopy, Download, EditPen, Files, Plus, Search, Upload } from '@element-plus/icons-vue'
-import { fetchEnabledStyleLibraries, fetchStyleLibraries, saveStyleLibrary, updateStyleLibrary, updateStyleLibraryVisibility } from '@/api/admin'
+import { deleteStyleLibrary, fetchEnabledStyleLibraries, fetchStyleLibraries, saveStyleLibrary, updateStyleLibrary, updateStyleLibraryVisibility } from '@/api/admin'
 import { ADMIN_TYPES } from '@/config/adminAccess'
 import { getAdminType } from '@/utils/auth'
 import { defaultStyleLibraryValue, fallbackStyleLibraries, getStyleLibrary, normalizeStyleLibraries } from './styleLibraries'
@@ -367,6 +397,7 @@ const importFileInput = ref(null)
 const importPreview = ref([])
 const importFileName = ref('')
 const visibilityUpdating = ref(false)
+const deleteDialog = reactive({ open: false, loading: false, library: null })
 const editor = reactive(createEmptyEditor())
 
 const normalizedPreviewItems = computed(() => getStyleItems(selectedLibrary.value))
@@ -549,6 +580,36 @@ async function toggleVisibility(library, isPublic) {
 
 function closeEditor() {
   editorOpen.value = false
+}
+
+function openDeleteDialog(library) {
+  if (!canMaintain.value || !library?.canEdit) return
+  deleteDialog.library = library
+  deleteDialog.loading = false
+  deleteDialog.open = true
+}
+
+function closeDeleteDialog() {
+  if (deleteDialog.loading) return
+  deleteDialog.open = false
+  deleteDialog.library = null
+}
+
+async function confirmDeleteLibrary() {
+  const library = deleteDialog.library
+  if (!library?.value || deleteDialog.loading) return
+  deleteDialog.loading = true
+  try {
+    await deleteStyleLibrary(library.value)
+    deleteDialog.open = false
+    deleteDialog.library = null
+    ElMessage.success('风格库已删除')
+    await loadStyleLibraries()
+  } catch (error) {
+    if (!error?.userNotified) ElMessage.warning(error?.message || '删除失败')
+  } finally {
+    deleteDialog.loading = false
+  }
 }
 
 async function submitEditor() {
@@ -1647,6 +1708,17 @@ small,
   background: rgba(255, 255, 255, 0.025);
 }
 
+.tool-button.danger {
+  color: #ffb4aa;
+  border-color: rgba(255, 132, 116, 0.35);
+  background: rgba(255, 132, 116, 0.08);
+}
+
+.tool-button.icon-only {
+  width: 34px;
+  padding: 0;
+}
+
 .tool-button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -2148,6 +2220,123 @@ small,
 .category-list::-webkit-scrollbar-thumb {
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.16);
+}
+
+.confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(1, 7, 9, 0.72);
+  backdrop-filter: blur(10px);
+}
+
+.confirm-dialog {
+  box-sizing: border-box;
+  display: grid;
+  gap: 16px;
+  width: min(460px, 100%);
+  padding: 20px;
+  color: var(--text);
+  border: 1px solid rgba(224, 184, 74, 0.28);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(224, 184, 74, 0.07), rgba(255, 255, 255, 0.012)),
+    #111b1f;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.48);
+}
+
+.confirm-dialog header {
+  display: grid;
+  gap: 7px;
+}
+
+.confirm-kicker {
+  color: var(--gold-soft);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.confirm-dialog h2 {
+  font-size: 22px;
+  line-height: 1.18;
+}
+
+.confirm-copy {
+  color: #bfd0d7;
+  line-height: 1.65;
+}
+
+.confirm-summary {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(7, 14, 17, 0.58);
+}
+
+.confirm-summary span {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.confirm-summary small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.confirm-summary strong {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.confirm-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  align-items: center;
+}
+
+.confirm-button {
+  min-height: 40px;
+  padding: 0 14px;
+  color: var(--text);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  font-weight: 800;
+}
+
+.confirm-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.confirm-button.ghost:hover {
+  border-color: rgba(224, 184, 74, 0.45);
+  background: rgba(216, 169, 53, 0.08);
+}
+
+.confirm-button.primary {
+  color: #141107;
+  border-color: rgba(224, 184, 74, 0.4);
+  background: linear-gradient(135deg, #f2cf67, #d6a52f);
+}
+
+.danger-dialog .confirm-button.primary.danger {
+  color: #fff;
+  border-color: rgba(255, 122, 107, 0.5);
+  background: #b94b40;
+}
+
+.danger-dialog .confirm-button.primary.danger:hover {
+  background: #c85a4e;
 }
 
 @media (max-width: 1180px) {

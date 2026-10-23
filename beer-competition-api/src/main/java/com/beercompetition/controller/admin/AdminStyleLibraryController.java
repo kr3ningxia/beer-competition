@@ -7,6 +7,7 @@ import com.beercompetition.pojo.vo.StyleLibraryVO;
 import com.beercompetition.service.StyleLibraryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -75,5 +76,12 @@ public class AdminStyleLibraryController {
     public Result<StyleLibraryVO> updateVisibility(@PathVariable String code,
                                                    @RequestBody @Valid StyleLibraryVisibilityRequest request) {
         return Result.success(styleLibraryService.setVisibility(code, request.getVisibility()));
+    }
+
+    /** 删除未被比赛引用的风格库。 */
+    @DeleteMapping("/{code}")
+    public Result<Void> deleteStyleLibrary(@PathVariable String code) {
+        styleLibraryService.deleteLibrary(code);
+        return Result.success(null);
     }
 }

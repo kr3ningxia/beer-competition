@@ -304,7 +304,18 @@
               </section>
 
               <section v-if="isTenantCompetition" class="form-subgroup collection-config-group">
-                <h3>报名收款</h3>
+                <div class="collection-config-head">
+                  <h3>报名收款</h3>
+                  <button
+                    class="tool-button primary"
+                    type="button"
+                    :disabled="!collectionEditable || !collectionDirty || collectionSaving"
+                    @click="saveCollectionConfig"
+                  >
+                    <Check />
+                    {{ collectionSaving ? '保存中' : '保存收款配置' }}
+                  </button>
+                </div>
                 <div v-if="!collectionEditable" class="edit-banner locked">
                   <Lock />
                   进入评审准备后收款配置已锁定，厂商付款页仍按既有配置展示
@@ -339,17 +350,23 @@
                   </div>
                   <div class="collection-qr-meta">
                     <strong>{{ collectionQrStatusText }}</strong>
-                    <small v-if="collectionForm.qrFile">已选择新收款码，保存后生效</small>
+                    <small v-if="collectionForm.qrFile">{{ collectionSaving ? '正在保存新收款码…' : '保存后生效' }}</small>
                   </div>
-                  <button
-                    v-if="collectionEditable"
-                    class="tool-button collection-qr-action"
-                    type="button"
-                    @click="collectionQrInput?.click()"
-                  >
-                    <Plus />
-                    {{ collectionQrAssetId ? '更换收款码' : '上传收款码' }}
-                  </button>
+                  <div v-if="collectionEditable" class="collection-qr-actions">
+                    <button
+                      v-if="collectionQrPreviewUrl"
+                      class="tool-button primary"
+                      type="button"
+                      @click="adjustCollectionQr"
+                    >
+                      <EditPen />
+                      调整位置
+                    </button>
+                    <button class="tool-button" type="button" @click="collectionQrInput?.click()">
+                      <Plus />
+                      {{ collectionQrAssetId ? '更换收款码' : '上传收款码' }}
+                    </button>
+                  </div>
                 </div>
                 <input
                   ref="collectionQrInput"
@@ -381,16 +398,6 @@
                     <span>付款咨询联系</span>
                     <input v-model.trim="collectionForm.paymentContact" :disabled="!collectionEditable" maxlength="128" placeholder="微信号或手机号，付款的厂商遇到问题时联系" />
                   </label>
-                </div>
-                <div class="collection-save-row">
-                  <button
-                    class="tool-button"
-                    type="button"
-                    :disabled="!collectionEditable || collectionSaving"
-                    @click="saveCollectionConfig"
-                  >
-                    {{ collectionSaving ? '保存中' : '保存收款配置' }}
-                  </button>
                 </div>
               </section>
 
@@ -619,15 +626,21 @@
               <div>
                 <h2>投递组别</h2>
               </div>
-              <div v-if="editable.categories" class="panel-actions">
-                <button class="tool-button" type="button" @click="syncCategoryFormFromStyleLibrary">
-                  <CircleCheck />
-                  按分类生成
+              <div class="panel-actions">
+                <button class="tool-button" type="button" :disabled="!categoryForm.length" @click="handleExportCategoryStyles">
+                  <Download />
+                  导出组别与风格
                 </button>
-                <button class="tool-button" type="button" @click="addCategoryItem">
-                  <Plus />
-                  添加组别
-                </button>
+                <template v-if="editable.categories">
+                  <button class="tool-button" type="button" @click="syncCategoryFormFromStyleLibrary">
+                    <CircleCheck />
+                    按分类生成
+                  </button>
+                  <button class="tool-button" type="button" @click="addCategoryItem">
+                    <Plus />
+                    添加组别
+                  </button>
+                </template>
               </div>
             </div>
             <div v-if="categoryForm.length" class="category-scope-list">
@@ -721,7 +734,7 @@
                     <div class="scope-category-rail">
                       <div
                         v-if="item.search"
-                        :class="['scope-category-item', { active: item.activeCategory === SCOPE_SEARCH_KEY }]"
+                        :class="['scope-category-item', 'scope-category-result', { active: item.activeCategory === SCOPE_SEARCH_KEY }]"
                         @click="item.activeCategory = SCOPE_SEARCH_KEY"
                       >
                         <span class="scope-category-name">搜索结果</span>
@@ -2517,6 +2530,14 @@
       <img v-if="collectionQrPreviewUrl" :src="collectionQrPreviewUrl" alt="收款码" class="collection-qr-zoom" />
     </el-dialog>
 
+    <ImageCropDialog
+      v-model="qrCropOpen"
+      :file="qrCropFile"
+      title="调整收款码"
+      output-suffix="qr"
+      @confirm="applyCollectionQrCrop"
+    />
+
     <datalist id="competition-box-number-options">
       <option v-for="boxNumber in entryBoxNumberOptions" :key="boxNumber" :value="boxNumber" />
     </datalist>
@@ -2568,6 +2589,7 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
+import ImageCropDialog from '@/components/admin/ImageCropDialog.vue'
 import {
   Back,
   Calendar,
@@ -2577,6 +2599,7 @@ import {
   Close,
   DataAnalysis,
   Delete,
+  Download,
   EditPen,
   Files,
   Finished,
@@ -2591,6 +2614,7 @@ import {
   TrendCharts,
   Warning,
 } from '@element-plus/icons-vue'
+import { exportCategoryStyleScope } from './competitionCategoryExport'
 import {
   defaultScoreConfigs,
   fieldTypeLabels,
@@ -2995,10 +3019,14 @@ const editable = computed(() => competition.value?.editableScopes || {})
 const isTenantCompetition = computed(() => competition.value?.organizerType === 'TENANT')
 const collectionConfig = ref(null)
 const collectionSaving = ref(false)
+const collectionBaseline = ref('')
 const collectionQrInput = ref(null)
 const collectionQrLocalUrl = ref('')
 const collectionQrRemoteUrl = ref('')
 const collectionQrPreviewOpen = ref(false)
+const qrCropOpen = ref(false)
+const qrCropFile = ref(null)
+const qrCropSourceFile = ref(null)
 const collectionForm = reactive({
   methodMode: 'BOTH',
   qrFile: null,
@@ -3023,6 +3051,10 @@ const collectionEnabledMethods = computed(() => [
 const collectionQrAssetId = computed(() => collectionConfig.value?.wechatQrAssetId || null)
 const collectionQrPreviewUrl = computed(() => collectionQrLocalUrl.value || collectionQrRemoteUrl.value)
 const collectionQrStatusText = computed(() => (collectionQrAssetId.value ? '已上传收款码' : '尚未上传收款码'))
+const collectionDirty = computed(() => (
+  Boolean(collectionForm.qrFile) || collectionBaseline.value !== serializeCollectionForm()
+))
+collectionBaseline.value = serializeCollectionForm()
 const refundPolicyDirty = computed(() => (
   baseForm.refundApprovalMode !== (competition.value?.refundApprovalMode || 'AUTO_APPROVE')
 ))
@@ -3258,6 +3290,23 @@ function addCategoryItem() {
 function removeCategoryItem(index) {
   categoryForm.splice(index, 1)
 }
+
+async function handleExportCategoryStyles() {
+  if (!categoryForm.length) return
+  try {
+    await exportCategoryStyleScope({
+      competitionName: competition.value?.name || '',
+      categories: categoryForm.map((item) => ({
+        name: item.name,
+        styleNames: Array.isArray(item.styleNames) ? [...item.styleNames] : null,
+      })),
+      styles: selectedStyleItems.value,
+    })
+    ElMessage.success('已开始下载组别与风格 Excel')
+  } catch {
+    ElMessage.error('导出失败，请重试')
+  }
+}
 const registrationWindowInfo = computed(() => resolveRegistrationWindowInfo())
 const headerMetaItems = computed(() => buildHeaderMetaItems())
 const stagePrimaryAction = computed(() => resolveStagePrimaryAction())
@@ -3311,7 +3360,10 @@ async function loadCollectionConfig() {
     collectionForm.bankName = data?.bankName || ''
     collectionForm.collectionNote = data?.collectionNote || ''
     collectionForm.paymentContact = data?.paymentContact || ''
+    collectionBaseline.value = serializeCollectionForm()
     collectionForm.qrFile = null
+    qrCropFile.value = null
+    qrCropSourceFile.value = null
     releaseCollectionQrUrls()
     await loadCollectionQrPreview(data?.wechatQrAssetId)
   } catch {
@@ -3321,15 +3373,84 @@ async function loadCollectionConfig() {
 
 function selectCollectionQr(event) {
   const file = event.target.files?.[0] || null
+  event.target.value = ''
   if (!file) return
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
     ElMessage.warning('收款码仅支持 JPG、PNG 或 WEBP 图片')
-    event.target.value = ''
     return
   }
+  if (file.size > 10 * 1024 * 1024) {
+    ElMessage.warning('收款码图片不能超过 10MB')
+    return
+  }
+  qrCropFile.value = file
+  qrCropOpen.value = true
+}
+
+async function applyCollectionQrCrop(file) {
+  qrCropSourceFile.value = qrCropFile.value
   clearCollectionQrLocalUrl()
   collectionForm.qrFile = file
   collectionQrLocalUrl.value = URL.createObjectURL(file)
+  qrCropOpen.value = false
+  await autoSaveCollectionQr()
+}
+
+// 裁剪确认后立即保存收款码；只提交已保存的收款配置，不带上其他未保存的字段。
+async function autoSaveCollectionQr() {
+  const competitionId = competition.value?.id || route.params.id
+  const config = collectionConfig.value
+  if (!competitionId || !config || !collectionForm.qrFile) return
+  collectionSaving.value = true
+  try {
+    const qrAssetId = (await uploadCompetitionCollectionQr(competitionId, collectionForm.qrFile)).fileAssetId
+    const saved = await updateCompetitionCollection(competitionId, {
+      enabledMethods: config.enabledMethods || [],
+      wechatQrAssetId: qrAssetId,
+      bankAccountName: config.bankAccountName || null,
+      bankAccountNo: config.bankAccountNo || null,
+      bankName: config.bankName || null,
+      collectionNote: config.collectionNote || null,
+      paymentContact: config.paymentContact || null,
+    })
+    if (saved) collectionConfig.value = saved
+    collectionForm.qrFile = null
+    qrCropSourceFile.value = null
+    clearCollectionQrLocalUrl()
+    await loadCollectionQrPreview(saved?.wechatQrAssetId || qrAssetId)
+    ElMessage.success('收款码已更新')
+  } catch {
+    ElMessage.warning('收款码自动保存失败，请点击「保存收款配置」重试')
+  } finally {
+    collectionSaving.value = false
+  }
+}
+
+async function adjustCollectionQr() {
+  if (qrCropSourceFile.value) {
+    qrCropFile.value = qrCropSourceFile.value
+    qrCropOpen.value = true
+    return
+  }
+  if (!collectionQrRemoteUrl.value) return
+  try {
+    const blob = await (await fetch(collectionQrRemoteUrl.value)).blob()
+    qrCropFile.value = new File([blob], 'qr-code.png', { type: blob.type || 'image/png' })
+    qrCropOpen.value = true
+  } catch {
+    ElMessage.warning('收款码读取失败，请重新上传')
+  }
+}
+
+function serializeCollectionForm() {
+  return JSON.stringify({
+    methodMode: collectionForm.methodMode,
+    bankAccountName: collectionForm.bankAccountName,
+    bankAccountNo: collectionForm.bankAccountNo,
+    bankName: collectionForm.bankName,
+    collectionNote: collectionForm.collectionNote,
+    paymentContact: collectionForm.paymentContact,
+  })
 }
 
 async function saveCollectionConfig() {

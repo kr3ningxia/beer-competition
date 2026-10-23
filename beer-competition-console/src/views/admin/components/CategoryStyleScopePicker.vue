@@ -313,6 +313,23 @@ onMounted(ensureActiveCategory)
   background: rgba(255, 255, 255, 0.04);
 }
 
+.scope-search::-webkit-search-cancel-button {
+  width: 13px;
+  height: 13px;
+  margin-right: 2px;
+  background: var(--gold-soft);
+  -webkit-appearance: none;
+  appearance: none;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.6' stroke-linecap='round'%3E%3Cpath d='M5 5l14 14M19 5 5 19'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.6' stroke-linecap='round'%3E%3Cpath d='M5 5l14 14M19 5 5 19'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  cursor: pointer;
+  opacity: 0.75;
+}
+
+.scope-search::-webkit-search-cancel-button:hover {
+  opacity: 1;
+}
+
 .scope-search::placeholder {
   color: var(--faint, var(--muted));
 }

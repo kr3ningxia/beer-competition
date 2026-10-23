@@ -413,7 +413,7 @@
               <span class="field-label">收款码 <b>*</b></span>
               <input ref="collectionQrInput" class="collection-file-input" type="file" accept="image/jpeg,image/png,image/webp" @change="selectCollectionQr" />
               <button v-if="!collectionDraft.qrFile" class="upload-dropzone" type="button" @click="collectionQrInput?.click()"><span class="upload-icon">↑</span><strong>上传收款码</strong><small>支持 JPG、PNG、WEBP，请上传清晰完整的收款码</small></button>
-              <div v-else class="qr-preview-card"><img :src="collectionDraft.qrPreviewUrl" alt="收款码预览" /><div><strong>{{ collectionDraft.qrFile.name }}</strong><small>厂商付款时将看到此收款码</small><button type="button" @click="collectionQrInput?.click()">更换图片</button></div></div>
+              <div v-else class="qr-preview-card"><img :src="collectionDraft.qrPreviewUrl" alt="收款码预览" /><div><strong>{{ qrSourceFile?.name || collectionDraft.qrFile.name }}</strong><small>厂商付款时将看到此收款码</small><span class="qr-preview-actions"><button class="tool-button primary" type="button" @click="openQrCrop">调整位置</button><button class="tool-button" type="button" @click="collectionQrInput?.click()">更换图片</button></span></div></div>
             </div>
             <template v-if="bankCollectionEnabled">
               <label><span>收款户名 <b>*</b></span><input v-model.trim="collectionDraft.bankAccountName" placeholder="请输入银行卡开户名称" /></label>
@@ -597,6 +597,14 @@
         </section>
 
       </main>
+
+      <ImageCropDialog
+        v-model="qrCropOpen"
+        :file="qrCropFile"
+        title="调整收款码"
+        output-suffix="qr"
+        @confirm="applyQrCrop"
+      />
   </div>
 </template>
 
@@ -607,6 +615,7 @@ import { getAdminMe } from '@/api/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Back, CircleCheck, Delete, InfoFilled, Plus, Right, Warning } from '@element-plus/icons-vue'
 import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
+import ImageCropDialog from '@/components/admin/ImageCropDialog.vue'
 import {
   defaultScoreConfigs,
   formatDateTime,
@@ -731,6 +740,9 @@ const draft = reactive({
 const FLEXIBLE_DIMENSION_MIN = 2
 const FLEXIBLE_DIMENSION_MAX = 8
 const collectionDraft = reactive({ methodMode: 'BOTH', qrFile: null, qrPreviewUrl: '', qrAssetId: null, bankAccountName: '', bankAccountNo: '', bankName: '', collectionNote: '', paymentContact: '' })
+const qrCropOpen = ref(false)
+const qrCropFile = ref(null)
+const qrSourceFile = ref(null)
 const initialDraftSnapshot = JSON.stringify(toDraftSnapshot(draft))
 const initialCollectionSnapshot = JSON.stringify(toCollectionSnapshot(collectionDraft))
 
@@ -816,15 +828,32 @@ function formatTierAmount(ratePercent) {
 
 function selectCollectionQr(event) {
   const file = event.target.files?.[0] || null
+  event.target.value = ''
   if (!file) return
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
     ElMessage.warning('收款码仅支持 JPG、PNG 或 WEBP 图片')
-    event.target.value = ''
     return
   }
+  if (file.size > 10 * 1024 * 1024) {
+    ElMessage.warning('收款码图片不能超过 10MB')
+    return
+  }
+  qrCropFile.value = file
+  qrCropOpen.value = true
+}
+
+function openQrCrop() {
+  if (!qrSourceFile.value) return
+  qrCropFile.value = qrSourceFile.value
+  qrCropOpen.value = true
+}
+
+function applyQrCrop(file) {
+  qrSourceFile.value = qrCropFile.value
   if (collectionDraft.qrPreviewUrl) URL.revokeObjectURL(collectionDraft.qrPreviewUrl)
   collectionDraft.qrFile = file
   collectionDraft.qrPreviewUrl = URL.createObjectURL(file)
+  qrCropOpen.value = false
 }
 
 function addCategory() {
@@ -2364,13 +2393,10 @@ textarea::placeholder {
   white-space: nowrap;
 }
 
-.qr-preview-card button {
-  width: fit-content;
-  padding: 0;
-  color: var(--gold-soft);
-  border: 0;
-  background: transparent;
-  cursor: pointer;
+.qr-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .collection-config-grid small {
