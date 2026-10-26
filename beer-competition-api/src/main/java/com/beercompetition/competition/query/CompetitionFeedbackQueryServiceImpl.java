@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.competition.FeedbackCommentEditPolicy;
+import com.beercompetition.competition.configuration.ScoreConfigValidator;
 import com.beercompetition.competition.access.CompetitionAccessService;
 import com.beercompetition.mapper.BeerEntryMapper;
 import com.beercompetition.mapper.CompetitionRoundMapper;
@@ -182,13 +183,13 @@ public class CompetitionFeedbackQueryServiceImpl implements CompetitionFeedbackQ
         Map<Long, JudgeAccount> judgeById = loadReviewJudges(tables, members);
         Map<String, ScoreRecord> personalScoreByJudgeEntry = loadPersonalScores(competitionId, beerEntryIds);
         Map<Long, ScoreRecord> finalScoreByEntry = loadFinalScores(competitionId, beerEntryIds);
-        Map<String, Integer> minCommentLengthByRole = loadMinCommentLengthByRole(competitionId);
+        Map<String, Integer> minCommentLengthByScope = loadMinCommentLengthByScope(competitionId);
 
         // 3) 组装发布前反馈复核列表
         List<AdminFeedbackReviewEntryVO> records = pageEntries.stream()
                 .map(roundEntry -> buildFeedbackReviewEntry(firstScoreRound, roundEntry, tableById, entryById,
                         labelByEntryId, categoryNameById, membersByTable, judgeById, personalScoreByJudgeEntry,
-                        finalScoreByEntry, minCommentLengthByRole, feedbackEditable))
+                        finalScoreByEntry, minCommentLengthByScope, feedbackEditable))
                 .filter(Objects::nonNull)
                 .toList();
         return new FeedbackPageData(total, records,
@@ -210,7 +211,7 @@ public class CompetitionFeedbackQueryServiceImpl implements CompetitionFeedbackQ
                                                                 Map<Long, JudgeAccount> judgeById,
                                                                 Map<String, ScoreRecord> personalScoreByJudgeEntry,
                                                                 Map<Long, ScoreRecord> finalScoreByEntry,
-                                                                Map<String, Integer> minCommentLengthByRole,
+                                                                Map<String, Integer> minCommentLengthByScope,
                                                                 boolean feedbackEditable) {
         RoundTable table = tableById.get(roundEntry.getRoundTableId());
         BeerEntry entry = entryById.get(roundEntry.getBeerEntryId());
@@ -223,7 +224,7 @@ public class CompetitionFeedbackQueryServiceImpl implements CompetitionFeedbackQ
                 .toList();
         ScoreRecord finalScore = finalScoreByEntry.get(entry.getId());
         List<AdminFeedbackJudgeScoreVO> judges = reviewMembers.stream()
-                .map(member -> buildFeedbackJudgeScore(member, entry, judgeById, personalScoreByJudgeEntry, minCommentLengthByRole, feedbackEditable))
+                .map(member -> buildFeedbackJudgeScore(member, entry, judgeById, personalScoreByJudgeEntry, minCommentLengthByScope, feedbackEditable))
                 .toList();
         EntryScanLabel label = labelByEntryId.get(entry.getId());
         int personalSubmitted = (int) judges.stream().filter(item -> Boolean.TRUE.equals(item.getScored())).count();
@@ -244,8 +245,9 @@ public class CompetitionFeedbackQueryServiceImpl implements CompetitionFeedbackQ
                 .captainSubmitted(finalScore != null)
                 .consensusScore(finalScore == null ? null : firstScore(finalScore.getConsensusScore(), finalScore.getTotalScore()))
                 .advanced(finalScore != null && Objects.equals(finalScore.getAdvancedFlag(), FLAG_TRUE))
-                .status(resolveFeedbackStatus(finalScore, judges, minCommentLengthByRole))
-                .captainOpinion(buildCaptainOpinion(table, finalScore, judgeById, minCommentLengthByRole, feedbackEditable))
+                .status(resolveFeedbackStatus(finalScore, judges, minCommentLengthByScope, entry.getCategoryId()))
+                .captainOpinion(buildCaptainOpinion(table, finalScore, judgeById, minCommentLengthByScope,
+                        entry.getCategoryId(), feedbackEditable))
                 .judges(judges)
                 .build();
     }
@@ -254,7 +256,7 @@ public class CompetitionFeedbackQueryServiceImpl implements CompetitionFeedbackQ
                                                               BeerEntry entry,
                                                               Map<Long, JudgeAccount> judgeById,
                                                               Map<String, ScoreRecord> personalScoreByJudgeEntry,
-                                                              Map<String, Integer> minCommentLengthByRole,
+                                                              Map<String, Integer> minCommentLengthByScope,
                                                               boolean feedbackEditable) {
         JudgeAccount judge = judgeById.get(member.getJudgeAccountId());
         ScoreRecord score = personalScoreByJudgeEntry.get(scoreKey(member.getJudgeAccountId(), entry.getId()));
@@ -274,17 +276,19 @@ public class CompetitionFeedbackQueryServiceImpl implements CompetitionFeedbackQ
                 .updatedAt(score == null ? null : firstTime(score.getUpdateTime(), score.getCreateTime()))
                 .durationSeconds(score == null ? null : score.getDurationSeconds())
                 .commentCharCount(score == null ? 0 : resolveFeedbackCommentCharCount(score))
-                .minCommentLength(minCommentLengthByRole.getOrDefault(role, DEFAULT_MIN_COMMENT_LENGTH))
+                .minCommentLength(resolveMinCommentLength(minCommentLengthByScope, entry.getCategoryId(), role))
                 .dimensions(dimensions)
                 .comments(score == null ? "" : score.getComments())
-                .anomaly(score == null ? JUDGE_ANOMALY_NOT_SUBMITTED : resolveCommentAnomaly(score, role, minCommentLengthByRole))
+                .anomaly(score == null ? JUDGE_ANOMALY_NOT_SUBMITTED
+                        : resolveCommentAnomaly(score, role, minCommentLengthByScope, entry.getCategoryId()))
                 .build();
     }
 
     private AdminFeedbackCaptainOpinionVO buildCaptainOpinion(RoundTable table,
                                                               ScoreRecord finalScore,
                                                               Map<Long, JudgeAccount> judgeById,
-                                                              Map<String, Integer> minCommentLengthByRole,
+                                                              Map<String, Integer> minCommentLengthByScope,
+                                                              Long categoryId,
                                                               boolean feedbackEditable) {
         JudgeAccount captain = judgeById.get(table.getCaptainJudgeId());
         if (finalScore == null) {
@@ -310,7 +314,7 @@ public class CompetitionFeedbackQueryServiceImpl implements CompetitionFeedbackQ
                 .submittedAt(firstTime(finalScore.getUpdateTime(), finalScore.getCreateTime()))
                 .updatedAt(firstTime(finalScore.getUpdateTime(), finalScore.getCreateTime()))
                 .commentCharCount(resolveFeedbackCommentCharCount(finalScore))
-                .minCommentLength(minCommentLengthByRole.getOrDefault(JudgeRoleType.CAPTAIN.name(), DEFAULT_MIN_COMMENT_LENGTH))
+                .minCommentLength(resolveMinCommentLength(minCommentLengthByScope, categoryId, JudgeRoleType.CAPTAIN.name()))
                 .build();
     }
 
@@ -320,11 +324,13 @@ public class CompetitionFeedbackQueryServiceImpl implements CompetitionFeedbackQ
 
     private String resolveFeedbackStatus(ScoreRecord finalScore,
                                          List<AdminFeedbackJudgeScoreVO> judges,
-                                         Map<String, Integer> minCommentLengthByRole) {
+                                         Map<String, Integer> minCommentLengthByScope,
+                                         Long categoryId) {
         if (finalScore == null) {
             return FEEDBACK_STATUS_AWAITING_CAPTAIN;
         }
-        String captainAnomaly = resolveCommentAnomaly(finalScore, JudgeRoleType.CAPTAIN.name(), minCommentLengthByRole);
+        String captainAnomaly = resolveCommentAnomaly(finalScore, JudgeRoleType.CAPTAIN.name(),
+                minCommentLengthByScope, categoryId);
         if (JUDGE_ANOMALY_COMMENT_MISSING.equals(captainAnomaly)
                 || judges.stream().anyMatch(judge -> JUDGE_ANOMALY_COMMENT_MISSING.equals(judge.getAnomaly()))) {
             return FEEDBACK_STATUS_COMMENT_MISSING;
@@ -336,12 +342,14 @@ public class CompetitionFeedbackQueryServiceImpl implements CompetitionFeedbackQ
         return FEEDBACK_STATUS_PUBLISHABLE;
     }
 
-    private String resolveCommentAnomaly(ScoreRecord record, String role, Map<String, Integer> minCommentLengthByRole) {
+    private String resolveCommentAnomaly(ScoreRecord record, String role,
+                                         Map<String, Integer> minCommentLengthByScope,
+                                         Long categoryId) {
         int effectiveChars = resolveFeedbackCommentCharCount(record);
         if (effectiveChars == 0) {
             return JUDGE_ANOMALY_COMMENT_MISSING;
         }
-        int minLength = minCommentLengthByRole.getOrDefault(role, DEFAULT_MIN_COMMENT_LENGTH);
+        int minLength = resolveMinCommentLength(minCommentLengthByScope, categoryId, role);
         if (minLength > 0 && effectiveChars < minLength) {
             return JUDGE_ANOMALY_COMMENT_SHORT;
         }
@@ -428,13 +436,28 @@ public class CompetitionFeedbackQueryServiceImpl implements CompetitionFeedbackQ
                 .collect(Collectors.toMap(CompetitionCategory::getId, CompetitionCategory::getName, (left, right) -> left));
     }
 
-    private Map<String, Integer> loadMinCommentLengthByRole(Long competitionId) {
+    private Map<String, Integer> loadMinCommentLengthByScope(Long competitionId) {
         return competitionScoreConfigMapper.selectList(new LambdaQueryWrapper<CompetitionScoreConfig>()
                         .eq(CompetitionScoreConfig::getCompetitionId, competitionId))
                 .stream()
-                .collect(Collectors.toMap(CompetitionScoreConfig::getJudgeRoleType,
+                .collect(Collectors.toMap(
+                        config -> scoreConfigScopeKey(config.getCategoryId(), config.getJudgeRoleType()),
                         config -> resolveMinCommentLength(config.getMinCommentLength()),
                         (left, right) -> left));
+    }
+
+    private int resolveMinCommentLength(Map<String, Integer> minCommentLengthByScope,
+                                        Long categoryId,
+                                        String role) {
+        Integer scoped = minCommentLengthByScope.get(scoreConfigScopeKey(categoryId, role));
+        if (scoped != null) {
+            return scoped;
+        }
+        return minCommentLengthByScope.getOrDefault(scoreConfigScopeKey(0L, role), DEFAULT_MIN_COMMENT_LENGTH);
+    }
+
+    private String scoreConfigScopeKey(Long categoryId, String role) {
+        return (categoryId == null ? 0L : categoryId) + ":" + role;
     }
 
     private ScoreRecord preferLatestScore(ScoreRecord left, ScoreRecord right) {
@@ -502,7 +525,9 @@ public class CompetitionFeedbackQueryServiceImpl implements CompetitionFeedbackQ
 
     private BigDecimal getScoreTotal(List<DimensionRequest> dimensions) {
         return dimensions.stream()
+                .filter(ScoreConfigValidator::isScored)
                 .map(DimensionRequest::getMaxScore)
+                .filter(java.util.Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 

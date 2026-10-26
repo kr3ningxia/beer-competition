@@ -11,7 +11,7 @@
           <strong>{{ displayPlainShortCode(entry) }}</strong>
         </div>
         <div>
-          <span>备注字数</span>
+          <span>评语字数</span>
           <strong class="sub-score">{{ notesLength }} / {{ minNoteLength }}</strong>
         </div>
       </div>
@@ -81,12 +81,16 @@
 
           <div class="dimension-list">
             <article v-for="item in form.dimensions" :key="item.key" class="dimension-card">
-              <div class="dimension-head">
+              <div :class="['dimension-head', { 'single-column': !item.scored }]">
                 <div>
-                  <h2>{{ item.label }}（{{ item.maxScore }}分）</h2>
-                  <p v-if="item.description">{{ item.description }}</p>
+                  <h2>
+                    {{ item.label }}<template v-if="item.scored">（{{ item.maxScore }}分）</template>
+                    <span v-if="item.required && (!item.scored || item.checkbox)" class="required-mark">必填</span>
+                    <span v-if="item.checkbox" class="check-mode-mark">{{ item.selectionMode === 'SINGLE' ? '单选' : '多选' }}</span>
+                  </h2>
+                  <p v-if="item.description && (item.scored || item.checkbox)">{{ item.description }}</p>
                 </div>
-                <div class="score-stepper" :aria-label="`${item.label}分数`">
+                <div v-if="item.scored" class="score-stepper" :aria-label="`${item.label}分数`">
                   <button type="button" :disabled="entry.locked || !hasScore(item) || Number(item.score) <= 1" @click="adjustScore(item, -1)">-</button>
                   <input
                     :value="scoreInputValue(item)"
@@ -104,60 +108,86 @@
                   <button type="button" :disabled="entry.locked || Number(item.score || 0) >= item.maxScore" @click="adjustScore(item, 1)">+</button>
                 </div>
               </div>
-              <div v-if="isSegmentedScale(item)" class="score-options" :aria-label="`${item.label}分数选项`">
+
+              <div v-if="item.checkbox" class="check-options" :aria-label="`${item.label}选项`">
                 <button
-                  v-for="score in scoreOptions(item)"
-                  :key="score"
+                  v-for="option in item.options"
+                  :key="option"
                   type="button"
-                  :class="{ active: Number(item.score) === score }"
+                  :class="['check-option', { active: isOptionSelected(item, option) }]"
+                  :aria-pressed="isOptionSelected(item, option)"
                   :disabled="entry.locked"
-                  @click="setScore(item, score)"
+                  @click="toggleOption(item, option)"
                 >
-                  {{ score }}
+                  <span class="check-box" aria-hidden="true">
+                    <svg v-if="isOptionSelected(item, option)" viewBox="0 0 12 12">
+                      <path d="M2.2 6.2 4.8 8.8 9.8 3.4" />
+                    </svg>
+                  </span>
+                  <span class="check-label">{{ option }}</span>
                 </button>
               </div>
-              <div v-else class="range-wrap" :class="{ unscored: !hasScore(item) }" :style="{ '--range-progress': `${rangePercent(item)}%` }">
-                <div class="range-rail" aria-hidden="true">
-                  <span class="range-fill"></span>
-                  <span
-                    v-for="tick in tickValues(item)"
-                    :key="tick.value"
-                    class="range-tick"
-                    :class="{ active: hasScore(item) && Number(item.score) >= tick.value, major: tick.label }"
-                    :style="{ left: `${tick.percent}%` }"
+
+              <template v-if="item.scored">
+                <div v-if="isSegmentedScale(item)" class="score-options" :aria-label="`${item.label}分数选项`">
+                  <button
+                    v-for="score in scoreOptions(item)"
+                    :key="score"
+                    type="button"
+                    :class="{ active: Number(item.score) === score }"
+                    :disabled="entry.locked"
+                    @click="setScore(item, score)"
                   >
-                    <i></i>
-                  </span>
+                    {{ score }}
+                  </button>
                 </div>
-                <input
-                  :value="rangeInputValue(item)"
-                  class="range"
-                  type="range"
-                  min="1"
-                  :max="item.maxScore"
-                  step="1"
-                  :disabled="entry.locked"
-                  @input="setScoreFromInput(item, $event.target.value)"
-                />
-                <div class="range-labels" aria-hidden="true">
-                  <span
-                    v-for="tick in tickValues(item).filter((tick) => tick.label !== '')"
-                    :key="tick.value"
-                    class="range-label"
-                    :class="{ start: tick.value === 0, end: tick.value === Number(item.maxScore) }"
-                    :style="{ left: `${tick.percent}%` }"
-                  >
-                    {{ tick.label }}
-                  </span>
+                <div v-else class="range-wrap" :class="{ unscored: !hasScore(item) }" :style="{ '--range-progress': `${rangePercent(item)}%` }">
+                  <div class="range-rail" aria-hidden="true">
+                    <span class="range-fill"></span>
+                    <span
+                      v-for="tick in tickValues(item)"
+                      :key="tick.value"
+                      class="range-tick"
+                      :class="{ active: hasScore(item) && Number(item.score) >= tick.value, major: tick.label }"
+                      :style="{ left: `${tick.percent}%` }"
+                    >
+                      <i></i>
+                    </span>
+                  </div>
+                  <input
+                    :value="rangeInputValue(item)"
+                    class="range"
+                    type="range"
+                    min="1"
+                    :max="item.maxScore"
+                    step="1"
+                    :disabled="entry.locked"
+                    @input="setScoreFromInput(item, $event.target.value)"
+                  />
+                  <div class="range-labels" aria-hidden="true">
+                    <span
+                      v-for="tick in tickValues(item).filter((tick) => tick.label !== '')"
+                      :key="tick.value"
+                      class="range-label"
+                      :class="{ start: tick.value === 0, end: tick.value === Number(item.maxScore) }"
+                      :style="{ left: `${tick.percent}%` }"
+                    >
+                      {{ tick.label }}
+                    </span>
+                  </div>
                 </div>
-              </div>
-              <div class="dimension-note">
+              </template>
+
+              <div v-if="item.noteEnabled" :class="['dimension-note', { primary: !item.scored && !item.checkbox }]">
                 <textarea
                   v-model="item.note"
                   class="textarea note-textarea"
+                  maxlength="500"
                   :disabled="entry.locked"
-                  :aria-label="`${item.label}备注`"
-                  :placeholder="item.notePlaceholder || item.notePrompt || '记录本项依据'"
+                  :aria-label="(!item.scored && !item.checkbox) ? `${item.label}输入` : `${item.label}评语`"
+                  :placeholder="(!item.scored && !item.checkbox)
+                    ? (item.notePrompt || '请输入')
+                    : (item.checkbox ? '补充评语' : (item.notePlaceholder || item.notePrompt || '记录本项依据'))"
                 />
               </div>
             </article>
@@ -172,7 +202,7 @@
               <div class="score-summary-side">
                 <span v-if="existingScore" class="pill status-warn">已提交</span>
                 <p :class="['caption', commentReady ? 'ok-text' : 'warn-text']">
-                  备注合计 {{ notesLength }} / {{ minNoteLength }} 字
+                  评语合计 {{ notesLength }} / {{ minNoteLength }} 字
                 </p>
               </div>
             </div>
@@ -223,26 +253,31 @@ const form = reactive({
   dimensions: [],
 })
 
+const scoreDimensions = computed(() => form.dimensions.filter((item) => item.scored))
 const totalScore = computed(() => (
-  form.dimensions.reduce((sum, item) => sum + Number(item.score || 0), 0)
+  scoreDimensions.value.reduce((sum, item) => sum + Number(item.score || 0), 0)
 ))
 const maxTotalScore = computed(() => (
-  form.dimensions.reduce((sum, item) => sum + Number(item.maxScore || 0), 0)
+  scoreDimensions.value.reduce((sum, item) => sum + Number(item.maxScore || 0), 0)
 ))
 const notesLength = computed(() => (
-  form.dimensions.reduce((sum, item) => sum + countEffectiveChars(item.note), 0)
+  form.dimensions.reduce((sum, item) => sum + (item.noteEnabled ? countEffectiveChars(item.note) : 0), 0)
 ))
 
 const minNoteLength = computed(() => Number(config.value?.commentMinLength ?? config.value?.minCommentLength ?? 0))
 const commentReady = computed(() => notesLength.value >= minNoteLength.value)
 const remainingNotes = computed(() => Math.max(0, minNoteLength.value - notesLength.value))
-const unscoredDimensions = computed(() => form.dimensions.filter((item) => !hasScore(item)))
-const zeroScoreDimensions = computed(() => form.dimensions.filter((item) => Number(item.score) === 0))
+const unscoredDimensions = computed(() => scoreDimensions.value.filter((item) => !hasScore(item)))
+const zeroScoreDimensions = computed(() => scoreDimensions.value.filter((item) => Number(item.score) === 0))
+const missingRequiredDimensions = computed(() => form.dimensions.filter((item) => (
+  item.required && (!item.scored || item.checkbox) && !isRequiredFilled(item)
+)))
 const canSubmit = computed(() => (
   !entry.value?.locked
   && !submitting.value
   && form.dimensions.length > 0
-  && form.dimensions.every(isScoreComplete)
+  && scoreDimensions.value.every(isScoreComplete)
+  && !missingRequiredDimensions.value.length
   && commentReady.value
 ))
 const submitHint = computed(() => {
@@ -251,7 +286,7 @@ const submitHint = computed(() => {
   if (!form.dimensions.length) return ''
   if (unscoredDimensions.value.length) return `还有 ${unscoredDimensions.value.length} 项未评分`
   if (zeroScoreDimensions.value.length) return `${zeroScoreDimensions.value.map((item) => item.label).join('、')}不能为 0 分`
-  const invalid = form.dimensions.some((item) => (
+  const invalid = scoreDimensions.value.some((item) => (
     item.score === null
     || item.score === ''
     || !Number.isInteger(Number(item.score))
@@ -259,7 +294,10 @@ const submitHint = computed(() => {
     || Number(item.score) > item.maxScore
   ))
   if (invalid) return '请检查各项分数，必须为 1 到满分之间的整数。'
-  if (remainingNotes.value > 0) return `备注还差 ${remainingNotes.value} 字`
+  if (missingRequiredDimensions.value.length) {
+    return `请完成：${missingRequiredDimensions.value.map((item) => item.label).join('、')}`
+  }
+  if (remainingNotes.value > 0) return `评语还差 ${remainingNotes.value} 字`
   return ''
 })
 const submitButtonText = computed(() => {
@@ -285,6 +323,28 @@ function adjustScore(item, delta) {
 
 function hasScore(item) {
   return item.score !== null && item.score !== '' && item.score !== undefined
+}
+
+function isRequiredFilled(item) {
+  if (item.checkbox) return Array.isArray(item.selectedOptions) && item.selectedOptions.length > 0
+  if (!item.scored) return Boolean(String(item.note || '').trim())
+  return true
+}
+
+function isOptionSelected(item, option) {
+  return Array.isArray(item.selectedOptions) && item.selectedOptions.includes(option)
+}
+
+function toggleOption(item, option) {
+  if (entry.value?.locked) return
+  const selected = Array.isArray(item.selectedOptions) ? [...item.selectedOptions] : []
+  if (item.selectionMode === 'SINGLE') {
+    item.selectedOptions = selected.includes(option) && !item.required ? [] : [option]
+    return
+  }
+  item.selectedOptions = selected.includes(option)
+    ? selected.filter((value) => value !== option)
+    : [...selected, option]
 }
 
 function isScoreComplete(item) {
@@ -431,6 +491,7 @@ function parseCommentNotes(comments = '') {
 
 function buildComments(dimensions) {
   return dimensions
+    .filter((item) => item.noteEnabled)
     .map((item) => ({
       label: item.label,
       note: String(item.note || '').trim(),
@@ -441,13 +502,23 @@ function buildComments(dimensions) {
 }
 
 function buildDimensionPayload(item) {
+  const scored = Boolean(item.scored)
+  const checkbox = Boolean(item.checkbox)
+  const noteEnabled = Boolean(item.noteEnabled)
   return {
     key: item.key,
     label: item.label,
-    score: Number(item.score),
-    maxScore: item.maxScore,
+    kind: checkbox ? 'CHECK' : (scored ? 'SCORE' : 'TEXT'),
+    scored,
+    checkbox,
+    noteEnabled,
+    score: scored ? Number(item.score) : null,
+    maxScore: scored ? item.maxScore : null,
+    selectionMode: checkbox ? item.selectionMode : null,
+    required: checkbox || !scored ? Boolean(item.required) : null,
+    selectedOptions: checkbox ? [...(item.selectedOptions || [])] : [],
     notePrompt: item.notePrompt,
-    note: String(item.note || '').trim(),
+    note: noteEnabled ? String(item.note || '').trim() : '',
   }
 }
 
@@ -460,13 +531,18 @@ function collectScoreDraft() {
     dimensions: form.dimensions.map((item) => ({
       key: item.key,
       score: item.score,
+      selectedOptions: [...(item.selectedOptions || [])],
       note: String(item.note || ''),
     })),
   }
 }
 
 function hasScoreDraftContent() {
-  return form.dimensions.some((item) => hasScore(item) || String(item.note || '').trim())
+  return form.dimensions.some((item) => (
+    hasScore(item)
+    || String(item.note || '').trim()
+    || (Array.isArray(item.selectedOptions) && item.selectedOptions.length > 0)
+  ))
 }
 
 function persistScoreDraft() {
@@ -508,11 +584,20 @@ function buildDimensionForm(configDimensions, savedDimensions = [], savedComment
   const savedByLabel = parseCommentNotes(savedComments)
   return configDimensions.map((item) => {
     const saved = savedByKey.get(item.key) || {}
+    const scored = Boolean(item.scored)
+    const checkbox = Boolean(item.checkbox)
+    const noteEnabled = Boolean(item.noteEnabled)
     const hasSavedScore = Object.prototype.hasOwnProperty.call(saved, 'score') && saved.score !== null && saved.score !== ''
     return {
       ...item,
-      score: hasSavedScore && Number.isFinite(Number(saved.score)) ? Math.round(Number(saved.score)) : null,
-      note: saved.note || savedByLabel.get(item.label) || '',
+      scored,
+      checkbox,
+      noteEnabled,
+      score: scored && hasSavedScore && Number.isFinite(Number(saved.score))
+        ? Math.round(Number(saved.score))
+        : null,
+      selectedOptions: checkbox && Array.isArray(saved.selectedOptions) ? saved.selectedOptions : [],
+      note: noteEnabled ? (saved.note || savedByLabel.get(item.label) || '') : '',
     }
   })
 }
@@ -566,7 +651,7 @@ onMounted(async () => {
   me.value = await fetchMe()
   entry.value = await fetchEntry(uuid)
   const scoreRole = entry.value?.scoreRoleType || me.value.role
-  config.value = await fetchScoreConfig(scoreRole, entry.value?.competitionId || me.value?.competitionId)
+  config.value = await fetchScoreConfig(scoreRole, entry.value?.competitionId || me.value?.competitionId, uuid)
   startScore({
     beerUuid: uuid,
     judgeRoleType: scoreRole,
@@ -921,6 +1006,103 @@ onMounted(async () => {
   grid-template-columns: minmax(0, 1fr) 131px;
   gap: 12px;
   align-items: start;
+}
+
+.dimension-head.single-column {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.required-mark,
+.check-mode-mark {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  vertical-align: middle;
+}
+
+.required-mark {
+  color: #92400e;
+  border-color: #fedf89;
+  background: #fffaeb;
+}
+
+.check-mode-mark {
+  color: #475467;
+  border-color: #d0d5dd;
+  background: #f2f4f7;
+}
+
+.check-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.check-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  border: 1px solid var(--score-border);
+  border-radius: 12px;
+  padding: 9px 10px;
+  color: #344054;
+  background: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: left;
+  touch-action: manipulation;
+}
+
+.check-option.active {
+  border-color: var(--score-primary);
+  color: var(--score-primary);
+  background: rgba(200, 116, 52, 0.08);
+  font-weight: 800;
+}
+
+.check-box {
+  display: grid;
+  flex: 0 0 16px;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid #cfd4da;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.check-option.active .check-box {
+  border-color: var(--score-primary);
+  background: var(--score-primary);
+}
+
+.check-box svg {
+  width: 11px;
+  height: 11px;
+  fill: none;
+  stroke: #fff;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.4;
+}
+
+.check-label {
+  min-width: 0;
+}
+
+.dimension-note.primary .note-textarea {
+  min-height: 108px;
+  border-color: rgba(200, 116, 52, 0.45);
+  background: #fffdf9;
 }
 
 .dimension-card h2 {
@@ -1297,6 +1479,10 @@ onMounted(async () => {
   }
 
   .dimension-head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .check-options {
     grid-template-columns: minmax(0, 1fr);
   }
 

@@ -227,6 +227,43 @@ public class RoundValidationPolicy {
     }
 
     /**
+     * 草稿轮次可以早于啤酒币结算创建，进入评审准备或发布前需要重新确认酒款仍可参与评审。
+     */
+    public void validateDraftRoundEntriesEffective(Competition competition) {
+        roundQuerySupport.listRounds(competition.getId()).stream()
+                .filter(round -> RoundStatus.DRAFT.name().equals(round.getStatus()))
+                .forEach(this::validateRoundEntriesEffective);
+    }
+
+    public void validateRoundEntriesEffective(CompetitionRound round) {
+        List<RoundTableEntry> entries = roundQuerySupport.listRoundEntries(round.getId());
+        if (entries.isEmpty()) {
+            return;
+        }
+        Map<Long, String> tableNames = roundQuerySupport.listRoundTables(round.getId()).stream()
+                .collect(Collectors.toMap(RoundTable::getId, RoundTable::getTableName));
+        Map<Long, BeerEntry> entryById = roundQuerySupport.loadEntries(entries.stream()
+                .map(RoundTableEntry::getBeerEntryId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet()));
+        boolean scoreRound = RoundType.SCORE.name().equals(round.getRoundType());
+        for (RoundTableEntry item : entries) {
+            String tableName = tableNames.getOrDefault(item.getRoundTableId(), "轮次桌");
+            BeerEntry entry = entryById.get(item.getBeerEntryId());
+            if (entry == null) {
+                throw new BaseException(tableName + "中存在已删除的酒款，请重新调整分桌");
+            }
+            String entryLabel = "「" + (StringUtils.hasText(entry.getName()) ? entry.getName() : "未命名酒款") + "」";
+            if (EntryStatus.CANCELED.name().equals(entry.getStatus())) {
+                throw new BaseException(tableName + "中的" + entryLabel + "已取消，请移除后再继续");
+            }
+            if (scoreRound && !Objects.equals(entry.getStoredFlag(), RoundConstants.FLAG_TRUE)) {
+                throw new BaseException(tableName + "中的" + entryLabel + "尚未完成入库，请移除后再继续");
+            }
+        }
+    }
+
+    /**
      * 发布轮次前的完整性校验，覆盖评分表、候选池、桌长和目标数量。
      */
     public void validateRoundReady(Competition competition, CompetitionRound round) {
@@ -431,7 +468,8 @@ public class RoundValidationPolicy {
 
     private void validateScoreFormsReady(Long competitionId) {
         Set<String> roles = competitionScoreConfigMapper.selectList(new LambdaQueryWrapper<CompetitionScoreConfig>()
-                        .eq(CompetitionScoreConfig::getCompetitionId, competitionId))
+                        .eq(CompetitionScoreConfig::getCompetitionId, competitionId)
+                        .eq(CompetitionScoreConfig::getCategoryId, 0L))
                 .stream()
                 .map(CompetitionScoreConfig::getJudgeRoleType)
                 .collect(Collectors.toSet());

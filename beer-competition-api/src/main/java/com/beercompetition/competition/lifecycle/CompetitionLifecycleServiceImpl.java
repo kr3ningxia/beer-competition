@@ -39,6 +39,7 @@ import com.beercompetition.mapper.OrganizerMapper;
 import com.beercompetition.pojo.enums.OrganizerType;
 import com.beercompetition.pojo.po.Organizer;
 import com.beercompetition.pojo.vo.CompetitionCollectionConfigVO;
+import com.beercompetition.service.impl.round.RoundValidationPolicy;
 
 /**
  * 校验并推进赛事状态，所有状态变更在事务内完成审计。
@@ -71,6 +72,8 @@ public class CompetitionLifecycleServiceImpl implements CompetitionLifecycleServ
     private final CompetitionCollectionService competitionCollectionService;
 
     private final BeerCoinSettlementService beerCoinSettlementService;
+
+    private final RoundValidationPolicy roundValidationPolicy;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -171,6 +174,9 @@ public class CompetitionLifecycleServiceImpl implements CompetitionLifecycleServ
         // 2) 校验评审准备必需配置
         CompetitionDetailVO detail = competitionQueryService.getCompetitionOverview(competition.getId());
         assertChecksDone(detail.getChecks(), Set.of("judgeTables", "scoreForms", "storedEntries"), "评审准备");
+
+        // 报名期允许预排分桌，进入评审准备前重新确认草稿里的酒款仍有效。
+        roundValidationPolicy.validateDraftRoundEntriesEffective(competition);
 
         // 报名截止后按有效酒款数量补扣啤酒币，余额不足时保持报名截止状态。
         beerCoinSettlementService.settleJudgingPreparation(competition.getId());

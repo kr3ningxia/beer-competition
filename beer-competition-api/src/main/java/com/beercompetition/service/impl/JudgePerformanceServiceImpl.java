@@ -308,11 +308,12 @@ public class JudgePerformanceServiceImpl implements JudgePerformanceService {
         if (roundIds.isEmpty()) {
             return new MetricContext(Map.of(), 0);
         }
+        // 组别专属评分表可能设置不同的字数下限，绩效口径按角色取最宽松值，避免同一评审被多套口径重复拉低。
         Map<String, Integer> minimums = scoreConfigMapper.selectList(new LambdaQueryWrapper<CompetitionScoreConfig>()
                         .eq(CompetitionScoreConfig::getCompetitionId, competition.getId())).stream()
                 .collect(Collectors.toMap(CompetitionScoreConfig::getJudgeRoleType,
                         item -> JudgePerformanceScorePolicy.minimumLength(item.getJudgeRoleType(), item.getMinCommentLength()),
-                        (left, right) -> left));
+                        Math::min));
         List<RoundTable> tables = roundTableMapper.selectList(new LambdaQueryWrapper<RoundTable>()
                 .eq(RoundTable::getCompetitionId, competition.getId()).in(RoundTable::getRoundId, roundIds));
         Set<Long> tableIds = tables.stream().map(RoundTable::getId).collect(Collectors.toSet());

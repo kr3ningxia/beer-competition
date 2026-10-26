@@ -698,6 +698,7 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
     private ScoreConfigVO toScoreConfigVO(CompetitionScoreConfig config) {
         return ScoreConfigVO.builder()
                 .competitionId(config.getCompetitionId())
+                .categoryId(config.getCategoryId() == null ? 0L : config.getCategoryId())
                 .judgeRoleType(config.getJudgeRoleType())
                 .minCommentLength(resolveMinCommentLength(config.getMinCommentLength()))
                 .dimensions(readDimensions(config.getDimensionsJson()))

@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.competition.access.CompetitionAccessService;
+import com.beercompetition.competition.configuration.ScoreConfigValidator;
 import com.beercompetition.mapper.BeerEntryMapper;
 import com.beercompetition.mapper.BeerEntryExtraFieldMapper;
 import com.beercompetition.mapper.AwardResultMapper;
@@ -259,7 +260,8 @@ public class CompetitionScoringExportServiceImpl implements CompetitionScoringEx
                                                        Map<Long, List<ScoreRecord>> scoresByEntry,
                                                        Map<Long, JudgeAccount> judgeById) {
         List<List<String>> rows = new ArrayList<>();
-        rows.add(List.of("匿名编号", "短编号", "酒款名称", "评审", "评审角色", "评分维度", "得分", "满分", "维度备注"));
+        rows.add(List.of("匿名编号", "短编号", "酒款名称", "评审", "评审角色",
+                "类型", "评分维度", "得分", "满分", "已选项", "维度评语"));
         for (BeerEntry entry : entries) {
             for (ScoreRecord record : scoresByEntry.getOrDefault(entry.getId(), List.of())) {
                 if (Objects.equals(record.getFinalFlag(), FLAG_TRUE)) {
@@ -274,9 +276,11 @@ public class CompetitionScoringExportServiceImpl implements CompetitionScoringEx
                             firstText(entry.getName(), ""),
                             judgeName,
                             feedbackRoleLabel(record.getJudgeRoleType()),
+                            dimensionKindLabel(dimension),
                             firstText(dimension.getLabel(), ""),
                             toPlain(dimension.getScore()),
                             toPlain(dimension.getMaxScore()),
+                            formatSelectedOptions(dimension.getSelectedOptions()),
                             firstText(dimension.getNote(), "")
                     ));
                 }
@@ -511,8 +515,39 @@ public class CompetitionScoringExportServiceImpl implements CompetitionScoringEx
 
     private String formatScoreDimensions(String dimensionsJson) {
         return readDimensions(dimensionsJson).stream()
-                .map(item -> item.getLabel() + " " + toPlain(item.getScore()) + "/" + toPlain(item.getMaxScore()))
+                .map(item -> {
+                    boolean scored = ScoreConfigValidator.isScored(item);
+                    boolean checkbox = ScoreConfigValidator.isCheckbox(item);
+                    String value;
+                    if (scored && checkbox) {
+                        value = toPlain(item.getScore()) + "/" + toPlain(item.getMaxScore())
+                                + "；勾选：" + formatSelectedOptions(item.getSelectedOptions());
+                    } else if (scored) {
+                        value = toPlain(item.getScore()) + "/" + toPlain(item.getMaxScore());
+                    } else if (checkbox) {
+                        value = "勾选：" + formatSelectedOptions(item.getSelectedOptions());
+                    } else {
+                        value = firstText(item.getNote(), "");
+                    }
+                    return firstText(item.getLabel(), "") + " " + value;
+                })
                 .collect(Collectors.joining("，"));
+    }
+
+    private String dimensionKindLabel(DimensionRequest dimension) {
+        boolean scored = ScoreConfigValidator.isScored(dimension);
+        boolean checkbox = ScoreConfigValidator.isCheckbox(dimension);
+        if (scored && checkbox) {
+            return "评分 + 勾选";
+        }
+        if (checkbox) {
+            return "勾选项";
+        }
+        return scored ? "评分项" : "输入项";
+    }
+
+    private String formatSelectedOptions(List<String> selectedOptions) {
+        return selectedOptions == null || selectedOptions.isEmpty() ? "" : String.join("、", selectedOptions);
     }
 
     private String formatRoundResults(List<RoundResult> results,

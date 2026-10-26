@@ -37,8 +37,9 @@ public class JudgeScoreController {
      */
     @GetMapping("/score-configs/current")
     public Result<ScoreConfigVO> currentScoreConfig(@RequestParam JudgeRoleType role,
-                                                    @RequestParam(required = false) Long competitionId) {
-        return Result.success(scoreService.getCurrentScoreConfig(role, competitionId));
+                                                    @RequestParam(required = false) Long competitionId,
+                                                    @RequestParam(required = false) String beerUuid) {
+        return Result.success(scoreService.getCurrentScoreConfig(role, competitionId, beerUuid));
     }
 
     /**

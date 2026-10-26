@@ -14,7 +14,10 @@ public final class SimpleXlsxBuilder {
     private SimpleXlsxBuilder() {
     }
 
-    public record Sheet(String name, List<List<String>> rows) {
+    public record Sheet(String name, List<List<String>> rows, List<Integer> columnWidths) {
+        public Sheet(String name, List<List<String>> rows) {
+            this(name, rows, List.of());
+        }
     }
 
     public static byte[] build(List<Sheet> sheets) {
@@ -33,15 +36,34 @@ public final class SimpleXlsxBuilder {
                 writeZipEntry(zip, "xl/styles.xml", """
                         <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
                         <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-                          <fonts count="2"><font/><font><b/></font></fonts>
-                          <fills count="1"><fill><patternFill patternType="none"/></fill></fills>
-                          <borders count="1"><border/></borders>
+                          <fonts count="2">
+                            <font><sz val="11"/><color rgb="FF111827"/><name val="Calibri"/></font>
+                            <font><b/><sz val="11"/><color rgb="FF1F2937"/><name val="Calibri"/></font>
+                          </fonts>
+                          <fills count="3">
+                            <fill><patternFill patternType="none"/></fill>
+                            <fill><patternFill patternType="gray125"/></fill>
+                            <fill><patternFill patternType="solid"><fgColor rgb="FFF2F4F7"/><bgColor indexed="64"/></patternFill></fill>
+                          </fills>
+                          <borders count="2">
+                            <border/>
+                            <border>
+                              <left style="thin"><color rgb="FFE4E7EC"/></left>
+                              <right style="thin"><color rgb="FFE4E7EC"/></right>
+                              <top style="thin"><color rgb="FFE4E7EC"/></top>
+                              <bottom style="thin"><color rgb="FFE4E7EC"/></bottom>
+                            </border>
+                          </borders>
                           <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-                          <cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0"/></cellXfs>
+                          <cellXfs count="3">
+                            <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+                            <xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+                            <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>
+                          </cellXfs>
                         </styleSheet>
                         """);
                 for (int index = 0; index < sheets.size(); index++) {
-                    writeZipEntry(zip, "xl/worksheets/sheet" + (index + 1) + ".xml", buildSheetXml(sheets.get(index).rows()));
+                    writeZipEntry(zip, "xl/worksheets/sheet" + (index + 1) + ".xml", buildSheetXml(sheets.get(index)));
                 }
             }
             return output.toByteArray();
@@ -139,28 +161,57 @@ public final class SimpleXlsxBuilder {
         return xml.toString();
     }
 
-    private static String buildSheetXml(List<List<String>> rows) {
+    private static String buildSheetXml(Sheet sheet) {
+        List<List<String>> rows = sheet.rows();
         StringBuilder xml = new StringBuilder();
         xml.append("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>")
                 .append("<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">")
-                .append("<sheetData>");
+                .append("<sheetViews><sheetView workbookViewId=\"0\">");
+        if (!rows.isEmpty()) {
+            xml.append("<pane ySplit=\"1\" topLeftCell=\"A2\" activePane=\"bottomLeft\" state=\"frozen\"/>")
+                    .append("<selection pane=\"bottomLeft\" activeCell=\"A2\" sqref=\"A2\"/>");
+        }
+        xml.append("</sheetView></sheetViews>");
+        if (!sheet.columnWidths().isEmpty()) {
+            xml.append("<cols>");
+            for (int index = 0; index < sheet.columnWidths().size(); index++) {
+                Integer width = sheet.columnWidths().get(index);
+                if (width == null || width <= 0) {
+                    continue;
+                }
+                xml.append("<col min=\"").append(index + 1)
+                        .append("\" max=\"").append(index + 1)
+                        .append("\" width=\"").append(width)
+                        .append("\" customWidth=\"1\"/>");
+            }
+            xml.append("</cols>");
+        }
+        xml.append("<sheetData>");
         for (int rowIndex = 0; rowIndex < rows.size(); rowIndex++) {
             int rowNo = rowIndex + 1;
             xml.append("<row r=\"").append(rowNo).append("\">");
             List<String> row = rows.get(rowIndex);
             for (int columnIndex = 0; columnIndex < row.size(); columnIndex++) {
                 String ref = columnName(columnIndex + 1) + rowNo;
-                xml.append("<c r=\"").append(ref).append("\" t=\"inlineStr\"");
-                if (rowIndex == 0) {
-                    xml.append(" s=\"1\"");
-                }
-                xml.append("><is><t>")
+                xml.append("<c r=\"").append(ref).append("\" t=\"inlineStr\"")
+                        .append(" s=\"").append(rowIndex == 0 ? 1 : 2).append("\"")
+                        .append("><is><t>")
                         .append(escapeXml(row.get(columnIndex)))
                         .append("</t></is></c>");
             }
             xml.append("</row>");
         }
-        xml.append("</sheetData></worksheet>");
+        xml.append("</sheetData>");
+        if (rows.size() > 1) {
+            int maxColumns = rows.stream().mapToInt(List::size).max().orElse(0);
+            if (maxColumns > 0) {
+                xml.append("<autoFilter ref=\"A1:")
+                        .append(columnName(maxColumns))
+                        .append(rows.size())
+                        .append("\"/>");
+            }
+        }
+        xml.append("</worksheet>");
         return xml.toString();
     }
 

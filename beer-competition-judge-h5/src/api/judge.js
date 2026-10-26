@@ -187,11 +187,12 @@ export function fetchEntries() {
   }))
 }
 
-export async function fetchScoreConfig(role, competitionId) {
+export async function fetchScoreConfig(role, competitionId, beerUuid) {
   const config = await request.get('/api/judge/score-configs/current', {
     params: {
       role,
       competitionId,
+      ...(beerUuid ? { beerUuid } : {}),
     },
   })
   return normalizeScoreConfig(config)
@@ -292,17 +293,40 @@ export function updateAdvancedList(uuids) {
   return wait({ advancedUuids: uuids })
 }
 
+function normalizeDimension(item) {
+  const kind = String(item.kind || 'SCORE').toUpperCase()
+  const legacyKind = ['SCORE', 'TEXT', 'CHECK'].includes(kind) ? kind : 'SCORE'
+  const scored = item.scored !== undefined && item.scored !== null
+    ? Boolean(item.scored)
+    : legacyKind !== 'TEXT' && legacyKind !== 'CHECK'
+  const checkbox = item.checkbox !== undefined && item.checkbox !== null
+    ? Boolean(item.checkbox)
+    : legacyKind === 'CHECK'
+  const noteEnabled = item.noteEnabled !== undefined && item.noteEnabled !== null
+    ? Boolean(item.noteEnabled)
+    : true
+  return {
+    ...item,
+    scored,
+    checkbox,
+    noteEnabled: checkbox ? noteEnabled : true,
+    kind: checkbox ? 'CHECK' : (scored ? 'SCORE' : 'TEXT'),
+    maxScore: scored ? Number(item.maxScore || 0) : null,
+    selectionMode: checkbox ? (item.selectionMode === 'SINGLE' ? 'SINGLE' : 'MULTI') : null,
+    required: checkbox || !scored ? Boolean(item.required) : false,
+    options: checkbox ? (item.options || []) : [],
+    selectedOptions: Array.isArray(item.selectedOptions) ? item.selectedOptions : [],
+    notePlaceholder: item.notePlaceholder || item.notePrompt || '',
+    description: item.description || item.notePrompt || '',
+  }
+}
+
 function normalizeScoreConfig(config) {
   return {
     ...config,
     roleLabel: config.roleLabel || getRoleLabel(config.judgeRoleType),
     commentMinLength: Number(config.commentMinLength ?? config.minCommentLength ?? 0),
-    dimensions: (config.dimensions || []).map((item) => ({
-      ...item,
-      maxScore: Number(item.maxScore || 0),
-      notePlaceholder: item.notePlaceholder || item.notePrompt || '',
-      description: item.description || item.notePrompt || '',
-    })),
+    dimensions: (config.dimensions || []).map(normalizeDimension),
   }
 }
 
@@ -338,6 +362,7 @@ function normalizeScoreRecord(score) {
     finalFlag: Boolean(score.isFinal ?? score.finalFlag),
     advanced: Boolean(score.isAdvanced ?? score.advanced),
     locked: Boolean(score.locked),
+    dimensions: (score.dimensions || []).map(normalizeDimension),
     submittedAt: formatSubmittedAt(score.submittedAt),
   }
 }

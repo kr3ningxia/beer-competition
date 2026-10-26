@@ -12,7 +12,11 @@ import java.util.List;
 
 public interface ScoreService {
 
-    ScoreConfigVO getCurrentScoreConfig(JudgeRoleType role, Long competitionId);
+    ScoreConfigVO getCurrentScoreConfig(JudgeRoleType role, Long competitionId, String beerUuid);
+
+    default ScoreConfigVO getCurrentScoreConfig(JudgeRoleType role, Long competitionId) {
+        return getCurrentScoreConfig(role, competitionId, null);
+    }
 
     void startScore(JudgeScoreStartRequest request);
 

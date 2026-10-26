@@ -157,6 +157,7 @@ public class ReviewStatsServiceImpl implements ReviewStatsService {
         }
         CompetitionScoreConfig config = competitionScoreConfigMapper.selectOne(new LambdaQueryWrapper<CompetitionScoreConfig>()
                 .eq(CompetitionScoreConfig::getCompetitionId, round.getCompetitionId())
+                .eq(CompetitionScoreConfig::getCategoryId, 0L)
                 .eq(CompetitionScoreConfig::getJudgeRoleType, statsRole)
                 .last("LIMIT 1"));
         return config == null || config.getMinCommentLength() == null ? 0 : config.getMinCommentLength();

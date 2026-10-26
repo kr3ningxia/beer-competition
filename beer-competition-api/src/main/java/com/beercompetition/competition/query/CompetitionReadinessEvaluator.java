@@ -8,7 +8,7 @@ import com.beercompetition.mapper.RoundResultMapper;
 import com.beercompetition.mapper.RoundTableEntryMapper;
 import com.beercompetition.mapper.ScoreRecordMapper;
 import com.beercompetition.mapper.OrganizerMapper;
-import com.beercompetition.pojo.dto.DimensionRequest;
+import com.beercompetition.competition.configuration.ScoreConfigValidator;
 import com.beercompetition.pojo.enums.BrewType;
 import com.beercompetition.pojo.enums.CompetitionStatus;
 import com.beercompetition.pojo.enums.CompetitionType;
@@ -59,8 +59,6 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 public class CompetitionReadinessEvaluator {
 
-    private static final BigDecimal SCORE_FORM_TOTAL = BigDecimal.valueOf(50);
-
     private static final String CHECK_DONE = "done";
 
     private static final String CHECK_PENDING = "pending";
@@ -79,10 +77,6 @@ public class CompetitionReadinessEvaluator {
 
     private static final String GROUP_DATA_ISSUE = "data_issue";
 
-    private static final int FLEXIBLE_MIN_DIMENSIONS = 2;
-
-    private static final int FLEXIBLE_MAX_DIMENSIONS = 8;
-
     private final ScoreRecordMapper scoreRecordMapper;
 
     private final CompetitionRoundMapper competitionRoundMapper;
@@ -94,6 +88,8 @@ public class CompetitionReadinessEvaluator {
     private final RoundTableEntryMapper roundTableEntryMapper;
 
     private final AwardService awardService;
+
+    private final ScoreConfigValidator scoreConfigValidator;
 
     private final OrganizerMapper organizerMapper;
 
@@ -530,35 +526,29 @@ public class CompetitionReadinessEvaluator {
     }
 
     private boolean isScoreFormsReady(List<ScoreConfigVO> scoreConfigs) {
-        if (scoreConfigs.size() != JudgeRoleType.values().length) {
+        Map<Long, List<ScoreConfigVO>> configsByCategory = scoreConfigs.stream()
+                .collect(Collectors.groupingBy(
+                        config -> config.getCategoryId() == null ? 0L : config.getCategoryId(),
+                        LinkedHashMap::new, Collectors.toList()));
+        if (!configsByCategory.containsKey(0L)) {
             return false;
         }
-        Set<String> roles = scoreConfigs.stream()
-                .map(ScoreConfigVO::getJudgeRoleType)
-                .collect(Collectors.toSet());
-        if (!roles.containsAll(EnumSet.allOf(JudgeRoleType.class).stream().map(Enum::name).toList())) {
-            return false;
-        }
-        return scoreConfigs.stream().allMatch(config -> getScoreTotal(config.getDimensions()).compareTo(SCORE_FORM_TOTAL) == 0
-                && isScoreConfigShapeReady(config));
-    }
-
-    private boolean isScoreConfigShapeReady(ScoreConfigVO config) {
-        int dimensionCount = config.getDimensions().size();
-        if (JudgeRoleType.CROSS.name().equals(config.getJudgeRoleType())
-                || JudgeRoleType.PROFESSIONAL.name().equals(config.getJudgeRoleType())) {
-            return dimensionCount >= FLEXIBLE_MIN_DIMENSIONS && dimensionCount <= FLEXIBLE_MAX_DIMENSIONS;
-        }
-        if (JudgeRoleType.CAPTAIN.name().equals(config.getJudgeRoleType())) {
-            return dimensionCount == 1;
+        for (List<ScoreConfigVO> scopeConfigs : configsByCategory.values()) {
+            if (scopeConfigs.size() != JudgeRoleType.values().length) {
+                return false;
+            }
+            Set<String> roles = scopeConfigs.stream()
+                    .map(ScoreConfigVO::getJudgeRoleType)
+                    .collect(Collectors.toSet());
+            if (!roles.containsAll(EnumSet.allOf(JudgeRoleType.class).stream().map(Enum::name).toList())) {
+                return false;
+            }
+            if (!scopeConfigs.stream().allMatch(config -> scoreConfigValidator.isValidForm(
+                    config.getJudgeRoleType(), config.getDimensions()))) {
+                return false;
+            }
         }
         return true;
-    }
-
-    private BigDecimal getScoreTotal(List<DimensionRequest> dimensions) {
-        return dimensions.stream()
-                .map(DimensionRequest::getMaxScore)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     public CompetitionStatus parseStatus(Competition competition) {

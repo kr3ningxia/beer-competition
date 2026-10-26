@@ -147,6 +147,7 @@ public class CompetitionProgressQueryService {
                 new LambdaQueryWrapper<CompetitionScoreConfig>()
                         .select(CompetitionScoreConfig::getMinCommentLength)
                         .eq(CompetitionScoreConfig::getCompetitionId, competitionId)
+                        .eq(CompetitionScoreConfig::getCategoryId, 0L)
                         .eq(CompetitionScoreConfig::getJudgeRoleType, JudgeRoleType.CAPTAIN.name())
                         .last("LIMIT 1"));
         int captainMinCommentLength = captainConfig == null || captainConfig.getMinCommentLength() == null

@@ -8,10 +8,11 @@ import com.beercompetition.common.exception.ForbiddenException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.competition.FeedbackCommentEditPolicy;
 import com.beercompetition.competition.access.CompetitionAccessService;
+import com.beercompetition.competition.configuration.ScoreConfigResolver;
 import com.beercompetition.mapper.AdminOperationLogMapper;
+import com.beercompetition.mapper.BeerEntryMapper;
 import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.CompetitionRoundMapper;
-import com.beercompetition.mapper.CompetitionScoreConfigMapper;
 import com.beercompetition.mapper.RoundTableEntryMapper;
 import com.beercompetition.mapper.RoundTableMapper;
 import com.beercompetition.mapper.RoundTableMemberMapper;
@@ -20,9 +21,11 @@ import com.beercompetition.pojo.dto.AdminFeedbackCommentUpdateRequest;
 import com.beercompetition.pojo.dto.AdminFeedbackDimensionNoteRequest;
 import com.beercompetition.pojo.dto.DimensionRequest;
 import com.beercompetition.pojo.enums.CompetitionStatus;
+import com.beercompetition.pojo.enums.JudgeRoleType;
 import com.beercompetition.pojo.enums.RoundStatus;
 import com.beercompetition.pojo.enums.RoundType;
 import com.beercompetition.pojo.po.AdminOperationLog;
+import com.beercompetition.pojo.po.BeerEntry;
 import com.beercompetition.pojo.po.Competition;
 import com.beercompetition.pojo.po.CompetitionRound;
 import com.beercompetition.pojo.po.CompetitionScoreConfig;
@@ -61,7 +64,8 @@ public class AdminFeedbackServiceImpl implements AdminFeedbackService {
     private final CompetitionMapper competitionMapper;
     private final CompetitionAccessService competitionAccessService;
     private final CompetitionRoundMapper competitionRoundMapper;
-    private final CompetitionScoreConfigMapper competitionScoreConfigMapper;
+    private final BeerEntryMapper beerEntryMapper;
+    private final ScoreConfigResolver scoreConfigResolver;
     private final RoundTableMapper roundTableMapper;
     private final RoundTableEntryMapper roundTableEntryMapper;
     private final RoundTableMemberMapper roundTableMemberMapper;
@@ -97,7 +101,8 @@ public class AdminFeedbackServiceImpl implements AdminFeedbackService {
             updatePersonalComments(scoreRecord, comments, request.getDimensionNotes());
         }
         int commentCharCount = countScoreRecordCommentChars(scoreRecord);
-        validateMinCommentLength(competition.getId(), finalScore, scoreRecord.getJudgeRoleType(), commentCharCount);
+        validateMinCommentLength(competition.getId(), scoreRecord.getBeerEntryId(), finalScore,
+                scoreRecord.getJudgeRoleType(), commentCharCount);
         scoreRecord.setCommentCharCount(commentCharCount);
         scoreRecordMapper.updateById(scoreRecord);
         if (finalScore && scoreChanged(oldComments, oldDimensionsJson, scoreRecord) && isConfirmationOpen(firstScoreRound, table)) {
@@ -328,16 +333,13 @@ public class AdminFeedbackServiceImpl implements AdminFeedbackService {
         }
     }
 
-    private void validateMinCommentLength(Long competitionId, boolean finalScore, String judgeRoleType, int commentCharCount) {
-        String role = finalScore ? "CAPTAIN" : judgeRoleType;
-        int minCommentLength = competitionScoreConfigMapper.selectList(new LambdaQueryWrapper<CompetitionScoreConfig>()
-                        .eq(CompetitionScoreConfig::getCompetitionId, competitionId)
-                        .eq(CompetitionScoreConfig::getJudgeRoleType, role))
-                .stream()
-                .findFirst()
-                .map(CompetitionScoreConfig::getMinCommentLength)
-                .filter(Objects::nonNull)
-                .orElse(0);
+    private void validateMinCommentLength(Long competitionId, Long beerEntryId, boolean finalScore,
+                                          String judgeRoleType, int commentCharCount) {
+        BeerEntry entry = beerEntryMapper.selectById(beerEntryId);
+        CompetitionScoreConfig config = scoreConfigResolver.resolve(competitionId,
+                entry == null ? null : entry.getCategoryId(),
+                JudgeRoleType.valueOf(finalScore ? JudgeRoleType.CAPTAIN.name() : judgeRoleType));
+        int minCommentLength = config == null || config.getMinCommentLength() == null ? 0 : config.getMinCommentLength();
         if (minCommentLength > 0 && commentCharCount < minCommentLength) {
             throw new BaseException((finalScore ? "桌长综合评语" : "评价内容") + "至少 " + minCommentLength + " 字");
         }

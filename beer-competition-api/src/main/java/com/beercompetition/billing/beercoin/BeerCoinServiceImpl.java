@@ -716,7 +716,7 @@ public class BeerCoinServiceImpl implements BeerCoinService, BeerCoinSettlementS
                 .eq(CompetitionCoinSettlement::getSettlementType, BeerCoinSettlementType.REGISTRATION_CLOSE.name())
                 .last("LIMIT 1"));
         if (settlement == null || !BeerCoinSettlementStatus.COMPLETED.name().equals(settlement.getStatus())) {
-            throw new BaseException("请先完成啤酒币结算，才能进入评审准备");
+            throw new BaseException("赛事啤酒币尚未完成结算，请先完成结算后再继续");
         }
         long effectiveCount = beerEntryMapper.countEffectiveEntries(competitionId);
         long required = requiredQuantityForEntryCount(Math.toIntExact(effectiveCount));
@@ -725,7 +725,7 @@ public class BeerCoinServiceImpl implements BeerCoinService, BeerCoinSettlementS
                 + nullToZero(settlement.getChargedQuantity());
         long missingSnapshotCount = settlementEntryMapper.countMissingEffectiveEntries(competitionId, settlement.getId());
         if (required > charged || missingSnapshotCount > 0) {
-            throw new BaseException("请先完成啤酒币增量结算，才能进入评审流程");
+            throw new BaseException("赛事存在未纳入结算的酒款，请先完成啤酒币增量结算");
         }
     }
 

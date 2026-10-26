@@ -342,7 +342,11 @@ export function getReadyCount(competition) {
 }
 
 export function getScoreTotal(config) {
-  return (config.dimensions || []).reduce((sum, dimension) => sum + Number(dimension.maxScore || 0), 0)
+  return (config.dimensions || [])
+    .filter((dimension) => dimension.scored !== undefined && dimension.scored !== null
+      ? dimension.scored
+      : (!dimension.kind || dimension.kind === 'SCORE'))
+    .reduce((sum, dimension) => sum + Number(dimension.maxScore || 0), 0)
 }
 
 export function getStageIndex(status) {

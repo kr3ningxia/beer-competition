@@ -30,6 +30,7 @@ public class JudgeEntryVO {
     private Boolean scored;
     private Boolean locked;
     private String scoreRoleType;
+    private Long categoryId;
     private String categoryName;
     private String style;
     private String styleCategoryName;

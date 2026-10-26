@@ -50,7 +50,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -74,15 +73,9 @@ import com.beercompetition.competition.query.CompetitionQueryService;
 @RequiredArgsConstructor
 public class CompetitionConfigurationServiceImpl implements CompetitionConfigurationService {
 
-    private static final BigDecimal SCORE_FORM_TOTAL = BigDecimal.valueOf(50);
-
     private static final int FLAG_FALSE = 0;
 
     private static final int FLAG_TRUE = 1;
-
-    private static final int FLEXIBLE_MIN_DIMENSIONS = 2;
-
-    private static final int FLEXIBLE_MAX_DIMENSIONS = 8;
 
     private static final int DEFAULT_MIN_COMMENT_LENGTH = 0;
 
@@ -114,6 +107,8 @@ public class CompetitionConfigurationServiceImpl implements CompetitionConfigura
 
     private final CompetitionCategoryStyleService competitionCategoryStyleService;
 
+    private final ScoreConfigValidator scoreConfigValidator;
+
     private final ObjectMapper objectMapper;
 
     private final CompetitionQueryService competitionQueryService;
@@ -128,10 +123,15 @@ public class CompetitionConfigurationServiceImpl implements CompetitionConfigura
         assertCategoriesEditable(competition);
         List<ConfigNameItemRequest> items = normalizeNameItems(request.getItems(), "投递组别");
         Map<String, List<String>> scopesByCategory = validateCategoryStyleScopes(id, items);
+        Map<Long, String> previousCategoryNames = listCompetitionCategories(id).entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().getName()));
+        List<CompetitionScoreConfig> specialScoreConfigs = listSpecialScoreConfigs(id);
+        assertSpecialScoreConfigCategoriesPresent(specialScoreConfigs, previousCategoryNames, items);
 
         // 2) 替换当前比赛投递组别和可选风格范围
         Map<String, Long> categoryIds = replaceCategories(id, items);
         competitionCategoryStyleService.replaceScopes(id, remapScopeKeys(scopesByCategory, categoryIds, items));
+        remapSpecialScoreConfigCategories(specialScoreConfigs, previousCategoryNames, categoryIds);
 
         // 3) 重新计算配置检查并返回详情
         return competitionQueryService.getCompetitionDetail(id);
@@ -274,7 +274,7 @@ public class CompetitionConfigurationServiceImpl implements CompetitionConfigura
         // 1) 参数规范化与阶段权限校验
         Competition competition = getCompetitionOrThrow(competitionId);
         assertJudgeConfigEditable(competition);
-        validateScoreConfigs(request.getConfigs());
+        validateScoreConfigs(competitionId, request.getConfigs());
 
         // 2) 替换当前比赛评分表
         replaceScoreConfigs(competitionId, request.getConfigs());
@@ -500,6 +500,7 @@ public class CompetitionConfigurationServiceImpl implements CompetitionConfigura
         for (ScoreConfigItemRequest item : configs) {
             competitionScoreConfigMapper.insert(CompetitionScoreConfig.builder()
                     .competitionId(competitionId)
+                    .categoryId(item.getCategoryId() == null ? ScoreConfigResolver.COMMON_CATEGORY_ID : item.getCategoryId())
                     .judgeRoleType(item.getJudgeRoleType().name())
                     .minCommentLength(resolveMinCommentLength(item.getMinCommentLength()))
                     .dimensionsJson(writeDimensions(item.getDimensions()))
@@ -510,6 +511,7 @@ public class CompetitionConfigurationServiceImpl implements CompetitionConfigura
     private List<ScoreConfigVO> listScoreConfigs(Long competitionId) {
         return competitionScoreConfigMapper.selectList(new LambdaQueryWrapper<CompetitionScoreConfig>()
                         .eq(CompetitionScoreConfig::getCompetitionId, competitionId)
+                        .orderByAsc(CompetitionScoreConfig::getCategoryId)
                         .orderByAsc(CompetitionScoreConfig::getId))
                 .stream()
                 .map(this::toScoreConfigVO)
@@ -541,47 +543,76 @@ public class CompetitionConfigurationServiceImpl implements CompetitionConfigura
         throw new BaseException("评审已开始，评审桌和评分表已锁定");
     }
 
-    private void validateScoreConfigs(List<ScoreConfigItemRequest> configs) {
-        Set<JudgeRoleType> roles = configs.stream()
-                .map(ScoreConfigItemRequest::getJudgeRoleType)
-                .collect(Collectors.toCollection(() -> EnumSet.noneOf(JudgeRoleType.class)));
-        if (!roles.equals(EnumSet.allOf(JudgeRoleType.class)) || configs.size() != JudgeRoleType.values().length) {
-            throw new BaseException("评分表需要同时配置跨界评审、专业评审和桌长");
+    private void validateScoreConfigs(Long competitionId, List<ScoreConfigItemRequest> configs) {
+        if (configs == null || configs.isEmpty()) {
+            throw new BaseException("评分配置不能为空");
         }
+        Set<Long> competitionCategoryIds = listCompetitionCategories(competitionId).keySet();
+        Map<Long, List<ScoreConfigItemRequest>> configsByCategory = new LinkedHashMap<>();
+        Set<String> scopeRoles = new LinkedHashSet<>();
         for (ScoreConfigItemRequest config : configs) {
-            config.setMinCommentLength(resolveMinCommentLength(config.getMinCommentLength()));
-            config.getDimensions().forEach(dimension -> {
-                dimension.setKey(normalizeRequired(dimension.getKey(), "评分维度 key 不能为空"));
-                dimension.setLabel(normalizeRequired(dimension.getLabel(), "评分维度名称不能为空"));
-                dimension.setNotePrompt(normalizeNullable(dimension.getNotePrompt()));
-            });
-            if (isFlexibleDimensionRole(config.getJudgeRoleType())) {
-                int dimensionCount = config.getDimensions().size();
-                if (dimensionCount < FLEXIBLE_MIN_DIMENSIONS || dimensionCount > FLEXIBLE_MAX_DIMENSIONS) {
-                    throw new BaseException(scoreRoleLabel(config.getJudgeRoleType()) + "需配置 "
-                            + FLEXIBLE_MIN_DIMENSIONS + "-" + FLEXIBLE_MAX_DIMENSIONS + " 个维度");
-                }
+            Long categoryId = config.getCategoryId() == null
+                    ? ScoreConfigResolver.COMMON_CATEGORY_ID : config.getCategoryId();
+            if (categoryId > 0 && !competitionCategoryIds.contains(categoryId)) {
+                throw new BaseException("评分表组别不属于当前赛事");
             }
-            if (config.getJudgeRoleType() == JudgeRoleType.CAPTAIN && config.getDimensions().size() != 1) {
-                throw new BaseException("桌长评分表只能配置 1 个共识评分维度");
+            config.setCategoryId(categoryId);
+            if (!scopeRoles.add(categoryId + ":" + config.getJudgeRoleType().name())) {
+                throw new BaseException("评分表重复配置：" + config.getJudgeRoleType().name());
             }
-            BigDecimal total = config.getDimensions().stream()
-                    .map(DimensionRequest::getMaxScore)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-            if (total.compareTo(SCORE_FORM_TOTAL) != 0) {
-                throw new BaseException("评分表总分必须等于 50 分：" + config.getJudgeRoleType().name());
+            configsByCategory.computeIfAbsent(categoryId, key -> new ArrayList<>()).add(config);
+        }
+        if (!configsByCategory.containsKey(ScoreConfigResolver.COMMON_CATEGORY_ID)) {
+            throw new BaseException("请配置通用评分表");
+        }
+        for (Map.Entry<Long, List<ScoreConfigItemRequest>> entry : configsByCategory.entrySet()) {
+            List<ScoreConfigItemRequest> scopeConfigs = entry.getValue();
+            Set<JudgeRoleType> roles = scopeConfigs.stream()
+                    .map(ScoreConfigItemRequest::getJudgeRoleType)
+                    .collect(Collectors.toCollection(() -> EnumSet.noneOf(JudgeRoleType.class)));
+            if (!roles.equals(EnumSet.allOf(JudgeRoleType.class))
+                    || scopeConfigs.size() != JudgeRoleType.values().length) {
+                throw new BaseException("每张评分表都需要同时配置跨界评审、专业评审和桌长");
             }
-            assertUniqueKeys(config.getDimensions().stream().map(DimensionRequest::getKey).toList(), "评分维度 key");
-            assertUniqueKeys(config.getDimensions().stream().map(DimensionRequest::getLabel).toList(), "评分维度名称");
+            for (ScoreConfigItemRequest config : scopeConfigs) {
+                config.setMinCommentLength(resolveMinCommentLength(config.getMinCommentLength()));
+                scoreConfigValidator.normalizeAndValidateForm(config.getJudgeRoleType(), config.getDimensions());
+                scoreConfigValidator.validateNoteAvailability(config.getMinCommentLength(), config.getDimensions());
+            }
         }
     }
 
-    private boolean isFlexibleDimensionRole(JudgeRoleType role) {
-        return role == JudgeRoleType.CROSS || role == JudgeRoleType.PROFESSIONAL;
+    private List<CompetitionScoreConfig> listSpecialScoreConfigs(Long competitionId) {
+        return competitionScoreConfigMapper.selectList(new LambdaQueryWrapper<CompetitionScoreConfig>()
+                .eq(CompetitionScoreConfig::getCompetitionId, competitionId)
+                .gt(CompetitionScoreConfig::getCategoryId, ScoreConfigResolver.COMMON_CATEGORY_ID));
     }
 
-    private String scoreRoleLabel(JudgeRoleType role) {
-        return role == JudgeRoleType.PROFESSIONAL ? "专业评审" : "跨界评审";
+    private void assertSpecialScoreConfigCategoriesPresent(List<CompetitionScoreConfig> specialConfigs,
+                                                           Map<Long, String> previousCategoryNames,
+                                                           List<ConfigNameItemRequest> nextItems) {
+        Set<String> nextNames = nextItems.stream().map(ConfigNameItemRequest::getName).collect(Collectors.toSet());
+        for (CompetitionScoreConfig config : specialConfigs) {
+            String categoryName = previousCategoryNames.get(config.getCategoryId());
+            if (categoryName != null && !nextNames.contains(categoryName)) {
+                throw new BaseException("组别「" + categoryName + "」已配置专属评分表，请先删除该评分表后再调整组别");
+            }
+        }
+    }
+
+    private void remapSpecialScoreConfigCategories(List<CompetitionScoreConfig> specialConfigs,
+                                                   Map<Long, String> previousCategoryNames,
+                                                   Map<String, Long> nextCategoryIds) {
+        for (CompetitionScoreConfig config : specialConfigs) {
+            String categoryName = previousCategoryNames.get(config.getCategoryId());
+            Long nextCategoryId = categoryName == null ? null : nextCategoryIds.get(categoryName);
+            if (nextCategoryId == null) {
+                competitionScoreConfigMapper.deleteById(config.getId());
+                continue;
+            }
+            config.setCategoryId(nextCategoryId);
+            competitionScoreConfigMapper.updateById(config);
+        }
     }
 
     private List<ConfigNameItemRequest> normalizeNameItems(List<ConfigNameItemRequest> items, String label) {
@@ -705,6 +736,7 @@ public class CompetitionConfigurationServiceImpl implements CompetitionConfigura
     private ScoreConfigVO toScoreConfigVO(CompetitionScoreConfig config) {
         return ScoreConfigVO.builder()
                 .competitionId(config.getCompetitionId())
+                .categoryId(config.getCategoryId() == null ? 0L : config.getCategoryId())
                 .judgeRoleType(config.getJudgeRoleType())
                 .minCommentLength(resolveMinCommentLength(config.getMinCommentLength()))
                 .dimensions(readDimensions(config.getDimensionsJson()))

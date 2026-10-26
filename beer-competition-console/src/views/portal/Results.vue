@@ -42,10 +42,13 @@
               type="button"
               @click="selectEntry(entry.entryId)"
             >
-              <span :class="['label-chip', `tone-${resultTone(entry)}`]">{{ resultStatusLabel(entry) }}</span>
-              <strong>{{ entry.entryName }}</strong>
-              <small>{{ entry.categoryName || '组别待确认' }} · {{ entry.style || '风格待确认' }}</small>
-              <em>{{ resultBrief(entry) }}</em>
+              <span class="result-entry-head">
+                <strong :title="entry.entryName">{{ entry.entryName }}</strong>
+                <span :class="['label-chip', `tone-${resultTone(entry)}`]" :title="resultEntryBadge(entry)">
+                  {{ resultEntryBadge(entry) }}
+                </span>
+              </span>
+              <small :title="entry.categoryName || '组别待确认'">{{ entry.categoryName || '组别待确认' }}</small>
             </button>
           </section>
         </div>
@@ -61,7 +64,6 @@
           <section class="result-summary-card brewer-card">
             <div class="result-overview-head">
               <div class="summary-title">
-                <span :class="['label-chip', `tone-${resultTone(selectedEntry)}`]">{{ resultStatusLabel(selectedEntry) }}</span>
                 <h2>{{ selectedEntry.entryName }}</h2>
                 <p>{{ selectedEntry.competitionName || '赛事信息待确认' }}</p>
               </div>
@@ -135,10 +137,21 @@
                 </header>
 
                 <div v-if="score.dimensions?.length" class="dimension-table">
-                  <div v-for="dimension in score.dimensions" :key="dimension.key || dimension.label" class="dimension-row">
-                    <span>{{ dimension.label || dimension.key }}</span>
-                    <strong>{{ dimensionScoreText(dimension) }}</strong>
-                    <em>{{ readableComment(dimension.note, '') }}</em>
+                  <div
+                    v-for="dimension in score.dimensions"
+                    :key="dimension.key || dimension.label"
+                    :class="['dimension-row', { 'dimension-row-wide': isDimensionCheckbox(dimension) }]"
+                  >
+                    <span :title="dimension.label || dimension.key">{{ dimension.label || dimension.key }}</span>
+                    <template v-if="isDimensionCheckbox(dimension)">
+                      <strong v-if="isDimensionScored(dimension)">{{ formatScore(dimension.score) }} / {{ formatScore(dimension.maxScore) }}</strong>
+                      <div class="dimension-option-tags">
+                        <span v-for="option in dimension.selectedOptions || []" :key="option">{{ option }}</span>
+                        <span v-if="!(dimension.selectedOptions || []).length" class="empty">未选择</span>
+                      </div>
+                    </template>
+                    <strong v-else>{{ dimensionScoreText(dimension) }}</strong>
+                    <em v-if="isDimensionScored(dimension) || isDimensionCheckbox(dimension)">{{ readableComment(dimension.note, '') }}</em>
                   </div>
                 </div>
               </article>
@@ -405,14 +418,11 @@ function resultTone(entry) {
   return entryStatusMeta[entry.status]?.tone || 'muted'
 }
 
-function resultBrief(entry) {
-  if (isFeedbackOnlyEntry(entry)) {
-    if (isEntryResultPublished(entry)) return '评分和诊断已开放'
-    return entry.lockReason || '等待组委会发布诊断结果'
+function resultEntryBadge(entry) {
+  if (!isFeedbackOnlyEntry(entry) && isEntryAwarded(entry)) {
+    return entry.awardName || entry.roundResult?.awardName || '已获奖'
   }
-  if (isEntryAwarded(entry)) return entry.awardName || entry.roundResult?.awardName || '获奖结果已发布'
-  if (isEntryResultPublished(entry)) return '评分和评语已开放'
-  return entry.lockReason || '等待组委会发布结果'
+  return resultStatusLabel(entry)
 }
 
 function resultTypeLabel(type) {
@@ -445,9 +455,21 @@ function judgeDisplayName(score) {
   return score.judgeLabel
 }
 
+function isDimensionScored(dimension) {
+  if (dimension?.scored !== undefined && dimension?.scored !== null) return Boolean(dimension.scored)
+  return !dimension?.kind || dimension.kind === 'SCORE'
+}
+
+function isDimensionCheckbox(dimension) {
+  if (dimension?.checkbox !== undefined && dimension?.checkbox !== null) return Boolean(dimension.checkbox)
+  return dimension?.kind === 'CHECK'
+}
+
 function scoreMax(score) {
   if (!score?.dimensions?.length) return null
-  return score.dimensions.reduce((sum, dimension) => sum + Number(dimension.maxScore || 0), 0) || null
+  return score.dimensions
+    .filter(isDimensionScored)
+    .reduce((sum, dimension) => sum + Number(dimension.maxScore || 0), 0) || null
 }
 
 function scoreWithMax(score, consensus = false) {
@@ -458,6 +480,7 @@ function scoreWithMax(score, consensus = false) {
 }
 
 function dimensionScoreText(dimension) {
+  if (!isDimensionScored(dimension)) return String(dimension?.note || '').trim() || '-'
   if (dimension?.score === null || dimension?.score === undefined || dimension?.score === '') return '-'
   if (dimension.maxScore !== null && dimension.maxScore !== undefined && dimension.maxScore !== '') {
     return `${formatScore(dimension.score)} / ${formatScore(dimension.maxScore)}`
@@ -665,10 +688,9 @@ function buildCertificateFilename(blob) {
 
 .result-entry {
   display: grid;
-  justify-items: start;
-  gap: 7px;
+  gap: 4px;
   width: 100%;
-  padding: 14px;
+  padding: 10px 12px;
   text-align: left;
   color: #2b1d10;
   background: #fff8ec;
@@ -682,15 +704,43 @@ function buildCertificateFilename(blob) {
   box-shadow: inset 3px 0 0 #3d7d50;
 }
 
-.result-entry strong {
-  max-width: 100%;
-  overflow-wrap: anywhere;
-  font-size: 17px;
-  line-height: 1.35;
+.result-entry-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
 }
 
-.result-entry small,
-.result-entry em,
+.result-entry-head strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 15px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-entry-head .label-chip {
+  flex: 0 0 auto;
+  max-width: 55%;
+  min-height: 22px;
+  padding: 0 8px;
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-entry small {
+  overflow: hidden;
+  color: #746a5f;
+  font-size: 12px;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .side-empty p,
 .locked-card p,
 .captain-card p,
@@ -698,10 +748,6 @@ function buildCertificateFilename(blob) {
 .dimension-row em {
   color: #746a5f;
   line-height: 1.65;
-}
-
-.result-entry em {
-  font-style: normal;
 }
 
 .result-detail {
@@ -936,32 +982,43 @@ function buildCertificateFilename(blob) {
 
 .dimension-table {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 10px;
 }
 
 .dimension-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px 12px;
+  gap: 6px 12px;
   align-items: start;
-  min-height: 70px;
-  padding: 12px;
+  padding: 10px 12px;
   background: #fffdf7;
   border: 1px solid rgba(87, 58, 26, 0.08);
   border-radius: 8px;
 }
 
-.dimension-row span {
+.dimension-row-wide {
+  grid-column: 1 / -1;
+}
+
+.dimension-row > span {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   min-width: 0;
+  overflow: hidden;
   overflow-wrap: anywhere;
   color: #2b1d10;
   font-weight: 800;
+  line-height: 1.45;
+  text-overflow: ellipsis;
 }
 
-.dimension-row strong {
+.dimension-row > strong {
   color: #2b1d10;
   font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
   white-space: nowrap;
 }
 
@@ -969,8 +1026,36 @@ function buildCertificateFilename(blob) {
   grid-column: 1 / -1;
   min-width: 0;
   overflow-wrap: anywhere;
+  color: #746a5f;
   font-size: 13px;
   font-style: normal;
+  line-height: 1.45;
+}
+
+.dimension-option-tags {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.dimension-option-tags span {
+  max-width: 100%;
+  padding: 3px 9px;
+  border: 1px solid rgba(87, 58, 26, 0.12);
+  border-radius: 999px;
+  color: #6b4f2a;
+  background: #fbf1e2;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.dimension-option-tags span.empty {
+  color: #98a2b3;
+  border-color: #e4e7ec;
+  background: #f3f4f5;
 }
 
 .empty-feedback,
@@ -1194,10 +1279,6 @@ function buildCertificateFilename(blob) {
 
   .feedback-head > span {
     align-self: flex-start;
-  }
-
-  .dimension-row {
-    grid-template-columns: 1fr;
   }
 }
 </style>

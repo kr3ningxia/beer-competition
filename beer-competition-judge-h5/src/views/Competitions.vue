@@ -84,7 +84,6 @@
       <button class="scan-button ranking-button" type="button" @click="router.push(`/ranking/${current.roundTableId}`)">
         {{ rankingCardAction }}
       </button>
-      <p v-if="!isRankingCaptain" class="caption">本轮由桌长提交排序结果。</p>
     </section>
 
     <section class="card">

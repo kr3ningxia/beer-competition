@@ -15,6 +15,7 @@ public class ScoreRecordVO {
     private Long id;
     private String beerUuid;
     private String shortCode;
+    private Long categoryId;
     private String categoryName;
     private String style;
     private String judgeName;

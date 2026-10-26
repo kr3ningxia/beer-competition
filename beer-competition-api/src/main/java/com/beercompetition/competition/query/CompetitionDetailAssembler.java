@@ -360,6 +360,7 @@ public class CompetitionDetailAssembler {
     private List<ScoreConfigVO> listScoreConfigs(Long competitionId) {
         return competitionScoreConfigMapper.selectList(new LambdaQueryWrapper<CompetitionScoreConfig>()
                         .eq(CompetitionScoreConfig::getCompetitionId, competitionId)
+                        .orderByAsc(CompetitionScoreConfig::getCategoryId)
                         .orderByAsc(CompetitionScoreConfig::getId))
                 .stream()
                 .map(this::toScoreConfigVO)
@@ -383,6 +384,7 @@ public class CompetitionDetailAssembler {
     private ScoreConfigVO toScoreConfigVO(CompetitionScoreConfig config) {
         return ScoreConfigVO.builder()
                 .competitionId(config.getCompetitionId())
+                .categoryId(config.getCategoryId() == null ? 0L : config.getCategoryId())
                 .judgeRoleType(config.getJudgeRoleType())
                 .minCommentLength(resolveMinCommentLength(config.getMinCommentLength()))
                 .dimensions(readDimensions(config.getDimensionsJson()))

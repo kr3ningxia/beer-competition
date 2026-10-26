@@ -584,8 +584,13 @@ public class PortalResultQueryServiceImpl implements PortalResultQueryService {
                     .map(item -> PortalScoreDimensionVO.builder()
                             .key(asString(item.get("key")))
                             .label(asString(item.get("label")))
+                            .kind(asString(item.get("kind")))
+                            .scored(asBoolean(item.get("scored")))
+                            .checkbox(asBoolean(item.get("checkbox")))
+                            .selectionMode(asString(item.get("selectionMode")))
                             .score(asBigDecimal(item.get("score")))
                             .maxScore(asBigDecimal(item.get("maxScore")))
+                            .selectedOptions(asStringList(item.get("selectedOptions")))
                             .note(asString(item.get("note")))
                             .build())
                     .toList();
@@ -665,6 +670,26 @@ public class PortalResultQueryServiceImpl implements PortalResultQueryService {
 
     private String asString(Object value) {
         return value == null ? null : String.valueOf(value);
+    }
+
+    private Boolean asBoolean(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Boolean booleanValue) {
+            return booleanValue;
+        }
+        return Boolean.valueOf(String.valueOf(value));
+    }
+
+    private List<String> asStringList(Object value) {
+        if (!(value instanceof List<?> items)) {
+            return List.of();
+        }
+        return items.stream()
+                .filter(Objects::nonNull)
+                .map(String::valueOf)
+                .toList();
     }
 
     private String firstText(String value, String fallback) {

@@ -457,7 +457,7 @@
                 <div class="dimension-row dimension-head">
                   <span>维度</span>
                   <span>满分</span>
-                  <span>备注提示</span>
+                  <span>评语提示</span>
                   <span></span>
                 </div>
                 <div v-for="(dimension, index) in config.dimensions" :key="dimension.key || dimension.label" class="dimension-row">
@@ -477,7 +477,7 @@
                 </div>
                 <div class="score-foot">
                   <label>
-                    <span>备注合计字数下限</span>
+                    <span>评语字数下限</span>
                     <input v-model.number="config.minCommentLength" min="0" type="number" />
                   </label>
                   <button
@@ -1411,7 +1411,7 @@ function createScoreConfigs() {
       key: dimension.key || `${config.role.toLowerCase()}_${index + 1}`,
       label: dimension.label,
       maxScore: dimension.maxScore,
-      notePrompt: promptMap[dimension.label] || '请输入该维度备注提示',
+      notePrompt: promptMap[dimension.label] || '请输入该维度评语提示',
     })),
   }))
 }

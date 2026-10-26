@@ -27,7 +27,14 @@ async function load() {
 
 async function save() {
   const parsed = JSON.parse(configText.value)
-  await updateScoreConfigs(competitionId.value, { configs: parsed.map((item) => ({ judgeRoleType: item.judgeRoleType, dimensions: item.dimensions })) })
+  await updateScoreConfigs(competitionId.value, {
+    configs: parsed.map((item) => ({
+      categoryId: Number(item.categoryId || 0),
+      judgeRoleType: item.judgeRoleType,
+      minCommentLength: Number(item.minCommentLength || 0),
+      dimensions: item.dimensions,
+    })),
+  })
   ElMessage.success('评分配置已更新')
   load()
 }

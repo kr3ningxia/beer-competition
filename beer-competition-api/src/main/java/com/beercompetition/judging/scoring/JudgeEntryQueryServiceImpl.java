@@ -137,6 +137,7 @@ public class JudgeEntryQueryServiceImpl implements JudgeEntryQueryService {
                 .scored(hasSubmittedJudgeScore(entry.getId(), context.judge().getId()))
                 .locked(scoreTableLocked || finalScoreExists)
                 .scoreRoleType(resolveScoreRoleType(context.member().getRole(), context.taskType()))
+                .categoryId(entry.getCategoryId())
                 .categoryName(category == null ? null : category.getName())
                 .style(entry.getStyle())
                 .styleCategoryName(style == null ? null : style.getCategoryName())

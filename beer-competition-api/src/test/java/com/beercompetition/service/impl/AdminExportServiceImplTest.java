@@ -100,9 +100,9 @@ class AdminExportServiceImplTest {
         String worksheet = readWorksheet(download.getContent());
 
         assertThat(worksheet).contains("<c r=\"I1\" t=\"inlineStr\" s=\"1\"><is><t>手机号</t>");
-        assertThat(worksheet).contains("<c r=\"I2\" t=\"inlineStr\"><is><t>13800000001</t>");
+        assertThat(worksheet).contains("<c r=\"I2\" t=\"inlineStr\" s=\"2\"><is><t>13800000001</t>");
         assertThat(worksheet).contains("<c r=\"J1\" t=\"inlineStr\" s=\"1\"><is><t>厂牌微信号</t>");
-        assertThat(worksheet).contains("<c r=\"J2\" t=\"inlineStr\"><is><t>brewery_wechat</t>");
+        assertThat(worksheet).contains("<c r=\"J2\" t=\"inlineStr\" s=\"2\"><is><t>brewery_wechat</t>");
     }
 
     @Test
@@ -135,7 +135,7 @@ class AdminExportServiceImplTest {
         String worksheet = readWorksheet(download.getContent());
 
         assertThat(worksheet).contains("<c r=\"F1\" t=\"inlineStr\" s=\"1\"><is><t>厂牌微信号</t>");
-        assertThat(worksheet).contains("<c r=\"F2\" t=\"inlineStr\"><is><t>brewery_wechat</t>");
+        assertThat(worksheet).contains("<c r=\"F2\" t=\"inlineStr\" s=\"2\"><is><t>brewery_wechat</t>");
     }
 
     private String readWorksheet(byte[] xlsx) throws IOException {

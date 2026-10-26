@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.competition.configuration.CompetitionCategoryStyleService;
+import com.beercompetition.competition.configuration.ScoreConfigResolver;
+import com.beercompetition.competition.configuration.ScoreConfigValidator;
 import com.beercompetition.mapper.CompetitionCategoryMapper;
 import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.CompetitionScoreConfigMapper;
@@ -69,8 +71,6 @@ import com.beercompetition.competition.access.CompetitionAccessService;
 @RequiredArgsConstructor
 public class CompetitionCreationService {
 
-    private static final BigDecimal SCORE_FORM_TOTAL = BigDecimal.valueOf(50);
-
     private static final String CHECK_DONE = "done";
 
     private static final int FLAG_FALSE = 0;
@@ -80,10 +80,6 @@ public class CompetitionCreationService {
     private static final int COMPETITION_CODE_RETRY_LIMIT = 5;
 
     private static final int CODE_SUFFIX_BOUND = 36 * 36 * 36 * 36 * 36;
-
-    private static final int FLEXIBLE_MIN_DIMENSIONS = 2;
-
-    private static final int FLEXIBLE_MAX_DIMENSIONS = 8;
 
     private static final int DEFAULT_MIN_COMMENT_LENGTH = 0;
 
@@ -114,6 +110,8 @@ public class CompetitionCreationService {
     private final StyleLibraryService styleLibraryService;
 
     private final CompetitionCategoryStyleService competitionCategoryStyleService;
+
+    private final ScoreConfigValidator scoreConfigValidator;
 
     private final ObjectMapper objectMapper;
 
@@ -330,6 +328,7 @@ public class CompetitionCreationService {
         for (ScoreConfigItemRequest item : configs) {
             competitionScoreConfigMapper.insert(CompetitionScoreConfig.builder()
                     .competitionId(competitionId)
+                    .categoryId(ScoreConfigResolver.COMMON_CATEGORY_ID)
                     .judgeRoleType(item.getJudgeRoleType().name())
                     .minCommentLength(resolveMinCommentLength(item.getMinCommentLength()))
                     .dimensionsJson(writeDimensions(item.getDimensions()))
@@ -530,6 +529,9 @@ public class CompetitionCreationService {
     }
 
     private void validateScoreConfigs(List<ScoreConfigItemRequest> configs) {
+        if (configs == null || configs.isEmpty()) {
+            throw new BaseException("评分配置不能为空");
+        }
         Set<JudgeRoleType> roles = configs.stream()
                 .map(ScoreConfigItemRequest::getJudgeRoleType)
                 .collect(Collectors.toCollection(() -> EnumSet.noneOf(JudgeRoleType.class)));
@@ -537,39 +539,11 @@ public class CompetitionCreationService {
             throw new BaseException("评分表需要同时配置跨界评审、专业评审和桌长");
         }
         for (ScoreConfigItemRequest config : configs) {
+            config.setCategoryId(ScoreConfigResolver.COMMON_CATEGORY_ID);
             config.setMinCommentLength(resolveMinCommentLength(config.getMinCommentLength()));
-            config.getDimensions().forEach(dimension -> {
-                dimension.setKey(normalizeRequired(dimension.getKey(), "评分维度 key 不能为空"));
-                dimension.setLabel(normalizeRequired(dimension.getLabel(), "评分维度名称不能为空"));
-                dimension.setNotePrompt(normalizeNullable(dimension.getNotePrompt()));
-            });
-            if (isFlexibleDimensionRole(config.getJudgeRoleType())) {
-                int dimensionCount = config.getDimensions().size();
-                if (dimensionCount < FLEXIBLE_MIN_DIMENSIONS || dimensionCount > FLEXIBLE_MAX_DIMENSIONS) {
-                    throw new BaseException(scoreRoleLabel(config.getJudgeRoleType()) + "需配置 "
-                            + FLEXIBLE_MIN_DIMENSIONS + "-" + FLEXIBLE_MAX_DIMENSIONS + " 个维度");
-                }
-            }
-            if (config.getJudgeRoleType() == JudgeRoleType.CAPTAIN && config.getDimensions().size() != 1) {
-                throw new BaseException("桌长评分表只能配置 1 个共识评分维度");
-            }
-            BigDecimal total = config.getDimensions().stream()
-                    .map(DimensionRequest::getMaxScore)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-            if (total.compareTo(SCORE_FORM_TOTAL) != 0) {
-                throw new BaseException("评分表总分必须等于 50 分：" + config.getJudgeRoleType().name());
-            }
-            assertUniqueKeys(config.getDimensions().stream().map(DimensionRequest::getKey).toList(), "评分维度 key");
-            assertUniqueKeys(config.getDimensions().stream().map(DimensionRequest::getLabel).toList(), "评分维度名称");
+            scoreConfigValidator.normalizeAndValidateForm(config.getJudgeRoleType(), config.getDimensions());
+            scoreConfigValidator.validateNoteAvailability(config.getMinCommentLength(), config.getDimensions());
         }
-    }
-
-    private boolean isFlexibleDimensionRole(JudgeRoleType role) {
-        return role == JudgeRoleType.CROSS || role == JudgeRoleType.PROFESSIONAL;
-    }
-
-    private String scoreRoleLabel(JudgeRoleType role) {
-        return role == JudgeRoleType.PROFESSIONAL ? "专业评审" : "跨界评审";
     }
 
     private List<ConfigNameItemRequest> normalizeNameItems(List<ConfigNameItemRequest> items, String label) {

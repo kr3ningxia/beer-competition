@@ -525,13 +525,14 @@ DROP TABLE IF EXISTS `competition_score_config`;
 CREATE TABLE `competition_score_config` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
   `competition_id` bigint NOT NULL COMMENT '所属比赛ID',
+  `category_id` bigint NOT NULL DEFAULT '0' COMMENT '0=通用评分表；>0=组别ID',
   `judge_role_type` varchar(32) NOT NULL COMMENT '评委角色类型',
   `min_comment_length` int NOT NULL DEFAULT '0' COMMENT '评语最小字数',
   `dimensions_json` json NOT NULL COMMENT '评分维度JSON',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_competition_score_config` (`competition_id`,`judge_role_type`)
+  UNIQUE KEY `uk_competition_score_config` (`competition_id`,`category_id`,`judge_role_type`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3040 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='比赛评分表配置表';
 /*!40101 SET character_set_client = @saved_cs_client */;
 

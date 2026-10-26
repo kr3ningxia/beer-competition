@@ -1,21 +1,24 @@
 <template>
   <main class="app-shell">
     <section :class="['top-panel', 'captain-top', { 'detail-top': uuid }]">
-      <button v-if="uuid" class="back-link" type="button" @click="$router.push('/captain')">返回本桌</button>
-      <p class="eyebrow">桌长工作台</p>
-      <h1 class="page-title">{{ uuid ? displayShortCode(entry) : `${me?.tableName || 'A 桌'}评分汇总` }}</h1>
-      <div class="captain-stats">
-        <div>
-          <span>已确认</span>
-          <strong>{{ initialBoardLoading ? '- / -' : `${finalizedCount} / ${boardEntries.length}` }}</strong>
+      <div class="captain-head">
+        <div class="captain-head-main">
+          <button v-if="uuid" class="back-link" type="button" @click="$router.push('/captain')">返回本桌</button>
+          <h1 class="page-title">{{ uuid ? displayShortCode(entry) : `${me?.tableName || 'A 桌'}评分汇总` }}</h1>
         </div>
-        <div v-if="!isFeedbackOnlyCompetition">
-          <span>已选晋级</span>
-          <strong>{{ initialBoardLoading ? '- / -' : `${advancedUuids.length} / ${advanceTargetCount}` }}</strong>
-        </div>
-        <div>
-          <span>同桌确认</span>
-          <strong>{{ initialBoardLoading ? '- / -' : confirmationProgressText }}</strong>
+        <div class="captain-stats">
+          <div>
+            <span>已确认</span>
+            <strong>{{ initialBoardLoading ? '- / -' : `${finalizedCount} / ${boardEntries.length}` }}</strong>
+          </div>
+          <div v-if="!isFeedbackOnlyCompetition">
+            <span>已选晋级</span>
+            <strong>{{ initialBoardLoading ? '- / -' : `${advancedUuids.length} / ${advanceTargetCount}` }}</strong>
+          </div>
+          <div>
+            <span>同桌确认</span>
+            <strong>{{ initialBoardLoading ? '- / -' : confirmationProgressText }}</strong>
+          </div>
         </div>
       </div>
     </section>
@@ -163,9 +166,16 @@
               </div>
             </div>
             <div class="dimension-notes">
-              <div v-for="dim in score.dimensions" :key="dim.key">
+              <div v-for="dim in score.dimensions" :key="dim.key" :class="{ wide: dim.checkbox }">
                 <span>{{ dim.label }}</span>
-                <strong>{{ dim.score }}/{{ dim.maxScore }}</strong>
+                <div v-if="dim.checkbox" class="peer-check-value">
+                  <strong v-if="dim.scored">{{ dim.score }}/{{ dim.maxScore }}</strong>
+                  <div class="peer-option-tags">
+                    <span v-for="option in dim.selectedOptions || []" :key="option">{{ option }}</span>
+                    <span v-if="!(dim.selectedOptions || []).length" class="empty">未选择</span>
+                  </div>
+                </div>
+                <strong v-else>{{ peerDimensionText(dim) }}</strong>
               </div>
             </div>
             <div v-if="score.comments" class="member-comment-block">
@@ -223,7 +233,7 @@
           <input :checked="form.advanced" type="checkbox" :disabled="tableLocked" @change="handleAdvanceToggle" />
           <span>加入晋级名单</span>
         </label>
-        <p v-if="!isFeedbackOnlyCompetition" class="caption">本桌最多可晋级 {{ advanceTargetCount }} 款，当前已选 {{ previewAdvancedCount }} 款（可少于名额）。</p>
+        <p v-if="!isFeedbackOnlyCompetition" class="caption">本桌最多可晋级 {{ advanceTargetCount }} 款。</p>
         <button class="button primary full" type="button" :disabled="!canFinalize" @click="submitFinal">
           {{ finalButtonText }}
         </button>
@@ -335,13 +345,6 @@ const advanceLimitReached = computed(() => (
   && advancedUuids.value.length >= numericAdvanceTarget.value
   && !currentEntryAlreadyAdvanced.value
 ))
-const previewAdvancedCount = computed(() => {
-  if (!uuid.value) return advancedUuids.value.length
-  const selected = new Set(advancedUuids.value)
-  if (form.advanced) selected.add(uuid.value)
-  else selected.delete(uuid.value)
-  return selected.size
-})
 const tableReadyForReview = computed(() => {
   if (!boardEntries.value.length) return false
   if (isFeedbackOnlyCompetition.value) return finalizedCount.value === boardEntries.value.length
@@ -557,10 +560,6 @@ async function loadBoard() {
   try {
     board.value = await fetchCaptainBoard()
     advancedUuids.value = board.value.entries.filter((item) => item.advanced).map((item) => item.uuid)
-    const competitionId = board.value?.competition?.competitionId || me.value?.competitionId
-    if (competitionId && !captainConfig.value) {
-      captainConfig.value = await fetchScoreConfig('CAPTAIN', competitionId)
-    }
   } finally {
     loadingBoard.value = false
   }
@@ -571,6 +570,10 @@ async function loadDetail() {
   draftReady = false
   window.clearTimeout(draftTimer)
   entry.value = await fetchEntry(uuid.value)
+  const competitionId = entry.value?.competitionId || me.value?.competitionId
+  captainConfig.value = competitionId
+    ? await fetchScoreConfig('CAPTAIN', competitionId, uuid.value)
+    : null
   tableScores.value = await fetchTableScores(uuid.value)
   expandedCommentIds.value = new Set()
   captainDraftKey = draftKey(me.value?.id, uuid.value)
@@ -624,6 +627,11 @@ async function submitFinal() {
   clearDraft(captainDraftKey)
   message.value = '桌长意见已保存'
   window.setTimeout(() => router.push('/captain'), 420)
+}
+
+function peerDimensionText(dimension) {
+  if (!dimension.scored) return '输入项'
+  return `${dimension.score}/${dimension.maxScore}`
 }
 
 function countEffectiveChars(text) {
@@ -857,35 +865,48 @@ onMounted(async () => {
   padding-bottom: 16px;
 }
 
-.captain-stats {
+.captain-head {
   display: flex;
-  gap: 8px;
-  margin-top: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.captain-head-main {
+  min-width: 0;
+}
+
+.captain-head .page-title {
+  min-width: 0;
+}
+
+.captain-stats {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 3px;
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  font-variant-numeric: tabular-nums;
 }
 
 .captain-stats div {
-  flex: 1 1 0;
-  min-width: 0;
-  border-radius: 8px;
-  padding: 9px 10px;
-  color: #fff;
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.captain-stats span,
-.captain-stats strong {
-  display: block;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .captain-stats span {
-  color: rgba(248, 250, 252, 0.7);
-  font-size: 12px;
+  color: rgba(248, 250, 252, 0.68);
+  font-size: 11px;
 }
 
 .captain-stats strong {
-  margin-top: 4px;
-  font-size: 20px;
-  font-variant-numeric: tabular-nums;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 750;
 }
 
 .compact {
@@ -1241,17 +1262,18 @@ onMounted(async () => {
   margin-top: 12px;
 }
 
-.dimension-notes div {
+.dimension-notes > div {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
   border-bottom: 1px solid #eef0ee;
   padding: 0 0 6px;
 }
 
-.dimension-notes span {
+.dimension-notes > div > span {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   color: #667085;
@@ -1261,12 +1283,50 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
+.dimension-notes > div.wide {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 4px;
+}
+
+.dimension-notes > div.wide strong {
+  text-align: left;
+}
+
+.peer-check-value {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.peer-option-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.peer-option-tags span {
+  padding: 2px 7px;
+  border-radius: 999px;
+  color: #5c4634;
+  background: #f3eadf;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.peer-option-tags span.empty {
+  color: #98a2b3;
+  background: #f3f4f5;
+}
+
 .dimension-notes strong {
   flex: 0 0 auto;
   color: #18222f;
   font-size: 12px;
   font-weight: 850;
   font-variant-numeric: tabular-nums;
+  text-align: right;
   white-space: nowrap;
 }
 

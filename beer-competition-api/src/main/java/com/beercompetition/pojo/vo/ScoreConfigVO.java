@@ -11,6 +11,7 @@ import java.util.List;
 public class ScoreConfigVO {
 
     private Long competitionId;
+    private Long categoryId;
     private String judgeRoleType;
     private Integer minCommentLength;
     private List<DimensionRequest> dimensions;

@@ -404,6 +404,13 @@ export function exportCompetitionScoringData(competitionId) {
   })
 }
 
+export function exportScoreConfigs(competitionId) {
+  return request.get(`/api/admin/competitions/${competitionId}/exports/score-configs`, {
+    authScope: 'admin',
+    responseType: 'blob',
+  })
+}
+
 export function exportCompetitionJudges(competitionId) {
   return request.get(`/api/admin/competitions/${competitionId}/exports/judges`, {
     authScope: 'admin',

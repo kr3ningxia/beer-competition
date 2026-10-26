@@ -97,9 +97,17 @@ public class RoundLifecycleServiceImpl implements RoundLifecycleService {
         if (!RoundStatus.DRAFT.name().equals(round.getStatus())) {
             throw new BaseException("只有草稿轮次可以发布");
         }
-        beerCoinSettlementService.requireJudgingSettlementCompleted(competitionId);
         roundValidationPolicy.validateCompetitionStageForRoundPublish(competition, round);
         roundValidationPolicy.validateRoundReady(competition, round);
+        // 报名期预排的酒款可能在结算前被取消、删除或退回未入库，发布前必须重新确认。
+        roundValidationPolicy.validateRoundEntriesEffective(round);
+        beerCoinSettlementService.requireJudgingSettlementCompleted(competitionId);
+        // 平台赛事由结算服务跳过；租户赛事的每款参赛酒必须已纳入结算快照。
+        roundQuerySupport.listRoundEntries(roundId).stream()
+                .map(RoundTableEntry::getBeerEntryId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .forEach(entryId -> beerCoinSettlementService.requireEntryIncludedAfterSettlement(competitionId, entryId));
 
         // 2) 更新轮次和桌任务状态
         String nextStatus = RoundType.SCORE.name().equals(round.getRoundType()) ? RoundStatus.PUBLISHED.name() : RoundStatus.IN_PROGRESS.name();

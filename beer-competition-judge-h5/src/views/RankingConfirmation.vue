@@ -197,8 +197,8 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  min-height: 46px;
-  padding: 11px 14px;
+  min-height: 40px;
+  padding: 8px 12px;
   color: #344054;
   border: 1px solid #e4e7ec;
   border-radius: 8px;

@@ -2,6 +2,7 @@ package com.beercompetition.controller.admin;
 
 import com.beercompetition.controller.support.FileResponseHelper;
 import com.beercompetition.service.AdminExportService;
+import com.beercompetition.competition.configuration.ScoreConfigExportService;
 import com.beercompetition.competition.query.CompetitionScoringExportService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -21,6 +22,7 @@ public class AdminExportController {
 
     private final AdminExportService adminExportService;
     private final CompetitionScoringExportService competitionScoringExportService;
+    private final ScoreConfigExportService scoreConfigExportService;
 
     /**
      * 导出评审使用的比赛评分数据，并记录导出操作。
@@ -30,6 +32,14 @@ public class AdminExportController {
         byte[] content = competitionScoringExportService.exportScoringData(id);
         adminExportService.logScoringExport(id);
         return FileResponseHelper.xlsx("scoring-data.xlsx", content);
+    }
+
+    /**
+     * 导出本场比赛全部评分表配置，供主办方快速核对。
+     */
+    @GetMapping("/score-configs")
+    public ResponseEntity<byte[]> exportScoreConfigs(@PathVariable Long id) {
+        return FileResponseHelper.attachment(scoreConfigExportService.export(id));
     }
 
     /**

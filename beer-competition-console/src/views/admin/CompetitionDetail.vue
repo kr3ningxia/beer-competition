@@ -401,7 +401,7 @@
                 </div>
               </section>
 
-              <section class="form-subgroup refund-policy-group">
+              <section v-if="!isTenantCompetition" class="form-subgroup refund-policy-group">
                 <div class="refund-policy-heading">
                   <h3>退款审批</h3>
                   <el-tooltip :content="refundPolicyTooltip" placement="top">
@@ -1282,15 +1282,75 @@
         </section>
 
         <section v-if="activeTab === 'score'" class="tab-panel score-config-panel">
+          <div class="score-scope-list">
+            <button
+              v-for="scope in scoreScopes"
+              :key="`score-scope-${scope.categoryId}`"
+              :class="['score-scope-row', { active: selectedScoreScopeId === scope.categoryId }]"
+              :aria-pressed="selectedScoreScopeId === scope.categoryId"
+              type="button"
+              @click="selectedScoreScopeId = scope.categoryId"
+            >
+              <span>{{ scope.label }}</span>
+              <small v-if="scope.categoryId">特殊</small>
+              <em :class="{ ready: scope.ready }">{{ scope.summary }}</em>
+            </button>
+            <div class="score-scope-add">
+              <template v-if="editable.scoreConfigs && addableScoreCategories.length">
+                <select
+                  v-model="newScoreScopeCategoryId"
+                  :class="{ placeholder: !newScoreScopeCategoryId }"
+                >
+                  <option :value="null" disabled>选择组别</option>
+                  <option v-for="category in addableScoreCategories" :key="category.id" :value="category.id">
+                    {{ category.name }}
+                  </option>
+                </select>
+                <button
+                  class="tool-button"
+                  type="button"
+                  :disabled="!newScoreScopeCategoryId"
+                  @click="addScoreScope"
+                >
+                  <Plus />
+                  添加评分表
+                </button>
+              </template>
+              <button
+                class="tool-button"
+                type="button"
+                :disabled="exportingScoreConfigs"
+                @click="exportScoreConfigsToExcel"
+              >
+                <Download />
+                {{ exportingScoreConfigs ? '导出中' : '导出' }}
+              </button>
+              <button
+                v-if="editable.scoreConfigs && selectedScoreScopeId"
+                class="tool-button danger score-scope-delete"
+                type="button"
+                title="删除特殊评分表"
+                aria-label="删除特殊评分表"
+                @click="removeScoreScope"
+              >
+                <Delete />
+              </button>
+            </div>
+          </div>
+
           <div class="score-panels">
-            <article v-for="config in scoreConfigForm" :key="config.role" class="panel-card score-config-card">
+            <article
+              v-for="config in currentScoreConfigs"
+              :key="`${config.categoryId}-${config.role}`"
+              class="panel-card score-config-card"
+            >
               <div class="panel-heading">
                 <div>
                   <h2>{{ roleLabels[config.role] }}</h2>
                 </div>
                 <div class="score-card-actions">
                   <span :class="['score-total-pill', { success: getScoreTotal(config) === 50, danger: getScoreTotal(config) !== 50 }]">
-                    {{ getScoreTotal(config) }} / 50
+                    评分项 {{ getScoreTotal(config) }} / 50
                   </span>
                   <button
                     v-if="editable.scoreConfigs && isFlexibleScoreRole(config.role)"
@@ -1304,42 +1364,145 @@
                   </button>
                 </div>
               </div>
-              <p v-if="getScoreTotal(config) !== 50" class="score-warning">
-                当前总分 {{ getScoreTotal(config) }}，必须调整为 50 后才能保存
-              </p>
+              <p v-if="getScoreTotal(config) !== 50" class="score-warning">评分项合计需为 50</p>
               <label class="score-comment-limit">
-                <span>备注合计字数下限：</span>
-                <span class="compact-number-field">
+                <span>评语字数下限</span>
+                <span class="score-limit-field">
                   <input v-if="editable.scoreConfigs" v-model.number="config.minCommentLength" min="0" type="number" />
                   <strong v-else>{{ config.minCommentLength || 0 }}</strong>
                   <em>字</em>
                 </span>
               </label>
-              <div class="dimension-list">
-                <div class="dimension-head">
-                  <span>维度</span>
-                  <span>分值</span>
-                  <span>备注提示</span>
-                  <span></span>
-                </div>
-                <div v-for="(dimension, index) in config.dimensions" :key="dimension.localId" class="dimension-row">
-                  <input v-if="editable.scoreConfigs && isFlexibleScoreRole(config.role)" v-model.trim="dimension.label" placeholder="维度名称" />
-                  <span v-else>{{ dimension.label }}</span>
-                  <input v-if="editable.scoreConfigs && isFlexibleScoreRole(config.role)" v-model.number="dimension.maxScore" min="1" type="number" />
-                  <strong v-else>{{ dimension.maxScore }}</strong>
-                  <input v-if="editable.scoreConfigs" v-model.trim="dimension.notePrompt" placeholder="这个维度的备注提示" />
-                  <span v-else>{{ dimension.notePrompt || '-' }}</span>
-                  <button
-                    v-if="editable.scoreConfigs && isFlexibleScoreRole(config.role)"
-                    class="icon-button"
-                    type="button"
-                    :disabled="config.dimensions.length <= FLEXIBLE_DIMENSION_MIN"
-                    @click="removeScoreDimension(config, index)"
-                  >
-                    <Delete />
-                  </button>
-                  <span v-else class="dimension-action-placeholder"></span>
-                </div>
+              <div class="score-dimension-list">
+                <article
+                  v-for="(dimension, index) in config.dimensions"
+                  :key="dimension.localId"
+                  class="score-dimension-card"
+                >
+                  <div class="score-dimension-head">
+                    <span class="score-dimension-index">{{ index + 1 }}.</span>
+                    <input
+                      v-if="editable.scoreConfigs && isFlexibleScoreRole(config.role)"
+                      v-model.trim="dimension.label"
+                      class="score-dimension-name"
+                      placeholder="维度名称"
+                    />
+                    <span v-else class="score-dimension-name readonly">{{ dimension.label }}</span>
+                    <div v-if="isFlexibleScoreRole(config.role)" class="dimension-mode-switches">
+                      <button
+                        type="button"
+                        :class="{ active: dimension.scored }"
+                        :disabled="!editable.scoreConfigs"
+                        @click="toggleDimensionScored(dimension)"
+                      >
+                        评分项
+                      </button>
+                      <button
+                        type="button"
+                        :class="{ active: dimension.checkbox }"
+                        :disabled="!editable.scoreConfigs"
+                        @click="toggleDimensionCheckbox(dimension)"
+                      >
+                        勾选项
+                      </button>
+                    </div>
+                    <span v-else class="dimension-kind-text">评分项</span>
+                    <label v-if="dimension.scored" class="score-dimension-score">
+                      <input
+                        v-if="editable.scoreConfigs && isFlexibleScoreRole(config.role)"
+                        v-model.number="dimension.maxScore"
+                        min="1"
+                        type="number"
+                      />
+                      <strong v-else>{{ dimension.maxScore }}</strong>
+                      <span>分</span>
+                    </label>
+                    <button
+                      v-if="editable.scoreConfigs && isFlexibleScoreRole(config.role)"
+                      class="icon-button score-dimension-remove"
+                      type="button"
+                      :disabled="config.dimensions.length <= FLEXIBLE_DIMENSION_MIN"
+                      @click="removeScoreDimension(config, index)"
+                    >
+                      <Delete />
+                    </button>
+                  </div>
+
+                  <div class="score-dimension-note">
+                    <div v-if="dimension.checkbox" class="dimension-note-toggle">
+                      <el-switch
+                        v-model="dimension.noteEnabled"
+                        :disabled="!editable.scoreConfigs || !isFlexibleScoreRole(config.role)"
+                        size="small"
+                      />
+                      <span>补充评语</span>
+                    </div>
+                    <template v-if="dimension.noteEnabled">
+                      <span>{{ !dimension.scored && !dimension.checkbox ? '输入提示' : '评语提示' }}</span>
+                      <input
+                        v-if="editable.scoreConfigs && isFlexibleScoreRole(config.role)"
+                        v-model.trim="dimension.notePrompt"
+                        placeholder="描述本项关注点"
+                      />
+                      <em v-else>{{ dimension.notePrompt || '-' }}</em>
+                      <label v-if="!dimension.scored && !dimension.checkbox" class="dimension-required-field">
+                        <input
+                          v-if="editable.scoreConfigs && isFlexibleScoreRole(config.role)"
+                          v-model="dimension.required"
+                          type="checkbox"
+                        />
+                        <span>{{ dimension.required ? '必填' : '选填' }}</span>
+                      </label>
+                    </template>
+                  </div>
+
+                  <div v-if="dimension.checkbox" class="score-dimension-options">
+                    <button
+                      :class="['score-dimension-options-summary', { invalid: dimensionOptionCount(dimension) === 0 }]"
+                      type="button"
+                      @click="dimension.optionsOpen = !dimension.optionsOpen"
+                    >
+                      <span>选项配置</span>
+                      <em>{{ dimensionOptionCount(dimension) }} 项 · {{ dimension.selectionMode === 'SINGLE' ? '单选' : '多选' }}{{ dimension.required ? ' · 必选' : '' }}</em>
+                      <Right :class="['dimension-options-chevron', { open: dimension.optionsOpen }]" />
+                    </button>
+                    <div v-if="dimension.optionsOpen" class="score-dimension-options-body">
+                      <div class="score-dimension-options-controls">
+                        <label>
+                          <span>选择方式</span>
+                          <select
+                            v-if="editable.scoreConfigs && isFlexibleScoreRole(config.role)"
+                            v-model="dimension.selectionMode"
+                          >
+                            <option value="MULTI">多选</option>
+                            <option value="SINGLE">单选</option>
+                          </select>
+                          <strong v-else>{{ dimension.selectionMode === 'SINGLE' ? '单选' : '多选' }}</strong>
+                        </label>
+                        <label class="dimension-required-field">
+                          <input
+                            v-if="editable.scoreConfigs && isFlexibleScoreRole(config.role)"
+                            v-model="dimension.required"
+                            type="checkbox"
+                          />
+                          <span>必选</span>
+                        </label>
+                      </div>
+                      <div class="score-dimension-options-input">
+                        <span>候选项</span>
+                        <textarea
+                          v-if="editable.scoreConfigs && isFlexibleScoreRole(config.role)"
+                          v-model="dimension.optionsText"
+                          rows="3"
+                          placeholder="每行一个选项，可直接从表格粘贴"
+                        />
+                        <div v-else class="dimension-option-tags">
+                          <span v-for="option in dimension.options || []" :key="option">{{ option }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </article>
               </div>
             </article>
           </div>
@@ -1518,8 +1681,15 @@
                           <div v-else class="judge-dimension-list">
                             <div v-for="dimension in judge.dimensions" :key="dimension.key || dimension.label" class="judge-dimension-row">
                               <span>{{ dimension.label || dimension.key }}</span>
-                              <strong>{{ dimension.score ?? '-' }} / {{ dimension.maxScore ?? '-' }}</strong>
-                              <p v-if="dimension.note">{{ dimension.note }}</p>
+                              <div v-if="isDimensionCheckbox(dimension)" class="feedback-check-value">
+                                <strong v-if="isDimensionScored(dimension)">{{ dimension.score }} / {{ dimension.maxScore }}</strong>
+                                <div class="feedback-option-tags">
+                                  <span v-for="option in dimension.selectedOptions || []" :key="option">{{ option }}</span>
+                                  <span v-if="!(dimension.selectedOptions || []).length" class="empty">未选择</span>
+                                </div>
+                              </div>
+                              <strong v-else>{{ feedbackDimensionValue(dimension) }}</strong>
+                              <p v-if="isDimensionScored(dimension) || isDimensionCheckbox(dimension)">{{ dimension.note }}</p>
                             </div>
                           </div>
                         </article>
@@ -1699,7 +1869,7 @@
                   :title="publishResultsDisabledReason"
                   @click="publishResultsAction"
                 >
-                  {{ isFeedbackOnlyCompetition ? '发布诊断结果' : '发布到厂牌端' }}
+                  {{ isFeedbackOnlyCompetition ? '发布诊断结果' : '发布结果' }}
                 </button>
                 <p v-if="!showGenerateAwardsAction && !showConfirmAwardsAction && !showPublishResultsAction">
                   结果已发布，当前只需要按获奖名单补充奖状
@@ -2442,8 +2612,15 @@
                   <div v-else class="judge-dimension-list">
                     <div v-for="dimension in judge.dimensions" :key="dimension.key || dimension.label" class="judge-dimension-row">
                       <span>{{ dimension.label || dimension.key }}</span>
-                      <strong>{{ dimension.score ?? '-' }} / {{ dimension.maxScore ?? '-' }}</strong>
-                      <p v-if="dimension.note">{{ dimension.note }}</p>
+                      <div v-if="isDimensionCheckbox(dimension)" class="feedback-check-value">
+                        <strong v-if="isDimensionScored(dimension)">{{ dimension.score }} / {{ dimension.maxScore }}</strong>
+                        <div class="feedback-option-tags">
+                          <span v-for="option in dimension.selectedOptions || []" :key="option">{{ option }}</span>
+                          <span v-if="!(dimension.selectedOptions || []).length" class="empty">未选择</span>
+                        </div>
+                      </div>
+                      <strong v-else>{{ feedbackDimensionValue(dimension) }}</strong>
+                      <p v-if="isDimensionScored(dimension) || isDimensionCheckbox(dimension)">{{ dimension.note }}</p>
                     </div>
                   </div>
                 </article>
@@ -2497,7 +2674,7 @@
           <article v-for="dimension in feedbackEditor.dimensions" :key="dimension.key || dimension.label" class="feedback-editor-dimension">
             <div>
               <strong>{{ dimension.label || dimension.key }}</strong>
-              <small>{{ dimension.score ?? '-' }} / {{ dimension.maxScore ?? '-' }}</small>
+              <small>{{ feedbackEditorDimensionValue(dimension) }}</small>
             </div>
             <textarea v-model="dimension.note" rows="3" maxlength="500" />
           </article>
@@ -2637,6 +2814,7 @@ import {
   deleteCompetition,
   downloadAwardCertificate,
   exportCompetitionScoringData,
+  exportScoreConfigs,
   fetchAdminEntries,
   fetchCompetitionAnalytics,
   fetchCompetitionAwardRules,
@@ -2779,6 +2957,10 @@ const entryFieldForm = reactive([])
 const judgeTableForm = reactive([])
 const judgeAssignmentForm = reactive([])
 const scoreConfigForm = reactive([])
+const selectedScoreScopeId = ref(0)
+const newScoreScopeCategoryId = ref(null)
+const exportingScoreConfigs = ref(false)
+const SCORE_ROLE_ORDER = ['CROSS', 'PROFESSIONAL', 'CAPTAIN']
 const FLEXIBLE_DIMENSION_MIN = 2
 const FLEXIBLE_DIMENSION_MAX = 8
 const judgePool = ref([])
@@ -3016,6 +3198,26 @@ const beerCoinBlockReason = computed(() => {
   return ''
 })
 const editable = computed(() => competition.value?.editableScopes || {})
+const scoreScopeCategoryIds = computed(() => {
+  const ids = new Set([0])
+  scoreConfigForm.forEach((config) => ids.add(Number(config.categoryId || 0)))
+  return [...ids].sort((left, right) => left - right)
+})
+const scoreScopes = computed(() => scoreScopeCategoryIds.value.map((categoryId) => {
+  const configs = scoreConfigsForScope(categoryId)
+  const ready = configs.length === 3 && !validateScoreScope(categoryId)
+  return {
+    categoryId,
+    label: scoreScopeLabel(categoryId),
+    ready,
+    summary: ready ? '50 分' : '待配置',
+  }
+}))
+const currentScoreConfigs = computed(() => sortScoreConfigs(scoreConfigsForScope(selectedScoreScopeId.value)))
+const addableScoreCategories = computed(() => {
+  const existing = new Set(scoreConfigForm.map((config) => Number(config.categoryId || 0)))
+  return (competition.value?.categories || []).filter((category) => !existing.has(Number(category.id)))
+})
 const isTenantCompetition = computed(() => competition.value?.organizerType === 'TENANT')
 const collectionConfig = ref(null)
 const collectionSaving = ref(false)
@@ -4133,7 +4335,7 @@ const selectedFeedbackIssues = computed(() => buildFeedbackIssues(selectedFeedba
 const feedbackEditorTitle = computed(() => (feedbackEditor.type === 'captain' ? '编辑桌长综合评语' : '编辑评审评语'))
 const feedbackEditorSubtitle = computed(() => {
   if (feedbackEditor.type === 'captain') return isFeedbackOnlyCompetition.value ? '只修改文字，不调整共识分' : '只修改文字，不调整共识分和晋级状态'
-  return '只修改维度备注，不调整评分'
+  return '只修改维度评语，不调整评分'
 })
 const feedbackEditorEffectiveText = computed(() => {
   if (feedbackEditor.type === 'captain') return feedbackEditor.comments
@@ -4696,6 +4898,39 @@ function feedbackRoleLabel(role) {
   return roleLabels[role] || '评审'
 }
 
+function isDimensionScored(dimension) {
+  if (!dimension) return false
+  if (dimension.scored !== undefined && dimension.scored !== null) return Boolean(dimension.scored)
+  const kind = normalizeDimensionKind(dimension.kind)
+  return kind !== 'TEXT' && kind !== 'CHECK'
+}
+
+function isDimensionCheckbox(dimension) {
+  if (!dimension) return false
+  if (dimension.checkbox !== undefined && dimension.checkbox !== null) return Boolean(dimension.checkbox)
+  return normalizeDimensionKind(dimension.kind) === 'CHECK'
+}
+
+function feedbackDimensionValue(dimension) {
+  const scored = isDimensionScored(dimension)
+  if (isDimensionCheckbox(dimension)) {
+    const options = (dimension.selectedOptions || []).join('、') || '未选择'
+    return scored ? `${dimension.score ?? '-'} / ${dimension.maxScore ?? '-'} · ${options}` : options
+  }
+  if (!scored) return String(dimension.note || '').trim() || '-'
+  return `${dimension.score ?? '-'} / ${dimension.maxScore ?? '-'}`
+}
+
+function feedbackEditorDimensionValue(dimension) {
+  const scored = isDimensionScored(dimension)
+  if (isDimensionCheckbox(dimension)) {
+    const options = (dimension.selectedOptions || []).join('、') || '未选择'
+    return scored ? `${dimension.score ?? '-'} / ${dimension.maxScore ?? '-'} · ${options}` : options
+  }
+  if (!scored) return '文本输入'
+  return `${dimension.score ?? '-'} / ${dimension.maxScore ?? '-'}`
+}
+
 function feedbackJudgeAnomalyLabel(anomaly) {
   const labels = {
     not_submitted: '未提交',
@@ -4805,6 +5040,11 @@ function openFeedbackCommentEditor(type, entry, judge = null) {
   feedbackEditor.dimensions = (judge.dimensions || []).map((dimension) => ({
     key: dimension.key,
     label: dimension.label,
+    kind: dimension.kind,
+    scored: dimension.scored,
+    checkbox: dimension.checkbox,
+    selectionMode: dimension.selectionMode,
+    selectedOptions: dimension.selectedOptions || [],
     score: dimension.score,
     maxScore: dimension.maxScore,
     note: dimension.note || '',
@@ -4987,20 +5227,15 @@ function resetForms() {
   judgeAssignmentForm.splice(0, judgeAssignmentForm.length, ...persistedAssignments)
   selectedTableLocalId.value = judgeTableForm[0]?.localId || null
   const sourceScoreConfigs = competition.value.scoreConfigs.length ? competition.value.scoreConfigs : defaultScoreConfigs().map((item) => ({
+    categoryId: 0,
     judgeRoleType: item.role,
     dimensions: item.dimensions,
   }))
-  scoreConfigForm.splice(0, scoreConfigForm.length, ...sourceScoreConfigs.map((item) => ({
-    role: item.judgeRoleType,
-    minCommentLength: Number(item.minCommentLength ?? defaultMinCommentLength(item.judgeRoleType)),
-    dimensions: item.dimensions.map((dimension, index) => ({
-      key: dimension.key || `${item.judgeRoleType.toLowerCase()}_${index + 1}`,
-      label: dimension.label,
-      maxScore: Number(dimension.maxScore || 0),
-      notePrompt: dimension.notePrompt || '',
-      localId: `${item.judgeRoleType}-${index}`,
-    })),
-  })))
+  scoreConfigForm.splice(0, scoreConfigForm.length, ...sourceScoreConfigs.map((item) => buildScoreConfigCard(item)))
+  if (!scoreConfigForm.some((config) => Number(config.categoryId || 0) === Number(selectedScoreScopeId.value || 0))) {
+    selectedScoreScopeId.value = 0
+  }
+  newScoreScopeCategoryId.value = null
   baseFormBaseline.value = serializeBaseForm()
 }
 
@@ -8126,7 +8361,7 @@ async function publishResultsAction() {
   openBusinessConfirm({
     action: 'publishResults',
     kicker: feedbackOnly ? '诊断发布' : '结果发布',
-    title: feedbackOnly ? '确认发布诊断结果？' : '确认发布到厂牌端？',
+    title: feedbackOnly ? '确认发布诊断结果？' : '确认发布结果？',
     copy: feedbackOnly
       ? '发布后，厂商可查看评分、评语和桌长综合诊断，公开结果页会展示诊断名单。请确认首轮结果已经核对完成'
       : '发布后，厂牌端和公开结果页将展示获奖名单、奖项信息和已上传奖状，请确认奖项结果已经核对完成',
@@ -8210,7 +8445,10 @@ function prepareJudgingAction() {
       { label: '进入评审', value: `${storedCount} 款` },
       { label: '未入库', value: `${notStoredCount} 款` },
       { label: '评审桌', value: `${judgeTableCount} 张` },
-      { label: '评分表', value: `${competition.value?.scoreConfigs?.length ?? 0} 套` },
+      {
+        label: '评分表',
+        value: `${new Set((competition.value?.scoreConfigs || []).map((config) => Number(config.categoryId || 0))).size} 套`,
+      },
     ]),
     confirmText: '进入评审准备中',
     loadingText: '处理中',
@@ -8270,6 +8508,17 @@ async function downloadScoringData() {
   if (!competition.value?.id) return
   const blob = await exportCompetitionScoringData(competition.value.id)
   downloadBlob(blob, `${competition.value.name || '比赛'}-评分数据.xlsx`)
+}
+
+async function exportScoreConfigsToExcel() {
+  if (!competition.value?.id || exportingScoreConfigs.value) return
+  exportingScoreConfigs.value = true
+  try {
+    const blob = await exportScoreConfigs(competition.value.id)
+    downloadBlob(blob, `${competition.value.name || '比赛'}-评分表配置.xlsx`)
+  } finally {
+    exportingScoreConfigs.value = false
+  }
 }
 
 async function chooseAwardCertificate(award) {
@@ -9228,44 +9477,90 @@ async function saveEntryConfig() {
   ElMessage.success('报名配置已保存')
 }
 
+function validateScoreScope(categoryId) {
+  const scopeLabel = scoreScopeLabel(categoryId)
+  const configs = sortScoreConfigs(scoreConfigsForScope(categoryId))
+  if (configs.length !== 3) return `${scopeLabel}缺少评审角色`
+  for (const config of configs) {
+    const roleLabel = `${scopeLabel} · ${roleLabels[config.role]}`
+    if (Number(config.minCommentLength || 0) > 0
+      && !config.dimensions.some((dimension) => dimension.noteEnabled !== false)) {
+      return `${roleLabel}评语字数下限大于 0，但没有评语输入项`
+    }
+    if (!isFlexibleScoreRole(config.role)) {
+      const dimension = config.dimensions[0]
+      if (config.dimensions.length !== 1
+        || !dimension?.scored
+        || dimension?.checkbox
+        || Number(dimension?.maxScore || 0) !== 50) {
+        return `${roleLabel}需配置 1 个 50 分共识评分项`
+      }
+      continue
+    }
+    if (config.dimensions.length < FLEXIBLE_DIMENSION_MIN || config.dimensions.length > FLEXIBLE_DIMENSION_MAX) {
+      return `${roleLabel}需配置 ${FLEXIBLE_DIMENSION_MIN}-${FLEXIBLE_DIMENSION_MAX} 个维度`
+    }
+    if (!config.dimensions.some((dimension) => dimension.scored)) {
+      return `${roleLabel}至少需要 1 个评分项`
+    }
+    if (getScoreTotal(config) !== 50) return `${roleLabel}评分项合计需为 50`
+    const labels = []
+    for (const dimension of config.dimensions) {
+      const label = String(dimension.label || '').trim()
+      if (!label) return `${roleLabel}存在未命名的维度`
+      labels.push(label)
+      if (dimension.scored && Number(dimension.maxScore || 0) <= 0) {
+        return `${roleLabel}「${label}」分值需大于 0`
+      }
+      if (dimension.checkbox) {
+        const options = dimensionOptions(dimension)
+        if (!options.length) return `${roleLabel}「${label}」至少配置 1 个选项`
+        if (new Set(options).size !== options.length) return `${roleLabel}「${label}」存在重复选项`
+      }
+    }
+    if (new Set(labels).size !== labels.length) return `${roleLabel}存在重名维度`
+  }
+  return ''
+}
+
 async function saveScoreConfigs() {
-  const flexibleConfigs = scoreConfigForm.filter((config) => isFlexibleScoreRole(config.role))
-  const invalidDimensionConfig = flexibleConfigs.find((config) => (
-    config.dimensions.length < FLEXIBLE_DIMENSION_MIN || config.dimensions.length > FLEXIBLE_DIMENSION_MAX
-  ))
-  if (invalidDimensionConfig) {
-    ElMessage.warning(`${roleLabels[invalidDimensionConfig.role]}需配置 ${FLEXIBLE_DIMENSION_MIN}-${FLEXIBLE_DIMENSION_MAX} 个维度`)
-    return
-  }
-  const blankDimensionConfig = flexibleConfigs.find((config) => (
-    config.dimensions.some((dimension) => !String(dimension.label || '').trim())
-  ))
-  if (blankDimensionConfig) {
-    ElMessage.warning(`${roleLabels[blankDimensionConfig.role]}存在未命名的维度`)
-    return
-  }
-  const duplicateDimensionConfig = flexibleConfigs.find((config) => {
-    const labels = config.dimensions.map((dimension) => String(dimension.label || '').trim())
-    return new Set(labels).size !== labels.length
-  })
-  if (duplicateDimensionConfig) {
-    ElMessage.warning(`${roleLabels[duplicateDimensionConfig.role]}存在重名维度`)
-    return
-  }
-  if (!scoreConfigForm.every((config) => getScoreTotal(config) === 50)) {
-    ElMessage.warning('三类评分表总分都需要为 50 分')
-    return
+  for (const categoryId of scoreScopeCategoryIds.value) {
+    const error = validateScoreScope(categoryId)
+    if (error) {
+      ElMessage.warning(error)
+      return
+    }
   }
   await updateScoreConfigs(competition.value.id, {
     configs: scoreConfigForm.map((config) => ({
+      categoryId: Number(config.categoryId || 0),
       judgeRoleType: config.role,
       minCommentLength: Number(config.minCommentLength || 0),
-      dimensions: config.dimensions.map((dimension) => ({
-        key: dimension.key,
-        label: dimension.label,
-        maxScore: Number(dimension.maxScore || 0),
-        notePrompt: dimension.notePrompt,
-      })),
+      dimensions: config.dimensions.map((dimension) => {
+        const scored = Boolean(dimension.scored)
+        const checkbox = Boolean(dimension.checkbox)
+        const base = {
+          key: dimension.key,
+          label: String(dimension.label || '').trim(),
+          kind: checkbox ? 'CHECK' : (scored ? 'SCORE' : 'TEXT'),
+          scored,
+          checkbox,
+          noteEnabled: checkbox ? Boolean(dimension.noteEnabled) : true,
+          notePrompt: dimension.notePrompt,
+        }
+        if (scored) {
+          base.maxScore = Number(dimension.maxScore || 0)
+        }
+        if (checkbox) {
+          return {
+            ...base,
+            required: Boolean(dimension.required),
+            selectionMode: normalizeSelectionMode(dimension.selectionMode),
+            options: dimensionOptions(dimension),
+          }
+        }
+        return { ...base, required: scored ? null : Boolean(dimension.required) }
+      }),
     })),
   })
   await loadDetail()
@@ -9333,6 +9628,153 @@ function isFlexibleScoreRole(role) {
   return role === 'CROSS' || role === 'PROFESSIONAL'
 }
 
+function scoreConfigsForScope(categoryId) {
+  return scoreConfigForm.filter((config) => Number(config.categoryId || 0) === Number(categoryId || 0))
+}
+
+function sortScoreConfigs(configs) {
+  return [...configs].sort((left, right) => (
+    SCORE_ROLE_ORDER.indexOf(left.role) - SCORE_ROLE_ORDER.indexOf(right.role)
+  ))
+}
+
+function scoreScopeLabel(categoryId) {
+  if (!Number(categoryId)) return '通用评分表'
+  const category = (competition.value?.categories || []).find((item) => Number(item.id) === Number(categoryId))
+  return category?.name || `组别 ${categoryId}`
+}
+
+function buildScoreConfigCard(item) {
+  const categoryId = Number(item.categoryId || 0)
+  const role = item.judgeRoleType || item.role
+  return {
+    categoryId,
+    role,
+    minCommentLength: Number(item.minCommentLength ?? defaultMinCommentLength(role)),
+    dimensions: (item.dimensions || []).map((dimension, index) => {
+      const legacyKind = normalizeDimensionKind(dimension.kind)
+      const scored = dimension.scored !== undefined && dimension.scored !== null
+        ? Boolean(dimension.scored)
+        : legacyKind !== 'TEXT' && legacyKind !== 'CHECK'
+      const checkbox = dimension.checkbox !== undefined && dimension.checkbox !== null
+        ? Boolean(dimension.checkbox)
+        : legacyKind === 'CHECK'
+      const options = checkbox
+        ? (dimension.options || []).map((option) => String(option || '').trim()).filter(Boolean)
+        : []
+      return {
+        key: dimension.key || `${role.toLowerCase()}_${index + 1}`,
+        label: dimension.label || '',
+        scored,
+        checkbox,
+        noteEnabled: checkbox
+          ? (dimension.noteEnabled !== undefined && dimension.noteEnabled !== null ? Boolean(dimension.noteEnabled) : true)
+          : true,
+        lastNoteEnabled: checkbox
+          ? (dimension.noteEnabled !== undefined && dimension.noteEnabled !== null ? Boolean(dimension.noteEnabled) : true)
+          : true,
+        maxScore: scored ? Number(dimension.maxScore || 0) : null,
+        lastMaxScore: Number(dimension.maxScore || 10),
+        selectionMode: checkbox ? normalizeSelectionMode(dimension.selectionMode) : 'MULTI',
+        required: checkbox || !scored ? Boolean(dimension.required) : false,
+        options,
+        optionsText: options.join('\n'),
+        optionsOpen: false,
+        notePrompt: dimension.notePrompt || '',
+        localId: `${categoryId}-${role}-${index}-${Date.now()}`,
+      }
+    }),
+  }
+}
+
+function normalizeDimensionKind(kind) {
+  const normalized = String(kind || 'SCORE').toUpperCase()
+  return ['SCORE', 'TEXT', 'CHECK'].includes(normalized) ? normalized : 'SCORE'
+}
+
+function normalizeSelectionMode(mode) {
+  return String(mode || '').toUpperCase() === 'SINGLE' ? 'SINGLE' : 'MULTI'
+}
+
+function dimensionOptions(dimension) {
+  return String(dimension.optionsText || '')
+    .split(/\r?\n|\t/)
+    .map((option) => option.trim())
+    .filter(Boolean)
+}
+
+function dimensionOptionCount(dimension) {
+  return dimensionOptions(dimension).length
+}
+
+function toggleDimensionScored(dimension) {
+  dimension.scored = !dimension.scored
+  normalizeDimensionMode(dimension)
+}
+
+function toggleDimensionCheckbox(dimension) {
+  dimension.checkbox = !dimension.checkbox
+  normalizeDimensionMode(dimension)
+}
+
+function normalizeDimensionMode(dimension) {
+  if (dimension.scored) {
+    dimension.maxScore = Number(dimension.maxScore || dimension.lastMaxScore || 0) || 10
+    dimension.lastMaxScore = Number(dimension.maxScore || 10)
+  } else {
+    dimension.lastMaxScore = Number(dimension.maxScore || dimension.lastMaxScore || 10)
+    dimension.maxScore = null
+  }
+  if (dimension.checkbox) {
+    dimension.noteEnabled = dimension.lastNoteEnabled !== false
+    dimension.lastNoteEnabled = dimension.noteEnabled
+    dimension.selectionMode = normalizeSelectionMode(dimension.selectionMode)
+    dimension.optionsOpen = true
+  } else {
+    dimension.lastNoteEnabled = dimension.noteEnabled !== false
+    dimension.noteEnabled = true
+    dimension.optionsOpen = false
+  }
+  dimension.required = dimension.checkbox || !dimension.scored ? Boolean(dimension.required) : false
+}
+
+function addScoreScope() {
+  const categoryId = Number(newScoreScopeCategoryId.value || 0)
+  if (!categoryId || scoreConfigsForScope(categoryId).length) return
+  const source = sortScoreConfigs(scoreConfigsForScope(0))
+  const configs = source.length ? source : defaultScoreConfigs().map((item) => ({
+    role: item.role,
+    dimensions: item.dimensions,
+  }))
+  configs.forEach((config) => {
+    scoreConfigForm.push(buildScoreConfigCard({
+      categoryId,
+      judgeRoleType: config.role,
+      minCommentLength: config.minCommentLength,
+      dimensions: config.dimensions,
+    }))
+  })
+  selectedScoreScopeId.value = categoryId
+  newScoreScopeCategoryId.value = null
+}
+
+async function removeScoreScope() {
+  const categoryId = Number(selectedScoreScopeId.value || 0)
+  if (!categoryId) return
+  try {
+    await ElMessageBox.confirm(`删除「${scoreScopeLabel(categoryId)}」的专属评分表后，该组别将使用通用评分表。`, '删除特殊评分表', {
+      type: 'warning',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+    })
+  } catch {
+    return
+  }
+  const remaining = scoreConfigForm.filter((config) => Number(config.categoryId || 0) !== categoryId)
+  scoreConfigForm.splice(0, scoreConfigForm.length, ...remaining)
+  selectedScoreScopeId.value = 0
+}
+
 function addScoreDimension(config) {
   if (!isFlexibleScoreRole(config.role)) return
   if (config.dimensions.length >= FLEXIBLE_DIMENSION_MAX) {
@@ -9346,9 +9788,19 @@ function addScoreDimension(config) {
   config.dimensions.push({
     key: `${keyPrefix}_${nextIndex}`,
     label: '',
+    scored: true,
+    checkbox: false,
+    noteEnabled: true,
+    lastNoteEnabled: true,
     maxScore: 10,
+    lastMaxScore: 10,
+    selectionMode: 'MULTI',
+    required: false,
+    options: [],
+    optionsText: '',
+    optionsOpen: false,
     notePrompt: '',
-    localId: `${keyPrefix}-${Date.now()}-${nextIndex}`,
+    localId: `${config.categoryId}-${keyPrefix}-${Date.now()}-${nextIndex}`,
   })
 }
 

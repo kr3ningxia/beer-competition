@@ -104,9 +104,8 @@ public class RoundAllocationServiceImpl implements RoundAllocationService {
         ).contains(competitionStatus)) {
             throw new BaseException("评审已开始，不能再创建首轮编排");
         }
-        // 首轮创建和后续分桌都属于正式评审准备动作，租户赛事必须先完成最终结算。
-        // 平台赛事由结算服务按赛事归属自动跳过该门槛。
-        beerCoinSettlementService.requireJudgingSettlementCompleted(competitionId);
+        // 草稿分桌只对主办方可见，不改变有效酒款口径，因此不在保存时校验啤酒币结算；
+        // 结算门槛由进入评审准备、发布轮次和正式标签等对外动作校验。
         if (competitionRoundMapper.selectCount(new LambdaQueryWrapper<CompetitionRound>()
                 .eq(CompetitionRound::getCompetitionId, competitionId)
                 .eq(CompetitionRound::getRoundNo, 1)) > 0) {
@@ -173,7 +172,7 @@ public class RoundAllocationServiceImpl implements RoundAllocationService {
         // 1) 查询轮次并校验编辑状态
         Competition competition = roundQuerySupport.requireCompetition(competitionId);
         CompetitionRound round = roundQuerySupport.requireRoundForUpdate(competitionId, roundId);
-        beerCoinSettlementService.requireJudgingSettlementCompleted(competitionId);
+        // 草稿编排允许在结算前反复调整，发布轮次时再校验结算与酒款快照。
         roundValidationPolicy.validateCompetitionStageForRoundAllocation(competition, round);
         if (!RoundStatus.DRAFT.name().equals(round.getStatus())) {
             throw new BaseException("只有草稿轮次可以保存编排");

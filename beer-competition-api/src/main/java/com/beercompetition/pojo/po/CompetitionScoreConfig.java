@@ -20,6 +20,7 @@ public class CompetitionScoreConfig {
     @TableId(type = IdType.AUTO)
     private Long id;
     private Long competitionId;
+    private Long categoryId;
     private String judgeRoleType;
     private String dimensionsJson;
     private Integer minCommentLength;
