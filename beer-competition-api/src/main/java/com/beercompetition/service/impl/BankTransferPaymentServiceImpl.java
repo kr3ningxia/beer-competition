@@ -270,6 +270,13 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
                 .build();
         bankTransferPaymentMapper.insert(transfer);
         batchPaymentService.markOrganizerPaymentPending(order.getId(), transfer.getId());
+        if (competitionCollectionService.shouldSkipPaymentConfirmation(batch.getCompetitionId())) {
+            transfer.setStatus(BankTransferPaymentStatus.CONFIRMED.name());
+            transfer.setAdminNote("已开启跳过付款确认，厂商提交后自动确认到账");
+            transfer.setProcessedTime(LocalDateTime.now());
+            bankTransferPaymentMapper.updateById(transfer);
+            batchPaymentService.confirmOrganizerPayment(order.getId(), transfer.getId(), null);
+        }
         return toBankTransferVO(bankTransferPaymentMapper.selectById(transfer.getId()), true);
     }
 

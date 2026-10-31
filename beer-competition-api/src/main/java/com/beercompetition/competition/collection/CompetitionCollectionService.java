@@ -18,4 +18,6 @@ public interface CompetitionCollectionService {
     CompetitionCollectionConfigVO getPortalConfig(Long competitionId);
 
     void requirePortalPaymentMethodEnabled(Long competitionId, EntryPayMethod payMethod);
+
+    boolean shouldSkipPaymentConfirmation(Long competitionId);
 }

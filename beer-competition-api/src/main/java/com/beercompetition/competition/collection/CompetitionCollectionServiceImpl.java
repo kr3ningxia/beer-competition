@@ -85,6 +85,7 @@ public class CompetitionCollectionServiceImpl implements CompetitionCollectionSe
         config.setBankName(normalizeNullable(request.getBankName()));
         config.setCollectionNote(normalizeNullable(request.getCollectionNote()));
         config.setPaymentContact(normalizeNullable(request.getPaymentContact()));
+        config.setSkipPaymentConfirm(Boolean.TRUE.equals(request.getSkipPaymentConfirm()));
         if (config.getId() == null) {
             configMapper.insert(config);
         } else {
@@ -150,6 +151,12 @@ public class CompetitionCollectionServiceImpl implements CompetitionCollectionSe
         }
     }
 
+    @Override
+    public boolean shouldSkipPaymentConfirmation(Long competitionId) {
+        CompetitionCollectionConfig config = findConfig(competitionId);
+        return config != null && Boolean.TRUE.equals(config.getSkipPaymentConfirm());
+    }
+
     private Competition requireTenantCompetition(Long competitionId) {
         competitionAccessService.requireCompetitionAccess(competitionId);
         Competition competition = requireCompetition(competitionId);
@@ -202,6 +209,7 @@ public class CompetitionCollectionServiceImpl implements CompetitionCollectionSe
                 .bankName(config == null ? null : config.getBankName())
                 .collectionNote(config == null ? null : config.getCollectionNote())
                 .paymentContact(config == null ? null : config.getPaymentContact())
+                .skipPaymentConfirm(config != null && Boolean.TRUE.equals(config.getSkipPaymentConfirm()))
                 .build();
     }
 

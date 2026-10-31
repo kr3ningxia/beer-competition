@@ -399,6 +399,14 @@
                     <input v-model.trim="collectionForm.paymentContact" :disabled="!collectionEditable" maxlength="128" placeholder="微信号或手机号，付款的厂商遇到问题时联系" />
                   </label>
                 </div>
+                <label class="tier-toggle" :class="{ enabled: collectionForm.skipPaymentConfirm }">
+                  <span>跳过付款确认</span>
+                  <el-switch
+                    v-model="collectionForm.skipPaymentConfirm"
+                    aria-label="跳过付款确认"
+                    :disabled="!collectionEditable || !collectionWechatEnabled"
+                  />
+                </label>
               </section>
 
               <section v-if="!isTenantCompetition" class="form-subgroup refund-policy-group">
@@ -3237,6 +3245,7 @@ const collectionForm = reactive({
   bankName: '',
   collectionNote: '',
   paymentContact: '',
+  skipPaymentConfirm: false,
 })
 const collectionMethodOptions = [
   { label: '收款码', value: 'WECHAT' },
@@ -3562,6 +3571,7 @@ async function loadCollectionConfig() {
     collectionForm.bankName = data?.bankName || ''
     collectionForm.collectionNote = data?.collectionNote || ''
     collectionForm.paymentContact = data?.paymentContact || ''
+    collectionForm.skipPaymentConfirm = data?.skipPaymentConfirm === true
     collectionBaseline.value = serializeCollectionForm()
     collectionForm.qrFile = null
     qrCropFile.value = null
@@ -3614,6 +3624,7 @@ async function autoSaveCollectionQr() {
       bankName: config.bankName || null,
       collectionNote: config.collectionNote || null,
       paymentContact: config.paymentContact || null,
+      skipPaymentConfirm: config.skipPaymentConfirm === true,
     })
     if (saved) collectionConfig.value = saved
     collectionForm.qrFile = null
@@ -3652,6 +3663,7 @@ function serializeCollectionForm() {
     bankName: collectionForm.bankName,
     collectionNote: collectionForm.collectionNote,
     paymentContact: collectionForm.paymentContact,
+    skipPaymentConfirm: collectionForm.skipPaymentConfirm,
   })
 }
 
@@ -3680,6 +3692,7 @@ async function saveCollectionConfig() {
       bankName: collectionBankEnabled.value ? collectionForm.bankName : null,
       collectionNote: collectionForm.collectionNote,
       paymentContact: collectionForm.paymentContact,
+      skipPaymentConfirm: collectionWechatEnabled.value && collectionForm.skipPaymentConfirm,
     })
     if (saved) collectionConfig.value = saved
     await loadCollectionConfig()

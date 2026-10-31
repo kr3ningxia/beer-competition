@@ -19,4 +19,5 @@ public class CompetitionCollectionConfigVO {
     private String bankName;
     private String collectionNote;
     private String paymentContact;
+    private Boolean skipPaymentConfirm;
 }

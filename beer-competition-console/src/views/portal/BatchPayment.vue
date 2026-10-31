@@ -430,6 +430,10 @@ async function submitOrganizerPayment() {
     organizerPaymentRemark.value = transfer?.remark || ''
     paymentStatus.value = await fetchPortalBatchPaymentStatus(orderId)
     batch.value = await fetchPortalEntryBatch(batchId.value)
+    if (paymentStatus.value?.status === 'PAID') {
+      ElMessage.success('付款成功')
+      return
+    }
     startPolling()
     ElMessage.success('付款信息已提交，等待赛事主办方确认')
   } catch (error) {

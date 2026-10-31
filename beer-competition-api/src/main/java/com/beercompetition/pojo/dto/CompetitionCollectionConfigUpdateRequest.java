@@ -20,4 +20,6 @@ public class CompetitionCollectionConfigUpdateRequest {
 
     @Size(max = 128, message = "付款咨询联系最多128个字")
     private String paymentContact;
+
+    private Boolean skipPaymentConfirm;
 }

@@ -26,6 +26,7 @@ public class CompetitionCollectionConfig {
     private String bankName;
     private String collectionNote;
     private String paymentContact;
+    private Boolean skipPaymentConfirm;
     private String enabledMethodsJson;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;

@@ -549,6 +549,7 @@ CREATE TABLE `competition_collection_config` (
   `bank_name` varchar(128) DEFAULT NULL COMMENT '开户行',
   `collection_note` varchar(1000) DEFAULT NULL COMMENT '收款提示',
   `payment_contact` varchar(128) DEFAULT NULL COMMENT '付款咨询联系（微信/电话）',
+  `skip_payment_confirm` tinyint NOT NULL DEFAULT '0' COMMENT '是否跳过付款确认：1=厂商确认付款后自动到账',
   `enabled_methods_json` varchar(255) NOT NULL COMMENT '启用收款方式 JSON 数组',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
