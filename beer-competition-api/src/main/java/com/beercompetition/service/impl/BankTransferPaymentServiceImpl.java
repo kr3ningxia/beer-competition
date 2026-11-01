@@ -469,10 +469,10 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
 
         // 2) 生成转账汇总与酒款明细两个工作表
         List<List<String>> summaryRows = new ArrayList<>();
-        summaryRows.add(List.of("序号", "提交时间", "厂牌", "赛事", "付款方式", "金额（元）",
+        summaryRows.add(List.of("序号", "提交时间", "厂牌", "厂牌手机号", "赛事", "付款方式", "金额（元）",
                 "付款人", "转账时间", "付款备注", "凭证文件", "状态", "酒款数", "处理时间", "处理说明"));
         List<List<String>> detailRows = new ArrayList<>();
-        detailRows.add(List.of("序号", "厂牌", "赛事", "酒款名称", "参赛编号", "投递组别",
+        detailRows.add(List.of("序号", "厂牌", "厂牌手机号", "赛事", "酒款名称", "参赛编号", "投递组别",
                 "风格", "金额（元）", "转账状态", "提交时间"));
 
         int sequence = 1;
@@ -482,6 +482,7 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
                     sequenceText,
                     exportTime(item.getSubmittedTime()),
                     exportText(item.getBreweryName()),
+                    exportText(item.getBreweryPhone()),
                     exportText(item.getCompetitionName()),
                     transferMethodLabel(item),
                     exportMoney(item.getAmount()),
@@ -499,6 +500,7 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
                 detailRows.add(List.of(
                         sequenceText,
                         exportText(item.getBreweryName()),
+                        exportText(item.getBreweryPhone()),
                         exportText(item.getCompetitionName()),
                         exportText(entry.getEntryName()),
                         exportText(entry.getShortCode()),
@@ -513,9 +515,9 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
 
         byte[] content = SimpleXlsxBuilder.build(List.of(
                 new SimpleXlsxBuilder.Sheet("转账记录", summaryRows,
-                        List.of(6, 20, 26, 28, 14, 14, 16, 20, 36, 26, 8, 8, 20, 34)),
+                        List.of(6, 20, 26, 16, 28, 14, 14, 16, 20, 36, 26, 8, 8, 20, 34)),
                 new SimpleXlsxBuilder.Sheet("酒款明细", detailRows,
-                        List.of(6, 26, 28, 24, 14, 16, 24, 12, 8, 20))
+                        List.of(6, 26, 16, 28, 24, 14, 16, 24, 12, 8, 20))
         ));
         String statusText = StringUtils.hasText(status) ? transferStatusLabel(status) : "全部状态";
         return FileDownloadVO.builder()
@@ -708,6 +710,7 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
                 .competitionCode(competition == null ? null : competition.getCode())
                 .breweryId(transfer.getBreweryId())
                 .breweryName(brewery == null ? null : brewery.getCompanyName())
+                .breweryPhone(brewery == null ? null : brewery.getPhone())
                 .portalAccountId(transfer.getPortalAccountId())
                 .entryId(transfer.getBeerEntryId())
                 .paymentId(transfer.getEntryPaymentId())

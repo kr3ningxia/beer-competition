@@ -20,6 +20,7 @@ public class BankTransferVO {
     private String competitionCode;
     private Long breweryId;
     private String breweryName;
+    private String breweryPhone;
     private Long portalAccountId;
     private Long entryId;
     private Long paymentId;
