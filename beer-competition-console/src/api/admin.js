@@ -140,6 +140,14 @@ export function fetchAdminBankTransferDetail(id) {
   return request.get(`/api/admin/bank-transfers/${id}`, { authScope: 'admin' })
 }
 
+export function exportAdminBankTransfers(params = {}) {
+  return request.get('/api/admin/bank-transfers/export', {
+    params,
+    authScope: 'admin',
+    responseType: 'blob',
+  })
+}
+
 export function confirmAdminBankTransfer(id, payload = {}) {
   return request.post(`/api/admin/bank-transfers/${id}/confirm`, payload, { authScope: 'admin' })
 }

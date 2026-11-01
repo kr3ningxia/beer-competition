@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.beercompetition.common.context.BaseContext;
 import com.beercompetition.common.exception.BaseException;
+import com.beercompetition.common.util.SimpleXlsxBuilder;
 import com.beercompetition.common.exception.ForbiddenException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.competition.collection.CompetitionCollectionService;
@@ -63,7 +64,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -84,6 +88,10 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
             "image/webp",
             "application/pdf"
     );
+    private static final String XLSX_CONTENT_TYPE =
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    private static final DateTimeFormatter EXPORT_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final DateTimeFormatter EXPORT_FILE_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
 
     private final AdminOperationLogMapper adminOperationLogMapper;
     private final BankTransferPaymentMapper bankTransferPaymentMapper;
@@ -424,13 +432,14 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
         // 1) 参数规范化并查询转账记录
         int currentPage = Math.max(page == null ? 1 : page, 1);
         int currentPageSize = Math.min(Math.max(pageSize == null ? 30 : pageSize, 1), 100);
+        String normalizedStatus = normalizeNullable(status);
         String normalizedKeyword = normalizeNullable(keyword);
         Long organizerId = competitionAccessService.canAccessAllOrganizers()
                 ? null : competitionAccessService.requireCurrentOrganizerId();
         if (competitionId != null) {
             competitionAccessService.requireCompetitionAccess(competitionId);
         }
-        List<BankTransferVO> filtered = bankTransferPaymentMapper.selectAdminTransfers(status, competitionId, organizerId)
+        List<BankTransferVO> filtered = bankTransferPaymentMapper.selectAdminTransfers(normalizedStatus, competitionId, organizerId)
                 .stream()
                 .map(transfer -> toBankTransferVO(transfer, false))
                 .filter(item -> !StringUtils.hasText(normalizedKeyword) || matchesKeyword(item, normalizedKeyword))
@@ -440,6 +449,81 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
         int fromIndex = Math.min((currentPage - 1) * currentPageSize, filtered.size());
         int toIndex = Math.min(fromIndex + currentPageSize, filtered.size());
         return new PageResult<>(filtered.size(), filtered.subList(fromIndex, toIndex));
+    }
+
+    @Override
+    public FileDownloadVO exportAdminTransfers(String status, Long competitionId, String keyword) {
+        // 1) 按当前筛选条件取全部记录（不分页）
+        String normalizedStatus = normalizeNullable(status);
+        String normalizedKeyword = normalizeNullable(keyword);
+        Long organizerId = competitionAccessService.canAccessAllOrganizers()
+                ? null : competitionAccessService.requireCurrentOrganizerId();
+        if (competitionId != null) {
+            competitionAccessService.requireCompetitionAccess(competitionId);
+        }
+        List<BankTransferVO> items = bankTransferPaymentMapper.selectAdminTransfers(normalizedStatus, competitionId, organizerId)
+                .stream()
+                .map(transfer -> toBankTransferVO(transfer, true))
+                .filter(item -> !StringUtils.hasText(normalizedKeyword) || matchesKeyword(item, normalizedKeyword))
+                .toList();
+
+        // 2) 生成转账汇总与酒款明细两个工作表
+        List<List<String>> summaryRows = new ArrayList<>();
+        summaryRows.add(List.of("序号", "提交时间", "厂牌", "赛事", "付款方式", "金额（元）",
+                "付款人", "转账时间", "付款备注", "凭证文件", "状态", "酒款数", "处理时间", "处理说明"));
+        List<List<String>> detailRows = new ArrayList<>();
+        detailRows.add(List.of("序号", "厂牌", "赛事", "酒款名称", "参赛编号", "投递组别",
+                "风格", "金额（元）", "转账状态", "提交时间"));
+
+        int sequence = 1;
+        for (BankTransferVO item : items) {
+            String sequenceText = String.valueOf(sequence++);
+            summaryRows.add(List.of(
+                    sequenceText,
+                    exportTime(item.getSubmittedTime()),
+                    exportText(item.getBreweryName()),
+                    exportText(item.getCompetitionName()),
+                    transferMethodLabel(item),
+                    exportMoney(item.getAmount()),
+                    exportText(item.getPayerName()),
+                    exportTime(item.getTransferTime()),
+                    exportText(item.getRemark()),
+                    exportText(item.getVoucherFileName()),
+                    transferStatusLabel(item.getStatus()),
+                    item.getEntryCount() == null ? "0" : String.valueOf(item.getEntryCount()),
+                    exportTime(item.getProcessedTime()),
+                    exportText(item.getAdminNote())
+            ));
+            List<BankTransferEntryVO> entries = item.getEntries() == null ? List.of() : item.getEntries();
+            for (BankTransferEntryVO entry : entries) {
+                detailRows.add(List.of(
+                        sequenceText,
+                        exportText(item.getBreweryName()),
+                        exportText(item.getCompetitionName()),
+                        exportText(entry.getEntryName()),
+                        exportText(entry.getShortCode()),
+                        exportText(entry.getCategoryName()),
+                        exportText(entry.getStyle()),
+                        exportMoney(entry.getAmount()),
+                        transferStatusLabel(item.getStatus()),
+                        exportTime(item.getSubmittedTime())
+                ));
+            }
+        }
+
+        byte[] content = SimpleXlsxBuilder.build(List.of(
+                new SimpleXlsxBuilder.Sheet("转账记录", summaryRows,
+                        List.of(6, 20, 26, 28, 14, 14, 16, 20, 36, 26, 8, 8, 20, 34)),
+                new SimpleXlsxBuilder.Sheet("酒款明细", detailRows,
+                        List.of(6, 26, 28, 24, 14, 16, 24, 12, 8, 20))
+        ));
+        String statusText = StringUtils.hasText(status) ? transferStatusLabel(status) : "全部状态";
+        return FileDownloadVO.builder()
+                .fileName("转账确认-" + statusText + "-"
+                        + LocalDateTime.now().format(EXPORT_FILE_TIME_FORMAT) + ".xlsx")
+                .contentType(XLSX_CONTENT_TYPE)
+                .content(content)
+                .build();
     }
 
     @Override
@@ -694,6 +778,36 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
 
     private boolean contains(String value, String keyword) {
         return StringUtils.hasText(value) && value.toLowerCase(Locale.ROOT).contains(keyword);
+    }
+
+    private String transferStatusLabel(String status) {
+        if (!StringUtils.hasText(status)) {
+            return "-";
+        }
+        return switch (status) {
+            case "SUBMITTED" -> "待确认";
+            case "CONFIRMED" -> "已确认";
+            case "REJECTED" -> "已驳回";
+            case "CANCELED" -> "已取消";
+            default -> status;
+        };
+    }
+
+    private String transferMethodLabel(BankTransferVO item) {
+        String transferNo = item.getTransferNo();
+        return transferNo != null && transferNo.startsWith("QR-") ? "赛事收款码" : "银行转账";
+    }
+
+    private String exportText(String value) {
+        return value == null ? "" : value;
+    }
+
+    private String exportMoney(BigDecimal value) {
+        return value == null ? "" : value.setScale(2, RoundingMode.HALF_UP).toPlainString();
+    }
+
+    private String exportTime(LocalDateTime value) {
+        return value == null ? "" : value.format(EXPORT_TIME_FORMAT);
     }
 
     private String defaultString(String value) {

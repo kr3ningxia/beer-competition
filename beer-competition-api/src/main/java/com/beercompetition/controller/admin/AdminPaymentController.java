@@ -40,6 +40,17 @@ public class AdminPaymentController {
     }
 
     /**
+     * 导出当前筛选范围内的转账记录与酒款明细。
+     */
+    @GetMapping("/export")
+    public ResponseEntity<byte[]> exportBankTransfers(@RequestParam(required = false) String status,
+                                                      @RequestParam(required = false) Long competitionId,
+                                                      @RequestParam(required = false) String keyword) {
+        return FileResponseHelper.attachment(
+                bankTransferPaymentService.exportAdminTransfers(status, competitionId, keyword));
+    }
+
+    /**
      * 查询银行转账记录详情。
      */
     @GetMapping("/{id}")

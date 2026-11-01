@@ -36,6 +36,8 @@ public interface BankTransferPaymentService {
     PageResult<BankTransferVO> listAdminTransfers(String status, Long competitionId, String keyword,
                                                   Integer page, Integer pageSize);
 
+    FileDownloadVO exportAdminTransfers(String status, Long competitionId, String keyword);
+
     BankTransferVO getAdminTransfer(Long id);
 
     BankTransferVO confirmTransfer(Long id, AdminBankTransferProcessRequest request);

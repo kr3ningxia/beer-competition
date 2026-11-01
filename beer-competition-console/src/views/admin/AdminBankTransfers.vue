@@ -10,6 +10,10 @@
           <Refresh />
           刷新
         </button>
+        <button class="tool-button" type="button" :disabled="exporting" @click="exportTransfers">
+          <Download />
+          {{ exporting ? '导出中' : '导出' }}
+        </button>
       </template>
     </AdminPageHeader>
 
@@ -186,10 +190,11 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
-import { Refresh, RefreshLeft, Search } from '@element-plus/icons-vue'
+import { Download, Refresh, RefreshLeft, Search } from '@element-plus/icons-vue'
 import {
   confirmAdminBankTransfer,
   downloadAdminBankTransferVoucher,
+  exportAdminBankTransfers,
   fetchAdminBankTransferDetail,
   fetchAdminBankTransfers,
   rejectAdminBankTransfer,
@@ -198,6 +203,7 @@ import {
 const transfers = ref([])
 const total = ref(0)
 const loading = ref(false)
+const exporting = ref(false)
 const detailLoading = ref(false)
 const detailOpen = ref(false)
 const detail = ref(null)
@@ -286,6 +292,41 @@ function changePage(page) {
 function changePageSize() {
   filters.page = 1
   loadTransfers()
+}
+
+async function exportTransfers() {
+  if (exporting.value) return
+  exporting.value = true
+  try {
+    const blob = await exportAdminBankTransfers({
+      status: filters.status || undefined,
+      keyword: filters.keyword || undefined,
+    })
+    const statusText = filters.status ? statusLabel(filters.status) : '全部状态'
+    downloadBlob(blob, `转账确认-${statusText}-${fileTimestamp()}.xlsx`)
+    ElMessage.success('导出文件已开始下载')
+  } catch (error) {
+    ElMessage.warning(error?.message || '导出失败，请稍后重试')
+  } finally {
+    exporting.value = false
+  }
+}
+
+function fileTimestamp() {
+  const now = new Date()
+  const pad = (value) => String(value).padStart(2, '0')
+  return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}`
+}
+
+function downloadBlob(blob, fileName) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 500)
 }
 
 async function openDetail(target, intent = '') {
