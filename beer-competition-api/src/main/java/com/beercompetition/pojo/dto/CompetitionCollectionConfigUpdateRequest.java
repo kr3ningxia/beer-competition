@@ -22,4 +22,5 @@ public class CompetitionCollectionConfigUpdateRequest {
     private String paymentContact;
 
     private Boolean skipPaymentConfirm;
+    private Boolean paymentRemarkRequired;
 }

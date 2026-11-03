@@ -20,4 +20,5 @@ public class CompetitionCollectionConfigVO {
     private String collectionNote;
     private String paymentContact;
     private Boolean skipPaymentConfirm;
+    private Boolean paymentRemarkRequired;
 }

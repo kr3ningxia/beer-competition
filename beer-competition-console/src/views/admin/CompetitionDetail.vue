@@ -407,6 +407,14 @@
                     :disabled="!collectionEditable || !collectionWechatEnabled"
                   />
                 </label>
+                <label class="tier-toggle" :class="{ enabled: collectionForm.paymentRemarkRequired }">
+                  <span>付款备注必填</span>
+                  <el-switch
+                    v-model="collectionForm.paymentRemarkRequired"
+                    aria-label="付款备注必填"
+                    :disabled="!collectionEditable"
+                  />
+                </label>
               </section>
 
               <section v-if="!isTenantCompetition" class="form-subgroup refund-policy-group">
@@ -3246,6 +3254,7 @@ const collectionForm = reactive({
   collectionNote: '',
   paymentContact: '',
   skipPaymentConfirm: false,
+  paymentRemarkRequired: false,
 })
 const collectionMethodOptions = [
   { label: '收款码', value: 'WECHAT' },
@@ -3572,6 +3581,7 @@ async function loadCollectionConfig() {
     collectionForm.collectionNote = data?.collectionNote || ''
     collectionForm.paymentContact = data?.paymentContact || ''
     collectionForm.skipPaymentConfirm = data?.skipPaymentConfirm === true
+    collectionForm.paymentRemarkRequired = data?.paymentRemarkRequired === true
     collectionBaseline.value = serializeCollectionForm()
     collectionForm.qrFile = null
     qrCropFile.value = null
@@ -3625,6 +3635,7 @@ async function autoSaveCollectionQr() {
       collectionNote: config.collectionNote || null,
       paymentContact: config.paymentContact || null,
       skipPaymentConfirm: config.skipPaymentConfirm === true,
+      paymentRemarkRequired: config.paymentRemarkRequired === true,
     })
     if (saved) collectionConfig.value = saved
     collectionForm.qrFile = null
@@ -3664,6 +3675,7 @@ function serializeCollectionForm() {
     collectionNote: collectionForm.collectionNote,
     paymentContact: collectionForm.paymentContact,
     skipPaymentConfirm: collectionForm.skipPaymentConfirm,
+    paymentRemarkRequired: collectionForm.paymentRemarkRequired,
   })
 }
 
@@ -3693,6 +3705,7 @@ async function saveCollectionConfig() {
       collectionNote: collectionForm.collectionNote,
       paymentContact: collectionForm.paymentContact,
       skipPaymentConfirm: collectionWechatEnabled.value && collectionForm.skipPaymentConfirm,
+      paymentRemarkRequired: collectionForm.paymentRemarkRequired,
     })
     if (saved) collectionConfig.value = saved
     await loadCollectionConfig()

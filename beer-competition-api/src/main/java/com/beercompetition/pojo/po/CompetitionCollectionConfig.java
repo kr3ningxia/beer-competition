@@ -27,6 +27,7 @@ public class CompetitionCollectionConfig {
     private String collectionNote;
     private String paymentContact;
     private Boolean skipPaymentConfirm;
+    private Boolean paymentRemarkRequired;
     private String enabledMethodsJson;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;

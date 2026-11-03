@@ -20,4 +20,6 @@ public interface CompetitionCollectionService {
     void requirePortalPaymentMethodEnabled(Long competitionId, EntryPayMethod payMethod);
 
     boolean shouldSkipPaymentConfirmation(Long competitionId);
+
+    void requirePaymentRemark(Long competitionId, String remark);
 }

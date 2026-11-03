@@ -86,6 +86,7 @@ public class CompetitionCollectionServiceImpl implements CompetitionCollectionSe
         config.setCollectionNote(normalizeNullable(request.getCollectionNote()));
         config.setPaymentContact(normalizeNullable(request.getPaymentContact()));
         config.setSkipPaymentConfirm(Boolean.TRUE.equals(request.getSkipPaymentConfirm()));
+        config.setPaymentRemarkRequired(Boolean.TRUE.equals(request.getPaymentRemarkRequired()));
         if (config.getId() == null) {
             configMapper.insert(config);
         } else {
@@ -157,6 +158,15 @@ public class CompetitionCollectionServiceImpl implements CompetitionCollectionSe
         return config != null && Boolean.TRUE.equals(config.getSkipPaymentConfirm());
     }
 
+    @Override
+    public void requirePaymentRemark(Long competitionId, String remark) {
+        CompetitionCollectionConfig config = findConfig(competitionId);
+        if (config != null && Boolean.TRUE.equals(config.getPaymentRemarkRequired())
+                && !StringUtils.hasText(remark)) {
+            throw new BaseException("请填写付款备注");
+        }
+    }
+
     private Competition requireTenantCompetition(Long competitionId) {
         competitionAccessService.requireCompetitionAccess(competitionId);
         Competition competition = requireCompetition(competitionId);
@@ -210,6 +220,7 @@ public class CompetitionCollectionServiceImpl implements CompetitionCollectionSe
                 .collectionNote(config == null ? null : config.getCollectionNote())
                 .paymentContact(config == null ? null : config.getPaymentContact())
                 .skipPaymentConfirm(config != null && Boolean.TRUE.equals(config.getSkipPaymentConfirm()))
+                .paymentRemarkRequired(config != null && Boolean.TRUE.equals(config.getPaymentRemarkRequired()))
                 .build();
     }
 

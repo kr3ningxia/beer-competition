@@ -48,7 +48,7 @@
                     <el-input
                       v-model.trim="organizerRemarkDraft"
                       maxlength="255"
-                      placeholder="付款备注（选填）"
+                      :placeholder="paymentRemarkPlaceholder"
                     />
                     <div class="organizer-remark-actions">
                       <el-button type="primary" :loading="savingOrganizerRemark" @click="saveOrganizerRemark">保存备注</el-button>
@@ -128,7 +128,7 @@
                   v-model.trim="bankForm.remark"
                   class="organizer-payment-remark"
                   maxlength="255"
-                  placeholder="付款备注（选填）"
+                  :placeholder="paymentRemarkPlaceholder"
                 />
                 <el-button class="organizer-payment-submit" type="primary" :loading="paying" @click="submitOrganizerPayment">我已完成付款</el-button>
               </div>
@@ -177,7 +177,10 @@
                 <el-button @click="copyBankAccount">复制账户信息</el-button>
               </div>
               <el-form label-position="top" class="bank-form">
-                <el-form-item label="转账备注（选填）">
+                <el-form-item
+                  :label="paymentRemarkRequired ? '转账备注' : '转账备注（选填）'"
+                  :required="paymentRemarkRequired"
+                >
                   <el-input v-model.trim="bankForm.remark" maxlength="255" placeholder="如需补充核对信息，可填写转账备注" />
                 </el-form-item>
                 <el-form-item label="付款凭证" required>
@@ -288,6 +291,10 @@ const organizerRemarkDraft = ref('')
 const editingOrganizerRemark = ref(false)
 const savingOrganizerRemark = ref(false)
 const organizerManaged = computed(() => collectionConfig.value?.tenantCompetition === true)
+const paymentRemarkRequired = computed(() => collectionConfig.value?.paymentRemarkRequired === true)
+const paymentRemarkPlaceholder = computed(() => (
+  paymentRemarkRequired.value ? '付款备注（必填）' : '付款备注（选填）'
+))
 const availablePaymentMethods = computed(() => {
   if (!organizerManaged.value) {
     return [
@@ -424,6 +431,10 @@ async function switchPayMode(mode) {
 
 async function submitOrganizerPayment() {
   if (paying.value || paid.value) return
+  if (paymentRemarkRequired.value && !bankForm.remark.trim()) {
+    ElMessage.warning('请填写付款备注')
+    return
+  }
   paying.value = true
   try {
     const transfer = await submitPortalOrganizerPayment(orderId, { remark: bankForm.remark || '' })
@@ -582,6 +593,10 @@ async function copyBankAccount() {
 
 async function submitBankTransfer() {
   if (submittingBank.value) return
+  if (paymentRemarkRequired.value && !bankForm.remark.trim()) {
+    ElMessage.warning('请填写付款备注')
+    return
+  }
   if (!voucherFile.value && !bankVoucherAssetId.value) {
     ElMessage.warning('请上传付款凭证')
     return
@@ -650,6 +665,10 @@ function cancelOrganizerRemarkEdit() {
 
 async function saveOrganizerRemark() {
   if (savingOrganizerRemark.value) return
+  if (paymentRemarkRequired.value && !organizerRemarkDraft.value.trim()) {
+    ElMessage.warning('请填写付款备注')
+    return
+  }
   savingOrganizerRemark.value = true
   try {
     const transfer = await updatePortalOrganizerPayment(orderId, { remark: organizerRemarkDraft.value || '' })

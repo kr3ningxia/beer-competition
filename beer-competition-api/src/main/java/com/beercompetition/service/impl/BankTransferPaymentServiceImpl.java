@@ -172,6 +172,7 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
         BeerEntry entry = requireOwnedPayableEntry(entryId, brewery.getId());
         competitionCollectionService.requirePortalPaymentMethodEnabled(
                 entry.getCompetitionId(), EntryPayMethod.BANK_TRANSFER);
+        competitionCollectionService.requirePaymentRemark(entry.getCompetitionId(), remark);
         FileAsset voucher = requireVoucherAsset(request.getVoucherAssetId(), account.getId());
         EntryPayment payment = ensurePayment(entry);
         if (payment.getPaymentOrderId() != null) {
@@ -221,6 +222,8 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
         }
         competitionCollectionService.requirePortalPaymentMethodEnabled(
                 batch.getCompetitionId(), EntryPayMethod.BANK_TRANSFER);
+        competitionCollectionService.requirePaymentRemark(
+                batch.getCompetitionId(), normalizeNullable(request.getRemark()));
         FileAsset voucher = requireVoucherAsset(request.getVoucherAssetId(), account.getId());
         LocalDateTime submittedTime = LocalDateTime.now();
         LocalDateTime transferTime = request.getTransferTime() == null ? submittedTime : request.getTransferTime();
@@ -262,6 +265,8 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
         }
         competitionCollectionService.requirePortalPaymentMethodEnabled(
                 batch.getCompetitionId(), EntryPayMethod.WECHAT_QR);
+        competitionCollectionService.requirePaymentRemark(
+                batch.getCompetitionId(), normalizeNullable(request == null ? null : request.getRemark()));
         if (!PaymentOrderStatus.UNPAID.name().equals(order.getStatus())
                 && !PaymentOrderStatus.EXPIRED.name().equals(order.getStatus())) {
             throw new BaseException("当前订单不能提交付款确认");
@@ -312,7 +317,9 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
         }
 
         // 2) 仅更新付款备注
-        transfer.setRemark(defaultString(normalizeNullable(request == null ? null : request.getRemark())));
+        String remark = normalizeNullable(request == null ? null : request.getRemark());
+        competitionCollectionService.requirePaymentRemark(batch.getCompetitionId(), remark);
+        transfer.setRemark(defaultString(remark));
         bankTransferPaymentMapper.updateById(transfer);
 
         // 3) 返回最新转账详情
@@ -346,7 +353,9 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
         if (request.getTransferTime() != null) {
             transfer.setTransferTime(request.getTransferTime());
         }
-        transfer.setRemark(defaultString(normalizeNullable(request.getRemark())));
+        String remark = normalizeNullable(request.getRemark());
+        competitionCollectionService.requirePaymentRemark(batch.getCompetitionId(), remark);
+        transfer.setRemark(defaultString(remark));
         transfer.setVoucherAssetId(voucher.getId());
         bankTransferPaymentMapper.updateById(transfer);
         attachOrganizer(voucher, transfer.getCompetitionId());
@@ -386,7 +395,9 @@ public class BankTransferPaymentServiceImpl implements BankTransferPaymentServic
 
         // 2) 校验凭证并更新付款信息
         String payerName = normalizeNullable(request.getPayerName());
-        String remark = defaultString(normalizeNullable(request.getRemark()));
+        String normalizedRemark = normalizeNullable(request.getRemark());
+        competitionCollectionService.requirePaymentRemark(transfer.getCompetitionId(), normalizedRemark);
+        String remark = defaultString(normalizedRemark);
         FileAsset voucher = requireVoucherAsset(request.getVoucherAssetId(), account.getId());
         if (request.getPayerName() != null) {
             transfer.setPayerName(payerName);
