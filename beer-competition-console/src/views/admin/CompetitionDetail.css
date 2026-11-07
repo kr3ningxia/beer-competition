@@ -6790,6 +6790,23 @@ button.pyramid-placeholder-mark {
   background: rgba(255, 255, 255, 0.04);
 }
 
+.tier-rate-cell {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.tier-editor .fee-field.invalid {
+  border-color: #ff9b8f;
+}
+
+.tier-field-error {
+  margin: 0;
+  color: #ffb4aa;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
 .tier-editor .fee-field input,
 .base-form-grid .fee-field input {
   min-height: 40px;

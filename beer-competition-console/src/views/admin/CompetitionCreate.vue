@@ -143,9 +143,12 @@
                     <input v-model.number="tier.startQuantity" :aria-label="`第 ${index + 1} 档起始款数`" min="2" step="1" type="number" />
                     <span>款起</span>
                   </div>
-                  <div class="fee-field">
-                    <input v-model.number="tier.discountRatePercent" :aria-label="`第 ${index + 1} 档折扣率`" min="1" max="100" step="0.01" type="number" />
-                    <span>%</span>
+                  <div class="tier-rate-cell">
+                    <div class="fee-field" :class="{ invalid: Boolean(feeTierIssue(tier, index, draft.feeTiers)) }">
+                      <input v-model.number="tier.discountRatePercent" :aria-label="`第 ${index + 1} 档折扣率`" :aria-invalid="Boolean(feeTierIssue(tier, index, draft.feeTiers))" min="1" max="100" step="0.0001" type="number" />
+                      <span>%</span>
+                    </div>
+                    <p v-if="feeTierIssue(tier, index, draft.feeTiers)" class="tier-field-error">{{ feeTierIssue(tier, index, draft.feeTiers) }}</p>
                   </div>
                   <span class="tier-example-price">{{ formatTierAmount(tier.discountRatePercent) }}<small>元 / 款</small></span>
                   <button class="icon-button tier-remove-button" title="删除阶梯" :aria-label="`删除第 ${index + 1} 档阶梯`" type="button" @click="draft.feeTiers.splice(index, 1)"><Delete /></button>
@@ -632,6 +635,7 @@ import { fetchBeerCoinOverview } from '@/api/beerCoin'
 import { defaultStyleLibraryValue, fallbackStyleLibraries, getStyleLibrary, normalizeStyleLibraries } from './styleLibraries'
 import { brewTypeOptions } from '@/utils/competitionMeta'
 import CategoryStyleScopePicker from './components/CategoryStyleScopePicker.vue'
+import { discountPercentToRate, feeTierIssue } from './competitionFeeTiers'
 
 const router = useRouter()
 const activeSection = ref('base-info')
@@ -1012,7 +1016,7 @@ async function submitDraft() {
       earlyBirdFee: draft.earlyBirdEnabled && draft.earlyBirdFee !== '' && draft.earlyBirdFee !== null ? Number(draft.earlyBirdFee) : null,
       earlyBirdDeadline: draft.earlyBirdEnabled ? toBackendDateTime(draft.earlyBirdDeadline) : null,
       tierPricingEnabled: draft.tierPricingEnabled,
-      feeTiers: draft.tierPricingEnabled ? draft.feeTiers.map(({ startQuantity, discountRatePercent }) => ({ startQuantity: Number(startQuantity), discountRate: Number(discountRatePercent) / 100 })) : [],
+      feeTiers: draft.tierPricingEnabled ? draft.feeTiers.map(({ startQuantity, discountRatePercent }) => ({ startQuantity: Number(startQuantity), discountRate: discountPercentToRate(discountRatePercent) })) : [],
       description: draft.description,
       rulesUrl: draft.rulesUrl || null,
       deliveryMethod: draft.deliveryMethod,
@@ -1436,8 +1440,7 @@ function buildReviewItems(source) {
   const tierInvalid = source.tierPricingEnabled && (!source.feeTiers?.length
     || source.feeTiers.some((tier, index) => Number(tier.startQuantity) <= 1
       || (index > 0 && Number(tier.startQuantity) <= Number(source.feeTiers[index - 1].startQuantity))
-      || Number(tier.discountRatePercent) <= 0 || Number(tier.discountRatePercent) > 100
-      || (index > 0 && Number(tier.discountRatePercent) > Number(source.feeTiers[index - 1].discountRatePercent))))
+      || Boolean(feeTierIssue(tier, index, source.feeTiers))))
   const categoryNames = getCategoryNames(source)
   const duplicatedCategories = getDuplicateItems(categoryNames)
   const invalidScopeCategories = source.categories.filter((category) => (
@@ -1530,7 +1533,7 @@ function buildReviewItems(source) {
       label: '阶梯报名费',
       target: 'base-info',
       status: !tierInvalid ? 'done' : 'pending',
-      detail: !source.tierPricingEnabled ? '未启用阶梯报名费' : (tierInvalid ? '请按起始款数升序配置折扣率' : `已配置 ${source.feeTiers.length} 档`),
+      detail: !source.tierPricingEnabled ? '未启用阶梯报名费' : (tierInvalid ? '请检查阶梯起始款数或折扣率' : `已配置 ${source.feeTiers.length} 档`),
     },
     {
       key: 'logistics',
@@ -2205,6 +2208,23 @@ textarea::placeholder {
 
 .tier-editor .fee-field {
   min-width: 0;
+}
+
+.tier-rate-cell {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.tier-editor .fee-field.invalid {
+  border-color: #ff9b8f;
+}
+
+.tier-field-error {
+  margin: 0;
+  color: #ffb4aa;
+  font-size: 12px;
+  line-height: 1.3;
 }
 
 .tier-editor .fee-field input {

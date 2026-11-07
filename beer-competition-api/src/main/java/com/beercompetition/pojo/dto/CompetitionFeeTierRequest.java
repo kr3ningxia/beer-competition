@@ -15,9 +15,9 @@ public class CompetitionFeeTierRequest {
     @Positive(message = "阶梯起始数量必须大于 0")
     private Integer startQuantity;
 
-    @NotNull(message = "阶梯折扣不能为空")
-    @DecimalMin(value = "0.01", message = "阶梯折扣必须大于 0")
-    @DecimalMax(value = "1.00", message = "阶梯折扣不能超过 1")
-    @Digits(integer = 1, fraction = 4, message = "阶梯折扣最多保留 4 位小数")
+    @NotNull(message = "折扣率不能为空")
+    @DecimalMin(value = "0.01", message = "折扣率不能低于 1%")
+    @DecimalMax(value = "1.00", message = "折扣率不能高于 100%")
+    @Digits(integer = 1, fraction = 6, message = "折扣率百分比最多保留 4 位小数")
     private BigDecimal discountRate;
 }

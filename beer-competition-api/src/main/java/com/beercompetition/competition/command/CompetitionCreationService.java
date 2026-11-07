@@ -204,10 +204,10 @@ public class CompetitionCreationService {
                 throw new BaseException("阶梯起始数量必须从第 2 款起按升序配置，且不能重复");
             }
             if (item.getDiscountRate().compareTo(BigDecimal.ZERO) <= 0 || item.getDiscountRate().compareTo(BigDecimal.ONE) > 0) {
-                throw new BaseException("阶梯折扣必须在 0.01 到 1.00 之间");
+                throw new BaseException("折扣率需在 1% 到 100% 之间");
             }
             if (item.getDiscountRate().compareTo(previousRate) > 0) {
-                throw new BaseException("后续阶梯折扣不能高于前一档");
+                throw new BaseException("后续档位的折扣率不能高于前一档");
             }
             previousStart = item.getStartQuantity();
             previousRate = item.getDiscountRate();
