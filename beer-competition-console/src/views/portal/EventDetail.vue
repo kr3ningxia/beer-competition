@@ -49,8 +49,9 @@
         </div>
           <div class="category-main">
             <ul class="category-list">
-              <li v-for="category in visibleCategories" :key="category.id">
-                {{ category.name }}
+              <li v-for="(category, index) in visibleCategories" :key="category.id">
+                <span v-if="categoryNumber(category, index)" class="category-number">{{ categoryNumber(category, index) }}</span>
+                <span class="category-name">{{ category.name }}</span>
                 <small v-if="category.styleNames?.length">{{ category.styleNames.length }} 种风格</small>
               </li>
             </ul>
@@ -101,17 +102,37 @@
       </section>
       <el-drawer v-model="stylesOpen" title="基础风格" size="min(560px, 100vw)">
         <el-input v-model="styleSearch" placeholder="搜索风格名称或代码" clearable :prefix-icon="Search" aria-label="搜索基础风格" />
-        <ul class="style-list"><li v-for="style in filteredStyles" :key="style.id || style.name"><h3>{{ [style.styleCode, style.name].filter(Boolean).join(' ') }}</h3><p v-if="style.description">{{ style.description }}</p></li></ul>
-        <p v-if="!filteredStyles.length" role="status">未找到匹配的风格</p>
+        <div v-if="styleGroups.length" class="style-groups">
+          <section v-for="group in styleGroups" :key="group.key" class="style-group">
+            <h3 v-if="group.showHeader && group.number" class="style-group-title"><span class="style-group-number">{{ group.number }}</span>{{ group.name }}</h3>
+            <h3 v-else-if="group.showHeader" class="style-group-title">{{ group.name }}</h3>
+            <ul class="style-list">
+              <li v-for="style in group.styles" :key="style.id || `${group.key}-${style.styleCode}-${style.name}`">
+                <button
+                  class="style-toggle"
+                  type="button"
+                  :disabled="!style.description"
+                  :aria-expanded="style.description ? isStyleExpanded(style) : undefined"
+                  @click="toggleStyleDescription(style)"
+                >
+                  <strong>{{ [style.styleCode, style.name].filter(Boolean).join(' ') }}</strong>
+                  <el-icon v-if="style.description" :class="['style-caret', { expanded: isStyleExpanded(style) }]" aria-hidden="true"><ArrowDown /></el-icon>
+                </button>
+                <p v-if="style.description && isStyleExpanded(style)" class="style-description">{{ style.description }}</p>
+              </li>
+            </ul>
+          </section>
+        </div>
+        <p v-else role="status">未找到匹配的风格</p>
       </el-drawer>
     </template>
   </div>
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onBeforeUnmount, ref } from 'vue'
+import { computed, nextTick, onMounted, onBeforeUnmount, reactive, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { ArrowLeft, ArrowRight, Search } from '@element-plus/icons-vue'
+import { ArrowDown, ArrowLeft, ArrowRight, Search } from '@element-plus/icons-vue'
 import { isLoggedIn } from '@/utils/auth'
 import { brewTypeLabel } from '@/utils/competitionMeta'
 import { fetchPortalCompetitionDetail, fetchPortalEntries } from '@/api/portal'
@@ -184,11 +205,63 @@ const organizerMetaText = computed(() => {
   return parts.join(' · ')
 })
 const visibleCategories = computed(() => categoriesExpanded.value ? competition.value.categories : competition.value.categories?.slice(0, 9))
+
+function categoryNumber(category, index) {
+  const name = String(category?.name || '').trim()
+  if (!name || /^\d/.test(name)) return ''
+  const order = Number(category?.sortOrder)
+  return Number.isInteger(order) && order >= 0 ? order + 1 : index + 1
+}
 const requiredFields = computed(() => (competition.value.entryFields || []).filter(field => field.required))
-const filteredStyles = computed(() => {
+const expandedStyleKeys = reactive({})
+const styleGroups = computed(() => {
+  const groups = []
+  const byName = new Map()
+  ;(competition.value.styles || []).forEach((style) => {
+    const name = style.categoryName || '未分类'
+    let group = byName.get(name)
+    if (!group) {
+      group = { key: name, name, styles: [], total: 0 }
+      byName.set(name, group)
+      groups.push(group)
+    }
+    group.styles.push(style)
+    group.total += 1
+  })
   const query = styleSearch.value.trim().toLowerCase()
-  return (competition.value.styles || []).filter(style => [style.name, style.styleCode].filter(Boolean).join(' ').toLowerCase().includes(query))
+  const matches = style => [style.name, style.styleCode].filter(Boolean).join(' ').toLowerCase().includes(query)
+  return groups
+    .map((group) => ({
+      key: group.key,
+      name: group.name,
+      styles: query ? group.styles.filter(matches) : group.styles,
+      showHeader: group.total > 1,
+      number: group.total > 1 && !/^\d/.test(group.name) ? styleGroupNumber(group.styles) : '',
+    }))
+    .filter(group => group.styles.length)
 })
+
+function styleGroupNumber(styles) {
+  const numbers = styles
+    .map(style => String(style.styleCode || '').match(/^(\d+)/)?.[1])
+    .filter(Boolean)
+  if (!numbers.length) return ''
+  return numbers.every(value => value === numbers[0]) ? numbers[0] : ''
+}
+
+function styleKey(style) {
+  return style.id != null ? `id:${style.id}` : `${style.categoryName || ''}|${style.styleCode || ''}|${style.name || ''}`
+}
+
+function isStyleExpanded(style) {
+  return Boolean(expandedStyleKeys[styleKey(style)])
+}
+
+function toggleStyleDescription(style) {
+  if (!style.description) return
+  const key = styleKey(style)
+  expandedStyleKeys[key] = !expandedStyleKeys[key]
+}
 const feeText = computed(() => formatCompetitionFee(competition.value))
 const tierMoneyFormatter = new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY', minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const earlyBirdActive = computed(() => isEarlyBirdActive(competition.value))
@@ -301,6 +374,8 @@ dd { margin: 7px 0 0; font-weight: 600; overflow-wrap: anywhere; line-height: 1.
 .category-heading > span { font-size: 13px; color: #746a5f; }
 .category-list { display: flex; flex-wrap: wrap; gap: 10px; list-style: none; margin: 0; padding: 0; }
 .category-list li { display: flex; align-items: center; gap: 8px; max-width: 100%; min-height: 36px; box-sizing: border-box; padding: 7px 16px; border: 1px solid #dfd3b9; border-radius: 4px; background: #fffdf7; font-size: 15px; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
+.category-number { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 4px; background: #f2e6c8; color: #875716; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.category-name { min-width: 0; overflow-wrap: anywhere; }
 .category-list li small { color: #8b7a62; font-size: 12px; font-weight: 500; white-space: nowrap; }
 .requirements-meta { margin-top: 24px; padding-top: 18px; border-top: 1px solid #e8e0d1; }
 .requirements-meta .field-row { margin-top: 12px; grid-template-columns: 88px minmax(0,1fr); gap: 16px; }
@@ -331,10 +406,17 @@ dd { margin: 7px 0 0; font-weight: 600; overflow-wrap: anywhere; line-height: 1.
 .process-list { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 18px; list-style: none; padding: 0; margin: 24px 0 0; }
 .process-list li { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 15px; border-top: 2px solid #dac393; padding-top: 14px; }
 .process-list span { color: #967024; font-size: 13px; }
-.style-list { list-style: none; padding: 0; margin: 20px 0; }
-.style-list li { padding: 16px 0; border-bottom: 1px solid #e6dece; }
-.style-list h3 { font-size: 16px; margin: 0; overflow-wrap: anywhere; }
-.style-list p { font-size: 14px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; color: #746a5f; margin: 8px 0 0; }
+.style-groups { display: grid; gap: 20px; margin: 20px 0; }
+.style-group-title { display: flex; align-items: center; gap: 8px; margin: 0; color: #3f3427; font-size: 16px; font-weight: 700; overflow-wrap: anywhere; }
+.style-group-number { display: inline-flex; flex: none; align-items: center; justify-content: center; min-width: 24px; height: 24px; padding: 0 7px; border-radius: 4px; background: #f2e6c8; color: #875716; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.style-list { list-style: none; padding: 0; margin: 8px 0 0; }
+.style-list li { border-bottom: 1px solid #e6dece; }
+.style-toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 14px 0; color: #2f281f; border: 0; background: none; font: inherit; text-align: left; cursor: pointer; }
+.style-toggle:disabled { cursor: default; }
+.style-toggle strong { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.style-caret { flex: none; color: #8b7a62; transition: transform 0.18s ease; }
+.style-caret.expanded { transform: rotate(180deg); }
+.style-description { margin: 0 0 14px; padding-right: 24px; color: #746a5f; font-size: 14px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
 .page-state { padding: 40px 0; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 a:focus-visible, button:focus-visible { outline: 2px solid #875716; outline-offset: 4px; }
