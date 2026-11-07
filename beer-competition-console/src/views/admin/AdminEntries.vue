@@ -225,7 +225,7 @@
               </label>
               <label>
                 <span>投递组别</span>
-                <select v-model="editForm.categoryId" :disabled="!detail.canEdit">
+                <select v-model="editForm.categoryId" :disabled="!detail.canEdit" @change="handleEditCategoryChange">
                   <option v-for="item in detailCategoryOptions" :key="item.id" :value="String(item.id)">{{ item.name }}</option>
                 </select>
               </label>
@@ -239,9 +239,18 @@
                   placeholder="输入或选择箱号"
                 />
               </label>
-              <label>
+              <label class="style-field">
                 <span>基础风格</span>
-                <input v-model.trim="editForm.style" :disabled="!detail.canEdit" />
+                <el-cascader
+                  v-model="editForm.style"
+                  :options="detailStyleCascaderOptions"
+                  :props="styleCascaderProps"
+                  :disabled="!detail.canEdit || !detailStyleCascaderOptions.length"
+                  :placeholder="detailStylePlaceholder"
+                  popper-class="admin-style-cascader-popper"
+                  clearable
+                  filterable
+                />
               </label>
               <label>
                 <span>ABV</span>
@@ -546,6 +555,7 @@ const total = ref(0)
 const competitions = ref([])
 const categoryOptions = ref([])
 const detailCategoryOptions = ref([])
+const detailStyles = ref([])
 const boxNumberOptions = ref([])
 const loading = ref(false)
 const detailLoading = ref(false)
@@ -604,6 +614,42 @@ const editForm = reactive({
   reason: '',
   extraFields: [],
 })
+
+const styleCascaderProps = { expandTrigger: 'click', emitPath: false }
+const selectedEditCategory = computed(() => (
+  detailCategoryOptions.value.find((item) => String(item.id) === String(editForm.categoryId))
+))
+const editAvailableStyles = computed(() => {
+  const styleNames = selectedEditCategory.value?.styleNames
+  if (!Array.isArray(styleNames) || !styleNames.length) return detailStyles.value
+  const allowed = new Set(styleNames)
+  return detailStyles.value.filter((style) => allowed.has(style.name))
+})
+const detailStyleCascaderOptions = computed(() => {
+  const groups = []
+  const byName = new Map()
+  editAvailableStyles.value.forEach((style) => {
+    const categoryName = style.categoryName || '未归类'
+    let group = byName.get(categoryName)
+    if (!group) {
+      group = { value: categoryName, label: categoryName, children: [] }
+      byName.set(categoryName, group)
+      groups.push(group)
+    }
+    group.children.push({ value: style.name, label: style.name })
+  })
+  if (editForm.style && !editAvailableStyles.value.some((style) => style.name === editForm.style)) {
+    groups.unshift({
+      value: '__current_style__',
+      label: '当前值（不在风格库）',
+      children: [{ value: editForm.style, label: editForm.style }],
+    })
+  }
+  return groups
+})
+const detailStylePlaceholder = computed(() => (
+  detailStyleCascaderOptions.value.length ? '请选择基础风格' : '该赛事未配置可选风格'
+))
 
 const entryStatusOptions = [
   { value: 'PENDING_PAYMENT', label: '待支付' },
@@ -976,8 +1022,20 @@ function normalizeDetailTab(tab) {
 }
 
 async function loadDetailCategories(competitionId) {
+  if (!competitionId) {
+    detailCategoryOptions.value = []
+    detailStyles.value = []
+    return
+  }
   const data = await fetchCompetitionDetail(competitionId)
   detailCategoryOptions.value = data.categories || []
+  detailStyles.value = (data.styles || []).filter((style) => style.name)
+}
+
+function handleEditCategoryChange() {
+  const styleNames = selectedEditCategory.value?.styleNames
+  if (!Array.isArray(styleNames) || !styleNames.length) return
+  if (editForm.style && !styleNames.includes(editForm.style)) editForm.style = ''
 }
 
 function closeDetail() {
@@ -2044,6 +2102,104 @@ button:disabled {
   border: 1px solid rgba(218, 232, 237, 0.12);
   border-radius: 8px;
   background: #0d161a;
+}
+
+.style-field :deep(.el-cascader) {
+  width: 100%;
+}
+
+.style-field :deep(.el-cascader .el-input__wrapper) {
+  min-height: 38px;
+  padding: 1px 10px;
+  border-radius: 8px;
+  background: #0d161a;
+  box-shadow: 0 0 0 1px rgba(218, 232, 237, 0.12) inset;
+}
+
+.style-field :deep(.el-cascader:not(.is-disabled) .el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px rgba(218, 232, 237, 0.28) inset;
+}
+
+.style-field :deep(.el-cascader:not(.is-disabled) .el-input.is-focus .el-input__wrapper) {
+  box-shadow: 0 0 0 1px rgba(216, 169, 53, 0.62) inset;
+}
+
+.style-field :deep(.el-cascader .el-input__inner) {
+  color: #eaf3f6;
+  font-size: 13px;
+}
+
+.style-field :deep(.el-cascader .el-input__inner::placeholder) {
+  color: #7f949d;
+}
+
+.style-field :deep(.el-cascader .el-input__suffix) {
+  color: #8ea4ad;
+}
+
+.style-field :deep(.el-cascader.is-disabled .el-input__wrapper) {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+:global(.admin-style-cascader-popper.el-popper) {
+  border: 1px solid rgba(218, 232, 237, 0.14);
+  background: #0d171b;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
+}
+
+:global(.admin-style-cascader-popper .el-popper__arrow::before) {
+  border-color: rgba(218, 232, 237, 0.14);
+  background: #0d171b;
+}
+
+:global(.admin-style-cascader-popper .el-cascader-panel) {
+  background: #0d171b;
+}
+
+:global(.admin-style-cascader-popper .el-cascader-menu) {
+  border-color: rgba(218, 232, 237, 0.12);
+  background: #0d171b;
+}
+
+:global(.admin-style-cascader-popper .el-cascader-menu__wrap) {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(218, 232, 237, 0.22) transparent;
+}
+
+:global(.admin-style-cascader-popper .el-cascader-node) {
+  color: #eaf3f6;
+}
+
+:global(.admin-style-cascader-popper .el-cascader-node:not(.is-disabled):hover),
+:global(.admin-style-cascader-popper .el-cascader-node:not(.is-disabled):focus) {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+:global(.admin-style-cascader-popper .el-cascader-node.in-active-path),
+:global(.admin-style-cascader-popper .el-cascader-node.is-active) {
+  color: #ffdc73;
+  font-weight: 700;
+}
+
+:global(.admin-style-cascader-popper .el-cascader-node__label) {
+  font-size: 13px;
+}
+
+:global(.admin-style-cascader-popper .el-cascader-node__postfix) {
+  color: #8ea4ad;
+}
+
+:global(.admin-style-cascader-popper .el-cascader__search-input) {
+  color: #eaf3f6;
+  border-bottom-color: rgba(218, 232, 237, 0.2);
+}
+
+:global(.admin-style-cascader-popper .el-cascader__search-input::placeholder) {
+  color: #7f949d;
+}
+
+:global(.admin-style-cascader-popper .el-cascader__empty-text) {
+  color: #8ea4ad;
 }
 
 .search-field div {
