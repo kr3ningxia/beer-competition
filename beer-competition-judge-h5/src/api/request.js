@@ -117,6 +117,11 @@ service.interceptors.response.use(
       clearSession()
       router.push('/login')
     }
+    if (error.response?.status === 401) {
+      // 登录失效由跳转登录页处理，避免请求错误提示带到登录页。
+      error.userNotified = true
+      return Promise.reject(error)
+    }
     showRequestError(extractErrorMessage(error))
     return Promise.reject(error)
   }

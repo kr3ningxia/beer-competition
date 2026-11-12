@@ -87,6 +87,11 @@ service.interceptors.response.use(
       clearSession(scope)
       router.push(scope === 'admin' ? '/admin/login' : '/portal/login')
     }
+    if (status === 401 && scope) {
+      // 登录失效由跳转登录页处理，避免并发请求重复弹出提示。
+      error.userNotified = true
+      return Promise.reject(error)
+    }
     const message = error.response?.data?.msg || '请求失败，请稍后重试'
     if (status === 403 && scope === 'admin' && message.includes('首次登录请先修改密码')) {
       if (router.currentRoute.value.path !== '/admin/account-setup') {
