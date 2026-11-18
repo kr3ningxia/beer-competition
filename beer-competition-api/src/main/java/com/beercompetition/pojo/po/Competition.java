@@ -53,6 +53,7 @@ public class Competition {
     private String deliveryAddress;
     private String deliveryNote;
     private String logisticsVisibility;
+    private Integer homeFeatured;
     @TableLogic(value = "0", delval = "1")
     private Integer deletedFlag;
     private LocalDateTime createTime;

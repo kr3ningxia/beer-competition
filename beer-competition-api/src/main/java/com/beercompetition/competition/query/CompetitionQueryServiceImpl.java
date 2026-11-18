@@ -223,11 +223,14 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
                 .filter(item -> CompetitionStatus.REGISTRATION_OPEN.name().equals(item.getStatus()))
                 .toList();
 
-        // 2) 平台赛事在主宣传位拥有优先权。只要平台赛事尚未结束，租户赛事不占用主位。
+        // 2) 运营手动指定的重点赛事优先；未指定或已结束时，平台赛事在主宣传位拥有优先权。
         PortalCompetitionVO activeCompetition = competitions.stream()
-                .filter(this::isOngoingPlatformCompetition)
+                .filter(this::isManualHomeFeatured)
                 .findFirst()
-                .orElse(openCompetitions.stream().findFirst().orElse(competitions.stream().findFirst().orElse(null)));
+                .orElseGet(() -> competitions.stream()
+                        .filter(this::isOngoingPlatformCompetition)
+                        .findFirst()
+                        .orElse(openCompetitions.stream().findFirst().orElse(competitions.stream().findFirst().orElse(null))));
 
         // 3) 组装首页数据
         return PortalHomeVO.builder()
@@ -252,9 +255,12 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
                 .filter(item -> CompetitionStatus.REGISTRATION_OPEN.name().equals(item.getStatus()))
                 .toList();
         PortalCompetitionSummaryVO activeCompetition = competitions.stream()
-                .filter(this::isOngoingPlatformCompetition)
+                .filter(this::isManualHomeFeatured)
                 .findFirst()
-                .orElse(openCompetitions.stream().findFirst().orElse(competitions.stream().findFirst().orElse(null)));
+                .orElseGet(() -> competitions.stream()
+                        .filter(this::isOngoingPlatformCompetition)
+                        .findFirst()
+                        .orElse(openCompetitions.stream().findFirst().orElse(competitions.stream().findFirst().orElse(null))));
 
         return PortalHomeSummaryVO.builder()
                 .activeCompetition(activeCompetition)
@@ -459,8 +465,19 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
     }
 
     private boolean isOngoingPlatformCompetition(String organizerType, String status) {
-        return OrganizerType.PLATFORM.name().equals(organizerType)
-                && !ENDED_STATUS.equals(status)
+        return OrganizerType.PLATFORM.name().equals(organizerType) && isOngoingStatus(status);
+    }
+
+    private boolean isManualHomeFeatured(PortalCompetitionVO competition) {
+        return Boolean.TRUE.equals(competition.getHomeFeatured()) && isOngoingStatus(competition.getStatus());
+    }
+
+    private boolean isManualHomeFeatured(PortalCompetitionSummaryVO competition) {
+        return Boolean.TRUE.equals(competition.getHomeFeatured()) && isOngoingStatus(competition.getStatus());
+    }
+
+    private boolean isOngoingStatus(String status) {
+        return !ENDED_STATUS.equals(status)
                 && !CompetitionStatus.ARCHIVED.name().equals(status)
                 && !CompetitionStatus.DRAFT.name().equals(status);
     }
@@ -531,6 +548,7 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
                 .brewType(competitionReadinessEvaluator.resolveBrewType(competition).name())
                 .organizerType(organizer == null ? null : organizer.getOrganizerType())
                 .organizerName(organizer == null ? null : organizer.getName())
+                .homeFeatured(Integer.valueOf(1).equals(competition.getHomeFeatured()))
                 .competitionDate(competition.getCompetitionDate())
                 .registrationStart(competition.getRegistrationStart())
                 .registrationDeadline(competition.getRegistrationDeadline())
@@ -555,6 +573,7 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
                 .brewType(competitionReadinessEvaluator.resolveBrewType(competition).name())
                 .organizerType(resolveOrganizerType(competition.getOrganizerId()))
                 .organizerName(resolveOrganizerName(competition.getOrganizerId()))
+                .homeFeatured(Integer.valueOf(1).equals(competition.getHomeFeatured()))
                 .competitionDate(competition.getCompetitionDate())
                 .registrationStart(competition.getRegistrationStart())
                 .registrationDeadline(competition.getRegistrationDeadline())

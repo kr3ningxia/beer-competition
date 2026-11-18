@@ -1634,3 +1634,12 @@ CREATE TABLE IF NOT EXISTS `competition_judge_evaluation` (
   KEY `idx_judge_evaluation_judge` (`judge_account_id`,`status`),
   KEY `idx_judge_evaluation_competition_score` (`competition_id`,`status`,`total_score`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='比赛级评审表现评价';
+
+--
+-- 2026-11-18 首页重点赛事手动配置
+--
+
+ALTER TABLE `competition`
+  ADD COLUMN `home_featured` tinyint NOT NULL DEFAULT 0
+    COMMENT '首页重点赛事：1 时优先展示在厂商端首页主位'
+    AFTER `logistics_visibility`;
