@@ -9,6 +9,21 @@
           <small>{{ focusCompetition.dataIntegrityIssues.length ? '数据需修正' : `${focusCompetition.alerts.length || '无'} 项待处理` }} · {{ getNextAction(focusCompetition) }}</small>
         </button>
 
+        <label v-if="canFilterOrganizers" class="featured-picker">
+          <span>首页重点</span>
+          <select
+            :value="homeFeaturedValue"
+            :disabled="savingHomeFeatured"
+            aria-label="首页重点赛事"
+            @change="changeHomeFeatured"
+          >
+            <option value="">不指定，按规则自动选取</option>
+            <option v-for="competition in homeFeaturedOptions" :key="competition.id" :value="String(competition.id)">
+              {{ competition.name }}
+            </option>
+          </select>
+        </label>
+
         <div class="head-actions">
           <button class="tool-button primary" type="button" @click="router.push('/admin/competitions/new')">
             <Plus />
@@ -198,6 +213,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import {
   CircleCheck,
@@ -216,7 +232,7 @@ import {
   getDateDistance,
   statusMeta,
 } from './competitionStore'
-import { fetchCompetitionQuickSummary, fetchCompetitions } from '@/api/admin'
+import { fetchCompetitionQuickSummary, fetchCompetitions, fetchHomeFeaturedOptions, updateHomeFeaturedCompetition } from '@/api/admin'
 import { ADMIN_TYPES } from '@/config/adminAccess'
 import { getAdminType } from '@/utils/auth'
 
@@ -231,10 +247,16 @@ const quickVisible = ref(false)
 const quickLoading = ref(false)
 const selectedCompetition = ref(null)
 const archivesLoaded = ref(false)
+const savingHomeFeatured = ref(false)
+const featuredOptionList = ref([])
 
 const canFilterOrganizers = computed(() => getAdminType() === ADMIN_TYPES.PLATFORM_SUPER_ADMIN)
 const isThirdPartyView = computed(() => canFilterOrganizers.value && selectedOrganizerType.value === 'TENANT')
 const organizerColumnLabel = computed(() => isThirdPartyView.value ? '比赛举办的主办方' : '下一步')
+const homeFeaturedCompetitionId = computed(() => featuredOptionList.value.find((item) => item.homeFeatured)?.id || null)
+const homeFeaturedValue = computed(() => homeFeaturedCompetitionId.value ? String(homeFeaturedCompetitionId.value) : '')
+const homeFeaturedOptions = computed(() => featuredOptionList.value.filter((item) => item.homeFeatured
+  || !['PUBLISHED', 'ARCHIVED', 'DRAFT'].includes(item.status)))
 
 const organizerOptions = [
   { label: '啤酒事务局', value: 'PLATFORM' },
@@ -274,7 +296,18 @@ const filteredCompetitions = computed(() => {
   })
 })
 
-onMounted(() => loadCompetitions(false))
+onMounted(() => {
+  loadCompetitions(false)
+  if (canFilterOrganizers.value) loadHomeFeaturedOptions()
+})
+
+async function loadHomeFeaturedOptions() {
+  try {
+    featuredOptionList.value = await fetchHomeFeaturedOptions()
+  } catch {
+    featuredOptionList.value = []
+  }
+}
 
 async function loadCompetitions(includeArchived = false) {
   loading.value = true
@@ -337,8 +370,25 @@ async function openQuickView(competition) {
   }
 }
 
-async function selectStatus(status) {
-  selectedStatus.value = status
+async function changeHomeFeatured(event) {
+  const nextId = event.target.value ? Number(event.target.value) : null
+  if (nextId === homeFeaturedCompetitionId.value) return
+  savingHomeFeatured.value = true
+  try {
+    await updateHomeFeaturedCompetition(nextId)
+    featuredOptionList.value = featuredOptionList.value.map((item) => ({
+      ...item,
+      homeFeatured: nextId !== null && item.id === nextId,
+    }))
+    ElMessage.success(nextId ? '已设为首页重点赛事' : '已取消首页重点赛事')
+  } catch {
+    event.target.value = homeFeaturedValue.value
+  } finally {
+    savingHomeFeatured.value = false
+  }
+}
+
+async function selectStatus(status) {  selectedStatus.value = status
   if (status !== 'ARCHIVED' || archivesLoaded.value || loading.value) return
   await loadCompetitions(true)
   if (selectedStatus.value === 'ARCHIVED') {
@@ -504,6 +554,45 @@ svg {
   color: var(--green);
   font-style: normal;
   font-weight: 800;
+}
+
+.featured-picker {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.featured-picker > span {
+  flex: 0 0 auto;
+  color: var(--gold-soft);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.featured-picker select {
+  max-width: 240px;
+  min-height: 30px;
+  padding: 0 4px;
+  color: var(--text);
+  border: 0;
+  outline: 0;
+  background: transparent;
+}
+
+.featured-picker select:disabled {
+  opacity: 0.6;
+}
+
+.featured-picker option {
+  color: #dce9ed;
+  background: #172227;
 }
 
 .head-actions {

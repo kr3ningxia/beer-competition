@@ -106,6 +106,14 @@ export function updateCompetitionSponsors(id, payload) {
   return request.put(`/api/admin/competitions/${id}/sponsors`, payload, { authScope: 'admin' })
 }
 
+export function updateHomeFeaturedCompetition(competitionId) {
+  return request.put('/api/admin/competitions/home-featured', { competitionId }, { authScope: 'admin' })
+}
+
+export function fetchHomeFeaturedOptions() {
+  return request.get('/api/admin/competitions/home-featured/options', { authScope: 'admin' })
+}
+
 export function uploadCompetitionSponsorLogo(id, file) {
   const formData = new FormData()
   formData.append('file', file)

@@ -1,6 +1,7 @@
 package com.beercompetition.competition.command;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.beercompetition.common.exception.BaseException;
 import com.beercompetition.common.exception.ResourceNotFoundException;
 import com.beercompetition.mapper.BeerEntryMapper;
@@ -152,6 +153,52 @@ public class CompetitionCommandServiceImpl implements CompetitionCommandService 
         competitionMapper.updateById(competition);
         writeRefundPolicyLog(competition.getId(), oldMode, newMode);
         return competitionQueryService.getCompetitionDetail(id);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void setHomeFeaturedCompetition(Long competitionId) {
+        // 1) 首页重点赛事属于平台运营动作，仅平台超级管理员可以设置
+        competitionAccessService.requirePlatformSuperAdmin();
+        Competition competition = null;
+        if (competitionId != null) {
+            competition = competitionMapper.selectById(competitionId);
+            if (competition == null) {
+                throw new ResourceNotFoundException("比赛不存在");
+            }
+            CompetitionStatus status = parseStatus(competition);
+            if (status == CompetitionStatus.PUBLISHED
+                    || status == CompetitionStatus.ARCHIVED
+                    || status == CompetitionStatus.DRAFT) {
+                throw new BaseException("已发布结果、已归档或草稿的比赛不能设为首页重点赛事");
+            }
+        }
+
+        // 2) 首页主位同时只保留一场，先清空旧标记再写入新标记
+        competitionMapper.update(null, new LambdaUpdateWrapper<Competition>()
+                .set(Competition::getHomeFeatured, 0)
+                .eq(Competition::getHomeFeatured, 1));
+        if (competition != null) {
+            competitionMapper.update(null, new LambdaUpdateWrapper<Competition>()
+                    .set(Competition::getHomeFeatured, 1)
+                    .eq(Competition::getId, competitionId));
+        }
+
+        // 3) 记录操作日志，便于追溯首页主位调整
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("action", "设置首页重点赛事");
+        payload.put("competitionId", competitionId);
+        payload.put("competitionName", competition == null ? null : competition.getName());
+        adminOperationLogMapper.insert(AdminOperationLog.builder()
+                .adminUserId(BaseContext.getCurrentId())
+                .organizerId(competition == null ? null : competition.getOrganizerId())
+                .competitionId(competitionId)
+                .action("COMPETITION_HOME_FEATURED_UPDATE")
+                .targetType(LOG_TARGET_COMPETITION)
+                .targetPublicId(competitionId == null ? null : String.valueOf(competitionId))
+                .summary(writeObjectJson(payload, "保存首页重点赛事操作日志失败"))
+                .createTime(LocalDateTime.now())
+                .build());
     }
 
     private void validateEarlyBirdConfig(BigDecimal earlyBirdFee,

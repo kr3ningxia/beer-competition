@@ -19,6 +19,7 @@ public class CompetitionVO {
     private String brewType;
     private String organizerType;
     private String organizerName;
+    private Boolean homeFeatured;
     private LocalDate competitionDate;
     private LocalDateTime registrationStart;
     private LocalDateTime registrationDeadline;

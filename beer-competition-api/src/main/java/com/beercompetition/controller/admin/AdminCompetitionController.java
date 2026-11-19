@@ -12,6 +12,7 @@ import com.beercompetition.pojo.dto.CompetitionSponsorBatchUpdateRequest;
 import com.beercompetition.pojo.dto.CompetitionStyleLibraryUpdateRequest;
 import com.beercompetition.pojo.dto.ConfigNameBatchUpdateRequest;
 import com.beercompetition.pojo.dto.EntryFieldBatchUpdateRequest;
+import com.beercompetition.pojo.dto.HomeFeaturedCompetitionUpdateRequest;
 import com.beercompetition.pojo.dto.JudgeTableBatchUpdateRequest;
 import com.beercompetition.pojo.dto.CompetitionCollectionConfigUpdateRequest;
 import com.beercompetition.pojo.dto.NotificationRuleUpdateRequest;
@@ -26,6 +27,7 @@ import com.beercompetition.pojo.vo.CompetitionQuickSummaryVO;
 import com.beercompetition.pojo.vo.CompetitionSponsorLogoVO;
 import com.beercompetition.pojo.vo.CompetitionSponsorVO;
 import com.beercompetition.pojo.vo.CompetitionVO;
+import com.beercompetition.pojo.vo.HomeFeaturedCompetitionOptionVO;
 import com.beercompetition.pojo.vo.CompetitionCollectionConfigVO;
 import com.beercompetition.pojo.vo.CompetitionCollectionQrVO;
 import com.beercompetition.pojo.vo.CompetitionNotificationConfigVO;
@@ -138,6 +140,23 @@ public class AdminCompetitionController {
     public Result<String> deleteCompetition(@PathVariable Long id) {
         competitionCommandService.deleteCompetition(id);
         return Result.success("删除成功");
+    }
+
+    /**
+     * 查询首页重点赛事下拉选项。
+     */
+    @GetMapping("/home-featured/options")
+    public Result<List<HomeFeaturedCompetitionOptionVO>> homeFeaturedOptions() {
+        return Result.success(competitionQueryService.listHomeFeaturedCompetitionOptions());
+    }
+
+    /**
+     * 设置厂商端首页重点赛事。
+     */
+    @PutMapping("/home-featured")
+    public Result<Void> updateHomeFeatured(@RequestBody HomeFeaturedCompetitionUpdateRequest request) {
+        competitionCommandService.setHomeFeaturedCompetition(request.getCompetitionId());
+        return Result.success();
     }
 
     /**

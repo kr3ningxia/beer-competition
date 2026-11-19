@@ -36,6 +36,7 @@ import com.beercompetition.pojo.vo.CompetitionCheckVO;
 import com.beercompetition.pojo.vo.CompetitionConfigNameVO;
 import com.beercompetition.pojo.vo.CompetitionDetailVO;
 import com.beercompetition.pojo.vo.CompetitionEntryStatsVO;
+import com.beercompetition.pojo.vo.HomeFeaturedCompetitionOptionVO;
 import com.beercompetition.pojo.vo.CompetitionEntryVO;
 import com.beercompetition.pojo.vo.CompetitionLogisticsVO;
 import com.beercompetition.pojo.vo.CompetitionRoundVO;
@@ -249,6 +250,23 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
     }
 
     @Override
+    public List<HomeFeaturedCompetitionOptionVO> listHomeFeaturedCompetitionOptions() {
+        competitionAccessService.requirePlatformSuperAdmin();
+        return competitionMapper.selectList(new LambdaQueryWrapper<Competition>()
+                        .ne(Competition::getStatus, CompetitionStatus.ARCHIVED.name())
+                        .orderByDesc(Competition::getCompetitionDate)
+                        .orderByDesc(Competition::getId))
+                .stream()
+                .map(competition -> HomeFeaturedCompetitionOptionVO.builder()
+                        .id(competition.getId())
+                        .name(competition.getName())
+                        .status(competition.getStatus())
+                        .homeFeatured(Integer.valueOf(1).equals(competition.getHomeFeatured()))
+                        .build())
+                .toList();
+    }
+
+    @Override
     public PortalHomeSummaryVO getPortalHomeSummary() {
         List<PortalCompetitionSummaryVO> competitions = listPortalCompetitionSummaries();
         List<PortalCompetitionSummaryVO> openCompetitions = competitions.stream()
@@ -405,6 +423,7 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
                 .brewType(competitionReadinessEvaluator.resolveBrewType(competition).name())
                 .organizerType(organizer == null ? null : organizer.getOrganizerType())
                 .organizerName(organizer == null ? null : organizer.getName())
+                .homeFeatured(Integer.valueOf(1).equals(competition.getHomeFeatured()))
                 .competitionDate(competition.getCompetitionDate())
                 .registrationStart(competition.getRegistrationStart())
                 .registrationDeadline(competition.getRegistrationDeadline())

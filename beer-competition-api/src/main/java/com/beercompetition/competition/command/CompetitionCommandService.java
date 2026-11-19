@@ -18,4 +18,9 @@ public interface CompetitionCommandService {
     CompetitionDetailVO updateBaseInfo(Long id, CompetitionBaseInfoUpdateRequest request);
 
     CompetitionDetailVO updateRefundPolicy(Long id, CompetitionRefundPolicyUpdateRequest request);
+
+    /**
+     * 设置厂商端首页重点赛事，competitionId 为空时取消手动指定。
+     */
+    void setHomeFeaturedCompetition(Long competitionId);
 }

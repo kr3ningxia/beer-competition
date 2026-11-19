@@ -6,6 +6,7 @@ import com.beercompetition.pojo.vo.CompetitionEntryVO;
 import com.beercompetition.pojo.vo.CompetitionProgressVO;
 import com.beercompetition.pojo.vo.CompetitionQuickSummaryVO;
 import com.beercompetition.pojo.vo.CompetitionVO;
+import com.beercompetition.pojo.vo.HomeFeaturedCompetitionOptionVO;
 import com.beercompetition.pojo.vo.PortalCompetitionVO;
 import com.beercompetition.pojo.vo.PortalCompetitionSummaryVO;
 import com.beercompetition.pojo.vo.PortalHomeVO;
@@ -24,6 +25,11 @@ public interface CompetitionQueryService {
     List<CompetitionVO> listCompetitions(boolean includeArchived);
 
     List<CompetitionVO> listCompetitions(boolean includeArchived, String organizerType);
+
+    /**
+     * 查询首页重点赛事下拉选项，只有平台超级管理员可以调用。
+     */
+    List<HomeFeaturedCompetitionOptionVO> listHomeFeaturedCompetitionOptions();
 
     PortalHomeVO getPortalHome();
 
