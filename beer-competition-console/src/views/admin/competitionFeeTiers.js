@@ -1,32 +1,38 @@
-export const DISCOUNT_RATE_MAX_DECIMALS = 4
+const PRICE_EPSILON = 1e-9
 
-const PERCENT_EPSILON = 1e-6
-
-export function discountRateToPercent(rate) {
-  return Number((Number(rate) * 100).toFixed(DISCOUNT_RATE_MAX_DECIMALS))
+/**
+ * 把折后单价换算成“X 折”，仅用于展示，不参与计价。
+ */
+export function tierPriceToZhe(price, entryFee) {
+  const fee = Number(entryFee)
+  const value = Number(price)
+  if (!Number.isFinite(fee) || fee <= 0 || !Number.isFinite(value) || value <= 0) return ''
+  const zhe = Math.round((value / fee) * 100) / 10
+  const text = Number.isInteger(zhe) ? String(zhe) : zhe.toFixed(1)
+  return `${text} 折`
 }
 
-export function discountPercentToRate(percent) {
-  return Number((Number(percent) / 100).toFixed(6))
-}
-
-export function discountPercentIssue(value) {
-  if (value === '' || value === null || value === undefined) return '请填写折扣率'
-  const percent = Number(value)
-  if (!Number.isFinite(percent)) return '请输入有效的折扣率'
-  if (percent < 1 - PERCENT_EPSILON || percent > 100 + PERCENT_EPSILON) return '折扣率需在 1% 到 100% 之间'
-  const rounded = Math.round(percent * 10 ** DISCOUNT_RATE_MAX_DECIMALS) / 10 ** DISCOUNT_RATE_MAX_DECIMALS
-  if (Math.abs(percent - rounded) > PERCENT_EPSILON) return `折扣率最多保留 ${DISCOUNT_RATE_MAX_DECIMALS} 位小数`
+export function tierPriceIssue(price, entryFee) {
+  if (price === '' || price === null || price === undefined) return '请填写折后单价'
+  const value = Number(price)
+  if (!Number.isFinite(value)) return '请输入有效的折后单价'
+  if (value <= 0) return '折后单价需大于 0'
+  if (Math.abs(value * 100 - Math.round(value * 100)) > PRICE_EPSILON) return '折后单价最多保留 2 位小数'
+  const fee = Number(entryFee)
+  if (entryFee !== '' && entryFee !== null && entryFee !== undefined
+    && Number.isFinite(fee) && value > fee) {
+    return '折后单价不能高于普通报名费'
+  }
   return ''
 }
 
-export function feeTierIssue(tier, index, tiers) {
-  const issue = discountPercentIssue(tier?.discountRatePercent)
+export function feeTierIssue(tier, index, tiers, entryFee) {
+  const issue = tierPriceIssue(tier?.price, entryFee)
   if (issue) return issue
   if (index > 0) {
     const previous = tiers?.[index - 1]
-    if (previous && Number(tier.discountRatePercent) > Number(previous.discountRatePercent)) {
-      return '折扣率不能高于上一档'
+    if (previous && Number(tier.price) > Number(previous.price)) {
+      return '后面档位的折后单价不能高于前一档'
     }
   }
   return ''

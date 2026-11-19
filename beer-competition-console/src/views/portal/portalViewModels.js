@@ -115,8 +115,20 @@ export function formatCompetitionFee(competition) {
 export function normalizeTiers(competition) {
   if (!competition?.tierPricingEnabled) return []
   return (competition?.feeTiers || [])
-    .filter((tier) => Number(tier?.discountRate) > 0)
+    .filter((tier) => Number(tier?.price) > 0 || Number(tier?.discountRate) > 0)
     .sort((a, b) => Number(a.startQuantity) - Number(b.startQuantity))
+}
+
+/**
+ * 阶梯价以折后金额为准，按报名费换算成比例；历史数据没有金额时回落到原折扣率。
+ */
+export function tierRate(tier, competition) {
+  const entryFee = Number(competition?.entryFee)
+  const price = Number(tier?.price)
+  if (Number.isFinite(price) && price > 0 && Number.isFinite(entryFee) && entryFee > 0) {
+    return price / entryFee
+  }
+  return Number(tier?.discountRate) || 1
 }
 
 export function tierRateToZhe(rate) {
@@ -143,12 +155,13 @@ export function buildTierLadder(competition) {
     })
   }
   tiers.forEach((tier) => {
-    const amount = Math.round(base * Number(tier.discountRate) * 100) / 100
+    const rate = tierRate(tier, competition)
+    const amount = Math.round(base * rate * 100) / 100
     const saved = Math.round((base - amount) * 100) / 100
     segments.push({
       key: `tier-${tier.startQuantity}`,
       label: `累计第 ${tier.startQuantity} 款起`,
-      rateText: tierRateToZhe(tier.discountRate),
+      rateText: tierRateToZhe(rate),
       amount,
       saved,
       isBase: false,
@@ -157,7 +170,7 @@ export function buildTierLadder(competition) {
   return {
     visible: true,
     segments,
-    pillText: `第 ${firstStart} 款起 ${tierRateToZhe(first.discountRate)}`,
+    pillText: `第 ${firstStart} 款起 ${tierRateToZhe(tierRate(first, competition))}`,
     base,
   }
 }
@@ -167,7 +180,7 @@ export function tierRateAt(competition, sequence) {
   if (!tiers.length) return 1
   let rate = 1
   for (const tier of tiers) {
-    if (Number(tier.startQuantity) <= sequence) rate = Number(tier.discountRate)
+    if (Number(tier.startQuantity) <= sequence) rate = tierRate(tier, competition)
     else break
   }
   return rate
@@ -180,11 +193,11 @@ export function nextTierHint(competition, currentTotal) {
   if (next) {
     const gap = Number(next.startQuantity) - currentTotal
     return gap <= 0
-      ? `累计第 ${next.startQuantity} 款起享 ${tierRateToZhe(next.discountRate)}`
-      : `再报 ${gap} 款，累计第 ${next.startQuantity} 款起享 ${tierRateToZhe(next.discountRate)}`
+      ? `累计第 ${next.startQuantity} 款起享 ${tierRateToZhe(tierRate(next, competition))}`
+      : `再报 ${gap} 款，累计第 ${next.startQuantity} 款起享 ${tierRateToZhe(tierRate(next, competition))}`
   }
   const last = tiers[tiers.length - 1]
-  return `已是最高档 · 累计第 ${last.startQuantity} 款起享 ${tierRateToZhe(last.discountRate)}`
+  return `已是最高档 · 累计第 ${last.startQuantity} 款起享 ${tierRateToZhe(tierRate(last, competition))}`
 }
 
 export function isEntryAwarded(entry) {

@@ -47,6 +47,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumSet;
@@ -129,7 +130,7 @@ public class CompetitionCreationService {
         List<ConfigNameItemRequest> categories = normalizeNameItems(
                 request.getCategories() == null ? List.of() : request.getCategories(), "投递组别");
         validateScoreConfigs(request.getScoreConfigs());
-        validateFeeTiers(request.getTierPricingEnabled(), request.getFeeTiers());
+        validateFeeTiers(request.getTierPricingEnabled(), request.getFeeTiers(), request.getEntryFee());
 
         // 2) 构造草稿比赛主记录
         Competition competition = Competition.builder()
@@ -161,14 +162,15 @@ public class CompetitionCreationService {
                 remapScopeKeys(scopesByCategoryName, categoryIds, categories));
         replaceEntryFields(competition.getId(), entryFields);
         replaceScoreConfigs(competition.getId(), request.getScoreConfigs());
-        replaceFeeTiers(competition.getId(), request.getTierPricingEnabled(), request.getFeeTiers());
+        replaceFeeTiers(competition.getId(), request.getTierPricingEnabled(), request.getFeeTiers(), request.getEntryFee());
 
         // 4) 返回列表口径摘要
         Competition saved = competitionMapper.selectById(competition.getId());
         return toCompetitionVO(saved, competitionQueryService.getCompetitionOverview(saved.getId()));
     }
 
-    public void replaceFeeTiers(Long competitionId, Boolean enabled, List<CompetitionFeeTierRequest> requests) {
+    public void replaceFeeTiers(Long competitionId, Boolean enabled, List<CompetitionFeeTierRequest> requests,
+                                BigDecimal entryFee) {
         competitionFeeTierMapper.delete(new LambdaQueryWrapper<CompetitionFeeTier>()
                 .eq(CompetitionFeeTier::getCompetitionId, competitionId));
         if (!Boolean.TRUE.equals(enabled)) {
@@ -176,42 +178,77 @@ public class CompetitionCreationService {
         }
         int sort = 0;
         for (CompetitionFeeTierRequest item : requests == null ? List.<CompetitionFeeTierRequest>of() : requests) {
+            BigDecimal price = resolveTierPrice(item, entryFee);
             competitionFeeTierMapper.insert(CompetitionFeeTier.builder()
                     .competitionId(competitionId)
                     .startQuantity(item.getStartQuantity())
-                    .discountRate(item.getDiscountRate())
+                    .tierPrice(price)
+                    .discountRate(resolveDiscountRate(price, entryFee))
                     .sortOrder(sort++)
                     .enabled(FLAG_TRUE)
                     .build());
         }
     }
 
-    public void validateFeeTiers(Boolean enabled, List<CompetitionFeeTierRequest> requests) {
+    public void validateFeeTiers(Boolean enabled, List<CompetitionFeeTierRequest> requests, BigDecimal entryFee) {
         if (!Boolean.TRUE.equals(enabled)) {
             return;
         }
         if (requests == null || requests.isEmpty()) {
             throw new BaseException("启用阶梯报名价后至少配置一档优惠");
         }
+        if (entryFee == null || entryFee.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BaseException("请先填写普通报名费，再配置阶梯报名价");
+        }
         int previousStart = 1;
-        BigDecimal previousRate = BigDecimal.ONE;
+        BigDecimal previousPrice = entryFee;
         Set<Integer> starts = new LinkedHashSet<>();
         for (CompetitionFeeTierRequest item : requests) {
-            if (item == null || item.getStartQuantity() == null || item.getDiscountRate() == null) {
+            if (item == null || item.getStartQuantity() == null) {
                 throw new BaseException("阶梯价格配置不完整");
+            }
+            BigDecimal price = resolveTierPrice(item, entryFee);
+            if (price == null) {
+                throw new BaseException("请填写阶梯的折后单价");
             }
             if (item.getStartQuantity() <= 1 || item.getStartQuantity() <= previousStart || !starts.add(item.getStartQuantity())) {
                 throw new BaseException("阶梯起始数量必须从第 2 款起按升序配置，且不能重复");
             }
-            if (item.getDiscountRate().compareTo(BigDecimal.ZERO) <= 0 || item.getDiscountRate().compareTo(BigDecimal.ONE) > 0) {
-                throw new BaseException("折扣率需在 1% 到 100% 之间");
+            if (price.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new BaseException("折后单价需大于 0");
             }
-            if (item.getDiscountRate().compareTo(previousRate) > 0) {
-                throw new BaseException("后续档位的折扣率不能高于前一档");
+            if (price.compareTo(entryFee) > 0) {
+                throw new BaseException("折后单价不能高于普通报名费");
+            }
+            if (price.compareTo(previousPrice) > 0) {
+                throw new BaseException("后面档位的折后单价不能高于前一档");
             }
             previousStart = item.getStartQuantity();
-            previousRate = item.getDiscountRate();
+            previousPrice = price;
         }
+    }
+
+    /**
+     * 兼容旧口径：请求带金额时以金额为准，只带折扣率时按报名费换算金额。
+     */
+    private BigDecimal resolveTierPrice(CompetitionFeeTierRequest item, BigDecimal entryFee) {
+        if (item == null) {
+            return null;
+        }
+        if (item.getPrice() != null) {
+            return item.getPrice().setScale(2, RoundingMode.HALF_UP);
+        }
+        if (item.getDiscountRate() == null || entryFee == null || entryFee.compareTo(BigDecimal.ZERO) <= 0) {
+            return null;
+        }
+        return entryFee.multiply(item.getDiscountRate()).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal resolveDiscountRate(BigDecimal price, BigDecimal entryFee) {
+        if (price == null || entryFee == null || entryFee.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ONE;
+        }
+        return price.divide(entryFee, 6, RoundingMode.HALF_UP);
     }
 
     private void replaceStyleSnapshot(Long competitionId, List<StyleItemVO> styles) {

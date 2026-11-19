@@ -240,8 +240,8 @@
                 <div v-if="baseForm.tierPricingEnabled" class="tier-editor">
                   <div class="tier-editor-head">
                     <span aria-hidden="true">起始款数</span>
-                    <span aria-hidden="true">折扣率</span>
-                    <span aria-hidden="true">示例单价</span>
+                    <span aria-hidden="true">折后单价</span>
+                    <span aria-hidden="true">折算</span>
                     <button v-if="editable.basePrice" type="button" class="text-button tier-add-button" @click="addBaseFeeTier">添加阶梯</button>
                   </div>
                   <div v-for="(tier, index) in baseForm.feeTiers" :key="tier.id || index" class="tier-editor-row">
@@ -250,15 +250,16 @@
                       <span>款起</span>
                     </div>
                     <div class="tier-rate-cell">
-                      <div class="fee-field" :class="{ invalid: editable.basePrice && Boolean(feeTierIssue(tier, index, baseForm.feeTiers)) }">
-                        <input v-model.number="tier.discountRatePercent" :aria-label="`第 ${index + 1} 档折扣率`" :aria-invalid="editable.basePrice && Boolean(feeTierIssue(tier, index, baseForm.feeTiers))" min="1" max="100" step="0.0001" type="number" :disabled="!editable.basePrice" />
-                        <span>%</span>
+                      <div class="fee-field" :class="{ invalid: editable.basePrice && Boolean(feeTierIssue(tier, index, baseForm.feeTiers, baseForm.entryFee)) }">
+                        <input v-model.number="tier.price" :aria-label="`第 ${index + 1} 档折后单价`" :aria-invalid="editable.basePrice && Boolean(feeTierIssue(tier, index, baseForm.feeTiers, baseForm.entryFee))" min="0" step="0.01" type="number" :disabled="!editable.basePrice" />
+                        <span>元 / 款</span>
                       </div>
-                      <p v-if="editable.basePrice && feeTierIssue(tier, index, baseForm.feeTiers)" class="tier-field-error">{{ feeTierIssue(tier, index, baseForm.feeTiers) }}</p>
+                      <p v-if="editable.basePrice && feeTierIssue(tier, index, baseForm.feeTiers, baseForm.entryFee)" class="tier-field-error">{{ feeTierIssue(tier, index, baseForm.feeTiers, baseForm.entryFee) }}</p>
                     </div>
-                    <span class="tier-example-price">{{ formatBaseTierAmount(tier.discountRatePercent) }}<small>元 / 款</small></span>
+                    <span class="tier-example-price">{{ tierPriceToZhe(tier.price, baseForm.entryFee) || '—' }}</span>
                     <button v-if="editable.basePrice" class="icon-button tier-remove-button" title="删除阶梯" :aria-label="`删除第 ${index + 1} 档阶梯`" type="button" @click="baseForm.feeTiers.splice(index, 1)"><Delete /></button>
                   </div>
+                  <p v-if="baseForm.earlyBirdEnabled" class="tier-pricing-hint">早鸟期内按早鸟价折算同一比例</p>
                 </div>
               </section>
 
@@ -2811,7 +2812,7 @@ import {
   Warning,
 } from '@element-plus/icons-vue'
 import { exportCategoryStyleScope } from './competitionCategoryExport'
-import { discountPercentToRate, discountRateToPercent, feeTierIssue } from './competitionFeeTiers'
+import { feeTierIssue, tierPriceToZhe } from './competitionFeeTiers'
 import {
   defaultScoreConfigs,
   fieldTypeLabels,
@@ -2936,7 +2937,7 @@ const baseForm = reactive({
   earlyBirdFee: '',
   earlyBirdDeadline: '',
   tierPricingEnabled: false,
-  feeTiers: [{ startQuantity: 3, discountRatePercent: 80 }],
+  feeTiers: [{ startQuantity: 3, price: '' }],
   refundApprovalMode: 'AUTO_APPROVE',
   description: '',
   rulesUrl: '',
@@ -5211,10 +5212,12 @@ function resetForms() {
     earlyBirdFee: competition.value.earlyBirdFee ?? '',
     earlyBirdDeadline: toInputDateTime(competition.value.earlyBirdDeadline),
     tierPricingEnabled: Boolean(competition.value.tierPricingEnabled),
-    feeTiers: (competition.value.feeTiers?.length ? competition.value.feeTiers : [{ startQuantity: 3, discountRate: 0.8 }]).map((tier) => ({
+    feeTiers: (competition.value.feeTiers?.length ? competition.value.feeTiers : [{ startQuantity: 3, price: '' }]).map((tier) => ({
       id: tier.id,
       startQuantity: tier.startQuantity,
-      discountRatePercent: discountRateToPercent(tier.discountRate),
+      price: tier.price ?? (tier.discountRate != null
+        ? Number((Number(competition.value.entryFee || 0) * Number(tier.discountRate)).toFixed(2))
+        : ''),
     })),
     refundApprovalMode: competition.value.refundApprovalMode || 'AUTO_APPROVE',
     description: competition.value.description || '',
@@ -8833,11 +8836,7 @@ function removeItem(list, index) {
 
 function addBaseFeeTier() {
   const last = baseForm.feeTiers[baseForm.feeTiers.length - 1]
-  baseForm.feeTiers.push({ startQuantity: (Number(last?.startQuantity) || 1) + 2, discountRatePercent: 80 })
-}
-
-function formatBaseTierAmount(ratePercent) {
-  return (Number(baseForm.entryFee || 0) * Number(ratePercent ?? 100) / 100).toFixed(2)
+  baseForm.feeTiers.push({ startQuantity: (Number(last?.startQuantity) || 1) + 2, price: '' })
 }
 
 async function removeJudgeTable(index) {
@@ -9161,9 +9160,9 @@ async function saveBaseInfo() {
     }
   }
   if (editable.value.basePrice && baseForm.tierPricingEnabled) {
-    const invalidTierIndex = baseForm.feeTiers.findIndex((tier, index) => Boolean(feeTierIssue(tier, index, baseForm.feeTiers)))
+    const invalidTierIndex = baseForm.feeTiers.findIndex((tier, index) => Boolean(feeTierIssue(tier, index, baseForm.feeTiers, baseForm.entryFee)))
     if (invalidTierIndex >= 0) {
-      ElMessage.warning(`第 ${invalidTierIndex + 1} 档：${feeTierIssue(baseForm.feeTiers[invalidTierIndex], invalidTierIndex, baseForm.feeTiers)}`)
+      ElMessage.warning(`第 ${invalidTierIndex + 1} 档：${feeTierIssue(baseForm.feeTiers[invalidTierIndex], invalidTierIndex, baseForm.feeTiers, baseForm.entryFee)}`)
       return
     }
   }
@@ -9180,7 +9179,7 @@ async function saveBaseInfo() {
     earlyBirdFee: earlyBirdEnabled ? Number(baseForm.earlyBirdFee) : null,
     earlyBirdDeadline: earlyBirdEnabled ? toBackendDateTime(baseForm.earlyBirdDeadline) : null,
     tierPricingEnabled: baseForm.tierPricingEnabled,
-    feeTiers: baseForm.tierPricingEnabled ? baseForm.feeTiers.map(({ startQuantity, discountRatePercent }) => ({ startQuantity: Number(startQuantity), discountRate: discountPercentToRate(discountRatePercent) })) : [],
+    feeTiers: baseForm.tierPricingEnabled ? baseForm.feeTiers.map(({ startQuantity, price }) => ({ startQuantity: Number(startQuantity), price: Number(price) })) : [],
     description: baseForm.description,
     rulesUrl: baseForm.rulesUrl || null,
     deliveryMethod: baseForm.deliveryMethod,

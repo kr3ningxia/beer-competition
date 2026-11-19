@@ -10,6 +10,7 @@ import java.math.BigDecimal;
 public class CompetitionFeeTierVO {
     private Long id;
     private Integer startQuantity;
+    private BigDecimal price;
     private BigDecimal discountRate;
     private Integer sortOrder;
     private Integer enabled;

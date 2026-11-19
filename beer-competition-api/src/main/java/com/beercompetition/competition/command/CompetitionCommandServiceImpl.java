@@ -10,6 +10,7 @@ import com.beercompetition.mapper.CompetitionRoundMapper;
 import com.beercompetition.mapper.CompetitionMapper;
 import com.beercompetition.mapper.CompetitionFeeTierMapper;
 import com.beercompetition.pojo.dto.CompetitionBaseInfoUpdateRequest;
+import com.beercompetition.pojo.dto.CompetitionFeeTierRequest;
 import com.beercompetition.pojo.dto.CompetitionCreateRequest;
 import com.beercompetition.pojo.dto.CompetitionRefundPolicyUpdateRequest;
 import com.beercompetition.pojo.enums.BrewType;
@@ -33,6 +34,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.List;
@@ -102,7 +104,7 @@ public class CompetitionCommandServiceImpl implements CompetitionCommandService 
         Competition competition = getCompetitionOrThrow(id);
         validateEarlyBirdConfig(request.getEarlyBirdFee(), request.getEarlyBirdDeadline(),
                 request.getEntryFee(), request.getRegistrationStart(), request.getRegistrationDeadline());
-        competitionCreationService.validateFeeTiers(request.getTierPricingEnabled(), request.getFeeTiers());
+        competitionCreationService.validateFeeTiers(request.getTierPricingEnabled(), request.getFeeTiers(), request.getEntryFee());
         assertBaseInfoEditable(competition, request);
         String nextCode = normalizeRequired(request.getCode(), "比赛编号不能为空");
         assertCompetitionCodeUnique(nextCode, id);
@@ -130,7 +132,7 @@ public class CompetitionCommandServiceImpl implements CompetitionCommandService 
         } catch (DuplicateKeyException ex) {
             throw new BaseException("比赛编号已存在");
         }
-        competitionCreationService.replaceFeeTiers(id, request.getTierPricingEnabled(), request.getFeeTiers());
+        competitionCreationService.replaceFeeTiers(id, request.getTierPricingEnabled(), request.getFeeTiers(), request.getEntryFee());
 
         // 4) 重新计算配置检查并返回详情
         return competitionQueryService.getCompetitionDetail(id);
@@ -335,13 +337,39 @@ public class CompetitionCommandServiceImpl implements CompetitionCommandService 
         if (current.size() != requested.size()) return true;
         for (int i = 0; i < current.size(); i++) {
             if (!Objects.equals(current.get(i).getStartQuantity(), requested.get(i).getStartQuantity())
-                    || !compareBigDecimal(current.get(i).getDiscountRate(), requested.get(i).getDiscountRate())) return true;
+                    || !compareBigDecimal(resolveTierPrice(current.get(i), competition.getEntryFee()),
+                            resolveTierPrice(requested.get(i), competition.getEntryFee()))) return true;
         }
         return false;
     }
 
-    private boolean onlyDescriptionChangedOrUnchanged(Competition competition, CompetitionBaseInfoUpdateRequest request) {
-        return Objects.equals(competition.getName(), request.getName())
+    private BigDecimal resolveTierPrice(CompetitionFeeTier tier, BigDecimal entryFee) {
+        if (tier == null) {
+            return null;
+        }
+        if (tier.getTierPrice() != null) {
+            return tier.getTierPrice();
+        }
+        if (tier.getDiscountRate() == null || entryFee == null) {
+            return null;
+        }
+        return entryFee.multiply(tier.getDiscountRate()).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal resolveTierPrice(CompetitionFeeTierRequest tier, BigDecimal entryFee) {
+        if (tier == null) {
+            return null;
+        }
+        if (tier.getPrice() != null) {
+            return tier.getPrice().setScale(2, RoundingMode.HALF_UP);
+        }
+        if (tier.getDiscountRate() == null || entryFee == null) {
+            return null;
+        }
+        return entryFee.multiply(tier.getDiscountRate()).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private boolean onlyDescriptionChangedOrUnchanged(Competition competition, CompetitionBaseInfoUpdateRequest request) {        return Objects.equals(competition.getName(), request.getName())
                 && Objects.equals(competition.getCode(), request.getCode())
                 && brewTypeUnchanged(competition, request.getBrewType())
                 && Objects.equals(competition.getCompetitionDate(), request.getCompetitionDate())

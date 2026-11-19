@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="competition-create">
     <AdminPageHeader title="新建比赛">
       <template #leading>
@@ -134,8 +134,8 @@
               <div v-if="draft.tierPricingEnabled" class="tier-editor">
                 <div class="tier-editor-head">
                   <span aria-hidden="true">起始款数</span>
-                  <span aria-hidden="true">折扣率</span>
-                  <span aria-hidden="true">示例单价</span>
+                  <span aria-hidden="true">折后单价</span>
+                  <span aria-hidden="true">折算</span>
                   <button type="button" class="text-button tier-add-button" @click="addFeeTier">添加阶梯</button>
                 </div>
                 <div v-for="(tier, index) in draft.feeTiers" :key="tier.id" class="tier-editor-row">
@@ -144,15 +144,16 @@
                     <span>款起</span>
                   </div>
                   <div class="tier-rate-cell">
-                    <div class="fee-field" :class="{ invalid: Boolean(feeTierIssue(tier, index, draft.feeTiers)) }">
-                      <input v-model.number="tier.discountRatePercent" :aria-label="`第 ${index + 1} 档折扣率`" :aria-invalid="Boolean(feeTierIssue(tier, index, draft.feeTiers))" min="1" max="100" step="0.0001" type="number" />
-                      <span>%</span>
+                    <div class="fee-field" :class="{ invalid: Boolean(feeTierIssue(tier, index, draft.feeTiers, draft.entryFee)) }">
+                      <input v-model.number="tier.price" :aria-label="`第 ${index + 1} 档折后单价`" :aria-invalid="Boolean(feeTierIssue(tier, index, draft.feeTiers, draft.entryFee))" min="0" step="0.01" type="number" />
+                      <span>元 / 款</span>
                     </div>
-                    <p v-if="feeTierIssue(tier, index, draft.feeTiers)" class="tier-field-error">{{ feeTierIssue(tier, index, draft.feeTiers) }}</p>
+                    <p v-if="feeTierIssue(tier, index, draft.feeTiers, draft.entryFee)" class="tier-field-error">{{ feeTierIssue(tier, index, draft.feeTiers, draft.entryFee) }}</p>
                   </div>
-                  <span class="tier-example-price">{{ formatTierAmount(tier.discountRatePercent) }}<small>元 / 款</small></span>
+                  <span class="tier-example-price">{{ tierPriceToZhe(tier.price, draft.entryFee) || '—' }}</span>
                   <button class="icon-button tier-remove-button" title="删除阶梯" :aria-label="`删除第 ${index + 1} 档阶梯`" type="button" @click="draft.feeTiers.splice(index, 1)"><Delete /></button>
                 </div>
+                <p v-if="draft.earlyBirdEnabled" class="tier-pricing-hint">早鸟期内按早鸟价折算同一比例</p>
               </div>
             </section>
 
@@ -635,7 +636,7 @@ import { fetchBeerCoinOverview } from '@/api/beerCoin'
 import { defaultStyleLibraryValue, fallbackStyleLibraries, getStyleLibrary, normalizeStyleLibraries } from './styleLibraries'
 import { brewTypeOptions } from '@/utils/competitionMeta'
 import CategoryStyleScopePicker from './components/CategoryStyleScopePicker.vue'
-import { discountPercentToRate, feeTierIssue } from './competitionFeeTiers'
+import { feeTierIssue, tierPriceToZhe } from './competitionFeeTiers'
 
 const router = useRouter()
 const activeSection = ref('base-info')
@@ -724,7 +725,7 @@ const draft = reactive({
   earlyBirdFee: '',
   earlyBirdDeadline: '',
   tierPricingEnabled: false,
-  feeTiers: [{ id: 'tier-initial', startQuantity: 3, discountRatePercent: 80 }],
+  feeTiers: [{ id: 'tier-initial', startQuantity: 3, price: '' }],
   description: '',
   rulesUrl: '',
   deliveryMethod: 'EXPRESS',
@@ -823,11 +824,7 @@ function removeItem(list, index) {
 
 function addFeeTier() {
   const last = draft.feeTiers[draft.feeTiers.length - 1]
-  draft.feeTiers.push({ id: `tier-${Date.now()}`, startQuantity: (last?.startQuantity || 1) + 2, discountRatePercent: 80 })
-}
-
-function formatTierAmount(ratePercent) {
-  return (Number(draft.entryFee || 0) * Number(ratePercent ?? 100) / 100).toFixed(2)
+  draft.feeTiers.push({ id: `tier-${Date.now()}`, startQuantity: (last?.startQuantity || 1) + 2, price: '' })
 }
 
 function selectCollectionQr(event) {
@@ -1016,7 +1013,7 @@ async function submitDraft() {
       earlyBirdFee: draft.earlyBirdEnabled && draft.earlyBirdFee !== '' && draft.earlyBirdFee !== null ? Number(draft.earlyBirdFee) : null,
       earlyBirdDeadline: draft.earlyBirdEnabled ? toBackendDateTime(draft.earlyBirdDeadline) : null,
       tierPricingEnabled: draft.tierPricingEnabled,
-      feeTiers: draft.tierPricingEnabled ? draft.feeTiers.map(({ startQuantity, discountRatePercent }) => ({ startQuantity: Number(startQuantity), discountRate: discountPercentToRate(discountRatePercent) })) : [],
+      feeTiers: draft.tierPricingEnabled ? draft.feeTiers.map(({ startQuantity, price }) => ({ startQuantity: Number(startQuantity), price: Number(price) })) : [],
       description: draft.description,
       rulesUrl: draft.rulesUrl || null,
       deliveryMethod: draft.deliveryMethod,
@@ -1286,7 +1283,11 @@ function toDraftSnapshot(source) {
     earlyBirdFee: source.earlyBirdFee,
     earlyBirdDeadline: source.earlyBirdDeadline,
     tierPricingEnabled: Boolean(source.tierPricingEnabled),
-    feeTiers: (source.feeTiers || []).map((tier) => ({ ...tier })),
+    feeTiers: (source.feeTiers || []).map((tier) => ({
+      id: tier.id,
+      startQuantity: tier.startQuantity,
+      price: tier.price ?? '',
+    })),
     description: source.description,
     rulesUrl: source.rulesUrl,
     deliveryMethod: source.deliveryMethod,
@@ -1440,7 +1441,7 @@ function buildReviewItems(source) {
   const tierInvalid = source.tierPricingEnabled && (!source.feeTiers?.length
     || source.feeTiers.some((tier, index) => Number(tier.startQuantity) <= 1
       || (index > 0 && Number(tier.startQuantity) <= Number(source.feeTiers[index - 1].startQuantity))
-      || Boolean(feeTierIssue(tier, index, source.feeTiers))))
+      || Boolean(feeTierIssue(tier, index, source.feeTiers, source.entryFee))))
   const categoryNames = getCategoryNames(source)
   const duplicatedCategories = getDuplicateItems(categoryNames)
   const invalidScopeCategories = source.categories.filter((category) => (
@@ -1533,7 +1534,7 @@ function buildReviewItems(source) {
       label: '阶梯报名费',
       target: 'base-info',
       status: !tierInvalid ? 'done' : 'pending',
-      detail: !source.tierPricingEnabled ? '未启用阶梯报名费' : (tierInvalid ? '请检查阶梯起始款数或折扣率' : `已配置 ${source.feeTiers.length} 档`),
+      detail: !source.tierPricingEnabled ? '未启用阶梯报名费' : (tierInvalid ? '请检查阶梯起始款数或折后单价' : `已配置 ${source.feeTiers.length} 档`),
     },
     {
       key: 'logistics',
@@ -2225,6 +2226,12 @@ textarea::placeholder {
   color: #ffb4aa;
   font-size: 12px;
   line-height: 1.3;
+}
+
+.tier-pricing-hint {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .tier-editor .fee-field input {

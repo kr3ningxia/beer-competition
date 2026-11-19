@@ -1,42 +1,42 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  discountPercentIssue,
-  discountPercentToRate,
-  discountRateToPercent,
   feeTierIssue,
+  tierPriceIssue,
+  tierPriceToZhe,
 } from './competitionFeeTiers.js'
 
-test('accepts percentages with up to four decimal places', () => {
-  assert.equal(discountPercentIssue(80), '')
-  assert.equal(discountPercentIssue('86.0204'), '')
+test('accepts prices with up to two decimal places', () => {
+  assert.equal(tierPriceIssue(159.2, 199), '')
+  assert.equal(tierPriceIssue('159.20', 199), '')
+  assert.equal(tierPriceIssue(199, 199), '')
 })
 
-test('rejects a fifth decimal place', () => {
-  assert.equal(discountPercentIssue('86.02045'), '折扣率最多保留 4 位小数')
+test('rejects a third decimal place', () => {
+  assert.equal(tierPriceIssue(159.205, 199), '折后单价最多保留 2 位小数')
 })
 
-test('tolerates floating point noise produced by number inputs', () => {
-  assert.equal(discountPercentIssue(80.00010000000001), '')
-  assert.equal(discountPercentIssue(99.99999999999999), '')
+test('requires a positive price', () => {
+  assert.equal(tierPriceIssue('', 199), '请填写折后单价')
+  assert.equal(tierPriceIssue(0, 199), '折后单价需大于 0')
+  assert.equal(tierPriceIssue(-1, 199), '折后单价需大于 0')
 })
 
-test('enforces the 1% to 100% range', () => {
-  assert.equal(discountPercentIssue(''), '请填写折扣率')
-  assert.equal(discountPercentIssue(0.5), '折扣率需在 1% 到 100% 之间')
-  assert.equal(discountPercentIssue(100.5), '折扣率需在 1% 到 100% 之间')
+test('rejects a price above the entry fee', () => {
+  assert.equal(tierPriceIssue(209, 199), '折后单价不能高于普通报名费')
 })
 
-test('rejects a later tier whose rate exceeds the previous tier', () => {
+test('rejects a later tier whose price exceeds the previous tier', () => {
   assert.equal(
-    feeTierIssue({ discountRatePercent: 90 }, 1, [{ discountRatePercent: 80 }]),
-    '折扣率不能高于上一档',
+    feeTierIssue({ price: 169 }, 1, [{ price: 159 }], 199),
+    '后面档位的折后单价不能高于前一档',
   )
+  assert.equal(feeTierIssue({ price: 159 }, 1, [{ price: 159 }], 199), '')
 })
 
-test('converts percentages to six-decimal rates without float tails', () => {
-  assert.equal(discountPercentToRate(86.05), 0.8605)
-  assert.equal(discountPercentToRate(86.0204), 0.860204)
-  assert.equal(discountRateToPercent(0.8605), 86.05)
-  assert.equal(discountRateToPercent(0.860204), 86.0204)
+test('shows the implied discount for the provider form', () => {
+  assert.equal(tierPriceToZhe(159.2, 199), '8 折')
+  assert.equal(tierPriceToZhe(150, 199), '7.5 折')
+  assert.equal(tierPriceToZhe('', 199), '')
+  assert.equal(tierPriceToZhe(159, 0), '')
 })

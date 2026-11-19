@@ -37,7 +37,7 @@ public class CompetitionPricingService {
         BigDecimal tierDiscount = BigDecimal.ZERO;
         for (int i = 1; i <= newCount; i++) {
             int sequence = existingCount + i;
-            BigDecimal rate = resolveRate(sequence, tiers);
+            BigDecimal rate = resolveRate(sequence, tiers, competition.getEntryFee());
             BigDecimal amount = base.multiply(rate).setScale(2, RoundingMode.HALF_UP);
             total = total.add(amount);
             tierDiscount = tierDiscount.add(base.subtract(amount));
@@ -51,7 +51,7 @@ public class CompetitionPricingService {
 
     public BigDecimal priceForSequence(Competition competition, BigDecimal baseAmount, int sequence) {
         List<CompetitionFeeTier> tiers = loadTiers(competition.getId(), competition.getTierPricingEnabled());
-        BigDecimal rate = resolveRate(sequence, tiers);
+        BigDecimal rate = resolveRate(sequence, tiers, competition.getEntryFee());
         return defaultAmount(baseAmount).multiply(rate).setScale(2, RoundingMode.HALF_UP);
     }
 
@@ -78,10 +78,22 @@ public class CompetitionPricingService {
                 .orderByAsc(CompetitionFeeTier::getId));
     }
 
-    private BigDecimal resolveRate(int sequence, List<CompetitionFeeTier> tiers) {
+    private BigDecimal resolveRate(int sequence, List<CompetitionFeeTier> tiers, BigDecimal entryFee) {
         return tiers.stream().filter(tier -> tier.getStartQuantity() != null && tier.getStartQuantity() <= sequence)
                 .max(Comparator.comparing(CompetitionFeeTier::getStartQuantity))
-                .map(CompetitionFeeTier::getDiscountRate).orElse(ONE);
+                .map(tier -> tierDiscountRate(tier, entryFee))
+                .orElse(ONE);
+    }
+
+    /**
+     * 阶梯价以折后金额为准，折扣率按报名费换算；历史数据没有金额时回落到原折扣率。
+     */
+    private BigDecimal tierDiscountRate(CompetitionFeeTier tier, BigDecimal entryFee) {
+        BigDecimal price = tier.getTierPrice();
+        if (price != null && entryFee != null && entryFee.compareTo(BigDecimal.ZERO) > 0) {
+            return price.divide(entryFee, 6, RoundingMode.HALF_UP);
+        }
+        return tier.getDiscountRate() == null ? ONE : tier.getDiscountRate();
     }
 
     private BigDecimal defaultAmount(BigDecimal value) {

@@ -62,6 +62,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -432,7 +434,7 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
                 .earlyBirdFee(competition.getEarlyBirdFee())
                 .earlyBirdDeadline(competition.getEarlyBirdDeadline())
                 .tierPricingEnabled(Integer.valueOf(1).equals(competition.getTierPricingEnabled()))
-                .feeTiers(listFeeTiers(competition.getId()))
+                .feeTiers(listFeeTiers(competition))
                 .refundApprovalMode(competitionReadinessEvaluator.resolveRefundApprovalMode(competition).name())
                 .description(competition.getDescription())
                 .rulesUrl(competition.getRulesUrl())
@@ -601,7 +603,7 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
                 .earlyBirdFee(competition.getEarlyBirdFee())
                 .earlyBirdDeadline(competition.getEarlyBirdDeadline())
                 .tierPricingEnabled(Integer.valueOf(1).equals(competition.getTierPricingEnabled()))
-                .feeTiers(listFeeTiers(competition.getId()))
+                .feeTiers(listFeeTiers(competition))
                 .refundApprovalMode(competitionReadinessEvaluator.resolveRefundApprovalMode(competition).name())
                 .description(competition.getDescription())
                 .rulesUrl(competition.getRulesUrl())
@@ -613,15 +615,30 @@ public class CompetitionQueryServiceImpl implements CompetitionQueryService {
                 .build();
     }
 
-    private List<CompetitionFeeTierVO> listFeeTiers(Long competitionId) {
+    private List<CompetitionFeeTierVO> listFeeTiers(Competition competition) {
+        BigDecimal entryFee = competition.getEntryFee();
         return competitionFeeTierMapper.selectList(new LambdaQueryWrapper<CompetitionFeeTier>()
-                        .eq(CompetitionFeeTier::getCompetitionId, competitionId)
+                        .eq(CompetitionFeeTier::getCompetitionId, competition.getId())
                         .eq(CompetitionFeeTier::getEnabled, FLAG_TRUE)
                         .orderByAsc(CompetitionFeeTier::getStartQuantity))
                 .stream()
                 .map(item -> CompetitionFeeTierVO.builder().id(item.getId()).startQuantity(item.getStartQuantity())
+                        .price(resolveTierPrice(item, entryFee))
                         .discountRate(item.getDiscountRate()).sortOrder(item.getSortOrder()).enabled(item.getEnabled()).build())
                 .toList();
+    }
+
+    /**
+     * 阶梯价以折后金额为准；历史数据没有金额时按折扣率和报名费换算。
+     */
+    private BigDecimal resolveTierPrice(CompetitionFeeTier tier, BigDecimal entryFee) {
+        if (tier.getTierPrice() != null) {
+            return tier.getTierPrice();
+        }
+        if (tier.getDiscountRate() == null || entryFee == null) {
+            return null;
+        }
+        return entryFee.multiply(tier.getDiscountRate()).setScale(2, RoundingMode.HALF_UP);
     }
 
     private CompetitionLogisticsVO toCompetitionLogisticsVO(Competition competition) {

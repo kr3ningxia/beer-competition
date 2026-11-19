@@ -1643,3 +1643,11 @@ ALTER TABLE `competition`
   ADD COLUMN `home_featured` tinyint NOT NULL DEFAULT 0
     COMMENT '首页重点赛事：1 时优先展示在厂商端首页主位'
     AFTER `logistics_visibility`;
+--
+-- 2026-11-19 阶梯报名价改为按折后单价维护
+--
+
+ALTER TABLE `competition_fee_tier`
+  ADD COLUMN `tier_price` DECIMAL(10,2) NULL
+    COMMENT '折后单价（元/款），阶梯价以金额为准'
+    AFTER `start_quantity`;
