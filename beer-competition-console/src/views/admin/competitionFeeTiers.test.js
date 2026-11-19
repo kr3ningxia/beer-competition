@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  feeTierDisplayIssue,
   feeTierIssue,
   tierPriceIssue,
   tierPriceToZhe,
@@ -32,6 +33,11 @@ test('rejects a later tier whose price exceeds the previous tier', () => {
     '后面档位的折后单价不能高于前一档',
   )
   assert.equal(feeTierIssue({ price: 159 }, 1, [{ price: 159 }], 199), '')
+})
+
+test('keeps an empty price quiet until save', () => {
+  assert.equal(feeTierDisplayIssue({ price: '' }, 0, [], 199), '')
+  assert.equal(feeTierDisplayIssue({ price: 209 }, 0, [], 199), '折后单价不能高于普通报名费')
 })
 
 test('shows the implied discount for the provider form', () => {

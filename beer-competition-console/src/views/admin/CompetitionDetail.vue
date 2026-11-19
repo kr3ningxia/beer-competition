@@ -250,11 +250,11 @@
                       <span>款起</span>
                     </div>
                     <div class="tier-rate-cell">
-                      <div class="fee-field" :class="{ invalid: editable.basePrice && Boolean(feeTierIssue(tier, index, baseForm.feeTiers, baseForm.entryFee)) }">
-                        <input v-model.number="tier.price" :aria-label="`第 ${index + 1} 档折后单价`" :aria-invalid="editable.basePrice && Boolean(feeTierIssue(tier, index, baseForm.feeTiers, baseForm.entryFee))" min="0" step="0.01" type="number" :disabled="!editable.basePrice" />
+                      <div class="fee-field" :class="{ invalid: editable.basePrice && Boolean(feeTierDisplayIssue(tier, index, baseForm.feeTiers, baseForm.entryFee)) }">
+                        <input v-model.number="tier.price" :aria-label="`第 ${index + 1} 档折后单价`" :aria-invalid="editable.basePrice && Boolean(feeTierDisplayIssue(tier, index, baseForm.feeTiers, baseForm.entryFee))" min="0" step="0.01" type="number" :disabled="!editable.basePrice" />
                         <span>元 / 款</span>
                       </div>
-                      <p v-if="editable.basePrice && feeTierIssue(tier, index, baseForm.feeTiers, baseForm.entryFee)" class="tier-field-error">{{ feeTierIssue(tier, index, baseForm.feeTiers, baseForm.entryFee) }}</p>
+                      <p v-if="editable.basePrice && feeTierDisplayIssue(tier, index, baseForm.feeTiers, baseForm.entryFee)" class="tier-field-error">{{ feeTierDisplayIssue(tier, index, baseForm.feeTiers, baseForm.entryFee) }}</p>
                     </div>
                     <span class="tier-example-price">{{ tierPriceToZhe(tier.price, baseForm.entryFee) || '—' }}</span>
                     <button v-if="editable.basePrice" class="icon-button tier-remove-button" title="删除阶梯" :aria-label="`删除第 ${index + 1} 档阶梯`" type="button" @click="baseForm.feeTiers.splice(index, 1)"><Delete /></button>
@@ -2812,7 +2812,7 @@ import {
   Warning,
 } from '@element-plus/icons-vue'
 import { exportCategoryStyleScope } from './competitionCategoryExport'
-import { feeTierIssue, tierPriceToZhe } from './competitionFeeTiers'
+import { feeTierDisplayIssue, feeTierIssue, tierPriceToZhe } from './competitionFeeTiers'
 import {
   defaultScoreConfigs,
   fieldTypeLabels,

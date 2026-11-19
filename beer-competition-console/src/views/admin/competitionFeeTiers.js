@@ -37,3 +37,12 @@ export function feeTierIssue(tier, index, tiers, entryFee) {
   }
   return ''
 }
+
+/**
+ * 列表内联提示用：空单价先不标红，保存时再由 feeTierIssue 拦截。
+ */
+export function feeTierDisplayIssue(tier, index, tiers, entryFee) {
+  const price = tier?.price
+  if (price === '' || price === null || price === undefined) return ''
+  return feeTierIssue(tier, index, tiers, entryFee)
+}

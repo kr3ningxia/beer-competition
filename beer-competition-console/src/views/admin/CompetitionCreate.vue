@@ -144,11 +144,11 @@
                     <span>款起</span>
                   </div>
                   <div class="tier-rate-cell">
-                    <div class="fee-field" :class="{ invalid: Boolean(feeTierIssue(tier, index, draft.feeTiers, draft.entryFee)) }">
-                      <input v-model.number="tier.price" :aria-label="`第 ${index + 1} 档折后单价`" :aria-invalid="Boolean(feeTierIssue(tier, index, draft.feeTiers, draft.entryFee))" min="0" step="0.01" type="number" />
+                    <div class="fee-field" :class="{ invalid: Boolean(feeTierDisplayIssue(tier, index, draft.feeTiers, draft.entryFee)) }">
+                      <input v-model.number="tier.price" :aria-label="`第 ${index + 1} 档折后单价`" :aria-invalid="Boolean(feeTierDisplayIssue(tier, index, draft.feeTiers, draft.entryFee))" min="0" step="0.01" type="number" />
                       <span>元 / 款</span>
                     </div>
-                    <p v-if="feeTierIssue(tier, index, draft.feeTiers, draft.entryFee)" class="tier-field-error">{{ feeTierIssue(tier, index, draft.feeTiers, draft.entryFee) }}</p>
+                    <p v-if="feeTierDisplayIssue(tier, index, draft.feeTiers, draft.entryFee)" class="tier-field-error">{{ feeTierDisplayIssue(tier, index, draft.feeTiers, draft.entryFee) }}</p>
                   </div>
                   <span class="tier-example-price">{{ tierPriceToZhe(tier.price, draft.entryFee) || '—' }}</span>
                   <button class="icon-button tier-remove-button" title="删除阶梯" :aria-label="`删除第 ${index + 1} 档阶梯`" type="button" @click="draft.feeTiers.splice(index, 1)"><Delete /></button>
@@ -636,7 +636,7 @@ import { fetchBeerCoinOverview } from '@/api/beerCoin'
 import { defaultStyleLibraryValue, fallbackStyleLibraries, getStyleLibrary, normalizeStyleLibraries } from './styleLibraries'
 import { brewTypeOptions } from '@/utils/competitionMeta'
 import CategoryStyleScopePicker from './components/CategoryStyleScopePicker.vue'
-import { feeTierIssue, tierPriceToZhe } from './competitionFeeTiers'
+import { feeTierDisplayIssue, feeTierIssue, tierPriceToZhe } from './competitionFeeTiers'
 
 const router = useRouter()
 const activeSection = ref('base-info')
