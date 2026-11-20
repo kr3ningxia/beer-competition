@@ -237,11 +237,12 @@
                   <span>启用阶梯报名费</span>
                   <el-switch v-model="baseForm.tierPricingEnabled" aria-label="启用阶梯报名费" :disabled="!editable.basePrice" />
                 </label>
-                <div v-if="baseForm.tierPricingEnabled" class="tier-editor">
+                <div v-if="baseForm.tierPricingEnabled" :class="['tier-editor', { 'with-earlybird': baseForm.earlyBirdEnabled }]">
                   <div class="tier-editor-head">
                     <span aria-hidden="true">起始款数</span>
                     <span aria-hidden="true">折后单价</span>
                     <span aria-hidden="true">折算</span>
+                    <span v-if="baseForm.earlyBirdEnabled" aria-hidden="true">早鸟期单价</span>
                     <button v-if="editable.basePrice" type="button" class="text-button tier-add-button" @click="addBaseFeeTier">添加阶梯</button>
                   </div>
                   <div v-for="(tier, index) in baseForm.feeTiers" :key="tier.id || index" class="tier-editor-row">
@@ -257,6 +258,7 @@
                       <p v-if="editable.basePrice && feeTierDisplayIssue(tier, index, baseForm.feeTiers, baseForm.entryFee)" class="tier-field-error">{{ feeTierDisplayIssue(tier, index, baseForm.feeTiers, baseForm.entryFee) }}</p>
                     </div>
                     <span class="tier-example-price">{{ tierPriceToZhe(tier.price, baseForm.entryFee) || '—' }}</span>
+                    <span v-if="baseForm.earlyBirdEnabled" class="tier-example-price">{{ earlyBirdTierPrice(tier.price, baseForm.entryFee, baseForm.earlyBirdFee) || '—' }}<small>元 / 款</small></span>
                     <button v-if="editable.basePrice" class="icon-button tier-remove-button" title="删除阶梯" :aria-label="`删除第 ${index + 1} 档阶梯`" type="button" @click="baseForm.feeTiers.splice(index, 1)"><Delete /></button>
                   </div>
                   <p v-if="baseForm.earlyBirdEnabled" class="tier-pricing-hint">早鸟期内按早鸟价折算同一比例</p>
@@ -2812,7 +2814,7 @@ import {
   Warning,
 } from '@element-plus/icons-vue'
 import { exportCategoryStyleScope } from './competitionCategoryExport'
-import { feeTierDisplayIssue, feeTierIssue, tierPriceToZhe } from './competitionFeeTiers'
+import { earlyBirdTierPrice, feeTierDisplayIssue, feeTierIssue, tierPriceToZhe } from './competitionFeeTiers'
 import {
   defaultScoreConfigs,
   fieldTypeLabels,

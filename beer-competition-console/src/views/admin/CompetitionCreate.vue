@@ -131,11 +131,12 @@
                 <span>启用阶梯报名费</span>
                 <el-switch v-model="draft.tierPricingEnabled" aria-label="启用阶梯报名费" />
               </label>
-              <div v-if="draft.tierPricingEnabled" class="tier-editor">
+              <div v-if="draft.tierPricingEnabled" :class="['tier-editor', { 'with-earlybird': draft.earlyBirdEnabled }]">
                 <div class="tier-editor-head">
                   <span aria-hidden="true">起始款数</span>
                   <span aria-hidden="true">折后单价</span>
                   <span aria-hidden="true">折算</span>
+                  <span v-if="draft.earlyBirdEnabled" aria-hidden="true">早鸟期单价</span>
                   <button type="button" class="text-button tier-add-button" @click="addFeeTier">添加阶梯</button>
                 </div>
                 <div v-for="(tier, index) in draft.feeTiers" :key="tier.id" class="tier-editor-row">
@@ -151,6 +152,7 @@
                     <p v-if="feeTierDisplayIssue(tier, index, draft.feeTiers, draft.entryFee)" class="tier-field-error">{{ feeTierDisplayIssue(tier, index, draft.feeTiers, draft.entryFee) }}</p>
                   </div>
                   <span class="tier-example-price">{{ tierPriceToZhe(tier.price, draft.entryFee) || '—' }}</span>
+                  <span v-if="draft.earlyBirdEnabled" class="tier-example-price">{{ earlyBirdTierPrice(tier.price, draft.entryFee, draft.earlyBirdFee) || '—' }}<small>元 / 款</small></span>
                   <button class="icon-button tier-remove-button" title="删除阶梯" :aria-label="`删除第 ${index + 1} 档阶梯`" type="button" @click="draft.feeTiers.splice(index, 1)"><Delete /></button>
                 </div>
                 <p v-if="draft.earlyBirdEnabled" class="tier-pricing-hint">早鸟期内按早鸟价折算同一比例</p>
@@ -636,7 +638,7 @@ import { fetchBeerCoinOverview } from '@/api/beerCoin'
 import { defaultStyleLibraryValue, fallbackStyleLibraries, getStyleLibrary, normalizeStyleLibraries } from './styleLibraries'
 import { brewTypeOptions } from '@/utils/competitionMeta'
 import CategoryStyleScopePicker from './components/CategoryStyleScopePicker.vue'
-import { feeTierDisplayIssue, feeTierIssue, tierPriceToZhe } from './competitionFeeTiers'
+import { earlyBirdTierPrice, feeTierDisplayIssue, feeTierIssue, tierPriceToZhe } from './competitionFeeTiers'
 
 const router = useRouter()
 const activeSection = ref('base-info')
@@ -2191,6 +2193,11 @@ textarea::placeholder {
   gap: 12px;
 }
 
+.tier-editor.with-earlybird .tier-editor-head,
+.tier-editor.with-earlybird .tier-editor-row {
+  grid-template-columns: minmax(110px, 0.8fr) minmax(130px, 1fr) minmax(70px, 0.6fr) minmax(130px, 1fr) minmax(76px, auto);
+}
+
 .tier-editor-head {
   padding: 12px 0 8px;
   color: var(--muted);
@@ -3234,6 +3241,10 @@ textarea::placeholder {
   .tier-editor-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
+  }
+
+  .tier-editor.with-earlybird .tier-editor-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .tier-remove-button {

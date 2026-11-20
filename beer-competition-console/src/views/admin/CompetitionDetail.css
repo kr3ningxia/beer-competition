@@ -6763,6 +6763,11 @@ button.pyramid-placeholder-mark {
   gap: 12px;
 }
 
+.tier-editor.with-earlybird .tier-editor-head,
+.tier-editor.with-earlybird .tier-editor-row {
+  grid-template-columns: minmax(110px, 0.8fr) minmax(130px, 1fr) minmax(70px, 0.6fr) minmax(130px, 1fr) minmax(76px, auto);
+}
+
 .tier-editor-head {
   padding: 12px 0 8px;
   color: var(--muted);
@@ -6899,6 +6904,10 @@ button.pyramid-placeholder-mark {
   .tier-editor-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
+  }
+
+  .tier-editor.with-earlybird .tier-editor-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .tier-remove-button {

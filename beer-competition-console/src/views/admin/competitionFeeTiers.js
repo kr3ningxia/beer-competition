@@ -46,3 +46,17 @@ export function feeTierDisplayIssue(tier, index, tiers, entryFee) {
   if (price === '' || price === null || price === undefined) return ''
   return feeTierIssue(tier, index, tiers, entryFee)
 }
+
+/**
+ * 早鸟期单价：按档位金额占报名费的比例折算到早鸟价，与后端计价口径一致。
+ */
+export function earlyBirdTierPrice(price, entryFee, earlyBirdFee) {
+  if (earlyBirdFee === '' || earlyBirdFee === null || earlyBirdFee === undefined) return ''
+  const fee = Number(entryFee)
+  const early = Number(earlyBirdFee)
+  const value = Number(price)
+  if (!Number.isFinite(fee) || fee <= 0 || !Number.isFinite(early) || early < 0) return ''
+  if (!Number.isFinite(value) || value <= 0) return ''
+  const rate = Math.round((value / fee) * 1e6) / 1e6
+  return (Math.round(early * rate * 100) / 100).toFixed(2)
+}

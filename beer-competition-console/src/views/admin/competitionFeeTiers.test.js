@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  earlyBirdTierPrice,
   feeTierDisplayIssue,
   feeTierIssue,
   tierPriceIssue,
@@ -38,6 +39,14 @@ test('rejects a later tier whose price exceeds the previous tier', () => {
 test('keeps an empty price quiet until save', () => {
   assert.equal(feeTierDisplayIssue({ price: '' }, 0, [], 199), '')
   assert.equal(feeTierDisplayIssue({ price: 209 }, 0, [], 199), '折后单价不能高于普通报名费')
+})
+
+test('computes the early-bird unit price for each tier', () => {
+  assert.equal(earlyBirdTierPrice(159.2, 199, 99), '79.20')
+  assert.equal(earlyBirdTierPrice(150, 199, 99), '74.62')
+  assert.equal(earlyBirdTierPrice(159.2, 199, ''), '')
+  assert.equal(earlyBirdTierPrice(159.2, 199, null), '')
+  assert.equal(earlyBirdTierPrice(159.2, 0, 99), '')
 })
 
 test('shows the implied discount for the provider form', () => {
