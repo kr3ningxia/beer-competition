@@ -768,6 +768,10 @@
                         :class="['scope-category-item', { active: item.activeCategory === group.name }]"
                         @click="item.activeCategory = group.name"
                       >
+                        <span
+                          class="scope-category-code"
+                          :title="scopeCategoryCode(group)"
+                        >{{ scopeCategoryCode(group) }}</span>
                         <el-checkbox
                           :model-value="categoryStyleState(item, group).checked"
                           :indeterminate="categoryStyleState(item, group).indeterminate"
@@ -3482,6 +3486,16 @@ function categoryScopeStyles(item) {
 function scopePaneTitle(item) {
   if (item.activeCategory === SCOPE_SEARCH_KEY) return '搜索结果'
   return item.activeCategory || '风格'
+}
+
+/**
+ * 左侧分类对应的风格编号：单风格分类显示自身编号，多风格分类显示首尾编号。
+ */
+function scopeCategoryCode(group) {
+  const codes = [...new Set((group?.styles || []).map((style) => style.styleCode).filter(Boolean))]
+  if (!codes.length) return ''
+  if (codes.length === 1) return codes[0]
+  return `${codes[0]}–${codes[codes.length - 1]}`
 }
 
 function handleScopeSearch(item) {

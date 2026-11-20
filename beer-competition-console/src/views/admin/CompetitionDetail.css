@@ -2226,7 +2226,7 @@ small,
 
 .scope-picker-grid {
   display: grid;
-  grid-template-columns: 250px minmax(0, 1fr);
+  grid-template-columns: 300px minmax(0, 1fr);
   gap: 10px;
   height: 360px;
 }
@@ -2246,7 +2246,7 @@ small,
 
 .scope-category-item {
   display: grid;
-  grid-template-columns: 22px minmax(0, 1fr) auto;
+  grid-template-columns: 52px 22px minmax(0, 1fr) auto;
   gap: 6px;
   align-items: center;
   min-height: 40px;
@@ -2256,8 +2256,21 @@ small,
   cursor: pointer;
 }
 
-.scope-category-result {
-  grid-template-columns: minmax(0, 1fr) auto;
+.scope-category-code {
+  overflow: hidden;
+  color: var(--gold-soft);
+  font-size: 11px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scope-category-result .scope-category-name {
+  grid-column: 3;
+}
+
+.scope-category-result small {
+  grid-column: 4;
 }
 
 .scope-category-item:hover {
